@@ -22186,6 +22186,7 @@ def _v1213_release_check_acceleration_smoke(root: Path) -> tuple[bool, str]:
 from song_agent.release_check_architecture import run_architecture_guardrails_smoke as _v1214_architecture_guardrails_smoke
 from song_agent.release_check_lifecycle_kernel import run_lifecycle_kernel_smoke as _v1216_lifecycle_kernel_smoke
 from song_agent.release_check_persistence_kernel import run_persistence_kernel_smoke as _v1217_persistence_kernel_smoke
+from song_agent.release_check_interfaces import run_interface_registry_smoke as _v1218_interface_registry_smoke
 from song_agent.release_check_verification_kernel import run_verification_kernel_smoke as _v1215_verification_kernel_smoke
 
 

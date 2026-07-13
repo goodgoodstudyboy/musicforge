@@ -2533,3 +2533,10 @@ using SQLite WAL, while signed JSON/JSONL/ZIP evidence remains immutable and
 offline-verifiable without the database. `song-agent-state migrate-plan`,
 `migrate-apply`, `migrate-rollback`, and `recover` provide explicit, backed-up
 state migration and crash recovery.
+
+Since v12.18, the CLI, HTTP API, and Studio are modular interfaces. Commands are
+registered by bounded context through `CommandSpec`, API routes expose a stable
+`RouteSpec` inventory, and Studio HTML/CSS/JavaScript are package resources.
+`song_agent.cli`, `song_agent.server`, and `song_agent.webui` remain thin
+compatibility facades, so existing commands, imports, API paths, and Studio
+behavior continue to work.

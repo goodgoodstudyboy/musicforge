@@ -122,6 +122,7 @@ from song_agent.release_checks import (
     _v1215_verification_kernel_smoke,
     _v1216_lifecycle_kernel_smoke,
     _v1217_persistence_kernel_smoke,
+    _v1218_interface_registry_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1704,6 +1705,16 @@ def test_v1217_persistence_kernel_smoke(tmp_path: Path) -> None:
     assert "corrupt_recovery_blocked=True" in detail
     assert "migration=True" in detail
     assert "active_stores_migrated=True" in detail
+
+
+def test_v1218_interface_registry_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1218_interface_registry_smoke(tmp_path)
+
+    assert ok is True, detail
+    assert "commands=True" in detail
+    assert "routes=True" in detail
+    assert "web_snapshot=True" in detail
+    assert "facade_limits=True" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

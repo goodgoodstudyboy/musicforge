@@ -1,6 +1,6 @@
 [project]
 name = "song-agent"
-version = "12.17.0"
+version = "12.18.0"
 description = "Open songwriting agent that uses LLM APIs and open renderers."
 requires-python = ">=3.11"
 dependencies = []
@@ -13,6 +13,13 @@ dev = [
 [project.scripts]
 song-agent = "song_agent.cli:main"
 song-agent-state = "song_agent.persistence_cli:main"
+
+[tool.setuptools.package-data]
+"song_agent.interfaces.web" = ["*.html", "styles/*.css", "scripts/*.js", "scripts/panels/*.js"]
+
+[tool.setuptools.packages.find]
+include = ["song_agent*"]
+exclude = ["tests*", "material*", "runs*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

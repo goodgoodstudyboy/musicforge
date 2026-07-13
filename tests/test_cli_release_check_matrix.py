@@ -137,6 +137,7 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
             "v1215.verification_kernel_smoke",
             "v1216.lifecycle_kernel_smoke",
             "v1217.persistence_kernel_smoke",
+            "v1218.interface_registry_smoke",
         ]
 
 

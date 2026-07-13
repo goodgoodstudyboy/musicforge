@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MusicForge Studio</title>
+  <style>
+{{MUSICFORGE_STYLES}}
+</style>
+</head>
+<body>
+  <header>
+    <h1>MusicForge Studio</h1>
+    <div class="meta">
+      <span id="version">version</span>
+      <span id="mode">mode</span>
+      <span id="runs">runs</span>
+      <span id="poll">polling</span>
+    </div>
+  </header>
+  <section id="auth-lock" class="auth-lock">
+    <div class="panel-title">Access token</div>
+    <div class="panel-body">
+      <form id="auth-form">
+        <label>Access token
+          <input id="auth-token" type="password" autocomplete="off">
+        </label>
+        <div class="actions">
+          <button type="submit">Unlock</button>
+          <span id="auth-message" class="message"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+  <main>
+    <div class="stack">
+      <section>
+        <div class="panel-title">
+          <span>System Health</span>
+          <span id="ga-status" class="status">unknown</span>
+        </div>
+        <div class="panel-body">
+          <div id="ga-summary" class="summary-grid">
+            <div class="metric"><span>GA</span>unknown</div>
+            <div class="metric"><span>Doctor</span>unknown</div>
+            <div class="metric"><span>Manual Review</span>unknown</div>
+            <div class="metric"><span>Final Readiness</span>unknown</div>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="ga-check-run" type="button">Run GA Check</button>
+            <button class="secondary" id="ga-docs-index" type="button">Docs Index</button>
+          </div>
+          <pre id="ga-check-result">No GA check has been run in this session.</pre>
+        </div>
+      </section>
+      <section id="maintenance-panel">
+        <div class="panel-title">
+          <span>Maintenance</span>
+          <span id="maintenance-status" class="status">unknown</span>
+        </div>
+        <div class="panel-body">
+          <div id="maintenance-summary" class="summary-grid">
+            <div class="metric"><span>LTS</span>unknown</div>
+            <div class="metric"><span>Backup</span>unknown</div>
+            <div class="metric"><span>Migration</span>unknown</div>
+            <div class="metric"><span>Check</span>unknown</div>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="maintenance-refresh" type="button">Refresh Status</button>
+            <button class="secondary" id="maintenance-create-backup" type="button">Create Backup</button>
+            <button class="secondary" id="maintenance-run-preflight" type="button">Run Preflight</button>
+            <button class="secondary" id="maintenance-run-weekly" type="button">Run Weekly</button>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="maintenance-run-migration" type="button">Run Migration</button>
+            <button class="secondary" id="maintenance-backup-list" type="button">List Backups</button>
+          </div>
+          <pre id="maintenance-result">No maintenance check has been run in this session.</pre>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Provider Settings</span>
+          <span id="provider-status" class="status">not configured</span>
+        </div>
+        <div class="panel-body">
+          <form id="provider-form">
+            <label>Base URL
+              <input id="provider-base-url" name="base_url" placeholder="https://api.example.com/v1">
+            </label>
+            <div class="grid2">
+              <label>Wire API
+                <select id="provider-wire-api" name="wire_api">
+                  <option value="openai_chat_completions">openai_chat_completions</option>
+                  <option value="mock">mock</option>
+                </select>
+              </label>
+              <label>Model
+                <input id="provider-model" name="model">
+              </label>
+            </div>
+            <label>API Key
+              <input id="provider-api-key" name="api_key" type="password" autocomplete="off" placeholder="leave blank to save empty key">
+            </label>
+            <div class="grid2">
+              <label>Light Model
+                <input id="provider-light-model" name="light_model">
+              </label>
+              <label>Review Model
+                <input id="provider-review-model" name="review_model">
+              </label>
+            </div>
+            <div class="grid2">
+              <label>Timeout Seconds
+                <input id="provider-timeout-seconds" name="timeout_seconds" type="number" min="5" max="300">
+              </label>
+              <label>Max Retries
+                <input id="provider-max-retries" name="max_retries" type="number" min="0" max="5">
+              </label>
+            </div>
+            <label>Max Output Tokens
+              <input id="provider-max-output-tokens" name="max_output_tokens" type="number" min="256" max="16000">
+            </label>
+            <div class="actions">
+              <button type="submit">Save</button>
+              <button class="secondary" id="provider-reset" type="button">Reset</button>
+              <button class="secondary" id="provider-test" type="button">Test</button>
+              <span id="provider-message"></span>
+            </div>
+          </form>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Prompt Templates</span>
+          <span id="prompt-template-status" class="status">built-in</span>
+        </div>
+        <div class="panel-body">
+          <label>Template
+            <select id="prompt-template-select"></select>
+          </label>
+          <label>System Prompt
+            <textarea id="prompt-template-system" spellcheck="false"></textarea>
+          </label>
+          <label>User Prompt
+            <textarea id="prompt-template-user" spellcheck="false"></textarea>
+          </label>
+          <div class="actions">
+            <button id="prompt-template-save" type="button">Save Template Override</button>
+            <button class="secondary" id="prompt-template-reset" type="button">Reset Template</button>
+            <span id="prompt-template-message" class="message"></span>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Editor Templates</span>
+          <span id="editor-template-status" class="status">0 templates</span>
+        </div>
+        <div class="panel-body">
+          <div class="actions">
+            <button class="secondary" id="editor-template-refresh" type="button">Refresh Templates</button>
+          </div>
+          <div id="editor-template-list" class="table-wrap"><div class="empty">No editor templates saved yet.</div></div>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Renderer Settings</span>
+          <span id="renderer-status" class="status">missing</span>
+        </div>
+        <div class="panel-body">
+          <form id="renderer-form">
+            <label>Renderer Type
+              <select id="renderer-type" name="renderer_type">
+                <option value="fluidsynth">fluidsynth</option>
+              </select>
+            </label>
+            <label>FluidSynth Path
+              <input id="renderer-fluidsynth-path" name="fluidsynth_path" placeholder="fluidsynth">
+            </label>
+            <label>SoundFont Path
+              <input id="renderer-soundfont-path" name="soundfont_path" placeholder="C:\path\to\soundfont.sf2">
+            </label>
+            <div class="grid2">
+              <label>Sample Rate
+                <input id="renderer-sample-rate" name="sample_rate" type="number" min="8000" max="192000">
+              </label>
+              <label>Gain
+                <input id="renderer-gain" name="gain" type="number" min="0" max="10" step="0.1">
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit">Save</button>
+              <button class="secondary" id="renderer-reset" type="button">Reset</button>
+              <button class="secondary" id="renderer-test" type="button">Test renderer</button>
+              <span id="renderer-message"></span>
+            </div>
+          </form>
+        </div>
+      </section>
+      <section id="audio-lab">
+        <div class="panel-title">
+          <span>Audio Lab</span>
+          <span id="audio-lab-status" class="status">Real Audio Baseline</span>
+        </div>
+        <div class="panel-body">
+          <div class="grid3">
+            <div>${metric("Environment", "detectable")}</div>
+            <div>${metric("Smoke Runs", "MIDI/WAV")}</div>
+            <div>${metric("Manual Listening", "playback required")}</div>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="audio-lab-detect" type="button">Detect</button>
+            <button class="secondary" id="audio-lab-test-profile" type="button">Test Profile</button>
+            <button class="secondary" id="audio-lab-smoke" type="button">Create Smoke Run</button>
+            <button class="secondary" id="audio-lab-session-create" type="button">Create Session</button>
+            <button class="secondary" id="audio-lab-compare-create" type="button">A/B Compare</button>
+            <button class="secondary" id="audio-health-run" type="button">Run Audio Health</button>
+            <button class="secondary" id="release-refresh-audio-qa" type="button">Refresh Release Audio QA</button>
+          </div>
+          <div class="hint">Manual reviews require WAV playback confirmation; synthetic or MIDI-only checks do not count as real audio acceptance.</div>
+          <pre id="audio-lab-summary" class="json-preview"></pre>
+        </div>
+      </section>
+      <section id="audio-fix-sprints">
+        <div class="panel-title">
+          <span>Audio Fix Sprints</span>
+          <span id="audio-fix-sprint-status" class="status">Manual recheck required</span>
+        </div>
+        <div class="panel-body">
+          <div class="toolbar">
+            <input id="audio-fix-sprint-session-id" placeholder="als-000001">
+            <button class="secondary" id="audio-fix-sprint-list" type="button">List</button>
+            <button class="secondary" id="audio-fix-sprint-create" type="button">Create From Session</button>
+          </div>
+          <pre id="audio-fix-sprint-summary" class="json-preview"></pre>
+        </div>
+      </section>
+      <section id="audio-campaigns">
+        <div class="panel-title">
+          <span>Audio Campaigns</span>
+          <span id="audio-campaign-status" class="status">Release candidate gate</span>
+        </div>
+        <div class="panel-body">
+          <div class="toolbar">
+            <input id="audio-campaign-session-id" placeholder="als-000001">
+            <input id="audio-campaign-id" placeholder="acmp-000001">
+            <input id="audio-campaign-release-id" placeholder="release-000001">
+            <button class="secondary" id="audio-campaign-list" type="button">List</button>
+            <button class="secondary" id="audio-campaign-create" type="button">Create From Session</button>
+            <button class="secondary" id="audio-campaign-plan-release" type="button">Plan Release</button>
+            <button class="secondary" id="audio-campaign-preflight-release" type="button">Preflight Release</button>
+            <button class="secondary" id="audio-campaign-create-from-release" type="button">Create From Release</button>
+            <button class="secondary" id="audio-campaign-release-status" type="button">Release Status</button>
+            <button class="secondary" id="audio-campaign-release-link" type="button">Link Release</button>
+            <button class="secondary" id="audio-campaign-governance" type="button">Governance</button>
+            <button class="secondary" id="audio-campaign-archive-zip" type="button">Archive ZIP</button>
+            <button class="secondary" id="audio-campaign-verify-archive" type="button">Verify Archive</button>
+            <button class="secondary" id="audio-campaign-remediation-plan" type="button">Remediation Plan</button>
+            <button class="secondary" id="audio-campaign-remediation-run-safe" type="button">Run Safe Fixes</button>
+            <button class="secondary" id="audio-campaign-remediation-closeout" type="button">Remediation Closeout</button>
+            <button class="secondary" id="audio-campaign-remediation-zip" type="button">Remediation ZIP</button>
+            <button class="secondary" id="audio-campaign-remediation-verify" type="button">Verify Remediation</button>
+            <button class="secondary" id="release-audio-certification-refresh" type="button">Audio Certification</button>
+            <button class="secondary" id="release-audio-certification-signoff" type="button">Sign Audio Cert</button>
+            <button class="secondary" id="release-audio-certification-zip" type="button">Audio Cert ZIP</button>
+            <button class="secondary" id="release-audio-certification-verify" type="button">Verify Audio Cert</button>
+            <button class="secondary" id="release-audio-timeline-refresh" type="button">Audio Timeline</button>
+            <button class="secondary" id="release-audio-timeline-signoff" type="button">Sign Timeline</button>
+            <button class="secondary" id="release-audio-timeline-zip" type="button">Timeline ZIP</button>
+            <button class="secondary" id="release-audio-timeline-verify" type="button">Verify Timeline</button>
+            <button class="secondary" id="release-audio-regression-status" type="button">Audio Regression</button>
+            <button class="secondary" id="release-audio-regression-refresh" type="button">Refresh Regression</button>
+            <button class="secondary" id="release-audio-regression-signoff" type="button">Sign Regression</button>
+            <button class="secondary" id="release-audio-regression-zip" type="button">Regression ZIP</button>
+            <button class="secondary" id="release-audio-regression-verify" type="button">Verify Regression</button>
+            <button class="secondary" id="release-audio-baseline-list" type="button">Audio Baselines</button>
+            <button class="secondary" id="release-audio-regression-response-create" type="button">Regression Response</button>
+            <button class="secondary" id="release-audio-regression-response-run-safe" type="button">Run Response</button>
+            <button class="secondary" id="release-audio-regression-response-signoff" type="button">Sign Response</button>
+            <button class="secondary" id="release-audio-regression-response-verify" type="button">Verify Response</button>
+            <button class="secondary" id="release-audio-quality-observatory-list" type="button">Audio Observatory</button>
+            <button class="secondary" id="release-audio-quality-observatory-create" type="button">Create Observatory</button>
+            <button class="secondary" id="release-audio-quality-observatory-refresh" type="button">Refresh Observatory</button>
+            <button class="secondary" id="release-audio-quality-observatory-verify" type="button">Verify Observatory</button>
+            <button class="secondary" id="release-audio-quality-action-list" type="button">Quality Actions</button>
+            <button class="secondary" id="release-audio-quality-action-create" type="button">Create Quality Queue</button>
+            <button class="secondary" id="release-audio-quality-action-run-safe" type="button">Run Quality Queue</button>
+            <button class="secondary" id="release-audio-quality-action-verify" type="button">Verify Quality Queue</button>
+            <button class="secondary" id="release-audio-command-center-refresh" type="button">Audio Command Center</button>
+            <button class="secondary" id="release-audio-command-center-runbook" type="button">Command Runbook</button>
+            <button class="secondary" id="release-audio-command-center-run-safe" type="button">Run Safe Command</button>
+            <button class="secondary" id="release-audio-command-center-zip" type="button">Command ZIP</button>
+            <button class="secondary" id="release-audio-command-center-verify" type="button">Verify Command</button>
+            <button class="secondary" id="unified-command-center-refresh" type="button">Unified Command Center</button>
+            <button class="secondary" id="unified-command-center-runbook" type="button">Unified Runbook</button>
+            <button class="secondary" id="unified-command-center-run-safe" type="button">Run Unified Safe</button>
+            <button class="secondary" id="unified-command-center-zip" type="button">Unified ZIP</button>
+            <button class="secondary" id="unified-command-center-verify" type="button">Verify Unified</button>
+            <button class="secondary" id="unified-command-center-signoff" type="button">Unified Signoff</button>
+            <button class="secondary" id="unified-command-center-archive" type="button">Unified Archive</button>
+            <button class="secondary" id="unified-command-center-handoff" type="button">Unified Handoff</button>
+            <button class="secondary" id="unified-command-center-continuous-review" type="button">Unified Review</button>
+            <button class="secondary" id="unified-command-center-continuous-review-verify" type="button">Verify Review</button>
+          </div>
+          <span class="hidden" data-api="/api/unified-command-centers"></span>
+          <span class="hidden" data-api="/api/unified-command-center-release-trains"></span>
+          <pre id="audio-campaign-summary" class="json-preview"></pre>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Continuity Receiver Acceptance</span>
+          <span id="continuity-receiver-status" class="status">not configured</span>
+        </div>
+        <div class="panel-body">
+          <div class="grid2">
+            <label>Program ID
+              <input id="continuity-receiver-program-id" placeholder="urp-000001">
+            </label>
+            <label>Response ID
+              <input id="continuity-receiver-response-id" placeholder="receiver-001">
+            </label>
+          </div>
+          <label>External response JSON
+            <textarea id="continuity-receiver-response" rows="4"></textarea>
+          </label>
+          <div class="grid2">
+            <label>Response verification report
+              <textarea id="continuity-receiver-response-verification" rows="4"></textarea>
+            </label>
+            <label>Response binding summary
+              <textarea id="continuity-receiver-response-binding" rows="4"></textarea>
+            </label>
+          </div>
+          <label>Signoff owner
+            <input id="continuity-receiver-signed-by" placeholder="Receiver Chair">
+          </label>
+          <div class="grid2">
+            <label>Change Request ID
+              <input id="continuity-receiver-change-request-id" placeholder="cr-000001">
+            </label>
+            <label>Change reason
+              <input id="continuity-receiver-change-reason" placeholder="Receiver acceptance scope changed">
+            </label>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="continuity-receiver-refresh" type="button">Refresh</button>
+            <button class="secondary" id="continuity-receiver-review-pack" type="button">Review Pack</button>
+            <button class="secondary" id="continuity-receiver-verify-pack" type="button">Verify Pack</button>
+            <button class="secondary" id="continuity-receiver-import" type="button">Import Response</button>
+            <button class="secondary" id="continuity-receiver-accept" type="button">Accepted Evidence</button>
+            <button class="secondary" id="continuity-receiver-board" type="button">Refresh Board</button>
+            <button class="secondary" id="continuity-receiver-signoff" type="button">Signoff</button>
+            <button class="secondary" id="continuity-receiver-zip" type="button">Archive ZIP</button>
+            <button class="secondary" id="continuity-receiver-verify" type="button">Verify Archive</button>
+            <button class="secondary" id="continuity-receiver-change-refresh" type="button">Change Status</button>
+            <button class="secondary" id="continuity-receiver-change-create" type="button">Create CR</button>
+            <button class="secondary" id="continuity-receiver-change-approve" type="button">Approve CR</button>
+            <button class="secondary" id="continuity-receiver-change-reset" type="button">Reset Signoff</button>
+            <button class="secondary" id="continuity-receiver-change-lifecycle" type="button">Refresh Lifecycle</button>
+            <button class="secondary" id="continuity-receiver-change-zip" type="button">Lifecycle ZIP</button>
+            <button class="secondary" id="continuity-receiver-change-verify" type="button">Verify Lifecycle</button>
+          </div>
+          <pre id="continuity-receiver-result" class="json-preview"></pre>
+        </div>
+      </section>
+    <section>
+      <div class="panel-title">
+        <span>Song Request</span>
+        <select id="preset"></select>
+        </div>
+        <div class="panel-body">
+          <form id="song-form">
+            <label>Title
+              <input id="title" name="title" required>
+            </label>
+            <div class="grid2">
+              <label>Language
+                <input id="language" name="language" required>
+              </label>
+              <label>Vocal Mode
+                <select id="vocal_mode" name="vocal_mode">
+                  <option value="guide_melody">guide_melody</option>
+                  <option value="instrumental">instrumental</option>
+                  <option value="lyrics_only">lyrics_only</option>
+                </select>
+              </label>
+            </div>
+            <label>Generation Mode
+              <select id="generation_mode" name="generation_mode">
+                <option value="local">local</option>
+                <option value="provider">provider</option>
+              </select>
+            </label>
+            <label>Pipeline Mode
+              <select id="pipeline_mode" name="pipeline_mode">
+                <option value="single">single</option>
+                <option value="multinode">multinode</option>
+              </select>
+            </label>
+            <label>Style
+              <textarea id="style" name="style" required></textarea>
+            </label>
+            <label>Theme
+              <textarea id="theme" name="theme" required></textarea>
+            </label>
+            <div class="grid2">
+              <label>Duration Seconds
+                <input id="duration_seconds" name="duration_seconds" type="number" min="30" max="600" required>
+              </label>
+              <label>Tempo BPM
+                <input id="tempo_bpm" name="tempo_bpm" type="number" min="40" max="240">
+              </label>
+            </div>
+            <label>Key
+              <input id="key" name="key">
+            </label>
+            <label>Lyrics
+              <textarea id="lyrics" name="lyrics"></textarea>
+            </label>
+            <label>Asset References
+              <div id="song-asset-refs" class="asset-ref-list"></div>
+            </label>
+            <label>Reference Materials
+              <div id="song-reference-refs" class="reference-ref-list"></div>
+            </label>
+            <label>Context Pack
+              <select id="song-context-pack"><option value="">none</option></select>
+            </label>
+            <div class="actions">
+              <button type="submit">Generate</button>
+              <button class="secondary" id="song-suggest-context" type="button">Suggest Context</button>
+              <button class="secondary" id="reset-form" type="button">Reset</button>
+            </div>
+            <div id="song-context-suggestion" class="message"></div>
+          </form>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Library</span>
+          <button class="secondary" id="library-rebuild" type="button">Rebuild Index</button>
+        </div>
+        <div class="panel-body">
+          <div class="grid2">
+            <label>Search
+              <input id="library-query" placeholder="rainy synth hook">
+            </label>
+            <label>Kind
+              <select id="library-kind">
+                <option value="">assets + references</option>
+                <option value="asset">assets</option>
+                <option value="reference">references</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Role
+              <input id="library-role" placeholder="hook, melody, harmony">
+            </label>
+            <label>Tempo BPM
+              <input id="library-tempo" type="number" min="40" max="240">
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Key
+              <input id="library-key" placeholder="C">
+            </label>
+            <label>Flags
+              <span style="display:flex;gap:10px;margin-top:8px;">
+                <label style="margin:0;"><input id="library-include-stale" type="checkbox"> stale</label>
+                <label style="margin:0;"><input id="library-include-hidden" type="checkbox"> hidden</label>
+              </span>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="library-search" type="button">Search Library</button>
+            <button class="secondary" id="library-recommend" type="button">Recommend</button>
+            <span id="library-message" class="message"></span>
+          </div>
+          <div id="library-results"><div class="empty">Library results will appear here.</div></div>
+          <div class="panel-title subhead"><span>Context Packs</span></div>
+          <div class="grid2">
+            <label>Name
+              <input id="context-pack-name" placeholder="Rainy context">
+            </label>
+            <label>Saved Packs
+              <select id="context-pack-select"><option value="">none</option></select>
+            </label>
+          </div>
+          <div class="actions">
+            <button id="context-pack-save-selection" type="button">Save Selected Context</button>
+            <button class="secondary" id="context-pack-apply-preview" type="button">Apply Preview</button>
+            <button class="secondary" id="context-pack-refresh" type="button">Refresh Packs</button>
+            <span id="context-pack-message" class="message"></span>
+          </div>
+          <div id="context-pack-list"><div class="empty">No context packs yet.</div></div>
+          <pre id="context-pack-preview">{}</pre>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Projects</span>
+          <div class="actions" style="margin-top:0;">
+            <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+              <input id="include-hidden-projects" type="checkbox" style="width:auto;margin:0;">
+              Hidden
+            </label>
+            <button class="secondary" id="refresh-projects" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <form id="project-form">
+            <label>Project Name
+              <input id="project-name" name="project-name" placeholder="New song project">
+            </label>
+            <label>Description
+              <textarea id="project-description" name="project-description"></textarea>
+            </label>
+            <label>Tags
+              <input id="project-tags" name="project-tags" placeholder="demo, pop">
+            </label>
+            <div class="actions">
+              <button type="submit">New Project</button>
+              <span id="project-message" class="message"></span>
+            </div>
+          </form>
+          <div class="grid2">
+            <label>Search Projects
+              <input id="project-search" placeholder="name, description, version">
+            </label>
+            <label>Status Filter
+              <select id="project-status-filter">
+                <option value="">all</option>
+                <option value="active">active</option>
+                <option value="finalized">finalized</option>
+                <option value="selected">selected</option>
+                <option value="final">final</option>
+                <option value="gate_failed">gate_failed</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Variant Filter
+              <select id="project-variant-filter">
+                <option value="">all</option>
+                <option value="original">original</option>
+                <option value="manual">manual</option>
+                <option value="section_edit">section_edit</option>
+                <option value="track_edit">track_edit</option>
+                <option value="lyrics_edit">lyrics_edit</option>
+                <option value="melody_edit">melody_edit</option>
+                <option value="arrangement_edit">arrangement_edit</option>
+                <option value="style_variation">style_variation</option>
+              </select>
+            </label>
+            <label>Filters
+              <button class="secondary" id="clear-project-filters" type="button" style="width:100%;margin-top:4px;">Clear Filters</button>
+            </label>
+          </div>
+          <div id="project-list" class="project-list"><div class="empty">No projects yet.</div></div>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>References</span>
+          <div class="actions" style="margin-top:0;">
+            <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+              <input id="include-hidden-references" type="checkbox" style="width:auto;margin:0;">
+              Hidden
+            </label>
+            <button class="secondary" id="refresh-references" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <form id="reference-import-form">
+            <div class="grid2">
+              <label>Reference Type
+                <select id="reference-type">
+                  <option value="audio_wav">audio_wav</option>
+                  <option value="midi">midi</option>
+                  <option value="lyrics_text">lyrics_text</option>
+                  <option value="style_note">style_note</option>
+                </select>
+              </label>
+              <label>Title
+                <input id="reference-title" placeholder="Reference title">
+              </label>
+            </div>
+            <label>File
+              <input id="reference-file" type="file" accept=".wav,.mid,.midi,.txt,.md">
+            </label>
+            <label>Tags
+              <input id="reference-tags" placeholder="hook, style, client">
+            </label>
+            <div class="actions">
+              <button type="submit">Import Reference</button>
+              <span id="reference-message" class="message"></span>
+            </div>
+          </form>
+          <div class="grid2">
+            <label>Search References
+              <input id="reference-search" placeholder="title, tag">
+            </label>
+            <label>Reference Type
+              <select id="reference-type-filter">
+                <option value="">all</option>
+                <option value="audio_wav">audio_wav</option>
+                <option value="midi">midi</option>
+                <option value="lyrics_text">lyrics_text</option>
+                <option value="style_note">style_note</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Tag
+              <input id="reference-tag-filter" placeholder="hook">
+            </label>
+            <label>Favorite
+              <select id="reference-favorite-filter">
+                <option value="">all</option>
+                <option value="1">favorite</option>
+              </select>
+            </label>
+          </div>
+          <div id="reference-list" class="asset-list"><div class="empty">No references yet.</div></div>
+          <div id="reference-detail"><div class="empty">Select a reference.</div></div>
+        </div>
+      </section>
+      <section>
+        <div class="panel-title">
+          <span>Assets</span>
+          <div class="actions" style="margin-top:0;">
+            <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+              <input id="include-hidden-assets" type="checkbox" style="width:auto;margin:0;">
+              Hidden
+            </label>
+            <button class="secondary" id="refresh-assets" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="grid2">
+            <label>Search Assets
+              <input id="asset-search" placeholder="name, tag, style">
+            </label>
+            <label>Asset Type
+              <select id="asset-type-filter">
+                <option value="">all</option>
+                <option value="motif">motif</option>
+                <option value="chord_progression">chord_progression</option>
+                <option value="drum_pattern">drum_pattern</option>
+                <option value="bass_pattern">bass_pattern</option>
+                <option value="section_template">section_template</option>
+                <option value="arrangement_template">arrangement_template</option>
+                <option value="lyric_hook">lyric_hook</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Tag
+              <input id="asset-tag-filter" placeholder="chorus">
+            </label>
+            <label>Favorite
+              <select id="asset-favorite-filter">
+                <option value="">all</option>
+                <option value="1">favorite</option>
+              </select>
+            </label>
+          </div>
+          <div id="asset-list" class="asset-list"><div class="empty">No assets yet.</div></div>
+          <div id="asset-detail"><div class="empty">Select an asset.</div></div>
+        </div>
+      </section>
+    </div>
+    <section>
+      <div class="panel-title">
+        <span>Jobs</span>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-hidden" type="checkbox" style="width:auto;margin:0;">
+            Hidden
+          </label>
+          <button class="secondary" id="refresh" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="jobs">
+        <div class="job-list" id="job-list"><div class="empty">No jobs yet.</div></div>
+        <div class="detail" id="detail"><div class="empty">Select or create a job.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
+        <span>Project Detail</span>
+      </div>
+      <div class="panel-body">
+        <div id="project-detail" class="project-detail"><div class="empty">Select or create a project.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
+        <span>Releases</span>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-hidden-releases" type="checkbox" style="width:auto;margin:0;">
+            Hidden
+          </label>
+          <button class="secondary" id="refresh-releases" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="release-layout">
+          <form id="release-form">
+            <label>Release Name
+              <input id="release-name" placeholder="EP, album, client pack">
+            </label>
+            <div class="grid2">
+              <label>Release Type
+                <select id="release-type">
+                  <option value="demo_pack">demo_pack</option>
+                  <option value="single_pack">single_pack</option>
+                  <option value="ep">ep</option>
+                  <option value="album">album</option>
+                </select>
+              </label>
+              <label>Primary Artist
+                <input id="release-primary-artist" placeholder="Artist">
+              </label>
+            </div>
+            <div class="grid2">
+              <label>Catalog ID
+                <input id="release-catalog-id" placeholder="optional">
+              </label>
+              <label>Language
+                <input id="release-language" placeholder="English">
+              </label>
+            </div>
+            <label>Notes
+              <textarea id="release-notes" rows="2"></textarea>
+            </label>
+            <div class="actions">
+              <button type="submit">New Release</button>
+              <span id="release-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div id="release-list" class="release-list"><div class="empty">No releases yet.</div></div>
+          </div>
+        </div>
+        <div id="release-detail" class="release-detail"><div class="empty">Select or create a release.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
+        <span>Portfolio Audit</span>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-archived-portfolio-audits" type="checkbox" style="width:auto;margin:0;">
+            Archived
+          </label>
+          <button class="secondary" id="refresh-portfolio-audits" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="release-layout">
+          <form id="portfolio-audit-form">
+            <label>Portfolio Name
+              <input id="portfolio-audit-name" value="Release Portfolio Audit">
+            </label>
+            <label>Release IDs
+              <textarea id="portfolio-audit-release-ids" rows="3" placeholder="rel-000001, rel-000002"></textarea>
+            </label>
+            <div class="grid2">
+              <label>Max Releases
+                <input id="portfolio-audit-max-releases" type="number" min="1" max="500" value="50">
+              </label>
+              <label>Selection Flags
+                <span style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
+                  <label style="margin:0;"><input id="portfolio-audit-include-hidden-releases" type="checkbox"> hidden releases</label>
+                  <label style="margin:0;"><input id="portfolio-audit-include-archived-releases" type="checkbox" checked> archived releases</label>
+                </span>
+              </label>
+            </div>
+            <div class="grid3">
+              <label style="margin:0;"><input id="portfolio-audit-require-reviewer-packs" type="checkbox" checked> Require reviewer packs</label>
+              <label style="margin:0;"><input id="portfolio-audit-require-audit" type="checkbox" checked> Require audit</label>
+              <label style="margin:0;"><input id="portfolio-audit-require-archive" type="checkbox" checked> Require archive</label>
+            </div>
+            <div class="actions">
+              <button type="submit">New Portfolio Audit</button>
+              <span id="portfolio-audit-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div id="portfolio-audit-list" class="release-list"><div class="empty">No Portfolio Audits yet.</div></div>
+          </div>
+        </div>
+        <div id="portfolio-audit-detail" class="release-detail"><div class="empty">Select or create a Portfolio Audit.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
+        <span>Acceptance</span>
+        <button class="secondary" id="refresh-acceptance" type="button">Refresh</button>
+      </div>
+      <div class="panel-body">
+        <div class="release-layout">
+          <form id="acceptance-form">
+            <label>Suite Name
+              <input id="acceptance-name" value="v4.5 regression songbook acceptance">
+            </label>
+            <div class="grid2">
+              <label>Profile
+                <select id="acceptance-profile">
+                  <option value="developer_manual">developer_manual</option>
+                  <option value="midi_smoke">midi_smoke</option>
+                  <option value="release_candidate">release_candidate</option>
+                  <option value="audio_required">audio_required</option>
+                </select>
+              </label>
+              <label>Min Rating
+                <input id="acceptance-min-rating" type="number" min="1" max="5" value="3">
+              </label>
+            </div>
+            <div class="grid2">
+              <label>Mode
+                <select id="acceptance-mode">
+                  <option value="developer_self_test">developer_self_test</option>
+                  <option value="release_review">release_review</option>
+                </select>
+              </label>
+            </div>
+            <div class="actions">
+              <button type="submit">New Suite</button>
+              <span id="acceptance-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div class="panel-title subhead"><span>Regression Songbook</span></div>
+            <div id="acceptance-songbook" class="release-list"><div class="empty">Loading songbook.</div></div>
+            <div class="panel-title subhead"><span>Suites</span></div>
+            <div id="acceptance-list" class="release-list"><div class="empty">No acceptance suites yet.</div></div>
+          </div>
+        </div>
+        <div id="acceptance-detail" class="release-detail"><div class="empty">Select or create an acceptance suite.</div></div>
+        <div class="panel-title subhead"><span>Acceptance Analytics</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-refresh-analytics" type="button">Refresh Analytics</button>
+          <button class="secondary" id="acceptance-create-fix-sprint" type="button">Create Fix Sprint</button>
+        </div>
+        <div id="acceptance-analytics" class="release-detail"><div class="empty">No acceptance analytics report yet.</div></div>
+        <div class="panel-title subhead"><span>Acceptance Fix Sprints</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-refresh-fix-sprints" type="button">Refresh Fix Sprints</button>
+        </div>
+        <div id="acceptance-fix-sprints" class="release-detail"><div class="empty">No acceptance fix sprints yet.</div></div>
+        <div class="panel-title subhead"><span>Fix Planning</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-fix-plan-refresh" type="button">Refresh Plans</button>
+          <button class="secondary" id="acceptance-fix-plan-create" type="button">Create Plan</button>
+          <button class="secondary" id="acceptance-fix-plan-create-sprint" type="button">Create Sprint From Plan</button>
+          <button class="secondary" id="acceptance-fix-plan-review-refresh" type="button">Refresh Outcome Review</button>
+        </div>
+        <div class="grid3">
+          <label>Plan Max Items <input id="acceptance-fix-plan-max-items" type="number" min="1" max="50" value="20"></label>
+          <label>Include Hidden KB <input id="acceptance-fix-plan-hidden" type="checkbox" style="width:auto;margin-top:10px;"></label>
+          <label>Plan ID <input id="acceptance-fix-plan-id" readonly value=""></label>
+        </div>
+        <div id="acceptance-fix-plans" class="release-detail"><div class="empty">No acceptance fix plans yet.</div></div>
+        <div class="panel-title subhead"><span>Fix Plan Outcome Review</span></div>
+        <div id="acceptance-fix-plan-review" class="release-detail"><div class="empty">Select a Fix Plan and refresh Outcome Review.</div></div>
+        <div class="panel-title subhead"><span>Planning Rule Simulation</span></div>
+        <div class="actions">
+          <select id="planning-ruleset-template">
+            <option value="baseline">baseline</option>
+            <option value="manual_conservative">manual_conservative</option>
+            <option value="kb_trust_light">kb_trust_light</option>
+            <option value="waiver_strict">waiver_strict</option>
+            <option value="synthetic_strict">synthetic_strict</option>
+          </select>
+          <button class="secondary" id="planning-ruleset-create" type="button">Create Rule Set</button>
+          <button class="secondary" id="planning-simulation-run" type="button">Run Simulation</button>
+          <button class="secondary" id="planning-simulation-refresh" type="button">Refresh Simulations</button>
+        </div>
+        <div id="planning-rule-simulation" class="release-detail"><div class="empty">Simulation only. No production rules are changed.</div></div>
+        <div class="panel-title subhead"><span>Planning Rule Governance</span></div>
+        <div class="actions">
+          <button class="secondary" id="planning-governance-refresh" type="button">Refresh Governance</button>
+          <button class="secondary" id="planning-governance-create" type="button">Create Promotion</button>
+          <button class="secondary" id="planning-governance-approve" type="button">Approve</button>
+          <button class="secondary" id="planning-governance-promote" type="button">Promote</button>
+        </div>
+        <div id="planning-rule-governance" class="release-detail"><div class="empty">No active planning rule version.</div></div>
+        <div class="panel-title subhead"><span>Planning Rule Impact</span></div>
+        <div class="actions">
+          <button class="secondary" id="planning-impact-refresh" type="button">Refresh Impact Report</button>
+        </div>
+        <div id="planning-rule-impact" class="release-detail"><div class="empty">No planning rule impact report yet.</div></div>
+        <div class="panel-title subhead"><span>Knowledge Base</span></div>
+        <div class="actions">
+          <button class="secondary" id="acceptance-kb-refresh" type="button">Refresh KB</button>
+          <button class="secondary" id="acceptance-kb-recommend" type="button">Recommend</button>
+        </div>
+        <div class="grid3">
+          <label>Issue Type <input id="acceptance-kb-issue-type" value="hook"></label>
+          <label>Style <input id="acceptance-kb-style" value=""></label>
+          <label>Song ID <input id="acceptance-kb-song-id" value=""></label>
+        </div>
+        <div id="acceptance-kb" class="release-detail"><div class="empty">No acceptance knowledge report yet.</div></div>
+      </div>
+    </section>
+    <section style="grid-column: 1 / -1;">
+      <div class="panel-title">
+        <span>Batch</span>
+        <div class="actions" style="margin-top:0;">
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:650;">
+            <input id="include-hidden-batches" type="checkbox" style="width:auto;margin:0;">
+            Hidden
+          </label>
+          <button class="secondary" id="refresh-batches" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="batch-layout">
+          <form id="batch-form">
+            <label>Batch Name
+              <input id="batch-name" name="batch-name" value="MusicForge Batch">
+            </label>
+            <label>CSV File
+              <input id="batch-csv-file" name="batch-csv-file" type="file" accept=".csv,text/csv,text/plain">
+            </label>
+            <label>CSV Text
+              <textarea id="batch-csv-text" name="batch-csv-text" spellcheck="false">title,language,style,theme,duration_seconds,tempo_bpm,key,vocal_mode,lyrics,generation_mode,pipeline_mode
+Batch Demo One,English,synth pop,late city lights,90,100,C,guide_melody,,local,multinode
+Batch Demo Two,English,lo-fi,quiet morning room,60,82,A minor,guide_melody,,local,single</textarea>
+            </label>
+            <div class="grid2">
+              <label>Generation Mode
+                <select id="batch-generation-mode" name="batch-generation-mode">
+                  <option value="local">local</option>
+                  <option value="provider">provider</option>
+                </select>
+              </label>
+              <label>Pipeline Mode
+                <select id="batch-pipeline-mode" name="batch-pipeline-mode">
+                  <option value="multinode">multinode</option>
+                  <option value="single">single</option>
+                </select>
+              </label>
+            </div>
+            <label>Max Concurrency
+              <input id="batch-max-concurrency" name="batch-max-concurrency" type="number" min="1" max="4" value="1">
+            </label>
+            <div class="actions">
+              <button type="submit">Import</button>
+              <span id="batch-message" class="message"></span>
+            </div>
+          </form>
+          <div>
+            <div id="batch-list" class="batch-list"><div class="empty">No batches yet.</div></div>
+          </div>
+        </div>
+        <div id="batch-detail" class="batch-detail"><div class="empty">Select or import a batch.</div></div>
+      </div>
+    </section>
+  </main>
+  <script>
+{{MUSICFORGE_SCRIPTS}}
+</script>
+</body>
+</html>

@@ -165,7 +165,7 @@
       "song_agent.trust_operations_incident_knowledge_verifier"
     ]
   ],
-  "baseline_version": "12.17.0",
+  "baseline_version": "12.18.0",
   "dependency_exceptions": [
     {
       "imported": "song_agent.release_check_runner",
@@ -174,12 +174,28 @@
     }
   ],
   "mega_file_max_lines": {
-    "song_agent/cli.py": 14484,
-    "song_agent/release_checks.py": 26194,
-    "song_agent/server.py": 23753,
-    "song_agent/webui.py": 12660
+    "song_agent/cli.py": 17,
+    "song_agent/interfaces/api/routes/creation.py": 4969,
+    "song_agent/interfaces/api/routes/delivery.py": 2855,
+    "song_agent/interfaces/api/routes/maintenance.py": 148,
+    "song_agent/interfaces/api/routes/program.py": 2112,
+    "song_agent/interfaces/api/routes/quality.py": 4394,
+    "song_agent/interfaces/api/routes/studio.py": 1707,
+    "song_agent/interfaces/api/routes/trust.py": 2956,
+    "song_agent/interfaces/api/runtime.py": 4230,
+    "song_agent/interfaces/cli/commands/creation.py": 1227,
+    "song_agent/interfaces/cli/commands/delivery.py": 1941,
+    "song_agent/interfaces/cli/commands/maintenance.py": 1014,
+    "song_agent/interfaces/cli/commands/program.py": 3893,
+    "song_agent/interfaces/cli/commands/quality.py": 4225,
+    "song_agent/interfaces/cli/commands/release_check.py": 1371,
+    "song_agent/interfaces/cli/commands/studio.py": 65,
+    "song_agent/interfaces/cli/commands/trust.py": 5545,
+    "song_agent/release_checks.py": 26195,
+    "song_agent/server.py": 30,
+    "song_agent/webui.py": 3
   },
-  "module_count": 322,
+  "module_count": 356,
   "modules": [
     {
       "context": null,
@@ -282,6 +298,12 @@
       "layer": "application",
       "module": "song_agent.application.generation.service",
       "path": "song_agent/application/generation/service.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.interface_persistence",
+      "path": "song_agent/application/interface_persistence.py"
     },
     {
       "context": null,
@@ -588,6 +610,198 @@
       "layer": "domain",
       "module": "song_agent.human_review_verifier",
       "path": "song_agent/human_review_verifier.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api",
+      "path": "song_agent/interfaces/api/__init__.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.errors",
+      "path": "song_agent/interfaces/api/errors.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.request",
+      "path": "song_agent/interfaces/api/request.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.response",
+      "path": "song_agent/interfaces/api/response.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.router",
+      "path": "song_agent/interfaces/api/router.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes",
+      "path": "song_agent/interfaces/api/routes/__init__.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.creation",
+      "path": "song_agent/interfaces/api/routes/creation.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.delivery",
+      "path": "song_agent/interfaces/api/routes/delivery.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.maintenance",
+      "path": "song_agent/interfaces/api/routes/maintenance.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.program",
+      "path": "song_agent/interfaces/api/routes/program.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.quality",
+      "path": "song_agent/interfaces/api/routes/quality.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.studio",
+      "path": "song_agent/interfaces/api/routes/studio.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.trust",
+      "path": "song_agent/interfaces/api/routes/trust.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.runtime",
+      "path": "song_agent/interfaces/api/runtime.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.server",
+      "path": "song_agent/interfaces/api/server.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli",
+      "path": "song_agent/interfaces/cli/__init__.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.app",
+      "path": "song_agent/interfaces/cli/app.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands",
+      "path": "song_agent/interfaces/cli/commands/__init__.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.creation",
+      "path": "song_agent/interfaces/cli/commands/creation.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.delivery",
+      "path": "song_agent/interfaces/cli/commands/delivery.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.maintenance",
+      "path": "song_agent/interfaces/cli/commands/maintenance.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.program",
+      "path": "song_agent/interfaces/cli/commands/program.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.quality",
+      "path": "song_agent/interfaces/cli/commands/quality.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.release_check",
+      "path": "song_agent/interfaces/cli/commands/release_check.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.studio",
+      "path": "song_agent/interfaces/cli/commands/studio.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.trust",
+      "path": "song_agent/interfaces/cli/commands/trust.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.errors",
+      "path": "song_agent/interfaces/cli/errors.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.output",
+      "path": "song_agent/interfaces/cli/output.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.registry",
+      "path": "song_agent/interfaces/cli/registry.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.symbols",
+      "path": "song_agent/interfaces/cli/symbols.py"
+    },
+    {
+      "context": "web",
+      "layer": "interface",
+      "module": "song_agent.interfaces.web",
+      "path": "song_agent/interfaces/web/__init__.py"
+    },
+    {
+      "context": "web",
+      "layer": "interface",
+      "module": "song_agent.interfaces.web.assets",
+      "path": "song_agent/interfaces/web/assets.py"
     },
     {
       "context": "studio",
@@ -1218,6 +1432,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check_fixtures",
       "path": "song_agent/release_check_fixtures.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_interfaces",
+      "path": "song_agent/release_check_interfaces.py"
     },
     {
       "context": null,
@@ -2116,9 +2336,9 @@
   ],
   "notes": {
     "allowed_cycles": "Legacy domain cycles recorded at v12.14; they may be removed but no new cycle may be added.",
+    "interfaces": "v12.18 command and route modules are ratcheted; compatibility facades may only shrink.",
     "mega_files": "Tracked files may stay equal or shrink; growth is a release blocker.",
-    "persistence": "Active v12 stores use WorkspaceLock; offline verifiers must remain database and write-lock independent.",
-    "security_helpers": "Active v12 verification and lifecycle code uses platform kernels; remaining legacy helper counts may only decrease."
+    "security_helpers": "Duplicate helper counts may stay equal or shrink until v12.15 centralizes ZIP verification."
   },
   "required_absent_dependencies": [
     {

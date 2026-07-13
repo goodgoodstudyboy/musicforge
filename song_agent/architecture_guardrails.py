@@ -17,11 +17,28 @@ INTERFACE_MODULES = {
     "song_agent.server": "api",
     "song_agent.webui": "web",
 }
+INTERFACE_CONTEXTS = {"cli", "api", "web"}
 MEGA_FILE_PATHS = (
     "song_agent/release_checks.py",
     "song_agent/server.py",
     "song_agent/cli.py",
     "song_agent/webui.py",
+    "song_agent/interfaces/api/runtime.py",
+    "song_agent/interfaces/api/routes/creation.py",
+    "song_agent/interfaces/api/routes/studio.py",
+    "song_agent/interfaces/api/routes/quality.py",
+    "song_agent/interfaces/api/routes/delivery.py",
+    "song_agent/interfaces/api/routes/trust.py",
+    "song_agent/interfaces/api/routes/program.py",
+    "song_agent/interfaces/api/routes/maintenance.py",
+    "song_agent/interfaces/cli/commands/creation.py",
+    "song_agent/interfaces/cli/commands/studio.py",
+    "song_agent/interfaces/cli/commands/quality.py",
+    "song_agent/interfaces/cli/commands/delivery.py",
+    "song_agent/interfaces/cli/commands/trust.py",
+    "song_agent/interfaces/cli/commands/program.py",
+    "song_agent/interfaces/cli/commands/maintenance.py",
+    "song_agent/interfaces/cli/commands/release_check.py",
 )
 SECURITY_HELPER_NAMES = (
     "_raw_zip_entry_names",
@@ -284,6 +301,10 @@ def _module_ownership(module: str, path: str) -> dict[str, Any]:
         return _ownership_row(module, path, "platform", None)
     if module.startswith("song_agent.application"):
         return _ownership_row(module, path, "application", None)
+    if module.startswith("song_agent.interfaces."):
+        parts = module.split(".")
+        context = parts[2] if len(parts) > 2 and parts[2] in INTERFACE_CONTEXTS else None
+        return _ownership_row(module, path, "interface", context)
     if module in INTERFACE_MODULES:
         return _ownership_row(module, path, "interface", INTERFACE_MODULES[module])
     if module == "song_agent.release_checks" or module.startswith("song_agent.release_check_") or module == "song_agent.architecture_guardrails":
@@ -552,7 +573,7 @@ def _code_metrics(
                 functions.append(row)
                 if node.name.startswith("verify_"):
                     verifier_function_count += 1
-                if module == "song_agent.webui":
+                if module == "song_agent.webui" or module.startswith("song_agent.interfaces.web"):
                     web_function_count += 1
             elif isinstance(node, ast.ClassDef):
                 classes.append(_definition_metric(module, path, node, "class"))
@@ -560,10 +581,10 @@ def _code_metrics(
                     store_class_count += 1
             elif _is_dict_str_any(node):
                 dict_str_any_count += 1
-            elif module == "song_agent.cli" and isinstance(node, ast.Call):
+            elif (module == "song_agent.cli" or module.startswith("song_agent.interfaces.cli")) and isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument":
                     cli_argument_count += 1
-            elif module == "song_agent.server" and isinstance(node, ast.Constant):
+            elif (module == "song_agent.server" or module.startswith("song_agent.interfaces.api")) and isinstance(node, ast.Constant):
                 if isinstance(node.value, str) and node.value.startswith("/api/"):
                     api_routes.add(node.value)
     test_pattern = re.compile(r"^\s*(?:async\s+)?def\s+test_[A-Za-z0-9_]+\s*\(")

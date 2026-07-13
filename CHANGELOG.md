@@ -1,5 +1,22 @@
 # Changelog
 
+## v12.18.0 - 2026-07-13
+
+### Added
+- Typed CLI `CommandSpec` and HTTP `RouteSpec` registries with deterministic machine-readable inventories, duplicate registration rejection, help/output compatibility snapshots, and a v12.18 release-check smoke.
+- Bounded-context CLI command modules and HTTP route mixins for creation, Studio, quality, delivery, trust, Program, maintenance, and release engineering.
+- Package-resource Studio HTML, CSS, JavaScript, and panel metadata loaded through `importlib.resources` without adding a Node build chain.
+
+### Changed
+- Reduced `song_agent/cli.py`, `song_agent/server.py`, and `song_agent/webui.py` to compatibility facades below their 500/1000/200-line architecture limits.
+- Preserved all 173 command entrypoints, current parser help, exit-code policy, 113 concrete API dispatch entries, auth behavior, HTTP contracts, and rendered Studio output.
+- Made interface ownership explicit in the modular-monolith architecture guardrail.
+
+### Verified
+- `python -m pytest tests\test_interface_registry.py tests\test_cli.py tests\test_cli_doctor.py tests\test_cli_serve_auth.py tests\test_server.py tests\test_server_auth.py tests\test_server_assets.py tests\test_webui.py -q`
+- `python -m song_agent.cli release-check --profile v12 --skip-tests --json`
+- `python -m song_agent.cli release-check --profile latest --skip-tests --json`
+
 ## v12.17.0 - 2026-07-13
 
 ### Added

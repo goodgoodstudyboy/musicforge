@@ -142,6 +142,7 @@ def test_release_check_profile_and_filters() -> None:
             "v1215.verification_kernel_smoke",
             "v1216.lifecycle_kernel_smoke",
             "v1217.persistence_kernel_smoke",
+            "v1218.interface_registry_smoke",
         ]
     assert {definition.check_id for definition in portal} == {
         "v74.attestation_portal_smoke",
