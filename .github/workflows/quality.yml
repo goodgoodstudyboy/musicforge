@@ -1,0 +1,76 @@
+name: quality
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  architecture:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .[dev]
+      - run: python -m ruff check song_agent/platform song_agent/application song_agent/capabilities song_agent/release_check
+      - run: python -m mypy
+      - run: python -m pytest tests/test_architecture_boundaries.py tests/test_architecture_metrics.py tests/test_release_check_governance.py -q
+
+  tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        shard: [unit, contract]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .[dev]
+      - run: python -m pytest -m "${{ matrix.shard }} and not slow" --cov=song_agent/platform --cov=song_agent/application --cov-report=term-missing -q
+
+  security:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .[dev]
+      - run: python -m pytest -m "security and not legacy" -q
+      - run: python -m song_agent.cli release-check --profile security --skip-tests --json
+
+  release-candidate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .[dev]
+      - run: python -m song_agent.cli release-check --profile latest --skip-tests --json
+      - run: python -m song_agent.cli release-check --profile ga --skip-tests --json
+
+  package:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install build
+      - run: python -m build
+      - run: python -m pip install --force-reinstall dist/*.whl
+        shell: bash
+      - run: song-agent doctor

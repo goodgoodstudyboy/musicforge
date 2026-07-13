@@ -16,18 +16,10 @@ def test_release_check_cli_list_json() -> None:
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
     ids = {item["check_id"] for item in payload["checks"]}
-    assert "v74.attestation_portal_smoke" in ids
-    assert "v75.release_check_matrix_smoke" in ids
-    assert "v76.attestation_portal_review_response_smoke" in ids
-    assert "v77.attestation_accepted_evidence_smoke" in ids
-    assert "v78.attestation_transparency_feed_smoke" in ids
-    assert "v79.attestation_transparency_acknowledgement_smoke" in ids
-    assert "v80.public_trust_center_smoke" in ids
-    assert "v90.trust_operations_hub_smoke" in ids
-    assert "v91.trust_operations_hub_delivery_runbook_smoke" in ids
-    assert "v94.trust_operations_control_catalog_smoke" in ids
-    assert "v97.trust_operations_assurance_watch_smoke" in ids
-    assert "v98.trust_operations_assurance_watch_signoff_smoke" in ids
+    assert "v1219.evidence_policy_smoke" in ids
+    assert "v1220.release_check_governance_smoke" in ids
+    assert "v74.attestation_portal_smoke" not in ids
+    assert "v110.unified_command_center_smoke" not in ids
 
 
 def test_release_check_cli_only_json_report_out(tmp_path: Path) -> None:
@@ -63,14 +55,7 @@ def test_release_check_cli_group_timing(tmp_path: Path) -> None:
 
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
-    assert {item["check_id"] for item in payload["checks"]} == {
-        "v74.attestation_portal_smoke",
-        "v76.attestation_portal_review_response_smoke",
-        "v77.attestation_accepted_evidence_smoke",
-        "v78.attestation_transparency_feed_smoke",
-        "v79.attestation_transparency_acknowledgement_smoke",
-        "v80.public_trust_center_smoke",
-    }
+    assert payload["checks"] == []
 
 
 def test_release_check_cli_v8_profile_lists_public_trust_center() -> None:
@@ -108,15 +93,6 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
     assert completed.returncode == 0, completed.stderr
     payload = json.loads(completed.stdout)
     assert [item["check_id"] for item in payload["checks"]] == [
-        "v120.unified_release_program_board_smoke",
-        "v121.unified_release_program_operations_smoke",
-        "v122.unified_release_program_final_handoff_smoke",
-        "v123.unified_release_program_evidence_vault_smoke",
-        "v124.unified_release_program_vault_operations_smoke",
-        "v125.unified_release_program_continuity_recovery_smoke",
-        "v126.unified_release_program_continuity_distribution_kit_smoke",
-        "v127.unified_release_program_continuity_acceptance_board_smoke",
-        "v128.unified_release_program_continuity_acceptance_change_control_smoke",
         "v1213.v12_continuity_fixture_prepare",
         "v129.command_center_runtime_inventory",
         "v129.command_center_external_binding",
@@ -132,14 +108,15 @@ def test_release_check_cli_v12_profile_lists_unified_release_program() -> None:
         "v1212.receiver_acceptance_change_control_external_binding",
         "v1212.receiver_acceptance_change_control_signed_mutation",
         "v1212.receiver_acceptance_change_control_thin_integration",
-            "v1213.release_check_acceleration_smoke",
-            "v1214.architecture_guardrails_smoke",
-            "v1215.verification_kernel_smoke",
-            "v1216.lifecycle_kernel_smoke",
-            "v1217.persistence_kernel_smoke",
-                "v1218.interface_registry_smoke",
-                "v1219.evidence_policy_smoke",
-            ]
+        "v1213.release_check_acceleration_smoke",
+        "v1214.architecture_guardrails_smoke",
+        "v1215.verification_kernel_smoke",
+        "v1216.lifecycle_kernel_smoke",
+        "v1217.persistence_kernel_smoke",
+        "v1218.interface_registry_smoke",
+        "v1219.evidence_policy_smoke",
+        "v1220.release_check_governance_smoke",
+    ]
 
 
 def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
@@ -170,9 +147,9 @@ def test_release_check_cli_ga_profile_lists_readiness_checks() -> None:
     assert "git.diff_check" in ids
     assert "meta.version_consistency" in ids
     assert "security.secret_scan" in ids
-    assert "v75.release_check_matrix_smoke" in ids
-    assert "v99.trust_operations_final_readiness_smoke" in ids
-    assert "v100.ga_lts_readiness_smoke" in ids
+    assert "v1219.evidence_policy_smoke" in ids
+    assert "v1220.release_check_governance_smoke" in ids
+    assert "v75.release_check_matrix_smoke" not in ids
 
 
 def test_release_check_cli_empty_selection_fails() -> None:
@@ -192,6 +169,16 @@ def test_release_check_cli_empty_since_fails() -> None:
     payload = json.loads(completed.stdout)
     assert payload["ok"] is False
     assert payload["results"][0]["check_id"] == "release_check.selection"
+
+
+def test_release_check_cli_security_and_nightly_profiles_are_available() -> None:
+    security = _run_cli(["release-check", "--profile", "security", "--list", "--json"])
+    nightly = _run_cli(["release-check", "--profile", "nightly", "--list", "--json"])
+
+    assert security.returncode == 0, security.stderr
+    assert nightly.returncode == 0, nightly.stderr
+    assert any(row["check_id"] == "security.secret_scan" for row in json.loads(security.stdout)["checks"])
+    assert any("legacy" in row["tags"] for row in json.loads(nightly.stdout)["checks"])
 
 
 def test_release_check_cli_list_allows_empty_selection() -> None:

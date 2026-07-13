@@ -1,5 +1,22 @@
 # Changelog
 
+## v12.20.0 - 2026-07-13
+
+### Changed
+- Split release engineering into `song_agent.release_check` matrix, runner, performance, fixture, and domain-check packages; the 26k-line historical smoke implementation is isolated under `checks/legacy`.
+- Reduced `song_agent/release_checks.py` to a lazy compatibility facade while preserving historical private smoke imports through the v13 cutover.
+- Moved v1-v11 and v12.0-v12.8 monolithic checks out of `latest`/`ga`; their security assertions remain in full, nightly, and explicit historical profiles.
+- Removed the GA production dependency on release engineering by injecting the release-check executor from CLI/API interfaces.
+
+### Added
+- Windows/Linux CI for architecture, unit/contract shards, security verifiers, latest/GA profiles, package installation, and nightly legacy coverage.
+- Pytest test-layer markers, scoped Ruff/mypy/coverage configuration, a machine-readable deprecation catalog, migration runbook, and architecture review runbook.
+- `v1220.release_check_governance_smoke` and domain ownership metadata in matrix JSON.
+
+### Performance
+- Current checks use a 90-second hard default budget; exceptions require a reason and expiry.
+- v12/latest/GA profile budgets are hard gates instead of migration-period warnings.
+
 ## v12.19.0 - 2026-07-13
 
 ### Added

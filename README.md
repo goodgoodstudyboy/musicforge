@@ -34,6 +34,21 @@ provider access. Real WAV output requires a local renderer profile and
 SoundFont. Provider-assisted review and generation require a local provider
 configuration.
 
+## Engineering And Release Checks
+
+Release engineering is organized under `song_agent.release_check` by matrix,
+runner, performance, fixtures, and domain check providers. Use:
+
+```powershell
+python -m song_agent.cli release-check --profile latest --skip-tests --json
+python -m song_agent.cli release-check --profile security --skip-tests --json
+python -m song_agent.cli release-check --profile ga --skip-tests --json
+```
+
+Historical v1-v11 checks remain in `full`, `nightly`, and explicit historical
+profiles. Current command, architecture, migration, and deprecation guidance is
+indexed under [`docs/`](docs/ARCHITECTURE.md).
+
 ## Studio Panel
 
 The browser panel runs locally and uses the same deterministic pipeline as the

@@ -171,19 +171,13 @@
       "song_agent.trust_operations_incident_knowledge_verifier"
     ]
   ],
-  "baseline_version": "12.19.0",
-  "dependency_exceptions": [
-    {
-      "imported": "song_agent.release_check_runner",
-      "importer": "song_agent.ga_readiness",
-      "reason": "GA readiness compatibility; remove when release engineering is modularized in v12.20."
-    }
-  ],
+  "baseline_version": "12.20.0",
+  "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
     "song_agent/interfaces/api/routes/creation.py": 4969,
     "song_agent/interfaces/api/routes/delivery.py": 2906,
-    "song_agent/interfaces/api/routes/maintenance.py": 164,
+    "song_agent/interfaces/api/routes/maintenance.py": 166,
     "song_agent/interfaces/api/routes/program.py": 2112,
     "song_agent/interfaces/api/routes/quality.py": 4394,
     "song_agent/interfaces/api/routes/studio.py": 1707,
@@ -194,14 +188,14 @@
     "song_agent/interfaces/cli/commands/maintenance.py": 1014,
     "song_agent/interfaces/cli/commands/program.py": 3893,
     "song_agent/interfaces/cli/commands/quality.py": 4225,
-    "song_agent/interfaces/cli/commands/release_check.py": 1391,
+    "song_agent/interfaces/cli/commands/release_check.py": 1396,
     "song_agent/interfaces/cli/commands/studio.py": 65,
     "song_agent/interfaces/cli/commands/trust.py": 5545,
-    "song_agent/release_checks.py": 26196,
+    "song_agent/release_checks.py": 51,
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 370,
+  "module_count": 388,
   "modules": [
     {
       "context": null,
@@ -1504,6 +1498,114 @@
       "layer": "domain",
       "module": "song_agent.release_audio_timeline_verifier",
       "path": "song_agent/release_audio_timeline_verifier.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check",
+      "path": "song_agent/release_check/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks",
+      "path": "song_agent/release_check/checks/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.creation",
+      "path": "song_agent/release_check/checks/creation.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.delivery",
+      "path": "song_agent/release_check/checks/delivery.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.legacy",
+      "path": "song_agent/release_check/checks/legacy/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.legacy.monolith",
+      "path": "song_agent/release_check/checks/legacy/monolith.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.meta",
+      "path": "song_agent/release_check/checks/meta.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.program",
+      "path": "song_agent/release_check/checks/program.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.quality",
+      "path": "song_agent/release_check/checks/quality.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.registry",
+      "path": "song_agent/release_check/checks/registry.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.security",
+      "path": "song_agent/release_check/checks/security.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.studio",
+      "path": "song_agent/release_check/checks/studio.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.checks.trust",
+      "path": "song_agent/release_check/checks/trust.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.fixtures",
+      "path": "song_agent/release_check/fixtures/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.fixtures.cache",
+      "path": "song_agent/release_check/fixtures/cache.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.matrix",
+      "path": "song_agent/release_check/matrix.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.performance",
+      "path": "song_agent/release_check/performance.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.runner",
+      "path": "song_agent/release_check/runner.py"
     },
     {
       "context": null,

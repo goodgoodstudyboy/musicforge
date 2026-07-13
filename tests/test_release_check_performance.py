@@ -5,6 +5,7 @@ from pathlib import Path
 
 from song_agent.release_check_matrix import ReleaseCheckDefinition
 from song_agent.release_check_runner import run_release_check_matrix
+from song_agent.release_check.performance import PROFILE_DURATION_BUDGET_SECONDS
 
 
 def _slow_definition(*, warning_only: bool) -> ReleaseCheckDefinition:
@@ -52,3 +53,27 @@ def test_release_check_hard_budget_failure_is_blocking(tmp_path: Path) -> None:
     assert payload["results"][0]["status"] == "failed"
     assert payload["results"][0]["duration_budget_status"] == "failed"
     assert "duration budget exceeded" in payload["results"][0]["detail"]
+
+
+def test_release_check_profile_budget_is_blocking(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setitem(PROFILE_DURATION_BUDGET_SECONDS, "latest", 0.001)
+    definition = ReleaseCheckDefinition(
+        check_id="performance.profile",
+        name="performance profile",
+        group="release-check",
+        version="12.20",
+        kind="command",
+        risk="normal",
+        timeout_seconds=10,
+        command=(sys.executable, "-c", "import time; time.sleep(0.03)"),
+        profiles=("latest",),
+        duration_budget_seconds=5,
+        budget_enforced_profiles=("latest",),
+        budget_warning_only=False,
+    )
+
+    report = run_release_check_matrix(repo_root=tmp_path, profile="latest", definitions=[definition])
+
+    assert report.ok is False
+    assert report.results[-1].check_id == "release_check.profile_duration_budget"
+    assert report.results[-1].status == "failed"

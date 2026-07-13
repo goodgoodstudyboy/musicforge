@@ -8,7 +8,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import tomllib
 
@@ -28,7 +28,6 @@ from song_agent.release_audio_command_center_verifier import verify_release_audi
 from song_agent.music_acceptance import AcceptanceStore, acceptance_report_summary, stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.provider import ProviderError, load_provider_config, provider_configured
-from song_agent.release_check_runner import run_release_check_matrix
 
 
 GA_READINESS_PACKAGE_TYPE = "musicforge_ga_readiness_report"
@@ -225,6 +224,7 @@ def build_ga_readiness_report(
     release_check_ga_report_path: Path | str | None = None,
     run_release_checks: bool = False,
     skip_tests: bool = True,
+    release_check_executor: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root or Path.cwd()).resolve()
     checks: list[dict[str, Any]] = []
@@ -893,6 +893,7 @@ def build_ga_readiness_report(
         profile="latest",
         run_checks=run_release_checks,
         skip_tests=skip_tests,
+        executor=release_check_executor,
     )
     _add_check(
         checks,
@@ -909,6 +910,7 @@ def build_ga_readiness_report(
         profile="ga",
         run_checks=run_release_checks,
         skip_tests=skip_tests,
+        executor=release_check_executor,
     )
     _add_check(
         checks,
@@ -2766,7 +2768,15 @@ def _acceptance_check_status(summary: dict[str, Any], *, require_manual_acceptan
     return {"status": "warning", "severity": "warning", "message": "Acceptance evidence is missing or not passed."}
 
 
-def _release_check_summary(root: Path, *, report_path: Path | str | None, profile: str, run_checks: bool, skip_tests: bool) -> dict[str, Any]:
+def _release_check_summary(
+    root: Path,
+    *,
+    report_path: Path | str | None,
+    profile: str,
+    run_checks: bool,
+    skip_tests: bool,
+    executor: Callable[..., Any] | None,
+) -> dict[str, Any]:
     if report_path:
         try:
             report = read_json(Path(report_path))
@@ -2780,7 +2790,9 @@ def _release_check_summary(root: Path, *, report_path: Path | str | None, profil
         except Exception as exc:
             return {"status": "unknown", "profile": profile, "error": str(exc), "source": "report"}
     if run_checks:
-        report = run_release_check_matrix(repo_root=root, profile=profile, run_tests=not skip_tests)
+        if executor is None:
+            return {"status": "failed", "profile": profile, "error": "release-check executor is required", "source": "runtime"}
+        report = executor(repo_root=root, profile=profile, run_tests=not skip_tests)
         return {
             "status": "passed" if report.ok else "failed",
             "profile": profile,

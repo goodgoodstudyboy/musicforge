@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "generated_for_version": "12.20.0",
+  "entries": [
+    {
+      "old_path": "song_agent/release_checks.py",
+      "replacement": "song_agent/release_check/checks/",
+      "import_usage_count": 25,
+      "cli_api_aliases": [],
+      "data_schema_impact": "none",
+      "introduced_version": "12.20.0",
+      "removal_version": "13.0.0",
+      "rollback_strategy": "Restore the facade and legacy monolith resolver."
+    },
+    {
+      "old_path": "song_agent/release_check_matrix.py",
+      "replacement": "song_agent/release_check/matrix.py",
+      "import_usage_count": 4,
+      "cli_api_aliases": [],
+      "data_schema_impact": "matrix JSON adds domain and budget exception fields",
+      "introduced_version": "12.20.0",
+      "removal_version": "13.0.0",
+      "rollback_strategy": "Retain the one-line compatibility facade."
+    },
+    {
+      "old_path": "song_agent/release_check_runner.py",
+      "replacement": "song_agent/release_check/runner.py",
+      "import_usage_count": 4,
+      "cli_api_aliases": [],
+      "data_schema_impact": "none",
+      "introduced_version": "12.20.0",
+      "removal_version": "13.0.0",
+      "rollback_strategy": "Retain the one-line compatibility facade."
+    },
+    {
+      "old_path": "ga --require-* evidence flags",
+      "replacement": "--policy plus --evidence-manifest",
+      "import_usage_count": 0,
+      "cli_api_aliases": ["ga-check", "verify-ga-readiness-report"],
+      "data_schema_impact": "legacy GA reports remain readable",
+      "introduced_version": "12.19.0",
+      "removal_version": "13.0.0",
+      "rollback_strategy": "Use the v12.20 CLI facade against archived workspaces."
+    },
+    {
+      "old_path": "song_agent/cli.py, song_agent/server.py, song_agent/webui.py dispatchers",
+      "replacement": "song_agent/interfaces registries",
+      "import_usage_count": 3,
+      "cli_api_aliases": ["song-agent", "serve"],
+      "data_schema_impact": "none",
+      "introduced_version": "12.18.0",
+      "removal_version": "13.0.0",
+      "rollback_strategy": "Restore facade delegation to the v12.18 registries."
+    }
+  ]
+}

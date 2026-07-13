@@ -773,8 +773,10 @@ def run_acceptance_check(*args: Any, **kwargs: Any) -> Any:
     return _resolve_symbol('quality', 'run_acceptance_check')(*args, **kwargs)
 
 def build_release_check_parser() -> argparse.ArgumentParser:
+    from song_agent.release_check.matrix import release_check_profiles
+
     parser = argparse.ArgumentParser(description="Run MusicForge release verification checks.")
-    parser.add_argument("--profile", default="full", choices=["full", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "ga", "publish"], help="Release-check profile to run.")
+    parser.add_argument("--profile", default="full", choices=release_check_profiles(), help="Release-check profile to run.")
     parser.add_argument("--group", action="append", default=[], help="Run checks matching this group or tag. Can be repeated.")
     parser.add_argument("--since", default=None, help="Run versioned checks from this version onward, for example 7.0.")
     parser.add_argument("--only", action="append", default=[], help="Run only one or more check ids. Comma-separated values are accepted.")
@@ -966,6 +968,8 @@ def _execute_ga_check(argv: list[str]) -> None:
     parser = build_ga_check_parser()
     args = parser.parse_args(raw_args[1:])
     _warn_legacy_ga_flags(argv)
+    from song_agent.release_check.runner import run_release_check_matrix
+
     report = build_ga_readiness_report(
         policy=args.policy,
         evidence_manifest_path=args.evidence_manifest,
@@ -1131,6 +1135,7 @@ def _execute_ga_check(argv: list[str]) -> None:
         release_check_ga_report_path=args.release_check_ga_report,
         run_release_checks=args.run_release_checks,
         skip_tests=args.skip_tests,
+        release_check_executor=run_release_check_matrix,
     )
     if args.report_out is not None:
         write_ga_readiness_report(report, args.report_out)
@@ -1336,8 +1341,8 @@ def _warn_legacy_ga_flags(argv: list[str]) -> None:
 
 def _execute_release_check(argv: list[str]) -> None:
     raw_args = ['release-check', *argv]
-    from song_agent.release_check_matrix import release_check_definitions_as_dicts, select_check_definitions
-    from song_agent.release_check_runner import print_release_check_report, run_release_check_matrix, write_json_report, write_timing_report
+    from song_agent.release_check.matrix import release_check_definitions_as_dicts, select_check_definitions
+    from song_agent.release_check.runner import print_release_check_report, run_release_check_matrix, write_json_report, write_timing_report
     parser = build_release_check_parser()
     args = parser.parse_args(raw_args[1:])
     selected = select_check_definitions(

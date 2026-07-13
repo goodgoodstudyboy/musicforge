@@ -54,14 +54,9 @@ def test_release_check_profile_and_filters() -> None:
     since = select_check_definitions(profile="v7", since="7.2")
     only = select_check_definitions(profile="full", only=["v75.release_check_matrix_smoke"])
 
-    assert "v74.attestation_portal_smoke" in {definition.check_id for definition in latest}
-    assert "v75.release_check_matrix_smoke" in {definition.check_id for definition in latest}
-    assert "v76.attestation_portal_review_response_smoke" in {definition.check_id for definition in latest}
-    assert "v77.attestation_accepted_evidence_smoke" in {definition.check_id for definition in latest}
-    assert "v78.attestation_transparency_feed_smoke" in {definition.check_id for definition in latest}
-    assert "v79.attestation_transparency_acknowledgement_smoke" in {definition.check_id for definition in latest}
-    assert "v80.public_trust_center_smoke" in {definition.check_id for definition in latest}
-    assert "v81.public_trust_center_delivery_smoke" in {definition.check_id for definition in latest}
+    assert "v1219.evidence_policy_smoke" in {definition.check_id for definition in latest}
+    assert "v1220.release_check_governance_smoke" in {definition.check_id for definition in latest}
+    assert "v74.attestation_portal_smoke" not in {definition.check_id for definition in latest}
     assert "v70.release_portfolio_governance_final_board_smoke" in {definition.check_id for definition in v7}
     assert [definition.check_id for definition in v8] == [
         "v80.public_trust_center_smoke",
@@ -78,10 +73,9 @@ def test_release_check_profile_and_filters() -> None:
     assert "git.diff_check" in {definition.check_id for definition in ga}
     assert "meta.version_consistency" in {definition.check_id for definition in ga}
     assert "security.secret_scan" in {definition.check_id for definition in ga}
-    assert "v75.release_check_matrix_smoke" in {definition.check_id for definition in ga}
-    assert "v99.trust_operations_final_readiness_smoke" in {definition.check_id for definition in ga}
-    assert "v100.ga_lts_readiness_smoke" in {definition.check_id for definition in ga}
-    assert "v101.lts_maintenance_backup_restore_smoke" in {definition.check_id for definition in ga}
+    assert "v1219.evidence_policy_smoke" in {definition.check_id for definition in ga}
+    assert "v1220.release_check_governance_smoke" in {definition.check_id for definition in ga}
+    assert "v75.release_check_matrix_smoke" not in {definition.check_id for definition in ga}
     assert [definition.check_id for definition in v10] == [
         "v100.ga_lts_readiness_smoke",
         "v101.lts_maintenance_backup_restore_smoke",
@@ -113,15 +107,6 @@ def test_release_check_profile_and_filters() -> None:
         "v119.unified_command_center_release_train_handoff_smoke",
     ]
     assert [definition.check_id for definition in select_check_definitions(profile="v12")] == [
-        "v120.unified_release_program_board_smoke",
-        "v121.unified_release_program_operations_smoke",
-        "v122.unified_release_program_final_handoff_smoke",
-        "v123.unified_release_program_evidence_vault_smoke",
-        "v124.unified_release_program_vault_operations_smoke",
-        "v125.unified_release_program_continuity_recovery_smoke",
-        "v126.unified_release_program_continuity_distribution_kit_smoke",
-        "v127.unified_release_program_continuity_acceptance_board_smoke",
-        "v128.unified_release_program_continuity_acceptance_change_control_smoke",
         "v1213.v12_continuity_fixture_prepare",
         "v129.command_center_runtime_inventory",
         "v129.command_center_external_binding",
@@ -137,22 +122,16 @@ def test_release_check_profile_and_filters() -> None:
         "v1212.receiver_acceptance_change_control_external_binding",
         "v1212.receiver_acceptance_change_control_signed_mutation",
         "v1212.receiver_acceptance_change_control_thin_integration",
-            "v1213.release_check_acceleration_smoke",
-            "v1214.architecture_guardrails_smoke",
-            "v1215.verification_kernel_smoke",
-            "v1216.lifecycle_kernel_smoke",
-            "v1217.persistence_kernel_smoke",
-                "v1218.interface_registry_smoke",
-                "v1219.evidence_policy_smoke",
-            ]
-    assert {definition.check_id for definition in portal} == {
-        "v74.attestation_portal_smoke",
-        "v76.attestation_portal_review_response_smoke",
-        "v77.attestation_accepted_evidence_smoke",
-        "v78.attestation_transparency_feed_smoke",
-        "v79.attestation_transparency_acknowledgement_smoke",
-        "v80.public_trust_center_smoke",
-    }
+        "v1213.release_check_acceleration_smoke",
+        "v1214.architecture_guardrails_smoke",
+        "v1215.verification_kernel_smoke",
+        "v1216.lifecycle_kernel_smoke",
+        "v1217.persistence_kernel_smoke",
+        "v1218.interface_registry_smoke",
+        "v1219.evidence_policy_smoke",
+        "v1220.release_check_governance_smoke",
+    ]
+    assert portal == []
     assert all(definition.version is not None and tuple(int(part) for part in definition.version.split(".")[:2]) >= (7, 2) for definition in since)
     assert [definition.check_id for definition in only] == ["v75.release_check_matrix_smoke"]
 

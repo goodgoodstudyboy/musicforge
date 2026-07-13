@@ -124,6 +124,7 @@ from song_agent.release_checks import (
     _v1217_persistence_kernel_smoke,
     _v1218_interface_registry_smoke,
     _v1219_evidence_policy_smoke,
+    _v1220_release_check_governance_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1725,6 +1726,13 @@ def test_v1219_evidence_policy_smoke(tmp_path: Path) -> None:
     assert "baseline=True" in detail
     assert "runtime_tamper=True" in detail
     assert "duplicate_report=True" in detail
+
+
+def test_v1220_release_check_governance_smoke(tmp_path: Path) -> None:
+    ok, detail = _v1220_release_check_governance_smoke(Path(__file__).resolve().parents[1])
+
+    assert ok is True, detail
+    assert "facade_under_300" in detail
 
 
 def test_print_release_check_report(capsys) -> None:

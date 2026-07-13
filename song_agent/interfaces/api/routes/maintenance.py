@@ -18,6 +18,7 @@ class MaintenanceRoutes:
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.release_check.runner import run_release_check_matrix
 
         payload = self._optional_json_body()
         policy_id = str(payload.get("policy") or "").strip() or None
@@ -52,6 +53,7 @@ class MaintenanceRoutes:
             release_check_ga_report_path=payload.get("release_check_ga_report_path"),
             run_release_checks=bool(payload.get("run_release_checks", False)),
             skip_tests=bool(payload.get("skip_tests", True)),
+            release_check_executor=run_release_check_matrix,
         )
         write_ga_readiness_report(report)
         self._send_json({"ok": report.get("status") != "blocked", "report": report, "summary": report.get("summary", {})})

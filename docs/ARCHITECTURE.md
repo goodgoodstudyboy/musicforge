@@ -47,6 +47,14 @@ Detailed documents:
 - [ADR 0001: Modular Monolith](architecture/adr/0001-modular-monolith.md)
 - [ADR 0002: Evidence Verification Kernel](architecture/adr/0002-evidence-verification-kernel.md)
 - [ADR 0003: Persistence Authority](architecture/adr/0003-persistence-authority.md)
+- [ADR 0004: Evidence Lifecycle Kernel](architecture/adr/0004-evidence-lifecycle-kernel.md)
+- [ADR 0005: Interface Registries](architecture/adr/0005-interface-registries.md)
+- [ADR 0006: Evidence Graph and Policy Engine](architecture/adr/0006-evidence-graph-policy-engine.md)
+- [ADR 0007: Release Engineering Governance](architecture/adr/0007-release-engineering-governance.md)
+- [Architecture review runbook](ARCHITECTURE_REVIEW_RUNBOOK.md)
+- [Data migration runbook](DATA_MIGRATION_RUNBOOK.md)
+- [Deprecation catalog](DEPRECATIONS.md)
+- [Command reference](commands/README.md)
 
 The original songwriting workflow remains useful historical context and is
 retained in [MVP_PLAN.md](MVP_PLAN.md); it is no longer the current system

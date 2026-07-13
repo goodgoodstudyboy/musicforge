@@ -45,12 +45,7 @@ SECURITY_HELPER_NAMES = (
     "_is_safe_zip_entry",
     "_zip_has_no_trailing_data",
 )
-DEPENDENCY_EXCEPTIONS = {
-    (
-        "song_agent.ga_readiness",
-        "song_agent.release_check_runner",
-    ): "GA readiness compatibility; remove when release engineering is modularized in v12.20.",
-}
+DEPENDENCY_EXCEPTIONS: dict[tuple[str, str], str] = {}
 
 
 def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
@@ -307,7 +302,7 @@ def _module_ownership(module: str, path: str) -> dict[str, Any]:
         return _ownership_row(module, path, "interface", context)
     if module in INTERFACE_MODULES:
         return _ownership_row(module, path, "interface", INTERFACE_MODULES[module])
-    if module == "song_agent.release_checks" or module.startswith("song_agent.release_check_") or module == "song_agent.architecture_guardrails":
+    if module in {"song_agent.release_check", "song_agent.release_checks"} or module.startswith("song_agent.release_check_") or module.startswith("song_agent.release_check.") or module == "song_agent.architecture_guardrails":
         return _ownership_row(module, path, "release_check", None)
     if module.startswith("song_agent.domains."):
         parts = module.split(".")
