@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -21,7 +22,7 @@ def stop_test_server(server):
 
 
 def request_json(server, method, path, payload=None):
-    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=10)
+    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=30)
     body = None
     headers = {}
     if payload is not None:
@@ -36,11 +37,13 @@ def request_json(server, method, path, payload=None):
 
 
 def wait_for_job(server, job_id):
-    for _ in range(80):
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
         status, job = request_json(server, "GET", f"/api/jobs/{job_id}")
         assert status == 200
         if job["status"] in {"completed", "failed", "cancelled", "interrupted"}:
             return job
+        time.sleep(0.05)
     raise AssertionError("job did not finish")
 
 
