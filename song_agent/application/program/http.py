@@ -102,6 +102,52 @@ _COMPONENT_ATTRIBUTES = {
     "unified_release_program_continuity_command_center_acceptance_change_store": "receiver_acceptance_change",
 }
 
+_NOT_FOUND_ERRORS = (
+    UnifiedReleaseProgramVaultNotFoundError,
+    UnifiedReleaseProgramVaultOperationsNotFoundError,
+    UnifiedReleaseProgramContinuityNotFoundError,
+    UnifiedReleaseProgramContinuityDistributionNotFoundError,
+    UnifiedReleaseProgramContinuityAcceptanceNotFoundError,
+    UnifiedReleaseProgramContinuityAcceptanceChangeNotFoundError,
+    UnifiedReleaseProgramContinuityCommandCenterSignoffNotFoundError,
+    UnifiedReleaseProgramContinuityCommandCenterAcceptanceNotFoundError,
+    UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeNotFoundError,
+    UnifiedReleaseProgramHandoffNotFoundError,
+    UnifiedReleaseProgramOperationsNotFoundError,
+    UnifiedReleaseProgramNotFoundError,
+)
+_STATE_ERRORS = (
+    UnifiedReleaseProgramVaultStateError,
+    UnifiedReleaseProgramVaultOperationsStateError,
+    UnifiedReleaseProgramContinuityStateError,
+    UnifiedReleaseProgramContinuityDistributionStateError,
+    UnifiedReleaseProgramContinuityAcceptanceStateError,
+    UnifiedReleaseProgramContinuityAcceptanceChangeStateError,
+    UnifiedReleaseProgramContinuityCommandCenterSignoffStateError,
+    UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
+    UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
+    UnifiedReleaseProgramContinuityCommandCenterStateError,
+    UnifiedReleaseProgramHandoffStateError,
+    UnifiedReleaseProgramOperationsStateError,
+    UnifiedReleaseProgramStateError,
+)
+_PROGRAM_ERRORS = (
+    UnifiedReleaseProgramVaultError,
+    UnifiedReleaseProgramVaultOperationsError,
+    UnifiedReleaseProgramContinuityError,
+    UnifiedReleaseProgramContinuityDistributionError,
+    UnifiedReleaseProgramContinuityAcceptanceError,
+    UnifiedReleaseProgramContinuityAcceptanceChangeError,
+    UnifiedReleaseProgramContinuityCommandCenterSignoffError,
+    UnifiedReleaseProgramContinuityCommandCenterAcceptanceError,
+    UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeError,
+    UnifiedReleaseProgramContinuityCommandCenterError,
+    UnifiedReleaseProgramHandoffError,
+    UnifiedReleaseProgramOperationsError,
+    UnifiedReleaseProgramError,
+)
+_HANDLED_ERRORS = _NOT_FOUND_ERRORS + _STATE_ERRORS + _PROGRAM_ERRORS
+
 class ProgramHttpApplication(ProgramRootHttpRoutes, ProgramCoreHttpRoutes, ProgramHandoffHttpRoutes, ProgramVaultHttpRoutes, ProgramVaultOperationsHttpRoutes, ProgramContinuityHttpRoutes, ProgramContinuityKitHttpRoutes, ProgramAcceptanceHttpRoutes, ProgramAcceptanceChangeHttpRoutes, ProgramCommandCenterHttpRoutes, ProgramCommandCenterSignoffHttpRoutes, ProgramReceiverAcceptanceHttpRoutes, ProgramReceiverAcceptanceChangeHttpRoutes, ProgramOperationsHttpRoutes, ProgramDownloadHttpRoutes):
     def __init__(self, service: ProgramComponentProvider, port: object) -> None:
         self.service = service
@@ -115,117 +161,44 @@ class ProgramHttpApplication(ProgramRootHttpRoutes, ProgramCoreHttpRoutes, Progr
 
     def dispatch(self, method: str, path: str) -> None:
         try:
-            if self._dispatch_root(method, path):
-                return
-            prefix = '/api/unified-release-programs/'
-            if not path.startswith(prefix):
-                self._send_error(HTTPStatus.NOT_FOUND, 'Unified Release Program route not found.')
-                return
-            parts = path.removeprefix(prefix).strip('/').split('/')
-            program_id = parts[0]
-            tail = '/' + '/'.join(parts[1:]) if len(parts) > 1 else ''
-            if self._dispatch_core(method, program_id, tail):
-                return
-            if self._dispatch_handoff(method, program_id, tail):
-                return
-            if self._dispatch_vault(method, program_id, tail):
-                return
-            if self._dispatch_vault_operations(method, program_id, tail):
-                return
-            if self._dispatch_continuity(method, program_id, tail):
-                return
-            if self._dispatch_continuity_kit(method, program_id, tail):
-                return
-            if self._dispatch_acceptance(method, program_id, tail):
-                return
-            if self._dispatch_acceptance_change(method, program_id, tail):
-                return
-            if self._dispatch_command_center(method, program_id, tail):
-                return
-            if self._dispatch_command_center_signoff(method, program_id, tail):
-                return
-            if self._dispatch_receiver_acceptance(method, program_id, tail):
-                return
-            if self._dispatch_receiver_acceptance_change(method, program_id, tail):
-                return
-            if self._dispatch_operations(method, program_id, tail):
-                return
-            if self._dispatch_download(method, program_id, tail):
-                return
+            self._dispatch_request(method, path)
+        except _HANDLED_ERRORS as exc:
+            self._send_error(self._error_status(exc), str(exc))
+
+    def _dispatch_request(self, method: str, path: str) -> None:
+        if self._dispatch_root(method, path):
+            return
+        prefix = '/api/unified-release-programs/'
+        if not path.startswith(prefix):
             self._send_error(HTTPStatus.NOT_FOUND, 'Unified Release Program route not found.')
-        except UnifiedReleaseProgramVaultNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramVaultStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramVaultError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramVaultOperationsNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramVaultOperationsStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramVaultOperationsError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramContinuityStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityDistributionNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramContinuityDistributionStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityDistributionError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityAcceptanceNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramContinuityAcceptanceStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityAcceptanceError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityAcceptanceChangeNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramContinuityAcceptanceChangeStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityAcceptanceChangeError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterSignoffNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterSignoffStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterSignoffError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramContinuityCommandCenterError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramHandoffNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramHandoffStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramHandoffError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramOperationsNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramOperationsStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramOperationsError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
-        except UnifiedReleaseProgramNotFoundError as exc:
-            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
-        except UnifiedReleaseProgramStateError as exc:
-            self._send_error(HTTPStatus.CONFLICT, str(exc))
-        except UnifiedReleaseProgramError as exc:
-            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+            return
+        parts = path.removeprefix(prefix).strip('/').split('/')
+        program_id = parts[0]
+        tail = '/' + '/'.join(parts[1:]) if len(parts) > 1 else ''
+        handlers = (
+            self._dispatch_core,
+            self._dispatch_handoff,
+            self._dispatch_vault,
+            self._dispatch_vault_operations,
+            self._dispatch_continuity,
+            self._dispatch_continuity_kit,
+            self._dispatch_acceptance,
+            self._dispatch_acceptance_change,
+            self._dispatch_command_center,
+            self._dispatch_command_center_signoff,
+            self._dispatch_receiver_acceptance,
+            self._dispatch_receiver_acceptance_change,
+            self._dispatch_operations,
+            self._dispatch_download,
+        )
+        if any(handler(method, program_id, tail) for handler in handlers):
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, 'Unified Release Program route not found.')
+
+    @staticmethod
+    def _error_status(exc: Exception) -> HTTPStatus:
+        if isinstance(exc, _NOT_FOUND_ERRORS):
+            return HTTPStatus.NOT_FOUND
+        if isinstance(exc, _STATE_ERRORS):
+            return HTTPStatus.CONFLICT
+        return HTTPStatus.BAD_REQUEST

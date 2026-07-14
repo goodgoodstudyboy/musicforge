@@ -18,6 +18,15 @@ BUILTIN_POLICY_PROFILES: dict[str, PolicyProfile] = {
             EvidenceRequirement("audio_timeline", component_types=("release_audio_timeline",)),
         ),
     ),
+    "release.audio": PolicyProfile(
+        policy_id="release.audio",
+        description="Release and current human-reviewed audio evidence are required.",
+        evidence_requirements=(
+            EvidenceRequirement("release", component_types=("release",)),
+            EvidenceRequirement("audio_certification", component_types=("release_audio_certification",)),
+            EvidenceRequirement("audio_timeline", component_types=("release_audio_timeline",)),
+        ),
+    ),
     "distribution.standard": PolicyProfile(
         policy_id="distribution.standard",
         description="Current runtime-verified Distribution evidence is required.",
@@ -74,6 +83,19 @@ BUILTIN_POLICY_PROFILES: dict[str, PolicyProfile] = {
             ),
         ),
         quorum_requirements=(QuorumRequirement("continuity_roots", minimum_count=3),),
+    ),
+    "program.receiver_acceptance": PolicyProfile(
+        policy_id="program.receiver_acceptance",
+        description="A current signed Program receiver acceptance is required.",
+        evidence_requirements=(
+            EvidenceRequirement(
+                "receiver_acceptance",
+                component_types=(
+                    "unified_release_program_receiver_acceptance",
+                    "unified_release_program_continuity_command_center_acceptance",
+                ),
+            ),
+        ),
     ),
 }
 

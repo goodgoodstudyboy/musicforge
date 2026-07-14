@@ -103,6 +103,11 @@ class ProgramApplicationService:
         operation = ProgramOperation(ProgramComponent(component), action, arguments, options)
         return self.execute(operation).value
 
+    def evaluate_gate(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        from song_agent.application.program.policy_gate import ProgramPolicyGate
+
+        return ProgramPolicyGate(self.component(ProgramComponent.PROGRAM)).evaluate(program_id, payload)
+
     def dispatch_http(self, port: object, method: str, path: str) -> None:
         from song_agent.application.program.http import ProgramHttpApplication
 

@@ -757,7 +757,7 @@
       "removal_target_version": "13.8.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.redaction",
       "owner": "musicforge-creation",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1916,7 +1916,7 @@
       "functions": [
         {
           "max_lines": 106,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_reference_route",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_003.py:_handle_reference_route",
           "name": "_handle_reference_route"
         }
       ],
@@ -1929,7 +1929,7 @@
       "functions": [
         {
           "max_lines": 106,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_project_edit",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_005.py:_handle_project_edit",
           "name": "_handle_project_edit"
         }
       ],
@@ -1942,7 +1942,7 @@
       "functions": [
         {
           "max_lines": 145,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_project_mix_route",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_007.py:_handle_project_mix_route",
           "name": "_handle_project_mix_route"
         }
       ],
@@ -1955,7 +1955,7 @@
       "functions": [
         {
           "max_lines": 282,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_project_review_sprint_route",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_009.py:_handle_project_review_sprint_route",
           "name": "_handle_project_review_sprint_route"
         }
       ],
@@ -1968,7 +1968,7 @@
       "functions": [
         {
           "max_lines": 94,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_generate_review_sprint_provider_candidates",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_010.py:_generate_review_sprint_provider_candidates",
           "name": "_generate_review_sprint_provider_candidates"
         }
       ],
@@ -1981,7 +1981,7 @@
       "functions": [
         {
           "max_lines": 180,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_project_review_task_route",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_011.py:_handle_project_review_task_route",
           "name": "_handle_project_review_task_route"
         }
       ],
@@ -1994,7 +1994,7 @@
       "functions": [
         {
           "max_lines": 114,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_project_editor_preview_apply",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_012.py:_handle_project_editor_preview_apply",
           "name": "_handle_project_editor_preview_apply"
         }
       ],
@@ -2007,12 +2007,12 @@
       "functions": [
         {
           "max_lines": 114,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_create_project_candidate_group",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_014.py:_create_project_candidate_group",
           "name": "_create_project_candidate_group"
         },
         {
           "max_lines": 116,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_project_candidate_group_apply",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_014.py:_handle_project_candidate_group_apply",
           "name": "_handle_project_candidate_group_apply"
         }
       ],
@@ -2025,12 +2025,12 @@
       "functions": [
         {
           "max_lines": 143,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_batch_route",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_016.py:_handle_batch_route",
           "name": "_handle_batch_route"
         },
         {
           "max_lines": 184,
-          "migrated_from": "song_agent/interfaces/api/routes/creation.py:_handle_job_route",
+          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_016.py:_handle_job_route",
           "name": "_handle_job_route"
         }
       ],
@@ -2043,7 +2043,7 @@
       "functions": [
         {
           "max_lines": 312,
-          "migrated_from": "song_agent/interfaces/api/routes/delivery.py:_handle_release_route",
+          "migrated_from": "song_agent/interfaces/api/routes/delivery_parts/part_002.py:_handle_release_route",
           "name": "_handle_release_route"
         }
       ],
@@ -2056,7 +2056,7 @@
       "functions": [
         {
           "max_lines": 318,
-          "migrated_from": "song_agent/interfaces/api/routes/delivery.py:_handle_distribution_route",
+          "migrated_from": "song_agent/interfaces/api/routes/delivery_parts/part_005.py:_handle_distribution_route",
           "name": "_handle_distribution_route"
         }
       ],
@@ -2069,7 +2069,7 @@
       "functions": [
         {
           "max_lines": 360,
-          "migrated_from": "song_agent/interfaces/api/routes/delivery.py:_handle_submission_route",
+          "migrated_from": "song_agent/interfaces/api/routes/delivery_parts/part_007.py:_handle_submission_route",
           "name": "_handle_submission_route"
         }
       ],
@@ -2082,7 +2082,7 @@
       "functions": [
         {
           "max_lines": 303,
-          "migrated_from": "song_agent/interfaces/api/routes/program.py:_handle_unified_command_center_release_trains_route",
+          "migrated_from": "song_agent/interfaces/api/routes/program_parts/part_002.py:_handle_unified_command_center_release_trains_route",
           "name": "_handle_unified_command_center_release_trains_route"
         }
       ],
@@ -2095,7 +2095,7 @@
       "functions": [
         {
           "max_lines": 82,
-          "migrated_from": "song_agent/interfaces/api/routes/program.py:_handle_unified_command_centers_route",
+          "migrated_from": "song_agent/interfaces/api/routes/program_ucc_parts/core.py:_dispatch_ucc_core",
           "name": "_dispatch_ucc_core"
         }
       ],
@@ -2108,7 +2108,7 @@
       "functions": [
         {
           "max_lines": 83,
-          "migrated_from": "song_agent/interfaces/api/routes/program.py:_handle_unified_command_centers_route",
+          "migrated_from": "song_agent/interfaces/api/routes/program_ucc_parts/drifts.py:_dispatch_ucc_drifts",
           "name": "_dispatch_ucc_drifts"
         }
       ],
@@ -2121,7 +2121,7 @@
       "functions": [
         {
           "max_lines": 99,
-          "migrated_from": "song_agent/interfaces/api/routes/program.py:_handle_unified_command_centers_route",
+          "migrated_from": "song_agent/interfaces/api/routes/program_ucc_parts/evidence_detail.py:_dispatch_ucc_evidence_detail",
           "name": "_dispatch_ucc_evidence_detail"
         }
       ],
@@ -2134,7 +2134,7 @@
       "functions": [
         {
           "max_lines": 101,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_release_audio_reviews",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_001.py:_handle_release_audio_reviews",
           "name": "_handle_release_audio_reviews"
         }
       ],
@@ -2147,7 +2147,7 @@
       "functions": [
         {
           "max_lines": 141,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_release_audio_revisions",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_002.py:_handle_release_audio_revisions",
           "name": "_handle_release_audio_revisions"
         }
       ],
@@ -2160,12 +2160,12 @@
       "functions": [
         {
           "max_lines": 122,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_release_encoded_audio",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_003.py:_handle_release_encoded_audio",
           "name": "_handle_release_encoded_audio"
         },
         {
           "max_lines": 152,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_audio_lab_route",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_003.py:_handle_audio_lab_route",
           "name": "_handle_audio_lab_route"
         }
       ],
@@ -2178,7 +2178,7 @@
       "functions": [
         {
           "max_lines": 182,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_audio_campaign_route",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_004.py:_handle_audio_campaign_route",
           "name": "_handle_audio_campaign_route"
         }
       ],
@@ -2191,7 +2191,7 @@
       "functions": [
         {
           "max_lines": 118,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_release_audio_timeline",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_006.py:_handle_release_audio_timeline",
           "name": "_handle_release_audio_timeline"
         }
       ],
@@ -2204,7 +2204,7 @@
       "functions": [
         {
           "max_lines": 136,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_audio_quality_actions_route",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_008.py:_handle_audio_quality_actions_route",
           "name": "_handle_audio_quality_actions_route"
         }
       ],
@@ -2217,7 +2217,7 @@
       "functions": [
         {
           "max_lines": 149,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_release_acceptance_gate",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_011.py:_release_acceptance_gate",
           "name": "_release_acceptance_gate"
         }
       ],
@@ -2230,7 +2230,7 @@
       "functions": [
         {
           "max_lines": 235,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_acceptance_route",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_013.py:_handle_acceptance_route",
           "name": "_handle_acceptance_route"
         }
       ],
@@ -2243,7 +2243,7 @@
       "functions": [
         {
           "max_lines": 137,
-          "migrated_from": "song_agent/interfaces/api/routes/quality.py:_handle_acceptance_fix_sprint_route",
+          "migrated_from": "song_agent/interfaces/api/routes/quality_parts/part_016.py:_handle_acceptance_fix_sprint_route",
           "name": "_handle_acceptance_fix_sprint_route"
         }
       ],
@@ -2256,7 +2256,7 @@
       "functions": [
         {
           "max_lines": 102,
-          "migrated_from": "song_agent/interfaces/api/routes/studio.py:_apply_review_task_candidate",
+          "migrated_from": "song_agent/interfaces/api/routes/studio_parts/part_004.py:_apply_review_task_candidate",
           "name": "_apply_review_task_candidate"
         }
       ],
@@ -2282,12 +2282,12 @@
       "functions": [
         {
           "max_lines": 116,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_trust_operations_knowledge",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_parts/part_003.py:_handle_trust_operations_knowledge",
           "name": "_handle_trust_operations_knowledge"
         },
         {
           "max_lines": 107,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_trust_operations_control_signoff",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_parts/part_003.py:_handle_trust_operations_control_signoff",
           "name": "_handle_trust_operations_control_signoff"
         }
       ],
@@ -2300,7 +2300,7 @@
       "functions": [
         {
           "max_lines": 312,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_public_trust_centers",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_parts/part_005.py:_handle_public_trust_centers",
           "name": "_handle_public_trust_centers"
         }
       ],
@@ -2313,7 +2313,7 @@
       "functions": [
         {
           "max_lines": 116,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_public_trust_center_acceptance_board",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_parts/part_006.py:_handle_public_trust_center_acceptance_board",
           "name": "_handle_public_trust_center_acceptance_board"
         }
       ],
@@ -2326,7 +2326,7 @@
       "functions": [
         {
           "max_lines": 207,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_release_portfolio_governance_queues",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_parts/part_007.py:_handle_release_portfolio_governance_queues",
           "name": "_handle_release_portfolio_governance_queues"
         }
       ],
@@ -2339,7 +2339,7 @@
       "functions": [
         {
           "max_lines": 138,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_release_portfolio_audits",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/acknowledgement.py:_dispatch_portfolio_acknowledgement",
           "name": "_dispatch_portfolio_acknowledgement"
         }
       ],
@@ -2352,7 +2352,7 @@
       "functions": [
         {
           "max_lines": 99,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_release_portfolio_audits",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/downloads.py:_dispatch_portfolio_downloads",
           "name": "_dispatch_portfolio_downloads"
         }
       ],
@@ -2365,7 +2365,7 @@
       "functions": [
         {
           "max_lines": 100,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_release_portfolio_audits",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/final_board.py:_dispatch_portfolio_final_board",
           "name": "_dispatch_portfolio_final_board"
         }
       ],
@@ -2378,7 +2378,7 @@
       "functions": [
         {
           "max_lines": 96,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_release_portfolio_audits",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/portal_review.py:_dispatch_portfolio_portal_review",
           "name": "_dispatch_portfolio_portal_review"
         }
       ],
@@ -2391,7 +2391,7 @@
       "functions": [
         {
           "max_lines": 84,
-          "migrated_from": "song_agent/interfaces/api/routes/trust.py:_handle_release_portfolio_audits",
+          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/registry.py:_dispatch_portfolio_registry",
           "name": "_dispatch_portfolio_registry"
         }
       ],
@@ -2404,7 +2404,7 @@
       "functions": [
         {
           "max_lines": 104,
-          "migrated_from": "song_agent/interfaces/api/runtime.py:create_edit_job",
+          "migrated_from": "song_agent/interfaces/api/runtime_parts/job_store_parts/part_001.py:create_edit_job",
           "name": "create_edit_job"
         }
       ],
@@ -2417,7 +2417,7 @@
       "functions": [
         {
           "max_lines": 141,
-          "migrated_from": "song_agent/interfaces/api/runtime.py:_run_job",
+          "migrated_from": "song_agent/interfaces/api/runtime_parts/job_store_parts/part_003.py:_run_job",
           "name": "_run_job"
         }
       ],
@@ -2430,7 +2430,7 @@
       "functions": [
         {
           "max_lines": 187,
-          "migrated_from": "song_agent/interfaces/api/runtime.py:_run_edit_job",
+          "migrated_from": "song_agent/interfaces/api/runtime_parts/job_store_parts/part_004.py:_run_edit_job",
           "name": "_run_edit_job"
         }
       ],
@@ -2443,7 +2443,7 @@
       "functions": [
         {
           "max_lines": 87,
-          "migrated_from": "song_agent/interfaces/api/runtime.py:_run_node_retry",
+          "migrated_from": "song_agent/interfaces/api/runtime_parts/job_store_parts/part_005.py:_run_node_retry",
           "name": "_run_node_retry"
         }
       ],
@@ -2469,7 +2469,7 @@
       "functions": [
         {
           "max_lines": 90,
-          "migrated_from": "song_agent/interfaces/cli/commands/program.py:_add_ga_unified_command_center_evidence_args",
+          "migrated_from": "song_agent/interfaces/cli/commands/program_parts/part_002.py:_add_ga_unified_command_center_evidence_args",
           "name": "_add_ga_unified_command_center_evidence_args"
         }
       ],
@@ -2482,7 +2482,7 @@
       "functions": [
         {
           "max_lines": 81,
-          "migrated_from": "song_agent/interfaces/cli/commands/program.py:build_unified_release_program_handoff_parser",
+          "migrated_from": "song_agent/interfaces/cli/commands/program_parts/part_005.py:build_unified_release_program_handoff_parser",
           "name": "build_unified_release_program_handoff_parser"
         }
       ],
@@ -2495,7 +2495,7 @@
       "functions": [
         {
           "max_lines": 99,
-          "migrated_from": "song_agent/interfaces/cli/commands/program.py:_run_unified_command_center_command",
+          "migrated_from": "song_agent/interfaces/cli/commands/program_parts/part_007.py:_run_unified_command_center_command",
           "name": "_run_unified_command_center_command"
         }
       ],
@@ -2508,7 +2508,7 @@
       "functions": [
         {
           "max_lines": 96,
-          "migrated_from": "song_agent/interfaces/cli/commands/program.py:_run_unified_release_program_handoff_command",
+          "migrated_from": "song_agent/interfaces/cli/commands/program_parts/part_010.py:_run_unified_release_program_handoff_command",
           "name": "_run_unified_release_program_handoff_command"
         }
       ],
@@ -2521,7 +2521,7 @@
       "functions": [
         {
           "max_lines": 104,
-          "migrated_from": "song_agent/interfaces/cli/commands/quality.py:build_audio_lab_parser",
+          "migrated_from": "song_agent/interfaces/cli/commands/quality_parts/part_002.py:build_audio_lab_parser",
           "name": "build_audio_lab_parser"
         }
       ],
@@ -2534,7 +2534,7 @@
       "functions": [
         {
           "max_lines": 168,
-          "migrated_from": "song_agent/interfaces/cli/commands/quality.py:build_audio_campaign_parser",
+          "migrated_from": "song_agent/interfaces/cli/commands/quality_parts/part_003.py:build_audio_campaign_parser",
           "name": "build_audio_campaign_parser"
         }
       ],
@@ -2547,7 +2547,7 @@
       "functions": [
         {
           "max_lines": 85,
-          "migrated_from": "song_agent/interfaces/cli/commands/quality.py:_run_audio_lab_command",
+          "migrated_from": "song_agent/interfaces/cli/commands/quality_parts/part_006.py:_run_audio_lab_command",
           "name": "_run_audio_lab_command"
         }
       ],
@@ -2560,7 +2560,7 @@
       "functions": [
         {
           "max_lines": 134,
-          "migrated_from": "song_agent/interfaces/cli/commands/quality.py:_run_audio_campaign_command",
+          "migrated_from": "song_agent/interfaces/cli/commands/quality_parts/part_007.py:_run_audio_campaign_command",
           "name": "_run_audio_campaign_command"
         }
       ],
@@ -2573,7 +2573,7 @@
       "functions": [
         {
           "max_lines": 89,
-          "migrated_from": "song_agent/interfaces/cli/commands/quality.py:_run_release_audio_quality_actions_command",
+          "migrated_from": "song_agent/interfaces/cli/commands/quality_parts/part_008.py:_run_release_audio_quality_actions_command",
           "name": "_run_release_audio_quality_actions_command"
         }
       ],
@@ -2586,7 +2586,7 @@
       "functions": [
         {
           "max_lines": 184,
-          "migrated_from": "song_agent/interfaces/cli/commands/release_check.py:_execute_ga_check",
+          "migrated_from": "song_agent/interfaces/cli/commands/release_check_parts/part_004.py:_execute_ga_check",
           "name": "_execute_ga_check"
         }
       ],
@@ -2599,7 +2599,7 @@
       "functions": [
         {
           "max_lines": 173,
-          "migrated_from": "song_agent/interfaces/cli/commands/release_check.py:_execute_verify_ga_readiness_report",
+          "migrated_from": "song_agent/interfaces/cli/commands/release_check_parts/part_005.py:_execute_verify_ga_readiness_report",
           "name": "_execute_verify_ga_readiness_report"
         }
       ],
@@ -2612,7 +2612,7 @@
       "functions": [
         {
           "max_lines": 96,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:build_public_trust_center_parser",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_005.py:build_public_trust_center_parser",
           "name": "build_public_trust_center_parser"
         }
       ],
@@ -2625,7 +2625,7 @@
       "functions": [
         {
           "max_lines": 81,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:_execute_release_portfolio_audit",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_011.py:_execute_release_portfolio_audit",
           "name": "_execute_release_portfolio_audit"
         }
       ],
@@ -2638,12 +2638,12 @@
       "functions": [
         {
           "max_lines": 103,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:_execute_release_portfolio_governance_final_board",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_012.py:_execute_release_portfolio_governance_final_board",
           "name": "_execute_release_portfolio_governance_final_board"
         },
         {
           "max_lines": 89,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:_execute_release_portfolio_governance_evidence_vault",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_012.py:_execute_release_portfolio_governance_evidence_vault",
           "name": "_execute_release_portfolio_governance_evidence_vault"
         }
       ],
@@ -2656,7 +2656,7 @@
       "functions": [
         {
           "max_lines": 87,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:_execute_release_portfolio_governance_attestation_registry",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_013.py:_execute_release_portfolio_governance_attestation_registry",
           "name": "_execute_release_portfolio_governance_attestation_registry"
         }
       ],
@@ -2669,7 +2669,7 @@
       "functions": [
         {
           "max_lines": 107,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:_execute_public_trust_center_publication",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_014.py:_execute_public_trust_center_publication",
           "name": "_execute_public_trust_center_publication"
         }
       ],
@@ -2682,7 +2682,7 @@
       "functions": [
         {
           "max_lines": 122,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:_execute_trust_operations_hub",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_015.py:_execute_trust_operations_hub",
           "name": "_execute_trust_operations_hub"
         }
       ],
@@ -2695,7 +2695,7 @@
       "functions": [
         {
           "max_lines": 292,
-          "migrated_from": "song_agent/interfaces/cli/commands/trust.py:_execute_public_trust_center",
+          "migrated_from": "song_agent/interfaces/cli/commands/trust_parts/part_018.py:_execute_public_trust_center",
           "name": "_execute_public_trust_center"
         }
       ],
@@ -2711,6 +2711,6 @@
     "new_module_max_lines": 400,
     "route_handler_max_lines": 100
   },
-  "previous_release_tag": "v13.4.0",
+  "previous_release_tag": "v13.5.0",
   "schema_version": 1
 }

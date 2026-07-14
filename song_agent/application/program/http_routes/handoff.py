@@ -2,8 +2,16 @@ from __future__ import annotations
 
 from http import HTTPStatus
 
+
 class ProgramHandoffHttpRoutes:
     def _dispatch_handoff(self, method, program_id, tail) -> bool:
+        return (
+            self._dispatch_handoff_review(method, program_id, tail)
+            or self._dispatch_handoff_responses(method, program_id, tail)
+            or self._dispatch_handoff_decision(method, program_id, tail)
+        )
+
+    def _dispatch_handoff_review(self, method, program_id, tail) -> bool:
         if tail == '/handoff':
             if method != 'GET':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -42,6 +50,9 @@ class ProgramHandoffHttpRoutes:
             report = self.unified_release_program_handoff_store.verify_review_pack_zip(program_id, review_pack_id, self._optional_json_body())
             self._send_json({'ok': report.get('status') == 'passed', 'verification': report, 'summary': report.get('summary', {}), 'status': report.get('status')})
             return True
+        return False
+
+    def _dispatch_handoff_responses(self, method, program_id, tail) -> bool:
         if tail == '/handoff/responses/import':
             if method != 'POST':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -73,6 +84,9 @@ class ProgramHandoffHttpRoutes:
             report = self.unified_release_program_handoff_store.verify_accepted_evidence_zip(program_id, evidence_id, self._optional_json_body())
             self._send_json({'ok': report.get('status') == 'passed', 'verification': report, 'summary': report.get('summary', {}), 'status': report.get('status')})
             return True
+        return False
+
+    def _dispatch_handoff_decision(self, method, program_id, tail) -> bool:
         if tail == '/handoff/decision-board/refresh':
             if method != 'POST':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')

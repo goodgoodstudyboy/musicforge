@@ -39,6 +39,23 @@ def test_program_api_and_cli_use_explicit_registries() -> None:
     }
 
 
+def test_program_application_gate_is_policy_owned(tmp_path: Path) -> None:
+    service = ProgramApplicationService.build(root=tmp_path / "unified-release-programs")
+    created = service.invoke("program", "create_program", {"name": "Policy-owned Program"})
+
+    legacy = service.evaluate_gate(created["program_id"], {})
+    unknown = service.evaluate_gate(
+        created["program_id"],
+        {"policy": "program.unknown", "evidence_manifest_id": "program"},
+    )
+
+    assert legacy["policy_id"] == "program.compatibility"
+    assert legacy["legacy_gate_summary"]["authoritative"] is False
+    assert legacy["status"] == "failed"
+    assert unknown["status"] == "failed"
+    assert unknown["blockers"] == ["program_policy_id"]
+
+
 def test_v134_program_vertical_slice_smoke() -> None:
     ok, detail = run_program_vertical_slice_smoke(Path(__file__).resolve().parents[1])
 

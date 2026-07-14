@@ -209,12 +209,14 @@ class DeliveryRoutesPart004:
         policy_id = str(payload.get("gate_policy") or payload.get("policy") or "").strip()
         if not policy_id:
             return None
-        if policy_id not in {"release.standard", "release.audio_strict"}:
+        if policy_id == "release.audio_strict":
+            policy_id = "release.audio"
+        if policy_id not in {"release.standard", "release.audio"}:
             return {
                 "status": "failed",
                 "hard_block": True,
                 "policy_id": policy_id,
-                "message": "Release signoff only accepts release.standard or release.audio_strict policy.",
+                "message": "Release signoff only accepts release.standard or release.audio policy.",
                 "blockers": ["release_policy_id"],
             }
         workspace = self.release_store.root.parent.resolve()

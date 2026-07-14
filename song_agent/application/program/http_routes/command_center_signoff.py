@@ -4,6 +4,12 @@ from http import HTTPStatus
 
 class ProgramCommandCenterSignoffHttpRoutes:
     def _dispatch_command_center_signoff(self, method, program_id, tail) -> bool:
+        return (
+            self._dispatch_command_center_signoff_workflow(method, program_id, tail)
+            or self._dispatch_command_center_signoff_archive(method, program_id, tail)
+        )
+
+    def _dispatch_command_center_signoff_workflow(self, method, program_id, tail) -> bool:
         if tail == '/continuity-command-center-signoff':
             if method != 'GET':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -48,6 +54,9 @@ class ProgramCommandCenterSignoffHttpRoutes:
             proof = self.unified_release_program_continuity_command_center_signoff_store.reset_signoff(program_id, str(payload.get('change_request_id') or ''), payload)
             self._send_json({'ok': proof.get('status') == 'applied', 'reset_proof': proof, 'status': proof.get('status'), 'summary': {'reset_event_hash': proof.get('reset_event_hash')}})
             return True
+        return False
+
+    def _dispatch_command_center_signoff_archive(self, method, program_id, tail) -> bool:
         if tail == '/continuity-command-center-signoff/export':
             if method != 'POST':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')

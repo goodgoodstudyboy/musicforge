@@ -30,8 +30,11 @@ def _program(
             proof_arguments=proofs,
             required_proofs=required,
         ),
-        gate_policies=("program.handoff", "program.continuity", "ga.standard", "ga.lts"),
+        gate_policies=("program.handoff", "program.continuity", "program.receiver_acceptance", "ga.standard", "ga.lts"),
+        cli_commands=("unified-release-program",),
+        api_routes=("/api/unified-release-programs",),
         web_panel="Program",
+        release_checks=("v134.program_vertical_slice_smoke",),
         compatibility_aliases=aliases,
     )
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import platform
 import re
@@ -13,6 +12,12 @@ from typing import Any, Callable
 import tomllib
 
 from song_agent import __version__
+from song_agent.application.policy_compatibility import (
+    canonical_ga_policy_id,
+    evaluate_check_policy,
+    legacy_require_summary,
+    normalized_legacy_require_payload,
+)
 from song_agent.audio_profiles import AudioProfileStore, AudioProfileNotFoundError
 from song_agent.audio_campaign_governance import AudioCampaignGovernanceStore
 from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
@@ -930,8 +935,17 @@ def build_ga_readiness_report(
         final_severity = "blocking"
     _add_check(checks, "ga.trust_final_readiness", final_status, final_severity, final_message, final_summary)
 
+    readiness_scope = locals()
+    legacy_require_payload = normalized_legacy_require_payload({
+        key: value for key, value in readiness_scope.items() if key.startswith("require_")
+    })
+    enabled_legacy_requires = any(bool(value) for value in legacy_require_payload.values())
+    effective_policy = canonical_ga_policy_id(policy, legacy_require_payload)
     policy_summary = _evidence_policy_summary(policy, evidence_manifest_path)
-    if policy or evidence_manifest_path:
+    if not (policy or evidence_manifest_path) and enabled_legacy_requires:
+        policy_summary = evaluate_check_policy(effective_policy, "ga-readiness", checks)
+    converted_requires = legacy_require_summary(legacy_require_payload, effective_policy)
+    if policy or evidence_manifest_path or enabled_legacy_requires:
         source["policy_id"] = policy_summary.get("policy_id")
         source["evidence_graph_hash"] = policy_summary.get("graph_hash")
         source["evidence_manifest_hash"] = policy_summary.get("manifest_hash")
@@ -944,8 +958,13 @@ def build_ga_readiness_report(
             policy_summary,
         )
 
-    blocking_failures = [check for check in checks if check["status"] == "failed" and check.get("severity") == "blocking"]
-    warnings = [check for check in checks if check["status"] == "warning" or check.get("severity") == "warning"]
+    policy_authoritative = bool(policy or evidence_manifest_path or enabled_legacy_requires)
+    if policy_authoritative:
+        blocking_failures = [] if policy_summary.get("status") == "passed" else [{"check_id": "ga.evidence_policy"}]
+        warnings = list(policy_summary.get("warnings") or [])
+    else:
+        blocking_failures = [check for check in checks if check["status"] == "failed" and check.get("severity") == "blocking"]
+        warnings = [check for check in checks if check["status"] == "warning" or check.get("severity") == "warning"]
     status = "blocked" if blocking_failures else "warning" if warnings else "ready"
 
     report = {
@@ -992,6 +1011,7 @@ def build_ga_readiness_report(
         "checks": checks,
         "next_actions": _next_actions(checks),
         "source": source,
+        "legacy_require_summary": converted_requires,
     }
     report["integrity_hash"] = ga_readiness_integrity_hash(report)
     return sanitize_ga_report(report)

@@ -1,6 +1,6 @@
 """Single active import boundary for a pre-v13 compatibility module."""
 
-import song_agent.redaction as _implementation
+import song_agent.platform.verification.redaction as _implementation
 
 globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
 

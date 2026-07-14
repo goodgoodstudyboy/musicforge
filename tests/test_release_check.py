@@ -125,6 +125,7 @@ from song_agent.release_checks import (
     _v1218_interface_registry_smoke,
     _v1219_evidence_policy_smoke,
     _v1220_release_check_governance_smoke,
+    _v136_policy_gate_cutover_smoke,
     _version_consistency,
     print_release_check_report,
 )
@@ -1674,6 +1675,17 @@ def test_v1214_architecture_guardrails_smoke(tmp_path: Path, monkeypatch) -> Non
     assert "blocker_count=0" in detail
     assert "job_state_compatibility=True" in detail
     assert "generation_compatibility=True" in detail
+
+
+def test_v136_policy_gate_cutover_smoke(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])
+    ok, detail = _v136_policy_gate_cutover_smoke(Path.cwd())
+
+    assert ok is True, detail
+    assert "same_manifest_same_policy=True" in detail
+    assert "identity_tamper=True" in detail
+    assert "capability_metadata=True" in detail
+    assert "program_policy_owned=True" in detail
 
 
 def test_v1215_verification_kernel_smoke(tmp_path: Path) -> None:

@@ -14,6 +14,11 @@ def test_builtin_capability_inventory_is_unique_and_complete() -> None:
     assert all(row["bounded_context"] in {"delivery", "quality", "program"} for row in rows)
     assert all(row["application_service"] for row in rows)
     assert all(row["verification_package_type"] for row in rows)
+    assert all(row["cli_commands"] for row in rows)
+    assert all(row["api_routes"] for row in rows)
+    assert all(row["web_panel"] for row in rows)
+    assert all(row["release_checks"] for row in rows)
+    assert all(row["gate_policies"] for row in rows)
 
 
 def test_capability_registry_rejects_duplicate_component_and_alias() -> None:

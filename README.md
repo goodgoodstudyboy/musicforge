@@ -53,6 +53,12 @@ reachable through explicit application anti-corruption facades, so CLI/API
 modules no longer import compatibility Stores directly. Current architecture,
 migration, and deprecation guidance is indexed under [`docs/`](docs/ARCHITECTURE.md).
 
+As of v13.6, GA, Release, and Program readiness decisions are owned by the
+Evidence Graph Policy Engine. Legacy `require_*` options remain input adapters
+only: reports preserve `legacy_require_summary` for audit, while current ZIP,
+verification report, runtime identity, generation, and capability metadata are
+recomputed from the referenced evidence manifest before a gate can pass.
+
 `pytest -q` runs the complete active suite. Every active test belongs to exactly
 one primary `unit`, `contract`, or `integration` shard; security and slow are
 additional attributes. Archive-only release-check smoke is kept separate to

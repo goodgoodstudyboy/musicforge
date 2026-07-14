@@ -4,6 +4,12 @@ from http import HTTPStatus
 
 class ProgramContinuityHttpRoutes:
     def _dispatch_continuity(self, method, program_id, tail) -> bool:
+        return (
+            self._dispatch_continuity_workflow(method, program_id, tail)
+            or self._dispatch_continuity_archive(method, program_id, tail)
+        )
+
+    def _dispatch_continuity_workflow(self, method, program_id, tail) -> bool:
         if tail == '/continuity':
             if method != 'GET':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -54,6 +60,9 @@ class ProgramContinuityHttpRoutes:
             signoff = self.unified_release_program_continuity_store.signoff_continuity(program_id, self._optional_json_body())
             self._send_json({'ok': signoff.get('status') == 'signed', 'signoff': signoff, 'summary': {'signoff_hash': signoff.get('integrity_hash')}, 'status': signoff.get('status')}, status=HTTPStatus.CREATED)
             return True
+        return False
+
+    def _dispatch_continuity_archive(self, method, program_id, tail) -> bool:
         if tail == '/continuity/archive/export':
             if method != 'POST':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')

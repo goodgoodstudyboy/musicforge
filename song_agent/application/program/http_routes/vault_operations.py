@@ -4,6 +4,12 @@ from http import HTTPStatus
 
 class ProgramVaultOperationsHttpRoutes:
     def _dispatch_vault_operations(self, method, program_id, tail) -> bool:
+        return (
+            self._dispatch_vault_operations_custody(method, program_id, tail)
+            or self._dispatch_vault_operations_archive(method, program_id, tail)
+        )
+
+    def _dispatch_vault_operations_custody(self, method, program_id, tail) -> bool:
         if tail == '/vault-operations/policy':
             if method != 'POST':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -60,6 +66,9 @@ class ProgramVaultOperationsHttpRoutes:
             transfer = self.unified_release_program_vault_operations_store.create_transfer_pack(program_id, self._optional_json_body())
             self._send_json({'ok': transfer.get('status') == 'ready', 'transfer_report': transfer, 'summary': transfer.get('summary', {}), 'status': transfer.get('status')})
             return True
+        return False
+
+    def _dispatch_vault_operations_archive(self, method, program_id, tail) -> bool:
         if tail == '/vault-operations/signoff':
             if method != 'POST':
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')

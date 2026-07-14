@@ -9,8 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from song_agent.ga_readiness import GA_READINESS_PACKAGE_TYPE, GA_READINESS_SCHEMA_VERSION, ga_readiness_integrity_ok
+from song_agent.application.policy_compatibility import (
+    canonical_ga_policy_id,
+    evaluate_check_policy,
+    normalized_legacy_require_payload,
+)
 from song_agent.audio_campaign_archive_verifier import (
-    AUDIO_CAMPAIGN_ARCHIVE_PACKAGE_TYPE,
     verify_audio_campaign_archive_package,
 )
 from song_agent.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package
@@ -54,16 +58,16 @@ from song_agent.music_acceptance import AcceptanceStore
 from song_agent.music_acceptance import stable_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.releases import stable_hash as release_stable_hash
+from song_agent.trust_operations_final_readiness_verifier import (
+    TRUST_OPERATIONS_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE,
+    verify_trust_operations_final_handoff_package,
+)
 
 UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_continuous_review_verification"
 UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_drift_response_verification"
 UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_evidence_review_verification"
 UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_evidence_review_acceptance_verification"
 UNIFIED_COMMAND_CENTER_REVIEWER_DECISION_BOARD_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_command_center_reviewer_decision_board_verification"
-from song_agent.trust_operations_final_readiness_verifier import (
-    TRUST_OPERATIONS_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE,
-    verify_trust_operations_final_handoff_package,
-)
 
 
 GA_READINESS_VERIFICATION_PACKAGE_TYPE = "musicforge_ga_readiness_verification_report"
@@ -228,6 +232,7 @@ def verify_ga_readiness_report(
     release_check_latest_report_path: Path | str | None = None,
     release_check_ga_report_path: Path | str | None = None,
 ) -> dict[str, Any]:
+    verification_inputs = locals().copy()
     target = Path(report_path)
     checks: list[dict[str, Any]] = []
     try:
@@ -648,7 +653,63 @@ def verify_ga_readiness_report(
                 final_handoff_verification_report_path,
             )
 
-    blockers = [check for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
+    legacy_summary = report.get("legacy_require_summary") if isinstance(report.get("legacy_require_summary"), dict) else {}
+    if legacy_summary.get("status") == "converted":
+        require_payload = normalized_legacy_require_payload({
+            key: value for key, value in verification_inputs.items() if key.startswith("require_")
+        })
+        policy_id = canonical_ga_policy_id(str(legacy_summary.get("policy_id") or "") or None, require_payload)
+        reported_enabled = {
+            str(key) for key in legacy_summary.get("enabled", []) if isinstance(key, str)
+        }
+        verifier_requirements = {
+            key
+            for key, value in require_payload.items()
+            if key != "require_ready" and bool(value)
+        }
+        comparable_report_requirements = {
+            key for key in reported_enabled if key in verification_inputs
+        }
+        summary_matches = (
+            comparable_report_requirements.issubset(verifier_requirements)
+            and legacy_summary.get("policy_id") == policy_id
+        )
+        checks.append(
+            _check_result(
+                "ga_readiness_legacy_require_binding",
+                summary_matches,
+                "Legacy require flags match the GA Policy compatibility projection.",
+            )
+        )
+        policy_gate = evaluate_check_policy(policy_id, "ga-readiness-verifier", checks)
+        checks.append(
+            _check_result(
+                "ga_readiness_legacy_policy_status",
+                policy_gate.get("status") == "passed",
+                "Legacy verifier facts pass through the Policy Engine.",
+                {"policy_id": policy_id, "blockers": policy_gate.get("blockers", [])},
+            )
+        )
+        platform_check_ids = {
+            "ga_readiness_report_readable",
+            "ga_readiness_package_type",
+            "ga_readiness_schema_version",
+            "ga_readiness_integrity",
+            "ga_readiness_redaction",
+            "ga_readiness_status_allowed",
+            "ga_readiness_require_ready",
+            "ga_readiness_legacy_require_binding",
+            "ga_readiness_legacy_policy_status",
+        }
+        blockers = [
+            check
+            for check in checks
+            if check.get("check_id") in platform_check_ids
+            and check.get("status") == "failed"
+            and check.get("severity") == "blocking"
+        ]
+    else:
+        blockers = [check for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
     warnings = [check for check in checks if check.get("status") == "warning" or check.get("severity") == "warning"]
     verification = {
         "package_type": GA_READINESS_VERIFICATION_PACKAGE_TYPE,
@@ -685,6 +746,9 @@ def _verify_evidence_policy(
     report_policy = str(source.get("policy_id") or "")
     effective_policy = policy or report_policy
     if not effective_policy:
+        return
+    legacy_summary = report.get("legacy_require_summary") if isinstance(report.get("legacy_require_summary"), dict) else {}
+    if legacy_summary.get("status") == "converted" and evidence_manifest_path is None:
         return
     if report_policy and not policy:
         _add_check(

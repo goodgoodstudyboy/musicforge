@@ -59,7 +59,7 @@ class ProgramCoreHttpRoutes:
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
             payload = self._optional_json_body()
-            gate = self.unified_release_program_store.gate(program_zip_path=payload.get('program_zip'), verification_report_path=payload.get('program_verification_report'), external_evidence_manifest_path=payload.get('external_evidence_manifest'), program_signoff_binding_path=payload.get('program_signoff_binding'))
+            gate = self.service.evaluate_gate(program_id, payload)
             self._send_json({'ok': gate.get('status') == 'passed', 'gate': gate, 'summary': gate.get('summary', {}), 'status': gate.get('status')})
             return True
         return False

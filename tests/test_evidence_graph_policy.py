@@ -64,6 +64,11 @@ def _registry(component_type: str = "unified_release_program") -> CapabilityRegi
                 verification_package_type=FAKE_VERIFICATION_PACKAGE_TYPE,
                 defaults=(("strict", True),),
             ),
+            gate_policies=("ga.standard", "program.continuity"),
+            cli_commands=("test-evidence",),
+            api_routes=("/api/test-evidence",),
+            web_panel="Test Evidence",
+            release_checks=("test.evidence",),
         )
     )
     return registry
@@ -162,6 +167,31 @@ def test_evidence_graph_treats_package_directory_as_failed_evidence(tmp_path: Pa
 
     assert graph.status == "failed"
     assert "evidence_package_missing" in graph.nodes[0].blockers
+
+
+def test_evidence_graph_rejects_capability_without_interface_metadata(tmp_path: Path) -> None:
+    _package, _report, manifest = _fixture(tmp_path)
+    registry = CapabilityRegistry()
+    registry.register(
+        CapabilitySpec(
+            capability_id="test.incomplete",
+            component_type="unified_release_program",
+            bounded_context="test",
+            application_service="test.verify",
+            runtime=RuntimeVerificationSpec(
+                module=__name__,
+                function="fake_runtime_verifier",
+                package_type="musicforge_test_evidence",
+                verification_package_type=FAKE_VERIFICATION_PACKAGE_TYPE,
+                defaults=(("strict", True),),
+            ),
+        )
+    )
+
+    graph = build_evidence_graph(manifest, registry=registry)
+
+    assert graph.status == "failed"
+    assert "evidence_capability_metadata_incomplete" in graph.nodes[0].blockers
 
 
 def test_evidence_graph_rejects_duplicate_identity_and_report_reuse(tmp_path: Path) -> None:
@@ -291,6 +321,30 @@ def test_release_policy_gate_rejects_manifest_outside_workspace(tmp_path: Path) 
 
     assert gate and gate["status"] == "failed"
     assert gate["hard_block"] is True
+
+
+def test_program_policy_gate_runtime_verifies_manifest_and_program_scope(tmp_path: Path, monkeypatch) -> None:
+    import song_agent.application.evidence_policy_gate as policy_gate_module
+    from song_agent.application.program.policy_gate import ProgramPolicyGate
+
+    component_type = "unified_release_program_receiver_acceptance"
+    _package, _report, manifest = _fixture(tmp_path, component_type=component_type)
+    monkeypatch.setattr(policy_gate_module, "capability_registry", _registry(component_type))
+    store = type("ProgramStore", (), {"root": tmp_path / "unified-release-programs"})()
+    gate = ProgramPolicyGate(store)
+
+    passed = gate.evaluate(
+        "component-001",
+        {"policy": "program.receiver_acceptance", "evidence_manifest": manifest},
+    )
+    wrong_program = gate.evaluate(
+        "other-program",
+        {"policy": "program.receiver_acceptance", "evidence_manifest": manifest},
+    )
+
+    assert passed["status"] == "passed"
+    assert wrong_program["status"] == "failed"
+    assert "policy.program_scope" in wrong_program["blockers"]
 
 
 def test_builtin_program_capability_rechecks_real_program_package(tmp_path: Path) -> None:

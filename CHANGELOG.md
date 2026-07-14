@@ -1,5 +1,13 @@
 # Changelog
 
+## v13.6.0 - 2026-07-15
+
+- Made Evidence Graph policy evaluation authoritative for GA readiness, Release signoff, and the Program application gate while retaining non-authoritative legacy require summaries for compatibility audits.
+- Added `release.audio`, `program.continuity`, and `program.receiver_acceptance` profiles, canonical runtime identity checks, Program scope binding, and complete CLI/API/Web/release-check/policy metadata for every capability.
+- Moved Release signoff's legacy require adapter behind a thin application service and split the remaining oversized Program HTTP dispatch functions below the v13 interface limit.
+- Consolidated text and metadata redaction into the Verification Kernel, reducing active compatibility imports from 227 to 226 with no active cycles or boundary violations.
+- Added `v136.policy_gate_cutover_smoke` covering profile presence, capability metadata, legacy/policy equivalence, identity tampering, and production gate ownership.
+
 ## v13.5.0 - 2026-07-15
 
 - Replaced runtime API route AST discovery with a fixed, versioned 117-route manifest and removed every `legacy-compatible` route schema.

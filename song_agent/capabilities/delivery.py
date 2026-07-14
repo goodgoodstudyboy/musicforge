@@ -12,6 +12,12 @@ def _spec(
     verification_package_type: str,
     defaults: tuple[tuple[str, object], ...],
 ) -> CapabilitySpec:
+    surface = {
+        "release": ("release", "/api/releases", "release.qa"),
+        "distribution": ("distribution", "/api/distributions", "release.distribution"),
+        "submission": ("submission", "/api/submissions", "release.submission"),
+        "release_operations": ("release-operations", "/api/release-operations", "release.operations"),
+    }[component_type]
     return CapabilitySpec(
         capability_id=capability_id,
         component_type=component_type,
@@ -24,8 +30,11 @@ def _spec(
             verification_package_type=verification_package_type,
             defaults=defaults,
         ),
-        gate_policies=("release.standard", "distribution.standard", "ga.standard", "ga.lts"),
+        gate_policies=("release.standard", "release.audio", "distribution.standard", "ga.standard", "ga.lts"),
+        cli_commands=(surface[0],),
+        api_routes=(surface[1],),
         web_panel="Delivery",
+        release_checks=(surface[2],),
     )
 
 

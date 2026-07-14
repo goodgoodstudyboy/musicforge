@@ -10,6 +10,7 @@ from song_agent.release_check_interfaces import run_interface_registry_smoke
 from song_agent.release_check_persistence_kernel import run_persistence_kernel_smoke, run_program_persistence_authority_smoke
 from song_agent.release_check_program_vertical import run_program_vertical_slice_smoke
 from song_agent.release_check.lts_cutover import run_lts_cutover_smoke
+from song_agent.release_check_evidence_policy import run_policy_gate_cutover_smoke
 
 
 DOMAIN = "meta"
@@ -72,6 +73,7 @@ CALLABLES = {
     "_v133_program_persistence_authority_smoke": run_program_persistence_authority_smoke,
     "_v134_program_vertical_slice_smoke": run_program_vertical_slice_smoke,
     "_v135_interface_decomposition_smoke": run_interface_registry_smoke,
+    "_v136_policy_gate_cutover_smoke": run_policy_gate_cutover_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

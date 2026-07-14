@@ -162,14 +162,10 @@ def _build_node(
     if capability is None:
         blockers.append("evidence_capability_unknown")
         return _failed_node(
-            node_id,
-            component_type,
-            component_id,
-            evidence_type,
-            generation,
-            blockers,
+            node_id, component_type, component_id, evidence_type, generation, blockers,
             dependencies=_dependencies(row),
         )
+    _check_capability_metadata(capability, blockers)
     if package_path is None or not package_path.is_file():
         blockers.append("evidence_package_missing")
     if report_path is None or not report_path.is_file():
@@ -182,9 +178,7 @@ def _build_node(
     runtime_identity = spec.extract_identity(runtime, component_type=capability.component_type)
     report_identity = spec.extract_identity(external_report, component_type=capability.component_type)
     manifest_identity = _manifest_identity(
-        row,
-        canonical_component_type=capability.component_type,
-        package_type=spec.package_type,
+        row, canonical_component_type=capability.component_type, package_type=spec.package_type
     )
     blockers.extend(_identity_blockers(manifest_identity, runtime_identity, report_identity))
     canonical_component_id = _text(runtime_identity.get("component_id")) or component_id
@@ -224,6 +218,18 @@ def _build_node(
         dependencies=_dependencies(row),
         runtime_summary={**_public_runtime_summary(runtime), "identity": runtime_identity},
     )
+
+
+def _check_capability_metadata(capability: Any, blockers: list[str]) -> None:
+    metadata = (
+        capability.cli_commands,
+        capability.api_routes,
+        capability.web_panel,
+        capability.release_checks,
+        capability.gate_policies,
+    )
+    if not all(metadata):
+        blockers.append("evidence_capability_metadata_incomplete")
 
 
 def _node_identity(row: dict[str, Any]) -> tuple[str, str, str, int, str, list[str]]:

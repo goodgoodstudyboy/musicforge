@@ -1,5 +1,5 @@
 {
-  "active_to_compatibility_import_max_count": 227,
+  "active_to_compatibility_import_max_count": 226,
   "allowed_active_to_compatibility_imports": [
     {
       "imported": "song_agent.acceptance_analytics",
@@ -388,10 +388,6 @@
     {
       "imported": "song_agent.quality",
       "importer": "song_agent.application.legacy_dependencies.quality"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.application.legacy_dependencies.redaction"
     },
     {
       "imported": "song_agent.reference_analysis",
@@ -911,7 +907,7 @@
     }
   ],
   "allowed_cycles": [],
-  "baseline_version": "13.5.0",
+  "baseline_version": "13.6.0",
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
@@ -935,7 +931,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 907,
+  "module_count": 911,
   "modules": [
     {
       "context": null,
@@ -1062,6 +1058,18 @@
       "layer": "application",
       "module": "song_agent.application.jobs.model",
       "path": "song_agent/application/jobs/model.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.legacy",
+      "path": "song_agent/application/legacy/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.legacy.release_signoff",
+      "path": "song_agent/application/legacy/release_signoff.py"
     },
     {
       "context": null,
@@ -2434,6 +2442,12 @@
     {
       "context": null,
       "layer": "application",
+      "module": "song_agent.application.policy_compatibility",
+      "path": "song_agent/application/policy_compatibility.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
       "module": "song_agent.application.program",
       "path": "song_agent/application/program/__init__.py"
     },
@@ -2538,6 +2552,12 @@
       "layer": "application",
       "module": "song_agent.application.program.http_routes.vault_operations",
       "path": "song_agent/application/program/http_routes/vault_operations.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.program.policy_gate",
+      "path": "song_agent/application/program/policy_gate.py"
     },
     {
       "context": null,
