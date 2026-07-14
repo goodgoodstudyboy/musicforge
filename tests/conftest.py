@@ -65,7 +65,10 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             markers.update({"legacy", "slow"})
             markers.add(_legacy_release_check_shard(name))
         else:
-            markers.add(_primary_marker(path, name, item=item))
+            primary_marker = _primary_marker(path, name, item=item)
+            markers.add(primary_marker)
+            if primary_marker == "integration":
+                markers.add(f"integration_partition_{_integration_partition(item.nodeid)}")
             if "verifier" in path or "security" in path or "zip" in name or "tamper" in name or "forg" in name:
                 markers.add("security")
             if _is_slow_test(path, name):
@@ -98,6 +101,10 @@ def _is_slow_test(path: str, name: str) -> bool:
 def _slow_partition(nodeid: str, *, count: int = 2) -> int:
     digest = hashlib.sha256(nodeid.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big") % count
+
+
+def _integration_partition(nodeid: str, *, count: int = 2) -> int:
+    return _slow_partition(nodeid, count=count)
 
 
 def _legacy_release_check_shard(name: str) -> str:

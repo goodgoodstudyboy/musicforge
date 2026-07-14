@@ -34,6 +34,8 @@ markers = [
   "contract: public schema, registry, and compatibility contracts",
   "security: verifier and adversarial package tests",
   "integration: cross-module CLI, API, or workflow tests",
+  "integration_partition_0: deterministic first active-integration CI partition",
+  "integration_partition_1: deterministic second active-integration CI partition",
   "legacy: archived compatibility behavior",
   "legacy_early: archived v1-v7 release-check smoke",
   "legacy_trust: archived v8-v9 release-check smoke",

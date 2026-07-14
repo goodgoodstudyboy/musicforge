@@ -28,7 +28,7 @@
 - PR unit and security suites exclude explicitly marked active-slow evidence replays; nightly runs those tests by layer and deterministic two-way partition. Local unit fast is about three minutes, while the measured slow-unit partitions are about 23 and 14 minutes.
 - The local aggregate `pytest.full` check keeps a hard 60-minute budget; the 30-minute target applies to each CI/nightly shard. Duplicate-entry warnings intentionally created by adversarial ZIP tests are suppressed only for that aggregate command so unexpected warning classes remain visible.
 - The relocated historical provider resolves the repository root explicitly, preserving v10 GA smoke compatibility after the release-check package split.
-- Hosted quality shards use two scoped workers rather than oversubscribing four workers on two-core runners; tests that start an HTTP server are assigned to integration, and the CI client timeout allows for hosted-runner variance. Local and nightly full coverage retain their existing partitioning.
+- Hosted quality shards use two scoped workers rather than oversubscribing four workers on two-core runners; tests that start an HTTP server are assigned to integration, and fast integration coverage is split across two deterministic jobs to keep each hosted shard under the 30-minute target. Cross-platform redaction assertions target public evidence summaries while local project exports retain their documented artifact paths. HTTP clients and asynchronous job polling use bounded hosted-runner-safe deadlines, while local and nightly full coverage retain their existing partitioning.
 
 ## v12.20.0 - 2026-07-13
 

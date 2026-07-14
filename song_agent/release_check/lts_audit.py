@@ -225,13 +225,18 @@ def _test_layers_separated(root: Path) -> bool:
         and all(f'"song_agent/platform/{name}"' in project for name in ("lifecycle", "persistence", "verification"))
         and all(marker in project and marker in nightly for marker in markers)
         and all(f"slow_partition_{index}" in project for index in range(2))
+        and all(
+            f"integration_partition_{index}" in project and f"integration_partition_{index}" in quality
+            for index in range(2)
+        )
         and "partition: [0, 1]" in nightly
         and "-n 4 --dist load" in nightly
         and "--profile nightly --skip-tests --json" in nightly
         and "--profile nightly --skip-tests --list" not in nightly
         and "slow and not legacy and ${{ matrix.layer }} and slow_partition_${{ matrix.partition }}" in nightly
-        and "shard: [unit, contract, integration]" in quality
+        and "shard: [unit, contract, integration_partition_0, integration_partition_1]" in quality
         and "def _primary_marker" in conftest
+        and "def _integration_partition" in conftest
         and "branches: [master]" in quality
         and "fail-fast: false" in quality
         and "actions/checkout@v4" not in quality + nightly

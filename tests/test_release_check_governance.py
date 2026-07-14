@@ -61,5 +61,6 @@ def test_quality_workflow_is_reproducible_on_hosted_runners() -> None:
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
 
     assert workflow.count("fetch-depth: 0") == 5
+    assert "shard: [unit, contract, integration_partition_0, integration_partition_1]" in workflow
     assert '-m "${{ matrix.shard }} and not slow and not legacy" -n 2 --dist loadscope' in workflow
     assert '-m "security and not legacy and not slow" -n 2 --dist loadscope' in workflow

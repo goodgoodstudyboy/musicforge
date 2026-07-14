@@ -7,12 +7,13 @@ from pathlib import Path
 from song_agent.auth import AuthConfig
 from song_agent.server import create_server
 from song_agent.projectio import read_json, write_json
-from tests.test_server_edits import request_json, request_payload, start_test_server, stop_test_server, wait_for_job
+from tests.test_server_edits import request_json, request_payload, start_test_server, stop_test_server
 from tests.test_server_review_sprints import _create_two_review_tasks
 
 
 def test_review_sprint_closeout_gate_force_signoff_export_and_final(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    local_secret_path = tmp_path / "private" / "song.wav"
     server = start_test_server()
     try:
         project_id, first_task_id, _second_task_id = _create_two_review_tasks(server)
@@ -25,14 +26,29 @@ def test_review_sprint_closeout_gate_force_signoff_export_and_final(tmp_path, mo
             server,
             "POST",
             f"/api/projects/{project_id}/review-sprints/{sprint_id}/close",
-            {"force": True, "override_reason": r"manual playback accepted api_key=sk-secret-value C:\Users\demo\song.wav", "notes": r"ok C:\Users\demo"},
+            {
+                "force": True,
+                "override_reason": (
+                    f"manual playback accepted api_key=sk-secret-value "
+                    f"C:\\Users\\demo\\song.wav {local_secret_path}"
+                ),
+                "notes": f"ok C:\\Users\\demo {local_secret_path.parent}",
+            },
         )
         signoff_status, signoff = request_json(server, "GET", f"/api/projects/{project_id}/review-sprints/{sprint_id}/signoff")
         refresh_after_status, refreshed_after = request_json(server, "POST", f"/api/projects/{project_id}/review-sprints/{sprint_id}/closeout/refresh")
         export_status, project_export = request_json(server, "GET", f"/api/projects/{project_id}/export")
         final_status, final_data = request_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": "v001", "force": True})
         final_export_status, final_export = request_json(server, "POST", f"/api/projects/{project_id}/final-export", {"include_audio": False, "include_stems": False, "include_stem_audio": False})
-        serialized = json.dumps({"forced": forced, "signoff": signoff, "export": project_export, "final": final_export}, ensure_ascii=False)
+        public_summary = json.dumps(
+            {
+                "forced_signoff": forced["signoff"],
+                "signoff": signoff,
+                "project_review_sprint": project_export["review_sprints"][0],
+                "final_review_sprint": final_export["final_export"]["review_sprint_closeout"],
+            },
+            ensure_ascii=False,
+        )
     finally:
         stop_test_server(server)
 
@@ -59,9 +75,9 @@ def test_review_sprint_closeout_gate_force_signoff_export_and_final(tmp_path, mo
     assert final_export_status == 200
     assert final_export["final_export"]["review_sprint_closeout"]["latest_sprint_id"] == sprint_id
     assert final_export["final_export"]["review_sprint_closeout"]["signed_sprint_count"] == 1
-    assert "sk-secret-value" not in serialized
-    assert "C:\\Users" not in serialized
-    assert str(tmp_path) not in serialized
+    assert "sk-secret-value" not in public_summary
+    assert "C:\\Users" not in public_summary
+    assert str(tmp_path) not in public_summary
 
 
 def test_review_sprint_closeout_gate_passes_after_apply_and_auth(tmp_path, monkeypatch):

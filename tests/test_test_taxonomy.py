@@ -8,6 +8,7 @@ from tests.conftest import (
     _is_managed_basetemp,
     _is_managed_test_path,
     _is_slow_test,
+    _integration_partition,
     _primary_marker,
     _slow_partition,
     pytest_configure,
@@ -35,6 +36,10 @@ def test_active_test_taxonomy_has_one_deterministic_primary_shard() -> None:
     assert _is_slow_test("test_song.py", "test_happy_path") is False
     assert _slow_partition("tests/test_example.py::test_case") in {0, 1}
     assert _slow_partition("tests/test_example.py::test_case") == _slow_partition("tests/test_example.py::test_case")
+    assert _integration_partition("tests/test_example.py::test_case") in {0, 1}
+    assert _integration_partition("tests/test_example.py::test_case") == _integration_partition(
+        "tests/test_example.py::test_case"
+    )
 
 
 def test_managed_basetemp_guard_only_accepts_direct_pid_directories(
