@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 from song_agent.interfaces.api.runtime import *
+from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 
 class StudioRoutes:
     def do_GET(self) -> None:
@@ -68,8 +69,7 @@ class StudioRoutes:
             if path == "/api/unified-command-center-release-trains" or path.startswith("/api/unified-command-center-release-trains/"):
                 self._handle_unified_command_center_release_trains_route(method, path)
                 return
-            if path == "/api/unified-release-programs" or path.startswith("/api/unified-release-programs/"):
-                self._handle_unified_release_programs_route(method, path)
+            if PROGRAM_ROUTE_REGISTRY.dispatch(self, method, path):
                 return
             if path == "/api/unified-command-centers" or path.startswith("/api/unified-command-centers/"):
                 self._handle_unified_command_centers_route(method, path)

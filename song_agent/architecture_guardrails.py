@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import importlib.util
 import json
@@ -51,11 +52,24 @@ CUSTOM_LIFECYCLE_ALGORITHM_NAMES = (
     "_hash_history_event",
 )
 DEPENDENCY_EXCEPTIONS: dict[tuple[str, str], str] = {}
+_SNAPSHOT_CACHE: dict[tuple[str, tuple[tuple[str, int, int], ...]], dict[str, Any]] = {}
 
 
 def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
     root = Path(repo_root).resolve()
     paths = sorted((root / "song_agent").rglob("*.py"))
+    source_stamp = tuple(
+        (
+            path.relative_to(root).as_posix(),
+            path.stat().st_mtime_ns,
+            path.stat().st_size,
+        )
+        for path in paths
+    )
+    cache_key = (str(root), source_stamp)
+    cached = _SNAPSHOT_CACHE.get(cache_key)
+    if cached is not None:
+        return copy.deepcopy(cached)
     modules = {_module_name(root, path): path for path in paths}
     sources = {module: path.read_text(encoding="utf-8") for module, path in modules.items()}
     trees: dict[str, ast.AST] = {
@@ -101,7 +115,7 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
     )
     dependency_exceptions = _active_dependency_exceptions(imports)
     module_rows = [ownership[module] for module in sorted(ownership)]
-    return {
+    snapshot = {
         "schema_version": ARCHITECTURE_BASELINE_SCHEMA_VERSION,
         "app_version": __version__,
         "module_count": len(module_rows),
@@ -124,6 +138,9 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
         "active_custom_lifecycle_algorithm_counts": lifecycle_algorithm_counts,
         "code_metrics": code_metrics,
     }
+    _SNAPSHOT_CACHE.clear()
+    _SNAPSHOT_CACHE[cache_key] = snapshot
+    return copy.deepcopy(snapshot)
 
 
 def build_architecture_baseline(
@@ -365,7 +382,7 @@ def _module_ownership(module: str, path: str) -> dict[str, Any]:
         return _ownership_row(module, path, "domain", parts[2] if len(parts) > 2 else "creation")
     if module == "song_agent.domains":
         return _ownership_row(module, path, "domain", None)
-    if module.startswith("song_agent.unified_release_program"):
+    if module.startswith("song_agent.domains.program.unified_release_program"):
         return _ownership_row(module, path, "domain", "program")
     return _ownership_row(module, path, "compatibility", _legacy_domain_context(module))
 

@@ -1,3 +1,3 @@
 """Single production authority for the MusicForge package version."""
 
-VERSION = "13.3.0"
+VERSION = "13.4.0"

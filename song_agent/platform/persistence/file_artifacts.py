@@ -105,6 +105,13 @@ def write_json_atomic(path: Path | str, value: Any) -> Path:
     return target
 
 
+def read_json_document(path: Path | str) -> dict[str, Any]:
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("JSON document must be an object.")
+    return value
+
+
 def _safe_relative(value: str) -> Path:
     normalized = value.replace("\\", "/")
     path = Path(normalized)

@@ -1,5 +1,12 @@
 # Changelog
 
+## v13.4.0 - 2026-07-15
+
+- Moved all active Unified Release Program stores and verifiers into the physical `domains/program` bounded context while retaining short flat compatibility exports.
+- Added a typed Program application service, explicit API route registry, and compact CLI command registry so active interfaces dispatch through application use cases instead of importing Stores.
+- Removed every compatibility import from the Program domain/application core, kept the active production graph acyclic, and reduced repository-wide active compatibility edges from 494 to 407.
+- Added Program vertical-slice architecture, API dispatch, CLI handler-size, compatibility-wrapper, and application round-trip checks.
+
 ## v13.3.0 - 2026-07-14
 
 - Made `ProgramStateRepository` the write authority for all 13 active Program stores, with content-addressed state, SQLite current versions, event chains, indexes, and validated JSON projections.

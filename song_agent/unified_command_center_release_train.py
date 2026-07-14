@@ -12,7 +12,7 @@ from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.releases import ReleaseStore, stable_hash
-from song_agent.unified_command_center_release_train_verifier import (
+from song_agent.domains.program.unified_command_center_release_train_verifier import (
     EXPECTED_EVIDENCE_PACKAGE_TYPES,
     REQUIRED_ENTRIES,
     UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE,

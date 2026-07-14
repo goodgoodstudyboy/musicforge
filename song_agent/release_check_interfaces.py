@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 
 
-EXPECTED_COMMAND_INVENTORY_HASH = "9dae3beeaf2b17fae7ecec894aa0a3d4bf1d03d870863d10da3009105ce805ca"
-EXPECTED_COMMAND_HELP_HASH = "f767c652952eab00db3930cab08fe49f5c41d92f00dc781f10328f2d1d8745cd"
-EXPECTED_ROUTE_INVENTORY_HASH = "d35613b0de81ad2aa3e2ad51e0d8f31c553671c888c6aaead1c0b737df50a77c"
+EXPECTED_COMMAND_INVENTORY_HASH = "1a0e1e6f025b9e5e505a6a5ae138537a97a8bbebe393a40b7fb90afb1165424f"
+EXPECTED_COMMAND_HELP_HASH = "234e7cf07e98370f52f53587cc735427e678e02bc5a7c70c53d4aae10f360d64"
+EXPECTED_ROUTE_INVENTORY_HASH = "58f44f667e0568bc2f0ce8255f33904ef85e77482349e0b1b7e2f38b13f71317"
 EXPECTED_PANEL_HASH = "a5065e9852ef9b7ee18eac525a1b70c6a6e835c3f17fb5c494feb760b2468515"
 
 
@@ -120,7 +120,7 @@ def run_interface_registry_smoke(root: Path) -> tuple[bool, str]:
             "help_snapshot": _hash_json(command_help_contract_rows(REGISTRY)) == EXPECTED_COMMAND_HELP_HASH,
             "handlers_small": handlers_small,
             "parser_colocated": parser_colocated,
-            "routes": len(routes) == 113 and len(route_keys) == len(set(route_keys)),
+            "routes": len(routes) == 116 and len(route_keys) == len(set(route_keys)),
             "route_snapshot": _hash_json(routes) == EXPECTED_ROUTE_INVENTORY_HASH,
             "web_snapshot": hashlib.sha256(html.encode("utf-8")).hexdigest() == EXPECTED_PANEL_HASH,
             "web_resources": "{{MUSICFORGE_" not in html and "MusicForge Studio" in html,

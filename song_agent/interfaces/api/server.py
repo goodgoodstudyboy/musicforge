@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler
+from typing import Any
+
+from song_agent.application.program import ProgramApplicationService
 
 from .runtime import *
 from .router import api_inventory, configure_route_registry
@@ -18,6 +21,37 @@ class MusicForgeHandler(CreationRoutes, StudioRoutes, QualityRoutes, DeliveryRou
 
 
 MusicForgeHandler.route_registry = configure_route_registry(MusicForgeHandler._handle_request)
+
+
+def _configure_program(server: Any) -> None:
+    server.unified_release_program_store = UnifiedReleaseProgramStore(release_store=server.release_store)
+    server.unified_release_program_operations_store = UnifiedReleaseProgramOperationsStore(server.unified_release_program_store)
+    server.unified_release_program_handoff_store = UnifiedReleaseProgramHandoffStore(server.unified_release_program_store)
+    server.unified_release_program_vault_store = UnifiedReleaseProgramVaultStore(server.unified_release_program_store)
+    server.unified_release_program_vault_operations_store = UnifiedReleaseProgramVaultOperationsStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_store = UnifiedReleaseProgramContinuityStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_distribution_store = UnifiedReleaseProgramContinuityDistributionStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_acceptance_store = UnifiedReleaseProgramContinuityAcceptanceStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_acceptance_change_store = UnifiedReleaseProgramContinuityAcceptanceChangeStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_command_center_store = UnifiedReleaseProgramContinuityCommandCenterStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_command_center_signoff_store = UnifiedReleaseProgramContinuityCommandCenterSignoffStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_command_center_acceptance_store = UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore(server.unified_release_program_store)
+    server.unified_release_program_continuity_command_center_acceptance_change_store = UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore(server.unified_release_program_store)
+    server.program_application_service = ProgramApplicationService.from_components(
+        program=server.unified_release_program_store,
+        operations=server.unified_release_program_operations_store,
+        handoff=server.unified_release_program_handoff_store,
+        vault=server.unified_release_program_vault_store,
+        vault_operations=server.unified_release_program_vault_operations_store,
+        continuity=server.unified_release_program_continuity_store,
+        continuity_distribution=server.unified_release_program_continuity_distribution_store,
+        continuity_acceptance=server.unified_release_program_continuity_acceptance_store,
+        continuity_acceptance_change=server.unified_release_program_continuity_acceptance_change_store,
+        command_center=server.unified_release_program_continuity_command_center_store,
+        command_center_signoff=server.unified_release_program_continuity_command_center_signoff_store,
+        receiver_acceptance=server.unified_release_program_continuity_command_center_acceptance_store,
+        receiver_acceptance_change=server.unified_release_program_continuity_command_center_acceptance_change_store,
+    )
 
 
 class MusicForgeHTTPServer(ThreadingHTTPServer):
@@ -64,19 +98,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.unified_command_center_release_train_change_control_store = UnifiedCommandCenterReleaseTrainChangeControlStore(self.unified_command_center_release_train_store)
         self.unified_command_center_release_train_lifecycle_store = UnifiedCommandCenterReleaseTrainLifecycleStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store)
         self.unified_command_center_release_train_handoff_store = UnifiedCommandCenterReleaseTrainHandoffStore(self.unified_command_center_release_train_store, self.unified_command_center_release_train_change_control_store, self.unified_command_center_release_train_lifecycle_store)
-        self.unified_release_program_store = UnifiedReleaseProgramStore(release_store=self.release_store)
-        self.unified_release_program_operations_store = UnifiedReleaseProgramOperationsStore(self.unified_release_program_store)
-        self.unified_release_program_handoff_store = UnifiedReleaseProgramHandoffStore(self.unified_release_program_store)
-        self.unified_release_program_vault_store = UnifiedReleaseProgramVaultStore(self.unified_release_program_store)
-        self.unified_release_program_vault_operations_store = UnifiedReleaseProgramVaultOperationsStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_store = UnifiedReleaseProgramContinuityStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_distribution_store = UnifiedReleaseProgramContinuityDistributionStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_acceptance_store = UnifiedReleaseProgramContinuityAcceptanceStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_acceptance_change_store = UnifiedReleaseProgramContinuityAcceptanceChangeStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_command_center_store = UnifiedReleaseProgramContinuityCommandCenterStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_command_center_signoff_store = UnifiedReleaseProgramContinuityCommandCenterSignoffStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_command_center_acceptance_store = UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore(self.unified_release_program_store)
-        self.unified_release_program_continuity_command_center_acceptance_change_store = UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore(self.unified_release_program_store)
+        _configure_program(self)
         self.distribution_store = DistributionStore(self.release_store)
         self.submission_store = SubmissionStore(self.release_store, self.distribution_store)
         self.submission_evidence_store = SubmissionEvidenceStore(self.submission_store)

@@ -40,7 +40,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.operations",
         "unified_release_program_operations",
-        "song_agent.unified_release_program_operations_verifier",
+        "song_agent.domains.program.unified_release_program_operations_verifier",
         "verify_unified_release_program_operations_package",
         "musicforge_unified_release_program_operations_archive",
         "musicforge_unified_release_program_operations_archive_verification",
@@ -56,7 +56,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.board",
         "unified_release_program",
-        "song_agent.unified_release_program_verifier",
+        "song_agent.domains.program.unified_release_program_verifier",
         "verify_unified_release_program_package",
         "musicforge_unified_release_program",
         "musicforge_unified_release_program_verification",
@@ -67,7 +67,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.handoff",
         "unified_release_program_handoff",
-        "song_agent.unified_release_program_handoff_verifier",
+        "song_agent.domains.program.unified_release_program_handoff_verifier",
         "verify_unified_release_program_handoff_package",
         "musicforge_unified_release_program_handoff_archive",
         "musicforge_unified_release_program_handoff_verification",
@@ -78,7 +78,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.vault",
         "unified_release_program_vault",
-        "song_agent.unified_release_program_vault_verifier",
+        "song_agent.domains.program.unified_release_program_vault_verifier",
         "verify_unified_release_program_vault_package",
         "musicforge_unified_release_program_evidence_vault",
         "musicforge_unified_release_program_evidence_vault_verification",
@@ -89,7 +89,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.vault_operations",
         "unified_release_program_vault_operations",
-        "song_agent.unified_release_program_vault_operations_verifier",
+        "song_agent.domains.program.unified_release_program_vault_operations_verifier",
         "verify_unified_release_program_vault_operations_package",
         "musicforge_unified_release_program_vault_operations_archive",
         "musicforge_unified_release_program_vault_operations_verification",
@@ -100,7 +100,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.continuity",
         "unified_release_program_continuity",
-        "song_agent.unified_release_program_continuity_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_verifier",
         "verify_unified_release_program_continuity_package",
         "musicforge_unified_release_program_continuity_archive",
         "musicforge_unified_release_program_continuity_verification",
@@ -116,7 +116,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.continuity_kit",
         "unified_release_program_continuity_kit",
-        "song_agent.unified_release_program_continuity_distribution_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_distribution_verifier",
         "verify_unified_release_program_continuity_distribution_package",
         "musicforge_unified_release_program_continuity_distribution_kit",
         "musicforge_unified_release_program_continuity_distribution_verification",
@@ -125,7 +125,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.continuity_acceptance",
         "unified_release_program_continuity_acceptance",
-        "song_agent.unified_release_program_continuity_acceptance_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_acceptance_verifier",
         "verify_unified_release_program_continuity_acceptance_package",
         "musicforge_unified_release_program_continuity_acceptance_archive",
         "musicforge_unified_release_program_continuity_acceptance_verification",
@@ -140,7 +140,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.continuity_command_center",
         "unified_release_program_continuity_command_center",
-        "song_agent.unified_release_program_continuity_command_center_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_command_center_verifier",
         "verify_unified_release_program_continuity_command_center_package",
         "musicforge_unified_release_program_continuity_command_center",
         "musicforge_unified_release_program_continuity_command_center_verification",
@@ -151,7 +151,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.continuity_acceptance_change",
         "unified_release_program_continuity_acceptance_change",
-        "song_agent.unified_release_program_continuity_acceptance_change_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier",
         "verify_unified_release_program_continuity_acceptance_change_package",
         "musicforge_unified_release_program_continuity_acceptance_change_control_archive",
         "musicforge_unified_release_program_continuity_acceptance_change_control_verification",
@@ -166,7 +166,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.continuity_command_center_signoff",
         "unified_release_program_continuity_command_center_signoff",
-        "song_agent.unified_release_program_continuity_command_center_signoff_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier",
         "verify_unified_release_program_continuity_command_center_signoff_package",
         "musicforge_unified_release_program_continuity_command_center_signoff_archive",
         "musicforge_unified_release_program_continuity_command_center_signoff_archive_verification",
@@ -182,7 +182,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.receiver_acceptance",
         "unified_release_program_receiver_acceptance",
-        "song_agent.unified_release_program_continuity_command_center_acceptance_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_verifier",
         "verify_unified_release_program_continuity_command_center_acceptance_package",
         "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive",
         "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive_verification",
@@ -194,7 +194,7 @@ PROGRAM_CAPABILITIES = (
     _program(
         "program.receiver_acceptance_change",
         "unified_release_program_receiver_acceptance_change",
-        "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier",
+        "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier",
         "verify_unified_release_program_continuity_command_center_acceptance_change_package",
         "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive",
         "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_verification",

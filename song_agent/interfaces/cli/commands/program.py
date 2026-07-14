@@ -5,6 +5,7 @@ import sys
 import os
 from pathlib import Path
 from typing import Any
+from song_agent.application.program import ProgramApplicationService
 from song_agent.application.generation.service import generate_request
 from song_agent.auth import build_auth_config
 from song_agent.projectio import read_json, write_json
@@ -21,6 +22,10 @@ from song_agent.application.interface_persistence import write_interface_documen
 
 from song_agent.interfaces.cli.registry import CommandSpec
 from song_agent.interfaces.cli.symbols import resolve as _resolve_symbol
+
+
+def _program_component(name: str) -> Any:
+    return ProgramApplicationService.build().component(name)
 
 def _acceptance_analytics_fail_on(*args: Any, **kwargs: Any) -> Any:
     return _resolve_symbol('quality', '_acceptance_analytics_fail_on')(*args, **kwargs)
@@ -2414,7 +2419,7 @@ def _run_unified_command_center_reviewer_decision_board_command(args: argparse.N
 
 def _run_unified_command_center_release_train_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.unified_command_center_release_train import UnifiedCommandCenterReleaseTrainStore
-    from song_agent.unified_command_center_release_train_verifier import write_unified_command_center_release_train_verification_report
+    from song_agent.domains.program.unified_command_center_release_train_verifier import write_unified_command_center_release_train_verification_report
 
     store = UnifiedCommandCenterReleaseTrainStore()
     if args.action == "create":
@@ -2476,7 +2481,7 @@ def _run_unified_command_center_release_train_command(args: argparse.Namespace) 
 def _run_unified_command_center_release_train_change_control_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.unified_command_center_release_train import UnifiedCommandCenterReleaseTrainStore
     from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
-    from song_agent.unified_command_center_release_train_change_control_verifier import write_unified_command_center_release_train_change_control_verification_report
+    from song_agent.domains.program.unified_command_center_release_train_change_control_verifier import write_unified_command_center_release_train_change_control_verification_report
 
     train_store = UnifiedCommandCenterReleaseTrainStore()
     store = UnifiedCommandCenterReleaseTrainChangeControlStore(train_store)
@@ -2548,7 +2553,7 @@ def _run_unified_command_center_release_train_lifecycle_command(args: argparse.N
     from song_agent.unified_command_center_release_train import UnifiedCommandCenterReleaseTrainStore
     from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
     from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
-    from song_agent.unified_command_center_release_train_lifecycle_verifier import write_unified_command_center_release_train_lifecycle_verification_report
+    from song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier import write_unified_command_center_release_train_lifecycle_verification_report
 
     train_store = UnifiedCommandCenterReleaseTrainStore()
     change_store = UnifiedCommandCenterReleaseTrainChangeControlStore(train_store)
@@ -2581,7 +2586,7 @@ def _run_unified_command_center_release_train_handoff_command(args: argparse.Nam
     from song_agent.unified_command_center_release_train import UnifiedCommandCenterReleaseTrainStore
     from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
     from song_agent.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStore
-    from song_agent.unified_command_center_release_train_handoff_verifier import write_unified_command_center_release_train_handoff_verification_report
+    from song_agent.domains.program.unified_command_center_release_train_handoff_verifier import write_unified_command_center_release_train_handoff_verification_report
     from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
 
     train_store = UnifiedCommandCenterReleaseTrainStore()
@@ -2640,10 +2645,9 @@ def _run_unified_command_center_release_train_handoff_command(args: argparse.Nam
     raise ValueError("Unsupported unified-command-center-release-train-handoff command.")
 
 def _run_unified_release_program_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_verifier import write_unified_release_program_verification_report
+    from song_agent.domains.program.unified_release_program_verifier import write_unified_release_program_verification_report
 
-    store = UnifiedReleaseProgramStore()
+    store = _program_component("program")
     if args.action == "create":
         policy = {}
         if getattr(args, "require_external_handoff_acceptance", False):
@@ -2704,12 +2708,10 @@ def _run_unified_release_program_command(args: argparse.Namespace) -> dict[str, 
     raise ValueError("Unsupported unified-release-program command.")
 
 def _run_unified_release_program_operations_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
-    from song_agent.unified_release_program_operations_verifier import write_unified_release_program_operations_verification_report
+    from song_agent.domains.program.unified_release_program_operations_verifier import write_unified_release_program_operations_verification_report
 
-    program_store = UnifiedReleaseProgramStore()
-    store = UnifiedReleaseProgramOperationsStore(program_store)
+
+    store = _program_component("operations")
     payload = _unified_release_program_operations_payload_from_args(args)
     program_id = getattr(args, "program_id", None)
     if args.action == "change-request-create":
@@ -2780,15 +2782,13 @@ def _unified_release_program_operations_payload_from_args(args: argparse.Namespa
 
 def _run_unified_release_program_handoff_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.projectio import read_json
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore
-    from song_agent.unified_release_program_handoff_verifier import (
+    from song_agent.domains.program.unified_release_program_handoff_verifier import (
         write_unified_release_program_accepted_evidence_verification_report,
         write_unified_release_program_handoff_verification_report,
         write_unified_release_program_review_pack_verification_report,
     )
 
-    store = UnifiedReleaseProgramHandoffStore(UnifiedReleaseProgramStore())
+    store = _program_component("handoff")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_handoff(program_id)
@@ -2878,11 +2878,9 @@ def _run_unified_release_program_handoff_command(args: argparse.Namespace) -> di
     raise ValueError("Unsupported unified-release-program-handoff command.")
 
 def _run_unified_release_program_vault_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_vault import UnifiedReleaseProgramVaultStore
-    from song_agent.unified_release_program_vault_verifier import write_unified_release_program_vault_verification_report
+    from song_agent.domains.program.unified_release_program_vault_verifier import write_unified_release_program_vault_verification_report
 
-    store = UnifiedReleaseProgramVaultStore(UnifiedReleaseProgramStore())
+    store = _program_component("vault")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_vault(program_id)
@@ -2925,11 +2923,9 @@ def _run_unified_release_program_vault_command(args: argparse.Namespace) -> dict
     raise ValueError("Unsupported unified-release-program-vault command.")
 
 def _run_unified_release_program_vault_operations_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_vault_operations import UnifiedReleaseProgramVaultOperationsStore
-    from song_agent.unified_release_program_vault_operations_verifier import write_unified_release_program_vault_operations_verification_report
+    from song_agent.domains.program.unified_release_program_vault_operations_verifier import write_unified_release_program_vault_operations_verification_report
 
-    store = UnifiedReleaseProgramVaultOperationsStore(UnifiedReleaseProgramStore())
+    store = _program_component("vault_operations")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_operations(program_id)
@@ -2988,11 +2984,9 @@ def _run_unified_release_program_vault_operations_command(args: argparse.Namespa
     raise ValueError("Unsupported unified-release-program-vault-ops command.")
 
 def _run_unified_release_program_continuity_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity import UnifiedReleaseProgramContinuityStore
-    from song_agent.unified_release_program_continuity_verifier import write_unified_release_program_continuity_verification_report
+    from song_agent.domains.program.unified_release_program_continuity_verifier import write_unified_release_program_continuity_verification_report
 
-    store = UnifiedReleaseProgramContinuityStore(UnifiedReleaseProgramStore())
+    store = _program_component("continuity")
     program_id = args.program_id
     evidence_payload = {
         "vault_operations_archive": getattr(args, "vault_operations_archive", None),
@@ -3058,11 +3052,9 @@ def _run_unified_release_program_continuity_command(args: argparse.Namespace) ->
 
 def _run_unified_release_program_continuity_distribution_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.projectio import read_json
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_distribution import UnifiedReleaseProgramContinuityDistributionStore
-    from song_agent.unified_release_program_continuity_distribution_verifier import write_unified_release_program_continuity_distribution_verification_report
+    from song_agent.domains.program.unified_release_program_continuity_distribution_verifier import write_unified_release_program_continuity_distribution_verification_report
 
-    store = UnifiedReleaseProgramContinuityDistributionStore(UnifiedReleaseProgramStore())
+    store = _program_component("continuity_distribution")
     program_id = args.program_id
     evidence_payload = {
         "continuity_archive": getattr(args, "continuity_archive", None),
@@ -3109,11 +3101,9 @@ def _run_unified_release_program_continuity_distribution_command(args: argparse.
 
 def _run_unified_release_program_continuity_acceptance_command(args: argparse.Namespace) -> dict[str, Any]:
     from song_agent.projectio import read_json
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStore
-    from song_agent.unified_release_program_continuity_acceptance_verifier import write_unified_release_program_continuity_acceptance_verification_report
+    from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import write_unified_release_program_continuity_acceptance_verification_report
 
-    store = UnifiedReleaseProgramContinuityAcceptanceStore(UnifiedReleaseProgramStore())
+    store = _program_component("continuity_acceptance")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_board(program_id)
@@ -3176,11 +3166,9 @@ def _run_unified_release_program_continuity_acceptance_command(args: argparse.Na
     raise ValueError("Unsupported unified-release-program-continuity-acceptance command.")
 
 def _run_unified_release_program_continuity_acceptance_change_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
-    from song_agent.unified_release_program_continuity_acceptance_change_verifier import write_unified_release_program_continuity_acceptance_change_verification_report
+    from song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier import write_unified_release_program_continuity_acceptance_change_verification_report
 
-    store = UnifiedReleaseProgramContinuityAcceptanceChangeStore(UnifiedReleaseProgramStore())
+    store = _program_component("continuity_acceptance_change")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_state(program_id)
@@ -3251,11 +3239,9 @@ def _run_unified_release_program_continuity_acceptance_change_command(args: argp
     raise ValueError("Unsupported unified-release-program-continuity-acceptance-change command.")
 
 def _run_unified_release_program_continuity_command_center_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_command_center import UnifiedReleaseProgramContinuityCommandCenterStore
-    from song_agent.unified_release_program_continuity_command_center_verifier import write_unified_release_program_continuity_command_center_verification_report
+    from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import write_unified_release_program_continuity_command_center_verification_report
 
-    store = UnifiedReleaseProgramContinuityCommandCenterStore(UnifiedReleaseProgramStore())
+    store = _program_component("command_center")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_command_center(program_id)
@@ -3299,12 +3285,8 @@ def _run_unified_release_program_continuity_command_center_command(args: argpars
     raise ValueError("Unsupported unified-release-program-continuity-command-center command.")
 
 def _run_unified_release_program_continuity_command_center_signoff_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_command_center_signoff import (
-        UnifiedReleaseProgramContinuityCommandCenterSignoffStore,
-    )
 
-    store = UnifiedReleaseProgramContinuityCommandCenterSignoffStore(UnifiedReleaseProgramStore())
+    store = _program_component("command_center_signoff")
     program_id = args.program_id
     payload = {
         "signed_by": args.signed_by,
@@ -3379,12 +3361,8 @@ def _run_unified_release_program_continuity_command_center_signoff_command(args:
     raise ValueError("Unsupported unified-release-program-continuity-command-center-signoff command.")
 
 def _run_unified_release_program_continuity_command_center_acceptance_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_command_center_acceptance import (
-        UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore,
-    )
 
-    store = UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore(UnifiedReleaseProgramStore())
+    store = _program_component("receiver_acceptance")
     program_id = args.program_id
     payload = _command_center_acceptance_payload(args)
     if args.action == "status":
@@ -3440,12 +3418,8 @@ def _run_unified_release_program_continuity_command_center_acceptance_command(ar
     raise ValueError("Unsupported unified-release-program-continuity-command-center-acceptance command.")
 
 def _run_unified_release_program_continuity_command_center_acceptance_change_command(args: argparse.Namespace) -> dict[str, Any]:
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
-        UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore,
-    )
 
-    store = UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore(UnifiedReleaseProgramStore())
+    store = _program_component("receiver_acceptance_change")
     program_id = args.program_id
     payload = {
         **_command_center_acceptance_payload(args),
@@ -3891,3 +3865,7 @@ SPECS = (
     CommandSpec(name='unified-release-program-continuity-command-center-acceptance', parser=build_acceptance_analytics_parser, handler=handle_unified_release_program_continuity_command_center_acceptance, help='Unified Release Program Continuity Command Center Acceptance', group='program'),
     CommandSpec(name='unified-release-program-continuity-command-center-acceptance-change', parser=build_acceptance_analytics_parser, handler=handle_unified_release_program_continuity_command_center_acceptance_change, help='Unified Release Program Continuity Command Center Acceptance Change', group='program'),
 )
+
+# Active Program commands are registered by ``program_context``. This module
+# retains UCC commands and import compatibility for older callers.
+SPECS = tuple(spec for spec in SPECS if not spec.name.startswith("unified-release-program"))

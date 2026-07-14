@@ -85,7 +85,7 @@ def run_program_persistence_authority_smoke(root: Path) -> tuple[bool, str]:
                 index_count = int(connection.execute("SELECT COUNT(*) FROM program_document_index").fetchone()[0])
                 database_private_text = b"fixture-review-chair" not in repository.database.path.read_bytes()
 
-        source_root = Path(__file__).resolve().parent
+        source_root = Path(__file__).resolve().parent / "domains" / "program"
         stores_migrated = all(
             "program_json_facade" in (source_root / filename).read_text(encoding="utf-8")
             and "song_agent.projectio" not in (source_root / filename).read_text(encoding="utf-8")
@@ -146,7 +146,7 @@ def run_persistence_kernel_smoke(root: Path) -> tuple[bool, str]:
 
             root_path = workspace / "unified-release-programs"
             code = (
-                "from song_agent.unified_release_program import UnifiedReleaseProgramStore;"
+                "from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore;"
                 "import pathlib,sys;"
                 "print(UnifiedReleaseProgramStore(root=pathlib.Path(sys.argv[1])).create_program({})['program_id'])"
             )
@@ -201,7 +201,7 @@ def run_persistence_kernel_smoke(root: Path) -> tuple[bool, str]:
             migration = plan["status"] == "planned" and applied["status"] == "applied" and idempotent["status"] == "already_applied" and rollback["status"] == "rolled_back" and legacy.read_bytes() == original
             secret_not_indexed = b"not-indexed-secret" not in database.path.read_bytes()
 
-        source_root = Path(__file__).resolve().parent
+        source_root = Path(__file__).resolve().parent / "domains" / "program"
         stores_migrated = all(
             "WorkspaceLock" in (source_root / filename).read_text(encoding="utf-8")
             and "self.lock = threading.RLock()" not in (source_root / filename).read_text(encoding="utf-8")

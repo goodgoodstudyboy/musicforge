@@ -10,12 +10,13 @@ from .commands import quality as quality_commands
 from .commands import delivery as delivery_commands
 from .commands import trust as trust_commands
 from .commands import program as program_commands
+from .commands import program_context as program_context_commands
 from .commands import maintenance as maintenance_commands
 from .commands import release_check as release_check_commands
 from .registry import CommandRegistry
 
 
-COMMAND_MODULES = (creation_commands, studio_commands, quality_commands, delivery_commands, trust_commands, program_commands, maintenance_commands, release_check_commands,)
+COMMAND_MODULES = (creation_commands, studio_commands, quality_commands, delivery_commands, trust_commands, program_commands, program_context_commands, maintenance_commands, release_check_commands,)
 REGISTRY = CommandRegistry(spec for module in COMMAND_MODULES for spec in module.SPECS)
 
 

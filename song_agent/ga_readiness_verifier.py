@@ -2143,7 +2143,7 @@ def _verify_unified_release_program_handoff_evidence(
         return
     zip_path = Path(handoff_path)
     try:
-        from song_agent.unified_release_program_handoff_verifier import UNIFIED_RELEASE_PROGRAM_HANDOFF_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_handoff_package
+        from song_agent.domains.program.unified_release_program_handoff_verifier import UNIFIED_RELEASE_PROGRAM_HANDOFF_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_handoff_package
 
         verification_report = read_json(Path(handoff_verification_report_path))
         runtime_report = verify_unified_release_program_handoff_package(
@@ -2187,7 +2187,7 @@ def _verify_unified_release_program_vault_evidence(
         return
     zip_path = Path(vault_path)
     try:
-        from song_agent.unified_release_program_vault_verifier import UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_vault_package
+        from song_agent.domains.program.unified_release_program_vault_verifier import UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_vault_package
 
         verification_report = read_json(Path(vault_verification_report_path))
         runtime_report = verify_unified_release_program_vault_package(
@@ -2229,7 +2229,7 @@ def _verify_unified_release_program_vault_operations_evidence(
         return
     zip_path = Path(archive_path)
     try:
-        from song_agent.unified_release_program_vault_operations_verifier import UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_vault_operations_package
+        from song_agent.domains.program.unified_release_program_vault_operations_verifier import UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_vault_operations_package
 
         verification_report = read_json(Path(archive_verification_report_path))
         runtime_report = verify_unified_release_program_vault_operations_package(
@@ -2278,7 +2278,7 @@ def _verify_unified_release_program_continuity_evidence(
         return
     zip_path = Path(archive_path)
     try:
-        from song_agent.unified_release_program_continuity_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_continuity_package
+        from song_agent.domains.program.unified_release_program_continuity_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_continuity_package
 
         verification_report = read_json(Path(archive_verification_report_path))
         runtime_report = verify_unified_release_program_continuity_package(
@@ -2321,7 +2321,7 @@ def _verify_unified_release_program_continuity_kit_evidence(
         return
     zip_path = Path(kit_path)
     try:
-        from song_agent.unified_release_program_continuity_distribution_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_DISTRIBUTION_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_continuity_distribution_package
+        from song_agent.domains.program.unified_release_program_continuity_distribution_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_DISTRIBUTION_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_continuity_distribution_package
 
         verification_report = read_json(Path(kit_verification_report_path))
         runtime_report = verify_unified_release_program_continuity_distribution_package(
@@ -2369,7 +2369,7 @@ def _verify_unified_release_program_continuity_acceptance_evidence(
         return
     zip_path = Path(archive_path)
     try:
-        from song_agent.unified_release_program_continuity_acceptance_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import (
             UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_acceptance_package,
         )
@@ -2417,7 +2417,7 @@ def _verify_unified_release_program_continuity_command_center_evidence(
         return
     zip_path = Path(command_center_path)
     try:
-        from song_agent.unified_release_program_continuity_command_center_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import (
             UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_package,
         )
@@ -2458,7 +2458,7 @@ def _verify_unified_release_program_continuity_command_center_signoff_evidence(
         _add_check(checks, "ga_readiness_unified_release_program_continuity_command_center_signoff_required", "failed", "blocking", "Continuity Command Center signoff requires Archive, verification report, independent binding, current Command Center, and evidence manifest.")
         return
     try:
-        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier import (
             COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_signoff_package,
         )
@@ -2534,7 +2534,7 @@ def _verify_unified_release_program_continuity_command_center_acceptance_evidenc
         )
         return
     try:
-        from song_agent.unified_release_program_continuity_command_center_acceptance_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_verifier import (
             ARCHIVE_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_acceptance_package,
         )
@@ -2600,7 +2600,7 @@ def _verify_unified_release_program_continuity_command_center_acceptance_change_
         )
         return
     try:
-        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier import (
             UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_acceptance_change_package,
         )

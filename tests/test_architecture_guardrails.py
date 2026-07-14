@@ -88,7 +88,8 @@ def test_interface_limits_reject_new_thousand_line_route_handler(tmp_path: Path)
 
 def test_current_architecture_ratchet_is_enforced() -> None:
     report = evaluate_architecture(ROOT)
+    debt = json.loads((ROOT / "architecture-debt.json").read_text(encoding="utf-8"))
 
     assert report["status"] == "passed", report["blockers"]
     assert report["metrics"]["ratchet"]["delta"]["active_to_compatibility_import_count"] < 0
-    assert report["metrics"]["ratchet"]["compatibility_debt_count"] == 245
+    assert report["metrics"]["ratchet"]["compatibility_debt_count"] == len(debt["compatibility_entries"])

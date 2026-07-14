@@ -1,5 +1,5 @@
 {
-  "active_to_compatibility_import_max_count": 494,
+  "active_to_compatibility_import_max_count": 407,
   "allowed_active_to_compatibility_imports": [
     {
       "imported": "song_agent.releases",
@@ -950,22 +950,6 @@
       "importer": "song_agent.interfaces.cli.commands.delivery"
     },
     {
-      "imported": "song_agent.unified_command_center_release_train_change_control_verifier",
-      "importer": "song_agent.interfaces.cli.commands.delivery"
-    },
-    {
-      "imported": "song_agent.unified_command_center_release_train_handoff_verifier",
-      "importer": "song_agent.interfaces.cli.commands.delivery"
-    },
-    {
-      "imported": "song_agent.unified_command_center_release_train_lifecycle_verifier",
-      "importer": "song_agent.interfaces.cli.commands.delivery"
-    },
-    {
-      "imported": "song_agent.unified_command_center_release_train_verifier",
-      "importer": "song_agent.interfaces.cli.commands.delivery"
-    },
-    {
       "imported": "song_agent.auth",
       "importer": "song_agent.interfaces.cli.commands.maintenance"
     },
@@ -1054,27 +1038,11 @@
       "importer": "song_agent.interfaces.cli.commands.program"
     },
     {
-      "imported": "song_agent.unified_command_center_release_train_change_control_verifier",
-      "importer": "song_agent.interfaces.cli.commands.program"
-    },
-    {
       "imported": "song_agent.unified_command_center_release_train_handoff",
       "importer": "song_agent.interfaces.cli.commands.program"
     },
     {
-      "imported": "song_agent.unified_command_center_release_train_handoff_verifier",
-      "importer": "song_agent.interfaces.cli.commands.program"
-    },
-    {
       "imported": "song_agent.unified_command_center_release_train_lifecycle",
-      "importer": "song_agent.interfaces.cli.commands.program"
-    },
-    {
-      "imported": "song_agent.unified_command_center_release_train_lifecycle_verifier",
-      "importer": "song_agent.interfaces.cli.commands.program"
-    },
-    {
-      "imported": "song_agent.unified_command_center_release_train_verifier",
       "importer": "song_agent.interfaces.cli.commands.program"
     },
     {
@@ -1660,333 +1628,17 @@
     {
       "imported": "song_agent.trust_operations_incident_knowledge_verifier",
       "importer": "song_agent.interfaces.cli.commands.trust"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program"
-    },
-    {
-      "imported": "song_agent.unified_command_center_release_train_handoff_verifier",
-      "importer": "song_agent.unified_release_program"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_acceptance"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity_acceptance"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_acceptance"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_acceptance"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change_verifier"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_verifier"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_command_center"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity_command_center"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_verifier"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff_verifier"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_command_center_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_command_center_verifier"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_distribution"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_continuity_distribution"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_distribution"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_distribution"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_distribution_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_distribution_verifier"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_continuity_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_continuity_verifier"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_handoff"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_handoff"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_handoff"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_handoff"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_handoff_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_handoff_verifier"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_operations"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_operations"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_operations"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_operations"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_operations_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_operations_verifier"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_vault"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_vault"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_vault"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_vault"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_vault_operations"
-    },
-    {
-      "imported": "song_agent.projects",
-      "importer": "song_agent.unified_release_program_vault_operations"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_vault_operations"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_vault_operations"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_vault_operations_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_vault_operations_verifier"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_vault_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_vault_verifier"
-    },
-    {
-      "imported": "song_agent.redaction",
-      "importer": "song_agent.unified_release_program_verifier"
-    },
-    {
-      "imported": "song_agent.releases",
-      "importer": "song_agent.unified_release_program_verifier"
-    },
-    {
-      "imported": "song_agent.unified_command_center_release_train_handoff_verifier",
-      "importer": "song_agent.unified_release_program_verifier"
     }
   ],
   "allowed_cycles": [],
-  "baseline_version": "13.3.0",
+  "baseline_version": "13.4.0",
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
     "song_agent/interfaces/api/routes/creation.py": 4969,
     "song_agent/interfaces/api/routes/delivery.py": 2906,
     "song_agent/interfaces/api/routes/maintenance.py": 166,
-    "song_agent/interfaces/api/routes/program.py": 2112,
+    "song_agent/interfaces/api/routes/program.py": 982,
     "song_agent/interfaces/api/routes/quality.py": 4394,
     "song_agent/interfaces/api/routes/studio.py": 1707,
     "song_agent/interfaces/api/routes/trust.py": 2956,
@@ -1994,7 +1646,7 @@
     "song_agent/interfaces/cli/commands/creation.py": 1227,
     "song_agent/interfaces/cli/commands/delivery.py": 1941,
     "song_agent/interfaces/cli/commands/maintenance.py": 1014,
-    "song_agent/interfaces/cli/commands/program.py": 3893,
+    "song_agent/interfaces/cli/commands/program.py": 3871,
     "song_agent/interfaces/cli/commands/quality.py": 4225,
     "song_agent/interfaces/cli/commands/release_check.py": 1396,
     "song_agent/interfaces/cli/commands/studio.py": 65,
@@ -2003,7 +1655,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 405,
+  "module_count": 444,
   "modules": [
     {
       "context": null,
@@ -2130,6 +1782,24 @@
       "layer": "application",
       "module": "song_agent.application.jobs.model",
       "path": "song_agent/application/jobs/model.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.program",
+      "path": "song_agent/application/program/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.program.http",
+      "path": "song_agent/application/program/http.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.program.service",
+      "path": "song_agent/application/program/service.py"
     },
     {
       "context": null,
@@ -2402,6 +2072,198 @@
       "path": "song_agent/domains/program/__init__.py"
     },
     {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.model",
+      "path": "song_agent/domains/program/model.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.ports",
+      "path": "song_agent/domains/program/ports.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_command_center_release_train_change_control_verifier",
+      "path": "song_agent/domains/program/unified_command_center_release_train_change_control_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_command_center_release_train_handoff_verifier",
+      "path": "song_agent/domains/program/unified_command_center_release_train_handoff_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier",
+      "path": "song_agent/domains/program/unified_command_center_release_train_lifecycle_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_command_center_release_train_verifier",
+      "path": "song_agent/domains/program/unified_command_center_release_train_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program",
+      "path": "song_agent/domains/program/unified_release_program.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity",
+      "path": "song_agent/domains/program/unified_release_program_continuity.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_acceptance",
+      "path": "song_agent/domains/program/unified_release_program_continuity_acceptance.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_acceptance_change",
+      "path": "song_agent/domains/program/unified_release_program_continuity_acceptance_change.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_acceptance_change_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_acceptance_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_acceptance_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center_signoff",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_signoff.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_signoff_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_command_center_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_distribution",
+      "path": "song_agent/domains/program/unified_release_program_continuity_distribution.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_distribution_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_distribution_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_continuity_verifier",
+      "path": "song_agent/domains/program/unified_release_program_continuity_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_handoff",
+      "path": "song_agent/domains/program/unified_release_program_handoff.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_handoff_verifier",
+      "path": "song_agent/domains/program/unified_release_program_handoff_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_operations",
+      "path": "song_agent/domains/program/unified_release_program_operations.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_operations_verifier",
+      "path": "song_agent/domains/program/unified_release_program_operations_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_vault",
+      "path": "song_agent/domains/program/unified_release_program_vault.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_vault_operations",
+      "path": "song_agent/domains/program/unified_release_program_vault_operations.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_vault_operations_verifier",
+      "path": "song_agent/domains/program/unified_release_program_vault_operations_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_vault_verifier",
+      "path": "song_agent/domains/program/unified_release_program_vault_verifier.py"
+    },
+    {
+      "context": "program",
+      "layer": "domain",
+      "module": "song_agent.domains.program.unified_release_program_verifier",
+      "path": "song_agent/domains/program/unified_release_program_verifier.py"
+    },
+    {
       "context": "quality",
       "layer": "domain",
       "module": "song_agent.domains.quality",
@@ -2572,6 +2434,12 @@
     {
       "context": "api",
       "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.program_registry",
+      "path": "song_agent/interfaces/api/routes/program_registry.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
       "module": "song_agent.interfaces.api.routes.quality",
       "path": "song_agent/interfaces/api/routes/quality.py"
     },
@@ -2640,6 +2508,12 @@
       "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.program",
       "path": "song_agent/interfaces/cli/commands/program.py"
+    },
+    {
+      "context": "cli",
+      "layer": "interface",
+      "module": "song_agent.interfaces.cli.commands.program_context",
+      "path": "song_agent/interfaces/cli/commands/program_context.py"
     },
     {
       "context": "cli",
@@ -3000,6 +2874,12 @@
       "layer": "platform",
       "module": "song_agent.platform.policy.profiles",
       "path": "song_agent/platform/policy/profiles.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.time",
+      "path": "song_agent/platform/time.py"
     },
     {
       "context": null,
@@ -3412,54 +3292,6 @@
     {
       "context": null,
       "layer": "release_check",
-      "module": "song_agent.release_check_architecture",
-      "path": "song_agent/release_check_architecture.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_evidence_policy",
-      "path": "song_agent/release_check_evidence_policy.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_fixtures",
-      "path": "song_agent/release_check_fixtures.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_interfaces",
-      "path": "song_agent/release_check_interfaces.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_lifecycle_kernel",
-      "path": "song_agent/release_check_lifecycle_kernel.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_performance",
-      "path": "song_agent/release_check_performance.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_persistence_kernel",
-      "path": "song_agent/release_check_persistence_kernel.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_verification_kernel",
-      "path": "song_agent/release_check_verification_kernel.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
       "module": "song_agent.release_check.architecture_ratchet",
       "path": "song_agent/release_check/architecture_ratchet.py"
     },
@@ -3576,6 +3408,60 @@
       "layer": "release_check",
       "module": "song_agent.release_check.runner",
       "path": "song_agent/release_check/runner.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_architecture",
+      "path": "song_agent/release_check_architecture.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_evidence_policy",
+      "path": "song_agent/release_check_evidence_policy.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_fixtures",
+      "path": "song_agent/release_check_fixtures.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_interfaces",
+      "path": "song_agent/release_check_interfaces.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_lifecycle_kernel",
+      "path": "song_agent/release_check_lifecycle_kernel.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_performance",
+      "path": "song_agent/release_check_performance.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_persistence_kernel",
+      "path": "song_agent/release_check_persistence_kernel.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_program_vertical",
+      "path": "song_agent/release_check_program_vertical.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_verification_kernel",
+      "path": "song_agent/release_check_verification_kernel.py"
     },
     {
       "context": null,
@@ -4275,157 +4161,157 @@
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program",
       "path": "song_agent/unified_release_program.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity",
       "path": "song_agent/unified_release_program_continuity.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_acceptance",
       "path": "song_agent/unified_release_program_continuity_acceptance.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_acceptance_change",
       "path": "song_agent/unified_release_program_continuity_acceptance_change.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_acceptance_change_verifier",
       "path": "song_agent/unified_release_program_continuity_acceptance_change_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_acceptance_verifier",
       "path": "song_agent/unified_release_program_continuity_acceptance_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center",
       "path": "song_agent/unified_release_program_continuity_command_center.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center_acceptance",
       "path": "song_agent/unified_release_program_continuity_command_center_acceptance.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center_acceptance_change",
       "path": "song_agent/unified_release_program_continuity_command_center_acceptance_change.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier",
       "path": "song_agent/unified_release_program_continuity_command_center_acceptance_change_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center_acceptance_verifier",
       "path": "song_agent/unified_release_program_continuity_command_center_acceptance_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center_signoff",
       "path": "song_agent/unified_release_program_continuity_command_center_signoff.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center_signoff_verifier",
       "path": "song_agent/unified_release_program_continuity_command_center_signoff_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_command_center_verifier",
       "path": "song_agent/unified_release_program_continuity_command_center_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_distribution",
       "path": "song_agent/unified_release_program_continuity_distribution.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_distribution_verifier",
       "path": "song_agent/unified_release_program_continuity_distribution_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_continuity_verifier",
       "path": "song_agent/unified_release_program_continuity_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_handoff",
       "path": "song_agent/unified_release_program_handoff.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_handoff_verifier",
       "path": "song_agent/unified_release_program_handoff_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_operations",
       "path": "song_agent/unified_release_program_operations.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_operations_verifier",
       "path": "song_agent/unified_release_program_operations_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_vault",
       "path": "song_agent/unified_release_program_vault.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_vault_operations",
       "path": "song_agent/unified_release_program_vault_operations.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_vault_operations_verifier",
       "path": "song_agent/unified_release_program_vault_operations_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_vault_verifier",
       "path": "song_agent/unified_release_program_vault_verifier.py"
     },
     {
       "context": "program",
-      "layer": "domain",
+      "layer": "compatibility",
       "module": "song_agent.unified_release_program_verifier",
       "path": "song_agent/unified_release_program_verifier.py"
     },

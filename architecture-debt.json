@@ -1,7 +1,7 @@
 {
   "compatibility_entries": [
     {
-      "active_import_count": 13,
+      "active_import_count": 0,
       "module": "song_agent",
       "owner": "musicforge-core",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -561,7 +561,7 @@
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 16,
+      "active_import_count": 3,
       "module": "song_agent.projects",
       "owner": "musicforge-studio",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -757,7 +757,7 @@
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 27,
+      "active_import_count": 1,
       "module": "song_agent.redaction",
       "owner": "musicforge-creation",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1226,7 +1226,7 @@
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 30,
+      "active_import_count": 5,
       "module": "song_agent.releases",
       "owner": "musicforge-delivery",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1646,7 +1646,7 @@
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 2,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train_change_control_verifier",
       "owner": "musicforge-program",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1660,7 +1660,7 @@
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 4,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train_handoff_verifier",
       "owner": "musicforge-program",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1674,14 +1674,14 @@
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 2,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train_lifecycle_verifier",
       "owner": "musicforge-program",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 2,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train_verifier",
       "owner": "musicforge-program",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1711,6 +1711,188 @@
     {
       "active_import_count": 2,
       "module": "song_agent.unified_command_center_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_acceptance",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_acceptance_change",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_acceptance_change_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_acceptance_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center_acceptance",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center_acceptance_change",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center_acceptance_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center_signoff",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center_signoff_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_command_center_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_distribution",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_distribution_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_continuity_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_handoff",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_handoff_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_operations",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_operations_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_vault",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_vault_operations",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_vault_operations_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_vault_verifier",
+      "owner": "musicforge-program",
+      "reason": "Legacy production module awaiting migration behind an active modular boundary.",
+      "removal_target_version": "13.5.0"
+    },
+    {
+      "active_import_count": 0,
+      "module": "song_agent.unified_release_program_verifier",
       "owner": "musicforge-program",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
       "removal_target_version": "13.5.0"
@@ -1814,6 +1996,6 @@
     "new_module_max_lines": 400,
     "route_handler_max_lines": 100
   },
-  "previous_release_tag": "v13.2.0",
+  "previous_release_tag": "v13.3.0",
   "schema_version": 1
 }

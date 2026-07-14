@@ -795,7 +795,7 @@ def print_release_operations_reviewer_pack_result(result: dict[str, Any]) -> Non
 
 def _execute_verify_unified_command_center_release_train_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-command-center-release-train-package', *argv]
-    from song_agent.unified_command_center_release_train_verifier import (
+    from song_agent.domains.program.unified_command_center_release_train_verifier import (
         unified_command_center_release_train_verification_exit_code,
         verify_unified_command_center_release_train_package,
         write_unified_command_center_release_train_verification_report,
@@ -830,7 +830,7 @@ def handle_verify_unified_command_center_release_train_package(argv: list[str]) 
 
 def _execute_verify_unified_command_center_release_train_change_control_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-command-center-release-train-change-control-package', *argv]
-    from song_agent.unified_command_center_release_train_change_control_verifier import (
+    from song_agent.domains.program.unified_command_center_release_train_change_control_verifier import (
         unified_command_center_release_train_change_control_verification_exit_code,
         verify_unified_command_center_release_train_change_control_package,
         write_unified_command_center_release_train_change_control_verification_report,
@@ -868,7 +868,7 @@ def handle_verify_unified_command_center_release_train_change_control_package(ar
 
 def _execute_verify_unified_command_center_release_train_lifecycle_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-command-center-release-train-lifecycle-package', *argv]
-    from song_agent.unified_command_center_release_train_lifecycle_verifier import (
+    from song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier import (
         unified_command_center_release_train_lifecycle_verification_exit_code,
         verify_unified_command_center_release_train_lifecycle_package,
         write_unified_command_center_release_train_lifecycle_verification_report,
@@ -908,7 +908,7 @@ def handle_verify_unified_command_center_release_train_lifecycle_package(argv: l
 
 def _execute_verify_unified_command_center_release_train_handoff_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-command-center-release-train-handoff-package', *argv]
-    from song_agent.unified_command_center_release_train_handoff_verifier import (
+    from song_agent.domains.program.unified_command_center_release_train_handoff_verifier import (
         unified_command_center_release_train_handoff_verification_exit_code,
         verify_unified_command_center_release_train_handoff_package,
         write_unified_command_center_release_train_handoff_verification_report,
@@ -954,7 +954,7 @@ def handle_verify_unified_command_center_release_train_handoff_package(argv: lis
 
 def _execute_verify_unified_release_program_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-package', *argv]
-    from song_agent.unified_release_program_verifier import (
+    from song_agent.domains.program.unified_release_program_verifier import (
         unified_release_program_verification_exit_code,
         verify_unified_release_program_package,
         write_unified_release_program_verification_report,
@@ -989,7 +989,7 @@ def handle_verify_unified_release_program_package(argv: list[str]) -> None:
 
 def _execute_verify_unified_release_program_operations_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-operations-package', *argv]
-    from song_agent.unified_release_program_operations_verifier import (
+    from song_agent.domains.program.unified_release_program_operations_verifier import (
         unified_release_program_operations_verification_exit_code,
         verify_unified_release_program_operations_package,
         write_unified_release_program_operations_verification_report,
@@ -1028,7 +1028,7 @@ def handle_verify_unified_release_program_operations_package(argv: list[str]) ->
 
 def _execute_verify_unified_release_program_handoff_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-handoff-package', *argv]
-    from song_agent.unified_release_program_handoff_verifier import (
+    from song_agent.domains.program.unified_release_program_handoff_verifier import (
         unified_release_program_handoff_verification_exit_code,
         verify_unified_release_program_handoff_package,
         write_unified_release_program_handoff_verification_report,
@@ -1064,7 +1064,7 @@ def handle_verify_unified_release_program_handoff_package(argv: list[str]) -> No
 
 def _execute_verify_unified_release_program_vault_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-vault-package', *argv]
-    from song_agent.unified_release_program_vault_verifier import (
+    from song_agent.domains.program.unified_release_program_vault_verifier import (
         unified_release_program_vault_verification_exit_code,
         verify_unified_release_program_vault_package,
         write_unified_release_program_vault_verification_report,
@@ -1102,7 +1102,7 @@ def handle_verify_unified_release_program_vault_package(argv: list[str]) -> None
 
 def _execute_verify_unified_release_program_vault_operations_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-vault-operations-package', *argv]
-    from song_agent.unified_release_program_vault_operations_verifier import (
+    from song_agent.domains.program.unified_release_program_vault_operations_verifier import (
         unified_release_program_vault_operations_verification_exit_code,
         verify_unified_release_program_vault_operations_package,
         write_unified_release_program_vault_operations_verification_report,
@@ -1137,7 +1137,7 @@ def handle_verify_unified_release_program_vault_operations_package(argv: list[st
 
 def _execute_verify_unified_release_program_continuity_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-package', *argv]
-    from song_agent.unified_release_program_continuity_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_verifier import (
         unified_release_program_continuity_verification_exit_code,
         verify_unified_release_program_continuity_package,
         write_unified_release_program_continuity_verification_report,
@@ -1175,7 +1175,7 @@ def handle_verify_unified_release_program_continuity_package(argv: list[str]) ->
 
 def _execute_verify_unified_release_program_continuity_kit_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-kit-package', *argv]
-    from song_agent.unified_release_program_continuity_distribution_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_distribution_verifier import (
         unified_release_program_continuity_distribution_verification_exit_code,
         verify_unified_release_program_continuity_distribution_package,
         write_unified_release_program_continuity_distribution_verification_report,
@@ -1210,7 +1210,7 @@ def handle_verify_unified_release_program_continuity_kit_package(argv: list[str]
 
 def _execute_verify_unified_release_program_continuity_command_center_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-command-center-package', *argv]
-    from song_agent.unified_release_program_continuity_command_center_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import (
         unified_release_program_continuity_command_center_verification_exit_code,
         verify_unified_release_program_continuity_command_center_package,
         write_unified_release_program_continuity_command_center_verification_report,
@@ -1244,7 +1244,7 @@ def handle_verify_unified_release_program_continuity_command_center_package(argv
 
 def _execute_verify_unified_release_program_continuity_command_center_signoff_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-command-center-signoff-package', *argv]
-    from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier import (
         command_center_signoff_verification_exit_code,
         verify_unified_release_program_continuity_command_center_signoff_package,
         write_unified_release_program_continuity_command_center_signoff_verification_report,
@@ -1271,7 +1271,7 @@ def handle_verify_unified_release_program_continuity_command_center_signoff_pack
 
 def _execute_verify_unified_release_program_continuity_command_center_handoff_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-command-center-handoff-package', *argv]
-    from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier import (
         command_center_signoff_verification_exit_code,
         verify_unified_release_program_continuity_command_center_final_handoff_package,
         write_unified_release_program_continuity_command_center_final_handoff_verification_report,

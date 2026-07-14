@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v13.0 is a local-first modular monolith. It remains one Python
+MusicForge v13.4 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. Active v12/v13 Program
 paths follow `interfaces -> application -> domains -> platform`. Earlier music
 capabilities remain operational through flat compatibility implementations;
@@ -92,3 +92,15 @@ allowing this debt to shrink.
   canonical package owns those APIs.
 - Schema 2 migration requires a verified backup, source preservation,
   rollback rehearsal, and a verified migration evidence archive.
+
+## v13.4 Program Vertical Slice
+
+- Active Unified Release Program Stores and verifiers live under
+  `domains/program`; flat `unified_release_program*.py` modules are short
+  compatibility exports only.
+- `application/program` owns Program composition and operation dispatch.
+- The Program API uses an explicit route registry and delegates to the
+  application HTTP adapter; the interface route contains no Store behavior.
+- Active Program CLI commands use compact command specs and application
+  components. Program domain/application modules have no compatibility
+  imports, and the production import graph remains acyclic.

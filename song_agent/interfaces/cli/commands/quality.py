@@ -3276,7 +3276,7 @@ def handle_verify_unified_command_center_evidence_review_acceptance_package(argv
 
 def _execute_verify_unified_release_program_continuity_acceptance_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-acceptance-package', *argv]
-    from song_agent.unified_release_program_continuity_acceptance_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import (
         unified_release_program_continuity_acceptance_verification_exit_code,
         verify_unified_release_program_continuity_acceptance_package,
         write_unified_release_program_continuity_acceptance_verification_report,
@@ -3313,7 +3313,7 @@ def handle_verify_unified_release_program_continuity_acceptance_package(argv: li
 
 def _execute_verify_unified_release_program_continuity_acceptance_change_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-acceptance-change-package', *argv]
-    from song_agent.unified_release_program_continuity_acceptance_change_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier import (
         unified_release_program_continuity_acceptance_change_verification_exit_code,
         verify_unified_release_program_continuity_acceptance_change_package,
         write_unified_release_program_continuity_acceptance_change_verification_report,
@@ -3348,7 +3348,7 @@ def handle_verify_unified_release_program_continuity_acceptance_change_package(a
 
 def _execute_verify_unified_release_program_continuity_command_center_acceptance_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-command-center-acceptance-package', *argv]
-    from song_agent.unified_release_program_continuity_command_center_acceptance_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_verifier import (
         verification_exit_code,
         verify_unified_release_program_continuity_command_center_acceptance_package,
         write_verification_report,
@@ -3384,7 +3384,7 @@ def handle_verify_unified_release_program_continuity_command_center_acceptance_p
 
 def _execute_verify_unified_release_program_continuity_command_center_acceptance_change_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-continuity-command-center-acceptance-change-package', *argv]
-    from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier import (
         unified_release_program_continuity_command_center_acceptance_change_verification_exit_code,
         verify_unified_release_program_continuity_command_center_acceptance_change_package,
         write_unified_release_program_continuity_command_center_acceptance_change_verification_report,

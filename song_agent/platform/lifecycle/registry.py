@@ -63,7 +63,7 @@ def _lifecycle(
 ) -> LifecycleCapability:
     return LifecycleCapability(
         component_type=component_type,
-        module=f"song_agent.{module_leaf}",
+        module=f"song_agent.domains.program.{module_leaf}",
         store_class=store_class,
         signoff_method=signoff,
         reset_method=reset,

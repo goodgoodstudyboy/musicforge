@@ -136,7 +136,7 @@ def _capability(
     return VerifierCapability(
         capability_id=f"program.{component_type}",
         component_type=component_type,
-        module=f"song_agent.{module_leaf}",
+        module=f"song_agent.domains.program.{module_leaf}",
         function=function,
         package_type_attr=package_type_attr,
         verification_type_attr=verification_type_attr,

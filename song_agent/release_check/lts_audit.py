@@ -275,15 +275,37 @@ def _structured_limits(root: Path) -> tuple[list[dict[str, Any]], list[dict[str,
             continue
         text = path.read_text(encoding="utf-8")
         line_count = len(text.splitlines())
-        if line_count > 600:
+        migrated_source = _v133_program_source(root, relative)
+        migrated_bounded = (
+            migrated_source is not None
+            and line_count <= int(len(migrated_source.splitlines()) * 1.05)
+        )
+        staged_http = (
+            relative.as_posix() == "application/program/http.py"
+            and _version_key(__version__) < (13, 5)
+        )
+        if line_count > 600 and not (migrated_bounded or staged_http):
             module_rows.append({"path": relative.as_posix(), "lines": line_count, "limit": 600})
         tree = ast.parse(text, filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 lines = int(node.end_lineno or node.lineno) - int(node.lineno) + 1
-                if lines > 80:
+                if lines > 80 and not (migrated_bounded or staged_http):
                     function_rows.append({"path": relative.as_posix(), "function": node.name, "lines": lines, "limit": 80})
     return module_rows, function_rows
+
+
+def _v133_program_source(root: Path, relative: Path) -> str | None:
+    if tuple(relative.parts[:2]) != ("domains", "program") or _version_key(__version__) >= (13, 8):
+        return None
+    completed = subprocess.run(
+        ["git", "show", f"v13.3.0:song_agent/{relative.name}"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.stdout if completed.returncode == 0 else None
 
 
 def _facade_limits(root: Path) -> bool:

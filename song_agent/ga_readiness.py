@@ -2180,7 +2180,7 @@ def _unified_release_program_handoff_summary(
     if required and handoff_verification_report_path is None:
         return {"status": "failed", "message": "Unified Release Program Handoff requires a verification report."}
     try:
-        from song_agent.unified_release_program_handoff_verifier import verify_unified_release_program_handoff_package
+        from song_agent.domains.program.unified_release_program_handoff_verifier import verify_unified_release_program_handoff_package
 
         runtime_report = verify_unified_release_program_handoff_package(
             handoff_zip_path,
@@ -2231,7 +2231,7 @@ def _unified_release_program_vault_summary(
     if required and vault_anchor_path is None:
         return {"status": "failed", "message": "Unified Release Program Evidence Vault requires an external anchor."}
     try:
-        from song_agent.unified_release_program_vault_verifier import verify_unified_release_program_vault_package
+        from song_agent.domains.program.unified_release_program_vault_verifier import verify_unified_release_program_vault_package
 
         runtime_report = verify_unified_release_program_vault_package(
             vault_zip_path,
@@ -2280,7 +2280,7 @@ def _unified_release_program_vault_operations_summary(
     if required and signoff_binding_path is None:
         return {"status": "failed", "message": "Unified Release Program Vault Operations requires a signoff binding."}
     try:
-        from song_agent.unified_release_program_vault_operations_verifier import verify_unified_release_program_vault_operations_package
+        from song_agent.domains.program.unified_release_program_vault_operations_verifier import verify_unified_release_program_vault_operations_package
 
         runtime_report = verify_unified_release_program_vault_operations_package(
             archive_zip_path,
@@ -2335,7 +2335,7 @@ def _unified_release_program_continuity_summary(
     if required and (vault_operations_archive_path is None or vault_operations_verification_report_path is None or vault_operations_signoff_binding_path is None):
         return {"status": "failed", "message": "Unified Release Program Continuity requires source Vault Operations evidence."}
     try:
-        from song_agent.unified_release_program_continuity_verifier import verify_unified_release_program_continuity_package
+        from song_agent.domains.program.unified_release_program_continuity_verifier import verify_unified_release_program_continuity_package
 
         runtime_report = verify_unified_release_program_continuity_package(
             archive_zip_path,
@@ -2387,7 +2387,7 @@ def _unified_release_program_continuity_kit_summary(
     if required and kit_verification_report_path is None:
         return {"status": "failed", "message": "Unified Release Program Continuity Distribution Kit requires a verification report."}
     try:
-        from song_agent.unified_release_program_continuity_distribution_verifier import verify_unified_release_program_continuity_distribution_package
+        from song_agent.domains.program.unified_release_program_continuity_distribution_verifier import verify_unified_release_program_continuity_distribution_package
 
         runtime_report = verify_unified_release_program_continuity_distribution_package(
             kit_zip_path,
@@ -2438,7 +2438,7 @@ def _unified_release_program_continuity_acceptance_summary(
     if required and verification_report_path is None:
         return {"status": "failed", "message": "Unified Release Program Continuity Acceptance requires a verification report."}
     try:
-        from song_agent.unified_release_program_continuity_acceptance_verifier import verify_unified_release_program_continuity_acceptance_package
+        from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import verify_unified_release_program_continuity_acceptance_package
 
         runtime_report = verify_unified_release_program_continuity_acceptance_package(
             archive_zip_path,
@@ -2490,7 +2490,7 @@ def _unified_release_program_continuity_command_center_summary(
     if required and external_evidence_manifest_path is None:
         return {"status": "failed", "message": "Unified Release Program Continuity Command Center requires an external evidence manifest."}
     try:
-        from song_agent.unified_release_program_continuity_command_center_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import (
             UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_package,
         )
@@ -2557,7 +2557,7 @@ def _unified_release_program_continuity_command_center_signoff_summary(
     if required and not all(required_paths):
         return {"status": "failed", "message": "Continuity Command Center signoff requires Archive, verification report, binding, Command Center, and evidence manifest."}
     try:
-        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier import (
             COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_signoff_package,
         )
@@ -2634,7 +2634,7 @@ def _unified_release_program_continuity_command_center_acceptance_summary(
     if required and not all(required_paths):
         return {"status": "failed", "message": "Receiver Acceptance requires Archive, external proof roots, and current v12.10 evidence."}
     try:
-        from song_agent.unified_release_program_continuity_command_center_acceptance_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_verifier import (
             ARCHIVE_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_acceptance_package,
         )
@@ -2701,7 +2701,7 @@ def _unified_release_program_continuity_command_center_acceptance_change_summary
     if required and not all(required_paths):
         return {"status": "failed", "message": "Receiver Acceptance Change Control requires current Archive, verification report, and signoff binding."}
     try:
-        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier import (
             UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_VERIFICATION_PACKAGE_TYPE,
             verify_unified_release_program_continuity_command_center_acceptance_change_package,
         )

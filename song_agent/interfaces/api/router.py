@@ -150,4 +150,14 @@ def configure_route_registry(dispatch: Callable[..., object]) -> RouteRegistry:
 
 
 def api_inventory() -> list[dict[str, str]]:
-    return DEFAULT_ROUTE_REGISTRY.inventory()
+    from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROOT, PROGRAM_ROUTE_REGISTRY
+
+    legacy = [
+        row
+        for row in DEFAULT_ROUTE_REGISTRY.inventory()
+        if not row["pattern"].startswith(PROGRAM_ROOT)
+    ]
+    return sorted(
+        [*legacy, *PROGRAM_ROUTE_REGISTRY.inventory()],
+        key=lambda row: (row["method"], row["pattern"]),
+    )

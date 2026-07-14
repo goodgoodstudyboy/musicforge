@@ -122,7 +122,7 @@ def run_verification_kernel_smoke(root: Path) -> tuple[bool, str]:
                     archive.writestr("data.json", b'{"forged":true}')
             reports["manifest_spoof"] = _verify(manifest_spoof_path, spec)
 
-        source_root = Path(__file__).resolve().parent
+        source_root = Path(__file__).resolve().parent / "domains" / "program"
         migrated = all(
             "PackageSpec" in (source_root / filename).read_text(encoding="utf-8")
             and "verify_package_envelope" in (source_root / filename).read_text(encoding="utf-8")

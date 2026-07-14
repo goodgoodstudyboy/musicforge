@@ -19339,7 +19339,7 @@ def _v116_unified_command_center_release_train_smoke(root: Path) -> tuple[bool, 
         UnifiedCommandCenterReleaseTrainStore,
         write_external_evidence_manifest,
     )
-    from song_agent.unified_command_center_release_train_verifier import (
+    from song_agent.domains.program.unified_command_center_release_train_verifier import (
         EXPECTED_EVIDENCE_PACKAGE_TYPES,
         verify_unified_command_center_release_train_package,
     )
@@ -19452,8 +19452,8 @@ def _v117_unified_command_center_release_train_change_control_smoke(root: Path) 
 
     from song_agent.unified_command_center_release_train import DEFAULT_REQUIRED_EVIDENCE, UnifiedCommandCenterReleaseTrainStore, write_external_evidence_manifest
     from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
-    from song_agent.unified_command_center_release_train_change_control_verifier import verify_unified_command_center_release_train_change_control_package
-    from song_agent.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
+    from song_agent.domains.program.unified_command_center_release_train_change_control_verifier import verify_unified_command_center_release_train_change_control_package
+    from song_agent.domains.program.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
 
     del root
     old_cwd = Path.cwd()
@@ -19558,8 +19558,8 @@ def _v118_unified_command_center_release_train_lifecycle_smoke(root: Path) -> tu
     from song_agent.unified_command_center_release_train import DEFAULT_REQUIRED_EVIDENCE, UnifiedCommandCenterReleaseTrainStore, write_external_evidence_manifest
     from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
     from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
-    from song_agent.unified_command_center_release_train_lifecycle_verifier import verify_unified_command_center_release_train_lifecycle_package
-    from song_agent.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
+    from song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier import verify_unified_command_center_release_train_lifecycle_package
+    from song_agent.domains.program.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
 
     del root
     old_cwd = Path.cwd()
@@ -19702,9 +19702,9 @@ def _v119_unified_command_center_release_train_handoff_smoke(root: Path) -> tupl
     from song_agent.unified_command_center_release_train import DEFAULT_REQUIRED_EVIDENCE, UnifiedCommandCenterReleaseTrainStore, write_external_evidence_manifest
     from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore
     from song_agent.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStateError, UnifiedCommandCenterReleaseTrainHandoffStore
-    from song_agent.unified_command_center_release_train_handoff_verifier import verify_unified_command_center_release_train_handoff_package
+    from song_agent.domains.program.unified_command_center_release_train_handoff_verifier import verify_unified_command_center_release_train_handoff_package
     from song_agent.unified_command_center_release_train_lifecycle import UnifiedCommandCenterReleaseTrainLifecycleStore
-    from song_agent.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
+    from song_agent.domains.program.unified_command_center_release_train_verifier import EXPECTED_EVIDENCE_PACKAGE_TYPES
 
     del root
     old_cwd = Path.cwd()
@@ -19961,13 +19961,13 @@ def _v119_full_resign_handoff_signer(entries: dict[str, bytes]) -> dict[str, byt
 def _v120_unified_release_program_board_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
-    from song_agent.unified_release_program_verifier import (
+    from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
+    from song_agent.domains.program.unified_release_program_verifier import (
         UNIFIED_RELEASE_PROGRAM_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE,
         verify_unified_release_program_package,
     )
-    import song_agent.unified_release_program as program_module
-    import song_agent.unified_release_program_verifier as program_verifier_module
+    import song_agent.domains.program.unified_release_program as program_module
+    import song_agent.domains.program.unified_release_program_verifier as program_verifier_module
 
     del root
     original_store_verifier = program_module.verify_unified_command_center_release_train_handoff_package
@@ -20074,11 +20074,11 @@ def _v120_unified_release_program_board_smoke(root: Path) -> tuple[bool, str]:
 def _v121_unified_release_program_operations_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
-    from song_agent.unified_release_program_operations import UnifiedReleaseProgramOperationsStateError, UnifiedReleaseProgramOperationsStore
-    from song_agent.unified_release_program_operations_verifier import verify_unified_release_program_operations_package
-    import song_agent.unified_release_program as program_module
-    import song_agent.unified_release_program_verifier as program_verifier_module
+    from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
+    from song_agent.domains.program.unified_release_program_operations import UnifiedReleaseProgramOperationsStateError, UnifiedReleaseProgramOperationsStore
+    from song_agent.domains.program.unified_release_program_operations_verifier import verify_unified_release_program_operations_package
+    import song_agent.domains.program.unified_release_program as program_module
+    import song_agent.domains.program.unified_release_program_verifier as program_verifier_module
 
     del root
     original_store_verifier = program_module.verify_unified_command_center_release_train_handoff_package
@@ -20198,12 +20198,12 @@ def _v121_unified_release_program_operations_smoke(root: Path) -> tuple[bool, st
 def _v122_unified_release_program_final_handoff_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
-    from song_agent.unified_release_program_handoff import UnifiedReleaseProgramHandoffStateError, UnifiedReleaseProgramHandoffStore, write_handoff_external_evidence_manifest
-    from song_agent.unified_release_program_handoff_verifier import verify_unified_release_program_handoff_package
-    from song_agent.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
-    import song_agent.unified_release_program as program_module
-    import song_agent.unified_release_program_verifier as program_verifier_module
+    from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
+    from song_agent.domains.program.unified_release_program_handoff import UnifiedReleaseProgramHandoffStateError, UnifiedReleaseProgramHandoffStore, write_handoff_external_evidence_manifest
+    from song_agent.domains.program.unified_release_program_handoff_verifier import verify_unified_release_program_handoff_package
+    from song_agent.domains.program.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
+    import song_agent.domains.program.unified_release_program as program_module
+    import song_agent.domains.program.unified_release_program_verifier as program_verifier_module
 
     del root
     original_store_verifier = program_module.verify_unified_command_center_release_train_handoff_package
@@ -20358,13 +20358,13 @@ def _v122_handoff_manifest_rows(program_store, ops_store, program_id: str, progr
 def _v123_unified_release_program_evidence_vault_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
-    from song_agent.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore, write_handoff_external_evidence_manifest
-    from song_agent.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
-    from song_agent.unified_release_program_vault import UnifiedReleaseProgramVaultStore
-    from song_agent.unified_release_program_vault_verifier import verify_unified_release_program_vault_package
-    import song_agent.unified_release_program as program_module
-    import song_agent.unified_release_program_verifier as program_verifier_module
+    from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore, write_external_evidence_manifest
+    from song_agent.domains.program.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore, write_handoff_external_evidence_manifest
+    from song_agent.domains.program.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
+    from song_agent.domains.program.unified_release_program_vault import UnifiedReleaseProgramVaultStore
+    from song_agent.domains.program.unified_release_program_vault_verifier import verify_unified_release_program_vault_package
+    import song_agent.domains.program.unified_release_program as program_module
+    import song_agent.domains.program.unified_release_program_verifier as program_verifier_module
 
     del root
     original_store_verifier = program_module.verify_unified_command_center_release_train_handoff_package
@@ -20501,8 +20501,8 @@ def _v123_unified_release_program_evidence_vault_smoke(root: Path) -> tuple[bool
 def _v124_unified_release_program_vault_operations_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program_vault_operations import UnifiedReleaseProgramVaultOperationsStateError
-    from song_agent.unified_release_program_vault_operations_verifier import verify_unified_release_program_vault_operations_package
+    from song_agent.domains.program.unified_release_program_vault_operations import UnifiedReleaseProgramVaultOperationsStateError
+    from song_agent.domains.program.unified_release_program_vault_operations_verifier import verify_unified_release_program_vault_operations_package
     from tests.test_unified_release_program_vault_operations import _add_declared_extra, _forge_signoff_signed_by, _prepared_vault_operations
 
     del root
@@ -20589,8 +20589,8 @@ def _v124_unified_release_program_vault_operations_smoke(root: Path) -> tuple[bo
 def _v125_unified_release_program_continuity_recovery_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program_continuity import UnifiedReleaseProgramContinuityStateError, UnifiedReleaseProgramContinuityStore
-    from song_agent.unified_release_program_continuity_verifier import verify_unified_release_program_continuity_package
+    from song_agent.domains.program.unified_release_program_continuity import UnifiedReleaseProgramContinuityStateError, UnifiedReleaseProgramContinuityStore
+    from song_agent.domains.program.unified_release_program_continuity_verifier import verify_unified_release_program_continuity_package
     from tests.test_unified_release_program_continuity import _add_declared_extra, _forge_signoff_signed_by
     from tests.test_unified_release_program_vault_operations import _prepared_vault_operations
 
@@ -20729,8 +20729,8 @@ def _v125_unified_release_program_continuity_recovery_smoke(root: Path) -> tuple
 def _v126_unified_release_program_continuity_distribution_kit_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program_continuity_distribution import UnifiedReleaseProgramContinuityDistributionStateError, UnifiedReleaseProgramContinuityDistributionStore
-    from song_agent.unified_release_program_continuity_distribution_verifier import verify_unified_release_program_continuity_distribution_package
+    from song_agent.domains.program.unified_release_program_continuity_distribution import UnifiedReleaseProgramContinuityDistributionStateError, UnifiedReleaseProgramContinuityDistributionStore
+    from song_agent.domains.program.unified_release_program_continuity_distribution_verifier import verify_unified_release_program_continuity_distribution_package
     from tests.test_unified_release_program_continuity import _prepared_continuity
     from tests.test_unified_release_program_continuity_distribution import (
         _add_declared_extra as _v126_add_declared_extra,
@@ -20853,8 +20853,8 @@ def _v126_unified_release_program_continuity_distribution_kit_smoke(root: Path) 
 def _v127_unified_release_program_continuity_acceptance_board_smoke(root: Path) -> tuple[bool, str]:
     import tempfile
 
-    from song_agent.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStateError, UnifiedReleaseProgramContinuityAcceptanceStore
-    from song_agent.unified_release_program_continuity_acceptance_verifier import verify_unified_release_program_continuity_acceptance_package
+    from song_agent.domains.program.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStateError, UnifiedReleaseProgramContinuityAcceptanceStore
+    from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import verify_unified_release_program_continuity_acceptance_package
     from tests.test_unified_release_program_continuity_acceptance import (
         _add_declared_extra as _v127_add_declared_extra,
         _accepted_pair as _v127_accepted_pair,
@@ -20963,8 +20963,8 @@ def _v128_unified_release_program_continuity_acceptance_change_control_smoke(roo
     del root
     try:
         from song_agent.releases import stable_hash
-        from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStateError
-        from song_agent.unified_release_program_continuity_acceptance_change_verifier import verify_unified_release_program_continuity_acceptance_change_package
+        from song_agent.domains.program.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStateError
+        from song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier import verify_unified_release_program_continuity_acceptance_change_package
         from tests.test_unified_release_program_continuity_acceptance_change import _add_declared_extra as _v128_add_declared_extra, _tamper_reset_proof as _v128_tamper_reset_proof
         with _v1213_v128_world_checkout() as checkout:
             _program, _acceptance, change, program_id, _payload = _v1213_open_v128_world(checkout.path, checkout.metadata)
@@ -21085,9 +21085,9 @@ def _v1213_v128_world_checkout():
 
 
 def _v1213_open_v128_world(base: Path, metadata: dict[str, Any]):
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStore
-    from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
+    from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.domains.program.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStore
+    from song_agent.domains.program.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
 
     payload = dict(metadata.get("payload") or {})
     program_store = UnifiedReleaseProgramStore(root=base / str(payload["program_root"]))
@@ -21226,18 +21226,18 @@ def _v1213_acceptance_runtime_cache(store: Any, program_id: str) -> dict[str, di
 
 def _v1213_build_complete_world(base: Path) -> dict[str, Any]:
     from song_agent.releases import stable_hash
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_command_center import (
+    from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.domains.program.unified_release_program_continuity_command_center import (
         UnifiedReleaseProgramContinuityCommandCenterStore,
     )
-    from song_agent.unified_release_program_continuity_command_center_signoff import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_signoff import (
         UnifiedReleaseProgramContinuityCommandCenterSignoffStore,
     )
-    from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change import (
         UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore,
         UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
     )
-    from song_agent.unified_release_program_continuity_command_center_acceptance import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance import (
         UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore,
         UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
     )
@@ -21422,11 +21422,11 @@ def _v1213_world_checkout():
 
 
 def _v1213_open_world(base: Path, metadata: dict[str, Any]):
-    from song_agent.unified_release_program import UnifiedReleaseProgramStore
-    from song_agent.unified_release_program_continuity_command_center_acceptance import (
+    from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore
+    from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance import (
         UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore,
     )
-    from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+    from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change import (
         UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore,
     )
 
@@ -21486,7 +21486,7 @@ def _v1212_receiver_acceptance_change_control_semantics(root: Path) -> tuple[boo
 def _v1212_receiver_acceptance_change_control_zip_security(root: Path) -> tuple[bool, str]:
     del root
     try:
-        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier import (
             verify_unified_release_program_continuity_command_center_acceptance_change_package,
         )
         from tests.test_unified_release_program_continuity_command_center_acceptance_change import (
@@ -21541,7 +21541,7 @@ def _v1212_receiver_acceptance_change_control_zip_security(root: Path) -> tuple[
 def _v1212_receiver_acceptance_change_control_external_binding(root: Path) -> tuple[bool, str]:
     del root
     try:
-        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier import (
             verify_unified_release_program_continuity_command_center_acceptance_change_package,
         )
         from tests.test_unified_release_program_continuity_command_center_acceptance_change import (
@@ -21592,7 +21592,7 @@ def _v1212_receiver_acceptance_change_control_signed_mutation(root: Path) -> tup
     del root
     try:
         from song_agent.releases import stable_hash
-        from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change import (
             UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
         )
 
@@ -21694,7 +21694,7 @@ def _v1212_receiver_acceptance_change_control_thin_integration(root: Path) -> tu
 def _v129_command_center_runtime_inventory(root: Path) -> tuple[bool, str]:
     del root
     try:
-        from song_agent.unified_release_program_continuity_command_center_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import (
             verify_unified_release_program_continuity_command_center_package,
         )
 
@@ -21725,10 +21725,10 @@ def _v129_command_center_external_binding(root: Path) -> tuple[bool, str]:
     del root
     try:
         from song_agent.releases import stable_hash
-        from song_agent.unified_release_program_continuity_command_center import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center import (
             UnifiedReleaseProgramContinuityCommandCenterStateError,
         )
-        from song_agent.unified_release_program_continuity_command_center_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import (
             verify_unified_release_program_continuity_command_center_package,
         )
 
@@ -21856,7 +21856,7 @@ def _v1210_command_center_signoff_semantics(root: Path) -> tuple[bool, str]:
 def _v1210_command_center_signoff_archive_verifier(root: Path) -> tuple[bool, str]:
     del root
     try:
-        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier import (
             verify_unified_release_program_continuity_command_center_signoff_package,
         )
         from tests.test_unified_release_program_continuity_command_center_signoff import (
@@ -21910,7 +21910,7 @@ def _v1210_command_center_signoff_archive_verifier(root: Path) -> tuple[bool, st
 def _v1210_command_center_signoff_reset_guard(root: Path) -> tuple[bool, str]:
     del root
     try:
-        from song_agent.unified_release_program_continuity_command_center_signoff import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_signoff import (
             UnifiedReleaseProgramContinuityCommandCenterSignoffStateError,
         )
 
@@ -21960,7 +21960,7 @@ def _v1211_receiver_acceptance_semantics(root: Path) -> tuple[bool, str]:
     del root
     try:
         from song_agent.releases import stable_hash
-        from song_agent.unified_release_program_continuity_command_center_acceptance import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance import (
             UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
         )
 
@@ -22199,8 +22199,8 @@ def _v129_unified_release_program_continuity_command_center_smoke(root: Path) ->
         from song_agent.ga_readiness_verifier import verify_ga_readiness_report
         from song_agent.projectio import read_json, write_json
         from song_agent.releases import stable_hash
-        from song_agent.unified_release_program_continuity_command_center import UnifiedReleaseProgramContinuityCommandCenterStateError
-        from song_agent.unified_release_program_continuity_command_center_verifier import verify_unified_release_program_continuity_command_center_package
+        from song_agent.domains.program.unified_release_program_continuity_command_center import UnifiedReleaseProgramContinuityCommandCenterStateError
+        from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import verify_unified_release_program_continuity_command_center_package
         from tests.test_ga_readiness import _write_repo as _v129_write_ga_repo
         from tests.test_unified_release_program_continuity_command_center import _add_declared_extra as _v129_add_declared_extra, _prepared_command_center as _v129_prepared_command_center
 
@@ -22351,12 +22351,12 @@ def _v1210_unified_release_program_continuity_command_center_signoff_smoke(root:
         from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
         from song_agent.ga_readiness_verifier import verify_ga_readiness_report
         from song_agent.projectio import read_json, write_json
-        from song_agent.unified_release_program_continuity_command_center_signoff import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_signoff import (
             RESET_ACTION,
             UnifiedReleaseProgramContinuityCommandCenterSignoffStateError,
             UnifiedReleaseProgramContinuityCommandCenterSignoffStore,
         )
-        from song_agent.unified_release_program_continuity_command_center_signoff_verifier import verify_unified_release_program_continuity_command_center_signoff_package
+        from song_agent.domains.program.unified_release_program_continuity_command_center_signoff_verifier import verify_unified_release_program_continuity_command_center_signoff_package
         from tests.test_ga_readiness import _write_repo as _v1210_write_ga_repo
         from tests.test_unified_release_program_continuity_command_center import _prepared_command_center as _v1210_prepared_command_center
         from tests.test_unified_release_program_continuity_command_center_signoff import _add_declared_extra as _v1210_add_declared_extra, _full_resign_signed_by as _v1210_full_resign
@@ -22562,7 +22562,7 @@ def _v1211_unified_release_program_continuity_command_center_receiver_acceptance
     try:
         from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
         from song_agent.ga_readiness_verifier import verify_ga_readiness_report
-        from song_agent.unified_release_program_continuity_command_center_acceptance import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance import (
             UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
         )
         from tests.test_ga_readiness import _write_repo as _v1211_write_ga_repo
@@ -22768,13 +22768,13 @@ def _v1212_unified_release_program_continuity_command_center_receiver_acceptance
         from song_agent.ga_readiness_verifier import verify_ga_readiness_report
         from song_agent.projectio import read_json, write_json
         from song_agent.releases import stable_hash
-        from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change import (
             UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
         )
-        from song_agent.unified_release_program_continuity_command_center_acceptance import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance import (
             UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
         )
-        from song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+        from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier import (
             verify_unified_release_program_continuity_command_center_acceptance_change_package,
         )
         from tests.test_unified_release_program_continuity_command_center_acceptance_change import (
@@ -23046,7 +23046,7 @@ def _v1212_unified_release_program_continuity_command_center_receiver_acceptance
 
 
 def _v128_prepare_signed(base: Path):
-    from song_agent.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
+    from song_agent.domains.program.unified_release_program_continuity_acceptance_change import UnifiedReleaseProgramContinuityAcceptanceChangeStore
     from tests.test_unified_release_program_continuity_acceptance import _accepted_pair as _v127_accepted_pair, _prepared_acceptance as _v127_prepared_acceptance
 
     program_store, distribution, acceptance, program_id, zipped = _v127_prepared_acceptance(base)
@@ -23272,7 +23272,7 @@ def _v121_sha256_bytes(data: bytes) -> str:
 
 
 def _v120_fake_handoff_evidence(base: Path) -> tuple[Path, Path, Path]:
-    from song_agent.unified_command_center_release_train_handoff_verifier import UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE
+    from song_agent.domains.program.unified_command_center_release_train_handoff_verifier import UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE
 
     zip_path = base / "handoff.zip"
     zip_path.write_bytes(b"fake handoff zip for v12 program smoke\n")

@@ -87,7 +87,7 @@ def run_lifecycle_kernel_smoke(root: Path) -> tuple[bool, str]:
             except ValueError:
                 archive_tamper = True
 
-        source_root = Path(__file__).resolve().parent
+        source_root = Path(__file__).resolve().parent / "domains" / "program"
         forbidden = ('event["payload_hash"] = stable_hash', 'event["event_hash"] = stable_hash')
         stores_migrated = all(
             "HistoryChain" in (source_root / filename).read_text(encoding="utf-8")

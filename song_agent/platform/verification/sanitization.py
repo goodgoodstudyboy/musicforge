@@ -19,6 +19,7 @@ VERIFICATION_BLOCKED_METADATA_KEYS = {
     "secret",
     "token",
 }
+DEFAULT_BLOCKED_METADATA_KEYS = VERIFICATION_BLOCKED_METADATA_KEYS
 
 SENSITIVE_TEXT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"github_pat_[A-Za-z0-9_]{20,}"), "github_pat_[REDACTED]"),

@@ -14,6 +14,22 @@ from song_agent.architecture_guardrails import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_architecture_snapshot_cache_isolated_and_invalidated(tmp_path: Path) -> None:
+    package = tmp_path / "song_agent"
+    package.mkdir()
+    source = package / "sample.py"
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+
+    first = build_architecture_snapshot(tmp_path)
+    first["modules"].clear()
+    cached = build_architecture_snapshot(tmp_path)
+    source.write_text("VALUE = 1\nOTHER = 2\n", encoding="utf-8")
+    changed = build_architecture_snapshot(tmp_path)
+
+    assert len(cached["modules"]) == 1
+    assert changed["total_source_lines"] > cached["total_source_lines"]
+
+
 def test_architecture_module_ownership_is_complete() -> None:
     baseline = json.loads((ROOT / "architecture-baseline.json").read_text(encoding="utf-8"))
     snapshot = build_architecture_snapshot(ROOT)

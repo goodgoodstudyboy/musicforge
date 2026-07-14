@@ -645,78 +645,78 @@ from song_agent.unified_command_center_release_train_handoff import (
     UnifiedCommandCenterReleaseTrainHandoffStateError,
     UnifiedCommandCenterReleaseTrainHandoffStore,
 )
-from song_agent.unified_release_program import (
+from song_agent.domains.program.unified_release_program import (
     UnifiedReleaseProgramError,
     UnifiedReleaseProgramNotFoundError,
     UnifiedReleaseProgramStateError,
     UnifiedReleaseProgramStore,
 )
-from song_agent.unified_release_program_operations import (
+from song_agent.domains.program.unified_release_program_operations import (
     UnifiedReleaseProgramOperationsError,
     UnifiedReleaseProgramOperationsNotFoundError,
     UnifiedReleaseProgramOperationsStateError,
     UnifiedReleaseProgramOperationsStore,
 )
-from song_agent.unified_release_program_handoff import (
+from song_agent.domains.program.unified_release_program_handoff import (
     UnifiedReleaseProgramHandoffError,
     UnifiedReleaseProgramHandoffNotFoundError,
     UnifiedReleaseProgramHandoffStateError,
     UnifiedReleaseProgramHandoffStore,
 )
-from song_agent.unified_release_program_vault import (
+from song_agent.domains.program.unified_release_program_vault import (
     UnifiedReleaseProgramVaultError,
     UnifiedReleaseProgramVaultNotFoundError,
     UnifiedReleaseProgramVaultStateError,
     UnifiedReleaseProgramVaultStore,
 )
-from song_agent.unified_release_program_vault_operations import (
+from song_agent.domains.program.unified_release_program_vault_operations import (
     UnifiedReleaseProgramVaultOperationsError,
     UnifiedReleaseProgramVaultOperationsNotFoundError,
     UnifiedReleaseProgramVaultOperationsStateError,
     UnifiedReleaseProgramVaultOperationsStore,
 )
-from song_agent.unified_release_program_continuity import (
+from song_agent.domains.program.unified_release_program_continuity import (
     UnifiedReleaseProgramContinuityError,
     UnifiedReleaseProgramContinuityNotFoundError,
     UnifiedReleaseProgramContinuityStateError,
     UnifiedReleaseProgramContinuityStore,
 )
-from song_agent.unified_release_program_continuity_distribution import (
+from song_agent.domains.program.unified_release_program_continuity_distribution import (
     UnifiedReleaseProgramContinuityDistributionError,
     UnifiedReleaseProgramContinuityDistributionNotFoundError,
     UnifiedReleaseProgramContinuityDistributionStateError,
     UnifiedReleaseProgramContinuityDistributionStore,
 )
-from song_agent.unified_release_program_continuity_acceptance import (
+from song_agent.domains.program.unified_release_program_continuity_acceptance import (
     UnifiedReleaseProgramContinuityAcceptanceError,
     UnifiedReleaseProgramContinuityAcceptanceNotFoundError,
     UnifiedReleaseProgramContinuityAcceptanceStateError,
     UnifiedReleaseProgramContinuityAcceptanceStore,
 )
-from song_agent.unified_release_program_continuity_acceptance_change import (
+from song_agent.domains.program.unified_release_program_continuity_acceptance_change import (
     UnifiedReleaseProgramContinuityAcceptanceChangeError,
     UnifiedReleaseProgramContinuityAcceptanceChangeNotFoundError,
     UnifiedReleaseProgramContinuityAcceptanceChangeStateError,
     UnifiedReleaseProgramContinuityAcceptanceChangeStore,
 )
-from song_agent.unified_release_program_continuity_command_center import (
+from song_agent.domains.program.unified_release_program_continuity_command_center import (
     UnifiedReleaseProgramContinuityCommandCenterError,
     UnifiedReleaseProgramContinuityCommandCenterStateError,
     UnifiedReleaseProgramContinuityCommandCenterStore,
 )
-from song_agent.unified_release_program_continuity_command_center_signoff import (
+from song_agent.domains.program.unified_release_program_continuity_command_center_signoff import (
     UnifiedReleaseProgramContinuityCommandCenterSignoffError,
     UnifiedReleaseProgramContinuityCommandCenterSignoffNotFoundError,
     UnifiedReleaseProgramContinuityCommandCenterSignoffStateError,
     UnifiedReleaseProgramContinuityCommandCenterSignoffStore,
 )
-from song_agent.unified_release_program_continuity_command_center_acceptance import (
+from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance import (
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceError,
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceNotFoundError,
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError,
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore,
 )
-from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
+from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change import (
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeError,
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeNotFoundError,
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
