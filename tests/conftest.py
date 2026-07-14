@@ -65,7 +65,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             markers.update({"legacy", "slow"})
             markers.add(_legacy_release_check_shard(name))
         else:
-            markers.add(_primary_marker(path, name))
+            markers.add(_primary_marker(path, name, item=item))
             if "verifier" in path or "security" in path or "zip" in name or "tamper" in name or "forg" in name:
                 markers.add("security")
             if _is_slow_test(path, name):
@@ -78,8 +78,10 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             item.add_marker(getattr(pytest.mark, marker))
 
 
-def _primary_marker(path: str, name: str) -> str:
-    if path.startswith(("test_cli", "test_server", "test_webui")) or "integration" in name:
+def _primary_marker(path: str, name: str, *, item: pytest.Item | None = None) -> str:
+    code = getattr(getattr(item, "obj", None), "__code__", None)
+    starts_http_server = code is not None and "start_test_server" in {*code.co_names, *code.co_freevars}
+    if path.startswith(("test_cli", "test_server", "test_webui")) or "integration" in name or starts_http_server:
         return "integration"
     if any(token in path for token in ("architecture", "contract", "registry", "matrix")):
         return "contract"

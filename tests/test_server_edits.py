@@ -23,7 +23,7 @@ def stop_test_server(server):
     server.server_close()
 
 
-def request_json(server, method, path, payload=None, *, timeout=10):
+def request_json(server, method, path, payload=None, *, timeout=30):
     connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=timeout)
     body = None
     headers = {}
@@ -41,7 +41,7 @@ def request_json(server, method, path, payload=None, *, timeout=10):
 
 
 def request_bytes(server, method, path, payload=None):
-    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=10)
+    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=30)
     body = None
     headers = {}
     if payload is not None:

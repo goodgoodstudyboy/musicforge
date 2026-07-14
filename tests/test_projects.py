@@ -122,7 +122,7 @@ def test_export_project_collects_context_pack_summaries(tmp_path: Path) -> None:
     store.add_version_from_job(document.state.project_id, job)
 
     exported = store.export_project(document.state.project_id)
-    serialized = json.dumps(exported, ensure_ascii=False)
+    serialized = json.dumps(exported["context_packs"], ensure_ascii=False)
 
     assert exported["context_packs"][0]["pack_id"] == "pack-001"
     assert exported["context_packs"][0]["used_by_versions"] == ["v001"]

@@ -16,10 +16,21 @@ from tests.conftest import (
 
 
 def test_active_test_taxonomy_has_one_deterministic_primary_shard() -> None:
+    def start_test_server() -> None:
+        return None
+
+    def starts_server() -> None:
+        start_test_server()
+
     assert _primary_marker("test_song.py", "test_roundtrip") == "unit"
     assert _primary_marker("test_release_check_matrix.py", "test_profiles") == "contract"
     assert _primary_marker("test_cli_release_check_matrix.py", "test_profiles") == "integration"
     assert _primary_marker("test_song.py", "test_runtime_integration") == "integration"
+    assert _primary_marker(
+        "test_audio.py",
+        "test_server_backed_flow",
+        item=SimpleNamespace(obj=starts_server),
+    ) == "integration"
     assert _is_slow_test("test_unified_release_program.py", "test_happy_path") is True
     assert _is_slow_test("test_song.py", "test_happy_path") is False
     assert _slow_partition("tests/test_example.py::test_case") in {0, 1}
