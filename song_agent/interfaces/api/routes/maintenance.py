@@ -8,7 +8,7 @@ class MaintenanceRoutes:
         if method != "GET":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        from song_agent.ga_readiness import build_ga_readiness_report
+        from song_agent.application.legacy_dependencies.ga_readiness import build_ga_readiness_report
 
         report = build_ga_readiness_report(repo_root=Path.cwd())
         self._send_json({"ok": report.get("status") != "blocked", "report": report, "summary": report.get("summary", {})})
@@ -17,7 +17,7 @@ class MaintenanceRoutes:
         if method != "POST":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.application.legacy_dependencies.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
         from song_agent.release_check.runner import run_release_check_matrix
 
         payload = self._optional_json_body()
@@ -62,7 +62,7 @@ class MaintenanceRoutes:
         if method != "GET":
             self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        from song_agent.ga_readiness import REQUIRED_DOCS
+        from song_agent.application.legacy_dependencies.ga_readiness import REQUIRED_DOCS
 
         docs = []
         for rel in REQUIRED_DOCS:
@@ -77,7 +77,7 @@ class MaintenanceRoutes:
         self._send_json({"ok": True, "docs": docs, "summary": {"required_count": len(REQUIRED_DOCS), "present_count": sum(1 for item in docs if item["exists"])}})
 
     def _handle_maintenance_route(self, method: str, path: str) -> None:
-        from song_agent.lts_maintenance import LTSMaintenanceStore
+        from song_agent.application.legacy_dependencies.lts_maintenance import LTSMaintenanceStore
 
         store = LTSMaintenanceStore(repo_root=Path.cwd())
         if path == "/api/maintenance/status":

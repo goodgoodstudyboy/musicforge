@@ -1,0 +1,237 @@
+from __future__ import annotations
+
+import argparse
+
+import json
+
+import sys
+
+import os
+
+from pathlib import Path
+
+from typing import Any
+
+from song_agent.application.generation.service import generate_request
+
+from song_agent.application.legacy_dependencies.auth import build_auth_config
+
+from song_agent.application.legacy_dependencies.projectio import read_json, write_json
+
+from song_agent.application.legacy_dependencies.provider import (
+    ProviderConfig,
+    ProviderError,
+    load_provider_config,
+    provider_configured,
+    test_provider_config,
+)
+
+from song_agent.application.legacy_dependencies.schemas__song import SongRequest
+
+from song_agent.application.interface_persistence import write_interface_document
+
+from song_agent.interfaces.cli.registry import CommandSpec
+
+from song_agent.interfaces.cli.symbols import resolve as _resolve_symbol
+
+from song_agent.application.legacy_dependencies.audio_lab import AudioLabStore
+
+from song_agent.application.legacy_dependencies.audio_fix_sprints import AudioFixSprintStore
+
+from song_agent.application.legacy_dependencies.audio_campaigns import AudioCampaignStore
+
+from song_agent.application.legacy_dependencies.audio_campaign_verifier import write_audio_campaign_verification_report
+
+from song_agent.application.legacy_dependencies.audio_campaign_governance import AudioCampaignGovernanceStore
+
+from song_agent.application.legacy_dependencies.audio_campaign_archive_verifier import write_audio_campaign_archive_verification_report
+
+from song_agent.application.legacy_dependencies.audio_campaign_planner import AudioCampaignPlannerStore
+
+from song_agent.application.legacy_dependencies.audio_campaign_remediation import AudioCampaignRemediationStore
+
+from song_agent.application.legacy_dependencies.audio_campaign_remediation_verifier import write_audio_campaign_remediation_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_certification import ReleaseAudioCertificationStore
+
+from song_agent.application.legacy_dependencies.release_audio_certification_verifier import write_release_audio_certification_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_timeline import ReleaseAudioTimelineStore
+
+from song_agent.application.legacy_dependencies.release_audio_timeline_verifier import write_release_audio_timeline_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_regression import ReleaseAudioRegressionStore
+
+from song_agent.application.legacy_dependencies.release_audio_regression_verifier import write_release_audio_regression_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_baseline_governance import ReleaseAudioBaselineGovernanceStore
+
+from song_agent.application.legacy_dependencies.release_audio_baseline_governance_verifier import write_release_audio_baseline_registry_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_regression_response import ReleaseAudioRegressionResponseStore
+
+from song_agent.application.legacy_dependencies.release_audio_regression_response_verifier import write_release_audio_regression_response_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
+
+from song_agent.application.legacy_dependencies.release_audio_quality_observatory_verifier import write_release_audio_quality_observatory_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_quality_actions import ReleaseAudioQualityActionQueueStore
+
+from song_agent.application.legacy_dependencies.release_audio_quality_action_signoff import ReleaseAudioQualityActionQueueSignoffStore
+
+from song_agent.application.legacy_dependencies.release_audio_quality_action_signoff_verifier import write_release_audio_quality_action_queue_signoff_archive_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_quality_actions_verifier import write_release_audio_quality_action_queue_verification_report
+
+from song_agent.application.legacy_dependencies.release_audio_command_center import ReleaseAudioCommandCenterStore
+
+from song_agent.application.legacy_dependencies.release_audio_command_center_verifier import write_release_audio_command_center_verification_report
+
+from song_agent.application.legacy_dependencies.acceptance_profiles import get_acceptance_profile
+
+from song_agent.application.legacy_dependencies.music_acceptance import AcceptanceStore, build_acceptance_report, default_acceptance_song_cases
+
+from song_agent.application.legacy_dependencies.music_health import music_health_allows_review
+
+from song_agent.application.legacy_dependencies.release_audio_baseline_governance_verifier import (
+    release_audio_baseline_registry_verification_exit_code,
+    verify_release_audio_baseline_registry_package,
+    write_release_audio_baseline_registry_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_regression_response_verifier import (
+    release_audio_regression_response_verification_exit_code,
+    verify_release_audio_regression_response_package,
+    write_release_audio_regression_response_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_quality_observatory_verifier import (
+    release_audio_quality_observatory_verification_exit_code,
+    verify_release_audio_quality_observatory_package,
+    write_release_audio_quality_observatory_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_quality_actions_verifier import (
+    release_audio_quality_action_queue_verification_exit_code,
+    verify_release_audio_quality_action_queue_package,
+    write_release_audio_quality_action_queue_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_quality_action_signoff_verifier import (
+    release_audio_quality_action_queue_signoff_archive_verification_exit_code,
+    verify_release_audio_quality_action_queue_signoff_archive_package,
+    write_release_audio_quality_action_queue_signoff_archive_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_command_center import evidence_to_verifier_kwargs
+
+from song_agent.application.legacy_dependencies.release_audio_command_center_verifier import (
+    release_audio_command_center_verification_exit_code,
+    verify_release_audio_command_center_package,
+    write_release_audio_command_center_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.unified_command_center_evidence_review_verifier import (
+    unified_command_center_evidence_review_acceptance_verification_exit_code,
+    verify_unified_command_center_evidence_review_acceptance_package,
+    write_unified_command_center_evidence_review_acceptance_verification_report,
+)
+
+from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import (
+    unified_release_program_continuity_acceptance_verification_exit_code,
+    verify_unified_release_program_continuity_acceptance_package,
+    write_unified_release_program_continuity_acceptance_verification_report,
+)
+
+from song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier import (
+    unified_release_program_continuity_acceptance_change_verification_exit_code,
+    verify_unified_release_program_continuity_acceptance_change_package,
+    write_unified_release_program_continuity_acceptance_change_verification_report,
+)
+
+from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_verifier import (
+    verification_exit_code,
+    verify_unified_release_program_continuity_command_center_acceptance_package,
+    write_verification_report,
+)
+
+from song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change_verifier import (
+    unified_release_program_continuity_command_center_acceptance_change_verification_exit_code,
+    verify_unified_release_program_continuity_command_center_acceptance_change_package,
+    write_unified_release_program_continuity_command_center_acceptance_change_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.audio_campaign_verifier import audio_campaign_verification_exit_code, verify_audio_campaign_package, write_audio_campaign_verification_report
+
+from song_agent.application.legacy_dependencies.audio_campaign_archive_verifier import (
+    audio_campaign_archive_verification_exit_code,
+    verify_audio_campaign_archive_package,
+    write_audio_campaign_archive_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.audio_campaign_remediation_verifier import (
+    audio_campaign_remediation_verification_exit_code,
+    verify_audio_campaign_remediation_package,
+    write_audio_campaign_remediation_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_certification_verifier import (
+    release_audio_certification_verification_exit_code,
+    verify_release_audio_certification_package,
+    write_release_audio_certification_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_timeline_verifier import (
+    release_audio_timeline_verification_exit_code,
+    verify_release_audio_timeline_package,
+    write_release_audio_timeline_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.release_audio_regression_verifier import (
+    release_audio_regression_verification_exit_code,
+    verify_release_audio_regression_package,
+    write_release_audio_regression_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.audio_health import analyze_wav_health
+
+from song_agent.application.legacy_dependencies.audio_profiles import AudioProfileStore
+
+from song_agent.application.legacy_dependencies.audio_review_evidence import AudioReviewEvidenceStore, audio_review_summary_public
+
+from song_agent.application.legacy_dependencies.projects import ProjectStore
+
+from song_agent.application.legacy_dependencies.releases import ReleaseStore
+
+from song_agent.application.legacy_dependencies.audio_encoding import AudioEncodingStore, normalize_required_profiles
+
+from song_agent.application.legacy_dependencies.audio_encoding_profiles import AudioEncodingProfileStore
+
+from song_agent.application.legacy_dependencies.encoded_audio_acceptance import EncodedAudioAcceptanceStore, encoded_audio_acceptance_summary_public
+
+from song_agent.application.legacy_dependencies.distribution import DistributionStore
+
+from song_agent.application.legacy_dependencies.format_decisions import FormatDecisionStore
+
+from song_agent.application.legacy_dependencies.acceptance_diff import build_acceptance_diff
+
+from song_agent.application.legacy_dependencies.acceptance_analytics import AcceptanceAnalyticsStore, AnalyticsScope, acceptance_analytics_summary
+
+from song_agent.application.legacy_dependencies.acceptance_fix_sprints import AcceptanceFixSprintStore, fix_sprint_summary
+
+from song_agent.application.legacy_dependencies.acceptance_fix_planning import AcceptanceFixPlanningStore, fix_plan_summary
+
+from song_agent.application.legacy_dependencies.acceptance_fix_plan_reviews import AcceptanceFixPlanReviewStore, fix_plan_review_summary
+
+from song_agent.application.legacy_dependencies.planning_rule_simulation import PlanningRuleSimulationStore, ruleset_summary
+
+from song_agent.application.legacy_dependencies.planning_rule_simulation import PlanningRuleSimulationStore, planning_simulation_summary
+
+from song_agent.application.legacy_dependencies.planning_rule_governance import PlanningRuleGovernanceStore, governance_summary, promotion_summary
+
+from song_agent.application.legacy_dependencies.planning_rule_impact import PlanningRuleImpactStore, planning_rule_impact_summary
+
+from song_agent.application.legacy_dependencies.acceptance_kb import AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
+
+__all__ = ['AcceptanceAnalyticsStore', 'AcceptanceFixPlanReviewStore', 'AcceptanceFixPlanningStore', 'AcceptanceFixSprintStore', 'AcceptanceKnowledgeBaseStore', 'AcceptanceStore', 'AnalyticsScope', 'Any', 'AudioCampaignGovernanceStore', 'AudioCampaignPlannerStore', 'AudioCampaignRemediationStore', 'AudioCampaignStore', 'AudioEncodingProfileStore', 'AudioEncodingStore', 'AudioFixSprintStore', 'AudioLabStore', 'AudioProfileStore', 'AudioReviewEvidenceStore', 'CommandSpec', 'DistributionStore', 'EncodedAudioAcceptanceStore', 'FormatDecisionStore', 'Path', 'PlanningRuleGovernanceStore', 'PlanningRuleImpactStore', 'PlanningRuleSimulationStore', 'ProjectStore', 'ProviderConfig', 'ProviderError', 'ReleaseAudioBaselineGovernanceStore', 'ReleaseAudioCertificationStore', 'ReleaseAudioCommandCenterStore', 'ReleaseAudioQualityActionQueueSignoffStore', 'ReleaseAudioQualityActionQueueStore', 'ReleaseAudioQualityObservatoryStore', 'ReleaseAudioRegressionResponseStore', 'ReleaseAudioRegressionStore', 'ReleaseAudioTimelineStore', 'ReleaseStore', 'SongRequest', '_resolve_symbol', 'acceptance_analytics_summary', 'analyze_wav_health', 'argparse', 'audio_campaign_archive_verification_exit_code', 'audio_campaign_remediation_verification_exit_code', 'audio_campaign_verification_exit_code', 'audio_review_summary_public', 'build_acceptance_diff', 'build_acceptance_report', 'build_auth_config', 'default_acceptance_song_cases', 'encoded_audio_acceptance_summary_public', 'evidence_to_verifier_kwargs', 'fix_plan_review_summary', 'fix_plan_summary', 'fix_sprint_summary', 'generate_request', 'get_acceptance_profile', 'governance_summary', 'json', 'knowledge_entry_summary', 'knowledge_report_summary', 'load_provider_config', 'music_health_allows_review', 'normalize_required_profiles', 'os', 'planning_rule_impact_summary', 'planning_simulation_summary', 'promotion_summary', 'provider_configured', 'read_json', 'release_audio_baseline_registry_verification_exit_code', 'release_audio_certification_verification_exit_code', 'release_audio_command_center_verification_exit_code', 'release_audio_quality_action_queue_signoff_archive_verification_exit_code', 'release_audio_quality_action_queue_verification_exit_code', 'release_audio_quality_observatory_verification_exit_code', 'release_audio_regression_response_verification_exit_code', 'release_audio_regression_verification_exit_code', 'release_audio_timeline_verification_exit_code', 'ruleset_summary', 'sys', 'test_provider_config', 'unified_command_center_evidence_review_acceptance_verification_exit_code', 'unified_release_program_continuity_acceptance_change_verification_exit_code', 'unified_release_program_continuity_acceptance_verification_exit_code', 'unified_release_program_continuity_command_center_acceptance_change_verification_exit_code', 'verification_exit_code', 'verify_audio_campaign_archive_package', 'verify_audio_campaign_package', 'verify_audio_campaign_remediation_package', 'verify_release_audio_baseline_registry_package', 'verify_release_audio_certification_package', 'verify_release_audio_command_center_package', 'verify_release_audio_quality_action_queue_package', 'verify_release_audio_quality_action_queue_signoff_archive_package', 'verify_release_audio_quality_observatory_package', 'verify_release_audio_regression_package', 'verify_release_audio_regression_response_package', 'verify_release_audio_timeline_package', 'verify_unified_command_center_evidence_review_acceptance_package', 'verify_unified_release_program_continuity_acceptance_change_package', 'verify_unified_release_program_continuity_acceptance_package', 'verify_unified_release_program_continuity_command_center_acceptance_change_package', 'verify_unified_release_program_continuity_command_center_acceptance_package', 'write_audio_campaign_archive_verification_report', 'write_audio_campaign_remediation_verification_report', 'write_audio_campaign_verification_report', 'write_interface_document', 'write_json', 'write_release_audio_baseline_registry_verification_report', 'write_release_audio_certification_verification_report', 'write_release_audio_command_center_verification_report', 'write_release_audio_quality_action_queue_signoff_archive_verification_report', 'write_release_audio_quality_action_queue_verification_report', 'write_release_audio_quality_observatory_verification_report', 'write_release_audio_regression_response_verification_report', 'write_release_audio_regression_verification_report', 'write_release_audio_timeline_verification_report', 'write_unified_command_center_evidence_review_acceptance_verification_report', 'write_unified_release_program_continuity_acceptance_change_verification_report', 'write_unified_release_program_continuity_acceptance_verification_report', 'write_unified_release_program_continuity_command_center_acceptance_change_verification_report', 'write_verification_report']

@@ -101,11 +101,19 @@ def _is_short_wrapper(path: Path) -> bool:
 
 
 def _program_route_handler(root: Path) -> int:
-    source = root / "song_agent" / "interfaces" / "api" / "routes" / "program.py"
-    lines = source.read_text(encoding="utf-8").splitlines()
-    start = next(index for index, line in enumerate(lines) if "def _handle_unified_release_programs_route" in line)
-    end = next(index for index in range(start + 1, len(lines)) if lines[index].startswith("    def "))
-    return end - start
+    routes = root / "song_agent" / "interfaces" / "api" / "routes"
+    for source in [routes / "program.py", *sorted((routes / "program_parts").glob("part_*.py"))]:
+        lines = source.read_text(encoding="utf-8").splitlines()
+        for start, line in enumerate(lines):
+            if "def _handle_unified_release_programs_route" not in line:
+                continue
+            indent = len(line) - len(line.lstrip())
+            for end in range(start + 1, len(lines)):
+                candidate = lines[end]
+                if candidate.strip() and len(candidate) - len(candidate.lstrip()) <= indent and candidate.lstrip().startswith("def "):
+                    return end - start
+            return len(lines) - start
+    raise RuntimeError("Program route handler is missing.")
 
 
 def _active_flat_program_imports(root: Path) -> list[str]:

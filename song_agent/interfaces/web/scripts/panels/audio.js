@@ -1,1 +1,3 @@
-export const panel = {"name": "audio", "controls": ["audio-lab", "audio-campaign", "audio-quality"]};
+import './audio/part-001.js';
+export const panel = Object.freeze({ id: 'audio', moduleCount: 1 });
+globalThis.MusicForgePanels.audio = panel;

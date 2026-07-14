@@ -1,5 +1,13 @@
 # Changelog
 
+## v13.5.0 - 2026-07-15
+
+- Replaced runtime API route AST discovery with a fixed, versioned 117-route manifest and removed every `legacy-compatible` route schema.
+- Split the CLI, API routes, API runtime, Program HTTP adapter, and Studio browser application into bounded production modules while preserving command/help contracts and external APIs.
+- Added real browser ES modules served through a fixed script allow-list; the Studio entry is 14 lines and all panel modules are loaded and tested.
+- Centralized the remaining compatibility imports behind one application anti-corruption facade per legacy module, reducing active compatibility edges from 407 to 227 with no active cycles or boundary violations.
+- Added `v135.interface_decomposition_smoke` and hard checks for interface limits, explicit route registration, Web module references, and the compatibility boundary.
+
 ## v13.4.0 - 2026-07-15
 
 - Moved all active Unified Release Program stores and verifiers into the physical `domains/program` bounded context while retaining short flat compatibility exports.

@@ -1,10 +1,11 @@
 # Current Architecture
 
-MusicForge v13.4 is a local-first modular monolith. It remains one Python
+MusicForge v13.5 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. Active v12/v13 Program
 paths follow `interfaces -> application -> domains -> platform`. Earlier music
 capabilities remain operational through flat compatibility implementations;
-their complete inbound edge set is disclosed and frozen in the architecture
+their imports are centralized behind application anti-corruption facades and
+their complete inbound edge set is disclosed and ratcheted in the architecture
 baseline. Historical v1-v11 release checks are read-only compatibility paths.
 
 ## Current Layers
@@ -104,3 +105,20 @@ allowing this debt to shrink.
 - Active Program CLI commands use compact command specs and application
   components. Program domain/application modules have no compatibility
   imports, and the production import graph remains acyclic.
+
+## v13.5 Interface Decomposition
+
+- API inventory is a fixed 117-route manifest with versioned schemas; server
+  startup no longer parses `_handle_request` source.
+- CLI command implementations and API route families are physically split at
+  behavior boundaries. Every Python interface module is below 600 lines and
+  command modules do not import Stores directly.
+- `interfaces/api/runtime.py` is a 43-line facade over bounded dependency,
+  JobStore, BatchRunner, and helper modules.
+- Program HTTP routing is split by Program capability. Release signoff now
+  enters through an application use-case instead of a 1000-line API handler.
+- Studio loads fixed-manifest ES modules; `app.js` is a 14-line entry and each
+  product panel is an independently loaded module.
+- Remaining flat modules have one active anti-corruption import each. Active
+  compatibility edges fell from 407 to 227; active cycles and boundary
+  violations remain zero.

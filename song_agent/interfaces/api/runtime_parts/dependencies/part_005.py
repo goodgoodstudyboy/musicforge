@@ -1,0 +1,239 @@
+from __future__ import annotations
+
+from song_agent.application.legacy_dependencies.planning_rule_impact import (
+    PlanningRuleImpactError,
+    PlanningRuleImpactNotFoundError,
+    PlanningRuleImpactStateError,
+    PlanningRuleImpactStore,
+    planning_rule_impact_report_hash,
+    planning_rule_impact_summary,
+)
+from song_agent.application.legacy_dependencies.acceptance_diff import build_acceptance_diff
+from song_agent.application.legacy_dependencies.acceptance_profiles import list_acceptance_profiles
+from song_agent.application.legacy_dependencies.audio_profiles import AudioProfileError, AudioProfileNotFoundError, AudioProfileStore
+from song_agent.application.legacy_dependencies.mastering_profiles import MasteringProfileError, MasteringProfileNotFoundError, MasteringProfileStore
+from song_agent.application.legacy_dependencies.mastering_qa import MasteringNotFoundError, MasteringQAError, MasteringStateError, MasteringStore
+from song_agent.application.legacy_dependencies.music_acceptance import (
+    AcceptanceNotFoundError,
+    AcceptanceStateError,
+    AcceptanceStore,
+    AcceptanceValidationError,
+    acceptance_report_summary,
+    acceptance_signoff_summary,
+    acceptance_suite_summary,
+    listening_review_summary,
+)
+from song_agent.application.legacy_dependencies.mix_controls import (
+    MixControlError,
+    MixControlStateError,
+    MixControlStore,
+    mix_state_hash,
+    mix_state_integrity_ok,
+    mix_state_stale_reasons,
+)
+from song_agent.application.legacy_dependencies.mix_render import MixRenderStore, mix_preview_integrity_ok
+from song_agent.application.legacy_dependencies.stem_health import (
+    read_stem_health_report,
+    stem_health_allows_signoff,
+    stem_health_integrity_ok,
+    stem_health_source_state,
+    stem_health_stale_reasons,
+    stem_health_summary,
+)
+from song_agent.application.legacy_dependencies.human_review_pack import (
+    HumanReviewPackNotFoundError,
+    HumanReviewPackStateError,
+    HumanReviewPackStore,
+    HumanReviewPackValidationError,
+)
+from song_agent.application.legacy_dependencies.regression_songbook import builtin_songbook
+from song_agent.application.legacy_dependencies.context_packs import (
+    ContextPackStaleError,
+    ContextPackStore,
+    apply_context_pack,
+    context_pack_public_dict,
+    context_pack_snapshot,
+    merge_context_refs,
+    write_context_pack_snapshot,
+)
+from song_agent.application.legacy_dependencies.library_index import LibraryIndexStore, asset_source_hash, recommend_library_context, search_library
+from song_agent.application.legacy_dependencies.node_graph import affected_nodes_for_retry, downstream_nodes, upstream_nodes
+from song_agent.application.legacy_dependencies.node_store import NodeStore
+from song_agent.application.legacy_dependencies.prompt_templates import PromptTemplateStore
+from song_agent.application.legacy_dependencies.projectio import ProjectPaths, append_event, read_json, slugify, write_json
+from song_agent.application.legacy_dependencies.project_compare import compare_project_versions
+from song_agent.application.legacy_dependencies.provider_edits import (
+    ProviderEditPatch,
+    apply_provider_edit_patch,
+    create_provider_edit_preview,
+    delete_provider_edit_preview,
+    generate_provider_edit_candidates,
+    generate_provider_edit_patch,
+    mark_provider_edit_preview_applied,
+    preview_candidate_plan,
+    preview_patch,
+    preview_stale,
+    read_provider_edit_preview,
+    song_plan_hash,
+)
+from song_agent.application.legacy_dependencies.review_edits import (
+    ReviewEditError,
+    ReviewEditStore,
+    ReviewEditUnavailableError,
+    apply_review_edit,
+    build_review_edit,
+    review_edit_instruction_for_provider,
+    review_edit_metadata,
+    review_edit_summary,
+)
+from song_agent.application.legacy_dependencies.review_tasks import (
+    ReviewTaskError,
+    ReviewTaskStateError,
+    ReviewTaskStore,
+    apply_candidate_intents,
+    build_provider_review_candidates,
+    build_review_decision_report,
+    build_local_review_candidates,
+    candidate_apply_metadata,
+    ensure_candidate_current,
+    _ensure_task_open_for_apply,
+    ensure_task_current,
+    mark_task_archived,
+    mark_task_resolved,
+    review_candidate_summary,
+    review_candidate_source_breakdown,
+    review_decision_summary,
+    review_task_summary,
+    task_list_summary,
+)
+from song_agent.application.legacy_dependencies.review_judge import (
+    REVIEW_JUDGE_TEMPLATE_ID,
+    judge_report_summary,
+    judge_summary_for_apply,
+    mark_judge_report_stale,
+    read_judge_report_with_stale,
+    run_provider_review_judge,
+    sprint_judge_summary,
+)
+from song_agent.application.legacy_dependencies.review_sprints import (
+    ReviewSprintError,
+    ReviewSprintStateError,
+    ReviewSprintStore,
+    review_sprint_export_summary,
+)
+from song_agent.application.legacy_dependencies.review_sprint_recommendations import (
+    build_review_sprint_recommendation_report,
+    recommendation_report_summary,
+)
+from song_agent.application.legacy_dependencies.review_sprint_actions import (
+    ReviewSprintActionQueueStore,
+    SprintActionItem,
+    SprintActionQueue,
+    action_queue_collection_summary,
+    action_queue_summary,
+    build_action_queue_from_recommendation_report,
+    queue_report_is_stale,
+)
+from song_agent.application.legacy_dependencies.review_sprint_metrics import (
+    ReviewMetricsStore,
+    build_project_review_metrics,
+    build_sprint_metrics_report,
+    project_review_metrics_summary,
+    sprint_metrics_summary,
+)
+from song_agent.application.legacy_dependencies.review_sprint_closeout import (
+    build_closeout_report,
+    build_signoff_record,
+    closeout_allows_close,
+    closeout_report_summary,
+    closeout_source_hash,
+    mark_closeout_report_forced,
+    mark_closeout_report_stale,
+    signoff_summary,
+)
+from song_agent.application.legacy_dependencies.provider_usage import (
+    build_provider_usage_report,
+    collect_candidate_group_provider_usage_records,
+    collect_project_provider_usage_records,
+    usage_record_from_file,
+)
+from song_agent.application.legacy_dependencies.prompt_ab import PromptABStore
+from song_agent.application.legacy_dependencies.projects import ProjectStore
+from song_agent.application.legacy_dependencies.references import (
+    MAX_REFERENCE_WAV_BYTES,
+    ReferenceStore,
+    reference_file_url,
+    reference_prompt_summaries,
+    reference_public_dict,
+    reference_refs_snapshot,
+    write_reference_refs_snapshot,
+)
+from song_agent.application.legacy_dependencies.redaction import sanitize_metadata
+from song_agent.application.legacy_dependencies.reference_analysis import (
+    ReferenceAnalysisError,
+    analyze_reference,
+    create_asset_from_slice,
+    generate_slices,
+    get_analysis_report,
+    get_slice_manifest,
+    render_reference_slice_audio,
+    render_reference_slice_midi,
+    require_fresh_analysis,
+    require_fresh_slices,
+    slice_audio_path,
+    slice_midi_path,
+)
+from song_agent.application.legacy_dependencies.project_quality import (
+    QualityGateConfig,
+    evaluate_quality_gate,
+    load_quality_gate_config,
+    save_quality_gate_config,
+)
+from song_agent.application.legacy_dependencies.provider import (
+    ProviderError,
+    load_provider_config,
+    provider_configured,
+    reset_provider_config,
+    save_provider_config_from_dict,
+    test_provider_config,
+)
+from song_agent.application.legacy_dependencies.renderers__midi import render_midi
+from song_agent.application.legacy_dependencies.renderers__audio import (
+    RendererError,
+    load_renderer_config,
+    render_audio,
+    renderer_configured,
+    reset_renderer_config,
+    save_renderer_config_from_dict,
+    test_renderer_config,
+)
+from song_agent.application.legacy_dependencies.runtime_views import (
+    build_timeline_view,
+    build_tracks_view,
+    build_validator_view,
+    build_quality_view,
+)
+from song_agent.application.legacy_dependencies.schemas__song import SongPlan, SongRequest
+from song_agent.application.legacy_dependencies.song_editor import (
+    EditorPatchError,
+    EditorPatchStaleError,
+    EditorPreviewStore,
+    apply_editor_patch,
+    build_editor_state,
+    editor_edit_metadata,
+    song_plan_hash as editor_song_plan_hash,
+)
+from song_agent.application.legacy_dependencies.stems import (
+    StemManifest,
+    clear_stem_artifacts,
+    load_or_preview_stem_manifest,
+    read_stem_manifest,
+    render_stem_audio,
+    render_stem_midis,
+    stem_manifest_stale,
+    stem_audio_path,
+    stem_midi_path,
+)
+from song_agent.webui import panel_html
+
+__all__ = ['AcceptanceNotFoundError', 'AcceptanceStateError', 'AcceptanceStore', 'AcceptanceValidationError', 'AudioProfileError', 'AudioProfileNotFoundError', 'AudioProfileStore', 'ContextPackStaleError', 'ContextPackStore', 'EditorPatchError', 'EditorPatchStaleError', 'EditorPreviewStore', 'HumanReviewPackNotFoundError', 'HumanReviewPackStateError', 'HumanReviewPackStore', 'HumanReviewPackValidationError', 'LibraryIndexStore', 'MAX_REFERENCE_WAV_BYTES', 'MasteringNotFoundError', 'MasteringProfileError', 'MasteringProfileNotFoundError', 'MasteringProfileStore', 'MasteringQAError', 'MasteringStateError', 'MasteringStore', 'MixControlError', 'MixControlStateError', 'MixControlStore', 'MixRenderStore', 'NodeStore', 'PlanningRuleImpactError', 'PlanningRuleImpactNotFoundError', 'PlanningRuleImpactStateError', 'PlanningRuleImpactStore', 'ProjectPaths', 'ProjectStore', 'PromptABStore', 'PromptTemplateStore', 'ProviderEditPatch', 'ProviderError', 'QualityGateConfig', 'REVIEW_JUDGE_TEMPLATE_ID', 'ReferenceAnalysisError', 'ReferenceStore', 'RendererError', 'ReviewEditError', 'ReviewEditStore', 'ReviewEditUnavailableError', 'ReviewMetricsStore', 'ReviewSprintActionQueueStore', 'ReviewSprintError', 'ReviewSprintStateError', 'ReviewSprintStore', 'ReviewTaskError', 'ReviewTaskStateError', 'ReviewTaskStore', 'SongPlan', 'SongRequest', 'SprintActionItem', 'SprintActionQueue', 'StemManifest', '_ensure_task_open_for_apply', 'acceptance_report_summary', 'acceptance_signoff_summary', 'acceptance_suite_summary', 'action_queue_collection_summary', 'action_queue_summary', 'affected_nodes_for_retry', 'analyze_reference', 'append_event', 'apply_candidate_intents', 'apply_context_pack', 'apply_editor_patch', 'apply_provider_edit_patch', 'apply_review_edit', 'asset_source_hash', 'build_acceptance_diff', 'build_action_queue_from_recommendation_report', 'build_closeout_report', 'build_editor_state', 'build_local_review_candidates', 'build_project_review_metrics', 'build_provider_review_candidates', 'build_provider_usage_report', 'build_quality_view', 'build_review_decision_report', 'build_review_edit', 'build_review_sprint_recommendation_report', 'build_signoff_record', 'build_sprint_metrics_report', 'build_timeline_view', 'build_tracks_view', 'build_validator_view', 'builtin_songbook', 'candidate_apply_metadata', 'clear_stem_artifacts', 'closeout_allows_close', 'closeout_report_summary', 'closeout_source_hash', 'collect_candidate_group_provider_usage_records', 'collect_project_provider_usage_records', 'compare_project_versions', 'context_pack_public_dict', 'context_pack_snapshot', 'create_asset_from_slice', 'create_provider_edit_preview', 'delete_provider_edit_preview', 'downstream_nodes', 'editor_edit_metadata', 'editor_song_plan_hash', 'ensure_candidate_current', 'ensure_task_current', 'evaluate_quality_gate', 'generate_provider_edit_candidates', 'generate_provider_edit_patch', 'generate_slices', 'get_analysis_report', 'get_slice_manifest', 'judge_report_summary', 'judge_summary_for_apply', 'list_acceptance_profiles', 'listening_review_summary', 'load_or_preview_stem_manifest', 'load_provider_config', 'load_quality_gate_config', 'load_renderer_config', 'mark_closeout_report_forced', 'mark_closeout_report_stale', 'mark_judge_report_stale', 'mark_provider_edit_preview_applied', 'mark_task_archived', 'mark_task_resolved', 'merge_context_refs', 'mix_preview_integrity_ok', 'mix_state_hash', 'mix_state_integrity_ok', 'mix_state_stale_reasons', 'panel_html', 'planning_rule_impact_report_hash', 'planning_rule_impact_summary', 'preview_candidate_plan', 'preview_patch', 'preview_stale', 'project_review_metrics_summary', 'provider_configured', 'queue_report_is_stale', 'read_json', 'read_judge_report_with_stale', 'read_provider_edit_preview', 'read_stem_health_report', 'read_stem_manifest', 'recommend_library_context', 'recommendation_report_summary', 'reference_file_url', 'reference_prompt_summaries', 'reference_public_dict', 'reference_refs_snapshot', 'render_audio', 'render_midi', 'render_reference_slice_audio', 'render_reference_slice_midi', 'render_stem_audio', 'render_stem_midis', 'renderer_configured', 'require_fresh_analysis', 'require_fresh_slices', 'reset_provider_config', 'reset_renderer_config', 'review_candidate_source_breakdown', 'review_candidate_summary', 'review_decision_summary', 'review_edit_instruction_for_provider', 'review_edit_metadata', 'review_edit_summary', 'review_sprint_export_summary', 'review_task_summary', 'run_provider_review_judge', 'sanitize_metadata', 'save_provider_config_from_dict', 'save_quality_gate_config', 'save_renderer_config_from_dict', 'search_library', 'signoff_summary', 'slice_audio_path', 'slice_midi_path', 'slugify', 'song_plan_hash', 'sprint_judge_summary', 'sprint_metrics_summary', 'stem_audio_path', 'stem_health_allows_signoff', 'stem_health_integrity_ok', 'stem_health_source_state', 'stem_health_stale_reasons', 'stem_health_summary', 'stem_manifest_stale', 'stem_midi_path', 'task_list_summary', 'test_provider_config', 'test_renderer_config', 'upstream_nodes', 'usage_record_from_file', 'write_context_pack_snapshot', 'write_json', 'write_reference_refs_snapshot']

@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+
+from song_agent.interfaces.api.runtime import *
+
+class ProgramUccRootRoutes:
+    def _dispatch_ucc_root(self, method, path) -> bool:
+        if path == '/api/unified-command-centers':
+            if method == 'GET':
+                centers = self.unified_command_center_store.list_centers()
+                self._send_json({'ok': True, 'centers': centers, 'summary': {'center_count': len(centers)}})
+                return True
+            if method == 'POST':
+                center = self.unified_command_center_store.create(self._optional_json_body())
+                self._send_json({'ok': True, 'center': center, 'summary': {'center_id': center.get('center_id')}, 'status': center.get('status')}, status=HTTPStatus.CREATED)
+                return True
+            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return True
+        return False

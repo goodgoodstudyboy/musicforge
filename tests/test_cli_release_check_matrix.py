@@ -141,6 +141,7 @@ def test_release_check_cli_v13_profile_lists_cutover_governance() -> None:
         "v132.kernel_adoption_smoke",
         "v133.program_persistence_authority_smoke",
         "v134.program_vertical_slice_smoke",
+        "v135.interface_decomposition_smoke",
     ]
 
 

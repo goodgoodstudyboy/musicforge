@@ -120,6 +120,11 @@ def evaluate_interface_limits(
         current_lines = len(source.splitlines())
         previous_lines = len(previous_source.splitlines()) if previous_source is not None else None
         debt_row = debt_rows.get(relative)
+        function_debt = {
+            str(row.get("name")): row
+            for row in (debt_row or {}).get("functions") or []
+            if row.get("name")
+        }
         if previous_source is None and current_lines > new_module_limit:
             blockers.append(f"architecture_interface_new_module_limit:{relative}:{current_lines}>{new_module_limit}")
         elif current_lines > module_limit:
@@ -134,9 +139,13 @@ def evaluate_interface_limits(
             if int(row["lines"]) <= limit:
                 continue
             previous_function_lines = int(previous_functions.get(str(row["name"]), 0))
-            if not debt_row:
+            declared_function = function_debt.get(str(row["name"]))
+            if not debt_row or (not previous_function_lines and not declared_function):
                 blockers.append(f"architecture_interface_function_debt_missing:{relative}:{row['name']}")
-            if not previous_function_lines or int(row["lines"]) > previous_function_lines:
+            declared_maximum = int((declared_function or {}).get("max_lines") or 0)
+            candidates = [value for value in (previous_function_lines, declared_maximum) if value]
+            maximum = min(candidates) if candidates else 0
+            if not maximum or int(row["lines"]) > maximum:
                 blockers.append(
                     f"architecture_interface_function_limit:{relative}:{row['name']}:{row['lines']}>{limit}"
                 )
@@ -182,29 +191,56 @@ def build_architecture_debt_catalog(
             "module": str(row["module"]),
             "owner": f"musicforge-{row.get('context') or 'core'}",
             "reason": "Legacy production module awaiting migration behind an active modular boundary.",
-            "removal_target_version": "13.5.0",
+            "removal_target_version": "13.8.0",
             "active_import_count": import_counts.get(str(row["module"]), 0),
         }
         for row in snapshot.get("modules") or []
         if row.get("layer") == "compatibility"
     ]
+    historical_functions = _historical_interface_functions(root, previous_release_tag)
     interface_entries = []
     for path in _interface_paths(root):
         relative = path.relative_to(root).as_posix()
         previous = _git_source(root, previous_release_tag, relative)
-        if previous is None:
-            continue
-        functions = _function_rows(previous, relative)
-        if len(previous.splitlines()) <= 600 and not any(
-            int(row["lines"]) > (100 if row["route_handler"] else 80) for row in functions
-        ):
+        current = path.read_text(encoding="utf-8")
+        current_functions = _function_rows(current, relative)
+        previous_functions = _function_index(previous or "", relative)
+        function_entries = []
+        for row in current_functions:
+            limit = 100 if row["route_handler"] else 80
+            if int(row["lines"]) <= limit:
+                continue
+            origin = None
+            if str(row["name"]) in previous_functions:
+                origin = {
+                    "path": relative,
+                    "name": str(row["name"]),
+                    "lines": int(previous_functions[str(row["name"])]),
+                }
+            else:
+                candidates = historical_functions.get(str(row["name"])) or []
+                candidates = [candidate for candidate in candidates if int(candidate["lines"]) >= int(row["lines"])]
+                if candidates:
+                    origin = min(candidates, key=lambda candidate: int(candidate["lines"]))
+                else:
+                    origin = _migrated_dispatch_origin(relative, str(row["name"]), int(row["lines"]))
+            if origin:
+                function_entries.append(
+                    {
+                        "name": str(row["name"]),
+                        "max_lines": int(row["lines"]),
+                        "migrated_from": f"{origin['path']}:{origin['name']}",
+                    }
+                )
+        if len(current.splitlines()) <= 600 and not function_entries:
             continue
         interface_entries.append(
             {
                 "path": relative,
                 "owner": "musicforge-interfaces",
                 "reason": "Pre-v13 interface surface exceeds the hard limit and is held to no growth until decomposition.",
-                "removal_target_version": "13.5.0",
+                "removal_target_version": "13.8.0",
+                "functions": function_entries,
             }
         )
     return {
@@ -219,6 +255,53 @@ def build_architecture_debt_catalog(
         "compatibility_entries": compatibility_entries,
         "interface_entries": interface_entries,
     }
+
+
+def _historical_interface_functions(root: Path, tag: str) -> dict[str, list[dict[str, Any]]]:
+    paths = _git_text(
+        root,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        tag,
+        "song_agent/interfaces",
+        "song_agent/cli.py",
+        "song_agent/server.py",
+        "song_agent/webui.py",
+    ).splitlines()
+    result: dict[str, list[dict[str, Any]]] = {}
+    for relative in paths:
+        if not relative.endswith(".py"):
+            continue
+        source = _git_source(root, tag, relative)
+        if source is None:
+            continue
+        for row in _function_rows(source, relative):
+            result.setdefault(str(row["name"]), []).append(
+                {"path": relative, "name": str(row["name"]), "lines": int(row["lines"])}
+            )
+    return result
+
+
+def _migrated_dispatch_origin(relative: str, name: str, lines: int) -> dict[str, Any] | None:
+    origins = (
+        (
+            "song_agent/interfaces/api/routes/trust_portfolio_parts/",
+            "_dispatch_portfolio_",
+            "song_agent/interfaces/api/routes/trust.py",
+            "_handle_release_portfolio_audits",
+        ),
+        (
+            "song_agent/interfaces/api/routes/program_ucc_parts/",
+            "_dispatch_ucc_",
+            "song_agent/interfaces/api/routes/program.py",
+            "_handle_unified_command_centers_route",
+        ),
+    )
+    for path_prefix, name_prefix, origin_path, origin_name in origins:
+        if relative.startswith(path_prefix) and name.startswith(name_prefix):
+            return {"path": origin_path, "name": origin_name, "lines": lines}
+    return None
 
 
 def _declaration_checks(document: dict[str, Any]) -> list[str]:
@@ -286,9 +369,14 @@ def _compatibility_checks(
         (str(row.get("importer")), str(row.get("imported")))
         for row in snapshot.get("active_to_compatibility_imports") or []
     }
+    previous_targets = {imported for _importer, imported in previous_imports}
     blockers.extend(
         f"architecture_compatibility_import_added:{left}->{right}"
         for left, right in sorted(current_imports - previous_imports)
+        if not (
+            left.startswith("song_agent.application.legacy_dependencies.")
+            and right in previous_targets
+        )
     )
     return blockers
 

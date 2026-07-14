@@ -1,0 +1,1 @@
+"""Generated command implementation parts."""

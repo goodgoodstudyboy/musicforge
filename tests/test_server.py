@@ -62,6 +62,21 @@ def test_info_endpoint(tmp_path, monkeypatch):
     assert data["mode"] == "local-deterministic"
 
 
+def test_studio_es_module_endpoint_uses_fixed_manifest(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    server = start_test_server()
+    try:
+        status, source = request_json(server, "GET", "/assets/musicforge/app.js")
+        missing_status, missing = request_json(server, "GET", "/assets/musicforge/unknown.js")
+    finally:
+        stop_test_server(server)
+
+    assert status == 200
+    assert b"import './panels/trust.js';" in source
+    assert missing_status == 404
+    assert missing["error"] == "Studio script module not found."
+
+
 def test_server_close_stops_watchdog_without_serve_forever(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     server = create_server("127.0.0.1", 0)

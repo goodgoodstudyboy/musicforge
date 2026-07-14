@@ -1,8 +1,28 @@
-from song_agent.webui import panel_html
+import pytest
+
+from song_agent.webui import panel_html, panel_source, script_modules, web_script
+
+
+def test_webui_loads_real_es_modules_from_fixed_manifest() -> None:
+    html = panel_html()
+    modules = script_modules()
+
+    assert '<script type="module" src="/assets/musicforge/app.js"></script>' in html
+    assert "function init()" not in html
+    assert len(web_script("app.js").splitlines()) < 1000
+    for panel in ("audio", "continuity", "maintenance", "program", "trust"):
+        path = f"panels/{panel}.js"
+        assert path in modules
+        assert f"MusicForgePanels.{panel}" in web_script(path)
+        assert f"import './panels/{panel}.js';" in web_script("app.js")
+    with pytest.raises(FileNotFoundError):
+        web_script("../secrets.js")
+    with pytest.raises(FileNotFoundError):
+        web_script("panels\\trust.js")
 
 
 def test_webui_primary_workspaces_are_consolidated() -> None:
-    html = panel_html()
+    html = panel_source()
 
     for workspace in ("Create", "Studio", "Quality", "Delivery", "Trust", "Program", "System"):
         assert f">{workspace}</a>" in html
@@ -13,7 +33,7 @@ def test_webui_primary_workspaces_are_consolidated() -> None:
 
 
 def test_webui_contains_music_fields():
-    html = panel_html()
+    html = panel_source()
 
     assert "MusicForge Studio" in html
     assert "Provider Settings" in html
@@ -33,7 +53,7 @@ def test_webui_contains_music_fields():
 
 
 def test_webui_contains_continuity_receiver_acceptance_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Continuity Receiver Acceptance" in html
     assert 'id="continuity-receiver-change-create"' in html
@@ -53,7 +73,7 @@ def test_webui_contains_continuity_receiver_acceptance_controls():
 
 
 def test_webui_contains_acceptance_workspace():
-    html = panel_html()
+    html = panel_source()
 
     assert "Acceptance" in html
     assert 'id="acceptance-form"' in html
@@ -112,7 +132,7 @@ def test_webui_contains_acceptance_workspace():
 
 
 def test_webui_contains_encoded_audio_acceptance_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert 'id="release-require-encoded-audio-review"' in html
     assert "Require encoded audio review" in html
@@ -442,7 +462,7 @@ def test_webui_contains_encoded_audio_acceptance_controls():
 
 
 def test_webui_contains_runtime_tabs():
-    html = panel_html()
+    html = panel_source()
 
     assert "Timeline" in html
     assert "Nodes" in html
@@ -463,7 +483,7 @@ def test_webui_contains_runtime_tabs():
 
 
 def test_webui_calls_runtime_view_apis():
-    html = panel_html()
+    html = panel_source()
 
     assert "/timeline" in html
     assert "/nodes" in html
@@ -474,7 +494,7 @@ def test_webui_calls_runtime_view_apis():
 
 
 def test_webui_calls_nodes_api():
-    html = panel_html()
+    html = panel_source()
 
     assert "renderNodes" in html
     assert "/nodes/${encodeURIComponent(nodeName)}" in html
@@ -484,7 +504,7 @@ def test_webui_calls_nodes_api():
 
 
 def test_webui_contains_job_action_buttons_and_calls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Open Folder" in html
     assert "Hide" in html
@@ -501,7 +521,7 @@ def test_webui_contains_job_action_buttons_and_calls():
 
 
 def test_webui_displays_heartbeat_and_attempts():
-    html = panel_html()
+    html = panel_source()
 
     assert "Attempt" in html
     assert "Retry Count" in html
@@ -510,7 +530,7 @@ def test_webui_displays_heartbeat_and_attempts():
 
 
 def test_webui_contains_provider_form_calls():
-    html = panel_html()
+    html = panel_source()
 
     assert "/api/provider" in html
     assert "/api/provider/reset" in html
@@ -524,7 +544,7 @@ def test_webui_contains_provider_form_calls():
 
 
 def test_webui_contains_renderer_settings():
-    html = panel_html()
+    html = panel_source()
 
     assert "Renderer Settings" in html
     assert 'id="renderer-form"' in html
@@ -540,7 +560,7 @@ def test_webui_contains_renderer_settings():
 
 
 def test_webui_contains_audio_render_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Render Audio" in html
     assert "Download WAV" in html
@@ -551,7 +571,7 @@ def test_webui_contains_audio_render_controls():
 
 
 def test_webui_contains_stem_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Render Stems" in html
     assert "Render Stem Audio" in html
@@ -568,7 +588,7 @@ def test_webui_contains_stem_controls():
 
 
 def test_webui_contains_access_token_prompt():
-    html = panel_html()
+    html = panel_source()
 
     assert "Access token" in html
     assert 'id="auth-form"' in html
@@ -580,7 +600,7 @@ def test_webui_contains_access_token_prompt():
 
 
 def test_webui_fetch_injects_bearer_and_handles_401():
-    html = panel_html()
+    html = panel_source()
 
     assert 'headers.set("Authorization", `Bearer ${accessToken}`)' in html
     assert "res.status === 401" in html
@@ -590,7 +610,7 @@ def test_webui_fetch_injects_bearer_and_handles_401():
 
 
 def test_webui_contains_batch_tab_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Batch" in html
     assert 'id="batch-form"' in html
@@ -614,7 +634,7 @@ def test_webui_contains_batch_tab_controls():
 
 
 def test_webui_contains_project_workspace_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Projects" in html
     assert "Project Detail" in html
@@ -670,7 +690,7 @@ def test_webui_contains_project_workspace_controls():
 
 
 def test_webui_contains_assets_workspace_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Assets" in html
     assert 'id="asset-search"' in html
@@ -693,7 +713,7 @@ def test_webui_contains_assets_workspace_controls():
 
 
 def test_webui_contains_reference_workspace_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "References" in html
     assert 'id="reference-import-form"' in html
@@ -719,7 +739,7 @@ def test_webui_contains_reference_workspace_controls():
 
 
 def test_webui_calls_asset_apis():
-    html = panel_html()
+    html = panel_source()
 
     assert "/api/assets" in html
     assert "/api/assets/extract/from-job" in html
@@ -740,7 +760,7 @@ def test_webui_calls_asset_apis():
 
 
 def test_webui_calls_reference_apis():
-    html = panel_html()
+    html = panel_source()
 
     assert "/api/references" in html
     assert "/api/references/import" in html
@@ -762,7 +782,7 @@ def test_webui_calls_reference_apis():
 
 
 def test_webui_calls_library_context_pack_apis():
-    html = panel_html()
+    html = panel_source()
 
     assert "Library" in html
     assert "/api/library/index" in html or "/api/library/rebuild" in html
@@ -777,7 +797,7 @@ def test_webui_calls_library_context_pack_apis():
 
 
 def test_webui_calls_project_apis():
-    html = panel_html()
+    html = panel_source()
 
     assert "/api/projects" in html
     assert "include_hidden" in html
@@ -852,7 +872,7 @@ def test_webui_calls_project_apis():
 
 
 def test_webui_contains_release_workspace_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "System Health" in html
     assert "Maintenance" in html
@@ -1086,7 +1106,7 @@ def test_webui_contains_release_workspace_controls():
 
 
 def test_webui_contains_interactive_editor_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert 'id="project-editor-arranger"' in html
     assert 'id="project-editor-section-ruler"' in html
@@ -1218,7 +1238,7 @@ def test_webui_contains_interactive_editor_controls():
 
 
 def test_webui_compare_layout_is_responsive():
-    html = panel_html()
+    html = panel_source()
 
     assert ".compare-grid" in html
     assert ".table-scroll" in html
@@ -1227,7 +1247,7 @@ def test_webui_compare_layout_is_responsive():
 
 
 def test_webui_candidate_review_layout_is_responsive():
-    html = panel_html()
+    html = panel_source()
 
     assert ".candidate-grid" in html
     assert ".candidate-group" in html
@@ -1236,7 +1256,7 @@ def test_webui_candidate_review_layout_is_responsive():
 
 
 def test_webui_contains_mix_board_controls():
-    html = panel_html()
+    html = panel_source()
 
     assert "Mix Board" in html
     assert "/mix-state" in html
@@ -1247,7 +1267,7 @@ def test_webui_contains_mix_board_controls():
 
 
 def test_webui_calls_batch_apis():
-    html = panel_html()
+    html = panel_source()
 
     assert "/api/batches/import-csv" in html
     assert "/api/batches?include_hidden=1" in html

@@ -1,8 +1,7 @@
 from __future__ import annotations
-
 import sys
 from types import ModuleType
-
+from song_agent.interfaces.api.patching import propagate_compatibility_patch
 from song_agent.interfaces.api import runtime as _runtime
 from song_agent.interfaces.api.runtime import *
 from song_agent.interfaces.api.server import MusicForgeHTTPServer, MusicForgeHandler, api_inventory, create_server, serve
@@ -24,6 +23,7 @@ class _CompatibilityModule(ModuleType):
         for module in _PATCH_TARGETS:
             if hasattr(module, name):
                 setattr(module, name, value)
+        propagate_compatibility_patch(name, value)
 
 
 sys.modules[__name__].__class__ = _CompatibilityModule

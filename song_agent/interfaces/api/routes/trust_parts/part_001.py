@@ -1,0 +1,254 @@
+from __future__ import annotations
+
+from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+
+from song_agent.interfaces.api.runtime import *
+
+class TrustRoutesPart001:
+    @property
+    def trust_operations_hub_store(self) -> TrustOperationsHubStore:
+        return self.server.trust_operations_hub_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_incident_store(self) -> TrustOperationsIncidentStore:
+        return self.server.trust_operations_incident_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_incident_knowledge_store(self) -> TrustOperationsIncidentKnowledgeStore:
+        return self.server.trust_operations_incident_knowledge_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_control_store(self) -> TrustOperationsControlStore:
+        return self.server.trust_operations_control_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_control_signoff_store(self) -> TrustOperationsControlSignoffStore:
+        return self.server.trust_operations_control_signoff_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_assurance_store(self) -> TrustOperationsAssuranceStore:
+        return self.server.trust_operations_assurance_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_assurance_watch_store(self) -> TrustOperationsAssuranceWatchStore:
+        return self.server.trust_operations_assurance_watch_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_assurance_watch_signoff_store(self) -> TrustOperationsAssuranceWatchSignoffStore:
+        return self.server.trust_operations_assurance_watch_signoff_store  # type: ignore[attr-defined]
+
+    @property
+    def trust_operations_final_readiness_store(self) -> TrustOperationsFinalReadinessStore:
+        return self.server.trust_operations_final_readiness_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_audit_store(self) -> ReleasePortfolioAuditStore:
+        return self.server.release_portfolio_audit_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_store(self) -> ReleasePortfolioGovernanceStore:
+        return self.server.release_portfolio_governance_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_signoff_store(self) -> ReleasePortfolioGovernanceSignoffStore:
+        return self.server.release_portfolio_governance_signoff_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_audit_store(self) -> ReleasePortfolioGovernanceAuditStore:
+        return self.server.release_portfolio_governance_audit_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_reviewer_pack_store(self) -> ReleasePortfolioGovernanceReviewerPackStore:
+        return self.server.release_portfolio_governance_reviewer_pack_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_final_board_store(self) -> ReleasePortfolioGovernanceFinalBoardStore:
+        return self.server.release_portfolio_governance_final_board_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_evidence_vault_store(self) -> ReleasePortfolioGovernanceEvidenceVaultStore:
+        return self.server.release_portfolio_governance_evidence_vault_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_store(self) -> ReleasePortfolioGovernanceAttestationStore:
+        return self.server.release_portfolio_governance_attestation_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_registry_store(self) -> ReleasePortfolioGovernanceAttestationRegistryStore:
+        return self.server.release_portfolio_governance_attestation_registry_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_portal_store(self) -> ReleasePortfolioGovernanceAttestationPortalStore:
+        return self.server.release_portfolio_governance_attestation_portal_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_portal_review_store(self) -> ReleasePortfolioGovernanceAttestationPortalReviewStore:
+        return self.server.release_portfolio_governance_attestation_portal_review_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_accepted_evidence_store(self) -> ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
+        return self.server.release_portfolio_governance_attestation_accepted_evidence_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_transparency_store(self) -> ReleasePortfolioGovernanceAttestationTransparencyStore:
+        return self.server.release_portfolio_governance_attestation_transparency_store  # type: ignore[attr-defined]
+
+    @property
+    def release_portfolio_governance_attestation_transparency_acknowledgement_store(self) -> ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
+        return self.server.release_portfolio_governance_attestation_transparency_acknowledgement_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_store(self) -> PublicTrustCenterStore:
+        return self.server.public_trust_center_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_anchor_registry_store(self) -> PublicTrustCenterAnchorRegistryStore:
+        return self.server.public_trust_center_anchor_registry_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_anchor_transparency_store(self) -> PublicTrustCenterAnchorTransparencyStore:
+        return self.server.public_trust_center_anchor_transparency_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_distribution_kit_store(self) -> PublicTrustCenterDistributionKitStore:
+        return self.server.public_trust_center_distribution_kit_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_distribution_kit_acceptance_store(self) -> PublicTrustCenterDistributionKitAcceptanceStore:
+        return self.server.public_trust_center_distribution_kit_acceptance_store  # type: ignore[attr-defined]
+
+    @property
+    def public_trust_center_acceptance_board_store(self) -> PublicTrustCenterAcceptanceBoardStore:
+        return self.server.public_trust_center_acceptance_board_store  # type: ignore[attr-defined]
+
+    def _handle_trust_operations(self, method: str, path: str) -> None:
+        final_prefix = "/api/trust-operations/final-readiness"
+        if path == final_prefix or path.startswith(final_prefix + "/"):
+            self._handle_trust_operations_final_readiness(method, path.removeprefix(final_prefix))
+            return
+        watch_prefix = "/api/trust-operations/assurance-watch"
+        if path == watch_prefix or path.startswith(watch_prefix + "/"):
+            self._handle_trust_operations_assurance_watch(method, path.removeprefix(watch_prefix))
+            return
+        assurance_prefix = "/api/trust-operations/assurance"
+        if path == assurance_prefix or path.startswith(assurance_prefix + "/"):
+            self._handle_trust_operations_assurance(method, path.removeprefix(assurance_prefix))
+            return
+        signoff_prefix = "/api/trust-operations/control-signoff/"
+        if path.startswith(signoff_prefix):
+            hub_tail = path.removeprefix(signoff_prefix)
+            hub_id, _sep, rest = hub_tail.partition("/")
+            self._handle_trust_operations_control_signoff(method, unquote(hub_id), "/" + rest if rest else "")
+            return
+        prefix = "/api/trust-operations/hubs/"
+        if not path.startswith(prefix):
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations route not found.")
+            return
+        tail = path.removeprefix(prefix)
+        hub_id, sep, rest = tail.partition("/")
+        if not hub_id or not sep:
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Hub route not found.")
+            return
+        rest = "/" + rest
+        if rest == "/incidents.zip":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self._send_file(self.trust_operations_incident_store.zip_path(unquote(hub_id)), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-incidents.zip")
+            return
+        if rest == "/knowledge.zip":
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            self._send_file(self.trust_operations_incident_knowledge_store.zip_path(unquote(hub_id)), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-knowledge.zip")
+            return
+        if rest.startswith("/controls/") and rest.endswith(".zip"):
+            if method != "GET":
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in rest.split("/") if part]
+            if len(parts) == 2:
+                assessment_id = unquote(parts[1].removesuffix(".zip"))
+                self._send_file(self.trust_operations_control_store.zip_path(unquote(hub_id), assessment_id), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-controls.zip")
+                return
+        if rest == "/controls" or rest.startswith("/controls/"):
+            self._handle_trust_operations_controls(method, unquote(hub_id), rest.removeprefix("/controls"))
+            return
+        if rest == "/incidents" or rest.startswith("/incidents/"):
+            self._handle_trust_operations_incidents(method, unquote(hub_id), rest.removeprefix("/incidents"))
+            return
+        if rest == "/knowledge" or rest.startswith("/knowledge/"):
+            self._handle_trust_operations_knowledge(method, unquote(hub_id), rest.removeprefix("/knowledge"))
+            return
+        self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Hub route not found.")
+
+    def _handle_trust_operations_assurance(self, method: str, tail: str) -> None:
+        try:
+            if tail in {"", "/"}:
+                if method != "GET":
+                    self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                    return
+                self._send_json({"ok": True, "runs": self.trust_operations_assurance_store.list_runs()})
+                return
+            if tail == "/runs":
+                if method == "GET":
+                    query = parse_qs(urlparse(self.path).query)
+                    hub_id = query.get("hub_id", [None])[0]
+                    self._send_json({"ok": True, "runs": self.trust_operations_assurance_store.list_runs(hub_id=hub_id)})
+                    return
+                if method == "POST":
+                    payload = self._optional_json_body()
+                    hub_id = str(payload.get("hub_id") or "hub")
+                    policy_id = str(payload.get("policy_id") or "default")
+                    result = self.trust_operations_assurance_store.refresh_run(hub_id, payload, policy_id=policy_id, now=_utc_now())
+                    self._send_json({"ok": result.get("run", {}).get("status") == "passed", **result}, status=HTTPStatus.CREATED)
+                    return
+                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                return
+            parts = [part for part in tail.split("/") if part]
+            if len(parts) >= 2 and parts[0] == "runs":
+                run_id = unquote(parts[1])
+                if len(parts) == 2:
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_json({"ok": True, **self.trust_operations_assurance_store.summary(run_id)})
+                    return
+                action = parts[2]
+                if action == "download":
+                    if method != "GET":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    self._send_file(self.trust_operations_assurance_store.archive_zip_path(run_id), "application/zip", filename=f"musicforge-{run_id}-trust-operations-assurance.zip")
+                    return
+                if action == "export":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    manifest = self.trust_operations_assurance_store.export_archive(run_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "run_id": run_id, "manifest": manifest}, status=HTTPStatus.CREATED)
+                    return
+                if action == "zip":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    zip_info = self.trust_operations_assurance_store.build_archive_zip(run_id, self._optional_json_body(), now=_utc_now())
+                    self._send_json({"ok": True, "run_id": run_id, "zip": zip_info})
+                    return
+                if action == "verify":
+                    if method != "POST":
+                        self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                        return
+                    report = self.trust_operations_assurance_store.verify_archive_zip(run_id, self._optional_json_body())
+                    write_trust_operations_assurance_verification_report(report, self.trust_operations_assurance_store.verification_report_path(run_id))
+                    self._send_json({"ok": report.get("status") != "failed", "run_id": run_id, "verification": report, "summary": report.get("summary", {})})
+                    return
+            self._send_error(HTTPStatus.NOT_FOUND, "Trust Operations Assurance route not found.")
+        except TrustOperationsAssuranceNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))
+        except TrustOperationsAssuranceStateError as exc:
+            self._send_error(HTTPStatus.CONFLICT, str(exc))
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+        except FileNotFoundError as exc:
+            self._send_error(HTTPStatus.NOT_FOUND, str(exc))

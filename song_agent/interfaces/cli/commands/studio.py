@@ -6,16 +6,16 @@ import os
 from pathlib import Path
 from typing import Any
 from song_agent.application.generation.service import generate_request
-from song_agent.auth import build_auth_config
-from song_agent.projectio import read_json, write_json
-from song_agent.provider import (
+from song_agent.application.legacy_dependencies.auth import build_auth_config
+from song_agent.application.legacy_dependencies.projectio import read_json, write_json
+from song_agent.application.legacy_dependencies.provider import (
     ProviderConfig,
     ProviderError,
     load_provider_config,
     provider_configured,
     test_provider_config,
 )
-from song_agent.schemas.song import SongRequest
+from song_agent.application.legacy_dependencies.schemas__song import SongRequest
 
 from song_agent.application.interface_persistence import write_interface_document
 

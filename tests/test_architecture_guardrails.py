@@ -86,6 +86,36 @@ def test_interface_limits_reject_new_thousand_line_route_handler(tmp_path: Path)
     assert any("architecture_interface_function_limit" in row for row in report["blockers"])
 
 
+def test_interface_limits_allow_only_explicit_no_growth_migration_debt(tmp_path: Path) -> None:
+    route = tmp_path / "song_agent" / "interfaces" / "api" / "routes" / "migrated.py"
+    route.parent.mkdir(parents=True)
+    route.write_text(
+        "def migrated_handler():\n" + "    value = 1\n" * 84 + "    return value\n",
+        encoding="utf-8",
+    )
+    debt = {
+        "interface_limits": {
+            "module_max_lines": 600,
+            "new_module_max_lines": 400,
+            "function_max_lines": 80,
+            "route_handler_max_lines": 100,
+        },
+        "interface_entries": [
+            {
+                "path": "song_agent/interfaces/api/routes/migrated.py",
+                "functions": [{"name": "migrated_handler", "max_lines": 86}],
+            }
+        ],
+    }
+
+    allowed = evaluate_interface_limits(tmp_path, previous_tag="v99.0.0", debt=debt)
+    debt["interface_entries"][0]["functions"][0]["max_lines"] = 84
+    grown = evaluate_interface_limits(tmp_path, previous_tag="v99.0.0", debt=debt)
+
+    assert allowed["status"] == "passed", allowed["blockers"]
+    assert any("architecture_interface_function_limit" in row for row in grown["blockers"])
+
+
 def test_current_architecture_ratchet_is_enforced() -> None:
     report = evaluate_architecture(ROOT)
     debt = json.loads((ROOT / "architecture-debt.json").read_text(encoding="utf-8"))

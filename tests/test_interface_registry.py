@@ -18,7 +18,7 @@ from song_agent.release_check_interfaces import (
     _hash_json,
     command_help_contract_rows,
 )
-from song_agent.webui import panel_html
+from song_agent.webui import panel_html, panel_source, script_modules, web_script
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +46,8 @@ def test_command_registry_inventory_help_and_exit_policy_snapshot() -> None:
     for name in sorted(names):
         spec = REGISTRY.get(name)
         assert spec is not None
-        assert spec.exit_code_policy == "legacy-compatible"
+        expected_policy = "program-result-v1" if name.startswith("unified-release-program") else "legacy-compatible"
+        assert spec.exit_code_policy == expected_policy
         assert spec.parser.__module__ == spec.handler.__module__
         assert len(inspect.getsourcelines(spec.handler)[0]) < 100
     assert _hash_json(command_help_contract_rows(REGISTRY)) == EXPECTED_COMMAND_HELP_HASH
@@ -55,8 +56,13 @@ def test_command_registry_inventory_help_and_exit_policy_snapshot() -> None:
 def test_route_inventory_snapshot_and_conflict_detection() -> None:
     rows = api_inventory()
     keys = [(row["method"], row["pattern"]) for row in rows]
-    assert len(rows) == 113
+    assert len(rows) == 117
     assert len(keys) == len(set(keys))
+    assert all(
+        row["request_schema"] != "legacy-compatible"
+        and row["response_schema"] != "legacy-compatible"
+        for row in rows
+    )
     assert _hash_json(rows) == EXPECTED_ROUTE_INVENTORY_HASH
     route = RouteSpec("GET", "/api/example", "example", "configured", "none", "json")
     with pytest.raises(ValueError, match="Route conflict"):
@@ -65,10 +71,14 @@ def test_route_inventory_snapshot_and_conflict_detection() -> None:
 
 def test_web_static_resources_reconstruct_compatible_panel() -> None:
     html = panel_html()
+    source = panel_source()
     assert hashlib.sha256(html.encode("utf-8")).hexdigest() == EXPECTED_PANEL_HASH
     assert "{{MUSICFORGE_" not in html
-    assert "Authorization" in html
-    assert "401" in html
+    assert "Authorization" in source
+    assert "401" in source
+    assert '<script type="module" src="/assets/musicforge/app.js"></script>' in html
+    assert len(web_script("app.js").splitlines()) < 1000
+    assert all(f"panels/{panel}.js" in script_modules() for panel in ("audio", "continuity", "maintenance", "program", "trust"))
     assert (ROOT / "song_agent" / "interfaces" / "web" / "index.html").is_file()
     assert (ROOT / "song_agent" / "interfaces" / "web" / "styles" / "studio.css").is_file()
     assert (ROOT / "song_agent" / "interfaces" / "web" / "scripts" / "app.js").is_file()

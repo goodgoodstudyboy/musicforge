@@ -20,7 +20,7 @@ class MusicForgeHandler(CreationRoutes, StudioRoutes, QualityRoutes, DeliveryRou
     server_version = "MusicForgeHTTP/0.1"
 
 
-MusicForgeHandler.route_registry = configure_route_registry(MusicForgeHandler._handle_request)
+MusicForgeHandler.route_registry = configure_route_registry()
 
 
 def _configure_program(server: Any) -> None:

@@ -1,1 +1,6 @@
-export const panel = {"name": "program", "controls": ["unified-command-center", "release-train", "release-program"]};
+export const panel = Object.freeze({
+  id: 'program',
+  workspaceId: 'program-workspace',
+  continuityReceiverId: 'continuity-receiver-program-id',
+});
+globalThis.MusicForgePanels.program = panel;

@@ -48,9 +48,10 @@ python -m song_agent.cli release-check --profile v13 --skip-tests --json
 
 Historical v1-v11 checks remain read-only in `full`, `nightly`, and explicit
 historical profiles. Active v12/v13 Program paths follow `interfaces ->
-application -> domains -> platform`; earlier music capabilities remain on a
-reported, no-growth compatibility surface. Current architecture, migration,
-and deprecation guidance is indexed under [`docs/`](docs/ARCHITECTURE.md).
+application -> domains -> platform`. The remaining flat capabilities are only
+reachable through explicit application anti-corruption facades, so CLI/API
+modules no longer import compatibility Stores directly. Current architecture,
+migration, and deprecation guidance is indexed under [`docs/`](docs/ARCHITECTURE.md).
 
 `pytest -q` runs the complete active suite. Every active test belongs to exactly
 one primary `unit`, `contract`, or `integration` shard; security and slow are
@@ -72,6 +73,10 @@ python -m song_agent.cli serve --host 127.0.0.1 --port 8787
 Open `http://127.0.0.1:8787`, fill in a song request, and start a job. Completed
 jobs write `job-state.json`, `song-plan.json`, `events.jsonl`, and `song.mid`
 under `runs/<job-id>/`.
+
+The Studio JavaScript is loaded as fixed-manifest ES modules. Creation,
+quality, audio, delivery, trust, continuity, maintenance, Program, and job
+panels are separate modules; arbitrary asset paths are not served.
 
 The System Health panel shows GA readiness, doctor status, manual acceptance
 status, and final readiness status. It can run `ga-check` through `/api/ga/check`

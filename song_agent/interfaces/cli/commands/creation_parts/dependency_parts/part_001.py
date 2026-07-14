@@ -1,0 +1,88 @@
+from __future__ import annotations
+
+import argparse
+
+import json
+
+import sys
+
+import os
+
+from pathlib import Path
+
+from typing import Any
+
+from song_agent.application.generation.service import generate_request
+
+from song_agent.application.legacy_dependencies.auth import build_auth_config
+
+from song_agent.application.legacy_dependencies.projectio import read_json, write_json
+
+from song_agent.application.legacy_dependencies.provider import (
+    ProviderConfig,
+    ProviderError,
+    load_provider_config,
+    provider_configured,
+    test_provider_config,
+)
+
+from song_agent.application.legacy_dependencies.schemas__song import SongRequest
+
+from song_agent.application.interface_persistence import write_interface_document
+
+from song_agent.interfaces.cli.registry import CommandSpec
+
+from song_agent.interfaces.cli.symbols import resolve as _resolve_symbol
+
+from song_agent.application.legacy_dependencies.unified_command_center import evidence_to_verifier_kwargs
+
+from song_agent.application.legacy_dependencies.unified_command_center_verifier import (
+    unified_command_center_verification_exit_code,
+    verify_unified_command_center_package,
+    write_unified_command_center_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.unified_command_center_archive_verifier import (
+    unified_command_center_archive_verification_exit_code,
+    verify_unified_command_center_archive_package,
+    write_unified_command_center_archive_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.unified_command_center_handoff_verifier import (
+    unified_command_center_handoff_verification_exit_code,
+    verify_unified_command_center_handoff_package,
+    write_unified_command_center_handoff_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.unified_command_center_continuous_review_verifier import (
+    unified_command_center_continuous_review_verification_exit_code,
+    verify_unified_command_center_continuous_review_package,
+    write_unified_command_center_continuous_review_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.unified_command_center_drift_response_verifier import (
+    unified_command_center_drift_response_verification_exit_code,
+    verify_unified_command_center_drift_response_package,
+    write_unified_command_center_drift_response_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.unified_command_center_evidence_review_verifier import (
+    unified_command_center_evidence_review_verification_exit_code,
+    verify_unified_command_center_evidence_review_package,
+    write_unified_command_center_evidence_review_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.unified_command_center_reviewer_decision_board_verifier import (
+    unified_command_center_reviewer_decision_board_verification_exit_code,
+    verify_unified_command_center_reviewer_decision_board_package,
+    write_unified_command_center_reviewer_decision_board_verification_report,
+)
+
+from song_agent.application.legacy_dependencies.human_review_verifier import (
+    human_review_verification_exit_code,
+    print_human_review_verification_report,
+    verify_human_review_pack,
+    write_human_review_verification_report,
+)
+
+__all__ = ['Any', 'CommandSpec', 'Path', 'ProviderConfig', 'ProviderError', 'SongRequest', '_resolve_symbol', 'argparse', 'build_auth_config', 'evidence_to_verifier_kwargs', 'generate_request', 'human_review_verification_exit_code', 'json', 'load_provider_config', 'os', 'print_human_review_verification_report', 'provider_configured', 'read_json', 'sys', 'test_provider_config', 'unified_command_center_archive_verification_exit_code', 'unified_command_center_continuous_review_verification_exit_code', 'unified_command_center_drift_response_verification_exit_code', 'unified_command_center_evidence_review_verification_exit_code', 'unified_command_center_handoff_verification_exit_code', 'unified_command_center_reviewer_decision_board_verification_exit_code', 'unified_command_center_verification_exit_code', 'verify_human_review_pack', 'verify_unified_command_center_archive_package', 'verify_unified_command_center_continuous_review_package', 'verify_unified_command_center_drift_response_package', 'verify_unified_command_center_evidence_review_package', 'verify_unified_command_center_handoff_package', 'verify_unified_command_center_package', 'verify_unified_command_center_reviewer_decision_board_package', 'write_human_review_verification_report', 'write_interface_document', 'write_json', 'write_unified_command_center_archive_verification_report', 'write_unified_command_center_continuous_review_verification_report', 'write_unified_command_center_drift_response_verification_report', 'write_unified_command_center_evidence_review_verification_report', 'write_unified_command_center_handoff_verification_report', 'write_unified_command_center_reviewer_decision_board_verification_report', 'write_unified_command_center_verification_report']

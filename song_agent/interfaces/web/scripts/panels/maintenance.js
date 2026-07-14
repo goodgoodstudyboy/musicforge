@@ -1,1 +1,3 @@
-export const panel = {"name": "maintenance", "controls": ["maintenance", "ga-readiness", "release-check"]};
+import './maintenance/part-001.js';
+export const panel = Object.freeze({ id: 'maintenance', moduleCount: 1 });
+globalThis.MusicForgePanels.maintenance = panel;

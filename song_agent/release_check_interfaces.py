@@ -8,8 +8,8 @@ from pathlib import Path
 
 EXPECTED_COMMAND_INVENTORY_HASH = "1a0e1e6f025b9e5e505a6a5ae138537a97a8bbebe393a40b7fb90afb1165424f"
 EXPECTED_COMMAND_HELP_HASH = "234e7cf07e98370f52f53587cc735427e678e02bc5a7c70c53d4aae10f360d64"
-EXPECTED_ROUTE_INVENTORY_HASH = "58f44f667e0568bc2f0ce8255f33904ef85e77482349e0b1b7e2f38b13f71317"
-EXPECTED_PANEL_HASH = "a5065e9852ef9b7ee18eac525a1b70c6a6e835c3f17fb5c494feb760b2468515"
+EXPECTED_ROUTE_INVENTORY_HASH = "c8e45314f25c522e9089fb9d7badece7a9e282927a6cd895b58fa822066e74e8"
+EXPECTED_PANEL_HASH = "1612fe4fd9ae774f0c2e1f96bd7e9dd5321b53b074c543886fbc6b314fa92272"
 
 
 def _hash_json(value: object) -> str:
@@ -92,7 +92,8 @@ def run_interface_registry_smoke(root: Path) -> tuple[bool, str]:
     try:
         from song_agent.interfaces.api.router import api_inventory
         from song_agent.interfaces.cli.app import REGISTRY
-        from song_agent.webui import panel_html
+        from song_agent.architecture_guardrails import build_architecture_snapshot
+        from song_agent.webui import panel_html, script_modules, web_script
 
         repo_root = Path(__file__).resolve().parents[1]
         commands = REGISTRY.inventory()
@@ -109,6 +110,12 @@ def run_interface_registry_smoke(root: Path) -> tuple[bool, str]:
         routes = api_inventory()
         route_keys = [(row["method"], row["pattern"]) for row in routes]
         html = panel_html()
+        modules = script_modules()
+        architecture = build_architecture_snapshot(root)
+        compatibility_edges = architecture["active_to_compatibility_imports"]
+        api_router_source = (
+            repo_root / "song_agent" / "interfaces" / "api" / "router.py"
+        ).read_text(encoding="utf-8")
         facade_limits = {
             "cli": len((repo_root / "song_agent" / "cli.py").read_text(encoding="utf-8").splitlines()) < 500,
             "server": len((repo_root / "song_agent" / "server.py").read_text(encoding="utf-8").splitlines()) < 1000,
@@ -120,14 +127,39 @@ def run_interface_registry_smoke(root: Path) -> tuple[bool, str]:
             "help_snapshot": _hash_json(command_help_contract_rows(REGISTRY)) == EXPECTED_COMMAND_HELP_HASH,
             "handlers_small": handlers_small,
             "parser_colocated": parser_colocated,
-            "routes": len(routes) == 116 and len(route_keys) == len(set(route_keys)),
+            "routes": len(routes) == 117 and len(route_keys) == len(set(route_keys)),
             "route_snapshot": _hash_json(routes) == EXPECTED_ROUTE_INVENTORY_HASH,
+            "route_schemas": all(
+                row["request_schema"] != "legacy-compatible"
+                and row["response_schema"] != "legacy-compatible"
+                for row in routes
+            ),
             "web_snapshot": hashlib.sha256(html.encode("utf-8")).hexdigest() == EXPECTED_PANEL_HASH,
-            "web_resources": "{{MUSICFORGE_" not in html and "MusicForge Studio" in html,
+            "web_resources": "{{MUSICFORGE_" not in html
+            and "MusicForge Studio" in html
+            and 'type="module" src="/assets/musicforge/app.js"' in html
+            and len(web_script("app.js").splitlines()) < 1000
+            and all(f"panels/{panel}.js" in modules for panel in ("audio", "continuity", "maintenance", "program", "trust")),
+            "runtime_entry_small": len(
+                (repo_root / "song_agent" / "interfaces" / "api" / "runtime.py")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ) < 600,
+            "explicit_api_manifest": "import ast" not in api_router_source
+            and "inspect.getsource" not in api_router_source,
+            "interface_module_limits": all(
+                len(path.read_text(encoding="utf-8").splitlines()) < 600
+                for path in (repo_root / "song_agent" / "interfaces").rglob("*.py")
+            ),
+            "compatibility_boundary": len(compatibility_edges) < 407
+            and all(
+                str(row["importer"]).startswith("song_agent.application.legacy_dependencies.")
+                for row in compatibility_edges
+            ),
             "facade_limits": all(facade_limits.values()),
         }
         ok = all(checks.values())
         detail = ", ".join(f"{name}={value}" for name, value in checks.items())
-        return ok, f"v12.18 interface registry: {detail}"
+        return ok, f"v13.5 interface registry: {detail}"
     except Exception as exc:
         return False, f"v12.18 interface registry failed: {exc}"
