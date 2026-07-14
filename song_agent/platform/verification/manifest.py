@@ -33,13 +33,14 @@ def manifest_file_checks(
     names = set(archive.namelist())
     for row in rows:
         path = str(row.get("path") or "")
+        size_bytes = row.get("size_bytes")
         required_fields = (
             bool(path)
             and isinstance(row.get("sha256"), str)
             and len(str(row.get("sha256"))) == 64
-            and isinstance(row.get("size_bytes"), int)
-            and not isinstance(row.get("size_bytes"), bool)
-            and int(row.get("size_bytes")) >= 0
+            and isinstance(size_bytes, int)
+            and not isinstance(size_bytes, bool)
+            and size_bytes >= 0
         )
         checks.append(build_check(f"{check_prefix}_file_{safe_check_key(path)}_fields", required_fields, "Manifest file row includes path, sha256, and size_bytes.", {"entry": path}))
         exists = path in names

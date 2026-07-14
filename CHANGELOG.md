@@ -1,5 +1,9 @@
 # Changelog
 
+## v13.0.2 - 2026-07-14
+
+- Fixed Python 3.11 static type narrowing for manifest size validation so hosted architecture checks exercise the v13.0.1 security hardening successfully.
+
 ## v13.0.1 - 2026-07-14
 
 - Hardened the shared Verification Kernel against directory, symlink, special-file, duplicate, size, and frozen-archive attacks in strict and relaxed modes.
