@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_for_version": "13.0.0",
+  "generated_for_version": "13.1.0",
   "entries": [
     {
       "old_path": "song_agent/release_checks.py",
@@ -9,7 +9,7 @@
       "cli_api_aliases": [],
       "data_schema_impact": "none",
       "introduced_version": "12.20.0",
-      "removal_version": "13.1.0",
+      "removal_version": "13.7.0",
       "rollback_strategy": "The facade remains archive-only; restore its legacy resolver if an archived verifier import is discovered."
     },
     {
@@ -39,7 +39,7 @@
       "cli_api_aliases": ["ga-check", "verify-ga-readiness-report"],
       "data_schema_impact": "legacy GA reports remain readable",
       "introduced_version": "12.19.0",
-      "removal_version": "13.1.0",
+      "removal_version": "13.6.0",
       "rollback_strategy": "Keep the legacy flags as compatibility aliases while all active gates use policy plus evidence manifest."
     },
     {

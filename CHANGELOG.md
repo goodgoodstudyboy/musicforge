@@ -1,5 +1,11 @@
 # Changelog
 
+## v13.1.0 - 2026-07-14
+
+- Added a previous-release architecture ratchet with immutable baseline hashes, explicit compatibility debt ownership, interface no-growth limits, and independently recomputed reviewer evidence.
+- Reduced active production imports into compatibility code from 522 to 521 by moving interface document writes onto platform persistence.
+- Added adversarial architecture tests for baseline loosening, hidden compatibility reclassification, new legacy imports, and oversized interface handlers.
+
 ## v13.0.2 - 2026-07-14
 
 - Fixed Python 3.11 static type narrowing for manifest size validation so hosted architecture checks exercise the v13.0.1 security hardening successfully.

@@ -27,7 +27,7 @@ def test_v13_reviewer_package_is_complete_and_path_safe(tmp_path: Path) -> None:
     rendered = b"\n".join(path.read_bytes() for path in output.iterdir() if path.is_file())
 
     assert documents == {
-        "README.md", "architecture.json", "cli-api-compatibility.json", "compatibility.json",
+        "README.md", "architecture.json", "architecture-ratchet.json", "cli-api-compatibility.json", "compatibility.json",
         "debt.json", "deprecations.json", "duplicate-helpers.json", "import-graph.json",
         "lifecycle-migration.json", "migration-rollback.json", "persistence-migration.json",
         "ci-matrix.json", "performance.json", "release-alignment.json", "release-check-reports.json",

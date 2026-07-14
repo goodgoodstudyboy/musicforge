@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "release_version": "13.1.0",
+  "previous_release_tag": "v13.0.2",
+  "require_active_import_decrease": true,
+  "policy": {
+    "baseline_limit_increases": "forbidden",
+    "compatibility_reclassification_without_debt": "forbidden",
+    "interface_debt": "explicit_no_growth",
+    "reviewer_recomputation": "required"
+  }
+}

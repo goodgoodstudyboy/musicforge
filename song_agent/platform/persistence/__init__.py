@@ -1,7 +1,7 @@
 """Transactional local persistence for mutable MusicForge workflows."""
 
 from song_agent.platform.persistence.database import MusicForgeDatabase
-from song_agent.platform.persistence.file_artifacts import FileArtifactStore
+from song_agent.platform.persistence.file_artifacts import FileArtifactStore, write_json_atomic
 from song_agent.platform.persistence.locks import WorkspaceLock, WorkspaceLockError
 from song_agent.platform.persistence.migrations import LegacyWorkspaceMigrator
 from song_agent.platform.persistence.recovery import PersistenceRecovery
@@ -22,4 +22,5 @@ __all__ = [
     "V13MigrationOrchestrator",
     "migration_anchor_path",
     "verify_v13_migration_evidence",
+    "write_json_atomic",
 ]

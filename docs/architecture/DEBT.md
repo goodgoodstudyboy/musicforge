@@ -2,9 +2,11 @@
 
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
-| ARCH-006 | The 51-line `release_checks.py` archive adapter and legacy GA `--require-*` aliases remain for archived evidence compatibility. | Release engineering | v13.1 | New production imports or new behavior on these surfaces blocks release. |
+| ARCH-006 | The 51-line `release_checks.py` archive adapter and legacy GA `--require-*` aliases remain for archived evidence compatibility. | Release engineering | v13.7 / v13.6 | New production imports or new behavior on these surfaces blocks release. |
 | ARCH-007 | Historical flat-domain import cycles remain visible in `all_import_cycles`; active adapters still have an explicitly reported, ratcheted set of compatibility imports. | Domain owners | ongoing | Any new compatibility import, increase over the v13 baseline, or compatibility-to-platform/application reverse dependency blocks release. |
-| PERF-001 | Archive-only release-check smoke requires four parallel nightly shards; a single-process legacy run exceeds 30 minutes. | Release engineering | v13.1 | Any current profile exceeding its hard budget, or a nightly shard exceeding 30 minutes, blocks release. |
+| ARCH-008 | 245 legacy modules remain compatibility code rather than migrated production modules. | Architecture | v13.5 | `architecture-debt.json` assigns every module an owner, reason, target version, and live inbound count. |
+| ARCH-009 | Pre-v13 CLI/API handlers exceed the v13 module/function limits. | Interfaces | v13.5 | Explicit no-growth debt; new modules are capped at 400 lines and new functions at 80/100 lines. |
+| PERF-001 | Archive-only release-check smoke requires four parallel nightly shards; a single-process legacy run exceeds 30 minutes. | Release engineering | v13.7 | Any current profile exceeding its hard budget, or a nightly shard exceeding 30 minutes, blocks release. |
 | QUAL-001 | Historical compatibility modules still carry pre-v13 Ruff and typing debt; hard lint/type gates cover the modular core while the full compatibility inventory remains under no-growth review. | Domain owners | v13.2 | Any new violation in the modular core, expansion of an excluded scope, or removal of compatibility tests blocks release. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime

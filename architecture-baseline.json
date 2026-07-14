@@ -1,5 +1,5 @@
 {
-  "active_to_compatibility_import_max_count": 522,
+  "active_to_compatibility_import_max_count": 521,
   "allowed_active_to_compatibility_imports": [
     {
       "imported": "song_agent.releases",
@@ -48,10 +48,6 @@
     {
       "imported": "song_agent.state",
       "importer": "song_agent.application.generation.service"
-    },
-    {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.application.interface_persistence"
     },
     {
       "imported": "song_agent.ga_readiness",
@@ -2091,7 +2087,7 @@
     }
   ],
   "allowed_cycles": [],
-  "baseline_version": "13.0.0",
+  "baseline_version": "13.1.0",
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
@@ -2115,7 +2111,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 398,
+  "module_count": 399,
   "modules": [
     {
       "context": null,
@@ -3484,6 +3480,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check",
       "path": "song_agent/release_check/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.architecture_ratchet",
+      "path": "song_agent/release_check/architecture_ratchet.py"
     },
     {
       "context": null,

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
-from song_agent.architecture_guardrails import build_architecture_snapshot
+from song_agent.architecture_guardrails import build_architecture_snapshot, evaluate_architecture
 from song_agent.capabilities import capability_registry
 from song_agent.release_check.matrix import all_check_definitions
 
@@ -48,6 +48,7 @@ ACTIVE_MUTABLE_STORES = (*ACTIVE_LIFECYCLE_STORES, "unified_release_program_cont
 def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
     root = Path(repo_root).resolve()
     snapshot = build_architecture_snapshot(root)
+    architecture = evaluate_architecture(root)
     verifier_rows = _migration_rows(root, ACTIVE_VERIFIERS, ("PackageSpec", "verify_package_envelope"))
     lifecycle_rows = _migration_rows(root, ACTIVE_LIFECYCLE_STORES, ("HistoryChain",))
     persistence_rows = _migration_rows(root, ACTIVE_MUTABLE_STORES, ("WorkspaceLock",))
@@ -81,6 +82,7 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
         "function_limit_exceptions": function_limits,
         "expired_budget_exceptions": expired_exceptions,
         "expired_deprecations": expired_deprecations,
+        "architecture_ratchet": architecture["metrics"]["ratchet"],
     }
     checks = {
         "production_cycles_zero": source["production_cycle_count"] == 0,
@@ -99,6 +101,8 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
         "capability_registry_unique": len(capability_registry.all()) == len({row.component_type for row in capability_registry.all()}),
         "budgets_current": not expired_exceptions,
         "deprecations_current": not expired_deprecations,
+        "architecture_ratchet_passed": architecture["status"] == "passed"
+        and source["architecture_ratchet"]["status"] == "passed",
     }
     return {
         "schema_version": 1,
@@ -119,6 +123,7 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
     runtime_data = runtime or {}
     files = {
         "architecture.json": audit,
+        "architecture-ratchet.json": audit["source"]["architecture_ratchet"],
         "source-comparison.json": {"schema_version": 1, **audit["comparison"]},
         "import-graph.json": {
             "schema_version": 1,
@@ -148,6 +153,7 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
             "schema_version": 1,
             "legacy_all_cycle_count": audit["source"]["legacy_all_cycle_count"],
             "legacy_security_helpers": audit["source"]["legacy_security_helpers"],
+            "architecture_debt": json.loads((root / "architecture-debt.json").read_text(encoding="utf-8")),
             "catalog": json.loads((root / "docs" / "deprecations.json").read_text(encoding="utf-8")),
         },
         "deprecations.json": json.loads((root / "docs" / "deprecations.json").read_text(encoding="utf-8")),
@@ -160,6 +166,8 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
             "status": "documented",
             "open_items": ["ARCH-006", "ARCH-007", "PERF-001", "QUAL-001"],
             "source": "docs/architecture/DEBT.md",
+            "architecture_catalog": "architecture-debt.json",
+            "architecture_catalog_hash": audit["source"]["architecture_ratchet"]["debt_catalog_hash"],
         },
         "release-alignment.json": runtime_data.get("alignment", {"status": "pending_release_run"}),
         "security-attack-matrix.json": _security_matrix(),
@@ -298,8 +306,9 @@ This directory is generated from the current source and runtime reports. Review
 `architecture.json` first. `production_cycle_count` is the active modular
 monolith graph; `legacy_all_cycle_count` remains visible for compatibility
 adapters and is not represented as zero. `active_to_compatibility_import_count`
-and its complete edge list disclose the remaining migration debt and are held
-to a no-growth architecture ratchet.
+and its complete edge list disclose the remaining migration debt and must
+decrease at every architecture release. `architecture-ratchet.json` is
+independently recomputed from the previous annotated release tag.
 
 Runtime files are generated from the final full/latest/GA/v13, migration,
 package-install, CI, and repository-alignment runs. A `pending_release_run`

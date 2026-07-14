@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from song_agent.release_check_architecture import run_architecture_guardrails_smoke
+from song_agent.release_check_architecture import run_architecture_guardrails_smoke, run_architecture_ratchet_smoke
 from song_agent.release_check.checks.legacy import delegated_check
 from song_agent.release_check_interfaces import run_interface_registry_smoke
 from song_agent.release_check_persistence_kernel import run_persistence_kernel_smoke
@@ -66,6 +66,7 @@ CALLABLES = {
     "_version_consistency": delegated_check("_version_consistency"),
     "_v1213_release_check_acceleration_smoke": delegated_check("_v1213_release_check_acceleration_smoke"),
     "_v1214_architecture_guardrails_smoke": run_architecture_guardrails_smoke,
+    "_v131_architecture_ratchet_smoke": run_architecture_ratchet_smoke,
     "_v1217_persistence_kernel_smoke": run_persistence_kernel_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,

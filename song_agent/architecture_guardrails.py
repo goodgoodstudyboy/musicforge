@@ -58,7 +58,7 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
     paths = sorted((root / "song_agent").rglob("*.py"))
     modules = {_module_name(root, path): path for path in paths}
     sources = {module: path.read_text(encoding="utf-8") for module, path in modules.items()}
-    trees = {
+    trees: dict[str, ast.AST] = {
         module: ast.parse(sources[module], filename=str(path))
         for module, path in modules.items()
     }
@@ -241,6 +241,15 @@ def evaluate_architecture(
             f"architecture_compatibility_import_growth:{compatibility_import_count}>{compatibility_import_maximum}"
         )
 
+    from song_agent.release_check.architecture_ratchet import evaluate_architecture_ratchet
+
+    ratchet = evaluate_architecture_ratchet(
+        root,
+        current_baseline=baseline,
+        snapshot=snapshot,
+    )
+    blockers.extend(str(blocker) for blocker in ratchet.get("blockers") or [])
+
     metrics = {
         "schema_version": ARCHITECTURE_BASELINE_SCHEMA_VERSION,
         "app_version": __version__,
@@ -273,6 +282,7 @@ def evaluate_architecture(
         "api_route_count": snapshot["code_metrics"]["api_route_count"],
         "web_function_count": snapshot["code_metrics"]["web_function_count"],
         "pytest_test_function_count": snapshot["code_metrics"]["pytest_test_function_count"],
+        "ratchet": ratchet,
         "blockers": blockers,
         "baseline_hash": _stable_hash(baseline),
     }
@@ -413,7 +423,7 @@ def _import_graph(
     list[dict[str, Any]],
 ]:
     known = set(modules)
-    graph = {module: set() for module in known}
+    graph: dict[str, set[str]] = {module: set() for module in known}
     imported_names: dict[str, list[tuple[str, tuple[str, ...]]]] = {module: [] for module in known}
     dynamic_internal_imports: list[dict[str, Any]] = []
     for module in modules:

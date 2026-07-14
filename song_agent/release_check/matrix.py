@@ -425,6 +425,7 @@ _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v1220.release_check_governance_smoke", "v12.20 Release Check and CI governance smoke", "_v1220_release_check_governance_smoke", group="release-check", version="12.20", risk="critical", timeout_seconds=120, tags=("v12", "ga", "release-check", "ci", "documentation"), profiles=(*V12_ACCELERATED_PROFILES, "v13"), duration_budget_seconds=60, budget_enforced_profiles=("v12", "latest", "ga", "v13")),
     _callable("v130.lts_cutover_smoke", "v13.0 modular monolith cutover and LTS smoke", "_v130_lts_cutover_smoke", group="architecture", version="13.0", risk="critical", timeout_seconds=180, tags=("v13", "ga", "architecture", "migration", "lts"), profiles=V13_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga")),
     _callable("v1301.shared_kernel_security_smoke", "v13.0.1 shared kernel security hotfix smoke", "_v1301_shared_kernel_security_smoke", group="security", version="13.0.1", risk="critical", timeout_seconds=120, tags=("v13", "ga", "architecture", "verification", "lifecycle", "evidence-graph", "change-control", "zip-security"), profiles=(*V13_PROFILES, "security"), duration_budget_seconds=60, budget_enforced_profiles=("v13", "latest", "ga", "security")),
+    _callable("v131.architecture_ratchet_smoke", "v13.1 architecture ratchet smoke", "_v131_architecture_ratchet_smoke", group="architecture", version="13.1", risk="critical", timeout_seconds=120, tags=("v13", "ga", "architecture", "dependencies", "ratchet", "interfaces"), profiles=V13_PROFILES, duration_budget_seconds=90, budget_enforced_profiles=("v13", "latest", "ga")),
 )
 
 
@@ -448,8 +449,8 @@ def _govern_definition(definition: ReleaseCheckDefinition) -> ReleaseCheckDefini
             duration_budget_seconds=definition.duration_budget_seconds or 90.0,
             budget_enforced_profiles=tuple(profiles),
             budget_warning_only=True,
-            budget_exception_reason="Historical monolith retained for archive compatibility.",
-            budget_exception_expires_version="13.1",
+            budget_exception_reason="Historical monolith retained only for archive compatibility until the v13.7 release-check migration.",
+            budget_exception_expires_version="13.7",
         )
     if definition.group == "security" or {"zip-security", "verification"}.intersection(tags):
         if "security" not in profiles:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -91,6 +92,17 @@ def sha256_path(path: Path) -> str:
 def stable_tree_hash(rows: list[dict[str, Any]]) -> str:
     payload = json.dumps(sorted(rows, key=lambda row: str(row.get("path") or "")), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def write_json_atomic(path: Path | str, value: Any) -> Path:
+    """Write a JSON projection atomically without depending on legacy project I/O."""
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".tmp-{os.getpid()}-{threading.get_ident()}.json")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(target)
+    return target
 
 
 def _safe_relative(value: str) -> Path:
