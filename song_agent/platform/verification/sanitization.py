@@ -31,6 +31,7 @@ SENSITIVE_TEXT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?<![\\/\w])(?:\\\\|(?<!:)//)[^\\/\s,;]+[\\/]+[^\\/\s,;]+(?:[\\/]+[^\\/\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
     (re.compile(r"(?<!\S)/Users/[^/\s,;]+(?:/[^\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
     (re.compile(r"(?<!\S)/home/[^/\s,;]+(?:/[^\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
+    (re.compile(r"(?<!\S)/(?:tmp|var/tmp|private/tmp)/[^/\s,;]+(?:/[^\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
 )
 
 
