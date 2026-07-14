@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import zipfile
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,28 @@ class ArchiveBuilder:
     @staticmethod
     def build_zip(export_dir: Path, zip_path: Path, expected: dict[str, bytes]) -> Path:
         ImmutableSnapshotGuard.require_export_matches(export_dir, expected)
+        return ArchiveBuilder.build_payload_zip(zip_path, expected)
+
+    @staticmethod
+    def build_directory_zip(export_dir: Path, zip_path: Path) -> Path:
+        if not export_dir.is_dir():
+            raise ValueError("Archive export directory is missing.")
+        expected = {
+            path.relative_to(export_dir).as_posix(): path.read_bytes()
+            for path in sorted(export_dir.rglob("*"))
+            if path.is_file() and path.resolve() != zip_path.resolve()
+        }
+        return ArchiveBuilder.build_payload_zip(zip_path, expected)
+
+    @staticmethod
+    def build_payload_zip(
+        zip_path: Path,
+        documents: Mapping[str, dict[str, Any] | str | bytes],
+    ) -> Path:
+        expected = {name: _serialize(value) for name, value in documents.items()}
+        unsafe = sorted(name for name in expected if not is_safe_zip_entry(name) or name.endswith("/"))
+        if unsafe:
+            raise ValueError(f"Archive snapshot contains unsafe entry names: {unsafe}")
         if zip_path.exists():
             errors = frozen_zip_snapshot_errors(zip_path, expected)
             if errors:

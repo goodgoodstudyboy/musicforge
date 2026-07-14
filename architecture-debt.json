@@ -1,7 +1,7 @@
 {
   "compatibility_entries": [
     {
-      "active_import_count": 14,
+      "active_import_count": 13,
       "module": "song_agent",
       "owner": "musicforge-core",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1814,6 +1814,6 @@
     "new_module_max_lines": 400,
     "route_handler_max_lines": 100
   },
-  "previous_release_tag": "v13.0.2",
+  "previous_release_tag": "v13.1.0",
   "schema_version": 1
 }

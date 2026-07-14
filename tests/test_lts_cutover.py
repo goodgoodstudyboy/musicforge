@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from song_agent.release_check.lts_audit import build_lts_audit, write_reviewer_package
+from song_agent.release_check.lts_audit import _source_reduction_target, build_lts_audit, write_reviewer_package
 from song_agent.release_check.lts_cutover import run_lts_cutover_smoke
 
 
@@ -18,7 +18,16 @@ def test_v13_lts_audit_enforces_cutover_invariants() -> None:
     assert audit["source"]["production_cycle_count"] == 0
     assert not any(audit["source"]["active_security_helpers"].values())
     assert not any(audit["source"]["active_lifecycle_algorithms"].values())
-    assert audit["comparison"]["v13.0"]["lines"] <= audit["comparison"]["v12.13"]["lines"]
+    comparison = audit["comparison"]
+    assert comparison["line_delta"] == comparison["v13.0"]["lines"] - comparison["v12.13"]["lines"]
+    assert audit["checks"]["source_reduction_target"] is True
+
+
+def test_source_reduction_becomes_a_hard_v138_lts_gate() -> None:
+    comparison = {"v12.13": {"lines": 100}, "v13.0": {"lines": 101}}
+
+    assert _source_reduction_target(comparison, "13.7.0") is True
+    assert _source_reduction_target(comparison, "13.8.0") is False
 
 
 def test_v13_reviewer_package_is_complete_and_path_safe(tmp_path: Path) -> None:

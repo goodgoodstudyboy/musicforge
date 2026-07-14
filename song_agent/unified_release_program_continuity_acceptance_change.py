@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import GenerationRef, ResetAuthorization
-from song_agent.platform.lifecycle import ChangeRequestService, GenerationService, HistoryChain
+from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, GenerationService, HistoryChain, ResetService
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
@@ -294,7 +294,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
                     "reason": _bounded(payload.get("reason") or approval.get("reason") or "Approved Continuity Acceptance reset.", 1000),
                 },
             )
-            proof = sanitize_metadata(
+            proof = ResetService.build_proof(sanitize_metadata(
                 {
                     "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
                     "package_type": "musicforge_unified_release_program_continuity_acceptance_reset_proof",
@@ -316,8 +316,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
                     "reset_event_payload_hash": reset_event.get("payload_hash"),
                     "source": current,
                 }
-            )
-            proof["integrity_hash"] = _integrity_hash(proof)
+            ))
             binding = _with_integrity(
                 {
                     "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
@@ -336,14 +335,13 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
             self.reset_proof_path(program_id, reset_id).parent.mkdir(parents=True, exist_ok=True)
             write_json(self.reset_proof_path(program_id, reset_id), proof)
             write_json(self.reset_binding_path(program_id, reset_id), binding)
-            request["status"] = "applied"
-            request["applied_at"] = now
-            request["approved_request_hash"] = approved_request_hash
-            request["reset_id"] = reset_id
-            request["reset_proof_hash"] = proof.get("integrity_hash")
-            request["reset_event_hash"] = reset_event.get("event_hash")
-            request["updated_at"] = now
-            request["integrity_hash"] = _integrity_hash(request)
+            request = ResetService.mark_applied(
+                request,
+                applied_at=now,
+                proof_hash=str(proof.get("integrity_hash") or ""),
+                event_hash=str(reset_event.get("event_hash") or ""),
+                updates={"approved_request_hash": approved_request_hash, "reset_id": reset_id, "updated_at": now},
+            )
             write_json(self.request_path(program_id, request_id), request)
             self._write_request_binding(program_id, request, approval, current)
             self._append_lifecycle_event(
@@ -444,10 +442,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
             zip_path = self.archive_zip_path(program_id)
             if zip_path.exists():
                 zip_path.unlink()
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             with zipfile.ZipFile(zip_path) as archive:
                 entries = sorted(info.filename for info in archive.infolist())
             manifest = read_json(export_dir / "manifest.json")
@@ -455,10 +450,8 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
             manifest["files"] = [_file_record(path, path.relative_to(export_dir).as_posix()) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
             manifest["integrity_hash"] = _integrity_hash(manifest)
             write_json(export_dir / "manifest.json", manifest)
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            zip_path.unlink(missing_ok=True)
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             return {"status": "passed", "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest_hash": manifest.get("integrity_hash")}
 
     def verify_archive_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:

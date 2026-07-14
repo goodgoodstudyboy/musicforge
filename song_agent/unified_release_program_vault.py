@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
-from song_agent.platform.lifecycle import HistoryChain
+from song_agent.platform.lifecycle import ArchiveBuilder, HistoryChain
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
@@ -190,10 +190,7 @@ class UnifiedReleaseProgramVaultStore:
             zip_path = self.zip_path(program_id)
             if zip_path.exists():
                 zip_path.unlink()
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             with zipfile.ZipFile(zip_path) as archive:
                 entries = sorted(info.filename for info in archive.infolist())
             docs = self._read_docs(program_id)
@@ -202,10 +199,8 @@ class UnifiedReleaseProgramVaultStore:
             manifest["files"] = [_file_record(path, path.relative_to(export_dir).as_posix()) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
             manifest["integrity_hash"] = _integrity_hash(manifest)
             write_json(self.manifest_path(program_id), manifest)
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            zip_path.unlink(missing_ok=True)
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             anchor = _anchor_document(program_id, zip_path, manifest, docs)
             write_json(self.anchor_path(program_id), anchor)
             return {"status": "passed", "program_id": program_id, "zip_path": str(zip_path), "anchor_path": str(self.anchor_path(program_id)), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}

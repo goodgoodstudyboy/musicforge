@@ -35,6 +35,9 @@ class CapabilityRegistry:
         return tuple(self._by_id[key] for key in sorted(self._by_id))
 
     def inventory(self) -> list[dict[str, Any]]:
+        from song_agent.platform.verification.registry import active_verifier_registry
+
+        verifier_by_component = {row.component_type: row for row in active_verifier_registry.all()}
         return [
             {
                 "capability_id": item.capability_id,
@@ -43,6 +46,27 @@ class CapabilityRegistry:
                 "application_service": item.application_service,
                 "package_type": item.runtime.package_type,
                 "verification_package_type": item.runtime.verification_package_type,
+                "required_proofs": list(item.runtime.required_proofs),
+                "manifest_entry": (
+                    verifier_by_component[item.component_type].package_spec().manifest_entry
+                    if item.component_type in verifier_by_component
+                    else ""
+                ),
+                "allowed_entries": (
+                    sorted(verifier_by_component[item.component_type].package_spec().allowed_entries)
+                    if item.component_type in verifier_by_component
+                    else []
+                ),
+                "allowed_entry_patterns": (
+                    list(verifier_by_component[item.component_type].package_spec().allowed_entry_patterns)
+                    if item.component_type in verifier_by_component
+                    else []
+                ),
+                "lifecycle_binding_requirements": (
+                    list(verifier_by_component[item.component_type].lifecycle_bindings)
+                    if item.component_type in verifier_by_component
+                    else []
+                ),
                 "identity_fields": {
                     "component_id": list(item.runtime.identity.component_id_fields),
                     "generation": list(item.runtime.identity.generation_fields),

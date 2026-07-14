@@ -1,5 +1,12 @@
 # Changelog
 
+## v13.2.0 - 2026-07-14
+
+- Registered all 13 active Program verifiers with canonical package layouts, external proofs, runtime identities, and lifecycle binding requirements.
+- Added a shared differential attack corpus for every active verifier and lifecycle Store, replacing token-only LTS migration claims with executable adoption reports.
+- Routed active Program signoff sealing, reset proofs/transitions, and final archive snapshots through `SignoffService`, `ResetService`, and `ArchiveBuilder`.
+- Moved version authority to `platform.version` and reduced active-to-compatibility imports from 521 to 520.
+
 ## v13.1.0 - 2026-07-14
 
 - Added a previous-release architecture ratchet with immutable baseline hashes, explicit compatibility debt ownership, interface no-growth limits, and independently recomputed reviewer evidence.

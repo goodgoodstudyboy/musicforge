@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
-from song_agent.platform.lifecycle import HistoryChain, SignoffService
+from song_agent.platform.lifecycle import ArchiveBuilder, HistoryChain, SignoffService
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.platform.persistence.repository import sync_active_v12_state
 from song_agent.projectio import read_json, write_json
@@ -457,8 +457,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                 "reset_binding_hash": reset_binding_hash,
                 "tool": {"name": "MusicForge Receiver Acceptance Board", "version": __version__},
             }
-            signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
-            signoff["integrity_hash"] = _integrity_hash(signoff)
+            signoff = SignoffService.seal(signoff)
             event = self._append_history(
                 program_id,
                 {
@@ -1479,17 +1478,12 @@ def _manifest(package_type: str, program_id: str, docs: dict[str, Any], source: 
 
 def _build_zip_from_values(path: Path, docs: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for rel, value in docs.items():
-            archive.writestr(rel, _serialize(value))
+    ArchiveBuilder.build_payload_zip(path, {rel: _serialize(value) for rel, value in docs.items()})
 
 
 def _build_zip_from_dir(root: Path, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for source in sorted(root.rglob("*")):
-            if source.is_file():
-                archive.write(source, source.relative_to(root).as_posix())
+    ArchiveBuilder.build_directory_zip(root, path)
 
 
 def _serialize(value: Any) -> bytes:
@@ -1501,9 +1495,7 @@ def _serialize(value: Any) -> bytes:
 
 
 def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
-    output = dict(doc)
-    output["integrity_hash"] = _integrity_hash(output)
-    return output
+    return SignoffService.seal(doc, payload_hash=False)
 
 
 def _integrity_hash(doc: dict[str, Any]) -> str:

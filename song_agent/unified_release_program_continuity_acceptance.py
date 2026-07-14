@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
-from song_agent.platform.lifecycle import HistoryChain
+from song_agent.platform.lifecycle import ArchiveBuilder, HistoryChain, SignoffService
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
@@ -387,8 +387,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
                     "tool": {"name": "MusicForge Continuity Acceptance Board", "version": __version__},
                 }
             )
-            signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
-            signoff["integrity_hash"] = _integrity_hash(signoff)
+            signoff = SignoffService.seal(signoff)
             event = self._append_history(
                 program_id,
                 {
@@ -501,10 +500,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             zip_path = self.archive_zip_path(program_id)
             if zip_path.exists():
                 zip_path.unlink()
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             with zipfile.ZipFile(zip_path) as archive:
                 entries = sorted(info.filename for info in archive.infolist())
             manifest = read_json(export_dir / "manifest.json")
@@ -512,10 +508,8 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             manifest["files"] = [_file_record(path, path.relative_to(export_dir).as_posix()) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
             manifest["integrity_hash"] = _integrity_hash(manifest)
             write_json(export_dir / "manifest.json", manifest)
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            zip_path.unlink(missing_ok=True)
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             return {"status": "passed", "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest_hash": manifest.get("integrity_hash")}
 
     def verify_archive_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1031,9 +1025,7 @@ def _history_text(rows: list[dict[str, Any]]) -> str:
 
 
 def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
-    doc = sanitize_metadata(doc)
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
+    return SignoffService.seal(sanitize_metadata(doc), payload_hash=False)
 
 
 def _integrity_hash(doc: dict[str, Any]) -> str:

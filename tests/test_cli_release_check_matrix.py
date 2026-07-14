@@ -138,6 +138,7 @@ def test_release_check_cli_v13_profile_lists_cutover_governance() -> None:
         "v130.lts_cutover_smoke",
         "v1301.shared_kernel_security_smoke",
         "v131.architecture_ratchet_smoke",
+        "v132.kernel_adoption_smoke",
     ]
 
 

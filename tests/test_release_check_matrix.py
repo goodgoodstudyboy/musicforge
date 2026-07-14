@@ -41,6 +41,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v1214.architecture_guardrails_smoke" in {definition.check_id for definition in definitions}
     assert "v1301.shared_kernel_security_smoke" in {definition.check_id for definition in definitions}
     assert "v131.architecture_ratchet_smoke" in {definition.check_id for definition in definitions}
+    assert "v132.kernel_adoption_smoke" in {definition.check_id for definition in definitions}
     assert by_id["v1212.receiver_acceptance_change_control_zip_security"].duration_budget_seconds == 90
     assert by_id["pytest.full"].timeout_seconds >= 6000
 

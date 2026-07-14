@@ -95,10 +95,14 @@ class CapabilitySpec:
 
 
 def _report_containers(report: dict[str, Any]) -> tuple[dict[str, Any], ...]:
-    identity = report.get("identity") if isinstance(report.get("identity"), dict) else {}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    verification = summary.get("verification") if isinstance(summary.get("verification"), dict) else {}
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    identity_value = report.get("identity")
+    summary_value = report.get("summary")
+    source_value = report.get("source")
+    identity: dict[str, Any] = identity_value if isinstance(identity_value, dict) else {}
+    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+    verification_value = summary.get("verification")
+    verification: dict[str, Any] = verification_value if isinstance(verification_value, dict) else {}
+    source: dict[str, Any] = source_value if isinstance(source_value, dict) else {}
     return identity, summary, report, verification, source
 
 

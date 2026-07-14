@@ -1,5 +1,5 @@
 {
-  "active_to_compatibility_import_max_count": 521,
+  "active_to_compatibility_import_max_count": 520,
   "allowed_active_to_compatibility_imports": [
     {
       "imported": "song_agent.releases",
@@ -56,10 +56,6 @@
     {
       "imported": "song_agent.lts_maintenance",
       "importer": "song_agent.interfaces.api.routes.maintenance"
-    },
-    {
-      "imported": "song_agent",
-      "importer": "song_agent.interfaces.api.runtime"
     },
     {
       "imported": "song_agent.acceptance_analytics",
@@ -2087,7 +2083,7 @@
     }
   ],
   "allowed_cycles": [],
-  "baseline_version": "13.1.0",
+  "baseline_version": "13.2.0",
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
@@ -2111,7 +2107,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 399,
+  "module_count": 404,
   "modules": [
     {
       "context": null,
@@ -2998,6 +2994,12 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.lifecycle.attack_corpus",
+      "path": "song_agent/platform/lifecycle/attack_corpus.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.lifecycle.change_control",
       "path": "song_agent/platform/lifecycle/change_control.py"
     },
@@ -3012,6 +3014,12 @@
       "layer": "platform",
       "module": "song_agent.platform.lifecycle.generation",
       "path": "song_agent/platform/lifecycle/generation.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.lifecycle.registry",
+      "path": "song_agent/platform/lifecycle/registry.py"
     },
     {
       "context": null,
@@ -3100,6 +3108,12 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.verification.attack_corpus",
+      "path": "song_agent/platform/verification/attack_corpus.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.verification.engine",
       "path": "song_agent/platform/verification/engine.py"
     },
@@ -3142,6 +3156,12 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.verification.registry",
+      "path": "song_agent/platform/verification/registry.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.verification.sanitization",
       "path": "song_agent/platform/verification/sanitization.py"
     },
@@ -3150,6 +3170,12 @@
       "layer": "platform",
       "module": "song_agent.platform.verification.zip_security",
       "path": "song_agent/platform/verification/zip_security.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.version",
+      "path": "song_agent/platform/version.py"
     },
     {
       "context": "studio",

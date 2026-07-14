@@ -10,7 +10,7 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import ResetAuthorization
-from song_agent.platform.lifecycle import ChangeRequestService, SignoffService
+from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, ResetService, SignoffService
 from song_agent.platform.lifecycle import HistoryChain
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.platform.persistence.repository import sync_active_v12_state
@@ -193,8 +193,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
                     "tool": {"name": "MusicForge Continuity Command Center Signoff", "version": __version__},
                 }
             )
-            signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
-            signoff["integrity_hash"] = _integrity_hash(signoff)
+            signoff = SignoffService.seal(signoff)
             self.signoff_dir(program_id).mkdir(parents=True, exist_ok=True)
             write_json(self.signoff_path(program_id), signoff)
             event = self._append_history(
@@ -381,7 +380,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
                     "approval_hash": approval.get("integrity_hash"),
                 },
             )
-            proof = _with_integrity(
+            proof = ResetService.build_proof(_with_integrity(
                 {
                     "schema_version": COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION,
                     "package_type": "musicforge_unified_release_program_continuity_command_center_signoff_reset_proof",
@@ -395,13 +394,14 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
                     "approval_hash": approval.get("integrity_hash"),
                     "reset_event_hash": event.get("event_hash"),
                 }
-            )
+            ))
             write_json(self.reset_proof_path(program_id), proof)
-            request["status"] = "applied"
-            request["applied_at"] = now
-            request["reset_proof_hash"] = proof.get("integrity_hash")
-            request["reset_event_hash"] = event.get("event_hash")
-            request["integrity_hash"] = _integrity_hash(request)
+            request = ResetService.mark_applied(
+                request,
+                applied_at=now,
+                proof_hash=str(proof.get("integrity_hash") or ""),
+                event_hash=str(event.get("event_hash") or ""),
+            )
             write_json(self.change_request_path(program_id, change_request_id), request)
             for path in (self.signoff_path(program_id), self.signoff_binding_path(program_id)):
                 path.unlink(missing_ok=True)
@@ -972,9 +972,7 @@ def _integrity_ok(doc: dict[str, Any]) -> bool:
 
 
 def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
-    output = sanitize_metadata(doc)
-    output["integrity_hash"] = _integrity_hash(output)
-    return output
+    return SignoffService.seal(sanitize_metadata(doc), payload_hash=False)
 
 
 def _with_manifest_integrity(doc: dict[str, Any]) -> dict[str, Any]:
@@ -1014,10 +1012,7 @@ def _sha256_bytes(data: bytes) -> str:
 
 def _build_zip(root: Path, zip_path: Path) -> None:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(root.rglob("*")):
-            if path.is_file():
-                archive.write(path, path.relative_to(root).as_posix())
+    ArchiveBuilder.build_directory_zip(root, zip_path)
 
 
 def _zip_result(program_id: str, zip_path: Path, manifest_hash: Any) -> dict[str, Any]:

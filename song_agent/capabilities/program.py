@@ -38,6 +38,22 @@ def _program(
 
 PROGRAM_CAPABILITIES = (
     _program(
+        "program.operations",
+        "unified_release_program_operations",
+        "song_agent.unified_release_program_operations_verifier",
+        "verify_unified_release_program_operations_package",
+        "musicforge_unified_release_program_operations_archive",
+        "musicforge_unified_release_program_operations_archive_verification",
+        defaults=(("strict", True), ("require_current", True), ("require_signed_program", True)),
+        proofs=(
+            ("program_package", "program_zip_path"),
+            ("program_verification_report", "program_verification_report_path"),
+            ("program_signoff_binding", "program_signoff_binding_path"),
+            ("external_evidence_manifest", "external_evidence_manifest_path"),
+        ),
+        required=("program_package", "program_verification_report", "program_signoff_binding", "external_evidence_manifest"),
+    ),
+    _program(
         "program.board",
         "unified_release_program",
         "song_agent.unified_release_program_verifier",
@@ -133,6 +149,21 @@ PROGRAM_CAPABILITIES = (
         required=("external_evidence_manifest",),
     ),
     _program(
+        "program.continuity_acceptance_change",
+        "unified_release_program_continuity_acceptance_change",
+        "song_agent.unified_release_program_continuity_acceptance_change_verifier",
+        "verify_unified_release_program_continuity_acceptance_change_package",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_verification",
+        defaults=(("strict", True), ("require_current_acceptance", True)),
+        proofs=(
+            ("acceptance_package", "acceptance_archive_path"),
+            ("acceptance_verification_report", "acceptance_verification_report_path"),
+            ("acceptance_signoff_binding", "acceptance_signoff_binding_path"),
+        ),
+        required=("acceptance_package", "acceptance_verification_report", "acceptance_signoff_binding"),
+    ),
+    _program(
         "program.continuity_command_center_signoff",
         "unified_release_program_continuity_command_center_signoff",
         "song_agent.unified_release_program_continuity_command_center_signoff_verifier",
@@ -159,5 +190,22 @@ PROGRAM_CAPABILITIES = (
         proofs=(("signoff_binding", "signoff_binding_path"),),
         required=("signoff_binding",),
         aliases=("unified_release_program_continuity_command_center_acceptance",),
+    ),
+    _program(
+        "program.receiver_acceptance_change",
+        "unified_release_program_receiver_acceptance_change",
+        "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier",
+        "verify_unified_release_program_continuity_command_center_acceptance_change_package",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_verification",
+        defaults=(("strict", True), ("require_current_acceptance", True), ("require_reset_proofs", True)),
+        proofs=(
+            ("acceptance_package", "acceptance_archive_path"),
+            ("acceptance_verification_report", "acceptance_verification_report_path"),
+            ("acceptance_signoff_binding", "acceptance_signoff_binding_path"),
+            ("previous_acceptance_root", "previous_acceptance_root"),
+        ),
+        required=("acceptance_package", "acceptance_verification_report", "acceptance_signoff_binding", "previous_acceptance_root"),
+        aliases=("unified_release_program_continuity_command_center_acceptance_change",),
     ),
 )

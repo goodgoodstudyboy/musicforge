@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
-from song_agent.platform.lifecycle import HistoryChain
+from song_agent.platform.lifecycle import ArchiveBuilder, HistoryChain, SignoffService
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
@@ -560,10 +560,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             manifest["files"] = [_file_record(path, path.relative_to(export_dir).as_posix()) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
             manifest["integrity_hash"] = _integrity_hash(manifest)
             write_json(self.manifest_path(program_id), manifest)
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             return {"status": "passed", "program_id": program_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": manifest.get("integrity_hash")}
 
     def verify_archive_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -949,9 +946,10 @@ def _sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
-    doc = sanitize_metadata(doc, blocked_keys=VAULT_OPERATIONS_BLOCKED_METADATA_KEYS)
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
+    return SignoffService.seal(
+        sanitize_metadata(doc, blocked_keys=VAULT_OPERATIONS_BLOCKED_METADATA_KEYS),
+        payload_hash=False,
+    )
 
 
 def _integrity_hash(doc: dict[str, Any]) -> str:

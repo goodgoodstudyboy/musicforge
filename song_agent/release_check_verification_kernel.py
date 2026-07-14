@@ -36,6 +36,43 @@ ACTIVE_V12_VERIFIERS = (
 )
 
 
+def run_kernel_adoption_smoke(root: Path) -> tuple[bool, str]:
+    del root
+    try:
+        from song_agent.capabilities import capability_registry
+        from song_agent.platform.lifecycle.attack_corpus import run_active_lifecycle_attack_corpus
+        from song_agent.platform.verification.attack_corpus import run_active_verifier_attack_corpus
+        from song_agent.platform.verification.registry import active_verifier_registry
+
+        with tempfile.TemporaryDirectory(prefix="mf-v132-kernel-adoption-") as temp:
+            base = Path(temp)
+            verification = run_active_verifier_attack_corpus(base / "verification")
+            lifecycle = run_active_lifecycle_attack_corpus(base / "lifecycle")
+        product_components = {
+            row.component_type for row in capability_registry.all() if row.bounded_context == "program"
+        }
+        platform_components = {row.component_type for row in active_verifier_registry.all()}
+        lifecycle_adoption = lifecycle.get("adoption")
+        lifecycle_rows = lifecycle_adoption.get("rows", []) if isinstance(lifecycle_adoption, dict) else []
+        details = {
+            "verifier_capabilities": verification.get("capability_count"),
+            "verifier_corpus": verification.get("status"),
+            "lifecycle_capabilities": len(lifecycle_rows),
+            "lifecycle_corpus": lifecycle.get("status"),
+            "product_registry_complete": product_components == platform_components,
+        }
+        ok = (
+            details["verifier_capabilities"] == 13
+            and details["verifier_corpus"] == "passed"
+            and details["lifecycle_capabilities"] == 13
+            and details["lifecycle_corpus"] == "passed"
+            and details["product_registry_complete"] is True
+        )
+        return ok, "v13.2 kernel adoption: " + ", ".join(f"{key}={value}" for key, value in details.items())
+    except Exception as exc:
+        return False, f"v13.2 kernel adoption smoke failed: {exc}"
+
+
 def run_verification_kernel_smoke(root: Path) -> tuple[bool, str]:
     del root
     try:
@@ -267,7 +304,7 @@ def _identity_runtime_verifier(package_path: Path | str, *, strict: bool = True)
     del strict
     target = Path(package_path)
     fingerprint = sha256_file(target)
-    report = {
+    report: dict[str, Any] = {
         "package_type": "musicforge_v1301_identity_verification",
         "status": "passed" if target.is_file() else "failed",
         "zip_sha256": fingerprint,

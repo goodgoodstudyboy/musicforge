@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 from urllib.parse import parse_qs
-from song_agent import __version__
+from song_agent.platform.version import VERSION as __version__
 from song_agent.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.application.audio_campaigns.release_coverage import audio_campaign_release_track_coverage
 from song_agent.application.generation.service import generate_request

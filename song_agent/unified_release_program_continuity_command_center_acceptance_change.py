@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import GenerationRef, ResetAuthorization
-from song_agent.platform.lifecycle import ChangeRequestService, GenerationService, HistoryChain
+from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, GenerationService, HistoryChain, ResetService
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.platform.persistence.repository import sync_active_v12_state
 from song_agent.projectio import read_json, write_json
@@ -334,7 +334,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                     "reason": _bounded(payload.get("reason") or approval.get("reason") or "Approved Command Center Receiver Acceptance reset.", 1000),
                 },
             )
-            proof = sanitize_metadata(
+            proof = ResetService.build_proof(sanitize_metadata(
                 {
                     "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
                     "package_type": "musicforge_unified_release_program_continuity_command_center_acceptance_reset_proof",
@@ -359,8 +359,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                     "cr_binding_report_hash": request_binding.get("integrity_hash"),
                     "source": current,
                 }
-            )
-            proof["integrity_hash"] = _integrity_hash(proof)
+            ))
             binding = _with_integrity(
                 {
                     "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
@@ -387,14 +386,13 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             self.reset_proof_path(program_id, reset_id).parent.mkdir(parents=True, exist_ok=True)
             write_json(self.reset_proof_path(program_id, reset_id), proof)
             write_json(self.reset_binding_path(program_id, reset_id), binding)
-            request["status"] = "applied"
-            request["applied_at"] = now
-            request["approved_request_hash"] = approved_request_hash
-            request["reset_id"] = reset_id
-            request["reset_proof_hash"] = proof.get("integrity_hash")
-            request["reset_event_hash"] = reset_event.get("event_hash")
-            request["updated_at"] = now
-            request["integrity_hash"] = _integrity_hash(request)
+            request = ResetService.mark_applied(
+                request,
+                applied_at=now,
+                proof_hash=str(proof.get("integrity_hash") or ""),
+                event_hash=str(reset_event.get("event_hash") or ""),
+                updates={"approved_request_hash": approved_request_hash, "reset_id": reset_id, "updated_at": now},
+            )
             write_json(self.request_path(program_id, request_id), request)
             lifecycle_event = self._append_lifecycle_event(
                 program_id,
@@ -544,10 +542,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                 }
             self.export_archive(program_id)
             export_dir = self.archive_export_dir(program_id)
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             with zipfile.ZipFile(zip_path) as archive:
                 entries = sorted(info.filename for info in archive.infolist())
             manifest = read_json(export_dir / "manifest.json")
@@ -562,10 +557,8 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             )
             manifest["integrity_hash"] = _integrity_hash(manifest)
             write_json(export_dir / "manifest.json", manifest)
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(export_dir).as_posix())
+            zip_path.unlink(missing_ok=True)
+            ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             runtime = verify_unified_release_program_continuity_command_center_acceptance_change_package(
                 zip_path,
                 strict=True,

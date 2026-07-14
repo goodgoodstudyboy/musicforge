@@ -55,8 +55,16 @@ class ResetService:
         return proof
 
     @staticmethod
-    def mark_applied(request: dict[str, Any], *, applied_at: str, proof_hash: str, event_hash: str) -> dict[str, Any]:
+    def mark_applied(
+        request: dict[str, Any],
+        *,
+        applied_at: str,
+        proof_hash: str,
+        event_hash: str,
+        updates: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         result = dict(request)
         result.update({"status": "applied", "applied_at": applied_at, "reset_proof_hash": proof_hash, "reset_event_hash": event_hash})
+        result.update(updates or {})
         result["integrity_hash"] = integrity_hash(result)
         return result

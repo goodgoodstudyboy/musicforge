@@ -1,3 +1,5 @@
 """Song Agent package."""
 
-__version__ = "13.1.0"
+from song_agent.platform.version import VERSION
+
+__version__ = VERSION

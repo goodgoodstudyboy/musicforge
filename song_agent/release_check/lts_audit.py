@@ -5,12 +5,17 @@ import io
 import json
 import subprocess
 import tarfile
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from song_agent import __version__
 from song_agent.architecture_guardrails import build_architecture_snapshot, evaluate_architecture
 from song_agent.capabilities import capability_registry
+from song_agent.platform.lifecycle.attack_corpus import run_active_lifecycle_attack_corpus
+from song_agent.platform.lifecycle.registry import active_lifecycle_registry
+from song_agent.platform.verification.attack_corpus import run_active_verifier_attack_corpus
+from song_agent.platform.verification.registry import active_verifier_registry
 from song_agent.release_check.matrix import all_check_definitions
 
 
@@ -49,8 +54,13 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
     root = Path(repo_root).resolve()
     snapshot = build_architecture_snapshot(root)
     architecture = evaluate_architecture(root)
-    verifier_rows = _migration_rows(root, ACTIVE_VERIFIERS, ("PackageSpec", "verify_package_envelope"))
-    lifecycle_rows = _migration_rows(root, ACTIVE_LIFECYCLE_STORES, ("HistoryChain",))
+    verifier_adoption = active_verifier_registry.adoption_report()
+    lifecycle_adoption = active_lifecycle_registry.adoption_report()
+    verifier_rows = [{**row, "migrated": row.get("status") == "passed"} for row in verifier_adoption["rows"]]
+    lifecycle_rows = [{**row, "migrated": row.get("status") == "passed"} for row in lifecycle_adoption["rows"]]
+    with tempfile.TemporaryDirectory(prefix="musicforge-v132-audit-") as temp:
+        verifier_attacks = run_active_verifier_attack_corpus(Path(temp) / "verification")
+        lifecycle_attacks = run_active_lifecycle_attack_corpus(Path(temp) / "lifecycle")
     persistence_rows = _migration_rows(root, ACTIVE_MUTABLE_STORES, ("WorkspaceLock",))
     module_limits, function_limits = _structured_limits(root)
     definitions = list(all_check_definitions())
@@ -78,13 +88,54 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
         "verifiers": verifier_rows,
         "lifecycle": lifecycle_rows,
         "persistence": persistence_rows,
+        "verifier_attack_corpus": verifier_attacks,
+        "lifecycle_attack_corpus": lifecycle_attacks,
         "module_limit_exceptions": module_limits,
         "function_limit_exceptions": function_limits,
         "expired_budget_exceptions": expired_exceptions,
         "expired_deprecations": expired_deprecations,
         "architecture_ratchet": architecture["metrics"]["ratchet"],
     }
-    checks = {
+    comparison = _v1213_comparison(root)
+    checks = _lts_checks(
+        root,
+        source,
+        verifier_rows=verifier_rows,
+        lifecycle_rows=lifecycle_rows,
+        persistence_rows=persistence_rows,
+        module_limits=module_limits,
+        function_limits=function_limits,
+        expired_exceptions=expired_exceptions,
+        expired_deprecations=expired_deprecations,
+        architecture=architecture,
+        comparison=comparison,
+    )
+    return {
+        "schema_version": 1,
+        "package_type": "musicforge_v13_lts_audit",
+        "app_version": __version__,
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "source": source,
+        "comparison": comparison,
+    }
+
+
+def _lts_checks(
+    root: Path,
+    source: dict[str, Any],
+    *,
+    verifier_rows: list[dict[str, Any]],
+    lifecycle_rows: list[dict[str, Any]],
+    persistence_rows: list[dict[str, Any]],
+    module_limits: list[dict[str, Any]],
+    function_limits: list[dict[str, Any]],
+    expired_exceptions: list[str],
+    expired_deprecations: list[str],
+    architecture: dict[str, Any],
+    comparison: dict[str, Any],
+) -> dict[str, bool]:
+    return {
         "production_cycles_zero": source["production_cycle_count"] == 0,
         "domain_interface_zero": source["boundary_violation_count"] == 0,
         "dynamic_imports_zero": source["dynamic_internal_import_count"] == 0,
@@ -92,6 +143,14 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
         "active_custom_lifecycle_algorithms_zero": not any(source["active_lifecycle_algorithms"].values()),
         "active_verifiers_migrated": all(row["migrated"] for row in verifier_rows),
         "active_lifecycle_migrated": all(row["migrated"] for row in lifecycle_rows),
+        "active_verifier_registry_complete": {
+            row.module.rsplit(".", 1)[-1] + ".py" for row in active_verifier_registry.all()
+        } == set(ACTIVE_VERIFIERS),
+        "active_lifecycle_registry_complete": {
+            row.module.rsplit(".", 1)[-1] + ".py" for row in active_lifecycle_registry.all()
+        }.issuperset(set(ACTIVE_LIFECYCLE_STORES)),
+        "active_verifier_attack_corpus_passed": source["verifier_attack_corpus"]["status"] == "passed",
+        "active_lifecycle_attack_corpus_passed": source["lifecycle_attack_corpus"]["status"] == "passed",
         "active_persistence_migrated": all(row["migrated"] for row in persistence_rows),
         "facade_limits": _facade_limits(root),
         "new_module_limits": not module_limits,
@@ -103,16 +162,16 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
         "deprecations_current": not expired_deprecations,
         "architecture_ratchet_passed": architecture["status"] == "passed"
         and source["architecture_ratchet"]["status"] == "passed",
+        "source_reduction_target": _source_reduction_target(comparison),
     }
-    return {
-        "schema_version": 1,
-        "package_type": "musicforge_v13_lts_audit",
-        "app_version": __version__,
-        "status": "passed" if all(checks.values()) else "failed",
-        "checks": checks,
-        "source": source,
-        "comparison": _v1213_comparison(root),
-    }
+
+
+def _source_reduction_target(comparison: dict[str, Any], version: str = __version__) -> bool:
+    if _version_key(version) < (13, 8):
+        return True
+    previous = comparison.get("v12.13") or {}
+    current = comparison.get("v13.0") or {}
+    return isinstance(previous.get("lines"), int) and int(current.get("lines", -1)) <= int(previous["lines"])
 
 
 def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime: dict[str, Any] | None = None) -> Path:
@@ -140,8 +199,16 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
             "compatibility": audit["source"]["legacy_security_helpers"],
             "active_lifecycle": audit["source"]["active_lifecycle_algorithms"],
         },
-        "verifier-migration.json": {"schema_version": 1, "rows": audit["source"]["verifiers"]},
-        "lifecycle-migration.json": {"schema_version": 1, "rows": audit["source"]["lifecycle"]},
+        "verifier-migration.json": {
+            "schema_version": 2,
+            "rows": audit["source"]["verifiers"],
+            "attack_corpus": audit["source"]["verifier_attack_corpus"],
+        },
+        "lifecycle-migration.json": {
+            "schema_version": 2,
+            "rows": audit["source"]["lifecycle"],
+            "attack_corpus": audit["source"]["lifecycle_attack_corpus"],
+        },
         "persistence-migration.json": {"schema_version": 1, "rows": audit["source"]["persistence"]},
         "cli-api-compatibility.json": {
             "schema_version": 1,

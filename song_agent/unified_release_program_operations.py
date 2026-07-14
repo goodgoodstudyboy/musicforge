@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import ResetAuthorization
-from song_agent.platform.lifecycle import ChangeRequestService, HistoryChain
+from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, HistoryChain, ResetService, SignoffService
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.projectio import read_json, write_json
 from song_agent.projects import now_iso
@@ -242,7 +242,7 @@ class UnifiedReleaseProgramOperationsStore:
                     "reason": _bounded(payload.get("reason") or approval.get("reason") or "Approved Program reset.", 1000),
                 },
             )
-            reset_proof = sanitize_metadata(
+            reset_proof = ResetService.build_proof(sanitize_metadata(
                 {
                     "schema_version": UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION,
                     "package_type": "musicforge_unified_release_program_reset_proof",
@@ -258,14 +258,14 @@ class UnifiedReleaseProgramOperationsStore:
                     "reset_event_payload_hash": reset_event.get("payload_hash"),
                     "source": current,
                 }
+            ))
+            request = ResetService.mark_applied(
+                request,
+                applied_at=now,
+                proof_hash=str(reset_proof.get("integrity_hash") or ""),
+                event_hash=str(reset_event.get("event_hash") or ""),
+                updates={"updated_at": now},
             )
-            reset_proof["integrity_hash"] = _integrity_hash(reset_proof)
-            request["status"] = "applied"
-            request["applied_at"] = now
-            request["reset_event_hash"] = reset_event.get("event_hash")
-            request["reset_proof_hash"] = reset_proof.get("integrity_hash")
-            request["updated_at"] = now
-            request["integrity_hash"] = _integrity_hash(request)
             write_json(self.request_path(program_id, request_id), request)
             write_json(self.reset_proof_path(program_id, request_id), reset_proof)
             self._append_change_history(program_id, {"event_type": "program_change_request_reset_applied", "created_at": now, "program_id": program_id, "change_request_id": request_id, "request_hash": request["integrity_hash"], "approval_hash": approval["integrity_hash"], "reset_proof_hash": reset_proof["integrity_hash"], "reset_event_hash": reset_event["event_hash"]})
@@ -478,10 +478,7 @@ class UnifiedReleaseProgramOperationsStore:
         zip_path = self.archive_zip_path(program_id)
         if zip_path.exists():
             zip_path.unlink()
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(archive_dir.rglob("*")):
-                if path.is_file():
-                    archive.write(path, path.relative_to(archive_dir).as_posix())
+        ArchiveBuilder.build_directory_zip(archive_dir, zip_path)
         with zipfile.ZipFile(zip_path) as archive:
             entries = sorted(info.filename for info in archive.infolist())
         manifest = read_json(self.archive_manifest_path(program_id))
@@ -489,10 +486,8 @@ class UnifiedReleaseProgramOperationsStore:
         manifest["files"] = [_file_record(path, path.relative_to(archive_dir).as_posix()) for path in sorted(archive_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
         manifest["integrity_hash"] = _integrity_hash(manifest)
         write_json(self.archive_manifest_path(program_id), manifest)
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(archive_dir.rglob("*")):
-                if path.is_file():
-                    archive.write(path, path.relative_to(archive_dir).as_posix())
+        zip_path.unlink(missing_ok=True)
+        ArchiveBuilder.build_directory_zip(archive_dir, zip_path)
         return {"status": "passed", "program_id": program_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
     def verify_operations_archive_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -770,9 +765,7 @@ def _history_text(rows: list[dict[str, Any]]) -> str:
 
 
 def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
-    doc = sanitize_metadata(doc)
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
+    return SignoffService.seal(sanitize_metadata(doc), payload_hash=False)
 
 
 def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
