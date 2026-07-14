@@ -16,6 +16,7 @@ from song_agent.release_check_interfaces import (
     EXPECTED_PANEL_HASH,
     EXPECTED_ROUTE_INVENTORY_HASH,
     _hash_json,
+    command_help_contract_rows,
 )
 from song_agent.webui import panel_html
 
@@ -39,7 +40,6 @@ def test_compatibility_facades_meet_line_budgets_and_exports() -> None:
 def test_command_registry_inventory_help_and_exit_policy_snapshot() -> None:
     rows = command_inventory()
     names = [row["name"] for row in rows]
-    help_rows = []
     assert len(rows) == 173
     assert len(names) == len(set(names))
     assert _hash_json(rows) == EXPECTED_COMMAND_INVENTORY_HASH
@@ -49,10 +49,7 @@ def test_command_registry_inventory_help_and_exit_policy_snapshot() -> None:
         assert spec.exit_code_policy == "legacy-compatible"
         assert spec.parser.__module__ == spec.handler.__module__
         assert len(inspect.getsourcelines(spec.handler)[0]) < 100
-        parser = spec.parser()
-        parser.prog = name
-        help_rows.append({"name": name, "help": parser.format_help()})
-    assert _hash_json(help_rows) == EXPECTED_COMMAND_HELP_HASH
+    assert _hash_json(command_help_contract_rows(REGISTRY)) == EXPECTED_COMMAND_HELP_HASH
 
 
 def test_route_inventory_snapshot_and_conflict_detection() -> None:

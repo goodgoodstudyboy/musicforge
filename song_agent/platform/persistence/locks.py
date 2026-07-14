@@ -169,10 +169,11 @@ def _pid_exists(pid: int) -> bool:
     if os.name == "nt":
         import ctypes
 
-        process = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        kernel32 = getattr(ctypes, "windll").kernel32
+        process = kernel32.OpenProcess(0x1000, False, pid)
         if not process:
             return False
-        ctypes.windll.kernel32.CloseHandle(process)
+        kernel32.CloseHandle(process)
         return True
     try:
         os.kill(pid, 0)

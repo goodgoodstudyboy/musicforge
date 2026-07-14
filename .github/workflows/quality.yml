@@ -16,6 +16,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -34,11 +36,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
-      - run: python -m pytest -m "${{ matrix.shard }} and not slow" --cov=song_agent/platform --cov=song_agent/application --cov-report=term-missing -q
+      - run: python -m pytest -m "${{ matrix.shard }} and not slow and not legacy" -n 2 --dist loadscope --cov=song_agent/platform --cov=song_agent/application --cov-report=term-missing -q
 
   security:
     strategy:
@@ -48,17 +52,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
-      - run: python -m pytest -m "security and not legacy and not slow" -q
+      - run: python -m pytest -m "security and not legacy and not slow" -n 2 --dist loadscope -q
       - run: python -m song_agent.cli release-check --profile security --skip-tests --json
 
   release-candidate:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -74,6 +82,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"

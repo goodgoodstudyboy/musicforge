@@ -315,7 +315,10 @@ class ReferenceStore:
     def reference_dir(self, reference_id: str) -> Path:
         reference_id = validate_reference_id(reference_id)
         base = self.root.resolve()
-        target = (base / reference_id).resolve()
+        raw_target = base / reference_id
+        if raw_target.is_symlink():
+            raise ValueError("Refusing to operate on symlink reference.")
+        target = raw_target.resolve()
         try:
             target.relative_to(base)
         except ValueError as exc:

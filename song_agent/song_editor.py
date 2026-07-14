@@ -297,6 +297,8 @@ class EditorPreviewStore:
         deleted: list[str] = []
         kept: list[str] = []
         with self.lock:
+            if self.root.exists() and any(path.is_symlink() for path in self.root.iterdir()):
+                raise ValueError("Refusing to delete symlink editor preview.")
             previews = self.list_previews()
             protected = {preview.preview_id for preview in previews[:keep]}
             for preview in previews:
@@ -311,7 +313,7 @@ class EditorPreviewStore:
                     kept.append(preview.preview_id)
                     continue
                 preview_dir = self.preview_dir(preview.preview_id)
-                if preview_dir.resolve().is_symlink():
+                if preview_dir.is_symlink():
                     raise ValueError("Refusing to delete symlink editor preview.")
                 shutil.rmtree(preview_dir)
                 deleted.append(preview.preview_id)
@@ -372,7 +374,10 @@ class EditorPreviewStore:
     def preview_dir(self, preview_id: str) -> Path:
         preview_id = validate_editor_preview_id(preview_id)
         base = self.root.resolve()
-        target = (base / preview_id).resolve()
+        raw_target = base / preview_id
+        if raw_target.is_symlink():
+            raise ValueError("Refusing to operate on symlink editor preview.")
+        target = raw_target.resolve()
         try:
             target.relative_to(base)
         except ValueError as exc:

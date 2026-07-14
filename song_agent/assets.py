@@ -274,7 +274,10 @@ class AssetStore:
     def asset_dir(self, asset_id: str) -> Path:
         asset_id = validate_asset_id(asset_id)
         base = self.root.resolve()
-        target = (base / asset_id).resolve()
+        raw_target = base / asset_id
+        if raw_target.is_symlink():
+            raise ValueError("Refusing to operate on symlink asset.")
+        target = raw_target.resolve()
         try:
             target.relative_to(base)
         except ValueError as exc:

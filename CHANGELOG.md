@@ -8,6 +8,7 @@
 - Removed the superseded release-check matrix/runner facades; retained the small historical smoke adapter as archive-only compatibility through v13.1.
 - Partitioned every active test into exactly one unit, contract, or integration CI shard; pytest uses a managed short temporary root and reclaims each test tree so xdist evidence runs do not exhaust runner disks.
 - Restricted quality runs to master/PR/manual triggers, disabled matrix fail-fast for complete diagnostics, and upgraded official checkout/setup-python actions to their Node 24 releases.
+- Made CLI parser snapshots semantic instead of depending on Python-version-specific `argparse` line wrapping, and made quality jobs fetch release tags required by the v12.13/v13 source comparison.
 
 ### Added
 - Schema-2 v13 migration orchestration with dry-run, verified backup enforcement, source preservation, rollback rehearsal, and a verified migration evidence archive.
@@ -20,12 +21,14 @@
 - v13 migration evidence emits and requires an external anchor for final LTS verification, blocking internally re-signed target/report/manifest substitutions.
 - Release and GA active gates are policy plus evidence-manifest driven and runtime re-verify current external evidence.
 - Modular-core import cycles and domain-to-interface dependencies are hard-zero release blockers; the remaining flat compatibility cycles and 522 inbound compatibility edges are disclosed and frozen as no-growth debt.
+- POSIX temporary paths and raw symlink targets are rejected or redacted consistently on Windows and Linux runners before cleanup or evidence serialization.
 
 ### Performance
 - Default pytest runs the complete active suite without duplicating archive-only release-check smokes; those smokes remain intact in four Windows/Linux nightly shards and are distributed by test item so the single archive module uses every xdist worker.
 - PR unit and security suites exclude explicitly marked active-slow evidence replays; nightly runs those tests by layer and deterministic two-way partition. Local unit fast is about three minutes, while the measured slow-unit partitions are about 23 and 14 minutes.
 - The local aggregate `pytest.full` check keeps a hard 60-minute budget; the 30-minute target applies to each CI/nightly shard. Duplicate-entry warnings intentionally created by adversarial ZIP tests are suppressed only for that aggregate command so unexpected warning classes remain visible.
 - The relocated historical provider resolves the repository root explicitly, preserving v10 GA smoke compatibility after the release-check package split.
+- Hosted quality shards use two scoped workers rather than oversubscribing four workers on two-core runners; local and nightly full coverage retain their existing partitioning.
 
 ## v12.20.0 - 2026-07-13
 

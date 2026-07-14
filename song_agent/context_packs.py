@@ -156,7 +156,10 @@ class ContextPackStore:
     def pack_dir(self, pack_id: str) -> Path:
         pack_id = validate_context_pack_id(pack_id)
         base = self.root.resolve()
-        target = (base / pack_id).resolve()
+        raw_target = base / pack_id
+        if raw_target.is_symlink():
+            raise ValueError("Refusing to operate on symlink context pack.")
+        target = raw_target.resolve()
         try:
             target.relative_to(base)
         except ValueError as exc:

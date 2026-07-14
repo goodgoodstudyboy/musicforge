@@ -206,12 +206,12 @@ def final_export_zip_path(project_dir: Path) -> Path:
 
 def clear_final_export_zip(project_dir: Path) -> None:
     project_dir = project_dir.resolve()
-    zip_path = final_export_zip_path(project_dir).resolve()
+    zip_path = final_export_zip_path(project_dir)
+    if zip_path.is_symlink():
+        raise FinalExportError("Refusing to remove a symlinked final export ZIP.")
     _ensure_within(project_dir, zip_path)
     if not zip_path.exists():
         return
-    if zip_path.is_symlink():
-        raise FinalExportError("Refusing to remove a symlinked final export ZIP.")
     zip_path.unlink()
 
 
