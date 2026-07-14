@@ -79,6 +79,7 @@ class V13MigrationOrchestrator:
             "verified_backup": backup_verified,
             "source_preserved": source_preserved,
             "imported_workflow_count": int(applied.get("imported_workflow_count") or 0),
+            "imported_program_document_count": int(applied.get("imported_program_document_count") or 0),
             "backup_path": applied.get("backup_path") or "",
             "rollback_command": f"song-agent-state migrate-rollback {plan['migration_id']}" if plan["file_count"] else "not_required",
             "executed_at": _now(),

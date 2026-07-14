@@ -23,7 +23,7 @@ from song_agent.platform.verification.zip_security import (
     zip_has_no_trailing_data as _zip_has_no_trailing_data,
 )
 
-from song_agent.projectio import read_json, write_json
+from song_agent.platform.persistence.program import read_program_json as read_json, write_program_json as write_json
 from song_agent.redaction import sanitize_sensitive_text
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program_verifier import (

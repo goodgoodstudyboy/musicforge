@@ -10,6 +10,7 @@ import pytest
 from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
 from song_agent.ga_readiness_verifier import verify_ga_readiness_report
 from song_agent.projectio import read_json, write_json
+from song_agent.platform.persistence.program import write_program_json
 from song_agent.release_checks import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program_continuity_command_center import (
@@ -234,7 +235,7 @@ def test_continuity_command_center_run_safe_skips_unsupported_actions(tmp_path: 
     runbook = read_json(command.runbook_path(program_id))
     runbook["actions"].append({"action_id": "unsupported", "action_type": "continuity_acceptance_change_control.reset", "mode": "safe"})
     runbook["integrity_hash"] = stable_hash({key: value for key, value in runbook.items() if key != "integrity_hash"})
-    write_json(command.runbook_path(program_id), runbook)
+    write_program_json(command.runbook_path(program_id), runbook)
 
     result = command.run_safe(program_id)
 

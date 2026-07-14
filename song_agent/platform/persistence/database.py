@@ -7,7 +7,53 @@ from pathlib import Path
 from typing import Iterator
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+SCHEMA_STATEMENTS = (
+    """CREATE TABLE IF NOT EXISTS schema_migrations (
+        version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS workflow_objects (
+        object_type TEXT NOT NULL, object_id TEXT NOT NULL, generation INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, payload_hash TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL, PRIMARY KEY (object_type, object_id))""",
+    "CREATE TABLE IF NOT EXISTS id_counters (namespace TEXT PRIMARY KEY, next_value INTEGER NOT NULL)",
+    """CREATE TABLE IF NOT EXISTS artifact_transactions (
+        transaction_id TEXT PRIMARY KEY, namespace TEXT NOT NULL, status TEXT NOT NULL,
+        generation_path TEXT NOT NULL, previous_generation TEXT NOT NULL DEFAULT '',
+        pointer_hash TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, committed_at TEXT NOT NULL DEFAULT '')""",
+    """CREATE TABLE IF NOT EXISTS legacy_migrations (
+        migration_id TEXT PRIMARY KEY, status TEXT NOT NULL, source_hash TEXT NOT NULL,
+        backup_path TEXT NOT NULL, schema_version INTEGER NOT NULL, created_at TEXT NOT NULL,
+        rolled_back_at TEXT NOT NULL DEFAULT '')""",
+    """CREATE TABLE IF NOT EXISTS legacy_migration_files (
+        migration_id TEXT NOT NULL REFERENCES legacy_migrations(migration_id), relative_path TEXT NOT NULL,
+        sha256 TEXT NOT NULL, size_bytes INTEGER NOT NULL, PRIMARY KEY (migration_id, relative_path))""",
+    """CREATE TABLE IF NOT EXISTS legacy_migration_objects (
+        migration_id TEXT NOT NULL REFERENCES legacy_migrations(migration_id), object_type TEXT NOT NULL,
+        object_id TEXT NOT NULL, payload_hash TEXT NOT NULL, PRIMARY KEY (migration_id, object_type, object_id))""",
+    """CREATE TABLE IF NOT EXISTS migration_evidence_archives (
+        migration_id TEXT PRIMARY KEY, archive_sha256 TEXT NOT NULL,
+        verification_hash TEXT NOT NULL, created_at TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS program_documents (
+        relative_path TEXT PRIMARY KEY, program_id TEXT NOT NULL, component_type TEXT NOT NULL,
+        generation INTEGER NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL,
+        authority_path TEXT NOT NULL, payload_hash TEXT NOT NULL, projection_sha256 TEXT NOT NULL,
+        updated_at TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS program_document_events (
+        event_hash TEXT PRIMARY KEY, relative_path TEXT NOT NULL REFERENCES program_documents(relative_path) ON DELETE CASCADE,
+        document_version INTEGER NOT NULL, event_type TEXT NOT NULL, previous_event_hash TEXT NOT NULL DEFAULT '',
+        payload_hash TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(relative_path, document_version))""",
+    """CREATE TABLE IF NOT EXISTS program_document_index (
+        relative_path TEXT PRIMARY KEY REFERENCES program_documents(relative_path) ON DELETE CASCADE,
+        program_id TEXT NOT NULL, component_type TEXT NOT NULL, generation INTEGER NOT NULL,
+        status TEXT NOT NULL, current_version INTEGER NOT NULL, payload_hash TEXT NOT NULL, updated_at TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS program_projection_transactions (
+        transaction_id TEXT PRIMARY KEY, relative_path TEXT NOT NULL REFERENCES program_documents(relative_path) ON DELETE CASCADE,
+        document_version INTEGER NOT NULL, status TEXT NOT NULL, projection_sha256 TEXT NOT NULL,
+        created_at TEXT NOT NULL, committed_at TEXT NOT NULL DEFAULT '')""",
+    """CREATE TABLE IF NOT EXISTS legacy_migration_program_documents (
+        migration_id TEXT NOT NULL REFERENCES legacy_migrations(migration_id), relative_path TEXT NOT NULL,
+        payload_hash TEXT NOT NULL, PRIMARY KEY(migration_id, relative_path))""",
+)
 
 
 class MusicForgeDatabase:
@@ -38,66 +84,7 @@ class MusicForgeDatabase:
 
     def initialize(self) -> None:
         with self.transaction() as connection:
-            statements = (
-                """CREATE TABLE IF NOT EXISTS schema_migrations (
-                    version INTEGER PRIMARY KEY,
-                    applied_at TEXT NOT NULL
-                )""",
-                """CREATE TABLE IF NOT EXISTS workflow_objects (
-                    object_type TEXT NOT NULL,
-                    object_id TEXT NOT NULL,
-                    generation INTEGER NOT NULL DEFAULT 1,
-                    status TEXT NOT NULL,
-                    version INTEGER NOT NULL DEFAULT 1,
-                    payload_hash TEXT NOT NULL DEFAULT '',
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (object_type, object_id)
-                )""",
-                """CREATE TABLE IF NOT EXISTS id_counters (
-                    namespace TEXT PRIMARY KEY,
-                    next_value INTEGER NOT NULL
-                )""",
-                """CREATE TABLE IF NOT EXISTS artifact_transactions (
-                    transaction_id TEXT PRIMARY KEY,
-                    namespace TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    generation_path TEXT NOT NULL,
-                    previous_generation TEXT NOT NULL DEFAULT '',
-                    pointer_hash TEXT NOT NULL DEFAULT '',
-                    created_at TEXT NOT NULL,
-                    committed_at TEXT NOT NULL DEFAULT ''
-                )""",
-                """CREATE TABLE IF NOT EXISTS legacy_migrations (
-                    migration_id TEXT PRIMARY KEY,
-                    status TEXT NOT NULL,
-                    source_hash TEXT NOT NULL,
-                    backup_path TEXT NOT NULL,
-                    schema_version INTEGER NOT NULL,
-                    created_at TEXT NOT NULL,
-                    rolled_back_at TEXT NOT NULL DEFAULT ''
-                )""",
-                """CREATE TABLE IF NOT EXISTS legacy_migration_files (
-                    migration_id TEXT NOT NULL REFERENCES legacy_migrations(migration_id),
-                    relative_path TEXT NOT NULL,
-                    sha256 TEXT NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    PRIMARY KEY (migration_id, relative_path)
-                )""",
-                """CREATE TABLE IF NOT EXISTS legacy_migration_objects (
-                    migration_id TEXT NOT NULL REFERENCES legacy_migrations(migration_id),
-                    object_type TEXT NOT NULL,
-                    object_id TEXT NOT NULL,
-                    payload_hash TEXT NOT NULL,
-                    PRIMARY KEY (migration_id, object_type, object_id)
-                )""",
-                """CREATE TABLE IF NOT EXISTS migration_evidence_archives (
-                    migration_id TEXT PRIMARY KEY,
-                    archive_sha256 TEXT NOT NULL,
-                    verification_hash TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )""",
-            )
-            for statement in statements:
+            for statement in SCHEMA_STATEMENTS:
                 connection.execute(statement)
             for version in range(1, SCHEMA_VERSION + 1):
                 connection.execute(

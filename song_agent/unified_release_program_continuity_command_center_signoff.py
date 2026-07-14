@@ -14,7 +14,7 @@ from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, 
 from song_agent.platform.lifecycle import HistoryChain
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.platform.persistence.repository import sync_active_v12_state
-from song_agent.projectio import read_json, write_json
+from song_agent.platform.persistence.program import program_json_facade
 from song_agent.projects import now_iso
 from song_agent.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
 from song_agent.releases import stable_hash
@@ -59,6 +59,9 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStateError(
     UnifiedReleaseProgramContinuityCommandCenterSignoffError
 ):
     pass
+
+
+read_json, write_json = program_json_facade(UnifiedReleaseProgramContinuityCommandCenterSignoffStateError)
 
 
 class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:

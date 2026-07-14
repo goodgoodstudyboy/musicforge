@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,9 @@ from song_agent.platform.persistence import (
     LegacyWorkspaceMigrator,
     MusicForgeDatabase,
     PersistenceRecovery,
+    ProgramPersistenceError,
+    ProgramStateRepository,
+    V13MigrationOrchestrator,
     WorkflowRepository,
 )
 from song_agent.platform.verification.hashing import integrity_hash
@@ -31,6 +35,94 @@ ACTIVE_V12_STORES = (
     "unified_release_program_continuity_command_center_acceptance.py",
     "unified_release_program_continuity_command_center_acceptance_change.py",
 )
+
+
+def run_program_persistence_authority_smoke(root: Path) -> tuple[bool, str]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="mf-v133-program-persistence-") as temp:
+            workspace = Path(temp) / ".musicforge"
+            fixture = root / "tests" / "fixtures" / "v12_13_program_workspace" / "workspace"
+            shutil.copytree(fixture, workspace)
+            before = _legacy_source_bytes(workspace)
+            migration = V13MigrationOrchestrator(workspace)
+            plan = migration.dry_run()
+            rehearsal = migration.rollback_rehearsal()
+            report = migration.execute()
+            repository = ProgramStateRepository(workspace)
+            aggregate = repository.aggregate("urp-000001")
+            rollback = migration.migrator.rollback(str(report["migration_id"]))
+            rollback_identical = before == _legacy_source_bytes(workspace)
+
+            crash_recovery = True
+            for stage in ("after_event_append_before_projection", "after_projection_before_index"):
+                path = workspace / "unified-release-programs" / "urp-runtime" / f"{stage}.json"
+
+                def crash(current: str, expected: str = stage) -> None:
+                    if current == expected:
+                        raise RuntimeError(expected)
+
+                try:
+                    repository.write_projection(
+                        path,
+                        {"program_id": "urp-runtime", "status": "ready", "generation": 1},
+                        crash_hook=crash,
+                    )
+                except RuntimeError:
+                    pass
+                recovered = PersistenceRecovery(workspace).recover()["program_recovered"]
+                crash_recovery = crash_recovery and len(recovered) == 1 and repository.read_projection(path)["status"] == "ready"
+
+            tamper_path = workspace / "unified-release-programs" / "urp-runtime" / "tamper.json"
+            repository.write_projection(tamper_path, {"program_id": "urp-runtime", "status": "ready"})
+            tamper_path.write_text('{"status":"forged"}\n', encoding="utf-8")
+            projection_tamper = False
+            try:
+                repository.read_projection(tamper_path)
+            except ProgramPersistenceError:
+                projection_tamper = True
+            with repository.database.session() as connection:
+                event_count = int(connection.execute("SELECT COUNT(*) FROM program_document_events").fetchone()[0])
+                index_count = int(connection.execute("SELECT COUNT(*) FROM program_document_index").fetchone()[0])
+                database_private_text = b"fixture-review-chair" not in repository.database.path.read_bytes()
+
+        source_root = Path(__file__).resolve().parent
+        stores_migrated = all(
+            "program_json_facade" in (source_root / filename).read_text(encoding="utf-8")
+            and "song_agent.projectio" not in (source_root / filename).read_text(encoding="utf-8")
+            for filename in ACTIVE_V12_STORES
+        )
+        verifiers_migrated = all(
+            "platform.persistence.program" in (source_root / filename.replace(".py", "_verifier.py")).read_text(encoding="utf-8")
+            and "song_agent.projectio" not in (source_root / filename.replace(".py", "_verifier.py")).read_text(encoding="utf-8")
+            for filename in ACTIVE_V12_STORES
+        )
+        signals = {
+            "fixture_file_count": int(plan["file_count"]) == 6,
+            "authority_import_count": int(report["imported_program_document_count"]) == 6,
+            "aggregate_components": {"program", "handoff", "vault", "continuity", "receiver_acceptance", "change_control"} <= set(aggregate.components),
+            "rollback_rehearsal": rehearsal["status"] == "passed" and rehearsal["source_restored"] is True,
+            "rollback_bit_identical": rollback["status"] == "rolled_back" and rollback_identical,
+            "crash_recovery": crash_recovery,
+            "projection_tamper": projection_tamper,
+            "event_and_index": event_count >= 3 and index_count >= 3,
+            "database_private_text": database_private_text,
+            "active_stores_migrated": stores_migrated,
+            "active_verifiers_migrated": verifiers_migrated,
+        }
+        return all(signals.values()), "v13.3 Program persistence authority: " + ", ".join(
+            f"{key}={value}" for key, value in signals.items()
+        )
+    except Exception as exc:
+        return False, f"v13.3 Program persistence authority smoke failed: {exc}"
+
+
+def _legacy_source_bytes(workspace: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(workspace).as_posix(): path.read_bytes()
+        for root_name in ("unified-release-programs", "urpccca")
+        for path in sorted((workspace / root_name).rglob("*"))
+        if path.is_file()
+    }
 
 
 def run_persistence_kernel_smoke(root: Path) -> tuple[bool, str]:

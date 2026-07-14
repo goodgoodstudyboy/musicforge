@@ -554,7 +554,7 @@
       "removal_target_version": "13.5.0"
     },
     {
-      "active_import_count": 36,
+      "active_import_count": 10,
       "module": "song_agent.projectio",
       "owner": "musicforge-studio",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -1814,6 +1814,6 @@
     "new_module_max_lines": 400,
     "route_handler_max_lines": 100
   },
-  "previous_release_tag": "v13.1.0",
+  "previous_release_tag": "v13.2.0",
   "schema_version": 1
 }

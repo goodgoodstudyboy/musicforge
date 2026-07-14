@@ -10,6 +10,7 @@ from typing import Any, Iterable
 from song_agent.platform.persistence.database import MusicForgeDatabase, SCHEMA_VERSION
 from song_agent.platform.persistence.file_artifacts import sha256_path, stable_tree_hash
 from song_agent.platform.persistence.locks import WorkspaceLock
+from song_agent.platform.persistence.program import ProgramStateRepository
 from song_agent.platform.persistence.repository import collect_active_v12_state
 
 
@@ -75,7 +76,10 @@ class LegacyWorkspaceMigrator:
                 raise RuntimeError("Injected migration failure after verified backup.")
             created_at = _now()
             workflow_rows = collect_active_v12_state(backup)
+            program_documents = _program_documents(backup, plan["files"])
             imported_workflow_count = 0
+            imported_program_document_count = 0
+            program_repository = ProgramStateRepository(self.workspace_root, database=self.database)
             with self.database.transaction() as connection:
                 connection.execute(
                     "INSERT INTO legacy_migrations(migration_id, status, source_hash, backup_path, schema_version, created_at) VALUES (?, 'applied', ?, ?, ?, ?)",
@@ -85,6 +89,15 @@ class LegacyWorkspaceMigrator:
                     "INSERT INTO legacy_migration_files(migration_id, relative_path, sha256, size_bytes) VALUES (?, ?, ?, ?)",
                     [(migration_id, row["path"], row["sha256"], row["size_bytes"]) for row in plan["files"]],
                 )
+                for relative_path, document, payload in program_documents:
+                    if program_repository.adopt_legacy_document(
+                        connection,
+                        relative_path,
+                        document,
+                        payload,
+                        migration_id=migration_id,
+                    ):
+                        imported_program_document_count += 1
                 for row in workflow_rows:
                     inserted = connection.execute(
                         """
@@ -109,6 +122,7 @@ class LegacyWorkspaceMigrator:
                 "rollback_command": f"song-agent-state migrate-rollback {migration_id}",
                 "idempotent": False,
                 "imported_workflow_count": imported_workflow_count,
+                "imported_program_document_count": imported_program_document_count,
             }
             report_path = self.migration_root / "reports" / f"{migration_id}.json"
             report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,6 +145,27 @@ class LegacyWorkspaceMigrator:
                 raise RuntimeError("Legacy migration rollback backup verification failed.")
             rolled_back_at = _now()
             with self.database.transaction() as connection:
+                program_documents = connection.execute(
+                    "SELECT relative_path, payload_hash FROM legacy_migration_program_documents WHERE migration_id=?",
+                    (migration_id,),
+                ).fetchall()
+                for row in program_documents:
+                    current = connection.execute(
+                        "SELECT version, payload_hash FROM program_documents WHERE relative_path=?",
+                        (row["relative_path"],),
+                    ).fetchone()
+                    if (
+                        current is None
+                        or int(current["version"]) != 1
+                        or str(current["payload_hash"]) != str(row["payload_hash"])
+                    ):
+                        raise RuntimeError(
+                            f"Migrated Program document changed after import: {row['relative_path']}"
+                        )
+                    connection.execute(
+                        "DELETE FROM program_documents WHERE relative_path=?",
+                        (row["relative_path"],),
+                    )
                 imported = connection.execute(
                     "SELECT object_type, object_id, payload_hash FROM legacy_migration_objects WHERE migration_id=?",
                     (migration_id,),
@@ -194,6 +229,31 @@ def _fingerprint_paths(root: Path, relative_paths: list[str]) -> list[dict[str, 
             return []
         rows.append({"path": relative, "sha256": sha256_path(path), "size_bytes": path.stat().st_size})
     return rows
+
+
+def _program_documents(
+    root: Path,
+    rows: list[dict[str, Any]],
+) -> list[tuple[str, dict[str, Any], bytes]]:
+    documents: list[tuple[str, dict[str, Any], bytes]] = []
+    for row in rows:
+        relative = str(row["path"])
+        parts = Path(relative.replace("\\", "/")).parts
+        if (
+            not parts
+            or parts[0].lower() not in {"unified-release-programs", "urpccca"}
+            or not relative.lower().endswith(".json")
+        ):
+            continue
+        payload = (root / relative).read_bytes()
+        try:
+            value = json.loads(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"Legacy Program JSON is unreadable: {relative}") from exc
+        if not isinstance(value, dict):
+            raise RuntimeError(f"Legacy Program JSON is not an object: {relative}")
+        documents.append((relative, value, payload))
+    return documents
 
 
 def migration_source_id(rows: list[dict[str, Any]]) -> str:

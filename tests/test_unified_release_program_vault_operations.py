@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from song_agent.projectio import read_json, write_json
+from song_agent.projectio import read_json
+from song_agent.platform.persistence.program import write_program_json
 from song_agent.release_checks import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program_vault_operations import UnifiedReleaseProgramVaultOperationsStateError, UnifiedReleaseProgramVaultOperationsStore
@@ -108,7 +109,7 @@ def test_unified_release_program_vault_operations_rejects_resigned_registry_curr
             break
     registry["summary"]["current_vault_zip_sha256"] = "0" * 64
     registry["integrity_hash"] = stable_hash({key: value for key, value in registry.items() if key != "integrity_hash"})
-    write_json(ops.registry_path(program_id), registry)
+    write_program_json(ops.registry_path(program_id), registry)
 
     review = ops.run_custody_review(program_id)
     transfer = ops.create_transfer_pack(program_id)

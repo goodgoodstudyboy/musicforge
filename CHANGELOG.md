@@ -1,5 +1,12 @@
 # Changelog
 
+## v13.3.0 - 2026-07-14
+
+- Made `ProgramStateRepository` the write authority for all 13 active Program stores, with content-addressed state, SQLite current versions, event chains, indexes, and validated JSON projections.
+- Added recoverable projection transactions for crashes after event append and after projection write, integrated into the shared persistence recovery command.
+- Migrated a tracked six-document v12.13 Program workspace fixture with verified backup, non-empty authority import, and byte-identical source rollback.
+- Reduced active production imports of legacy `projectio` from 36 to 10 and total active-to-compatibility imports from 520 to 494.
+
 ## v13.2.0 - 2026-07-14
 
 - Registered all 13 active Program verifiers with canonical package layouts, external proofs, runtime identities, and lifecycle binding requirements.

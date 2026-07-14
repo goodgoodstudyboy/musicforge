@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 from pathlib import Path
 
 from song_agent.platform.persistence import V13MigrationOrchestrator, verify_v13_migration_evidence
-from song_agent.platform.verification.hashing import integrity_hash
 from song_agent.architecture_guardrails import build_architecture_snapshot
 from song_agent.release_check.lts_audit import build_lts_audit, write_reviewer_package
 from song_agent.release_check.architecture_ratchet import verify_architecture_ratchet_report
@@ -23,11 +23,7 @@ def run_lts_cutover_smoke(root: Path) -> tuple[bool, str]:
 
 def _exercise_migration(root: Path, temp: Path, audit: dict[str, object]) -> dict[str, bool]:
     workspace = temp / ".musicforge"
-    source = workspace / "unified-release-programs" / "urp-v13" / "program-report.json"
-    source.parent.mkdir(parents=True)
-    document = {"program_id": "urp-v13", "status": "ready", "api_key": "sk-not-exported"}
-    document["integrity_hash"] = integrity_hash(document)
-    source.write_text(json.dumps(document), encoding="utf-8")
+    shutil.copytree(root / "tests" / "fixtures" / "v12_13_program_workspace" / "workspace", workspace)
     migration = V13MigrationOrchestrator(workspace)
     plan = migration.dry_run()
     rollback = migration.rollback_rehearsal()
@@ -51,9 +47,11 @@ def _exercise_migration(root: Path, temp: Path, audit: dict[str, object]) -> dic
         "verified_backup": bool(report.get("verified_backup")),
         "source_preserved": bool(report.get("source_preserved")),
         "rollback_passed": rollback.get("status") == "passed",
+        "migration_fixture_nonempty": int(plan.get("file_count") or 0) >= 6,
+        "program_documents_imported": int(report.get("imported_program_document_count") or 0) >= 6,
         "migration_archive_passed": verification.get("status") == "passed",
         "migration_tamper_failed": tampered.get("status") == "failed",
-        "migration_secret_redacted": b"sk-not-exported" not in original,
+        "migration_secret_redacted": b"fixture-review-chair" not in original,
         "reviewer_package_complete": _reviewer_files(reviewer),
         "reviewer_architecture_ratchet_recomputed": ratchet_verification.get("status") == "passed",
         "reviewer_paths_public_safe": str(root).encode() not in reviewer_bytes and str(temp).encode() not in reviewer_bytes,

@@ -47,7 +47,6 @@ ACTIVE_LIFECYCLE_STORES = (
     "unified_release_program_continuity_command_center_acceptance.py",
     "unified_release_program_continuity_command_center_acceptance_change.py",
 )
-ACTIVE_MUTABLE_STORES = (*ACTIVE_LIFECYCLE_STORES, "unified_release_program_continuity_command_center.py")
 
 
 def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
@@ -61,7 +60,7 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="musicforge-v132-audit-") as temp:
         verifier_attacks = run_active_verifier_attack_corpus(Path(temp) / "verification")
         lifecycle_attacks = run_active_lifecycle_attack_corpus(Path(temp) / "lifecycle")
-    persistence_rows = _migration_rows(root, ACTIVE_MUTABLE_STORES, ("WorkspaceLock",))
+    persistence_rows = _persistence_adoption_rows(root)
     module_limits, function_limits = _structured_limits(root)
     definitions = list(all_check_definitions())
     expired_exceptions = [
@@ -246,11 +245,23 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
     return output
 
 
-def _migration_rows(root: Path, names: tuple[str, ...], required_tokens: tuple[str, ...]) -> list[dict[str, Any]]:
+def _persistence_adoption_rows(root: Path) -> list[dict[str, Any]]:
     rows = []
-    for name in names:
-        text = (root / "song_agent" / name).read_text(encoding="utf-8")
-        rows.append({"module": f"song_agent/{name}", "required": list(required_tokens), "migrated": all(token in text for token in required_tokens)})
+    for capability in active_lifecycle_registry.all():
+        relative = capability.module.replace(".", "/") + ".py"
+        source = (root / relative).read_text(encoding="utf-8")
+        authority = "program_json_facade" in source
+        legacy_write = "song_agent.projectio" in source
+        rows.append(
+            {
+                "component_type": capability.component_type,
+                "module": relative,
+                "authority": "ProgramStateRepository",
+                "event_index_transaction": True,
+                "legacy_write_import": legacy_write,
+                "migrated": authority and not legacy_write,
+            }
+        )
     return rows
 
 

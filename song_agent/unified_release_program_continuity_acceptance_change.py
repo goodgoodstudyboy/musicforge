@@ -11,7 +11,7 @@ from song_agent import __version__
 from song_agent.platform.contracts.lifecycle import GenerationRef, ResetAuthorization
 from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, GenerationService, HistoryChain, ResetService
 from song_agent.platform.persistence import WorkspaceLock
-from song_agent.projectio import read_json, write_json
+from song_agent.platform.persistence.program import program_json_facade
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.releases import stable_hash
@@ -59,6 +59,9 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStateError(UnifiedReleasePr
 
 class UnifiedReleaseProgramContinuityAcceptanceChangeNotFoundError(UnifiedReleaseProgramContinuityAcceptanceChangeError):
     pass
+
+
+read_json, write_json = program_json_facade(UnifiedReleaseProgramContinuityAcceptanceChangeStateError)
 
 
 class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
@@ -394,7 +397,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
                 if isinstance(value, str):
                     path.write_text(value, encoding="utf-8")
                 else:
-                    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                    write_json(path, value)
                 files.append(_file_record(path, rel))
 
             write_entry("README.txt", "MusicForge Unified Release Program Continuity Acceptance Change Control Archive\n")

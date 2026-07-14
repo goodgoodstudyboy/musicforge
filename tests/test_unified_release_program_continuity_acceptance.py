@@ -9,6 +9,7 @@ from song_agent import __version__
 from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, write_ga_readiness_report
 from song_agent.ga_readiness_verifier import verify_ga_readiness_report
 from song_agent.projectio import read_json, write_json
+from song_agent.platform.persistence.program import write_program_json
 from song_agent.release_checks import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program_continuity_acceptance import (
@@ -170,7 +171,7 @@ def test_continuity_acceptance_blocks_role_forge_before_signoff(tmp_path: Path) 
     forged = read_json(evidence_path)
     forged["receiver_role"] = "external_custodian"
     forged["integrity_hash"] = stable_hash({key: value for key, value in forged.items() if key != "integrity_hash"})
-    write_json(evidence_path, forged)
+    write_program_json(evidence_path, forged)
 
     board = store.refresh_decision_board(program_id, {"policy": {"min_accepted_receipts": 1, "min_organizations": 1, "required_roles": ["external_custodian"]}})
 

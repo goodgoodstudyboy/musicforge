@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from song_agent.projectio import read_json, write_json
+from song_agent.projectio import read_json
+from song_agent.platform.persistence.program import write_program_json
 from song_agent.release_checks import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program_handoff import (
@@ -149,7 +150,7 @@ def test_unified_release_program_handoff_blocks_role_forge_before_signoff(tmp_pa
     forged["reviewer"]["role"] = "release_owner"
     forged["public_summary"]["role"] = "release_owner"
     forged["integrity_hash"] = stable_hash({key: value for key, value in forged.items() if key != "integrity_hash"})
-    write_json(report_path, forged)
+    write_program_json(report_path, forged)
     _write_handoff_manifest(store, program_store, ops_store, program_id, program_manifest_path, evidence_manifest, [_accepted_manifest_row(store, program_id, evidence_id, response["response"]["response_id"])])
 
     store.refresh_handoff(program_id, {"external_evidence_manifest": evidence_manifest})

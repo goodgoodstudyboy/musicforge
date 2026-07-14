@@ -1,0 +1,8 @@
+{
+  "schema_version": 12,
+  "package_type": "musicforge_receiver_acceptance_generation",
+  "program_id": "urp-000001",
+  "status": "current",
+  "generation": 2,
+  "previous_generation": 1
+}

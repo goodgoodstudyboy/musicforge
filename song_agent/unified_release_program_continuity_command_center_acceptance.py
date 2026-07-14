@@ -15,7 +15,7 @@ from song_agent import __version__
 from song_agent.platform.lifecycle import ArchiveBuilder, HistoryChain, SignoffService
 from song_agent.platform.persistence import WorkspaceLock
 from song_agent.platform.persistence.repository import sync_active_v12_state
-from song_agent.projectio import read_json, write_json
+from song_agent.platform.persistence.program import program_json_facade
 from song_agent.projects import now_iso
 from song_agent.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.releases import stable_hash
@@ -92,6 +92,9 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceNotFoundError(
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceError
 ):
     pass
+
+
+read_json, write_json = program_json_facade(UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError)
 
 
 class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:

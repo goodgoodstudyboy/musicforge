@@ -6,16 +6,20 @@ import subprocess
 import sys
 import time
 import zipfile
+import shutil
 from pathlib import Path
 
 import pytest
 
 from song_agent.persistence_cli import main as persistence_main
+from song_agent.release_check_persistence_kernel import run_program_persistence_authority_smoke
 from song_agent.platform.persistence import (
     FileUnitOfWork,
     LegacyWorkspaceMigrator,
     MusicForgeDatabase,
     PersistenceRecovery,
+    ProgramPersistenceError,
+    ProgramStateRepository,
     WorkflowRepository,
     WorkspaceLock,
     V13MigrationOrchestrator,
@@ -43,6 +47,12 @@ ACTIVE_V12_STORES = (
 )
 
 
+def test_v133_program_persistence_authority_smoke() -> None:
+    ok, detail = run_program_persistence_authority_smoke(Path(__file__).resolve().parents[1])
+
+    assert ok is True, detail
+
+
 def test_database_wal_schema_repository_and_optimistic_concurrency(tmp_path: Path) -> None:
     database = MusicForgeDatabase.from_workspace(tmp_path)
     database.initialize()
@@ -50,7 +60,7 @@ def test_database_wal_schema_repository_and_optimistic_concurrency(tmp_path: Pat
     with database.session() as connection:
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-    assert database.schema_version() == 2
+    assert database.schema_version() == 3
 
     repository = WorkflowRepository(database)
     first = repository.save("command_center", "cc-1", generation=1, status="draft", expected_version=0)
@@ -61,6 +71,46 @@ def test_database_wal_schema_repository_and_optimistic_concurrency(tmp_path: Pat
         repository.save("command_center", "cc-1", generation=2, status="stale", expected_version=1)
     assert repository.next_id("review", prefix="review-") == "review-000001"
     assert repository.next_id("review", prefix="review-") == "review-000002"
+
+
+def test_program_repository_is_authority_and_projection_tamper_fails_closed(tmp_path: Path) -> None:
+    workspace = tmp_path / ".musicforge"
+    path = workspace / "unified-release-programs" / "urp-000001" / "program-report.json"
+    repository = ProgramStateRepository(workspace)
+    document = {"program_id": "urp-000001", "status": "ready", "generation": 2}
+
+    repository.write_projection(path, document)
+    assert repository.read_projection(path) == document
+    aggregate = repository.aggregate("urp-000001")
+    assert aggregate.components["program"][0].version == 1
+    with repository.database.session() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM program_document_events").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM program_document_index").fetchone()[0] == 1
+    path.write_text('{"status":"forged"}\n', encoding="utf-8")
+    with pytest.raises(ProgramPersistenceError, match="differs from repository authority"):
+        repository.read_projection(path)
+
+
+@pytest.mark.parametrize("stage", ["after_event_append_before_projection", "after_projection_before_index"])
+def test_program_repository_recovers_projection_transaction_boundaries(tmp_path: Path, stage: str) -> None:
+    workspace = tmp_path / ".musicforge"
+    path = workspace / "unified-release-programs" / "urp-000001" / "continuity" / "readiness.json"
+    repository = ProgramStateRepository(workspace)
+
+    def crash(current: str) -> None:
+        if current == stage:
+            raise RuntimeError(f"crash:{stage}")
+
+    document = {"program_id": "urp-000001", "status": "ready", "generation": 3}
+    with pytest.raises(RuntimeError, match="crash"):
+        repository.write_projection(path, document, crash_hook=crash)
+    recovered = PersistenceRecovery(workspace).recover()["program_recovered"]
+    assert len(recovered) == 1
+    assert repository.read_projection(path) == document
+    with repository.database.session() as connection:
+        row = connection.execute("SELECT status FROM program_projection_transactions").fetchone()
+        assert row[0] == "committed"
+        assert connection.execute("SELECT current_version FROM program_document_index").fetchone()[0] == 1
 
 
 def test_workspace_lock_is_reentrant_cross_process_and_does_not_break_live_lease(tmp_path: Path) -> None:
@@ -221,6 +271,43 @@ def test_legacy_migration_is_dry_run_backed_up_idempotent_and_reversible(tmp_pat
     assert source.read_bytes() == original
 
 
+def test_legacy_migration_imports_only_program_roots(tmp_path: Path) -> None:
+    workspace = tmp_path / ".musicforge"
+    unrelated = workspace / "other-domain" / "report.json"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_text('{"status":"ready"}', encoding="utf-8")
+
+    applied = LegacyWorkspaceMigrator(workspace, legacy_roots=("other-domain",)).execute()
+
+    assert applied["status"] == "applied"
+    assert applied["imported_program_document_count"] == 0
+    with MusicForgeDatabase.from_workspace(workspace).session() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM program_documents").fetchone()[0] == 0
+
+
+def test_legacy_migration_rollback_rejects_changed_program_authority(tmp_path: Path) -> None:
+    workspace = tmp_path / ".musicforge"
+    source = workspace / "unified-release-programs" / "urp-000001" / "program-report.json"
+    source.parent.mkdir(parents=True)
+    source.write_text('{"program_id":"urp-000001","status":"ready"}', encoding="utf-8")
+    migrator = LegacyWorkspaceMigrator(workspace)
+    applied = migrator.execute()
+    ProgramStateRepository(workspace).write_projection(
+        source,
+        {"program_id": "urp-000001", "status": "changed"},
+    )
+
+    with pytest.raises(RuntimeError, match="changed after import"):
+        migrator.rollback(str(applied["migration_id"]))
+
+    with migrator.database.session() as connection:
+        row = connection.execute(
+            "SELECT status FROM legacy_migrations WHERE migration_id=?",
+            (applied["migration_id"],),
+        ).fetchone()
+    assert row["status"] == "applied"
+
+
 def test_active_v12_state_index_contains_only_public_workflow_metadata(tmp_path: Path) -> None:
     workspace = tmp_path / ".musicforge"
     report = workspace / "unified-release-programs" / "urp-000001" / "continuity-command-center" / "command-center-report.json"
@@ -354,6 +441,38 @@ def test_v13_migration_requires_verified_backup_rehearses_rollback_and_archives_
 
     archive.write_bytes(archive.read_bytes() + b"tamper")
     assert verify_v13_migration_evidence(archive, anchor_path=anchor, require_anchor=True)["status"] == "failed"
+
+
+def test_v1213_representative_workspace_migrates_and_rolls_back_bit_identical(tmp_path: Path) -> None:
+    fixture = Path(__file__).parent / "fixtures" / "v12_13_program_workspace" / "workspace"
+    workspace = tmp_path / ".musicforge"
+    shutil.copytree(fixture, workspace)
+    before = {
+        path.relative_to(workspace).as_posix(): path.read_bytes()
+        for root_name in ("unified-release-programs", "urpccca")
+        for path in sorted((workspace / root_name).rglob("*"))
+        if path.is_file()
+    }
+    migration = V13MigrationOrchestrator(workspace)
+
+    plan = migration.dry_run()
+    rehearsal = migration.rollback_rehearsal()
+    report = migration.execute()
+    aggregate = ProgramStateRepository(workspace).aggregate("urp-000001")
+    rolled_back = migration.migrator.rollback(str(report["migration_id"]))
+    after = {
+        path.relative_to(workspace).as_posix(): path.read_bytes()
+        for root_name in ("unified-release-programs", "urpccca")
+        for path in sorted((workspace / root_name).rglob("*"))
+        if path.is_file()
+    }
+
+    assert plan["file_count"] == 6
+    assert report["imported_program_document_count"] == 6
+    assert rehearsal["status"] == "passed" and rehearsal["source_restored"] is True
+    assert {"program", "handoff", "vault", "continuity", "receiver_acceptance", "change_control"} <= set(aggregate.components)
+    assert rolled_back["status"] == "rolled_back"
+    assert after == before
 
 
 def test_v13_migration_cli_plan_and_rehearsal(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

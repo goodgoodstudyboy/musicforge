@@ -1,5 +1,5 @@
 {
-  "active_to_compatibility_import_max_count": 520,
+  "active_to_compatibility_import_max_count": 494,
   "allowed_active_to_compatibility_imports": [
     {
       "imported": "song_agent.releases",
@@ -1666,10 +1666,6 @@
       "importer": "song_agent.unified_release_program"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program"
     },
@@ -1690,10 +1686,6 @@
       "importer": "song_agent.unified_release_program_continuity"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_continuity"
     },
@@ -1707,10 +1699,6 @@
     },
     {
       "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_acceptance"
-    },
-    {
-      "imported": "song_agent.projectio",
       "importer": "song_agent.unified_release_program_continuity_acceptance"
     },
     {
@@ -1730,10 +1718,6 @@
       "importer": "song_agent.unified_release_program_continuity_acceptance_change"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_continuity_acceptance_change"
     },
@@ -1746,20 +1730,12 @@
       "importer": "song_agent.unified_release_program_continuity_acceptance_change"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_change_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_continuity_acceptance_change_verifier"
     },
     {
       "imported": "song_agent.releases",
       "importer": "song_agent.unified_release_program_continuity_acceptance_change_verifier"
-    },
-    {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_acceptance_verifier"
     },
     {
       "imported": "song_agent.redaction",
@@ -1774,10 +1750,6 @@
       "importer": "song_agent.unified_release_program_continuity_command_center"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_command_center"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_continuity_command_center"
     },
@@ -1787,10 +1759,6 @@
     },
     {
       "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance"
-    },
-    {
-      "imported": "song_agent.projectio",
       "importer": "song_agent.unified_release_program_continuity_command_center_acceptance"
     },
     {
@@ -1810,10 +1778,6 @@
       "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
     },
@@ -1826,20 +1790,12 @@
       "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier"
     },
     {
       "imported": "song_agent.releases",
       "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_change_verifier"
-    },
-    {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_command_center_acceptance_verifier"
     },
     {
       "imported": "song_agent.redaction",
@@ -1854,10 +1810,6 @@
       "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
     },
@@ -1870,20 +1822,12 @@
       "importer": "song_agent.unified_release_program_continuity_command_center_signoff"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_command_center_signoff_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_continuity_command_center_signoff_verifier"
     },
     {
       "imported": "song_agent.releases",
       "importer": "song_agent.unified_release_program_continuity_command_center_signoff_verifier"
-    },
-    {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_command_center_verifier"
     },
     {
       "imported": "song_agent.redaction",
@@ -1898,10 +1842,6 @@
       "importer": "song_agent.unified_release_program_continuity_distribution"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_distribution"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_continuity_distribution"
     },
@@ -1914,20 +1854,12 @@
       "importer": "song_agent.unified_release_program_continuity_distribution"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_distribution_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_continuity_distribution_verifier"
     },
     {
       "imported": "song_agent.releases",
       "importer": "song_agent.unified_release_program_continuity_distribution_verifier"
-    },
-    {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_continuity_verifier"
     },
     {
       "imported": "song_agent.redaction",
@@ -1942,10 +1874,6 @@
       "importer": "song_agent.unified_release_program_handoff"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_handoff"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_handoff"
     },
@@ -1958,10 +1886,6 @@
       "importer": "song_agent.unified_release_program_handoff"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_handoff_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_handoff_verifier"
     },
@@ -1971,10 +1895,6 @@
     },
     {
       "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_operations"
-    },
-    {
-      "imported": "song_agent.projectio",
       "importer": "song_agent.unified_release_program_operations"
     },
     {
@@ -1990,10 +1910,6 @@
       "importer": "song_agent.unified_release_program_operations"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_operations_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_operations_verifier"
     },
@@ -2003,10 +1919,6 @@
     },
     {
       "imported": "song_agent",
-      "importer": "song_agent.unified_release_program_vault"
-    },
-    {
-      "imported": "song_agent.projectio",
       "importer": "song_agent.unified_release_program_vault"
     },
     {
@@ -2026,10 +1938,6 @@
       "importer": "song_agent.unified_release_program_vault_operations"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_vault_operations"
-    },
-    {
       "imported": "song_agent.projects",
       "importer": "song_agent.unified_release_program_vault_operations"
     },
@@ -2042,10 +1950,6 @@
       "importer": "song_agent.unified_release_program_vault_operations"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_vault_operations_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_vault_operations_verifier"
     },
@@ -2054,20 +1958,12 @@
       "importer": "song_agent.unified_release_program_vault_operations_verifier"
     },
     {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_vault_verifier"
-    },
-    {
       "imported": "song_agent.redaction",
       "importer": "song_agent.unified_release_program_vault_verifier"
     },
     {
       "imported": "song_agent.releases",
       "importer": "song_agent.unified_release_program_vault_verifier"
-    },
-    {
-      "imported": "song_agent.projectio",
-      "importer": "song_agent.unified_release_program_verifier"
     },
     {
       "imported": "song_agent.redaction",
@@ -2083,7 +1979,7 @@
     }
   ],
   "allowed_cycles": [],
-  "baseline_version": "13.2.0",
+  "baseline_version": "13.3.0",
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
@@ -2107,7 +2003,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 404,
+  "module_count": 405,
   "modules": [
     {
       "context": null,
@@ -3060,6 +2956,12 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.persistence.program",
+      "path": "song_agent/platform/persistence/program.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.persistence.recovery",
       "path": "song_agent/platform/persistence/recovery.py"
     },
@@ -3510,6 +3412,54 @@
     {
       "context": null,
       "layer": "release_check",
+      "module": "song_agent.release_check_architecture",
+      "path": "song_agent/release_check_architecture.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_evidence_policy",
+      "path": "song_agent/release_check_evidence_policy.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_fixtures",
+      "path": "song_agent/release_check_fixtures.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_interfaces",
+      "path": "song_agent/release_check_interfaces.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_lifecycle_kernel",
+      "path": "song_agent/release_check_lifecycle_kernel.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_performance",
+      "path": "song_agent/release_check_performance.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_persistence_kernel",
+      "path": "song_agent/release_check_persistence_kernel.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_verification_kernel",
+      "path": "song_agent/release_check_verification_kernel.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
       "module": "song_agent.release_check.architecture_ratchet",
       "path": "song_agent/release_check/architecture_ratchet.py"
     },
@@ -3626,54 +3576,6 @@
       "layer": "release_check",
       "module": "song_agent.release_check.runner",
       "path": "song_agent/release_check/runner.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_architecture",
-      "path": "song_agent/release_check_architecture.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_evidence_policy",
-      "path": "song_agent/release_check_evidence_policy.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_fixtures",
-      "path": "song_agent/release_check_fixtures.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_interfaces",
-      "path": "song_agent/release_check_interfaces.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_lifecycle_kernel",
-      "path": "song_agent/release_check_lifecycle_kernel.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_performance",
-      "path": "song_agent/release_check_performance.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_persistence_kernel",
-      "path": "song_agent/release_check_persistence_kernel.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_check_verification_kernel",
-      "path": "song_agent/release_check_verification_kernel.py"
     },
     {
       "context": null,

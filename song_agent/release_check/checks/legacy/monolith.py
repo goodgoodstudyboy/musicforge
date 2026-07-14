@@ -40,6 +40,7 @@ from song_agent.prompt_ab import PromptABStore
 from song_agent.project_compare import compare_project_versions
 from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.projectio import read_json, write_json
+from song_agent.platform.persistence.program import write_program_json
 from song_agent.projects import ProjectStore
 from song_agent.provider import ProviderConfig
 from song_agent.provider_edits import (
@@ -21760,7 +21761,7 @@ def _v129_command_center_external_binding(root: Path) -> tuple[bool, str]:
             verification["integrity_hash"] = stable_hash(
                 {key: value for key, value in verification.items() if key != "integrity_hash"}
             )
-            write_json(command.change_store.verification_report_path(program_id), verification)
+            write_program_json(command.change_store.verification_report_path(program_id), verification)
             wrong_type = verify_unified_release_program_continuity_command_center_package(
                 command.zip_path(program_id),
                 strict=True,
@@ -21994,13 +21995,13 @@ def _v1211_receiver_acceptance_semantics(root: Path) -> tuple[bool, str]:
                 {key: value for key, value in response.items() if key not in {"payload_hash", "integrity_hash"}}
             )
             response["integrity_hash"] = stable_hash({key: value for key, value in response.items() if key != "integrity_hash"})
-            write_json(response_path, response)
+            write_program_json(response_path, response)
             source_tamper_409 = False
             try:
                 store.build_archive_zip(program_id)
             except UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError:
                 source_tamper_409 = True
-            response_path.write_bytes(response_original)
+            write_program_json(response_path, json.loads(response_original.decode("utf-8")))
             checks = {
                 "signoff": latest.get("status"),
                 "gate": gate.get("status"),

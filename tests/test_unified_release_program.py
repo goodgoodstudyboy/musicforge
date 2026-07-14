@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from song_agent.projectio import read_json
+from song_agent.platform.persistence.program import write_program_json
 from song_agent.release_checks import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program import UnifiedReleaseProgramStateError, UnifiedReleaseProgramStore, write_external_evidence_manifest
@@ -111,7 +112,7 @@ def test_unified_release_program_blocks_dependency_cycle(tmp_path: Path) -> None
         if row["item_id"] == "train-a":
             row["depends_on"] = [second["item_id"]]
     items["integrity_hash"] = stable_hash({key: value for key, value in items.items() if key != "integrity_hash"})
-    store.items_path(program_id).write_text(json.dumps(items, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    write_program_json(store.items_path(program_id), items)
     manifest = read_json(manifest_path)
     manifest["items"].append(
         {

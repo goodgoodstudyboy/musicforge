@@ -8,6 +8,7 @@ from typing import Any
 from song_agent.platform.persistence.database import MusicForgeDatabase
 from song_agent.platform.persistence.file_artifacts import FileArtifactStore, sha256_path
 from song_agent.platform.persistence.locks import WorkspaceLock
+from song_agent.platform.persistence.program import ProgramStateRepository
 
 
 class PersistenceRecovery:
@@ -91,7 +92,13 @@ class PersistenceRecovery:
 
                     shutil.rmtree(staging)
                 rolled_back.append(transaction_id)
-        return {"status": "passed", "recovered": recovered, "rolled_back": rolled_back}
+        program_recovered = ProgramStateRepository(self.workspace_root, database=self.database).recover_pending()
+        return {
+            "status": "passed",
+            "recovered": recovered,
+            "rolled_back": rolled_back,
+            "program_recovered": program_recovered,
+        }
 
     def _record_committed(self, intent: dict[str, Any], generation: Path, pointer_hash: str) -> None:
         with self.database.transaction() as connection:
