@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from song_agent.release_checks import (
+from tests.release_check_legacy_api import (
     ReleaseCheckReport,
     _edit_smoke,
     _final_export_smoke,
@@ -154,7 +154,7 @@ def test_redact_line_masks_secret_like_values() -> None:
 def test_version_consistency_checks_pyproject_and_changelog(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "pyproject.toml").write_text('[project]\nversion = "0.5.0"\n', encoding="utf-8")
     (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## v0.5.0\n", encoding="utf-8")
-    monkeypatch.setattr("song_agent.release_checks.__version__", "0.5.0")
+    monkeypatch.setattr("song_agent.release_check.repository_checks.__version__", "0.5.0")
 
     ok, detail = _version_consistency(tmp_path)
 

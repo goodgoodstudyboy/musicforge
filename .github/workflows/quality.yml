@@ -18,13 +18,15 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
+      - run: python tools/assert_ci_final_sha.py
       - run: python -m ruff check song_agent/platform song_agent/application song_agent/capabilities song_agent/domains song_agent/release_check song_agent/architecture_guardrails.py song_agent/persistence_cli.py song_agent/release_check_verification_kernel.py
       - run: python -m mypy
-      - run: python -m pytest tests/test_architecture_boundaries.py tests/test_architecture_metrics.py tests/test_release_check_governance.py -q
+      - run: python -m pytest tests/test_architecture_boundaries.py tests/test_architecture_metrics.py tests/test_release_check_governance.py tests/test_release_check_governance_v137.py -q
       - run: python -m song_agent.cli release-check --profile v13 --skip-tests --json
 
   tests:
@@ -38,11 +40,32 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
-      - run: python -m pytest -m "${{ matrix.shard }} and not slow and not legacy" -n 2 --dist loadscope --cov=song_agent/platform --cov=song_agent/application --cov-report=term-missing -q
+      - run: python tools/assert_ci_final_sha.py
+      - run: python -m pytest -m "${{ matrix.shard }} and not slow and not legacy" -n 2 --dist loadscope -q
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .[dev]
+      - run: python tools/assert_ci_final_sha.py
+      - run: python -m pytest -m "not legacy and not slow" -n 4 --dist load --cov=song_agent --cov-report=json:coverage-active.json -q
+      - run: python tools/check_coverage_layers.py coverage-active.json --layer active
+      - name: Compatibility coverage (soft threshold)
+        continue-on-error: true
+        run: python -m pytest tests/test_release_check.py::test_status_is_clean_accepts_only_clean_branch_line -m legacy --cov=song_agent --cov-report=json:coverage-compatibility.json -q
+      - run: python tools/check_coverage_layers.py coverage-compatibility.json --layer compatibility
 
   security:
     strategy:
@@ -54,10 +77,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
+      - run: python tools/assert_ci_final_sha.py
       - run: python -m pytest -m "security and not legacy and not slow" -n 2 --dist loadscope -q
       - run: python -m song_agent.cli release-check --profile security --skip-tests --json
 
@@ -67,10 +92,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install -e .[dev]
+      - run: python tools/assert_ci_final_sha.py
       - run: python -m song_agent.cli release-check --profile latest --skip-tests --json
       - run: python -m song_agent.cli release-check --profile ga --skip-tests --json
 
@@ -84,10 +111,12 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python -m pip install build
+      - run: python tools/assert_ci_final_sha.py
       - run: python -m build
       - run: python -m pip install --force-reinstall dist/*.whl
         shell: bash
@@ -102,3 +131,26 @@ jobs:
           print(installed);
           assert repo / 'song_agent' not in installed.parents;
           subprocess.check_call([sys.executable, '-m', 'song_agent.cli', 'doctor'], cwd=isolated)"
+
+  full-lts:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .[dev]
+      - run: python tools/assert_ci_final_sha.py
+      - name: Active suite
+        run: python -m pytest -m "not legacy" -n 4 --dist load -q
+      - name: Legacy suite
+        run: python -m pytest -m "legacy" -n 4 --dist load -q
+      - name: Full release-check
+        run: python -m song_agent.cli release-check --profile full --skip-tests --json
+      - name: v13-rollback-rehearsal
+        run: python tools/run_migration_rehearsal.py --output migration-rehearsal.json

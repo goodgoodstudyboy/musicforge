@@ -15,7 +15,7 @@
       "removal_target_version": "13.8.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.acceptance_diff",
       "owner": "musicforge-quality",
       "reason": "Legacy production module awaiting migration behind an active modular boundary.",
@@ -2711,6 +2711,6 @@
     "new_module_max_lines": 400,
     "route_handler_max_lines": 100
   },
-  "previous_release_tag": "v13.5.0",
+  "previous_release_tag": "v13.6.0",
   "schema_version": 1
 }

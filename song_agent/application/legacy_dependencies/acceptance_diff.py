@@ -1,6 +1,6 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application import boundary for the quality acceptance-diff domain."""
 
-import song_agent.acceptance_diff as _implementation
+import song_agent.domains.quality.acceptance_diff as _implementation
 
 globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
 

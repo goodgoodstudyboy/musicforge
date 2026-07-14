@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v13.5 is a local-first modular monolith. It remains one Python
+MusicForge v13.7 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. Active v12/v13 Program
 paths follow `interfaces -> application -> domains -> platform`. Earlier music
 capabilities remain operational through flat compatibility implementations;
@@ -122,3 +122,25 @@ allowing this debt to shrink.
 - Remaining flat modules have one active anti-corruption import each. Active
   compatibility edges fell from 407 to 227; active cycles and boundary
   violations remain zero.
+
+## v13.6 Policy Cutover
+
+- Evidence Graph and Policy Engine decisions are authoritative for GA,
+  Release, and Program gates; legacy require summaries are non-authoritative.
+- Capability metadata binds CLI, API, Web, release-check, and policy ownership.
+- Shared redaction moved into the Verification Kernel and active compatibility
+  edges fell from 227 to 226.
+
+## v13.7 Release Governance
+
+- `latest`, `ga`, `v13`, and `security` reject legacy callable provenance.
+- Historical release checks are labeled and isolated to full/nightly or their
+  historical major profile; the expired `release_checks.py` facade is removed.
+- Test modules have explicit marker-manifest ownership; quality/nightly verify
+  the final SHA and separate active, legacy, full, migration, and coverage
+  evidence.
+- Root documentation is bounded and indexed. Final reviewer packages require
+  current quality/nightly, full/current release profiles, active/legacy tests,
+  and non-empty byte-identical migration rollback evidence.
+- The quality acceptance-diff implementation moved into its bounded context,
+  reducing active compatibility edges from 226 to 225.

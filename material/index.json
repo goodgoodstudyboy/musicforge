@@ -1,0 +1,942 @@
+{
+  "archive_policy": "original_paths_preserved",
+  "documents": [
+    {
+      "path": "material/README.md",
+      "status": "historical",
+      "title": "Architecture Material Index",
+      "version": "unversioned"
+    },
+    {
+      "path": "material/v0.2.0-Provider配置与模型接入施工图-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge v0.2.0 施工图：Provider 配置与模型接入",
+      "version": "0.2.0"
+    },
+    {
+      "path": "material/v0.2.1-任务控制重试与运行保护施工图-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge v0.2.1 施工图：任务控制、重试与运行保护",
+      "version": "0.2.1"
+    },
+    {
+      "path": "material/v0.3.0-多Agent音乐生成后端施工图-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge v0.3.0 施工图：多 Agent 音乐生成后端",
+      "version": "0.3.0"
+    },
+    {
+      "path": "material/v0.3.1到v0.4.0-节点重试与批量生产推进方案-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge v0.3.1 到 v0.4.0 推进方案：节点重试、下游失效与批量生产",
+      "version": "0.3.1"
+    },
+    {
+      "path": "material/v0.4.0-Batch批量生产施工图-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge v0.4.0 施工图：Batch 批量生产与批次控制台",
+      "version": "0.4.0"
+    },
+    {
+      "path": "material/v0.5.0-音频渲染与Studio试听施工图-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge v0.5.0 施工图：音频渲染与 Studio 试听",
+      "version": "0.5.0"
+    },
+    {
+      "path": "material/v0.6.0-安全鉴权与发布保护施工图-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge v0.6.0 施工图：安全、鉴权与发布保护",
+      "version": "0.6.0"
+    },
+    {
+      "path": "material/v0.7.0-音乐质量升级施工图-2026-05-06.md",
+      "status": "historical",
+      "title": "MusicForge v0.7.0 施工图：音乐质量升级",
+      "version": "0.7.0"
+    },
+    {
+      "path": "material/v0.7.1-音乐质量层收紧与兼容修复施工图-2026-05-06.md",
+      "status": "historical",
+      "title": "MusicForge v0.7.1 施工图：音乐质量层收紧与兼容修复",
+      "version": "0.7.1"
+    },
+    {
+      "path": "material/v0.8.0-Stem多轨导出与试听施工图-2026-05-06.md",
+      "status": "historical",
+      "title": "MusicForge v0.8.0 施工图：Stem 多轨导出与试听",
+      "version": "0.8.0"
+    },
+    {
+      "path": "material/v0.9.0-Project工作区与版本管理施工图-2026-05-06.md",
+      "status": "historical",
+      "title": "MusicForge v0.9.0 施工图：Project 工作区与版本管理",
+      "version": "0.9.0"
+    },
+    {
+      "path": "material/v1.0.0-可控创作与最终交付施工图-2026-05-06.md",
+      "status": "historical",
+      "title": "MusicForge v1.0.0 施工图：可控创作与最终交付",
+      "version": "1.0.0"
+    },
+    {
+      "path": "material/v1.1.0-局部编辑与版本派生施工图-2026-05-06.md",
+      "status": "historical",
+      "title": "MusicForge v1.1.0 施工图：局部编辑与版本派生",
+      "version": "1.1.0"
+    },
+    {
+      "path": "material/v1.2.0-编辑预设对比试听与ZIP交付施工图-2026-05-06.md",
+      "status": "historical",
+      "title": "MusicForge v1.2.0 施工图：编辑预设、版本对比试听与 ZIP 交付",
+      "version": "1.2.0"
+    },
+    {
+      "path": "material/v1.2.1到v1.3.0-编辑工作流收紧与Provider智能编辑施工图-2026-05-07.md",
+      "status": "historical",
+      "title": "MusicForge v1.2.1 到 v1.3.0 施工图：编辑工作流收紧与 Provider 智能编辑",
+      "version": "1.2.1"
+    },
+    {
+      "path": "material/v1.3.1到v1.4.0-Provider编辑收紧与多候选生成施工图-2026-05-07.md",
+      "status": "historical",
+      "title": "MusicForge v1.3.1 到 v1.4.0 施工图：Provider 编辑收紧与多候选生成",
+      "version": "1.3.1"
+    },
+    {
+      "path": "material/v1.4.1到v1.5.0-候选审计链试听与成本报表施工图-2026-05-07.md",
+      "status": "historical",
+      "title": "MusicForge v1.4.1 到 v1.5.0 施工图：候选审计链、候选试听与成本报表",
+      "version": "1.4.1"
+    },
+    {
+      "path": "material/v1.6.0-创作资产库与素材复用施工图-2026-05-07.md",
+      "status": "historical",
+      "title": "MusicForge v1.6.0 施工图：创作资产库与素材复用层",
+      "version": "1.6.0"
+    },
+    {
+      "path": "material/v1.7.0-参考音频与外部素材导入施工图-2026-05-08.md",
+      "status": "historical",
+      "title": "MusicForge v1.7.0 施工图：参考音频与外部素材导入层",
+      "version": "1.7.0"
+    },
+    {
+      "path": "material/v1.8.0-参考素材分析与MIDI资产化施工图-2026-05-08.md",
+      "status": "historical",
+      "title": "MusicForge v1.8.0 施工图：参考素材分析与 MIDI 资产化",
+      "version": "1.8.0"
+    },
+    {
+      "path": "material/v1.9.0-素材检索复用与创作上下文施工图-2026-05-08.md",
+      "status": "historical",
+      "title": "MusicForge v1.9.0 施工图：素材检索复用与创作上下文",
+      "version": "1.9.0"
+    },
+    {
+      "path": "material/v10.0.0-GALTS产品化收口安装验收与长期维护施工图-2026-06-23.md",
+      "status": "historical",
+      "title": "v10.0.0 GA/LTS 产品化收口、安装验收与长期维护施工图",
+      "version": "10.0.0"
+    },
+    {
+      "path": "material/v10.1.0-LTS维护中心备份恢复升级迁移与周期复验施工图-2026-06-24.md",
+      "status": "historical",
+      "title": "v10.1.0 LTS 维护中心、备份恢复、升级迁移与周期复验施工图",
+      "version": "10.1.0"
+    },
+    {
+      "path": "material/v10.10.0-ReleaseAudioRegressionGuard发行音频回归基线与质量防线施工图-2026-06-28.md",
+      "status": "historical",
+      "title": "v10.10.0 Release Audio Regression Guard 发行音频回归基线与质量防线施工图",
+      "version": "10.10.0"
+    },
+    {
+      "path": "material/v10.11.0-ReleaseAudioBaselineGovernance音频基线治理与回归响应闭环施工图-2026-06-28.md",
+      "status": "historical",
+      "title": "v10.11.0 Release Audio Baseline Governance 音频基线治理与回归响应闭环施工图",
+      "version": "10.11.0"
+    },
+    {
+      "path": "material/v10.12.0-ReleaseAudioQualityObservatory跨发行音频质量观测站与趋势预警施工图-2026-06-28.md",
+      "status": "historical",
+      "title": "v10.12.0 Release Audio Quality Observatory 跨发行音频质量观测站与趋势预警施工图",
+      "version": "10.12.0"
+    },
+    {
+      "path": "material/v10.13.0-AudioQualityObservatoryActionQueue音频质量观测站行动队列与治理闭环施工图-2026-06-29.md",
+      "status": "historical",
+      "title": "v10.13.0 Audio Quality Observatory Action Queue 音频质量观测站行动队列与治理闭环施工图",
+      "version": "10.13.0"
+    },
+    {
+      "path": "material/v10.14.0-ReleaseAudioQualityActionQueueSignoff音频质量行动队列签核归档与闭环准出施工图-2026-06-30.md",
+      "status": "historical",
+      "title": "v10.14.0 Release Audio Quality Action Queue Signoff 音频质量行动队列签核归档与闭环准出施工图",
+      "version": "10.14.0"
+    },
+    {
+      "path": "material/v10.15.0-ReleaseAudioCommandCenter音频准出总控台统一证据编排与一键准出施工图-2026-06-30.md",
+      "status": "historical",
+      "title": "v10.15.0 Release Audio Command Center 音频准出总控台、统一证据编排与一键准出施工图",
+      "version": "10.15.0"
+    },
+    {
+      "path": "material/v10.15.1-ReleaseAudioCommandCenter证据实时校验测试收紧与准出可靠性修复施工图-2026-06-30.md",
+      "status": "historical",
+      "title": "v10.15.1 Release Audio Command Center 证据实时校验、测试收紧与准出可靠性修复施工图",
+      "version": "10.15.1"
+    },
+    {
+      "path": "material/v10.2.0-真实音频环境向导试听验收与音乐可用性闭环施工图-2026-06-24.md",
+      "status": "historical",
+      "title": "v10.2.0 真实音频环境向导、试听验收与音乐可用性闭环施工图",
+      "version": "10.2.0"
+    },
+    {
+      "path": "material/v10.3.0-AudioFixSprint音频问题修复冲刺与人工复验闭环施工图-2026-06-24.md",
+      "status": "historical",
+      "title": "v10.3.0 Audio Fix Sprint 音频问题修复冲刺与人工复验闭环施工图",
+      "version": "10.3.0"
+    },
+    {
+      "path": "material/v10.4.0-ReleaseCandidateAudioCampaign批量真实听审战役与音乐准出门禁施工图-2026-06-25.md",
+      "status": "historical",
+      "title": "v10.4.0 Release Candidate Audio Campaign 批量真实听审战役与音乐准出门禁施工图",
+      "version": "10.4.0"
+    },
+    {
+      "path": "material/v10.5.0-AudioCampaignGovernance音乐听审战役准出绑定不可变归档与质量趋势施工图-2026-06-25.md",
+      "status": "historical",
+      "title": "v10.5.0 Audio Campaign Governance 音乐听审战役准出绑定、不可变归档与质量趋势施工图",
+      "version": "10.5.0"
+    },
+    {
+      "path": "material/v10.6.0-ReleaseDrivenAudioCampaign发行驱动真实听审战役自动编排施工图-2026-06-26.md",
+      "status": "historical",
+      "title": "v10.6.0 Release-Driven Audio Campaign 发行驱动真实听审战役自动编排施工图",
+      "version": "10.6.0"
+    },
+    {
+      "path": "material/v10.7.0-ReleaseAudioCampaignRemediation发行听审修复编排与复验闭环施工图-2026-06-26.md",
+      "status": "historical",
+      "title": "v10.7.0 Release Audio Campaign Remediation 发行听审修复编排与复验闭环施工图",
+      "version": "10.7.0"
+    },
+    {
+      "path": "material/v10.8.0-ReleaseAudioCertification发行音频准出证书与真实听审总闸施工图-2026-06-26.md",
+      "status": "historical",
+      "title": "v10.8.0 Release Audio Certification 发行音频准出证书与真实听审总闸施工图",
+      "version": "10.8.0"
+    },
+    {
+      "path": "material/v10.9.0-ReleaseAudioCertificationTimeline音频准出证据时间线与长期质量趋势施工图-2026-06-26.md",
+      "status": "historical",
+      "title": "v10.9.0 Release Audio Certification Timeline 音频准出证据时间线与长期质量趋势施工图",
+      "version": "10.9.0"
+    },
+    {
+      "path": "material/v11.0.0-MusicForgeUnifiedCommandCenter全产品准出总控台与统一证据图施工图-2026-06-30.md",
+      "status": "historical",
+      "title": "v11.0.0 MusicForge Unified Command Center 全产品准出总控台、统一证据图与一键准出编排施工图",
+      "version": "11.0.0"
+    },
+    {
+      "path": "material/v11.1.0-UnifiedCommandCenterSignoffArchive统一总控签核归档与变更控制施工图-2026-07-01.md",
+      "status": "historical",
+      "title": "v11.1.0 Unified Command Center Signoff / Archive 统一总控签核归档与变更控制施工图",
+      "version": "11.1.0"
+    },
+    {
+      "path": "material/v11.2.0-UnifiedCommandCenterContinuousReview统一总控持续复核漂移监控与恢复演练施工图-2026-07-02.md",
+      "status": "historical",
+      "title": "v11.2.0 Unified Command Center Continuous Review 统一总控持续复核、漂移监控与恢复演练施工图",
+      "version": "11.2.0"
+    },
+    {
+      "path": "material/v11.3.0-UnifiedCommandCenterDriftResponse统一总控漂移响应受控重基线与闭环归档施工图-2026-07-02.md",
+      "status": "historical",
+      "title": "v11.3.0 Unified Command Center Drift Response 统一总控漂移响应、受控重基线与闭环归档施工图",
+      "version": "11.3.0"
+    },
+    {
+      "path": "material/v11.4.0-UnifiedCommandCenterEvidenceReviewReplay统一总控证据复盘审查与离线重放施工图-2026-07-03.md",
+      "status": "historical",
+      "title": "v11.4.0 Unified Command Center Evidence Review / Replay 统一总控证据复盘、外部审查与离线重放施工图",
+      "version": "11.4.0"
+    },
+    {
+      "path": "material/v11.5.0-UnifiedCommandCenterReviewerDecisionBoard统一总控审查决策委员会与签核归档施工图-2026-07-03.md",
+      "status": "historical",
+      "title": "v11.5.0 Unified Command Center Reviewer Decision Board 统一总控审查决策委员会、仲裁签核与不可变归档施工图",
+      "version": "11.5.0"
+    },
+    {
+      "path": "material/v11.6.0-UnifiedCommandCenterReleaseTrain统一总控发版列车与跨中心准出编排施工图-2026-07-04.md",
+      "status": "historical",
+      "title": "v11.6.0 Unified Command Center Release Train 统一总控发版列车与跨中心准出编排施工图",
+      "version": "11.6.0"
+    },
+    {
+      "path": "material/v11.7.0-UnifiedCommandCenterReleaseTrainChangeControl发版列车变更控制与继任签核施工图-2026-07-05.md",
+      "status": "historical",
+      "title": "v11.7.0 Unified Command Center Release Train Change Control 发版列车变更控制与继任签核施工图",
+      "version": "11.7.0"
+    },
+    {
+      "path": "material/v11.8.0-UnifiedCommandCenterReleaseTrainLifecycleAudit发版列车生命周期审计与证据总账施工图-2026-07-05.md",
+      "status": "historical",
+      "title": "v11.8.0 Unified Command Center Release Train Lifecycle Audit 发版列车生命周期审计与证据总账施工图",
+      "version": "11.8.0"
+    },
+    {
+      "path": "material/v11.9.0-UnifiedCommandCenterReleaseTrainFinalHandoffBoard发版列车最终交接包与外部验收委员会施工图-2026-07-05.md",
+      "status": "historical",
+      "title": "v11.9.0 Unified Command Center Release Train Final Handoff Board 发版列车最终交接包与外部验收委员会施工图",
+      "version": "11.9.0"
+    },
+    {
+      "path": "material/v12.0.0-UnifiedReleaseProgramBoard多发版列车组合治理与Program级最终准出施工图-2026-07-06.md",
+      "status": "historical",
+      "title": "v12.0.0 Unified Release Program Board 多发版列车组合治理与 Program 级最终准出施工图",
+      "version": "12.0.0"
+    },
+    {
+      "path": "material/v12.1.0-UnifiedReleaseProgramOperationsCenter项目级发布组合运营总控与变更闭环施工图-2026-07-06.md",
+      "status": "historical",
+      "title": "v12.1.0 Unified Release Program Operations Center 项目级发布组合运营总控与变更闭环施工图",
+      "version": "12.1.0"
+    },
+    {
+      "path": "material/v12.10.0-UnifiedReleaseProgramContinuityCommandCenterSignoffArchive项目级连续性总控签核归档与最终移交施工图-2026-07-10.md",
+      "status": "historical",
+      "title": "v12.10.0 Unified Release Program Continuity Command Center Signoff / Archive 施工图",
+      "version": "12.10.0"
+    },
+    {
+      "path": "material/v12.11.0-UnifiedReleaseProgramContinuityCommandCenterReceiverAcceptance项目级连续性总控最终移交接收方验收与接管证明施工图-2026-07-11.md",
+      "status": "historical",
+      "title": "v12.11.0 Unified Release Program Continuity Command Center Receiver Acceptance 施工图",
+      "version": "12.11.0"
+    },
+    {
+      "path": "material/v12.12.0-UnifiedReleaseProgramContinuityCommandCenterReceiverAcceptanceChangeControl接收方验收变更控制与生命周期审计施工图-2026-07-11.md",
+      "status": "historical",
+      "title": "v12.12.0 Unified Release Program Continuity Command Center Receiver Acceptance Change Control 施工图",
+      "version": "12.12.0"
+    },
+    {
+      "path": "material/v12.13.0-ReleaseCheckAccelerationAndSmokeRefactor发布检查加速与重型Smoke拆分施工图-2026-07-12.md",
+      "status": "historical",
+      "title": "v12.13.0 Release Check Acceleration and Heavy Smoke Refactor 施工图",
+      "version": "12.13.0"
+    },
+    {
+      "path": "material/v12.14-v13.0-MusicForge模块化单体架构治理总施工图-2026-07-12.md",
+      "status": "historical",
+      "title": "v12.14-v13.0 MusicForge 模块化单体架构治理总施工图",
+      "version": "12.14-v13.0"
+    },
+    {
+      "path": "material/v12.2.0-UnifiedReleaseProgramFinalHandoffBoard项目级最终交接验收委员会与Program准出移交包施工图-2026-07-06.md",
+      "status": "historical",
+      "title": "v12.2.0 Unified Release Program Final Handoff Board 项目级最终交接验收委员会与 Program 准出移交包施工图",
+      "version": "12.2.0"
+    },
+    {
+      "path": "material/v12.3.0-UnifiedReleaseProgramEvidenceVault项目级证据总库与离线深度复验施工图-2026-07-06.md",
+      "status": "historical",
+      "title": "v12.3.0 Unified Release Program Evidence Vault 项目级证据总库与离线深度复验施工图",
+      "version": "12.3.0"
+    },
+    {
+      "path": "material/v12.4.0-UnifiedReleaseProgramVaultOperations证据总库运维轮转与长期托管施工图-2026-07-07.md",
+      "status": "historical",
+      "title": "v12.4.0 Unified Release Program Vault Operations 证据总库运维轮转与长期托管施工图",
+      "version": "12.4.0"
+    },
+    {
+      "path": "material/v12.5.0-UnifiedReleaseProgramContinuityRecoveryDrill项目级灾备恢复演练与连续性准出施工图-2026-07-07.md",
+      "status": "historical",
+      "title": "v12.5.0 Unified Release Program Continuity / Recovery Drill 项目级灾备恢复演练与连续性准出施工图",
+      "version": "12.5.0"
+    },
+    {
+      "path": "material/v12.6.0-UnifiedReleaseProgramContinuityDistributionKit项目级连续性交付套件与外部灾备验收包施工图-2026-07-08.md",
+      "status": "historical",
+      "title": "v12.6.0 Unified Release Program Continuity Distribution Kit 项目级连续性交付套件与外部灾备验收包施工图",
+      "version": "12.6.0"
+    },
+    {
+      "path": "material/v12.7.0-UnifiedReleaseProgramContinuityAcceptanceBoard项目级连续性交付外部灾备验收委员会施工图-2026-07-08.md",
+      "status": "historical",
+      "title": "v12.7.0 Unified Release Program Continuity Acceptance Board 项目级连续性交付外部灾备验收委员会施工图",
+      "version": "12.7.0"
+    },
+    {
+      "path": "material/v12.8.0-UnifiedReleaseProgramContinuityAcceptanceChangeControl连续性验收变更控制与生命周期审计施工图-2026-07-09.md",
+      "status": "historical",
+      "title": "v12.8.0 Unified Release Program Continuity Acceptance Change Control 连续性验收变更控制与生命周期审计施工图",
+      "version": "12.8.0"
+    },
+    {
+      "path": "material/v12.9.0-UnifiedReleaseProgramContinuityCommandCenter项目级连续性运营总控与证据健康仪表盘施工图-2026-07-10.md",
+      "status": "historical",
+      "title": "v12.9.0 Unified Release Program Continuity Command Center 项目级连续性运营总控与证据健康仪表盘施工图",
+      "version": "12.9.0"
+    },
+    {
+      "path": "material/v13.0.1-v13.8-MusicForge全面取证审计与真实模块化整改施工图-2026-07-14.md",
+      "status": "active",
+      "title": "v13.0.1-v13.8 MusicForge 全面取证审计与真实模块化整改施工图",
+      "version": "13.0.1-v13.8"
+    },
+    {
+      "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",
+      "status": "historical",
+      "title": "MusicForge v2.0.0 施工图：可视化编曲编辑与版本化收口",
+      "version": "2.0.0"
+    },
+    {
+      "path": "material/v2.1.0-结构编辑与编辑历史施工图-2026-05-08.md",
+      "status": "historical",
+      "title": "MusicForge v2.1.0 施工图：结构编辑与编辑历史",
+      "version": "2.1.0"
+    },
+    {
+      "path": "material/v2.2.0-交互式编曲与钢琴卷帘编辑施工图-2026-05-10.md",
+      "status": "historical",
+      "title": "MusicForge v2.2.0 施工图：交互式编曲与钢琴卷帘编辑",
+      "version": "2.2.0"
+    },
+    {
+      "path": "material/v2.3.0-素材片段导入与编辑器复用施工图-2026-05-11.md",
+      "status": "historical",
+      "title": "v2.3.0 素材片段导入与编辑器复用施工图",
+      "version": "2.3.0"
+    },
+    {
+      "path": "material/v2.4.0-多轨片段模板与编曲复用施工图-2026-05-11.md",
+      "status": "historical",
+      "title": "v2.4.0 多轨片段模板与编曲复用施工图",
+      "version": "2.4.0"
+    },
+    {
+      "path": "material/v2.5.0-编辑试听与AB对比施工图-2026-05-12.md",
+      "status": "historical",
+      "title": "v2.5.0 编辑试听与 A/B 对比施工图",
+      "version": "2.5.0"
+    },
+    {
+      "path": "material/v2.6.0-试听评审板与片段沉淀施工图-2026-05-12.md",
+      "status": "historical",
+      "title": "v2.6.0 试听评审板与片段沉淀施工图",
+      "version": "2.6.0"
+    },
+    {
+      "path": "material/v2.7.0-评审反馈驱动编辑施工图-2026-05-12.md",
+      "status": "historical",
+      "title": "v2.7.0 评审反馈驱动编辑施工图",
+      "version": "2.7.0"
+    },
+    {
+      "path": "material/v2.8.0-新开发者接手与执行指南-2026-05-12.md",
+      "status": "historical",
+      "title": "v2.8.0 新开发者接手与执行指南",
+      "version": "2.8.0"
+    },
+    {
+      "path": "material/v2.8.0-评审候选工作台与多轮反馈闭环施工图-2026-05-12.md",
+      "status": "historical",
+      "title": "v2.8.0 评审候选工作台与多轮反馈闭环施工图",
+      "version": "2.8.0"
+    },
+    {
+      "path": "material/v2.9.0-Provider评审候选与决策报告施工图-2026-05-13.md",
+      "status": "historical",
+      "title": "v2.9.0 Provider 评审候选与决策报告施工图",
+      "version": "2.9.0"
+    },
+    {
+      "path": "material/v3.0.0-ReviewSprint多反馈冲刺工作台施工图-2026-05-13.md",
+      "status": "historical",
+      "title": "v3.0.0 Review Sprint 多反馈冲刺工作台施工图",
+      "version": "3.0.0"
+    },
+    {
+      "path": "material/v3.1.0-ReviewSprint智能排序与上下文推荐施工图-2026-05-14.md",
+      "status": "historical",
+      "title": "v3.1.0 Review Sprint 智能排序与上下文推荐施工图",
+      "version": "3.1.0"
+    },
+    {
+      "path": "material/v3.2.0-ReviewSprint执行队列与安全动作编排施工图-2026-05-14.md",
+      "status": "historical",
+      "title": "v3.2.0 Review Sprint 执行队列与安全动作编排施工图",
+      "version": "3.2.0"
+    },
+    {
+      "path": "material/v3.3.0-ReviewSprint仪表盘与指标分析施工图-2026-05-14.md",
+      "status": "historical",
+      "title": "v3.3.0 Review Sprint 仪表盘与指标分析施工图",
+      "version": "3.3.0"
+    },
+    {
+      "path": "material/v3.4.0-Provider候选评审与多维决策增强施工图-2026-05-14.md",
+      "status": "historical",
+      "title": "v3.4.0 Provider 候选评审与多维决策增强施工图",
+      "version": "3.4.0"
+    },
+    {
+      "path": "material/v3.5.0-ReviewSprint收口签核与交付准出施工图-2026-05-15.md",
+      "status": "historical",
+      "title": "v3.5.0 Review Sprint 收口签核与交付准出施工图",
+      "version": "3.5.0"
+    },
+    {
+      "path": "material/v3.6.0-交付验收与移交工作台施工图-2026-05-15.md",
+      "status": "historical",
+      "title": "v3.6.0 交付验收与移交工作台施工图",
+      "version": "3.6.0"
+    },
+    {
+      "path": "material/v3.7.0-ReleaseWorkspace多曲目发行工作台施工图-2026-05-15.md",
+      "status": "historical",
+      "title": "v3.7.0 Release Workspace 多曲目发行工作台施工图",
+      "version": "3.7.0"
+    },
+    {
+      "path": "material/v3.8.0-ReleaseZIP外部验收与可移植校验施工图-2026-05-15.md",
+      "status": "historical",
+      "title": "v3.8.0 Release ZIP 外部验收与可移植校验施工图",
+      "version": "3.8.0"
+    },
+    {
+      "path": "material/v3.9.0-ReleaseMetadata发行资料与平台元数据施工图-2026-05-16.md",
+      "status": "historical",
+      "title": "v3.9.0 Release Metadata 发行资料与平台元数据施工图",
+      "version": "3.9.0"
+    },
+    {
+      "path": "material/v4.0.0-DistributionPrep发行准备与平台交付工作台施工图-2026-05-16.md",
+      "status": "historical",
+      "title": "v4.0.0 Distribution Prep 发行准备与平台交付工作台施工图",
+      "version": "4.0.0"
+    },
+    {
+      "path": "material/v4.1.0-PlatformTemplatePacks平台模板包与本地提交清单施工图-2026-05-17.md",
+      "status": "historical",
+      "title": "v4.1.0 Platform Template Packs 平台模板包与本地提交清单施工图",
+      "version": "4.1.0"
+    },
+    {
+      "path": "material/v4.10.0-KnowledgeAssistedFixPlanning知识辅助修复计划施工图-2026-05-21.md",
+      "status": "historical",
+      "title": "v4.10.0 Knowledge-assisted Fix Planning 知识辅助修复计划施工图",
+      "version": "4.10.0"
+    },
+    {
+      "path": "material/v4.11.0-FixPlanOutcomeReview计划效果复盘与规则校准施工图-2026-05-21.md",
+      "status": "historical",
+      "title": "v4.11.0 Fix Plan Outcome Review 计划效果复盘与规则校准施工图",
+      "version": "4.11.0"
+    },
+    {
+      "path": "material/v4.12.0-PlanningRuleSimulation计划规则模拟与评分沙箱施工图-2026-05-21.md",
+      "status": "historical",
+      "title": "v4.12.0 Planning Rule Simulation 计划规则模拟与评分沙箱施工图",
+      "version": "4.12.0"
+    },
+    {
+      "path": "material/v4.13.0-PlanningRuleGovernance规则晋升与版本治理施工图-2026-05-22.md",
+      "status": "historical",
+      "title": "v4.13.0 Planning Rule Governance 规则晋升与版本治理施工图",
+      "version": "4.13.0"
+    },
+    {
+      "path": "material/v4.14.0-PlanningRuleImpactMonitoring规则效果监控与回滚建议施工图-2026-05-24.md",
+      "status": "historical",
+      "title": "v4.14.0 Planning Rule Impact Monitoring 规则效果监控与回滚建议施工图",
+      "version": "4.14.0"
+    },
+    {
+      "path": "material/v4.2.0-DistributionPackageLayoutContract包布局契约与模板命名收敛施工图-2026-05-17.md",
+      "status": "historical",
+      "title": "v4.2.0 Distribution Package Layout Contract 包布局契约与模板命名收敛施工图",
+      "version": "4.2.0"
+    },
+    {
+      "path": "material/v4.3.0-SubmissionWorkspace多平台提交批次工作台施工图-2026-05-18.md",
+      "status": "historical",
+      "title": "v4.3.0 Submission Workspace 多平台提交批次工作台施工图",
+      "version": "4.3.0"
+    },
+    {
+      "path": "material/v4.4.0-MusicAcceptanceLab音乐成品自验与听审工作台施工图-2026-05-18.md",
+      "status": "historical",
+      "title": "v4.4.0 Music Acceptance Lab 音乐成品自验与听审工作台施工图",
+      "version": "4.4.0"
+    },
+    {
+      "path": "material/v4.6.0-HumanReviewPack人工听审包与外部评审闭环施工图-2026-05-19.md",
+      "status": "historical",
+      "title": "v4.6.0 Human Review Pack 人工听审包与外部评审闭环施工图",
+      "version": "4.6.0"
+    },
+    {
+      "path": "material/v4.7.0-AcceptanceAnalytics验收数据分析与问题洞察施工图-2026-05-20.md",
+      "status": "historical",
+      "title": "v4.7.0 Acceptance Analytics 验收数据分析与问题洞察施工图",
+      "version": "4.7.0"
+    },
+    {
+      "path": "material/v4.8.0-AcceptanceDrivenFixSprint验收驱动修复冲刺施工图-2026-05-20.md",
+      "status": "historical",
+      "title": "v4.8.0 Acceptance-driven Fix Sprint 验收驱动修复冲刺施工图",
+      "version": "4.8.0"
+    },
+    {
+      "path": "material/v4.9.0-AcceptanceKnowledgeBase验收修复知识库施工图-2026-05-20.md",
+      "status": "historical",
+      "title": "v4.9.0 Acceptance Knowledge Base 验收修复知识库施工图",
+      "version": "4.9.0"
+    },
+    {
+      "path": "material/v5.0.0-RealAudioBaseline真实音频基线与人工听审准出施工图-2026-05-25.md",
+      "status": "historical",
+      "title": "v5.0.0 Real Audio Baseline 真实音频基线与人工听审准出施工图",
+      "version": "5.0.0"
+    },
+    {
+      "path": "material/v5.1.0-PerTrackAudioReview逐曲音频听审证据与反馈回流施工图-2026-05-26.md",
+      "status": "historical",
+      "title": "v5.1.0 Per-Track Audio Review 逐曲音频听审证据与反馈回流施工图",
+      "version": "5.1.0"
+    },
+    {
+      "path": "material/v5.2.0-ArrangementMixControls编曲混音控制与Stem音频体检施工图-2026-05-26.md",
+      "status": "historical",
+      "title": "v5.2.0 Arrangement Mix Controls 编曲混音控制与 Stem 音频体检施工图",
+      "version": "5.2.0"
+    },
+    {
+      "path": "material/v5.3.0-AudioRevisionWorkbench音频修复工作台与混音复听闭环施工图-2026-05-27.md",
+      "status": "historical",
+      "title": "v5.3.0 Audio Revision Workbench 音频修复工作台与混音复听闭环施工图",
+      "version": "5.3.0"
+    },
+    {
+      "path": "material/v5.4.0-MasteringQA发行级母带响度与音频一致性施工图-2026-05-29.md",
+      "status": "historical",
+      "title": "v5.4.0 Mastering QA 发行级母带响度与音频一致性施工图",
+      "version": "5.4.0"
+    },
+    {
+      "path": "material/v5.5.0-DistributionAudioFormats多格式发行音频与编码验收施工图-2026-05-29.md",
+      "status": "historical",
+      "title": "v5.5.0 Distribution Audio Formats 多格式发行音频与编码验收施工图",
+      "version": "5.5.0"
+    },
+    {
+      "path": "material/v5.6.0-EncodedAudioAcceptance编码格式验收与交付听审施工图-2026-05-31.md",
+      "status": "historical",
+      "title": "v5.6.0 Encoded Audio Acceptance 编码格式验收与交付听审施工图",
+      "version": "5.6.0"
+    },
+    {
+      "path": "material/v5.7.0-ReleaseFormatDecisionWorkbench发行格式对比决策工作台施工图-2026-06-01.md",
+      "status": "historical",
+      "title": "v5.7.0 Release Format Decision Workbench 发行格式对比决策工作台施工图",
+      "version": "5.7.0"
+    },
+    {
+      "path": "material/v5.8.0-RightsClearanceWorkbench版权授权清算与交付合规施工图-2026-06-02.md",
+      "status": "historical",
+      "title": "v5.8.0 Rights Clearance Workbench 版权授权清算与交付合规施工图",
+      "version": "5.8.0"
+    },
+    {
+      "path": "material/v5.9.0-SubmissionEvidenceArchive平台提交证据归档与反馈对账施工图-2026-06-02.md",
+      "status": "historical",
+      "title": "v5.9.0 Submission Evidence Archive 平台提交证据归档与反馈对账施工图",
+      "version": "5.9.0"
+    },
+    {
+      "path": "material/v6.0.0-ReleaseOperationsDashboard发行运营总控台与准出编排施工图-2026-06-03.md",
+      "status": "historical",
+      "title": "v6.0.0 Release Operations Dashboard 发行运营总控台与准出编排施工图",
+      "version": "6.0.0"
+    },
+    {
+      "path": "material/v6.1.0-ReleaseOperationsRunbook运营动作队列与准出执行台施工图-2026-06-03.md",
+      "status": "historical",
+      "title": "v6.1.0 Release Operations Runbook 运营动作队列与准出执行台施工图",
+      "version": "6.1.0"
+    },
+    {
+      "path": "material/v6.2.0-ReleaseOperationsSignoff运营归档签核与变更控制施工图-2026-06-03.md",
+      "status": "historical",
+      "title": "v6.2.0 Release Operations Signoff 运营归档签核与变更控制施工图",
+      "version": "6.2.0"
+    },
+    {
+      "path": "material/v6.3.0-ReleaseOperationsAuditLedger运营审计账本与证据链追溯施工图-2026-06-04.md",
+      "status": "historical",
+      "title": "v6.3.0 Release Operations Audit Ledger 运营审计账本与证据链追溯施工图",
+      "version": "6.3.0"
+    },
+    {
+      "path": "material/v6.4.0-ReleaseOperationsReviewerPack外部审查包与运营复盘施工图-2026-06-04.md",
+      "status": "historical",
+      "title": "v6.4.0 Release Operations Reviewer Pack 外部审查包与运营复盘施工图",
+      "version": "6.4.0"
+    },
+    {
+      "path": "material/v6.5.0-ReleasePortfolioAudit跨发行审计组合与质量趋势施工图-2026-06-05.md",
+      "status": "historical",
+      "title": "v6.5.0 Release Portfolio Audit 跨发行审计组合与质量趋势施工图",
+      "version": "6.5.0"
+    },
+    {
+      "path": "material/v6.5.0-ReleasePortfolioAudit跨发行组合审计与趋势治理施工图-2026-06-05.md",
+      "status": "historical",
+      "title": "v6.5.0 Release Portfolio Audit 跨发行组合审计与趋势治理施工图",
+      "version": "6.5.0"
+    },
+    {
+      "path": "material/v6.6.0-ReleasePortfolioGovernanceActionQueue组合治理动作队列与风险闭环施工图-2026-06-05.md",
+      "status": "historical",
+      "title": "v6.6.0 Release Portfolio Governance Action Queue 组合治理动作队列与风险闭环施工图",
+      "version": "6.6.0"
+    },
+    {
+      "path": "material/v6.7.0-ReleasePortfolioGovernanceSignoff组合治理签核归档与变更控制施工图-2026-06-06.md",
+      "status": "historical",
+      "title": "v6.7.0 Release Portfolio Governance Signoff 组合治理签核归档与变更控制施工图",
+      "version": "6.7.0"
+    },
+    {
+      "path": "material/v6.8.0-ReleasePortfolioGovernanceAuditLedger组合治理审计账本与跨发行证据链施工图-2026-06-06.md",
+      "status": "historical",
+      "title": "v6.8.0 Release Portfolio Governance Audit Ledger 组合治理审计账本与跨发行证据链施工图",
+      "version": "6.8.0"
+    },
+    {
+      "path": "material/v6.9.0-ReleasePortfolioGovernanceReviewerPack组合治理外部审查包与复盘施工图-2026-06-07.md",
+      "status": "historical",
+      "title": "v6.9.0 Release Portfolio Governance Reviewer Pack 组合治理外部审查包与复盘施工图",
+      "version": "6.9.0"
+    },
+    {
+      "path": "material/v7.0.0-ReleasePortfolioGovernanceFinalBoard组合治理最终委员会签核与外部审查闭环施工图-2026-06-08.md",
+      "status": "historical",
+      "title": "v7.0.0 Release Portfolio Governance Final Board 组合治理最终委员会签核与外部审查闭环施工图",
+      "version": "7.0.0"
+    },
+    {
+      "path": "material/v7.1.0-ReleasePortfolioGovernanceEvidenceVault组合治理证据保险库与深度离线复验施工图-2026-06-08.md",
+      "status": "historical",
+      "title": "v7.1.0 Release Portfolio Governance Evidence Vault 组合治理证据保险库与深度离线复验施工图",
+      "version": "7.1.0"
+    },
+    {
+      "path": "material/v7.2.0-ReleasePortfolioGovernancePublicAttestation组合治理公开证明与证书包施工图-2026-06-09.md",
+      "status": "historical",
+      "title": "v7.2.0 Release Portfolio Governance Public Attestation 组合治理公开证明与证书包施工图",
+      "version": "7.2.0"
+    },
+    {
+      "path": "material/v7.3.0-ReleasePortfolioGovernanceAttestationRegistry公开证明登记册与撤销替换治理施工图-2026-06-09.md",
+      "status": "historical",
+      "title": "v7.3.0 Release Portfolio Governance Attestation Registry 公开证明登记册与撤销替换治理施工图",
+      "version": "7.3.0"
+    },
+    {
+      "path": "material/v7.4.0-ReleasePortfolioGovernanceAttestationPortalSnapshot公开证明静态门户快照与离线发布验收施工图-2026-06-09.md",
+      "status": "historical",
+      "title": "v7.4.0 Release Portfolio Governance Attestation Portal Snapshot 公开证明静态门户快照与离线发布验收施工图",
+      "version": "7.4.0"
+    },
+    {
+      "path": "material/v7.5.0-ReleaseCheckVerificationMatrix发布验证矩阵与回归检查编排施工图-2026-06-10.md",
+      "status": "historical",
+      "title": "v7.5.0 Release Check Verification Matrix 发布验证矩阵与回归检查编排施工图",
+      "version": "7.5.0"
+    },
+    {
+      "path": "material/v7.6.0-ReleasePortfolioGovernanceAttestationPortalReviewResponse公开证明门户外部审查响应闭环施工图-2026-06-10.md",
+      "status": "historical",
+      "title": "v7.6.0 Release Portfolio Governance Attestation Portal Review Response 公开证明门户外部审查响应闭环施工图",
+      "version": "7.6.0"
+    },
+    {
+      "path": "material/v7.7.0-ReleasePortfolioGovernanceAttestationAcceptedEvidence公开证明外部接受证据登记与门户摘要施工图-2026-06-11.md",
+      "status": "historical",
+      "title": "v7.7.0 Release Portfolio Governance Attestation Accepted Evidence 公开证明外部接受证据登记与门户摘要施工图",
+      "version": "7.7.0"
+    },
+    {
+      "path": "material/v7.8.0-ReleasePortfolioGovernanceAttestationTransparencyFeed公开证明透明度日志与变更通知施工图-2026-06-11.md",
+      "status": "historical",
+      "title": "v7.8.0 Release Portfolio Governance Attestation Transparency Feed 公开证明透明度日志与变更通知施工图",
+      "version": "7.8.0"
+    },
+    {
+      "path": "material/v7.9.0-ReleasePortfolioGovernanceAttestationTransparencyAcknowledgement透明度日志外部确认回执闭环施工图-2026-06-11.md",
+      "status": "historical",
+      "title": "v7.9.0 Release Portfolio Governance Attestation Transparency Acknowledgement 透明度日志外部确认回执闭环施工图",
+      "version": "7.9.0"
+    },
+    {
+      "path": "material/v8.0.0-PublicTrustCenter公开信任中心与跨发行证明门户施工图-2026-06-12.md",
+      "status": "historical",
+      "title": "v8.0.0 Public Trust Center 公开信任中心与跨发行证明门户施工图",
+      "version": "8.0.0"
+    },
+    {
+      "path": "material/v8.1.0-PublicTrustCenter全链路交付信任中心与运营提交聚合施工图-2026-06-13.md",
+      "status": "historical",
+      "title": "v8.1.0 Public Trust Center 全链路交付信任中心与运营提交聚合施工图",
+      "version": "8.1.0"
+    },
+    {
+      "path": "material/v8.2.0-PublicTrustCenterAnchorRegistry信任锚登记与签名验收施工图-2026-06-13.md",
+      "status": "historical",
+      "title": "v8.2.0 Public Trust Center Anchor Registry 信任锚登记与签名验收施工图",
+      "version": "8.2.0"
+    },
+    {
+      "path": "material/v8.3.0-PublicTrustCenterAnchorTransparency信任锚透明度账本与检查点施工图-2026-06-14.md",
+      "status": "historical",
+      "title": "v8.3.0 Public Trust Center Anchor Transparency 信任锚透明度账本与检查点施工图",
+      "version": "8.3.0"
+    },
+    {
+      "path": "material/v8.4.0-PublicTrustCenterDistributionKit公开信任中心外部分发套件与一键验收施工图-2026-06-14.md",
+      "status": "historical",
+      "title": "v8.4.0 Public Trust Center Distribution Kit 公开信任中心外部分发套件与一键验收施工图",
+      "version": "8.4.0"
+    },
+    {
+      "path": "material/v8.5.0-PublicTrustCenterDistributionKitAcceptance外部分发套件验收回执与接收方证据闭环施工图-2026-06-15.md",
+      "status": "historical",
+      "title": "v8.5.0 Public Trust Center Distribution Kit Acceptance 外部分发套件验收回执与接收方证据闭环施工图",
+      "version": "8.5.0"
+    },
+    {
+      "path": "material/v8.6.0-PublicTrustCenterAcceptanceBoard多接收方验收委员会与准出门禁施工图-2026-06-15.md",
+      "status": "historical",
+      "title": "v8.6.0 Public Trust Center Acceptance Board 多接收方验收委员会与准出门禁施工图",
+      "version": "8.6.0"
+    },
+    {
+      "path": "material/v8.7.0-PublicTrustCenterAcceptanceBoardSignoff验收委员会签核归档与公开准出绑定施工图-2026-06-15.md",
+      "status": "historical",
+      "title": "v8.7.0 Public Trust Center Acceptance Board Signoff 验收委员会签核归档与公开准出绑定施工图",
+      "version": "8.7.0"
+    },
+    {
+      "path": "material/v8.8.0-PublicTrustCenterPublicationChannels公开信任中心发布通道与镜像验收施工图-2026-06-16.md",
+      "status": "historical",
+      "title": "v8.8.0 Public Trust Center Publication Channels 公开信任中心发布通道与镜像验收施工图",
+      "version": "8.8.0"
+    },
+    {
+      "path": "material/v8.9.0-PublicTrustCenterPublicationMonitoring发布通道持续监控与事故响应施工图-2026-06-17.md",
+      "status": "historical",
+      "title": "v8.9.0 Public Trust Center Publication Monitoring 发布通道持续监控与事故响应施工图",
+      "version": "8.9.0"
+    },
+    {
+      "path": "material/v9.0.0-TrustOperationsHub统一信任运营中枢与跨链路准出施工图-2026-06-18.md",
+      "status": "historical",
+      "title": "v9.0.0 Trust Operations Hub 统一信任运营中枢与跨链路准出施工图",
+      "version": "9.0.0"
+    },
+    {
+      "path": "material/v9.1.0-TrustOperationsHub全链路交付扩展与安全Runbook施工图-2026-06-19.md",
+      "status": "historical",
+      "title": "v9.1.0 Trust Operations Hub 全链路交付扩展与安全 Runbook 施工图",
+      "version": "9.1.0"
+    },
+    {
+      "path": "material/v9.2.0-TrustOperationsHub事故响应与修复闭环施工图-2026-06-19.md",
+      "status": "historical",
+      "title": "v9.2.0 Trust Operations Hub 事故响应与修复闭环施工图",
+      "version": "9.2.0"
+    },
+    {
+      "path": "material/v9.3.0-TrustOperationsHub事故知识库与回归防线施工图-2026-06-20.md",
+      "status": "historical",
+      "title": "v9.3.0 Trust Operations Hub 事故知识库与回归防线施工图",
+      "version": "9.3.0"
+    },
+    {
+      "path": "material/v9.4.0-TrustOperationsControlCatalog预防控制目录与策略门禁施工图-2026-06-21.md",
+      "status": "historical",
+      "title": "v9.4.0 Trust Operations Control Catalog 预防控制目录与策略门禁施工图",
+      "version": "9.4.0"
+    },
+    {
+      "path": "material/v9.5.0-TrustOperationsControlSignoff控制签核例外审批与不可变归档施工图-2026-06-21.md",
+      "status": "historical",
+      "title": "v9.5.0 Trust Operations Control Signoff 控制签核、例外审批与不可变归档施工图",
+      "version": "9.5.0"
+    },
+    {
+      "path": "material/v9.6.0-TrustOperationsContinuousAssurance持续保障复核与漂移监控施工图-2026-06-22.md",
+      "status": "historical",
+      "title": "v9.6.0 Trust Operations Continuous Assurance 持续保障复核与漂移监控施工图",
+      "version": "9.6.0"
+    },
+    {
+      "path": "material/v9.7.0-TrustOperationsAssuranceScheduler持续保障计划队列与漂移处置施工图-2026-06-22.md",
+      "status": "historical",
+      "title": "v9.7.0 Trust Operations Assurance Scheduler 持续保障计划、复核队列与漂移处置施工图",
+      "version": "9.7.0"
+    },
+    {
+      "path": "material/v9.8.0-TrustOperationsAssuranceWatchSignoff持续保障队列签核归档与准出绑定施工图-2026-06-22.md",
+      "status": "historical",
+      "title": "v9.8.0 Trust Operations Assurance Watch Signoff 持续保障队列签核归档与准出绑定施工图",
+      "version": "9.8.0"
+    },
+    {
+      "path": "material/v9.9.0-TrustOperationsFinalReadinessCertificate最终准出证书与交付移交包施工图-2026-06-23.md",
+      "status": "historical",
+      "title": "v9.9.0 Trust Operations Final Readiness Certificate 最终准出证书与交付移交包施工图",
+      "version": "9.9.0"
+    },
+    {
+      "path": "material/开源Agent参考与音乐系统编排方案-2026-05-05.md",
+      "status": "historical",
+      "title": "开源 Agent 参考与音乐系统编排方案",
+      "version": "unversioned"
+    },
+    {
+      "path": "material/版本管理与GitHub发布准则-2026-05-05.md",
+      "status": "historical",
+      "title": "版本管理与 GitHub 发布准则",
+      "version": "unversioned"
+    },
+    {
+      "path": "material/音乐生成后端能力逐步推进计划-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge 后端能力逐步推进计划",
+      "version": "unversioned"
+    },
+    {
+      "path": "material/音乐生成操作面板复刻SagaQuill方案-2026-05-05.md",
+      "status": "historical",
+      "title": "MusicForge 操作面板方案：复刻 SagaQuill 的本地工作台能力",
+      "version": "unversioned"
+    },
+    {
+      "path": "material/音乐生成项目接手方案-2026-05-05.md",
+      "status": "historical",
+      "title": "音乐生成项目接手方案",
+      "version": "unversioned"
+    }
+  ],
+  "schema_version": 1
+}

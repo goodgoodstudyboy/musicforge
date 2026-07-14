@@ -604,7 +604,13 @@ class LegacyReleaseSignoffAdapter:
         acceptance_gate["status"] = policy_decision["status"]
         if policy_decision["status"] != "passed":
             message = str(acceptance_gate.get("message") or "Release Evidence Policy gate failed.")
-            self._send_error(HTTPStatus.CONFLICT, message)
+            self._send_json(
+                {
+                    "error": message,
+                    "acceptance_gate": acceptance_gate,
+                },
+                status=HTTPStatus.CONFLICT,
+            )
             return
         if not release_qa_allows_signoff(report) and not force:
             self._send_error(HTTPStatus.CONFLICT, "Release QA gate failed. Refresh QA or pass force=true with override_reason.")

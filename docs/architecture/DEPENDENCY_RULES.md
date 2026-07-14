@@ -22,8 +22,8 @@ interfaces -> application -> domains -> platform
 - Every production module must appear in `architecture-baseline.json` with one
   layer and, for domains/interfaces, one context.
 - Existing production cycles may disappear but no new cycle may appear.
-- `release_checks.py`, `server.py`, `cli.py`, and `webui.py` cannot exceed their
-  v12.14 line baselines.
+- `server.py`, `cli.py`, and `webui.py` cannot exceed their v12.14 line
+  baselines; the expired `release_checks.py` facade is absent.
 - Counts of `_raw_zip_entry_names`, `_is_safe_zip_entry`, and
   `_zip_has_no_trailing_data` cannot increase.
 - Dynamic imports must not be used to hide a dependency from the AST scan.

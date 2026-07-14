@@ -11,7 +11,7 @@ from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readines
 from song_agent.ga_readiness_verifier import verify_ga_readiness_report
 from song_agent.projectio import read_json, write_json
 from song_agent.platform.persistence.program import write_program_json
-from song_agent.release_checks import _v76_rewrite_zip
+from tests.zip_helpers import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program_continuity_command_center import (
     UnifiedReleaseProgramContinuityCommandCenterStateError,

@@ -80,6 +80,8 @@ def select_check_definitions(
             selected = [definition for definition in selected if definition.version is not None and _version_key(definition.version) >= since_key]
     if not run_tests:
         selected = [definition for definition in selected if definition.check_id != "pytest.full"]
+    if not only:
+        _reject_legacy_current_profile(profile, selected)
     return selected
 
 
@@ -89,7 +91,7 @@ def release_check_definitions_as_dicts(definitions: Iterable[ReleaseCheckDefinit
 
 
 def definition_to_dict(definition: ReleaseCheckDefinition) -> dict[str, object]:
-    from song_agent.release_check.checks.registry import check_domain
+    from song_agent.release_check.checks.registry import callable_provenance, check_domain
 
     return {
         "check_id": definition.check_id,
@@ -111,7 +113,24 @@ def definition_to_dict(definition: ReleaseCheckDefinition) -> dict[str, object]:
         "budget_exception_reason": definition.budget_exception_reason,
         "budget_exception_expires_version": definition.budget_exception_expires_version,
         "domain": check_domain(group=definition.group, tags=definition.tags, callable_name=definition.callable_name),
+        "callable_provenance": callable_provenance(definition.callable_name) if definition.callable_name else "command",
     }
+
+
+def _reject_legacy_current_profile(profile: str, definitions: list[ReleaseCheckDefinition]) -> None:
+    if profile not in CURRENT_NO_LEGACY_PROFILES:
+        return
+    from song_agent.release_check.checks.registry import callable_provenance
+
+    legacy = [
+        row.check_id
+        for row in definitions
+        if row.callable_name and callable_provenance(row.callable_name) != "active"
+    ]
+    if legacy:
+        raise ReleaseCheckMatrixError(
+            f"Current release-check profile {profile} contains non-active callables: {', '.join(legacy)}"
+        )
 
 
 def validate_check_definitions(definitions: Iterable[ReleaseCheckDefinition] | None = None) -> None:
@@ -246,6 +265,30 @@ V11_PROFILES = ("full", "quick", "latest", "ga", "v11")
 V12_PROFILES = ("full", "quick", "latest", "ga", "v12")
 V12_ACCELERATED_PROFILES = ("full", "latest", "ga", "v12")
 V13_PROFILES = ("full", "latest", "ga", "v13")
+CURRENT_NO_LEGACY_PROFILES = frozenset({"latest", "ga", "v13", "security"})
+
+LEGACY_COMPATIBILITY_CALLABLES = frozenset(
+    {
+        "_final_export_smoke",
+        "_edit_smoke",
+        "_v1213_v12_fixture_prepare_smoke",
+        "_v129_command_center_runtime_inventory",
+        "_v129_command_center_external_binding",
+        "_v129_command_center_ga_gate",
+        "_v1210_command_center_signoff_semantics",
+        "_v1210_command_center_signoff_archive_verifier",
+        "_v1210_command_center_signoff_reset_guard",
+        "_v1211_receiver_acceptance_semantics",
+        "_v1211_receiver_acceptance_zip_security",
+        "_v1211_receiver_acceptance_ga_gate",
+        "_v1212_receiver_acceptance_change_control_semantics",
+        "_v1212_receiver_acceptance_change_control_zip_security",
+        "_v1212_receiver_acceptance_change_control_external_binding",
+        "_v1212_receiver_acceptance_change_control_signed_mutation",
+        "_v1212_receiver_acceptance_change_control_thin_integration",
+        "_v1213_release_check_acceleration_smoke",
+    }
+)
 
 _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _command(
@@ -431,6 +474,7 @@ _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v134.program_vertical_slice_smoke", "v13.4 Program bounded-context vertical slice smoke", "_v134_program_vertical_slice_smoke", group="architecture", version="13.4", risk="critical", timeout_seconds=180, tags=("v13", "ga", "architecture", "program", "vertical-slice", "interfaces"), profiles=V13_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga")),
     _callable("v135.interface_decomposition_smoke", "v13.5 real CLI, API, runtime, and Web module decomposition smoke", "_v135_interface_decomposition_smoke", group="architecture", version="13.5", risk="critical", timeout_seconds=180, tags=("v13", "ga", "architecture", "interfaces", "web", "compatibility"), profiles=V13_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga")),
     _callable("v136.policy_gate_cutover_smoke", "v13.6 Evidence Graph and Policy main-gate cutover smoke", "_v136_policy_gate_cutover_smoke", group="architecture", version="13.6", risk="critical", timeout_seconds=180, tags=("v13", "ga", "architecture", "evidence-graph", "policy", "capabilities"), profiles=V13_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga")),
+    _callable("v137.release_check_ci_docs_governance_smoke", "v13.7 Release Check, CI, test marker, and documentation governance smoke", "_v137_release_check_ci_docs_governance_smoke", group="release-check", version="13.7", risk="critical", timeout_seconds=180, tags=("v13", "ga", "release-check", "ci", "documentation", "reviewer-package"), profiles=(*V13_PROFILES, "security"), duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga", "security")),
 )
 
 
@@ -439,6 +483,24 @@ def _govern_definition(definition: ReleaseCheckDefinition) -> ReleaseCheckDefini
     tags = list(definition.tags)
     key = _version_key(definition.version or "999")
     full_only = "full-only" in tags
+    compatibility_callable = definition.callable_name in LEGACY_COMPATIBILITY_CALLABLES
+    if compatibility_callable:
+        profiles = [item for item in profiles if item not in CURRENT_NO_LEGACY_PROFILES]
+        for item in ("full", "nightly"):
+            if item not in profiles:
+                profiles.append(item)
+        if "legacy" not in tags:
+            tags.append("legacy")
+        return replace(
+            definition,
+            profiles=tuple(profiles),
+            tags=tuple(tags),
+            duration_budget_seconds=definition.duration_budget_seconds or 90.0,
+            budget_enforced_profiles=tuple(profiles),
+            budget_warning_only=True,
+            budget_exception_reason="Compatibility smoke is isolated to full/nightly or its historical major profile.",
+            budget_exception_expires_version="14.0",
+        )
     historical = bool(definition.version) and (key < (12, 0) or (12, 0) <= key < (12, 9) or full_only)
     if historical:
         profiles = [item for item in profiles if item not in {"quick", "latest", "ga", "v12"}]
@@ -454,8 +516,8 @@ def _govern_definition(definition: ReleaseCheckDefinition) -> ReleaseCheckDefini
             duration_budget_seconds=definition.duration_budget_seconds or 90.0,
             budget_enforced_profiles=tuple(profiles),
             budget_warning_only=True,
-            budget_exception_reason="Historical monolith retained only for archive compatibility until the v13.7 release-check migration.",
-            budget_exception_expires_version="13.7",
+            budget_exception_reason="Historical monolith is retained only in the explicitly labeled full/nightly compatibility suite.",
+            budget_exception_expires_version="14.0",
         )
     if definition.group == "security" or {"zip-security", "verification"}.intersection(tags):
         if "security" not in profiles:

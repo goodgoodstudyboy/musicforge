@@ -6,11 +6,19 @@ from typing import Any
 
 from song_agent.release_check_architecture import run_architecture_guardrails_smoke, run_architecture_ratchet_smoke
 from song_agent.release_check.checks.legacy import delegated_check
+from song_agent.release_check.repository_checks import (
+    git_status_check,
+    musicforge_configs_ignored_check,
+    musicforge_configs_untracked_check,
+    remote_url_token_check,
+    version_consistency,
+)
 from song_agent.release_check_interfaces import run_interface_registry_smoke
 from song_agent.release_check_persistence_kernel import run_persistence_kernel_smoke, run_program_persistence_authority_smoke
 from song_agent.release_check_program_vertical import run_program_vertical_slice_smoke
 from song_agent.release_check.lts_cutover import run_lts_cutover_smoke
 from song_agent.release_check_evidence_policy import run_policy_gate_cutover_smoke
+from song_agent.release_check_governance_v137 import run_release_check_ci_docs_governance_smoke
 
 
 DOMAIN = "meta"
@@ -25,14 +33,18 @@ def run_release_check_governance_smoke(root: Path) -> tuple[bool, str]:
         from song_agent.release_check.performance import PROFILE_BUDGET_WARNING_ONLY
         from song_agent.release_check.runner import run_release_check_matrix
 
-        facade_lines = len((root / "song_agent" / "release_checks.py").read_text(encoding="utf-8").splitlines())
+        facade_removed = not (root / "song_agent" / "release_checks.py").exists()
         legacy = root / "song_agent" / "release_check" / "checks" / "legacy" / "monolith.py"
         marker_text = (root / "pyproject.toml").read_text(encoding="utf-8")
         workflow = root / ".github" / "workflows" / "quality.yml"
         catalog_path = root / "docs" / "deprecations.json"
         catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
         definitions = list(all_check_definitions())
-        current = [row for row in definitions if row.version and _version_key(row.version) >= (12, 13)]
+        current = [
+            row
+            for row in definitions
+            if row.version and _version_key(row.version) >= (12, 13) and "legacy" not in row.tags
+        ]
         hard_budgets = all(
             row.duration_budget_seconds is not None
             and not row.budget_warning_only
@@ -41,7 +53,7 @@ def run_release_check_governance_smoke(root: Path) -> tuple[bool, str]:
         )
         empty = run_release_check_matrix(repo_root=root, profile="latest", since="99.0", run_tests=False)
         details: dict[str, Any] = {
-            "facade_under_300": facade_lines < 300,
+            "expired_facade_removed": facade_removed,
             "legacy_preserved": legacy.is_file(),
             "providers": len(provider_inventory()),
             "markers_configured": all(f'"{name}:' in marker_text for name in ("unit", "contract", "security", "integration", "legacy", "slow", "platform_windows")),
@@ -61,11 +73,11 @@ def _version_key(value: str) -> tuple[int, ...]:
 
 
 CALLABLES = {
-    "_git_status_check": delegated_check("_git_status_check"),
-    "_remote_url_token_check": delegated_check("_remote_url_token_check"),
-    "_musicforge_configs_untracked_check": delegated_check("_musicforge_configs_untracked_check"),
-    "_musicforge_configs_ignored_check": delegated_check("_musicforge_configs_ignored_check"),
-    "_version_consistency": delegated_check("_version_consistency"),
+    "_git_status_check": git_status_check,
+    "_remote_url_token_check": remote_url_token_check,
+    "_musicforge_configs_untracked_check": musicforge_configs_untracked_check,
+    "_musicforge_configs_ignored_check": musicforge_configs_ignored_check,
+    "_version_consistency": version_consistency,
     "_v1213_release_check_acceleration_smoke": delegated_check("_v1213_release_check_acceleration_smoke"),
     "_v1214_architecture_guardrails_smoke": run_architecture_guardrails_smoke,
     "_v131_architecture_ratchet_smoke": run_architecture_ratchet_smoke,
@@ -74,6 +86,7 @@ CALLABLES = {
     "_v134_program_vertical_slice_smoke": run_program_vertical_slice_smoke,
     "_v135_interface_decomposition_smoke": run_interface_registry_smoke,
     "_v136_policy_gate_cutover_smoke": run_policy_gate_cutover_smoke,
+    "_v137_release_check_ci_docs_governance_smoke": run_release_check_ci_docs_governance_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

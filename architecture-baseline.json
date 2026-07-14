@@ -1,13 +1,9 @@
 {
-  "active_to_compatibility_import_max_count": 226,
+  "active_to_compatibility_import_max_count": 225,
   "allowed_active_to_compatibility_imports": [
     {
       "imported": "song_agent.acceptance_analytics",
       "importer": "song_agent.application.legacy_dependencies.acceptance_analytics"
-    },
-    {
-      "imported": "song_agent.acceptance_diff",
-      "importer": "song_agent.application.legacy_dependencies.acceptance_diff"
     },
     {
       "imported": "song_agent.acceptance_fix_plan_reviews",
@@ -907,7 +903,7 @@
     }
   ],
   "allowed_cycles": [],
-  "baseline_version": "13.6.0",
+  "baseline_version": "13.7.0",
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
@@ -927,11 +923,11 @@
     "song_agent/interfaces/cli/commands/release_check.py": 23,
     "song_agent/interfaces/cli/commands/studio.py": 65,
     "song_agent/interfaces/cli/commands/trust.py": 108,
-    "song_agent/release_checks.py": 51,
+    "song_agent/release_checks.py": 0,
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 911,
+  "module_count": 914,
   "modules": [
     {
       "context": null,
@@ -3038,6 +3034,12 @@
       "layer": "domain",
       "module": "song_agent.domains.quality",
       "path": "song_agent/domains/quality/__init__.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_diff",
+      "path": "song_agent/domains/quality/acceptance_diff.py"
     },
     {
       "context": "registry",
@@ -5484,6 +5486,18 @@
     {
       "context": null,
       "layer": "release_check",
+      "module": "song_agent.release_check.repository_checks",
+      "path": "song_agent/release_check/repository_checks.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.reviewer_package",
+      "path": "song_agent/release_check/reviewer_package.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
       "module": "song_agent.release_check.runner",
       "path": "song_agent/release_check/runner.py"
     },
@@ -5504,6 +5518,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check_fixtures",
       "path": "song_agent/release_check_fixtures.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check_governance_v137",
+      "path": "song_agent/release_check_governance_v137.py"
     },
     {
       "context": null,
@@ -5540,12 +5560,6 @@
       "layer": "release_check",
       "module": "song_agent.release_check_verification_kernel",
       "path": "song_agent/release_check_verification_kernel.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
-      "module": "song_agent.release_checks",
-      "path": "song_agent/release_checks.py"
     },
     {
       "context": "delivery",

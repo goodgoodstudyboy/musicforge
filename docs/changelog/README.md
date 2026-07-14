@@ -1,5 +1,5 @@
 # Changelog Archive
 
-`CHANGELOG.md` remains the complete trace during the v12-to-v13 migration. At
-the v13 LTS cutover, entries before the current major are copied here before the
-root changelog is shortened. Historical traceability must not be lost.
+`CHANGELOG.md` contains the current major line. The complete history through
+v13.6 is preserved in `CHANGELOG-v0-v13.6.md`; Git tags remain the immutable
+source for each released tree.

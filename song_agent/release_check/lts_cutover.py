@@ -80,5 +80,6 @@ def _reviewer_files(root: Path) -> bool:
         "release-alignment.json",
         "security-attack-matrix.json",
         "runtime-verification.json",
+        "reviewer-package-manifest.json",
     }
     return {path.name for path in root.iterdir() if path.is_file()} == required

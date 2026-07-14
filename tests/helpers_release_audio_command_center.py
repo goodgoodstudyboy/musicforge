@@ -13,7 +13,7 @@ from song_agent.release_audio_quality_actions import ReleaseAudioQualityActionQu
 from song_agent.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
 from song_agent.release_audio_regression import ReleaseAudioRegressionStore
 from song_agent.release_audio_regression_response import ReleaseAudioRegressionResponseStore
-from song_agent.release_checks import _v1010_signed_timeline_release
+from song_agent.release_check.checks.legacy.monolith import _v1010_signed_timeline_release
 
 
 @dataclass

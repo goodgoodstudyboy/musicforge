@@ -131,7 +131,7 @@ def split_module(path: Path, *, target_lines: int = 420, source: str | None = No
         document = "\n\n".join(
             [
                 "from __future__ import annotations",
-                f"from .dependencies import *",
+                "from .dependencies import *",
                 *cross_imports,
                 *bodies,
                 "__all__ = " + repr(tuple(group)),

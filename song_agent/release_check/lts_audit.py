@@ -213,7 +213,7 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
             "schema_version": 1,
             "facade_limits_passed": audit["checks"]["facade_limits"],
             "removed_facades": ["song_agent/release_check_matrix.py", "song_agent/release_check_runner.py"],
-            "archive_adapter": "song_agent/release_checks.py",
+            "archive_adapter": "removed_in_v13.7",
         },
         "compatibility.json": {
             "schema_version": 1,
@@ -242,6 +242,9 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
     for name, document in files.items():
         (output / name).write_text(json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (output / "README.md").write_text(_reviewer_readme(), encoding="utf-8")
+    from song_agent.release_check.reviewer_package import write_reviewer_manifest
+
+    write_reviewer_manifest(output, final_sha=str(runtime_data.get("final_sha") or ""))
     return output
 
 
@@ -316,7 +319,7 @@ def _v133_program_source(root: Path, relative: Path) -> str | None:
 
 
 def _facade_limits(root: Path) -> bool:
-    limits = {"cli.py": 500, "server.py": 1000, "webui.py": 200, "release_checks.py": 300}
+    limits = {"cli.py": 500, "server.py": 1000, "webui.py": 200}
     return all(len((root / "song_agent" / name).read_text(encoding="utf-8").splitlines()) < limit for name, limit in limits.items())
 
 
@@ -337,6 +340,8 @@ def _test_layers_separated(root: Path) -> bool:
     nightly = (root / ".github" / "workflows" / "nightly.yml").read_text(encoding="utf-8")
     quality = (root / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     conftest = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    marker_manifest = root / "tests" / "marker-manifest.json"
+    coverage = json.loads((root / "coverage-governance.json").read_text(encoding="utf-8"))
     markers = ("legacy_early", "legacy_trust", "legacy_audio", "legacy_program")
     return (
         "addopts = \"-m 'not legacy' -n 4 --dist load\"" in project
@@ -350,14 +355,22 @@ def _test_layers_separated(root: Path) -> bool:
         )
         and "partition: [0, 1]" in nightly
         and "-n 4 --dist load" in nightly
-        and "--profile nightly --skip-tests --json" in nightly
-        and "--profile nightly --skip-tests --list" not in nightly
+        and "--profile full --skip-tests --json" in nightly
+        and "tools/assert_ci_final_sha.py" in nightly
+        and "github.sha" in nightly
+        and "v13-rollback-rehearsal" in nightly
+        and "active-fast:" in nightly
+        and "legacy:" in nightly
         and "slow and not legacy and ${{ matrix.layer }} and slow_partition_${{ matrix.partition }}" in nightly
         and "shard: [unit, contract, integration_partition_0, integration_partition_1]" in quality
-        and "def _primary_marker" in conftest
+        and "def _declared_primary_marker" in conftest
+        and marker_manifest.is_file()
+        and (coverage.get("active") or {}).get("enforcement") == "hard"
+        and (coverage.get("compatibility") or {}).get("enforcement") == "soft"
         and "def _integration_partition" in conftest
         and "branches: [master]" in quality
         and "fail-fast: false" in quality
+        and "full-lts:" in quality
         and "actions/checkout@v4" not in quality + nightly
         and "actions/setup-python@v5" not in quality + nightly
     )

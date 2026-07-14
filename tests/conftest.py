@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -17,6 +18,8 @@ _SLOW_ACTIVE_TEST_PREFIXES = (
     "test_trust_operations_",
     "test_unified_",
 )
+_PRIMARY_MARKERS = frozenset({"unit", "contract", "integration", "legacy"})
+_MARKER_MANIFEST = Path(__file__).with_name("marker-manifest.json")
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -57,16 +60,16 @@ def _cleanup_managed_tmp_path(request: pytest.FixtureRequest):
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    manifest = _load_marker_manifest()
     for item in items:
         path = Path(str(item.path)).name.lower()
         name = item.name.lower()
-        markers: set[str] = set()
-        if path == "test_release_check.py" and name.startswith("test_v"):
-            markers.update({"legacy", "slow"})
+        primary_marker = _declared_primary_marker(path, manifest)
+        markers: set[str] = {primary_marker}
+        if primary_marker == "legacy":
+            markers.add("slow")
             markers.add(_legacy_release_check_shard(name))
         else:
-            primary_marker = _primary_marker(path, name, item=item)
-            markers.add(primary_marker)
             if primary_marker == "integration":
                 markers.add(f"integration_partition_{_integration_partition(item.nodeid)}")
             if "verifier" in path or "security" in path or "zip" in name or "tamper" in name or "forg" in name:
@@ -81,14 +84,22 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             item.add_marker(getattr(pytest.mark, marker))
 
 
-def _primary_marker(path: str, name: str, *, item: pytest.Item | None = None) -> str:
-    code = getattr(getattr(item, "obj", None), "__code__", None)
-    starts_http_server = code is not None and "start_test_server" in {*code.co_names, *code.co_freevars}
-    if path.startswith(("test_cli", "test_server", "test_webui")) or "integration" in name or starts_http_server:
-        return "integration"
-    if any(token in path for token in ("architecture", "contract", "registry", "matrix")):
-        return "contract"
-    return "unit"
+def _load_marker_manifest(path: Path = _MARKER_MANIFEST) -> dict[str, str]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise pytest.UsageError(f"Cannot read explicit pytest marker manifest: {exc}") from exc
+    files = payload.get("files") if isinstance(payload, dict) else None
+    if payload.get("schema_version") != 1 or not isinstance(files, dict):
+        raise pytest.UsageError("Invalid tests/marker-manifest.json schema.")
+    return {Path(str(key)).name.lower(): str(value) for key, value in files.items()}
+
+
+def _declared_primary_marker(path: str, manifest: dict[str, str]) -> str:
+    marker = manifest.get(Path(path).name.lower(), "")
+    if marker not in _PRIMARY_MARKERS:
+        raise pytest.UsageError(f"Test module {path} has no explicit primary marker in tests/marker-manifest.json.")
+    return marker
 
 
 def _is_slow_test(path: str, name: str) -> bool:

@@ -42,6 +42,7 @@ def test_v13_reviewer_package_is_complete_and_path_safe(tmp_path: Path) -> None:
         "ci-matrix.json", "performance.json", "release-alignment.json", "release-check-reports.json",
         "runtime-verification.json", "security-attack-matrix.json", "source-comparison.json",
         "verifier-migration.json",
+        "reviewer-package-manifest.json",
     }
     assert str(ROOT).encode() not in rendered
     assert str(tmp_path).encode() not in rendered

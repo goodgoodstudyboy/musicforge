@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from song_agent.release_check.checks.registry import check_domain, provider_inventory, resolve_callable
+from song_agent.release_check.checks.registry import callable_provenance, check_domain, provider_inventory, resolve_callable
 from song_agent.release_check.matrix import all_check_definitions, definition_to_dict, get_check_definition, select_check_definitions, validate_check_definitions
 from song_agent.release_check.performance import PROFILE_BUDGET_WARNING_ONLY
 
@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_release_check_facade_and_domain_registry() -> None:
-    assert len((ROOT / "song_agent" / "release_checks.py").read_text(encoding="utf-8").splitlines()) < 300
+    assert not (ROOT / "song_agent" / "release_checks.py").exists()
     assert len(provider_inventory()) == 8
     assert check_domain(group="audio") == "quality"
     assert check_domain(group="command-center") == "program"
@@ -22,9 +22,9 @@ def test_release_check_facade_and_domain_registry() -> None:
 
 
 def test_current_profiles_exclude_historical_monolith() -> None:
-    for profile in ("latest", "ga", "v12"):
+    for profile in ("latest", "ga", "v13", "security"):
         definitions = select_check_definitions(profile=profile, run_tests=False)
-        assert all(not row.version or tuple(int(part) for part in row.version.split(".")) >= (12, 9) for row in definitions)
+        assert all(not row.callable_name or callable_provenance(row.callable_name) == "active" for row in definitions)
     legacy = select_check_definitions(profile="nightly", run_tests=False)
     assert any(row.version and row.version.startswith("7.") for row in legacy)
     assert all("legacy" in row.tags for row in legacy)
@@ -60,7 +60,9 @@ def test_deprecation_catalog_is_machine_readable() -> None:
 def test_quality_workflow_is_reproducible_on_hosted_runners() -> None:
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
 
-    assert workflow.count("fetch-depth: 0") == 5
+    assert workflow.count("fetch-depth: 0") >= 7
     assert "shard: [unit, contract, integration_partition_0, integration_partition_1]" in workflow
     assert '-m "${{ matrix.shard }} and not slow and not legacy" -n 2 --dist loadscope' in workflow
     assert '-m "security and not legacy and not slow" -n 2 --dist loadscope' in workflow
+    assert "full-lts:" in workflow
+    assert "tools/assert_ci_final_sha.py" in workflow

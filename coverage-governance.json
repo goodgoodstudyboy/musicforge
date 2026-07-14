@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "active": {
+    "enforcement": "hard",
+    "minimum_percent": 20.0,
+    "roots": [
+      "song_agent/platform/",
+      "song_agent/application/",
+      "song_agent/domains/",
+      "song_agent/capabilities/",
+      "song_agent/release_check/"
+    ]
+  },
+  "compatibility": {
+    "enforcement": "soft",
+    "minimum_percent": 5.0,
+    "roots": ["song_agent/"]
+  }
+}

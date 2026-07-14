@@ -344,7 +344,7 @@ def test_legacy_migration_backup_failure_blocks_import_and_cli_supports_plan(tmp
 
 
 def test_active_v12_stores_use_cross_process_lock_facade() -> None:
-    source_root = Path(__file__).resolve().parents[1] / "song_agent"
+    source_root = Path(__file__).resolve().parents[1] / "song_agent" / "domains" / "program"
     for filename in ACTIVE_V12_STORES:
         source = (source_root / filename).read_text(encoding="utf-8")
         assert "WorkspaceLock" in source, filename

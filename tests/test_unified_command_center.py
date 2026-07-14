@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from song_agent.release_checks import _v76_rewrite_zip
+from tests.zip_helpers import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_command_center import UnifiedCommandCenterStateError, UnifiedCommandCenterStore
 from song_agent.unified_command_center_verifier import verify_unified_command_center_component, verify_unified_command_center_package

@@ -34,6 +34,17 @@ def resolve_callable(name: str) -> Any:
         raise AttributeError(f"Unknown release-check callable: {name}") from exc
 
 
+def callable_provenance(name: str) -> str:
+    for provider in _providers():
+        target = provider.CALLABLES.get(name)
+        if target is not None:
+            module = str(getattr(target, "__module__", ""))
+            return "legacy" if ".checks.legacy" in module else "active"
+    from song_agent.release_check.checks.legacy import monolith as legacy
+
+    return "legacy" if hasattr(legacy, name) else "unknown"
+
+
 def check_domain(*, group: str, tags: tuple[str, ...] = (), callable_name: str | None = None) -> str:
     if callable_name:
         for provider in _providers():
@@ -58,6 +69,9 @@ def provider_inventory() -> list[dict[str, Any]]:
             "groups": sorted(provider.GROUPS),
             "tags": sorted(provider.TAGS),
             "callables": sorted(provider.CALLABLES),
+            "legacy_callables": sorted(
+                name for name, target in provider.CALLABLES.items() if ".checks.legacy" in str(getattr(target, "__module__", ""))
+            ),
         }
         for provider in _providers()
     ]

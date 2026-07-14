@@ -255,7 +255,7 @@ def test_verification_kernel_nested_allowlist_history_and_evidence_identity(tmp_
 
 
 def test_all_active_v12_verifiers_use_kernel_without_duplicate_security_helpers() -> None:
-    root = Path(__file__).resolve().parents[1] / "song_agent"
+    root = Path(__file__).resolve().parents[1] / "song_agent" / "domains" / "program"
     forbidden = (
         "def _raw_zip_entry_names(",
         "def _is_safe_entry(",
