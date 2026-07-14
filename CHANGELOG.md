@@ -24,6 +24,7 @@
 ### Performance
 - Default pytest runs the complete active suite without duplicating archive-only release-check smokes; those smokes remain intact in four Windows/Linux nightly shards and are distributed by test item so the single archive module uses every xdist worker.
 - PR unit and security suites exclude explicitly marked active-slow evidence replays; nightly runs those tests by layer and deterministic two-way partition. Local unit fast is about three minutes, while the measured slow-unit partitions are about 23 and 14 minutes.
+- The local aggregate `pytest.full` check keeps a hard 60-minute budget; the 30-minute target applies to each CI/nightly shard. Duplicate-entry warnings intentionally created by adversarial ZIP tests are suppressed only for that aggregate command so unexpected warning classes remain visible.
 - The relocated historical provider resolves the repository root explicitly, preserving v10 GA smoke compatibility after the release-check package split.
 
 ## v12.20.0 - 2026-07-13

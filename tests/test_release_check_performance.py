@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from song_agent.release_check.matrix import ReleaseCheckDefinition
+from song_agent.release_check.matrix import ReleaseCheckDefinition, get_check_definition
 from song_agent.release_check.runner import run_release_check_matrix
 from song_agent.release_check.performance import PROFILE_DURATION_BUDGET_SECONDS
 
@@ -77,3 +77,11 @@ def test_release_check_profile_budget_is_blocking(tmp_path: Path, monkeypatch) -
     assert report.ok is False
     assert report.results[-1].check_id == "release_check.profile_duration_budget"
     assert report.results[-1].status == "failed"
+
+
+def test_full_pytest_uses_aggregate_budget_and_only_suppresses_duplicate_zip_warning() -> None:
+    definition = get_check_definition("pytest.full")
+
+    assert definition.duration_budget_seconds == 3600
+    assert definition.budget_warning_only is False
+    assert definition.command[-2:] == ("-W", "ignore:Duplicate name:UserWarning")

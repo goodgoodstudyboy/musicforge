@@ -248,7 +248,16 @@ V12_ACCELERATED_PROFILES = ("full", "latest", "ga", "v12")
 V13_PROFILES = ("full", "latest", "ga", "v13")
 
 _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
-    _command("pytest.full", "pytest", ("python", "-m", "pytest", "-q"), group="core", kind="pytest", risk="critical", timeout_seconds=6000, duration_budget_seconds=1800),
+    _command(
+        "pytest.full",
+        "pytest",
+        ("python", "-m", "pytest", "-q", "-W", "ignore:Duplicate name:UserWarning"),
+        group="core",
+        kind="pytest",
+        risk="critical",
+        timeout_seconds=6000,
+        duration_budget_seconds=3600,
+    ),
     _command("git.diff_check", "git diff --check", ("git", "-c", "core.safecrlf=false", "diff", "--check"), group="git", kind="git", risk="high", timeout_seconds=60, profiles=BASE_PROFILES),
     _callable("git.status", "git status", "_git_status_check", group="git", risk="high", timeout_seconds=60, profiles=("full", "ga")),
     _callable("git.remote_url_token", "remote url token check", "_remote_url_token_check", group="git", risk="high", timeout_seconds=60, profiles=("full", "ga")),
