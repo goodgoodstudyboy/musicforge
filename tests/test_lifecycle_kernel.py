@@ -134,6 +134,14 @@ def test_change_request_authorization_is_approved_scoped_bound_and_single_use() 
     with pytest.raises(ValueError, match="target"):
         ChangeRequestService.validate_reset_authorization(request, resigned_approval, expected)
 
+    for missing_field in ("approved_actions", "request_hash"):
+        incomplete = _integrity({key: value for key, value in approval.items() if key not in {missing_field, "integrity_hash"}})
+        with pytest.raises(ValueError):
+            ChangeRequestService.validate_reset_authorization(request, incomplete, expected)
+    missing_submitted = _integrity({key: value for key, value in request.items() if key not in {"submitted_request_hash", "integrity_hash"}})
+    with pytest.raises(ValueError, match="submitted hash"):
+        ChangeRequestService.validate_reset_authorization(missing_submitted, approval, expected)
+
 
 def test_generation_and_external_evidence_identity_are_order_independent() -> None:
     assert GenerationService.successor(1) == 2
@@ -169,6 +177,14 @@ def test_archive_builder_freezes_layout_content_and_existing_zip(tmp_path: Path)
     with zip_path.open("ab") as stream:
         stream.write(b"tamper")
     with pytest.raises(ValueError, match="trailing data"):
+        ArchiveBuilder.build_zip(export_dir, zip_path, expected)
+
+    zip_path.unlink()
+    ArchiveBuilder.build_zip(export_dir, zip_path, expected)
+    with pytest.warns(UserWarning, match="Duplicate name"):
+        with __import__("zipfile").ZipFile(zip_path, "a") as archive:
+            archive.writestr("README.txt", expected["README.txt"])
+    with pytest.raises(ValueError, match="duplicate entries"):
         ArchiveBuilder.build_zip(export_dir, zip_path, expected)
 
     source = tmp_path / "source.bin"

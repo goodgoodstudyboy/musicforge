@@ -61,7 +61,10 @@ def run_lifecycle_kernel_smoke(root: Path) -> tuple[bool, str]:
                 "target": target,
                 "source": source,
             }
-            approval = _integrity({"program_id": "subject-1", "change_request_id": "cr-1", "status": "approved", "target": target, "source": source, "approved_actions": ["reset_signoff"]})
+            submitted = _integrity(request)
+            submitted_hash = submitted["integrity_hash"]
+            approval = _integrity({"program_id": "subject-1", "change_request_id": "cr-1", "status": "approved", "target": target, "source": source, "approved_actions": ["reset_signoff"], "request_hash": submitted_hash})
+            request["submitted_request_hash"] = submitted_hash
             request["approval_hash"] = approval["integrity_hash"]
             request = _integrity(request)
             expected = ResetAuthorization("subject-1", "cr-1", "reset_signoff", "reset_signoff", target, source)

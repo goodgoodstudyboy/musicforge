@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import re
+import stat
+import zipfile
+import zlib
+from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 
 
@@ -18,6 +22,14 @@ def is_safe_zip_entry(name: str) -> bool:
     if any(part.lower() == ".musicforge" for part in path.parts):
         return False
     return True
+
+
+def is_regular_zip_entry(info: zipfile.ZipInfo) -> bool:
+    if info.is_dir() or not is_safe_zip_entry(info.filename):
+        return False
+    mode = (info.external_attr >> 16) & 0xFFFF
+    file_type = stat.S_IFMT(mode)
+    return file_type in (0, stat.S_IFREG)
 
 
 def raw_central_directory_entry_names(zip_path: Path | str) -> list[str]:
@@ -54,3 +66,45 @@ def zip_has_no_trailing_data(zip_path: Path | str) -> bool:
         return False
     comment_len = int.from_bytes(data[offset + 20 : offset + 22], "little")
     return offset + 22 + comment_len == len(data)
+
+
+def frozen_zip_snapshot_errors(zip_path: Path | str, expected: Mapping[str, bytes]) -> list[str]:
+    target = Path(zip_path)
+    errors: list[str] = []
+    expected_names = sorted(expected)
+    if not target.is_file():
+        return ["missing"]
+    if not zip_has_no_trailing_data(target):
+        errors.append("trailing data")
+    raw_names = raw_central_directory_entry_names(target)
+    if raw_names != expected_names:
+        errors.append("raw entry layout")
+    try:
+        with zipfile.ZipFile(target) as archive:
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            if len(names) != len(set(names)):
+                errors.append("duplicate entries")
+            if names != expected_names:
+                errors.append("entry layout or order")
+            for info in infos:
+                if not is_regular_zip_entry(info):
+                    errors.append(f"non-regular entry:{info.filename}")
+                    continue
+                expected_data = expected.get(info.filename)
+                if expected_data is None:
+                    continue
+                if info.file_size != len(expected_data):
+                    errors.append(f"entry size:{info.filename}")
+                if info.CRC != (zlib.crc32(expected_data) & 0xFFFFFFFF):
+                    errors.append(f"entry crc:{info.filename}")
+                try:
+                    actual_data = archive.read(info)
+                except (OSError, RuntimeError, zipfile.BadZipFile):
+                    errors.append(f"entry readable:{info.filename}")
+                    continue
+                if actual_data != expected_data:
+                    errors.append(f"entry content:{info.filename}")
+    except (OSError, zipfile.BadZipFile):
+        errors.append("readable")
+    return sorted(set(errors))

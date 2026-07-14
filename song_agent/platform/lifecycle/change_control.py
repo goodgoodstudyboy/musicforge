@@ -29,13 +29,21 @@ class ChangeRequestService:
             raise ValueError("Approval target binding mismatch.")
         if expected.source is not None and (approval.get("source") != request.get("source") or request.get("source") != expected.source):
             raise ValueError("Approval source binding mismatch.")
-        approved_actions = set(approval.get(approved_actions_field) or [])
-        if approved_actions and expected.action not in approved_actions:
+        approved_actions_value = approval.get(approved_actions_field)
+        if not isinstance(approved_actions_value, list) or not approved_actions_value:
+            raise ValueError("Approval must declare approved actions.")
+        approved_actions = set(approved_actions_value)
+        if expected.action not in approved_actions:
             raise ValueError("Approval does not authorize the reset action.")
-        submitted_hash = request.get("submitted_request_hash") or request.get("request_hash")
-        if approval.get("request_hash") and submitted_hash and approval.get("request_hash") != submitted_hash:
+        submitted_hash = request.get("submitted_request_hash")
+        if not isinstance(submitted_hash, str) or not submitted_hash:
+            raise ValueError("Change Request immutable submitted hash is missing.")
+        approval_request_hash = approval.get("request_hash")
+        if not isinstance(approval_request_hash, str) or not approval_request_hash:
+            raise ValueError("Approval request hash is missing.")
+        if approval_request_hash != submitted_hash:
             raise ValueError("Approval request hash mismatch.")
-        if request.get("approval_hash") and request.get("approval_hash") != approval.get("integrity_hash"):
+        if request.get("approval_hash") != approval.get("integrity_hash"):
             raise ValueError("Change Request approval hash mismatch.")
 
 

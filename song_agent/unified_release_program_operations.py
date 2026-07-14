@@ -158,6 +158,7 @@ class UnifiedReleaseProgramOperationsStore:
                 raise UnifiedReleaseProgramOperationsStateError("Only submitted Program Change Requests can be approved.")
             self._assert_request_current(program_id, request, payload)
             now = now_iso()
+            submitted_request_hash = request.get("integrity_hash")
             approval = sanitize_metadata(
                 {
                     "schema_version": UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION,
@@ -168,8 +169,9 @@ class UnifiedReleaseProgramOperationsStore:
                     "approved_by": _bounded(payload.get("approved_by") or "program-owner", 120),
                     "role": _bounded(payload.get("role") or "program_owner", 80),
                     "reason": _bounded(payload.get("reason") or request.get("reason") or "Approved Program reset.", 1000),
+                    "approved_actions": list(request.get("allowed_actions") or []),
                     "approved_at": now,
-                    "request_hash": request.get("integrity_hash"),
+                    "request_hash": submitted_request_hash,
                     "target": request.get("target"),
                     "source": request.get("source"),
                 }
@@ -177,6 +179,7 @@ class UnifiedReleaseProgramOperationsStore:
             approval["payload_hash"] = stable_hash({key: value for key, value in approval.items() if key not in {"payload_hash", "integrity_hash"}})
             approval["integrity_hash"] = _integrity_hash(approval)
             request["status"] = "approved"
+            request["submitted_request_hash"] = submitted_request_hash
             request["approved_at"] = now
             request["approval_hash"] = approval.get("integrity_hash")
             request["updated_at"] = now

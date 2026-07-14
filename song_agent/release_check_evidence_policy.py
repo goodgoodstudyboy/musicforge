@@ -25,7 +25,14 @@ def _smoke_runtime_verifier(package_path: Path | str, *, strict: bool = False) -
         "zip_sha256": fingerprint,
         "zip_size_bytes": target.stat().st_size if target.is_file() else 0,
         "manifest_hash": fingerprint,
-        "summary": {"status": "passed", "generation": 1},
+        "summary": {
+            "status": "passed",
+            "component_id": "release-001",
+            "generation": 1,
+            "current_generation": 1,
+            "current": True,
+            "source_hash": fingerprint,
+        },
         "blockers": [],
     }
     report["integrity_hash"] = integrity_hash(report)

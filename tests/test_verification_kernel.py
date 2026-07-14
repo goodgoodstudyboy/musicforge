@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import zipfile
 from pathlib import Path
 
@@ -170,6 +171,62 @@ def test_verification_kernel_rejects_duplicate_raw_backslash_trailing_and_spoof(
 
     wrong_type = _write_package(tmp_path / "wrong-type.zip", package_type="wrong_package")
     assert "kernel_test_package_type" in _status(wrong_type)[1]
+
+
+@pytest.mark.parametrize("file_type", [stat.S_IFDIR, stat.S_IFLNK, stat.S_IFIFO])
+def test_verification_kernel_rejects_non_regular_entries_in_all_modes(tmp_path: Path, file_type: int) -> None:
+    package = tmp_path / f"non-regular-{file_type}.zip"
+    data = b'{}'
+    readme = b"kernel fixture\n"
+    manifest = {
+        "schema_version": 1,
+        "package_type": "musicforge_test_kernel_package",
+        "files": [
+            {"path": "data.json", "sha256": sha256_bytes(data), "size_bytes": len(data)},
+            {"path": "README.txt", "sha256": sha256_bytes(readme), "size_bytes": len(readme)},
+        ],
+    }
+    manifest["integrity_hash"] = integrity_hash(manifest)
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("manifest.json", json.dumps(manifest, sort_keys=True))
+        info = zipfile.ZipInfo("data.json")
+        info.create_system = 3
+        info.external_attr = (file_type | 0o644) << 16
+        archive.writestr(info, data)
+        archive.writestr("README.txt", readme)
+
+    strict = verify_package_envelope(package, _spec(), strict=True)
+    relaxed = verify_package_envelope(package, _spec(), strict=False)
+
+    assert strict["status"] == "failed"
+    assert relaxed["status"] == "failed"
+    assert "kernel_test_entry_types_regular" in strict["blockers"]
+    assert "kernel_test_entry_types_regular" in relaxed["blockers"]
+
+
+def test_verification_kernel_requires_and_checks_manifest_size(tmp_path: Path) -> None:
+    package = tmp_path / "wrong-size.zip"
+    data = b'{}'
+    readme = b"readme"
+    manifest = {
+        "schema_version": 1,
+        "package_type": "musicforge_test_kernel_package",
+        "files": [
+            {"path": "data.json", "sha256": sha256_bytes(data), "size_bytes": len(data) + 1},
+            {"path": "README.txt", "sha256": sha256_bytes(readme)},
+        ],
+    }
+    manifest["integrity_hash"] = integrity_hash(manifest)
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("manifest.json", json.dumps(manifest, sort_keys=True))
+        archive.writestr("data.json", data)
+        archive.writestr("README.txt", readme)
+
+    status, blockers = _status(package)
+
+    assert status == "failed"
+    assert "kernel_test_manifest_file_data_json_size" in blockers
+    assert "kernel_test_manifest_file_README_txt_fields" in blockers
 
 
 def test_verification_kernel_nested_allowlist_history_and_evidence_identity(tmp_path: Path) -> None:

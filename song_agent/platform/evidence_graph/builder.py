@@ -107,6 +107,7 @@ def _build_nodes(
             continue
         node = _build_node(raw, root=root, allowed_root=allowed_root, registry=registry)
         identity = node.ref.identity
+        claimed_identity = _claimed_identity(raw)
         if identity in seen_identities:
             blockers.append(f"evidence_identity_duplicate:{node.node_id}")
         seen_identities.add(identity)
@@ -116,12 +117,12 @@ def _build_nodes(
         report_locator = str(raw.get("verification_report_path") or raw.get("verification_report") or "")
         if report_locator:
             resolved_locator = str(_resolve_path(root, report_locator)).casefold()
-            owner = report_owners.setdefault(resolved_locator, identity)
-            if owner != identity:
+            owner = report_owners.setdefault(resolved_locator, claimed_identity)
+            if owner != claimed_identity:
                 blockers.append(f"evidence_report_reused:{node.node_id}")
         if node.ref.verification_report_hash:
-            owner = report_hash_owners.setdefault(node.ref.verification_report_hash, identity)
-            if owner != identity:
+            owner = report_hash_owners.setdefault(node.ref.verification_report_hash, claimed_identity)
+            if owner != claimed_identity:
                 blockers.append(f"evidence_report_hash_reused:{node.node_id}")
         nodes.append(node)
     return nodes
@@ -178,16 +179,30 @@ def _build_node(
     resolved_proofs = _resolve_proofs(row, root, allowed_root, spec, blockers)
     runtime = _run_runtime(package_path, resolved_proofs, spec, blockers)
     runtime_status = _text(runtime.get("status")) or "failed"
+    runtime_identity = spec.extract_identity(runtime, component_type=capability.component_type)
+    report_identity = spec.extract_identity(external_report, component_type=capability.component_type)
+    manifest_identity = _manifest_identity(
+        row,
+        canonical_component_type=capability.component_type,
+        package_type=spec.package_type,
+    )
+    blockers.extend(_identity_blockers(manifest_identity, runtime_identity, report_identity))
+    canonical_component_id = _text(runtime_identity.get("component_id")) or component_id
+    canonical_generation = _positive_int(runtime_identity.get("generation"), default=generation)
+    canonical_node_id = _node_id(capability.component_type, canonical_component_id, evidence_type, canonical_generation)
+    if canonical_node_id != node_id:
+        blockers.append("evidence_node_identity_runtime")
+    node_id = canonical_node_id
     actual_zip_hash, actual_zip_size, runtime_fp, report_fp = _validate_bindings(
         row, package_path, runtime, external_report, blockers
     )
     _append_runtime_diagnostics(runtime, blockers, warnings)
-    current = runtime_status == "passed" and row.get("current", True) is not False and not blockers
+    current = runtime_status == "passed" and runtime_identity.get("current") is True and not blockers
     ref = EvidenceRef(
-        component_type=component_type,
-        component_id=component_id,
+        component_type=capability.component_type,
+        component_id=canonical_component_id,
         evidence_type=evidence_type,
-        generation=generation,
+        generation=canonical_generation,
         package_type=spec.package_type,
         zip_sha256=str(actual_zip_hash or ""),
         zip_size_bytes=actual_zip_size,
@@ -207,7 +222,7 @@ def _build_node(
         blockers=tuple(sorted(set(blockers))),
         warnings=tuple(sorted(set(warnings))),
         dependencies=_dependencies(row),
-        runtime_summary=_public_runtime_summary(runtime),
+        runtime_summary={**_public_runtime_summary(runtime), "identity": runtime_identity},
     )
 
 
@@ -225,6 +240,53 @@ def _node_identity(row: dict[str, Any]) -> tuple[str, str, str, int, str, list[s
     if provided and provided != node_id:
         blockers.append("evidence_node_id_identity")
     return component_type, component_id, evidence_type, generation, node_id, blockers
+
+
+def _claimed_identity(row: dict[str, Any]) -> tuple[str, str, str, int]:
+    component_type, component_id, evidence_type, generation, _node, _blockers = _node_identity(row)
+    return component_type, component_id, evidence_type, generation
+
+
+def _manifest_identity(
+    row: dict[str, Any],
+    *,
+    canonical_component_type: str,
+    package_type: str,
+) -> dict[str, Any]:
+    generation = _positive_int(row.get("generation"), default=1)
+    current_generation = _positive_int(row.get("current_generation"), default=generation)
+    return {
+        "component_type": canonical_component_type,
+        "component_id": _text(row.get("component_id")),
+        "generation": generation,
+        "current_generation": current_generation,
+        "current": row.get("current", True) is True,
+        "package_type": _text(row.get("package_type")) or package_type,
+        "source_hash": _text(row.get("source_hash")),
+    }
+
+
+def _identity_blockers(
+    manifest: dict[str, Any],
+    runtime: dict[str, Any],
+    external: dict[str, Any],
+) -> list[str]:
+    blockers: list[str] = []
+    required_fields = ("component_type", "component_id", "generation", "current_generation", "package_type", "source_hash")
+    for owner, identity in (("runtime", runtime), ("external", external)):
+        for field in required_fields:
+            if identity.get(field) in (None, "", 0):
+                blockers.append(f"evidence_{owner}_identity_{field}_required")
+    for field in ("component_type", "component_id", "generation", "current_generation", "current", "package_type"):
+        if manifest.get(field) != runtime.get(field):
+            blockers.append(f"evidence_manifest_identity_{field}")
+        if external.get(field) != runtime.get(field):
+            blockers.append(f"evidence_external_identity_{field}")
+    if manifest.get("source_hash") and manifest.get("source_hash") != runtime.get("source_hash"):
+        blockers.append("evidence_manifest_identity_source_hash")
+    if external.get("source_hash") != runtime.get("source_hash"):
+        blockers.append("evidence_external_identity_source_hash")
+    return blockers
 
 
 def _read_external_report(path: Path | None, package_type: str, blockers: list[str]) -> dict[str, Any]:
@@ -468,3 +530,11 @@ def _proof_hash(path: Path | None) -> str:
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    return number if number > 0 else default

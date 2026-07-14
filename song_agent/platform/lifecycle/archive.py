@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent.platform.verification.hashing import sha256_file
-from song_agent.platform.verification.zip_security import zip_has_no_trailing_data
+from song_agent.platform.verification.zip_security import frozen_zip_snapshot_errors, is_safe_zip_entry
 
 
 class ImmutableSnapshotGuard:
@@ -32,6 +32,9 @@ class ArchiveBuilder:
     @staticmethod
     def export_documents(export_dir: Path, documents: dict[str, dict[str, Any] | str | bytes]) -> dict[str, bytes]:
         payloads = {name: _serialize(value) for name, value in documents.items()}
+        unsafe = sorted(name for name in payloads if not is_safe_zip_entry(name) or name.endswith("/"))
+        if unsafe:
+            raise ValueError(f"Archive snapshot contains unsafe entry names: {unsafe}")
         if export_dir.exists():
             ImmutableSnapshotGuard.require_export_matches(export_dir, payloads)
             return payloads
@@ -45,12 +48,9 @@ class ArchiveBuilder:
     def build_zip(export_dir: Path, zip_path: Path, expected: dict[str, bytes]) -> Path:
         ImmutableSnapshotGuard.require_export_matches(export_dir, expected)
         if zip_path.exists():
-            if not zip_has_no_trailing_data(zip_path):
-                raise ValueError("Existing archive ZIP contains trailing data.")
-            with zipfile.ZipFile(zip_path) as archive:
-                names = set(archive.namelist())
-                if names != set(expected) or any(archive.read(name) != data for name, data in expected.items()):
-                    raise ValueError("Existing archive ZIP does not match the frozen snapshot.")
+            errors = frozen_zip_snapshot_errors(zip_path, expected)
+            if errors:
+                raise ValueError(f"Existing archive ZIP does not match the frozen snapshot: {', '.join(errors)}.")
             return zip_path
         zip_path.parent.mkdir(parents=True, exist_ok=True)
         temp = zip_path.with_suffix(zip_path.suffix + ".tmp")
@@ -58,6 +58,9 @@ class ArchiveBuilder:
             for name in sorted(expected):
                 archive.writestr(name, expected[name])
         temp.replace(zip_path)
+        errors = frozen_zip_snapshot_errors(zip_path, expected)
+        if errors:
+            raise ValueError(f"Built archive ZIP does not match the frozen snapshot: {', '.join(errors)}.")
         return zip_path
 
     @staticmethod

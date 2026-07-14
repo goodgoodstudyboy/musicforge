@@ -1,5 +1,11 @@
 # Changelog
 
+## v13.0.1 - 2026-07-14
+
+- Hardened the shared Verification Kernel against directory, symlink, special-file, duplicate, size, and frozen-archive attacks in strict and relaxed modes.
+- Bound Evidence Graph identities to runtime and external verifier facts instead of manifest claims.
+- Made shared Change Request reset authorization fail closed and normalized active Program reset producers.
+
 ## v13.0.0 - 2026-07-13
 
 ### Changed

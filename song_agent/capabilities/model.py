@@ -1,8 +1,60 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import import_module
 from typing import Any, Callable
+
+
+@dataclass(frozen=True)
+class RuntimeIdentitySpec:
+    """Extracts a canonical evidence identity from verifier-owned output."""
+
+    component_id_fields: tuple[str, ...] = (
+        "component_id",
+        "program_id",
+        "release_id",
+        "center_id",
+        "target_id",
+        "submission_id",
+        "operations_id",
+    )
+    generation_fields: tuple[str, ...] = ("generation", "current_generation")
+    current_generation_fields: tuple[str, ...] = ("current_generation", "generation")
+    current_fields: tuple[str, ...] = ("current",)
+    source_hash_fields: tuple[str, ...] = ("source_hash", "manifest_hash")
+    default_generation: int = 1
+
+    def extract(
+        self,
+        report: dict[str, Any],
+        *,
+        component_type: str,
+        package_type: str,
+    ) -> dict[str, Any]:
+        component_id = _first_report_value(report, self.component_id_fields)
+        generation = _positive_int(
+            _first_report_value(report, self.generation_fields),
+            default=self.default_generation,
+        )
+        current_generation = _positive_int(
+            _first_report_value(report, self.current_generation_fields),
+            default=generation,
+        )
+        explicit_current = _first_report_value(report, self.current_fields)
+        current = (
+            bool(explicit_current)
+            if isinstance(explicit_current, bool)
+            else report.get("status") == "passed" and generation == current_generation
+        )
+        return {
+            "component_type": str(component_type),
+            "component_id": str(component_id or ""),
+            "generation": generation,
+            "current_generation": current_generation,
+            "current": current,
+            "package_type": str(package_type),
+            "source_hash": str(_first_report_value(report, self.source_hash_fields) or ""),
+        }
 
 
 @dataclass(frozen=True)
@@ -14,9 +66,17 @@ class RuntimeVerificationSpec:
     defaults: tuple[tuple[str, Any], ...] = ()
     proof_arguments: tuple[tuple[str, str], ...] = ()
     required_proofs: tuple[str, ...] = ()
+    identity: RuntimeIdentitySpec = field(default_factory=RuntimeIdentitySpec)
 
     def verifier(self) -> Callable[..., dict[str, Any]]:
         return getattr(import_module(self.module), self.function)
+
+    def extract_identity(self, report: dict[str, Any], *, component_type: str) -> dict[str, Any]:
+        return self.identity.extract(
+            report,
+            component_type=component_type,
+            package_type=self.package_type,
+        )
 
 
 @dataclass(frozen=True)
@@ -32,3 +92,28 @@ class CapabilitySpec:
     web_panel: str = ""
     release_checks: tuple[str, ...] = ()
     compatibility_aliases: tuple[str, ...] = ()
+
+
+def _report_containers(report: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    identity = report.get("identity") if isinstance(report.get("identity"), dict) else {}
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    verification = summary.get("verification") if isinstance(summary.get("verification"), dict) else {}
+    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    return identity, summary, report, verification, source
+
+
+def _first_report_value(report: dict[str, Any], fields: tuple[str, ...]) -> Any:
+    for container in _report_containers(report):
+        for name in fields:
+            value = container.get(name)
+            if value not in (None, ""):
+                return value
+    return None
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    return number if number > 0 else default

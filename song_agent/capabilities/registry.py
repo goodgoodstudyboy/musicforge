@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from song_agent.capabilities.model import CapabilitySpec, RuntimeVerificationSpec
+from song_agent.capabilities.model import CapabilitySpec, RuntimeIdentitySpec, RuntimeVerificationSpec
 
 # Compatibility export for v12 callers; definitions live in model.py so the
 # registry/provider dependency remains acyclic.
-__all__ = ["CapabilityRegistry", "CapabilitySpec", "RuntimeVerificationSpec", "capability_registry"]
+__all__ = ["CapabilityRegistry", "CapabilitySpec", "RuntimeIdentitySpec", "RuntimeVerificationSpec", "capability_registry"]
 
 
 class CapabilityRegistry:
@@ -43,6 +43,12 @@ class CapabilityRegistry:
                 "application_service": item.application_service,
                 "package_type": item.runtime.package_type,
                 "verification_package_type": item.runtime.verification_package_type,
+                "identity_fields": {
+                    "component_id": list(item.runtime.identity.component_id_fields),
+                    "generation": list(item.runtime.identity.generation_fields),
+                    "current_generation": list(item.runtime.identity.current_generation_fields),
+                    "source_hash": list(item.runtime.identity.source_hash_fields),
+                },
                 "gate_policies": list(item.gate_policies),
                 "cli_commands": list(item.cli_commands),
                 "api_routes": list(item.api_routes),

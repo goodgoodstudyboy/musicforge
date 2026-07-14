@@ -213,6 +213,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                     "Receiver Acceptance approval source cannot differ from the Change Request."
                 )
             now = now_iso()
+            submitted_request_hash = request.get("integrity_hash")
             approved_actions = list(payload.get("approved_actions") or request.get("allowed_actions") or [])
             if approved_actions != list(request.get("allowed_actions") or []):
                 raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError(
@@ -231,7 +232,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                     "approved_actions": [_bounded(action, 160) for action in approved_actions],
                     "approved_at": now,
                     "request_payload_hash": request.get("payload_hash"),
-                    "request_hash": request.get("integrity_hash"),
+                    "request_hash": submitted_request_hash,
                     "target": request.get("target"),
                     "source": request.get("source"),
                 }
@@ -239,6 +240,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             approval["payload_hash"] = stable_hash({key: value for key, value in approval.items() if key not in {"payload_hash", "integrity_hash"}})
             approval["integrity_hash"] = _integrity_hash(approval)
             request["status"] = "approved"
+            request["submitted_request_hash"] = submitted_request_hash
             request["approval_hash"] = approval.get("integrity_hash")
             request["approved_at"] = now
             request["updated_at"] = now

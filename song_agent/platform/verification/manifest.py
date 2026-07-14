@@ -33,10 +33,21 @@ def manifest_file_checks(
     names = set(archive.namelist())
     for row in rows:
         path = str(row.get("path") or "")
+        required_fields = (
+            bool(path)
+            and isinstance(row.get("sha256"), str)
+            and len(str(row.get("sha256"))) == 64
+            and isinstance(row.get("size_bytes"), int)
+            and not isinstance(row.get("size_bytes"), bool)
+            and int(row.get("size_bytes")) >= 0
+        )
+        checks.append(build_check(f"{check_prefix}_file_{safe_check_key(path)}_fields", required_fields, "Manifest file row includes path, sha256, and size_bytes.", {"entry": path}))
         exists = path in names
         checks.append(build_check(f"{check_prefix}_file_{safe_check_key(path)}_exists", exists, "Manifest file exists in ZIP.", {"entry": path}))
         if exists:
-            checks.append(build_check(f"{check_prefix}_file_{safe_check_key(path)}_hash", row.get("sha256") == sha256_bytes(archive.read(path)), "Manifest file hash matches ZIP entry.", {"entry": path}))
+            data = archive.read(path)
+            checks.append(build_check(f"{check_prefix}_file_{safe_check_key(path)}_hash", row.get("sha256") == sha256_bytes(data), "Manifest file hash matches ZIP entry.", {"entry": path}))
+            checks.append(build_check(f"{check_prefix}_file_{safe_check_key(path)}_size", row.get("size_bytes") == len(data), "Manifest file size matches ZIP entry.", {"entry": path}))
     return checks
 
 

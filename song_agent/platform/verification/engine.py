@@ -11,7 +11,12 @@ from song_agent.platform.verification.hashing import integrity_ok, sha256_file
 from song_agent.platform.verification.manifest import manifest_file_checks
 from song_agent.platform.verification.model import build_check, build_verification_report, has_blocking_failures
 from song_agent.platform.verification.redaction import archive_redaction_check
-from song_agent.platform.verification.zip_security import is_safe_zip_entry, raw_unsafe_entry_names, zip_has_no_trailing_data
+from song_agent.platform.verification.zip_security import (
+    is_regular_zip_entry,
+    is_safe_zip_entry,
+    raw_unsafe_entry_names,
+    zip_has_no_trailing_data,
+)
 
 
 def verify_package_envelope(
@@ -20,7 +25,6 @@ def verify_package_envelope(
     *,
     strict: bool = True,
 ) -> dict[str, Any]:
-    del strict
     target = Path(zip_path)
     checks: list[dict[str, Any]] = []
     target_is_file = target.is_file()
@@ -45,7 +49,7 @@ def verify_package_envelope(
             summary["manifest_hash"] = manifest.get("integrity_hash")
             checks.append(archive_redaction_check(archive, names, check_id=f"{spec.check_prefix}_redaction_scan", suffixes=spec.redaction_suffixes))
             if spec.semantic_verifier and not has_blocking_failures(checks):
-                checks.extend(spec.semantic_verifier({"archive": archive, "manifest": manifest, "names": names, "summary": summary}))
+                checks.extend(spec.semantic_verifier({"archive": archive, "manifest": manifest, "names": names, "summary": summary, "strict": strict}))
     except (OSError, zipfile.BadZipFile, ValueError) as exc:
         checks.append(build_check(f"{spec.check_prefix}_zip_readable", False, "Package ZIP is readable.", {"error_type": type(exc).__name__}))
     return build_verification_report(
@@ -69,6 +73,7 @@ def _entry_structure_checks(infos: list[zipfile.ZipInfo], names: list[str], spec
     name_set = set(names)
     duplicates = sorted({name for name in names if names.count(name) > 1})
     unsafe = sorted(name for name in names if not is_safe_zip_entry(name))
+    non_regular = sorted(info.filename for info in infos if not is_regular_zip_entry(info))
     nested = sorted(name for name in names if name.lower().endswith(".zip"))
     allowed_nested = {
         name for name in nested
@@ -86,6 +91,7 @@ def _entry_structure_checks(infos: list[zipfile.ZipInfo], names: list[str], spec
         build_check(f"{spec.check_prefix}_entry_count", len(infos) <= spec.max_entry_count, "ZIP entry count is within limit.", {"entry_count": len(infos)}),
         build_check(f"{spec.check_prefix}_uncompressed_size", sum(info.file_size for info in infos) <= spec.max_uncompressed_size_mb * 1024 * 1024, "ZIP uncompressed size is within limit."),
         build_check(f"{spec.check_prefix}_entry_paths_safe", not unsafe, "ZIP entry paths are safe.", {"unsafe": unsafe}),
+        build_check(f"{spec.check_prefix}_entry_types_regular", not non_regular, "ZIP contains only regular file entries.", {"non_regular": non_regular}),
         build_check(f"{spec.check_prefix}_nested_zip_policy", not disallowed_nested, "Nested ZIP policy is satisfied.", {"disallowed": disallowed_nested}),
         build_check(f"{spec.check_prefix}_allowed_entries", not extra, "ZIP contains only PackageSpec entries.", {"extra": extra}),
         build_check(f"{spec.check_prefix}_required_entries", not missing, "ZIP contains required PackageSpec entries.", {"missing": sorted(set(missing))}),

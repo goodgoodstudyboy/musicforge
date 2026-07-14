@@ -298,6 +298,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
                     "approved_by": _bounded(payload.get("approved_by") or "program-owner", 120),
                     "role": _bounded(payload.get("role") or "program_owner", 80),
                     "reason": _bounded(payload.get("reason") or request.get("reason"), 1000),
+                    "approved_actions": list(request.get("allowed_actions") or []),
                     "approved_at": now_iso(),
                     "request_hash": submitted_request_hash,
                     "target": request.get("target"),

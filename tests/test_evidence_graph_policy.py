@@ -28,13 +28,21 @@ FAKE_VERIFICATION_PACKAGE_TYPE = "musicforge_test_evidence_verification"
 def fake_runtime_verifier(package_path: Path | str, *, strict: bool = False) -> dict:
     target = Path(package_path)
     fingerprint = sha256_file(target)
+    component_id = target.stem if target.stem in {"one", "two"} else "component-001"
     report = {
         "package_type": FAKE_VERIFICATION_PACKAGE_TYPE,
         "status": "passed" if target.is_file() else "failed",
         "zip_sha256": fingerprint,
         "zip_size_bytes": target.stat().st_size if target.is_file() else 0,
         "manifest_hash": fingerprint,
-        "summary": {"status": "passed", "generation": 1},
+        "summary": {
+            "status": "passed",
+            "component_id": component_id,
+            "generation": 1,
+            "current_generation": 1,
+            "current": True,
+            "source_hash": fingerprint,
+        },
         "blockers": [],
     }
     report["integrity_hash"] = integrity_hash(report)
@@ -116,6 +124,35 @@ def test_evidence_graph_rejects_stale_report_after_package_tamper(tmp_path: Path
     assert "evidence_verification_zip_sha256" in tampered.nodes[0].blockers
 
 
+def test_evidence_graph_rejects_manifest_identity_generation_and_current_forgery(tmp_path: Path) -> None:
+    _package, _report, manifest = _fixture(tmp_path)
+    for forged_fields, expected_blocker in (
+        ({"component_id": "forged-component"}, "evidence_manifest_identity_component_id"),
+        ({"generation": 2}, "evidence_manifest_identity_generation"),
+        ({"current_generation": 2}, "evidence_manifest_identity_current_generation"),
+        ({"current": False}, "evidence_manifest_identity_current"),
+    ):
+        write_evidence_graph_manifest(
+            manifest,
+            items=[
+                {
+                    "component_type": "unified_release_program",
+                    "component_id": "component-001",
+                    "evidence_type": "signed_archive",
+                    "generation": 1,
+                    "package_path": "evidence.zip",
+                    "verification_report_path": "verification-report.json",
+                    **forged_fields,
+                }
+            ],
+        )
+        graph = build_evidence_graph(manifest, registry=_registry())
+        assert graph.status == "failed"
+        assert expected_blocker in graph.nodes[0].blockers
+        assert graph.nodes[0].ref.component_id == "component-001"
+        assert graph.nodes[0].ref.generation == 1
+
+
 def test_evidence_graph_treats_package_directory_as_failed_evidence(tmp_path: Path) -> None:
     package, _report, manifest = _fixture(tmp_path)
     package.unlink()
@@ -145,14 +182,22 @@ def test_evidence_graph_rejects_duplicate_identity_and_report_reuse(tmp_path: Pa
 
 
 def test_evidence_graph_rejects_dependency_cycle_and_spoofed_node_id(tmp_path: Path) -> None:
-    package, report, manifest = _fixture(tmp_path)
+    _package, _report, manifest = _fixture(tmp_path)
+    one_package = tmp_path / "one.zip"
+    two_package = tmp_path / "two.zip"
+    one_package.write_bytes(b"one")
+    two_package.write_bytes(b"two")
+    one_report = tmp_path / "one-report.json"
+    two_report = tmp_path / "two-report.json"
+    write_json(one_report, fake_runtime_verifier(one_package, strict=True))
+    write_json(two_report, fake_runtime_verifier(two_package, strict=True))
     one = "unified_release_program:one:archive:1"
     two = "unified_release_program:two:archive:1"
     write_evidence_graph_manifest(
         manifest,
         items=[
-            {"node_id": "spoofed", "component_type": "unified_release_program", "component_id": "one", "evidence_type": "archive", "package_path": package.name, "verification_report_path": report.name, "dependencies": [two]},
-            {"component_type": "unified_release_program", "component_id": "two", "evidence_type": "archive", "package_path": package.name, "verification_report_path": report.name, "dependencies": [one]},
+            {"node_id": "spoofed", "component_type": "unified_release_program", "component_id": "one", "evidence_type": "archive", "package_path": one_package.name, "verification_report_path": one_report.name, "dependencies": [two]},
+            {"component_type": "unified_release_program", "component_id": "two", "evidence_type": "archive", "package_path": two_package.name, "verification_report_path": two_report.name, "dependencies": [one]},
         ],
     )
 
