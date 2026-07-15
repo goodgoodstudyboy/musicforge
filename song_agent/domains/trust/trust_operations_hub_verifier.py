@@ -1,4 +1,7 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -1227,28 +1230,6 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _raw_zip_entry_names(zip_path: Path) -> list[str]:
-    try:
-        data = Path(_fs_path(zip_path)).read_bytes()
-    except OSError:
-        return []
-    names: list[str] = []
-    offset = 0
-    signature = b"PK\x01\x02"
-    while True:
-        index = data.find(signature, offset)
-        if index < 0 or index + 46 > len(data):
-            break
-        name_len, extra_len, comment_len = struct.unpack_from("<HHH", data, index + 28)
-        start = index + 46
-        end = start + name_len
-        if end > len(data):
-            break
-        names.append(data[start:end].decode("utf-8", errors="replace"))
-        offset = end + extra_len + comment_len
-    return names
 
 
 def _counts(values: list[str]) -> dict[str, int]:

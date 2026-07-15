@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -398,53 +402,11 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _is_safe_zip_entry(name: str) -> bool:
-    if "\\" in name or not name:
-        return False
-    if name.startswith("/") or name.startswith("//"):
-        return False
-    path = PurePosixPath(name)
-    if path.is_absolute():
-        return False
-    parts = path.parts
-    if any(part in {"", ".", ".."} for part in parts):
-        return False
-    if ":" in parts[0]:
-        return False
-    return True
-
-
 def _counts(items: list[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in items:
         counts[item] = counts.get(item, 0) + 1
     return counts
-
-
-def _raw_zip_entry_names(path: Path) -> list[str]:
-    data = path.read_bytes()
-    names: list[str] = []
-    signature = b"PK\x01\x02"
-    index = 0
-    while True:
-        index = data.find(signature, index)
-        if index < 0 or index + 46 > len(data):
-            break
-        try:
-            name_len, extra_len, comment_len = struct.unpack_from("<HHH", data, index + 28)
-        except struct.error:
-            break
-        name_start = index + 46
-        name_end = name_start + name_len
-        if name_end > len(data):
-            break
-        raw_name = data[name_start:name_end]
-        try:
-            names.append(raw_name.decode("utf-8"))
-        except UnicodeDecodeError:
-            names.append(raw_name.decode("cp437", errors="replace"))
-        index = name_end + extra_len + comment_len
-    return names
 
 
 def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:

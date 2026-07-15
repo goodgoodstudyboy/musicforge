@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import os
 import stat
 import zipfile
 import zlib
@@ -33,7 +34,8 @@ def is_regular_zip_entry(info: zipfile.ZipInfo) -> bool:
 
 
 def raw_central_directory_entry_names(zip_path: Path | str) -> list[str]:
-    data = Path(zip_path).read_bytes()
+    with open(_filesystem_path(zip_path), "rb") as handle:
+        data = handle.read()
     names: list[str] = []
     offset = 0
     while True:
@@ -58,7 +60,8 @@ def raw_unsafe_entry_names(zip_path: Path | str) -> list[str]:
 
 
 def zip_has_no_trailing_data(zip_path: Path | str) -> bool:
-    data = Path(zip_path).read_bytes()
+    with open(_filesystem_path(zip_path), "rb") as handle:
+        data = handle.read()
     signature = b"PK\x05\x06"
     search_start = max(0, len(data) - (65535 + 22))
     offset = data.rfind(signature, search_start)
@@ -108,3 +111,12 @@ def frozen_zip_snapshot_errors(zip_path: Path | str, expected: Mapping[str, byte
     except (OSError, zipfile.BadZipFile):
         errors.append("readable")
     return sorted(set(errors))
+
+
+def _filesystem_path(path: Path | str) -> str:
+    value = os.path.abspath(os.fspath(path))
+    if os.name != "nt" or value.startswith("\\\\?\\"):
+        return value
+    if value.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + value[2:]
+    return "\\\\?\\" + value

@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -1429,55 +1433,6 @@ class _ReleaseZipVerifier:
             "blockers": blockers,
         }
         return sanitize_metadata(report, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS)
-
-
-def _is_safe_zip_entry(name: str) -> bool:
-    raw = str(name or "")
-    if "\\" in raw:
-        return False
-    normalized = raw
-    if not normalized or normalized.endswith("/"):
-        return False
-    if normalized.startswith("/") or normalized.startswith("\\") or normalized.startswith("//"):
-        return False
-    parts = normalized.split("/")
-    if any(part in {"", ".", ".."} for part in parts):
-        return False
-    if ":" in parts[0]:
-        return False
-    return PurePosixPath(*parts).as_posix() == normalized
-
-
-def _raw_zip_entry_names(path: Path) -> list[str]:
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return []
-    names: list[str] = []
-    offset = 0
-    signature = b"PK\x01\x02"
-    while True:
-        index = data.find(signature, offset)
-        if index < 0:
-            break
-        if index + 46 > len(data):
-            break
-        flags = struct.unpack_from("<H", data, index + 8)[0]
-        name_len = struct.unpack_from("<H", data, index + 28)[0]
-        extra_len = struct.unpack_from("<H", data, index + 30)[0]
-        comment_len = struct.unpack_from("<H", data, index + 32)[0]
-        name_start = index + 46
-        name_end = name_start + name_len
-        if name_end > len(data):
-            break
-        raw = data[name_start:name_end]
-        encoding = "utf-8" if flags & 0x800 else "cp437"
-        try:
-            names.append(raw.decode(encoding))
-        except UnicodeDecodeError:
-            names.append(raw.decode("utf-8", errors="replace"))
-        offset = name_end + extra_len + comment_len
-    return names
 
 
 def _release_signoff_hash_payload(signoff: dict[str, Any]) -> dict[str, Any]:

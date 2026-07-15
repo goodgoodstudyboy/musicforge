@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -632,43 +636,9 @@ def _counts(values: list[str]) -> dict[str, int]:
     return counts
 
 
-def _is_safe_zip_entry(name: str) -> bool:
-    if "\\" in name or "\x00" in name:
-        return False
-    path = PurePosixPath(name)
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        return False
-    return True
-
-
 def _is_forbidden_entry(name: str) -> bool:
     lower = name.lower()
     return lower.startswith(".musicforge/") or lower.endswith(".zip")
-
-
-def _raw_zip_entry_names(zip_path: Path) -> list[str]:
-    try:
-        data = zip_path.read_bytes()
-    except OSError:
-        return []
-    names: list[str] = []
-    signature = b"PK\x01\x02"
-    index = 0
-    while True:
-        index = data.find(signature, index)
-        if index == -1 or index + 46 > len(data):
-            break
-        try:
-            name_len, extra_len, comment_len = struct.unpack_from("<HHH", data, index + 28)
-        except struct.error:
-            break
-        start = index + 46
-        end = start + name_len
-        if end > len(data):
-            break
-        names.append(data[start:end].decode("utf-8", errors="replace"))
-        index = end + extra_len + comment_len
-    return names
 
 
 def _safe_check_id(value: str) -> str:

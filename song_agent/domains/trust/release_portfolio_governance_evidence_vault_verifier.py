@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -480,40 +484,6 @@ class _EvidenceVaultVerifier:
 
     def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str) -> None:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
-
-
-def _is_safe_zip_entry(name: str) -> bool:
-    text = str(name or "")
-    if "\\" in text or not text or text.startswith("/") or text.startswith("//") or text.endswith("/"):
-        return False
-    path = PurePosixPath(text)
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        return False
-    if ":" in path.parts[0]:
-        return False
-    return True
-
-
-def _raw_zip_entry_names(path: Path) -> list[str]:
-    data = path.read_bytes() if path.exists() else b""
-    names: list[str] = []
-    index = 0
-    signature = b"PK\x01\x02"
-    while True:
-        index = data.find(signature, index)
-        if index < 0 or index + 46 > len(data):
-            break
-        name_len, extra_len, comment_len = struct.unpack_from("<HHH", data, index + 28)
-        start = index + 46
-        end = start + name_len
-        if end > len(data):
-            break
-        try:
-            names.append(data[start:end].decode("utf-8"))
-        except UnicodeDecodeError:
-            names.append(data[start:end].decode("cp437", errors="replace"))
-        index = end + extra_len + comment_len
-    return names
 
 
 def _counts(values: list[str]) -> dict[str, int]:

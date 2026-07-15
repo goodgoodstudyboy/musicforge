@@ -14,7 +14,7 @@ from song_agent.domains.quality.quality import validate_song_plan
 from song_agent.domains.creation.renderers.midi import render_midi
 from song_agent.domains.creation.runtime import GraphRunner, PipelineStep, ResumeMismatchError
 from song_agent.domains.creation.schemas.song import SongRequest
-from song_agent.application.legacy_dependencies.state import ArtifactRef, RunState
+from song_agent.platform.contracts.run_state import ArtifactRef, RunState
 
 
 def generate_request(

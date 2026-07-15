@@ -77,7 +77,7 @@ class MaintenanceRoutes:
         self._send_json({"ok": True, "docs": docs, "summary": {"required_count": len(REQUIRED_DOCS), "present_count": sum(1 for item in docs if item["exists"])}})
 
     def _handle_maintenance_route(self, method: str, path: str) -> None:
-        from song_agent.application.legacy_dependencies import lts_maintenance
+        from song_agent.domains.creation import lts_maintenance
 
         store = lts_maintenance.LTSMaintenanceStore(repo_root=_interfaces_api_runtime.Path.cwd())
         if path == "/api/maintenance/status":

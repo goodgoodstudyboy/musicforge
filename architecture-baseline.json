@@ -26,7 +26,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 1222,
+  "module_count": 1223,
   "modules": [
     {
       "context": null,
@@ -6451,6 +6451,12 @@
     {
       "context": null,
       "layer": "release_check",
+      "module": "song_agent.release_check.v14_compatibility",
+      "path": "song_agent/release_check/v14_compatibility.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
       "module": "song_agent.release_check_architecture",
       "path": "song_agent/release_check_architecture.py"
     },
@@ -7379,8 +7385,8 @@
   ],
   "schema_version": 1,
   "security_helper_max_counts": {
-    "_is_safe_zip_entry": 36,
-    "_raw_zip_entry_names": 43,
+    "_is_safe_zip_entry": 0,
+    "_raw_zip_entry_names": 0,
     "_zip_has_no_trailing_data": 0
   }
 }

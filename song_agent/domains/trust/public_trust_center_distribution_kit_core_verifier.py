@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -513,18 +517,6 @@ class _DistributionKitVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _is_safe_zip_entry(name: str) -> bool:
-    if not name or "\\" in name:
-        return False
-    try:
-        path = PurePosixPath(name)
-    except ValueError:
-        return False
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        return False
-    return True
-
-
 def _is_forbidden_public_entry(name: str) -> bool:
     lower = name.lower()
     return lower.startswith(".musicforge/") or "/.musicforge/" in lower
@@ -557,33 +549,6 @@ def _counts(values: list[str]) -> dict[str, int]:
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return counts
-
-
-def _raw_zip_entry_names(path: Path) -> list[str]:
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return []
-    names: list[str] = []
-    signature = b"\x50\x4b\x01\x02"
-    index = 0
-    while True:
-        index = data.find(signature, index)
-        if index < 0 or index + 46 > len(data):
-            break
-        name_len = struct.unpack_from("<H", data, index + 28)[0]
-        extra_len = struct.unpack_from("<H", data, index + 30)[0]
-        comment_len = struct.unpack_from("<H", data, index + 32)[0]
-        start = index + 46
-        end = start + name_len
-        if end > len(data):
-            break
-        try:
-            names.append(data[start:end].decode("utf-8", errors="replace"))
-        except Exception:
-            pass
-        index = end + extra_len + comment_len
-    return names
 
 
 def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:

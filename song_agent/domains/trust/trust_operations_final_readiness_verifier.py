@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -635,43 +639,6 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
             return value if isinstance(value, dict) else {}
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
-
-
-def _raw_zip_entry_names(zip_path: Path) -> list[str]:
-    try:
-        data = zip_path.read_bytes()
-    except OSError:
-        return []
-    names: list[str] = []
-    signature = b"PK\x01\x02"
-    index = 0
-    while True:
-        index = data.find(signature, index)
-        if index < 0:
-            break
-        if index + 46 > len(data):
-            break
-        name_length = struct.unpack_from("<H", data, index + 28)[0]
-        extra_length = struct.unpack_from("<H", data, index + 30)[0]
-        comment_length = struct.unpack_from("<H", data, index + 32)[0]
-        start = index + 46
-        end = start + name_length
-        if end <= len(data):
-            names.append(data[start:end].decode("utf-8", errors="replace"))
-        index = end + extra_length + comment_length
-    return names
-
-
-def _is_safe_zip_entry(name: str) -> bool:
-    if "\\" in name:
-        return False
-    try:
-        path = PurePosixPath(name)
-    except ValueError:
-        return False
-    if not name or name.startswith("/") or name.startswith("../") or "/../" in name or name.endswith("/.."):
-        return False
-    return not path.is_absolute() and all(part not in {"", ".", ".."} for part in path.parts)
 
 
 def _is_forbidden_entry(name: str) -> bool:

@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -473,41 +477,6 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _raw_zip_entry_names(zip_path: Path) -> list[str]:
-    try:
-        data = zip_path.read_bytes()
-    except OSError:
-        return []
-    names: list[str] = []
-    signature = b"\x50\x4b\x01\x02"
-    index = 0
-    while True:
-        offset = data.find(signature, index)
-        if offset < 0 or offset + 46 > len(data):
-            break
-        try:
-            name_len = struct.unpack_from("<H", data, offset + 28)[0]
-            extra_len = struct.unpack_from("<H", data, offset + 30)[0]
-            comment_len = struct.unpack_from("<H", data, offset + 32)[0]
-            start = offset + 46
-            end = start + name_len
-            raw = data[start:end]
-            names.append(raw.decode("utf-8", errors="replace"))
-            index = end + extra_len + comment_len
-        except (struct.error, UnicodeDecodeError):
-            break
-    return names
-
-
-def _is_safe_zip_entry(name: str) -> bool:
-    if not name or "\\" in name:
-        return False
-    path = PurePosixPath(name)
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        return False
-    return True
 
 
 def _is_forbidden_entry(name: str) -> bool:

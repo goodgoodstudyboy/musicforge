@@ -1,4 +1,8 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    is_safe_zip_entry as _is_safe_zip_entry,
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -434,18 +438,6 @@ class _AnchorTransparencyVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _is_safe_zip_entry(name: str) -> bool:
-    if not name or "\\" in name:
-        return False
-    try:
-        path = PurePosixPath(name)
-    except ValueError:
-        return False
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        return False
-    return True
-
-
 def _is_forbidden_public_entry(name: str) -> bool:
     lower = name.lower()
     return lower.startswith(".musicforge/") or lower.endswith(".zip")
@@ -472,28 +464,6 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _raw_zip_entry_names(path: Path) -> list[str]:
-    data = path.read_bytes()
-    names: list[str] = []
-    sig = b"PK\x01\x02"
-    index = 0
-    while True:
-        pos = data.find(sig, index)
-        if pos == -1 or pos + 46 > len(data):
-            break
-        name_len, extra_len, comment_len = struct.unpack_from("<HHH", data, pos + 28)
-        start = pos + 46
-        end = start + name_len
-        if end > len(data):
-            break
-        try:
-            names.append(data[start:end].decode("utf-8", errors="replace"))
-        except Exception:
-            pass
-        index = end + extra_len + comment_len
-    return names
 
 
 def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:

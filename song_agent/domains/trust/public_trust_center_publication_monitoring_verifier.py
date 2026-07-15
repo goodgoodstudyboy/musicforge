@@ -1,4 +1,7 @@
 from __future__ import annotations
+from song_agent.platform.verification import (
+    raw_central_directory_entry_names as _raw_zip_entry_names,
+)
 
 import hashlib
 import json
@@ -694,31 +697,6 @@ def _counts(values: list[str]) -> dict[str, int]:
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return counts
-
-
-def _raw_zip_entry_names(path: Path) -> list[str]:
-    try:
-        with open(_fs_path(path), "rb") as handle:
-            data = handle.read()
-    except OSError:
-        return []
-    names: list[str] = []
-    signature = b"\x50\x4b\x01\x02"
-    index = 0
-    while True:
-        index = data.find(signature, index)
-        if index < 0 or index + 46 > len(data):
-            break
-        name_len = struct.unpack_from("<H", data, index + 28)[0]
-        extra_len = struct.unpack_from("<H", data, index + 30)[0]
-        comment_len = struct.unpack_from("<H", data, index + 32)[0]
-        start = index + 46
-        end = start + name_len
-        if end > len(data):
-            break
-        names.append(data[start:end].decode("utf-8", errors="replace"))
-        index = end + extra_len + comment_len
-    return names
 
 
 def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
