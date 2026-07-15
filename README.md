@@ -80,6 +80,16 @@ python -m pytest -m "not legacy"
 python -m pytest -m "legacy"
 ```
 
+Final LTS certification also requires `full`, active/legacy test attestations,
+non-empty rollback evidence, performance evidence, release alignment, and
+quality/nightly evidence all bound to the final commit. Build the reviewer
+package only after those reports exist:
+
+```powershell
+python tools/build_v13_final_reviewer_package.py --evidence-dir runs/v13.8-evidence --output runs/v13.8-reviewer
+python tools/verify_v13_reviewer_package.py runs/v13.8-reviewer --expected-sha (git rev-parse HEAD)
+```
+
 Every test module has an explicit primary owner in
 `tests/marker-manifest.json`. Update and review the manifest when adding tests:
 

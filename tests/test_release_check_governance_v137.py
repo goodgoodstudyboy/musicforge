@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import tempfile
 
 import pytest
 
-from conftest import _declared_primary_marker
+from conftest import _declared_primary_marker, _is_managed_basetemp, _is_managed_test_path
 from song_agent.release_check.matrix import ReleaseCheckDefinition, ReleaseCheckMatrixError, select_check_definitions
 from song_agent.release_check.reviewer_package import verify_reviewer_package, write_reviewer_manifest
 from song_agent.release_check_governance_v137 import _valid_runtime, _write_synthetic_package, run_release_check_ci_docs_governance_smoke
@@ -36,6 +37,16 @@ def test_current_profile_rejects_legacy_callable() -> None:
 def test_missing_explicit_marker_fails() -> None:
     with pytest.raises(pytest.UsageError, match="no explicit primary marker"):
         _declared_primary_marker("test_new_unregistered_module.py", {})
+
+
+def test_managed_basetemp_requires_a_unique_run_token() -> None:
+    temp_root = Path(tempfile.gettempdir())
+    managed = temp_root / "mf-deadbeef12"
+
+    assert _is_managed_basetemp(managed)
+    assert _is_managed_test_path(managed / "popen-gw0" / "test-example")
+    assert not _is_managed_basetemp(temp_root / "mf-1234")
+    assert not _is_managed_test_path(temp_root / "mf-1234" / "test-example")
 
 
 def test_marker_and_document_indexes_are_current() -> None:

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Active boundary for canonical run-state contracts."""
 
-import song_agent.state as _implementation
+from song_agent.platform.contracts.run_state import ArtifactRef, RunState, StepStatus
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ["ArtifactRef", "RunState", "StepStatus"]

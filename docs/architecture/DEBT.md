@@ -3,10 +3,10 @@
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
 | ARCH-007 | Historical flat-domain import cycles remain visible in `all_import_cycles`; active adapters still have an explicitly reported, ratcheted set of compatibility imports. | Domain owners | ongoing | Any new compatibility import, increase over the v13 baseline, or compatibility-to-platform/application reverse dependency blocks release. |
-| ARCH-008 | Legacy modules outside the migrated Program vertical slice remain compatibility code rather than migrated production modules. | Architecture | v13.8 | Every active import is centralized in `application/legacy_dependencies`; direct interface/domain imports block release and the facade inventory may only shrink. |
-| ARCH-010 | Physically migrated Program implementations retain pre-v13 module/function size debt. | Program | v13.8 | Only files traceable to the v13.3 flat source and bounded to at most 5% migration/security-adapter growth are temporarily accepted; all remaining debt expires automatically at v13.8. |
-| ARCH-012 | 225 active anti-corruption edges isolate flat compatibility modules but are not final domain ownership. | Architecture | v13.8 | The active edge count is hard-ratcheted; facades cannot gain behavior and must be removed by domain migration before LTS certification. |
-| QUAL-001 | Historical compatibility modules still carry pre-v13 Ruff and typing debt; hard lint/type gates cover the modular core while the full compatibility inventory remains under no-growth review. | Domain owners | v13.2 | Any new violation in the modular core, expansion of an excluded scope, or removal of compatibility tests blocks release. |
+| ARCH-008 | Legacy modules outside the migrated Program vertical slice remain compatibility code rather than migrated production modules. | Architecture | v14.0 | Every active import is centralized in `application/legacy_dependencies`; direct interface/domain imports block release and the facade inventory may only shrink. |
+| ARCH-010 | Physically migrated Program implementations retain pre-v13 module/function size debt. | Program | v14.0 | Files remain traceable to the v13.3 flat source and bounded to at most 5% migration/security-adapter growth; new oversized definitions are forbidden. |
+| ARCH-012 | 224 active anti-corruption edges isolate flat compatibility modules but are not final domain ownership. | Architecture | v14.0 | The active edge count is hard-ratcheted, the Program slice stays at zero, and facades cannot gain behavior. |
+| QUAL-001 | Historical compatibility modules still carry pre-v13 Ruff and typing debt; hard lint/type gates cover the modular core while the full compatibility inventory remains under no-growth review. | Domain owners | v14.0 | Any new violation in the modular core, expansion of an excluded scope, or removal of compatibility tests blocks release. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -39,3 +39,8 @@ Graph and Policy Engine as the authoritative gate.
 Closed in v13.7: ARCH-006 and PERF-001. The expired release-check facade is
 removed, current profiles reject legacy callables, and CI separates active,
 legacy, full, migration, and final-SHA evidence under hard profile budgets.
+
+v13.8 recertifies the active modular LTS line while retaining the explicitly
+cataloged compatibility surface for v13 consumers. The reviewer package shows
+both total and active source size; compatibility retirement remains a v14.0
+major-version task and cannot grow during the v13 LTS line.

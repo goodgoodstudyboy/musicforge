@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v13.7 is a local-first modular monolith. It remains one Python
+MusicForge v13.8 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. Active v12/v13 Program
 paths follow `interfaces -> application -> domains -> platform`. Earlier music
 capabilities remain operational through flat compatibility implementations;
@@ -144,3 +144,18 @@ allowing this debt to shrink.
   and non-empty byte-identical migration rollback evidence.
 - The quality acceptance-diff implementation moved into its bounded context,
   reducing active compatibility edges from 226 to 225.
+
+## v13.8 LTS Recertification
+
+- Final structural certification requires zero Program-slice compatibility
+  imports, zero legacy callables in current profiles, no open structural P1,
+  and a non-empty migration with byte-identical rollback.
+- Source comparison exposes total, active, and compatibility lines. The active
+  modular source is compared with v12.13; the supported v13 compatibility
+  source is retained in the report and cannot grow through the architecture
+  ratchet.
+- Final reviewer verification binds quality/nightly attestations, full and
+  current release-check profiles, active and legacy suites, migration,
+  performance, release alignment, architecture, and final SHA.
+- Run-state contracts moved to `platform/contracts`; active compatibility
+  edges fell from 225 to 224 while the Program slice remains at zero.

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import shutil
 import tempfile
+import uuid
 
 import pytest
 
@@ -26,7 +26,7 @@ def pytest_configure(config: pytest.Config) -> None:
     """Keep xdist paths bounded and make generated test trees reclaimable."""
     if config.option.basetemp:
         return
-    basetemp = Path(tempfile.gettempdir()) / f"mf-{os.getpid()}"
+    basetemp = Path(tempfile.gettempdir()) / f"mf-{uuid.uuid4().hex[:10]}"
     config.option.basetemp = str(basetemp)
     setattr(config, _MANAGED_BASETEMP_ATTRIBUTE, basetemp)
 
@@ -40,7 +40,7 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 def _is_managed_basetemp(path: Path) -> bool:
     resolved = path.resolve()
     temp_root = Path(tempfile.gettempdir()).resolve()
-    return resolved.parent == temp_root and re.fullmatch(r"mf-\d+", resolved.name) is not None
+    return resolved.parent == temp_root and re.fullmatch(r"mf-[0-9a-f]{10}", resolved.name) is not None
 
 
 def _is_managed_test_path(path: Path) -> bool:
@@ -48,7 +48,7 @@ def _is_managed_test_path(path: Path) -> bool:
         relative = path.resolve().relative_to(Path(tempfile.gettempdir()).resolve())
     except ValueError:
         return False
-    return len(relative.parts) >= 2 and re.fullmatch(r"mf-\d+", relative.parts[0]) is not None
+    return len(relative.parts) >= 2 and re.fullmatch(r"mf-[0-9a-f]{10}", relative.parts[0]) is not None
 
 
 @pytest.fixture(autouse=True)

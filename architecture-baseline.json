@@ -1,5 +1,5 @@
 {
-  "active_to_compatibility_import_max_count": 225,
+  "active_to_compatibility_import_max_count": 224,
   "allowed_active_to_compatibility_imports": [
     {
       "imported": "song_agent.acceptance_analytics",
@@ -714,10 +714,6 @@
       "importer": "song_agent.application.legacy_dependencies.song_editor"
     },
     {
-      "imported": "song_agent.state",
-      "importer": "song_agent.application.legacy_dependencies.state"
-    },
-    {
       "imported": "song_agent.stem_health",
       "importer": "song_agent.application.legacy_dependencies.stem_health"
     },
@@ -903,7 +899,7 @@
     }
   ],
   "allowed_cycles": [],
-  "baseline_version": "13.7.0",
+  "baseline_version": "13.8.0",
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
@@ -927,7 +923,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 914,
+  "module_count": 916,
   "modules": [
     {
       "context": null,
@@ -4814,6 +4810,12 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.contracts.run_state",
+      "path": "song_agent/platform/contracts/run_state.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.evidence_graph",
       "path": "song_agent/platform/evidence_graph/__init__.py"
     },
@@ -5470,6 +5472,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check.lts_cutover",
       "path": "song_agent/release_check/lts_cutover.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.lts_recertification",
+      "path": "song_agent/release_check/lts_recertification.py"
     },
     {
       "context": null,

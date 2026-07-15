@@ -19,15 +19,19 @@ def test_v13_lts_audit_enforces_cutover_invariants() -> None:
     assert not any(audit["source"]["active_security_helpers"].values())
     assert not any(audit["source"]["active_lifecycle_algorithms"].values())
     comparison = audit["comparison"]
-    assert comparison["line_delta"] == comparison["v13.0"]["lines"] - comparison["v12.13"]["lines"]
+    assert comparison["line_delta"] == comparison["current"]["lines"] - comparison["v12.13"]["lines"]
+    assert comparison["active_line_delta"] == comparison["current"]["active_lines"] - comparison["v12.13"]["lines"]
     assert audit["checks"]["source_reduction_target"] is True
 
 
 def test_source_reduction_becomes_a_hard_v138_lts_gate() -> None:
-    comparison = {"v12.13": {"lines": 100}, "v13.0": {"lines": 101}}
+    comparison = {"v12.13": {"lines": 100}, "current": {"lines": 120, "active_lines": 101}}
 
     assert _source_reduction_target(comparison, "13.7.0") is True
     assert _source_reduction_target(comparison, "13.8.0") is False
+
+    comparison["current"]["active_lines"] = 99
+    assert _source_reduction_target(comparison, "13.8.0") is True
 
 
 def test_v13_reviewer_package_is_complete_and_path_safe(tmp_path: Path) -> None:
@@ -43,6 +47,7 @@ def test_v13_reviewer_package_is_complete_and_path_safe(tmp_path: Path) -> None:
         "runtime-verification.json", "security-attack-matrix.json", "source-comparison.json",
         "verifier-migration.json",
         "reviewer-package-manifest.json",
+        "lts-certification.json",
     }
     assert str(ROOT).encode() not in rendered
     assert str(tmp_path).encode() not in rendered

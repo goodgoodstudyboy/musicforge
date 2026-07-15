@@ -105,6 +105,7 @@
     "tests/test_lts_backup_verifier.py": "unit",
     "tests/test_lts_cutover.py": "unit",
     "tests/test_lts_maintenance.py": "unit",
+    "tests/test_lts_recertification_v138.py": "unit",
     "tests/test_mastering_qa.py": "integration",
     "tests/test_midi_analysis.py": "unit",
     "tests/test_midi_renderer.py": "unit",

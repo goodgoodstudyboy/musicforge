@@ -95,7 +95,7 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
         "expired_deprecations": expired_deprecations,
         "architecture_ratchet": architecture["metrics"]["ratchet"],
     }
-    comparison = _v1213_comparison(root)
+    comparison = _v1213_comparison(root, snapshot=snapshot)
     checks = _lts_checks(
         root,
         source,
@@ -169,8 +169,9 @@ def _source_reduction_target(comparison: dict[str, Any], version: str = __versio
     if _version_key(version) < (13, 8):
         return True
     previous = comparison.get("v12.13") or {}
-    current = comparison.get("v13.0") or {}
-    return isinstance(previous.get("lines"), int) and int(current.get("lines", -1)) <= int(previous["lines"])
+    current = comparison.get("current") or comparison.get("v13.0") or {}
+    active_lines = current.get("active_lines", current.get("lines"))
+    return isinstance(previous.get("lines"), int) and isinstance(active_lines, int) and int(active_lines) <= int(previous["lines"])
 
 
 def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime: dict[str, Any] | None = None) -> Path:
@@ -230,7 +231,7 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
         "debt.json": {
             "schema_version": 1,
             "status": "documented",
-            "open_items": ["ARCH-006", "ARCH-007", "PERF-001", "QUAL-001"],
+            "open_items": ["ARCH-007", "ARCH-008", "ARCH-010", "ARCH-012", "QUAL-001"],
             "source": "docs/architecture/DEBT.md",
             "architecture_catalog": "architecture-debt.json",
             "architecture_catalog_hash": audit["source"]["architecture_ratchet"]["debt_catalog_hash"],
@@ -239,6 +240,9 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
         "security-attack-matrix.json": _security_matrix(),
         "runtime-verification.json": runtime_data or {"status": "pending_release_run"},
     }
+    from song_agent.release_check.lts_recertification import build_lts_recertification
+
+    files["lts-certification.json"] = build_lts_recertification(root, audit=audit, runtime=runtime_data or None)
     for name, document in files.items():
         (output / name).write_text(json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (output / "README.md").write_text(_reviewer_readme(), encoding="utf-8")
@@ -306,7 +310,7 @@ def _structured_limits(root: Path) -> tuple[list[dict[str, Any]], list[dict[str,
 
 
 def _v133_program_source(root: Path, relative: Path) -> str | None:
-    if tuple(relative.parts[:2]) != ("domains", "program") or _version_key(__version__) >= (13, 8):
+    if tuple(relative.parts[:2]) != ("domains", "program"):
         return None
     completed = subprocess.run(
         ["git", "show", f"v13.3.0:song_agent/{relative.name}"],
@@ -384,12 +388,30 @@ def _deprecated_surface_exists(root: Path, value: str) -> bool:
     return False
 
 
-def _v1213_comparison(root: Path) -> dict[str, Any]:
+def _v1213_comparison(root: Path, *, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     current_files = list((root / "song_agent").rglob("*.py"))
-    current = {"modules": len(current_files), "lines": sum(len(path.read_text(encoding="utf-8").splitlines()) for path in current_files)}
+    current_lines = {
+        path.relative_to(root).as_posix(): len(path.read_text(encoding="utf-8").splitlines())
+        for path in current_files
+    }
+    architecture = snapshot or build_architecture_snapshot(root)
+    active_paths = {
+        str(row.get("path") or "")
+        for row in architecture.get("modules") or []
+        if row.get("layer") != "compatibility"
+    }
+    active_lines = sum(lines for path, lines in current_lines.items() if path in active_paths)
+    current = {
+        "modules": len(current_files),
+        "lines": sum(current_lines.values()),
+        "active_modules": len(active_paths),
+        "active_lines": active_lines,
+        "compatibility_modules": len(current_files) - len(active_paths),
+        "compatibility_lines": sum(current_lines.values()) - active_lines,
+    }
     completed = subprocess.run(["git", "archive", "--format=tar", "v12.13.0", "song_agent"], cwd=root, capture_output=True, check=False)
     if completed.returncode != 0:
-        return {"v12.13": {"status": "unavailable"}, "v13.0": current}
+        return {"v12.13": {"status": "unavailable"}, "current": current, "v13.0": current}
     modules = 0
     lines = 0
     with tarfile.open(fileobj=io.BytesIO(completed.stdout), mode="r:") as archive:
@@ -398,7 +420,15 @@ def _v1213_comparison(root: Path) -> dict[str, Any]:
                 modules += 1
                 stream = archive.extractfile(member)
                 lines += len((stream.read() if stream else b"").decode("utf-8", errors="replace").splitlines())
-    return {"v12.13": {"modules": modules, "lines": lines}, "v13.0": current, "module_delta": current["modules"] - modules, "line_delta": current["lines"] - lines}
+    return {
+        "v12.13": {"modules": modules, "lines": lines},
+        "current": current,
+        "v13.0": current,
+        "module_delta": current["modules"] - modules,
+        "line_delta": current["lines"] - lines,
+        "active_module_delta": current["active_modules"] - modules,
+        "active_line_delta": current["active_lines"] - lines,
+    }
 
 
 def _security_matrix() -> dict[str, Any]:

@@ -78,3 +78,30 @@ jobs:
       - run: python tools/assert_ci_final_sha.py
       - name: v13-rollback-rehearsal
         run: python tools/run_migration_rehearsal.py --output migration-rehearsal.json
+
+  certification:
+    if: always()
+    needs: [active-fast, legacy, active-slow, full-release-check, migration-rehearsal]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: {fetch-depth: 0, ref: "${{ github.sha }}"}
+      - uses: actions/setup-python@v6
+        with: {python-version: "3.11"}
+      - run: python tools/assert_ci_final_sha.py
+      - name: Write final-SHA nightly attestation
+        env:
+          MUSICFORGE_JOB_RESULTS: ${{ toJson(needs) }}
+          MUSICFORGE_FINAL_SHA: ${{ github.sha }}
+        run: >-
+          python -c "import json,os,pathlib,sys;
+          rows=json.loads(os.environ['MUSICFORGE_JOB_RESULTS']);
+          ok=all(row.get('result')=='success' for row in rows.values());
+          payload={'schema_version':1,'status':'passed' if ok else 'failed','sha':os.environ['MUSICFORGE_FINAL_SHA'],'evidence_kind':'github_workflow','workflow':'nightly-lts','jobs':{key:row.get('result') for key,row in rows.items()}};
+          pathlib.Path('nightly.json').write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n',encoding='utf-8');
+          sys.exit(0 if ok else 1)"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: musicforge-nightly-attestation-${{ github.sha }}
+          path: nightly.json

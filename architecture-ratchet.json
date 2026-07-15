@@ -5,8 +5,8 @@
     "interface_debt": "explicit_no_growth",
     "reviewer_recomputation": "required"
   },
-  "previous_release_tag": "v13.6.0",
-  "release_version": "13.7.0",
+  "previous_release_tag": "v13.7.0",
+  "release_version": "13.8.0",
   "require_active_import_decrease": true,
   "schema_version": 1
 }

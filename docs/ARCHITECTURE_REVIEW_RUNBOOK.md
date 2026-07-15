@@ -14,3 +14,11 @@
 10. Run default pytest for active code, both partitions of every active-slow
     layer, and all four `legacy_*` nightly shards; do not infer compatibility
     from a fast marker exclusion.
+11. Download the quality and nightly attestation artifacts for the final SHA;
+    local-equivalent evidence is acceptable only when remote publication is
+    unavailable and must be labeled as such.
+12. Build and verify the final reviewer package. Confirm the source comparison
+    exposes total, active, and compatibility lines rather than hiding the
+    supported compatibility surface.
+13. Confirm migration, performance, and release-alignment evidence each carry
+    the same final SHA as the release-check and CI attestations.

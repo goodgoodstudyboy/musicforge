@@ -3,6 +3,23 @@
 This file contains the current v13 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v13.8.0 - 2026-07-15
+
+- Added final LTS recertification gates for zero open structural P1 blockers,
+  zero Program compatibility imports, active-only current profiles, non-empty
+  migration, and byte-identical rollback.
+- Made source comparison report total, active, and compatibility code
+  separately; the active modular source is the v12.13 reduction gate while the
+  supported v13 compatibility surface remains visible and hard-ratcheted.
+- Strengthened the final reviewer package to independently verify architecture,
+  Program imports, active source reduction, final SHA, CI attestations, all
+  release profiles, active/legacy suites, migration, performance, and release
+  alignment evidence.
+- Moved run-state contracts into `platform/contracts`, reducing active
+  compatibility edges from 225 to 224 without breaking `song_agent.state`.
+- Hardened Program atomic writes and pytest temp ownership for deep Windows
+  paths, concurrent xdist runs, timeout recovery, and PID reuse.
+
 ## v13.7.0 - 2026-07-15
 
 - Made release-check callable provenance explicit and prohibited legacy

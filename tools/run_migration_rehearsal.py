@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 
 from song_agent.platform.persistence import V13MigrationOrchestrator
@@ -22,6 +23,7 @@ def main() -> int:
         rehearsal = orchestrator.rollback_rehearsal()
         result = {
             "schema_version": 1,
+            "sha": _git_head(),
             "status": "passed"
             if int(plan.get("file_count") or 0) > 0
             and rehearsal.get("status") == "passed"
@@ -36,6 +38,18 @@ def main() -> int:
         Path(args.output).write_text(serialized, encoding="utf-8")
     print(serialized, end="")
     return 0 if result["status"] == "passed" else 1
+
+
+def _git_head() -> str:
+    root = Path(__file__).resolve().parents[1]
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return completed.stdout.strip().lower()
 
 
 if __name__ == "__main__":

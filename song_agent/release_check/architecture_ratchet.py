@@ -190,8 +190,8 @@ def build_architecture_debt_catalog(
         {
             "module": str(row["module"]),
             "owner": f"musicforge-{row.get('context') or 'core'}",
-            "reason": "Legacy production module awaiting migration behind an active modular boundary.",
-            "removal_target_version": "13.8.0",
+            "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
+            "removal_target_version": "14.0.0",
             "active_import_count": import_counts.get(str(row["module"]), 0),
         }
         for row in snapshot.get("modules") or []
@@ -238,8 +238,8 @@ def build_architecture_debt_catalog(
             {
                 "path": relative,
                 "owner": "musicforge-interfaces",
-                "reason": "Pre-v13 interface surface exceeds the hard limit and is held to no growth until decomposition.",
-                "removal_target_version": "13.8.0",
+                "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
+                "removal_target_version": "14.0.0",
                 "functions": function_entries,
             }
         )

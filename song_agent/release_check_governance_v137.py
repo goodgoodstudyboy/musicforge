@@ -91,6 +91,7 @@ def _reviewer_package_checks() -> dict[str, bool]:
 
 
 def _write_synthetic_package(root: Path, runtime: dict[str, Any]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
     for path in root.iterdir():
         if path.is_file():
             path.unlink()
@@ -110,25 +111,42 @@ def _document_for(name: str, runtime: dict[str, Any]) -> dict[str, Any]:
         "ci-matrix.json": runtime["ci"],
         "release-check-reports.json": runtime["release_checks"],
         "migration-rollback.json": runtime["migration"],
+        "performance.json": runtime["performance"],
+        "release-alignment.json": runtime["alignment"],
+        "architecture.json": {"schema_version": 1, "status": "passed"},
+        "source-comparison.json": {
+            "schema_version": 2,
+            "v12.13": {"modules": 100, "lines": 1000},
+            "current": {"modules": 50, "lines": 900, "active_modules": 40, "active_lines": 800},
+        },
+        "import-graph.json": {"schema_version": 1, "active_to_compatibility_imports": []},
+        "lts-certification.json": {
+            "schema_version": 1,
+            "status": "passed",
+            "runtime_status": "passed",
+            "summary": {"open_p1_count": 0},
+        },
     }
     return mapping.get(name, {"schema_version": 1, "status": "passed"})
 
 
 def _valid_runtime(sha: str) -> dict[str, Any]:
     passed = {"status": "passed", "sha": sha}
+    ci_passed = {**passed, "evidence_kind": "local_equivalent"}
     return {
         "schema_version": 1,
         "status": "passed",
         "final_sha": sha,
-        "ci": {"quality": dict(passed), "nightly": dict(passed)},
+        "ci": {"quality": dict(ci_passed), "nightly": dict(ci_passed)},
         "release_checks": {
             "status": "passed",
             "profiles": {profile: dict(passed) for profile in ("full", "v13", "latest", "ga", "security")},
         },
-        "migration": {"status": "passed", "file_count": 1, "rollback_identical": True},
+        "migration": {**passed, "file_count": 1, "rollback_identical": True},
         "tests": {"active": dict(passed), "legacy": dict(passed)},
-        "performance": {"status": "passed"},
-        "alignment": {"status": "passed"},
+        "performance": dict(passed),
+        "alignment": dict(passed),
+        "p1_blockers": [],
     }
 
 

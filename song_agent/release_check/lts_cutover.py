@@ -81,5 +81,6 @@ def _reviewer_files(root: Path) -> bool:
         "security-attack-matrix.json",
         "runtime-verification.json",
         "reviewer-package-manifest.json",
+        "lts-certification.json",
     }
     return {path.name for path in root.iterdir() if path.is_file()} == required

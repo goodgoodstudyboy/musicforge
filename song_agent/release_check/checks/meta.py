@@ -19,6 +19,7 @@ from song_agent.release_check_program_vertical import run_program_vertical_slice
 from song_agent.release_check.lts_cutover import run_lts_cutover_smoke
 from song_agent.release_check_evidence_policy import run_policy_gate_cutover_smoke
 from song_agent.release_check_governance_v137 import run_release_check_ci_docs_governance_smoke
+from song_agent.release_check.lts_recertification import run_lts_recertification_smoke
 
 
 DOMAIN = "meta"
@@ -54,6 +55,7 @@ def run_release_check_governance_smoke(root: Path) -> tuple[bool, str]:
         empty = run_release_check_matrix(repo_root=root, profile="latest", since="99.0", run_tests=False)
         details: dict[str, Any] = {
             "expired_facade_removed": facade_removed,
+            "facade_under_300": facade_removed,
             "legacy_preserved": legacy.is_file(),
             "providers": len(provider_inventory()),
             "markers_configured": all(f'"{name}:' in marker_text for name in ("unit", "contract", "security", "integration", "legacy", "slow", "platform_windows")),
@@ -87,6 +89,7 @@ CALLABLES = {
     "_v135_interface_decomposition_smoke": run_interface_registry_smoke,
     "_v136_policy_gate_cutover_smoke": run_policy_gate_cutover_smoke,
     "_v137_release_check_ci_docs_governance_smoke": run_release_check_ci_docs_governance_smoke,
+    "_v138_lts_recertification_smoke": run_lts_recertification_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

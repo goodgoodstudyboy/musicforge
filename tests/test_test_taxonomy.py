@@ -32,18 +32,20 @@ def test_active_test_taxonomy_has_one_deterministic_primary_shard() -> None:
     )
 
 
-def test_managed_basetemp_guard_only_accepts_direct_pid_directories(
+def test_managed_basetemp_guard_only_accepts_direct_unique_directories(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.setattr(conftest.tempfile, "gettempdir", lambda: str(tmp_path))
 
-    assert _is_managed_basetemp(tmp_path / "mf-123") is True
+    assert _is_managed_basetemp(tmp_path / "mf-deadbeef12") is True
+    assert _is_managed_basetemp(tmp_path / "mf-123") is False
     assert _is_managed_basetemp(tmp_path / "mf-current") is False
-    assert _is_managed_basetemp(tmp_path / "nested" / "mf-123") is False
+    assert _is_managed_basetemp(tmp_path / "nested" / "mf-deadbeef12") is False
 
-    assert _is_managed_test_path(tmp_path / "mf-123" / "test-case") is True
+    assert _is_managed_test_path(tmp_path / "mf-deadbeef12" / "test-case") is True
+    assert _is_managed_test_path(tmp_path / "mf-123" / "test-case") is False
     assert _is_managed_test_path(tmp_path / "mf-current" / "test-case") is False
-    assert _is_managed_test_path(tmp_path.parent / "mf-123" / "test-case") is False
+    assert _is_managed_test_path(tmp_path.parent / "mf-deadbeef12" / "test-case") is False
 
 
 def test_managed_basetemp_lifecycle_does_not_touch_explicit_configuration(

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_for_version": "13.7.0",
+  "generated_for_version": "13.8.0",
   "entries": [
     {
       "old_path": "song_agent/release_checks.py",

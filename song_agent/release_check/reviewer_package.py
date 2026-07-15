@@ -30,6 +30,7 @@ REQUIRED_DOCUMENTS = frozenset(
         "release-alignment.json",
         "security-attack-matrix.json",
         "runtime-verification.json",
+        "lts-certification.json",
     }
 )
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -78,6 +79,7 @@ def verify_reviewer_package(
     runtime = _read_json(root / "runtime-verification.json")
     final_sha = str(runtime.get("final_sha") or manifest.get("final_sha") or "")
     _check(checks, "reviewer_package_final_sha", bool(_SHA_RE.fullmatch(final_sha)))
+    _check(checks, "reviewer_package_manifest_final_sha", manifest.get("final_sha") == final_sha)
     if expected_sha:
         _check(checks, "reviewer_package_expected_sha", final_sha == expected_sha)
     if require_final:
@@ -97,11 +99,55 @@ def verify_reviewer_package(
 def _final_checks(checks: list[dict[str, Any]], root: Path, runtime: dict[str, Any], final_sha: str) -> None:
     ci = _read_json(root / "ci-matrix.json")
     release_checks = _read_json(root / "release-check-reports.json")
-    migration = _read_json(root / "migration-rollback.json")
+    certification = _read_json(root / "lts-certification.json")
+    architecture = _read_json(root / "architecture.json")
+    comparison = _read_json(root / "source-comparison.json")
+    import_graph = _read_json(root / "import-graph.json")
     _check(checks, "reviewer_package_runtime_passed", runtime.get("status") == "passed")
+    _check(checks, "reviewer_package_runtime_p1_zero", not list(runtime.get("p1_blockers") or []))
+    _check(checks, "reviewer_package_architecture_passed", architecture.get("status") == "passed")
+    _check(
+        checks,
+        "reviewer_package_lts_certification",
+        certification.get("status") == "passed"
+        and certification.get("runtime_status") == "passed"
+        and (certification.get("summary") or {}).get("open_p1_count") == 0,
+    )
+    _check(
+        checks,
+        "reviewer_package_program_slice",
+        not [
+            row
+            for row in import_graph.get("active_to_compatibility_imports") or []
+            if str(row.get("importer") or "").startswith(
+                (
+                    "song_agent.domains.program",
+                    "song_agent.application.program",
+                    "song_agent.interfaces.api.routes.program",
+                    "song_agent.interfaces.cli.commands.program",
+                )
+            )
+        ],
+    )
+    baseline = comparison.get("v12.13") if isinstance(comparison.get("v12.13"), dict) else {}
+    current = comparison.get("current") if isinstance(comparison.get("current"), dict) else {}
+    _check(
+        checks,
+        "reviewer_package_active_source_reduced",
+        isinstance(baseline.get("lines"), int)
+        and isinstance(current.get("active_lines"), int)
+        and current["active_lines"] <= baseline["lines"]
+        and isinstance(current.get("lines"), int),
+    )
     for workflow in ("quality", "nightly"):
         row = ci.get(workflow) if isinstance(ci.get(workflow), dict) else {}
-        _check(checks, f"reviewer_package_ci_{workflow}", row.get("status") == "passed" and row.get("sha") == final_sha)
+        _check(
+            checks,
+            f"reviewer_package_ci_{workflow}",
+            row.get("status") == "passed"
+            and row.get("sha") == final_sha
+            and row.get("evidence_kind") in {"github_workflow", "local_equivalent"},
+        )
     profiles = release_checks.get("profiles") if isinstance(release_checks.get("profiles"), dict) else {}
     for profile in ("full", "v13", "latest", "ga", "security"):
         row = profiles.get(profile) if isinstance(profiles.get(profile), dict) else {}
@@ -110,12 +156,30 @@ def _final_checks(checks: list[dict[str, Any]], root: Path, runtime: dict[str, A
     for suite in ("active", "legacy"):
         row = suites.get(suite) if isinstance(suites.get(suite), dict) else {}
         _check(checks, f"reviewer_package_tests_{suite}", row.get("status") == "passed" and row.get("sha") == final_sha)
+    _release_evidence_checks(checks, root, final_sha)
+
+
+def _release_evidence_checks(checks: list[dict[str, Any]], root: Path, final_sha: str) -> None:
+    migration = _read_json(root / "migration-rollback.json")
+    performance = _read_json(root / "performance.json")
+    alignment = _read_json(root / "release-alignment.json")
     _check(
         checks,
         "reviewer_package_migration_rehearsal",
         migration.get("status") == "passed"
+        and migration.get("sha") == final_sha
         and int(migration.get("file_count") or 0) > 0
         and migration.get("rollback_identical") is True,
+    )
+    _check(
+        checks,
+        "reviewer_package_performance",
+        performance.get("status") == "passed" and performance.get("sha") == final_sha,
+    )
+    _check(
+        checks,
+        "reviewer_package_release_alignment",
+        alignment.get("status") == "passed" and alignment.get("sha") == final_sha,
     )
 
 

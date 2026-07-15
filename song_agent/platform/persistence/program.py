@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -398,9 +399,14 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _write_bytes_atomic(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(f".tmp-{os.getpid()}-{uuid.uuid4().hex}.json")
-    temp.write_bytes(payload)
-    temp.replace(path)
+    descriptor, temp_name = tempfile.mkstemp(prefix=".tmp-", dir=path.parent)
+    temp = Path(temp_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def _now() -> str:

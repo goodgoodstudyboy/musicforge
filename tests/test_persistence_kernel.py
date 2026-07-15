@@ -91,6 +91,21 @@ def test_program_repository_is_authority_and_projection_tamper_fails_closed(tmp_
         repository.read_projection(path)
 
 
+def test_program_repository_atomic_projection_supports_long_windows_paths(tmp_path: Path) -> None:
+    workspace = tmp_path / ".musicforge"
+    base = workspace / "unified-release-programs" / "urp-000001" / "vault-operations"
+    filler_length = max(1, 225 - len(str(base.resolve())) - 1)
+    parent = base / ("x" * filler_length)
+    path = parent / "review-report.json"
+    document = {"program_id": "urp-000001", "status": "passed", "generation": 1}
+
+    assert len(str(path.resolve())) < 260
+    repository = ProgramStateRepository(workspace)
+    repository.write_projection(path, document)
+
+    assert repository.read_projection(path) == document
+
+
 @pytest.mark.parametrize("stage", ["after_event_append_before_projection", "after_projection_before_index"])
 def test_program_repository_recovers_projection_transaction_boundaries(tmp_path: Path, stage: str) -> None:
     workspace = tmp_path / ".musicforge"

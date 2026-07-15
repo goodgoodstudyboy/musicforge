@@ -20541,7 +20541,7 @@ def _v124_unified_release_program_vault_operations_smoke(root: Path) -> tuple[bo
                     row["vault"]["vault_zip_sha256"] = "0" * 64
             registry["summary"]["current_vault_zip_sha256"] = "0" * 64
             registry["integrity_hash"] = stable_hash({key: value for key, value in registry.items() if key != "integrity_hash"})
-            write_json(ops2.registry_path(program_id2), registry)
+            write_program_json(ops2.registry_path(program_id2), registry)
             registry_review = ops2.run_custody_review(program_id2)
             registry_signoff_blocked = False
             try:
@@ -22197,7 +22197,7 @@ def _v129_unified_release_program_continuity_command_center_smoke(root: Path) ->
     try:
         from song_agent.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
         from song_agent.ga_readiness_verifier import verify_ga_readiness_report
-        from song_agent.projectio import read_json, write_json
+        from song_agent.projectio import read_json
         from song_agent.releases import stable_hash
         from song_agent.domains.program.unified_release_program_continuity_command_center import UnifiedReleaseProgramContinuityCommandCenterStateError
         from song_agent.domains.program.unified_release_program_continuity_command_center_verifier import verify_unified_release_program_continuity_command_center_package
@@ -22223,7 +22223,7 @@ def _v129_unified_release_program_continuity_command_center_smoke(root: Path) ->
             runbook = read_json(command.runbook_path(program_id))
             runbook["actions"].append({"action_id": "unsupported", "action_type": "continuity_acceptance_change_control.reset", "mode": "safe"})
             runbook["integrity_hash"] = stable_hash({key: value for key, value in runbook.items() if key != "integrity_hash"})
-            write_json(command.runbook_path(program_id), runbook)
+            write_program_json(command.runbook_path(program_id), runbook)
             runbook_result = command.run_safe(program_id)
 
         with tempfile.TemporaryDirectory(prefix="mf-v129-runtime-") as temp:
@@ -22284,7 +22284,7 @@ def _v129_unified_release_program_continuity_command_center_smoke(root: Path) ->
             stale_verification = read_json(change.verification_report_path(program_id))
             stale_verification["zip_sha256"] = "f" * 64
             stale_verification["integrity_hash"] = stable_hash({key: value for key, value in stale_verification.items() if key != "integrity_hash"})
-            write_json(change.verification_report_path(program_id), stale_verification)
+            write_program_json(change.verification_report_path(program_id), stale_verification)
             stale_report = command.refresh_command_center(program_id)
             stale_gate = command.gate(program_id, required=True)
 
@@ -22295,7 +22295,7 @@ def _v129_unified_release_program_continuity_command_center_smoke(root: Path) ->
             verification = read_json(change.verification_report_path(program_id))
             verification["package_type"] = "musicforge_wrong_verification"
             verification["integrity_hash"] = stable_hash({key: value for key, value in verification.items() if key != "integrity_hash"})
-            write_json(change.verification_report_path(program_id), verification)
+            write_program_json(change.verification_report_path(program_id), verification)
             wrong_type = verify_unified_release_program_continuity_command_center_package(
                 zipped["zip_path"],
                 strict=True,
