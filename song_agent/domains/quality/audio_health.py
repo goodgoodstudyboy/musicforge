@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent.domains.studio.projectio import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.quality.mix_controls import stable_hash
 
 
 AUDIO_HEALTH_SCHEMA_VERSION = 1

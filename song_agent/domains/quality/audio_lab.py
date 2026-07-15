@@ -18,7 +18,7 @@ from song_agent.domains.creation.music_health import analyze_music_health, music
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 from song_agent.domains.creation.renderers.audio import RendererError, load_renderer_config, renderer_configured, render_audio
 from song_agent.domains.creation.renderers.midi import render_midi
 from song_agent.domains.creation.schemas.song import SongPlan, SongRequest

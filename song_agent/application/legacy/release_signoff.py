@@ -8,19 +8,11 @@ from song_agent.application.policy_compatibility import evaluate_legacy_release_
 
 from song_agent.domains.quality.audio_encoding import encoded_audio_gate, normalize_required_profiles
 
-from song_agent.application.legacy_dependencies.release_export import (
-    build_release_export_zip,
-    read_release_export_manifest,
-    refresh_release_export_signoff_summary,
-)
+from song_agent.domains.delivery.release_export import build_release_export_zip, read_release_export_manifest, refresh_release_export_signoff_summary
 
-from song_agent.application.legacy_dependencies.release_qa import (
-    build_release_signoff_record,
-    release_qa_allows_signoff,
-    release_signoff_summary,
-)
+from song_agent.domains.delivery.release_qa import build_release_signoff_record, release_qa_allows_signoff, release_signoff_summary
 
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()

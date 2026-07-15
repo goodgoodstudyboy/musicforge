@@ -13,7 +13,7 @@ from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_se
 from song_agent.domains.quality.release_audio_certification import ReleaseAudioCertificationStore
 from song_agent.domains.quality.release_audio_regression_verifier import RELEASE_AUDIO_REGRESSION_PACKAGE_TYPE, RELEASE_AUDIO_REGRESSION_SCHEMA_VERSION, build_regression_documents_from_bindings, verify_release_audio_regression_package, write_release_audio_regression_verification_report
 from song_agent.domains.quality.release_audio_timeline import ReleaseAudioTimelineStore
-from song_agent.application.legacy_dependencies.releases import ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
 
 
 class ReleaseAudioRegressionError(ValueError):

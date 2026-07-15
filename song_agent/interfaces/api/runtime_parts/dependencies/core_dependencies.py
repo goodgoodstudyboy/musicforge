@@ -37,24 +37,8 @@ from song_agent.domains.studio.editor_audition import EditorAuditionError, Edito
 from song_agent.domains.studio.editor_review import EditorReviewError, audition_asset_payload
 from song_agent.domains.studio.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
 from song_agent.domains.creation.final_export import FinalExportError, FinalExportOptions, build_final_export_bundle, build_final_export_zip, final_export_dir, final_export_zip_path, read_final_export_manifest
-from song_agent.application.legacy_dependencies.delivery_qa import (
-    build_delivery_qa_report,
-    build_delivery_signoff_record,
-    delivery_qa_allows_signoff,
-    delivery_qa_source_hash,
-    delivery_qa_summary,
-    delivery_signoff_summary,
-    mark_delivery_qa_stale,
-    signoff_history_event,
-)
-from song_agent.application.legacy_dependencies.release_export import (
-    ReleaseExportError,
-    build_release_export_bundle,
-    build_release_export_zip,
-    read_release_export_manifest,
-    refresh_release_export_signoff_summary,
-    release_export_summary,
-)
+from song_agent.domains.delivery.delivery_qa import build_delivery_qa_report, build_delivery_signoff_record, delivery_qa_allows_signoff, delivery_qa_source_hash, delivery_qa_summary, delivery_signoff_summary, mark_delivery_qa_stale, signoff_history_event
+from song_agent.domains.delivery.release_export import ReleaseExportError, build_release_export_bundle, build_release_export_zip, read_release_export_manifest, refresh_release_export_signoff_summary, release_export_summary
 from song_agent.application.legacy_dependencies.release_operations import ReleaseOperationsError, ReleaseOperationsStore, operations_report_summary
 from song_agent.application.legacy_dependencies.release_operations_runbook import (
     ReleaseOperationsRunbookError,

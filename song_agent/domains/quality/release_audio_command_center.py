@@ -14,7 +14,7 @@ from song_agent.domains.quality.release_audio_command_center_verifier import REL
 from song_agent.domains.quality.release_audio_quality_action_signoff import ReleaseAudioQualityActionQueueSignoffStore
 from song_agent.domains.quality.release_audio_quality_actions import ReleaseAudioQualityActionQueueStore
 from song_agent.domains.quality.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
-from song_agent.application.legacy_dependencies.releases import ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
 
 
 RELEASE_AUDIO_COMMAND_CENTER_SCHEMA_VERSION = 1

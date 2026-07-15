@@ -16,7 +16,7 @@ from song_agent.domains.quality.release_audio_regression_response_verifier impor
 from song_agent.domains.quality.release_audio_regression_verifier import verify_release_audio_regression_package
 from song_agent.domains.quality.release_audio_timeline_verifier import verify_release_audio_timeline_package
 from song_agent.domains.creation.redaction import sanitize_sensitive_text
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 RELEASE_AUDIO_COMMAND_CENTER_PACKAGE_TYPE = "release_audio_command_center"

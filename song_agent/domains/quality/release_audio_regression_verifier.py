@@ -9,7 +9,7 @@ from typing import Any
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.quality.release_audio_certification_verifier import verify_release_audio_certification_package
 from song_agent.domains.quality.release_audio_timeline_verifier import verify_release_audio_timeline_package
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 RELEASE_AUDIO_REGRESSION_PACKAGE_TYPE = "release_audio_regression"

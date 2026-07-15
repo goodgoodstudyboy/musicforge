@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.delivery.distribution_checklist."""
 
-import song_agent.distribution_checklist as _implementation
+from song_agent.domains.delivery.distribution_checklist import Any, CHECKLIST_STATUSES, DISTRIBUTION_BLOCKED_KEYS, DISTRIBUTION_CHECKLIST_SCHEMA_VERSION, DistributionChecklistError, DistributionStateError, DistributionStore, Path, _check, _safe_note, _stale_summary, annotations, checklist_checks, checklist_dir, checklist_export_payload, checklist_markdown, checklist_path, checklist_payload_hash, checklist_summary, initialize_distribution_checklist, json, now_iso, read_distribution_checklist, read_json, reconcile_distribution_checklist, sanitize_metadata, sanitize_sensitive_text, stable_hash, template_summary, update_distribution_checklist_item, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'CHECKLIST_STATUSES', 'DISTRIBUTION_BLOCKED_KEYS', 'DISTRIBUTION_CHECKLIST_SCHEMA_VERSION', 'DistributionChecklistError', 'DistributionStateError', 'DistributionStore', 'Path', '_check', '_safe_note', '_stale_summary', 'annotations', 'checklist_checks', 'checklist_dir', 'checklist_export_payload', 'checklist_markdown', 'checklist_path', 'checklist_payload_hash', 'checklist_summary', 'initialize_distribution_checklist', 'json', 'now_iso', 'read_distribution_checklist', 'read_json', 'reconcile_distribution_checklist', 'sanitize_metadata', 'sanitize_sensitive_text', 'stable_hash', 'template_summary', 'update_distribution_checklist_item', 'write_json')

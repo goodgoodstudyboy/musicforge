@@ -12,7 +12,7 @@ from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.creation.regression_songbook import builtin_songbook
-from song_agent.application.legacy_dependencies.releases import ReleaseStore
+from song_agent.domains.delivery.releases import ReleaseStore
 from song_agent.domains.quality.review_tasks import REVIEW_TASK_SCHEMA_VERSION, ReviewTask, ReviewTaskStore
 
 

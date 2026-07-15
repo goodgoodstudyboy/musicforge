@@ -18,7 +18,7 @@ from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_se
 from song_agent.domains.quality.release_audio_certification import ReleaseAudioCertificationStore
 from song_agent.domains.quality.release_audio_certification_verifier import verify_release_audio_certification_package
 from song_agent.domains.quality.release_audio_timeline_verifier import RELEASE_AUDIO_TIMELINE_PACKAGE_TYPE, RELEASE_AUDIO_TIMELINE_SCHEMA_VERSION, verify_release_audio_timeline_package, write_release_audio_timeline_verification_report
-from song_agent.application.legacy_dependencies.releases import ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
 
 
 class ReleaseAudioTimelineError(ValueError):

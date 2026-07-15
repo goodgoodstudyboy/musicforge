@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.delivery.release_metadata_qa."""
 
-import song_agent.release_metadata_qa as _implementation
+from song_agent.domains.delivery.release_metadata_qa import Any, CREDIT_ROLES, EXPLICIT_WORDS, ISRC_PATTERN, METADATA_BLOCKED_KEYS, RELEASE_DATE_PATTERN, RELEASE_METADATA_QA_SCHEMA_VERSION, RELEASE_TYPES, ReleaseDocument, UPC_PATTERN, _check, _check_message, _release_checks, _track_check, _track_checks, annotations, build_release_metadata_qa_report, mark_release_metadata_qa_stale, now_iso, re, release_metadata_qa_summary, release_metadata_source_hash, sanitize_metadata, scan_release_payload_for_sensitive_values, stable_hash
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'CREDIT_ROLES', 'EXPLICIT_WORDS', 'ISRC_PATTERN', 'METADATA_BLOCKED_KEYS', 'RELEASE_DATE_PATTERN', 'RELEASE_METADATA_QA_SCHEMA_VERSION', 'RELEASE_TYPES', 'ReleaseDocument', 'UPC_PATTERN', '_check', '_check_message', '_release_checks', '_track_check', '_track_checks', 'annotations', 'build_release_metadata_qa_report', 'mark_release_metadata_qa_stale', 'now_iso', 're', 'release_metadata_qa_summary', 'release_metadata_source_hash', 'sanitize_metadata', 'scan_release_payload_for_sensitive_values', 'stable_hash')

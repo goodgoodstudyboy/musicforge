@@ -8,7 +8,7 @@ from typing import Any
 
 from song_agent.domains.studio.projectio import write_json
 from song_agent.domains.quality.release_audio_quality_observatory_semantics import RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE, RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, build_observatory_documents_from_evidence_root
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 RELEASE_AUDIO_QUALITY_OBSERVATORY_VERIFICATION_PACKAGE_TYPE = "release_audio_quality_observatory_verification"

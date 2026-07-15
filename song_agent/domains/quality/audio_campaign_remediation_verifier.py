@@ -8,7 +8,7 @@ from typing import Any
 
 from song_agent.domains.quality.audio_campaign_remediation_contracts import AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE, AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION
 from song_agent.domains.studio.projectio import write_json
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 REQUIRED_ENTRIES = {"manifest.json", "remediation-plan.json", "action-queue.json", "closeout-report.json", "linked-fix-sprints.json", "README.txt"}

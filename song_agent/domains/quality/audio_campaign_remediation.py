@@ -14,7 +14,7 @@ from song_agent.domains.creation.final_export import final_export_dir
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.application.legacy_dependencies.releases import ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
 from song_agent.domains.quality.audio_campaign_remediation_contracts import AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE, AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION
 
 

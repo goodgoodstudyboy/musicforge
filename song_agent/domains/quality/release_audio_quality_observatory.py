@@ -13,7 +13,7 @@ from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.quality.release_audio_certification_verifier import verify_release_audio_certification_package
 from song_agent.domains.quality.release_audio_timeline_verifier import verify_release_audio_timeline_package
-from song_agent.application.legacy_dependencies.releases import ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
 from song_agent.domains.quality.release_audio_quality_observatory_semantics import RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE, RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, _avg, _baseline_drift, _basic_component, _build_release_entry, _build_release_entry_from_paths, _current_timeline_id, _default_thresholds, _delta, _external_facts_from_entry, _integrity_hash, _integrity_ok, _issue_heatmap, _manual_rating, _min, _normalize_title, _num, _read_json_entry, _recommendation_report, _remediation_cost, _risk_register, _sha256_path, _source_row, _stable_config_hash, _timeline_facts, _trend_report, _verification_component, build_observatory_documents, build_observatory_documents_from_evidence_root
 
 

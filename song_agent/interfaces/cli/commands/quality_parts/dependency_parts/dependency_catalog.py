@@ -151,7 +151,7 @@ from song_agent.domains.quality.audio_review_evidence import AudioReviewEvidence
 
 from song_agent.domains.studio.projects import ProjectStore
 
-from song_agent.application.legacy_dependencies.releases import ReleaseStore
+from song_agent.domains.delivery.releases import ReleaseStore
 
 from song_agent.domains.quality.audio_encoding import AudioEncodingStore, normalize_required_profiles
 
@@ -159,9 +159,9 @@ from song_agent.domains.quality.audio_encoding_profiles import AudioEncodingProf
 
 from song_agent.domains.creation.encoded_audio_acceptance import EncodedAudioAcceptanceStore, encoded_audio_acceptance_summary_public
 
-from song_agent.application.legacy_dependencies.distribution import DistributionStore
+from song_agent.domains.delivery.distribution import DistributionStore
 
-from song_agent.application.legacy_dependencies.format_decisions import FormatDecisionStore
+from song_agent.domains.delivery.format_decisions import FormatDecisionStore
 
 from song_agent.domains.quality.acceptance_diff import build_acceptance_diff
 

@@ -1,34 +1,8 @@
 from __future__ import annotations
 
-from song_agent.application.legacy_dependencies.release_metadata import (
-    ReleaseMetadataError,
-    attach_metadata_export_to_manifest,
-    export_release_metadata_files,
-    initialize_release_metadata,
-    metadata_export_summary,
-    read_release_metadata,
-    read_release_metadata_history,
-    read_release_metadata_qa,
-    release_metadata_source_hash,
-    release_metadata_summary,
-    write_release_metadata,
-    write_release_metadata_qa,
-)
-from song_agent.application.legacy_dependencies.release_metadata_qa import (
-    build_release_metadata_qa_report,
-    mark_release_metadata_qa_stale,
-    release_metadata_qa_summary,
-)
-from song_agent.application.legacy_dependencies.release_qa import (
-    build_release_qa_report,
-    build_release_signoff_record,
-    mark_release_qa_stale,
-    release_qa_allows_signoff,
-    release_qa_summary,
-    release_signoff_summary,
-    release_source_hash,
-    signoff_history_event as release_signoff_history_event,
-)
+from song_agent.domains.delivery.release_metadata import ReleaseMetadataError, attach_metadata_export_to_manifest, export_release_metadata_files, initialize_release_metadata, metadata_export_summary, read_release_metadata, read_release_metadata_history, read_release_metadata_qa, release_metadata_source_hash, release_metadata_summary, write_release_metadata, write_release_metadata_qa
+from song_agent.domains.delivery.release_metadata_qa import build_release_metadata_qa_report, mark_release_metadata_qa_stale, release_metadata_qa_summary
+from song_agent.domains.delivery.release_qa import build_release_qa_report, build_release_signoff_record, mark_release_qa_stale, release_qa_allows_signoff, release_qa_summary, release_signoff_summary, release_source_hash, signoff_history_event as release_signoff_history_event
 from song_agent.domains.quality.release_audio import build_release_audio_qa_report, read_release_audio_qa, release_audio_allows_signoff, release_audio_report_integrity_ok, release_audio_source_hash, release_audio_summary, write_release_audio_qa
 from song_agent.domains.quality.audio_review_evidence import AudioReviewEvidenceError, AudioReviewEvidenceNotFoundError, AudioReviewEvidenceStateError, AudioReviewEvidenceStore, audio_review_summary_allows_signoff, audio_review_summary_public, release_audio_review_gate
 from song_agent.domains.quality.audio_revision import AudioRevisionError, AudioRevisionNotFoundError, AudioRevisionStateError, AudioRevisionStore

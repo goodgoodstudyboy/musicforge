@@ -15,7 +15,7 @@ from song_agent.domains.quality.mastering_qa import mastering_summary_hash
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.application.legacy_dependencies.releases import BLOCKED_RELEASE_KEYS, ReleaseStateError, ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseStateError, ReleaseStore, stable_hash
 
 
 AUDIO_ENCODING_SCHEMA_VERSION = 1
@@ -416,7 +416,7 @@ class AudioEncodingStore:
 
 
 def encoded_audio_source_state(release_store: ReleaseStore, release_id: str, profile: AudioEncodingProfile) -> dict[str, Any]:
-    from song_agent.application.legacy_dependencies.release_export import read_release_export_manifest
+    from song_agent.domains.delivery.release_export_manifest import read_release_export_manifest
 
     try:
         manifest = read_release_export_manifest(release_store, release_id)

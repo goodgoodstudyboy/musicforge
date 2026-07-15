@@ -14,7 +14,7 @@ from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.quality.release_audio import read_release_audio_qa, release_audio_report_integrity_ok, release_audio_source_hash
-from song_agent.application.legacy_dependencies.releases import BLOCKED_RELEASE_KEYS, ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseStore, stable_hash
 from song_agent.domains.quality.review_tasks import REVIEW_TASK_SCHEMA_VERSION, ReviewTask, ReviewTaskStore
 
 

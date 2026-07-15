@@ -391,7 +391,7 @@ def with_preview_integrity(preview: MixPreview) -> MixPreview:
 
 def mix_preview_hash(preview: MixPreview | dict[str, Any]) -> str:
     data = preview.to_dict() if isinstance(preview, MixPreview) else dict(preview)
-    from song_agent.application.legacy_dependencies.releases import stable_hash
+    from song_agent.domains.delivery.releases import stable_hash
 
     return stable_hash({key: value for key, value in data.items() if key not in MIX_PREVIEW_INTEGRITY_EXCLUDE_KEYS})
 

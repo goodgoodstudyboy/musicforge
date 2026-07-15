@@ -8,7 +8,7 @@ from typing import Any
 
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.quality.release_audio_regression_verifier import _external_facts
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 RELEASE_AUDIO_BASELINE_REGISTRY_PACKAGE_TYPE = "release_audio_baseline_registry"

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.delivery.distribution_profiles."""
 
-import song_agent.distribution_profiles as _implementation
+from song_agent.domains.delivery.distribution_profiles import Any, BLOCKED_RELEASE_KEYS, BUILTIN_DISTRIBUTION_PROFILES, DISTRIBUTION_BLOCKED_KEYS, DISTRIBUTION_PROFILE_SCHEMA_VERSION, DistributionProfile, annotations, dataclass, field, get_distribution_profile, list_distribution_profiles, merge_profile_options, sanitize_metadata, stable_hash
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'BLOCKED_RELEASE_KEYS', 'BUILTIN_DISTRIBUTION_PROFILES', 'DISTRIBUTION_BLOCKED_KEYS', 'DISTRIBUTION_PROFILE_SCHEMA_VERSION', 'DistributionProfile', 'annotations', 'dataclass', 'field', 'get_distribution_profile', 'list_distribution_profiles', 'merge_profile_options', 'sanitize_metadata', 'stable_hash')

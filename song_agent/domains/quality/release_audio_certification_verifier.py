@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent.domains.studio.projectio import write_json
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 RELEASE_AUDIO_CERTIFICATION_PACKAGE_TYPE = "release_audio_certification"

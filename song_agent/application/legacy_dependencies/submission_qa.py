@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.delivery.submission_qa."""
 
-import song_agent.submission_qa as _implementation
+from song_agent.domains.delivery.submission_qa import Any, DISTRIBUTION_BLOCKED_KEYS, SIGNED_SUBMISSION_STATUSES, SUBMISSION_QA_SCHEMA_VERSION, SubmissionBatch, SubmissionStore, _check, _check_message, _checks, _duplicates, annotations, build_submission_qa_report, json, mark_submission_qa_stale, now_iso, sanitize_metadata, scan_release_payload_for_sensitive_values, stable_hash, submission_item_current_snapshot, submission_qa_allows_export, submission_qa_summary, submission_source_state
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'DISTRIBUTION_BLOCKED_KEYS', 'SIGNED_SUBMISSION_STATUSES', 'SUBMISSION_QA_SCHEMA_VERSION', 'SubmissionBatch', 'SubmissionStore', '_check', '_check_message', '_checks', '_duplicates', 'annotations', 'build_submission_qa_report', 'json', 'mark_submission_qa_stale', 'now_iso', 'sanitize_metadata', 'scan_release_payload_for_sensitive_values', 'stable_hash', 'submission_item_current_snapshot', 'submission_qa_allows_export', 'submission_qa_summary', 'submission_source_state')

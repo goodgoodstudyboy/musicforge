@@ -177,7 +177,7 @@ def _collect_project_planning_rule_impact_summary(project_id: str) -> dict[str, 
 
 
 def _collect_project_delivery_qa_summary(project_dir: Path) -> dict[str, Any]:
-    from song_agent.application.legacy_dependencies.delivery_qa import delivery_qa_summary
+    from song_agent.domains.delivery.delivery_qa import delivery_qa_summary
 
     try:
         return _sanitize_asset_metadata(delivery_qa_summary(read_json(project_dir / "delivery-qa.json")))
@@ -186,7 +186,7 @@ def _collect_project_delivery_qa_summary(project_dir: Path) -> dict[str, Any]:
 
 
 def _collect_project_delivery_signoff_summary(project_dir: Path) -> dict[str, Any]:
-    from song_agent.application.legacy_dependencies.delivery_qa import delivery_signoff_summary
+    from song_agent.domains.delivery.delivery_qa import delivery_signoff_summary
 
     try:
         return _sanitize_asset_metadata(delivery_signoff_summary(read_json(project_dir / "delivery-signoff.json")))

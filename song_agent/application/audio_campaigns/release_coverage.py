@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 def audio_campaign_release_track_coverage(tracks: list[Any], case_index: dict[str, Any]) -> dict[str, Any]:

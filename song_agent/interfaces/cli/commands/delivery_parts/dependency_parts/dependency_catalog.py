@@ -111,28 +111,13 @@ from song_agent.domains.program.unified_release_program_continuity_command_cente
     write_unified_release_program_continuity_command_center_final_handoff_verification_report,
 )
 
-from song_agent.application.legacy_dependencies.release_verifier import release_verification_exit_code, print_verification_report, verify_release_zip, write_verification_report
+from song_agent.domains.delivery.release_verifier import release_verification_exit_code, print_verification_report, verify_release_zip, write_verification_report
 
-from song_agent.application.legacy_dependencies.distribution_verifier import (
-    distribution_verification_exit_code,
-    print_distribution_verification_report,
-    verify_distribution_package,
-    write_distribution_verification_report,
-)
+from song_agent.domains.delivery.distribution_verifier import distribution_verification_exit_code, print_distribution_verification_report, verify_distribution_package, write_distribution_verification_report
 
-from song_agent.application.legacy_dependencies.submission_verifier import (
-    print_submission_verification_report,
-    submission_verification_exit_code,
-    verify_submission_package,
-    write_submission_verification_report,
-)
+from song_agent.domains.delivery.submission_verifier import print_submission_verification_report, submission_verification_exit_code, verify_submission_package, write_submission_verification_report
 
-from song_agent.application.legacy_dependencies.submission_evidence_verifier import (
-    print_submission_evidence_verification_report,
-    submission_evidence_verification_exit_code,
-    verify_submission_evidence_package,
-    write_submission_evidence_verification_report,
-)
+from song_agent.domains.delivery.submission_evidence_verifier import print_submission_evidence_verification_report, submission_evidence_verification_exit_code, verify_submission_evidence_package, write_submission_evidence_verification_report
 
 from song_agent.application.legacy_dependencies.release_operations_verifier import (
     print_release_operations_verification_report,
@@ -168,17 +153,17 @@ from song_agent.application.legacy_dependencies.release_operations_reviewer_pack
     write_release_operations_reviewer_pack_verification_report,
 )
 
-from song_agent.application.legacy_dependencies.distribution import DistributionStore
+from song_agent.domains.delivery.distribution import DistributionStore
 
 from song_agent.application.legacy_dependencies.release_operations import ReleaseOperationsStore, operations_report_summary
 
 from song_agent.application.legacy_dependencies.release_operations_verifier import release_operations_verification_summary, verify_release_operations_package
 
-from song_agent.application.legacy_dependencies.releases import ReleaseStore
+from song_agent.domains.delivery.releases import ReleaseStore
 
-from song_agent.application.legacy_dependencies.submission_evidence import SubmissionEvidenceStore
+from song_agent.domains.delivery.submission_evidence import SubmissionEvidenceStore
 
-from song_agent.application.legacy_dependencies.submissions import SubmissionStore
+from song_agent.domains.delivery.submissions import SubmissionStore
 
 from song_agent.application.legacy_dependencies.release_operations import ReleaseOperationsStore
 

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.delivery.distribution_artwork."""
 
-import song_agent.distribution_artwork as _implementation
+from song_agent.domains.delivery.distribution_artwork import Any, DISTRIBUTION_BLOCKED_KEYS, DistributionArtworkError, DistributionStateError, DistributionStore, DistributionValidationError, MAX_ARTWORK_BYTES, Path, SUPPORTED_ARTWORK_EXTENSIONS, _image_dimensions, _jpeg_dimensions, _payload_bytes, _reserve_artwork_id, _safe_filename, _sha256, _validate_artwork_id, _write_bytes, annotations, base64, delete_distribution_artwork, distribution_artwork_file_path, distribution_artwork_summary, hashlib, import_distribution_artwork, latest_distribution_artwork, list_distribution_artwork, now_iso, os, read_distribution_artwork, read_json, sanitize_metadata, sanitize_sensitive_text, shutil, slugify, struct, threading, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'DISTRIBUTION_BLOCKED_KEYS', 'DistributionArtworkError', 'DistributionStateError', 'DistributionStore', 'DistributionValidationError', 'MAX_ARTWORK_BYTES', 'Path', 'SUPPORTED_ARTWORK_EXTENSIONS', '_image_dimensions', '_jpeg_dimensions', '_payload_bytes', '_reserve_artwork_id', '_safe_filename', '_sha256', '_validate_artwork_id', '_write_bytes', 'annotations', 'base64', 'delete_distribution_artwork', 'distribution_artwork_file_path', 'distribution_artwork_summary', 'hashlib', 'import_distribution_artwork', 'latest_distribution_artwork', 'list_distribution_artwork', 'now_iso', 'os', 'read_distribution_artwork', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'shutil', 'slugify', 'struct', 'threading', 'write_json')

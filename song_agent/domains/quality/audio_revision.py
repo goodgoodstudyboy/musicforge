@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent.domains.quality.audio_artifacts import build_audio_artifact_manifest, write_audio_artifact_manifest
 from song_agent.domains.quality.audio_health import analyze_wav_health, audio_health_allows_release, audio_health_integrity_ok, audio_health_summary
-from song_agent.application.legacy_dependencies.delivery_qa import build_delivery_qa_report
+from song_agent.domains.delivery.delivery_qa import build_delivery_qa_report
 from song_agent.domains.quality.audio_review_evidence import AudioReviewEvidenceStore, review_integrity_ok, review_payload_hash
 from song_agent.domains.creation.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip, final_export_dir
 from song_agent.domains.quality.mix_controls import MixControlError, MixControlStateError, MixControlStore, MixPatch, apply_patch_and_render_plan, build_mix_patch, default_mix_state, file_sha256, marker_to_mix_patch_operations, mix_patch_hash, mix_patch_integrity_ok, mix_state_hash, mix_state_integrity_ok, mix_state_stale_reasons, song_plan_hash, stable_hash
@@ -19,7 +19,7 @@ from song_agent.domains.studio.project_quality import evaluate_quality_gate, loa
 from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.quality.release_audio import build_release_audio_qa_report, write_release_audio_qa
-from song_agent.application.legacy_dependencies.releases import BLOCKED_RELEASE_KEYS, ReleaseNotFoundError, ReleaseStateError, ReleaseStore, build_release_track_snapshot
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseNotFoundError, ReleaseStateError, ReleaseStore, build_release_track_snapshot
 from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, load_renderer_config, render_audio
 from song_agent.domains.creation.renderers.midi import render_midi
 from song_agent.domains.creation.schemas.song import SongPlan

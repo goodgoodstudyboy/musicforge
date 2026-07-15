@@ -27,7 +27,7 @@ from song_agent.application.interface_persistence import write_interface_documen
 from song_agent.interfaces.cli.registry import CommandSpec
 
 
-from song_agent.application.legacy_dependencies.distribution import DistributionStore
+from song_agent.domains.delivery.distribution import DistributionStore
 
 from song_agent.application.legacy_dependencies.release_operations import ReleaseOperationsStore
 
@@ -59,11 +59,11 @@ from song_agent.application.legacy_dependencies.release_portfolio_governance_rev
 
 from song_agent.application.legacy_dependencies.release_portfolio_governance_signoff import ReleasePortfolioGovernanceSignoffStore
 
-from song_agent.application.legacy_dependencies.releases import ReleaseStore
+from song_agent.domains.delivery.releases import ReleaseStore
 
-from song_agent.application.legacy_dependencies.submission_evidence import SubmissionEvidenceStore
+from song_agent.domains.delivery.submission_evidence import SubmissionEvidenceStore
 
-from song_agent.application.legacy_dependencies.submissions import SubmissionStore
+from song_agent.domains.delivery.submissions import SubmissionStore
 
 from song_agent.application.legacy_dependencies.public_trust_center import PublicTrustCenterStore
 

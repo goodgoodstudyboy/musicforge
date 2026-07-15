@@ -7,7 +7,7 @@ from song_agent.domains.quality.audio_campaigns import AudioCampaignStore
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.application.legacy_dependencies.releases import stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 AUDIO_CAMPAIGN_ANALYTICS_SCHEMA_VERSION = 1

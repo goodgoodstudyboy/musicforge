@@ -96,6 +96,7 @@ def migrate(root: Path, contexts: set[str], *, plan: bool = False) -> int:
                 _facade_source(wrapper_module, target_module, exports[source_module], application_boundary=True),
                 encoding="utf-8",
             )
+    _canonicalize_domain_imports(root)
 
     manifest = _read_manifest(root)
     manifest.setdefault("schema_version", 1)
@@ -145,6 +146,7 @@ def repair_facades(root: Path) -> int:
         row["export_count"] = len(exports)
         changed += 1
     (root / MANIFEST).write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _canonicalize_domain_imports(root)
     print(f"repaired domain facades: {changed}")
     return 0
 

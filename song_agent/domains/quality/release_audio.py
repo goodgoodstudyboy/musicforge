@@ -11,8 +11,8 @@ from song_agent.domains.creation.final_export import final_export_dir
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.application.legacy_dependencies.release_qa import release_source_hash
-from song_agent.application.legacy_dependencies.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseStore, stable_hash
+from song_agent.domains.delivery.release_qa import release_source_hash
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseStore, stable_hash
 
 
 RELEASE_AUDIO_QA_SCHEMA_VERSION = 1

@@ -13,7 +13,7 @@ from typing import Any
 from song_agent.platform.version import VERSION as __version__
 from song_agent.domains.studio.projectio import write_json
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.application.legacy_dependencies.release_verifier import LOCAL_PATH_VALUE_PATTERNS
+from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS
 
 
 HUMAN_REVIEW_VERIFICATION_SCHEMA_VERSION = 1

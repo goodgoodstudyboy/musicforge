@@ -15,7 +15,7 @@ from song_agent.domains.quality.mastering_profiles import MasteringProfile, Mast
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.application.legacy_dependencies.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseStateError, ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseStateError, ReleaseStore, stable_hash
 
 
 MASTERING_SCHEMA_VERSION = 1
@@ -927,7 +927,7 @@ def _profile_limits(profile: MasteringProfile) -> dict[str, Any]:
 
 
 def _release_stub_from_analysis(analysis: dict[str, Any]) -> ReleaseDocument:
-    from song_agent.application.legacy_dependencies.releases import ReleaseDocument, ReleaseTrack
+    from song_agent.domains.delivery.releases import ReleaseDocument, ReleaseTrack
 
     tracks = []
     for index, item in enumerate(analysis.get("tracks", []) if isinstance(analysis.get("tracks"), list) else [], start=1):

@@ -60,116 +60,26 @@ from song_agent.application.legacy_dependencies.unified_command_center_signoff i
 )
 from song_agent.domains.quality.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.domains.creation.encoded_audio_acceptance import EncodedAudioAcceptanceError, EncodedAudioAcceptanceNotFoundError, EncodedAudioAcceptanceStateError, EncodedAudioAcceptanceStore, encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok, encoded_audio_review_integrity_hash, encoded_audio_review_integrity_ok
-from song_agent.application.legacy_dependencies.format_decisions import (
-    FormatDecisionError,
-    FormatDecisionNotFoundError,
-    FormatDecisionStateError,
-    FormatDecisionStore,
-    distribution_target_format_decision_coverage,
-)
-from song_agent.application.legacy_dependencies.rights_clearance import (
-    RightsClearanceError,
-    RightsClearanceNotFoundError,
-    RightsClearanceStateError,
-    RightsClearanceStore,
-)
+from song_agent.domains.delivery.format_decisions import FormatDecisionError, FormatDecisionNotFoundError, FormatDecisionStateError, FormatDecisionStore, distribution_target_format_decision_coverage
+from song_agent.domains.delivery.rights_clearance import RightsClearanceError, RightsClearanceNotFoundError, RightsClearanceStateError, RightsClearanceStore
 from song_agent.domains.quality.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
-from song_agent.application.legacy_dependencies.releases import (
-    ReleaseConflictError,
-    ReleaseNotFoundError,
-    ReleaseStateError,
-    ReleaseStore,
-    ReleaseValidationError,
-    release_summary,
-    stable_hash,
-)
-from song_agent.application.legacy_dependencies.distribution import (
-    DistributionNotFoundError,
-    DistributionStateError,
-    DistributionStore,
-    DistributionValidationError,
-    distribution_signoff_summary,
-    distribution_target_summary,
-)
-from song_agent.application.legacy_dependencies.distribution_artwork import (
-    delete_distribution_artwork,
-    distribution_artwork_file_path,
-    distribution_artwork_summary,
-    import_distribution_artwork,
-    list_distribution_artwork,
-    read_distribution_artwork,
-)
-from song_agent.application.legacy_dependencies.distribution_export import (
-    DistributionExportError,
-    build_distribution_export_package,
-    build_distribution_package_zip,
-    distribution_export_summary,
-    read_distribution_export_manifest,
-    sign_distribution_package,
-)
-from song_agent.application.legacy_dependencies.distribution_profiles import get_distribution_profile, list_distribution_profiles
-from song_agent.application.legacy_dependencies.distribution_templates import DistributionTemplateError, TemplatePackStore, template_summary
-from song_agent.application.legacy_dependencies.distribution_layout import build_distribution_layout_plan, layout_summary
-from song_agent.application.legacy_dependencies.distribution_checklist import (
-    DistributionChecklistError,
-    checklist_summary,
-    initialize_distribution_checklist,
-    read_distribution_checklist,
-    reconcile_distribution_checklist,
-    update_distribution_checklist_item,
-)
-from song_agent.application.legacy_dependencies.distribution_qa import (
-    build_distribution_qa_report,
-    distribution_source_state,
-    distribution_qa_summary,
-    mark_distribution_qa_stale,
-)
-from song_agent.application.legacy_dependencies.release_metadata import read_release_metadata
-from song_agent.application.legacy_dependencies.distribution_verifier import (
-    distribution_verification_summary,
-    verify_distribution_package,
-    write_distribution_verification_report,
-)
-from song_agent.application.legacy_dependencies.submissions import (
-    SubmissionNotFoundError,
-    SubmissionStateError,
-    SubmissionStore,
-    SubmissionValidationError,
-    submission_batch_summary,
-    submission_signoff_summary,
-)
-from song_agent.application.legacy_dependencies.submission_qa import (
-    build_submission_qa_report,
-    mark_submission_qa_stale,
-    submission_qa_summary,
-    submission_source_state,
-)
-from song_agent.application.legacy_dependencies.submission_export import (
-    SubmissionExportError,
-    build_submission_export_bundle,
-    build_submission_package_zip,
-    read_submission_export_manifest,
-    sign_submission_package,
-    submission_export_summary,
-)
-from song_agent.application.legacy_dependencies.submission_verifier import (
-    submission_verification_summary,
-    verify_submission_package,
-    write_submission_verification_report,
-)
-from song_agent.application.legacy_dependencies.submission_evidence import (
-    SubmissionEvidenceNotFoundError,
-    SubmissionEvidenceStateError,
-    SubmissionEvidenceStore,
-    SubmissionEvidenceValidationError,
-    submission_evidence_report_summary,
-    submission_evidence_signoff_summary,
-)
-from song_agent.application.legacy_dependencies.submission_evidence_verifier import (
-    submission_evidence_verification_summary,
-    verify_submission_evidence_package,
-    write_submission_evidence_verification_report,
-)
+from song_agent.domains.delivery.releases import ReleaseConflictError, ReleaseNotFoundError, ReleaseStateError, ReleaseStore, ReleaseValidationError, release_summary, stable_hash
+from song_agent.domains.delivery.distribution import DistributionNotFoundError, DistributionStateError, DistributionStore, DistributionValidationError, distribution_signoff_summary, distribution_target_summary
+from song_agent.domains.delivery.distribution_artwork import delete_distribution_artwork, distribution_artwork_file_path, distribution_artwork_summary, import_distribution_artwork, list_distribution_artwork, read_distribution_artwork
+from song_agent.domains.delivery.distribution_export import DistributionExportError, build_distribution_export_package, build_distribution_package_zip, distribution_export_summary, read_distribution_export_manifest, sign_distribution_package
+from song_agent.domains.delivery.distribution_profiles import get_distribution_profile, list_distribution_profiles
+from song_agent.domains.delivery.distribution_templates import DistributionTemplateError, TemplatePackStore, template_summary
+from song_agent.domains.delivery.distribution_layout import build_distribution_layout_plan, layout_summary
+from song_agent.domains.delivery.distribution_checklist import DistributionChecklistError, checklist_summary, initialize_distribution_checklist, read_distribution_checklist, reconcile_distribution_checklist, update_distribution_checklist_item
+from song_agent.domains.delivery.distribution_qa import build_distribution_qa_report, distribution_source_state, distribution_qa_summary, mark_distribution_qa_stale
+from song_agent.domains.delivery.release_metadata import read_release_metadata
+from song_agent.domains.delivery.distribution_verifier import distribution_verification_summary, verify_distribution_package, write_distribution_verification_report
+from song_agent.domains.delivery.submissions import SubmissionNotFoundError, SubmissionStateError, SubmissionStore, SubmissionValidationError, submission_batch_summary, submission_signoff_summary
+from song_agent.domains.delivery.submission_qa import build_submission_qa_report, mark_submission_qa_stale, submission_qa_summary, submission_source_state
+from song_agent.domains.delivery.submission_export import SubmissionExportError, build_submission_export_bundle, build_submission_package_zip, read_submission_export_manifest, sign_submission_package, submission_export_summary
+from song_agent.domains.delivery.submission_verifier import submission_verification_summary, verify_submission_package, write_submission_verification_report
+from song_agent.domains.delivery.submission_evidence import SubmissionEvidenceNotFoundError, SubmissionEvidenceStateError, SubmissionEvidenceStore, SubmissionEvidenceValidationError, submission_evidence_report_summary, submission_evidence_signoff_summary
+from song_agent.domains.delivery.submission_evidence_verifier import submission_evidence_verification_summary, verify_submission_evidence_package, write_submission_evidence_verification_report
 from song_agent.domains.quality.acceptance_analytics import AcceptanceAnalyticsError, AcceptanceAnalyticsNotFoundError, AcceptanceAnalyticsStateError, AcceptanceAnalyticsStore, AnalyticsScope, acceptance_analytics_summary, release_acceptance_analytics_evidence
 from song_agent.domains.quality.acceptance_fix_sprints import AcceptanceFixSprintError, AcceptanceFixSprintNotFoundError, AcceptanceFixSprintStateError, AcceptanceFixSprintStore, acceptance_fix_closeout_summary, fix_sprint_summary, latest_fix_sprint_summary
 from song_agent.domains.quality.acceptance_fix_planning import AcceptanceFixPlanError, AcceptanceFixPlanNotFoundError, AcceptanceFixPlanStateError, AcceptanceFixPlanningStore, fix_plan_summary, latest_fix_plan_summary
