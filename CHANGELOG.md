@@ -26,6 +26,8 @@ This file contains the current v13 major line. Earlier history is preserved in
   runner connection aborts without reducing protected-route coverage.
 - Assigned the synchronous mastering candidate render its own hosted-coverage
   timeout while retaining the stricter default for ordinary API requests.
+- Sanitized the embedded project snapshot in Final Export packages across
+  Windows and POSIX paths, and retained Nightly full reports on failure.
 
 ## v13.7.0 - 2026-07-15
 

@@ -1860,6 +1860,16 @@ def _v24_editor_template_smoke(root: Path) -> tuple[bool, str]:
             export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
             final_status, final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
             final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"force": True})
+            public_project_export = json.loads(
+                (
+                    base
+                    / ".musicforge"
+                    / "projects"
+                    / project_id
+                    / "final-export"
+                    / "project-export.json"
+                ).read_text(encoding="utf-8")
+            )
             metadata_path = Path(applied["job"]["output_dir"]) / "data" / "edit-metadata.json"
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             derived_notes = [
@@ -1869,7 +1879,15 @@ def _v24_editor_template_smoke(root: Path) -> tuple[bool, str]:
                 if str(note.get("note_id", "")).startswith("derived-note-")
             ]
             add_tracks = {operation["track_id"] for operation in draft["patch"]["operations"] if operation.get("op") == "add_note"}
-            serialized = json.dumps({"metadata": metadata, "export": project_export, "compare": compare, "final_export": final_export}, ensure_ascii=False)
+            serialized = json.dumps(
+                {
+                    "metadata": metadata,
+                    "project_export": public_project_export,
+                    "compare": compare,
+                    "final_export": final_export.get("final_export", {}),
+                },
+                ensure_ascii=False,
+            )
             ok = (
                 created_status == 201
                 and version_status == 202

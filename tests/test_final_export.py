@@ -67,6 +67,16 @@ def passed_gate(run_dir: Path):
 def test_final_export_bundle_copies_core_audio_stems_and_manifest(tmp_path: Path) -> None:
     project_dir = tmp_path / ".musicforge" / "projects" / "export-project"
     run_dir, _plan = make_run(tmp_path)
+    project_export = {
+        "project": {"project_id": "export-project"},
+        "versions": [
+            {
+                "output_dir": str(run_dir),
+                "song_plan": str(run_dir / "data" / "song-plan.json"),
+                "posix_artifact": "/tmp/musicforge-private/song.mid",
+            }
+        ],
+    }
 
     manifest = build_final_export_bundle(
         project=Project(),
@@ -76,10 +86,11 @@ def test_final_export_bundle_copies_core_audio_stems_and_manifest(tmp_path: Path
         gate=passed_gate(run_dir),
         options=FinalExportOptions(),
         now="2026-05-06T00:00:00Z",
-        project_export={"project": {"project_id": "export-project"}},
+        project_export=project_export,
     )
 
     export_dir = project_dir / "final-export"
+    public_project_export = read_json(export_dir / "project-export.json")
     assert manifest["project_id"] == "export-project"
     assert manifest["quality_gate"]["status"] == "passed"
     assert (export_dir / "song-plan.json").exists()
@@ -89,6 +100,10 @@ def test_final_export_bundle_copies_core_audio_stems_and_manifest(tmp_path: Path
     assert any((export_dir / "stems" / "midi").glob("*.mid"))
     assert any((export_dir / "stems" / "audio").glob("*.wav"))
     assert (export_dir / "project-export.json").exists()
+    assert public_project_export["versions"][0]["output_dir"] == "[REDACTED_LOCAL_PATH]"
+    assert public_project_export["versions"][0]["song_plan"] == "[REDACTED_LOCAL_PATH]"
+    assert public_project_export["versions"][0]["posix_artifact"] == "[REDACTED_LOCAL_PATH]"
+    assert project_export["versions"][0]["output_dir"] == str(run_dir)
     assert "MusicForge Final Export" in (export_dir / "README.txt").read_text(encoding="utf-8")
     assert read_final_export_manifest(project_dir)["version_id"] == "v001"
 

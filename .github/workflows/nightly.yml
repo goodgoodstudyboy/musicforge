@@ -65,7 +65,19 @@ jobs:
         with: {python-version: "3.11"}
       - run: python -m pip install -e .[dev]
       - run: python tools/assert_ci_final_sha.py
-      - run: python -m song_agent.cli release-check --profile full --skip-tests --json > full-release-check.json
+      - name: Run full release check
+        run: >-
+          python -m song_agent.cli release-check --profile full --skip-tests --json
+          --report-out full-release-check.json
+          --timing-out full-release-check-timing.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: musicforge-full-release-check-${{ github.sha }}
+          path: |
+            full-release-check.json
+            full-release-check-timing.json
+          if-no-files-found: error
 
   migration-rehearsal:
     runs-on: ubuntu-latest

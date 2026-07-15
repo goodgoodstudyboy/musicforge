@@ -95,7 +95,11 @@ def build_final_export_bundle(
 
     files: list[dict[str, Any]] = []
     if project_export is not None:
-        write_json(export_dir / "project-export.json", project_export)
+        public_project_export = sanitize_metadata(
+            project_export,
+            blocked_keys=BLOCKED_ASSET_METADATA_KEYS,
+        )
+        write_json(export_dir / "project-export.json", public_project_export)
         files.append({"kind": "project_export", "path": "project-export.json", "exists": True, "required": False})
 
     _copy_optional(run_dir, export_dir, plan_path, "song-plan.json", "song_plan", files, required=True)
