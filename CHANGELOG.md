@@ -28,6 +28,9 @@ This file contains the current v13 major line. Earlier history is preserved in
   timeout while retaining the stricter default for ordinary API requests.
 - Sanitized the embedded project snapshot in Final Export packages across
   Windows and POSIX paths, and retained Nightly full reports on failure.
+- Sanitized downloadable project JSON exports, recognized WSL drive-mount
+  paths in the shared redaction kernel, and made legacy export checks inspect
+  public Final Export manifests instead of local control responses.
 
 ## v13.7.0 - 2026-07-15
 

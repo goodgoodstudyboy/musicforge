@@ -14,7 +14,7 @@ SENSITIVE_BYTE_PATTERNS = (
     re.compile(rb"api[_-]?key\s*[:=]\s*[^,\s\"']+", re.IGNORECASE),
     re.compile(rb"[A-Za-z]:\\Users\\[^\\\r\n]+", re.IGNORECASE),
     re.compile(rb"\\\\[^\\\r\n]+\\[^\\\r\n]+"),
-    re.compile(rb"(?<![A-Za-z0-9_])/(?:Users|home|tmp|var/tmp|private/tmp)/[^/\s,;\"'{}\[\]()]+(?:/[^/\s,;\"'{}\[\]()]+)*"),
+    re.compile(rb"(?<![A-Za-z0-9_])/(?:Users|home|tmp|var/tmp|private/tmp|mnt/[A-Za-z])/[^/\s,;\"'{}\[\]()]+(?:/[^/\s,;\"'{}\[\]()]+)*"),
     re.compile(rb"\.musicforge[\\/]", re.IGNORECASE),
 )
 
@@ -43,7 +43,7 @@ SENSITIVE_VALUE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?i)\b[A-Z]:[\\/]+[^\\/\s,;]+(?:[\\/]+[^\\/\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
     (re.compile(r"(?<![\\/\w])(?:\\\\|(?<!:)//)[^\\/\s,;]+[\\/]+[^\\/\s,;]+(?:[\\/]+[^\\/\s,;]+)*"), "[REDACTED_LOCAL_PATH]"),
     (
-        re.compile(r"(?<![A-Za-z0-9_])/(?:Users|home|tmp|var/tmp|private/tmp)/[^/\s,;\"'{}\[\]()]+(?:/[^/\s,;\"'{}\[\]()]+)*"),
+        re.compile(r"(?<![A-Za-z0-9_])/(?:Users|home|tmp|var/tmp|private/tmp|mnt/[A-Za-z])/[^/\s,;\"'{}\[\]()]+(?:/[^/\s,;\"'{}\[\]()]+)*"),
         "[REDACTED_LOCAL_PATH]",
     ),
 )

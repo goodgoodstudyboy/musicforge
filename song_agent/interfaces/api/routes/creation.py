@@ -475,7 +475,7 @@ class CreationRoutes(CreationRoutesPart001, CreationRoutesPart002, CreationRoute
                 return
             try:
                 self.project_store.sync_project(project_id, self.store.get_job)
-                self._send_json(self.project_store.export_project(project_id))
+                self._send_json(sanitize_metadata(self.project_store.export_project(project_id)))
             except FileNotFoundError:
                 self._send_error(HTTPStatus.NOT_FOUND, "Project not found.")
             return

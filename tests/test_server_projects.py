@@ -192,6 +192,9 @@ def test_create_project_version_selected_final_diff_and_export(tmp_path, monkeyp
     assert compare["right"]["quality"]["overall"] is not None
     assert export_status == 200
     assert export["project"]["project_id"] == project_id
+    assert export["versions"][0]["output_dir"] == "[REDACTED_LOCAL_PATH]"
+    assert export["versions"][0]["song_plan"] == "[REDACTED_LOCAL_PATH]"
+    assert str(tmp_path) not in json.dumps(export, ensure_ascii=False)
     assert (tmp_path / ".musicforge" / "projects" / project_id / "export.json").exists()
 
 

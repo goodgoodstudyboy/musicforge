@@ -2425,7 +2425,7 @@ def _v28_review_task_smoke(root: Path) -> tuple[bool, str]:
             follow_status, follow = _release_http_json(server, "GET", f"/api/projects/{project_id}/review-tasks/{follow_up_id}")
             metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            serialized = json.dumps({"task": task_data, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export, "needs": needs}, ensure_ascii=False)
+            serialized = json.dumps({"task": task_data, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export.get("final_export", {}), "needs": needs}, ensure_ascii=False)
             ok = (
                 created_status == 201
                 and version_status == 202
@@ -2598,7 +2598,7 @@ def _v29_provider_review_candidates_smoke(root: Path) -> tuple[bool, str]:
             usage_status, usage = _release_http_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
             metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            serialized = json.dumps({"provider_candidates": provider_candidates, "report": report, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export}, ensure_ascii=False)
+            serialized = json.dumps({"provider_candidates": provider_candidates, "report": report, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export.get("final_export", {})}, ensure_ascii=False)
             ok = (
                 provider_status == 200
                 and provider.get("configured") is True
@@ -2790,7 +2790,7 @@ def _v30_review_sprint_smoke(root: Path) -> tuple[bool, str]:
             usage_status, usage = _release_http_json(server, "GET", f"/api/projects/{project_id}/usage/provider")
             metadata_path = Path(edit_job["output_dir"]) / "data" / "edit-metadata.json"
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            serialized = json.dumps({"sprint": sprint_data, "provider_candidates": provider_candidates, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export}, ensure_ascii=False)
+            serialized = json.dumps({"sprint": sprint_data, "provider_candidates": provider_candidates, "metadata": metadata, "compare": compare, "export": project_export, "final": final_export.get("final_export", {})}, ensure_ascii=False)
             conflict_kinds = {item.get("kind") for item in (conflicts.get("conflict_report") or {}).get("conflicts", [])}
             ok = (
                 provider_status == 200
@@ -3001,7 +3001,7 @@ def _v31_review_sprint_recommendations_smoke(root: Path) -> tuple[bool, str]:
                     "metadata": metadata,
                     "compare": compare,
                     "export": project_export,
-                    "final": final_export,
+                    "final": final_export.get("final_export", {}),
                     "stale": stale_pack,
                 },
                 ensure_ascii=False,
@@ -3235,7 +3235,7 @@ def _v32_review_sprint_action_queue_smoke(root: Path) -> tuple[bool, str]:
                     "metadata": metadata,
                     "compare": compare,
                     "export": project_export,
-                    "final": final_export,
+                    "final": final_export.get("final_export", {}),
                     "stale": stale_run,
                     "context_stale": context_stale_run,
                     "usage": usage,
@@ -3400,7 +3400,7 @@ def _v33_review_sprint_dashboard_metrics_smoke(root: Path) -> tuple[bool, str]:
             second_metrics_report = second_metrics.get("metrics_report", {})
             project_report = project_metrics.get("review_metrics", {})
             final_review_metrics = final_export.get("final_export", {}).get("review_metrics", {})
-            serialized = json.dumps({"sprint_metrics": sprint_metrics, "project_metrics": project_metrics, "export": project_export, "final": final_export}, ensure_ascii=False)
+            serialized = json.dumps({"sprint_metrics": sprint_metrics, "project_metrics": project_metrics, "export": project_export, "final": final_export.get("final_export", {})}, ensure_ascii=False)
             allowed_quality = {"improved", "unchanged", "regressed", "not_available"}
             allowed_readiness = {"ready_to_close", "needs_review", "needs_candidates", "blocked", "stale", "no_data"}
             expected_completion_rate = second_metrics.get("summary", {}).get("completion_rate")
@@ -3547,7 +3547,7 @@ def _v34_provider_review_judge_smoke(root: Path) -> tuple[bool, str]:
                 "metrics": metrics,
                 "project_metrics": project_metrics,
                 "export": project_export,
-                "final": final_export,
+                "final": final_export.get("final_export", {}),
                 "usage": usage,
             },
             ensure_ascii=False,
@@ -3711,7 +3711,7 @@ def _v35_review_sprint_closeout_smoke(root: Path) -> tuple[bool, str]:
         export_status, project_export = _release_http_json(server, "GET", f"/api/projects/{project_id}/export")
         final_status, _final_data = _release_http_json(server, "POST", f"/api/projects/{project_id}/final", {"version_id": child_version, "force": True})
         final_export_status, final_export = _release_http_json(server, "POST", f"/api/projects/{project_id}/final-export", {"version_id": child_version, "force": True, "include_audio": False, "include_stems": False, "include_stem_audio": False})
-        serialized = json.dumps({"closeout": closeout_refresh, "closed": closed, "signoff": signoff, "export": project_export, "final": final_export}, ensure_ascii=False)
+        serialized = json.dumps({"closeout": closeout_refresh, "closed": closed, "signoff": signoff, "export": project_export, "final": final_export.get("final_export", {})}, ensure_ascii=False)
         final_closeout = final_export.get("final_export", {}).get("review_sprint_closeout", {})
         ok = (
             created_status == 201
@@ -3857,7 +3857,7 @@ def _v36_delivery_qa_handoff_smoke(root: Path) -> tuple[bool, str]:
         polluted_status, polluted = _release_http_json(server, "POST", f"/api/projects/{project_id}/delivery-qa/refresh")
         polluted_zip_check = next((check for check in polluted.get("delivery_qa", {}).get("checks", []) if isinstance(check, dict) and check.get("check_id") == "zip_manifest_match"), {})
         history_path = base / ".musicforge" / "projects" / project_id / "delivery-signoff-history.jsonl"
-        serialized = json.dumps({"signed": signed, "project_export": project_export, "final_export": final_export, "qa_after": qa_after, "reset": reset}, ensure_ascii=False)
+        serialized = json.dumps({"signed": signed, "project_export": project_export, "final_export": final_export.get("final_export", {}), "qa_after": qa_after, "reset": reset}, ensure_ascii=False)
         ok = (
             created_status == 201
             and version_status == 202

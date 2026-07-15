@@ -23,19 +23,37 @@ def test_sensitive_text_redacts_posix_temporary_paths_without_redacting_routes()
 
 
 def test_sensitive_text_redacts_posix_paths_embedded_in_json() -> None:
-    source = '{"zip_path":"/tmp/mf-123/evidence.zip","home":"/home/runner/work/report.json"}'
+    source = (
+        '{"zip_path":"/tmp/mf-123/evidence.zip",'
+        '"home":"/home/runner/work/report.json",'
+        '"wsl":"/mnt/c/Users/demo/work/evidence.zip"}'
+    )
 
     for sanitizer in (sanitize_sensitive_text, sanitize_verification_text):
         rendered = sanitizer(source)
         assert "/tmp/mf-123" not in rendered
         assert "/home/runner" not in rendered
-        assert rendered.count("[REDACTED_LOCAL_PATH]") == 2
+        assert "/mnt/c/Users/demo" not in rendered
+        assert rendered.count("[REDACTED_LOCAL_PATH]") == 3
 
 
 def test_archive_redaction_rejects_posix_paths_embedded_in_json() -> None:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("report.json", b'{"zip_path":"/tmp/mf-123/evidence.zip"}')
+    buffer.seek(0)
+
+    with zipfile.ZipFile(buffer) as archive:
+        check = archive_redaction_check(archive, archive.namelist(), check_id="test_redaction")
+
+    assert check["status"] == "failed"
+    assert check["details"]["offenders"] == ["report.json"]
+
+
+def test_archive_redaction_rejects_wsl_mount_paths() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("report.json", b'{"zip_path":"/mnt/c/Users/demo/work/evidence.zip"}')
     buffer.seek(0)
 
     with zipfile.ZipFile(buffer) as archive:
