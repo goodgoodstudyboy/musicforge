@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.mastering_profiles."""
 
-import song_agent.mastering_profiles as _implementation
+from song_agent.domains.quality.mastering_profiles import Any, BLOCKED_RELEASE_KEYS, BUILTIN_MASTERING_PROFILES, MASTERING_PROFILE_SCHEMA_VERSION, MasteringProfile, MasteringProfileError, MasteringProfileNotFoundError, MasteringProfileStore, PROFILE_ID_RE, PROFILE_INTEGRITY_EXCLUDE, Path, _float_range, _int_range, _profile_from_payload, _validate_profile_id, annotations, builtin_profile, builtin_profiles, dataclass, mastering_profile_hash, mastering_profile_integrity_ok, now_iso, re, read_json, sanitize_metadata, sanitize_sensitive_text, stable_hash, threading, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'BLOCKED_RELEASE_KEYS', 'BUILTIN_MASTERING_PROFILES', 'MASTERING_PROFILE_SCHEMA_VERSION', 'MasteringProfile', 'MasteringProfileError', 'MasteringProfileNotFoundError', 'MasteringProfileStore', 'PROFILE_ID_RE', 'PROFILE_INTEGRITY_EXCLUDE', 'Path', '_float_range', '_int_range', '_profile_from_payload', '_validate_profile_id', 'annotations', 'builtin_profile', 'builtin_profiles', 'dataclass', 'mastering_profile_hash', 'mastering_profile_integrity_ok', 'now_iso', 're', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'stable_hash', 'threading', 'write_json')

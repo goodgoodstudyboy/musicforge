@@ -10,7 +10,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
-from song_agent.application.legacy_dependencies.projectio import read_json, slugify, write_json
+from song_agent.domains.studio.projectio import read_json, slugify, write_json
 from .schemas.song import SongRequest
 
 

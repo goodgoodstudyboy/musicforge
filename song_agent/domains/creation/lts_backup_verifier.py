@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from song_agent.application.legacy_dependencies.music_acceptance import stable_hash
+from song_agent.domains.quality.music_acceptance import stable_hash
 from song_agent.domains.studio.projectio import write_json
 
 

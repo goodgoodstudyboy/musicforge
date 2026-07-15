@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from song_agent.application.legacy_dependencies.music_acceptance import stable_hash
+from song_agent.domains.quality.music_acceptance import stable_hash
 from song_agent.domains.creation.planning_rule_simulation import PlanningRuleSimulationError, PlanningRuleSimulationNotFoundError, PlanningRuleSimulationStore, planning_simulation_summary, ruleset_summary
 from song_agent.domains.studio.projectio import now_iso, read_json, write_json
-from song_agent.domains.studio.projects import ProjectStore
+from song_agent.domains.studio.project_repository import ProjectStore
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 
 

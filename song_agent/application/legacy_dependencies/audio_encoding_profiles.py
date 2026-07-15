@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.audio_encoding_profiles."""
 
-import song_agent.audio_encoding_profiles as _implementation
+from song_agent.domains.quality.audio_encoding_profiles import AUDIO_ENCODING_PROFILE_SCHEMA_VERSION, Any, AudioEncodingProfile, AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore, BLOCKED_RELEASE_KEYS, BUILTIN_AUDIO_ENCODING_PROFILES, PROFILE_ID_RE, PROFILE_INTEGRITY_EXCLUDE, Path, SUPPORTED_ENGINES, SUPPORTED_FORMATS, _default_codec, _default_container, _int_range, _optional_int_range, _optional_text, _profile_from_payload, _safe_engine, _safe_extension, _safe_format, _validate_profile_id, annotations, audio_encoding_profile_hash, audio_encoding_profile_integrity_ok, builtin_profile, builtin_profiles, dataclass, now_iso, re, read_json, sanitize_metadata, sanitize_sensitive_text, stable_hash, threading, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('AUDIO_ENCODING_PROFILE_SCHEMA_VERSION', 'Any', 'AudioEncodingProfile', 'AudioEncodingProfileError', 'AudioEncodingProfileNotFoundError', 'AudioEncodingProfileStore', 'BLOCKED_RELEASE_KEYS', 'BUILTIN_AUDIO_ENCODING_PROFILES', 'PROFILE_ID_RE', 'PROFILE_INTEGRITY_EXCLUDE', 'Path', 'SUPPORTED_ENGINES', 'SUPPORTED_FORMATS', '_default_codec', '_default_container', '_int_range', '_optional_int_range', '_optional_text', '_profile_from_payload', '_safe_engine', '_safe_extension', '_safe_format', '_validate_profile_id', 'annotations', 'audio_encoding_profile_hash', 'audio_encoding_profile_integrity_ok', 'builtin_profile', 'builtin_profiles', 'dataclass', 'now_iso', 're', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'stable_hash', 'threading', 'write_json')

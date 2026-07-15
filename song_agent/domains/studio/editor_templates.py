@@ -12,7 +12,7 @@ from typing import Any
 from song_agent.domains.studio.editor_clips import ClipNote, EditorClipError, EditorClipUnavailableError
 from song_agent.domains.studio.editor_view import build_editor_view_from_result
 from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import ProjectStore, now_iso
+from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.creation.schemas.song import SongPlan
 from song_agent.domains.studio.song_editor import apply_editor_patch, build_editor_state, song_plan_hash

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.audio_campaign_remediation_verifier."""
 
-import song_agent.audio_campaign_remediation_verifier as _implementation
+from song_agent.domains.quality.audio_campaign_remediation_verifier import AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE, AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION, Any, OPTIONAL_ENTRIES, Path, REQUIRED_ENTRIES, SENSITIVE_PATTERNS, _check, _finish, _integrity_hash, _integrity_ok, _is_safe_entry, _manifest_checks, _read_json_entry, _redaction_check, _sha256_bytes, _sha256_path, _signoff_checks, annotations, audio_campaign_remediation_verification_exit_code, json, re, stable_hash, verify_audio_campaign_remediation_package, write_audio_campaign_remediation_verification_report, write_json, zipfile
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE', 'AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION', 'Any', 'OPTIONAL_ENTRIES', 'Path', 'REQUIRED_ENTRIES', 'SENSITIVE_PATTERNS', '_check', '_finish', '_integrity_hash', '_integrity_ok', '_is_safe_entry', '_manifest_checks', '_read_json_entry', '_redaction_check', '_sha256_bytes', '_sha256_path', '_signoff_checks', 'annotations', 'audio_campaign_remediation_verification_exit_code', 'json', 're', 'stable_hash', 'verify_audio_campaign_remediation_package', 'write_audio_campaign_remediation_verification_report', 'write_json', 'zipfile')

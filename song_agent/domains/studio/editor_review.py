@@ -4,7 +4,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from song_agent.domains.studio.projects import now_iso
+from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
 from song_agent.domains.studio.song_editor import build_editor_state, song_plan_hash

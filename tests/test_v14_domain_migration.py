@@ -13,17 +13,27 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.contract
 
 
-def _migration_rows() -> list[dict[str, object]]:
-    document = json.loads(
+def _migration_document() -> dict[str, object]:
+    return json.loads(
         (ROOT / "architecture-v14-domain-migration.json").read_text(encoding="utf-8")
     )
+
+
+def _migration_rows() -> list[dict[str, object]]:
+    document = _migration_document()
     return [row for wave in document["waves"] for row in wave["modules"]]
 
 
-def test_creation_and_studio_facades_preserve_export_identity() -> None:
+def test_migrated_facades_preserve_export_identity() -> None:
     rows = _migration_rows()
 
-    assert len(rows) == 59
+    waves = {
+        tuple(wave["contexts"]): int(wave["module_count"])
+        for wave in _migration_document()["waves"]
+    }
+    assert waves[("creation", "studio")] == 59
+    assert waves[("quality",)] == 61
+    assert len(rows) == 120
     for row in rows:
         facade = importlib.import_module(str(row["source"]))
         owner = importlib.import_module(str(row["target"]))
@@ -33,7 +43,7 @@ def test_creation_and_studio_facades_preserve_export_identity() -> None:
             assert getattr(facade, name) is getattr(owner, name), f"{row['source']}:{name}"
 
 
-def test_creation_and_studio_migration_has_no_dynamic_facade_or_active_debt() -> None:
+def test_domain_migration_has_no_dynamic_facade_or_active_debt() -> None:
     rows = _migration_rows()
     for row in rows:
         facade_path = ROOT.joinpath(*str(row["source"]).split(".")).with_suffix(".py")
@@ -51,5 +61,6 @@ def test_creation_and_studio_migration_has_no_dynamic_facade_or_active_debt() ->
     }
     assert "creation" not in contexts
     assert "studio" not in contexts
+    assert "quality" not in contexts
     assert snapshot["cycles"] == []
     assert snapshot["boundary_violations"] == []

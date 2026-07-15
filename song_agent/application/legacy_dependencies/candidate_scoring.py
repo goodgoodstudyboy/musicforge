@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.candidate_scoring."""
 
-import song_agent.candidate_scoring as _implementation
+from song_agent.domains.quality.candidate_scoring import Any, CandidateScore, ProviderEditPatch, SongPlan, _novelty_score, annotations, dataclass, group_status_for_candidates, rank_candidate_summaries, score_provider_edit_candidate
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'CandidateScore', 'ProviderEditPatch', 'SongPlan', '_novelty_score', 'annotations', 'dataclass', 'group_status_for_candidates', 'rank_candidate_summaries', 'score_provider_edit_candidate')

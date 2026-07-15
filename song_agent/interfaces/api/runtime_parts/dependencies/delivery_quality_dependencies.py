@@ -29,133 +29,24 @@ from song_agent.application.legacy_dependencies.release_qa import (
     release_source_hash,
     signoff_history_event as release_signoff_history_event,
 )
-from song_agent.application.legacy_dependencies.release_audio import (
-    build_release_audio_qa_report,
-    read_release_audio_qa,
-    release_audio_allows_signoff,
-    release_audio_report_integrity_ok,
-    release_audio_source_hash,
-    release_audio_summary,
-    write_release_audio_qa,
-)
-from song_agent.application.legacy_dependencies.audio_review_evidence import (
-    AudioReviewEvidenceError,
-    AudioReviewEvidenceNotFoundError,
-    AudioReviewEvidenceStateError,
-    AudioReviewEvidenceStore,
-    audio_review_summary_allows_signoff,
-    audio_review_summary_public,
-    release_audio_review_gate,
-)
-from song_agent.application.legacy_dependencies.audio_revision import (
-    AudioRevisionError,
-    AudioRevisionNotFoundError,
-    AudioRevisionStateError,
-    AudioRevisionStore,
-)
-from song_agent.application.legacy_dependencies.audio_lab import (
-    AudioLabError,
-    AudioLabNotFoundError,
-    AudioLabStateError,
-    AudioLabStore,
-    AudioLabValidationError,
-)
-from song_agent.application.legacy_dependencies.audio_fix_sprints import (
-    AudioFixSprintError,
-    AudioFixSprintNotFoundError,
-    AudioFixSprintStateError,
-    AudioFixSprintStore,
-    AudioFixSprintValidationError,
-)
-from song_agent.application.legacy_dependencies.audio_campaigns import (
-    AudioCampaignError,
-    AudioCampaignNotFoundError,
-    AudioCampaignStateError,
-    AudioCampaignStore,
-    AudioCampaignValidationError,
-)
-from song_agent.application.legacy_dependencies.audio_campaign_governance import (
-    AudioCampaignGovernanceError,
-    AudioCampaignGovernanceNotFoundError,
-    AudioCampaignGovernanceStateError,
-    AudioCampaignGovernanceStore,
-)
-from song_agent.application.legacy_dependencies.audio_campaign_planner import (
-    AudioCampaignPlannerError,
-    AudioCampaignPlannerNotFoundError,
-    AudioCampaignPlannerStateError,
-    AudioCampaignPlannerStore,
-    AudioCampaignPlannerValidationError,
-)
-from song_agent.application.legacy_dependencies.audio_campaign_remediation import (
-    AudioCampaignRemediationError,
-    AudioCampaignRemediationNotFoundError,
-    AudioCampaignRemediationStateError,
-    AudioCampaignRemediationStore,
-    AudioCampaignRemediationValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_certification import (
-    ReleaseAudioCertificationError,
-    ReleaseAudioCertificationNotFoundError,
-    ReleaseAudioCertificationStateError,
-    ReleaseAudioCertificationStore,
-    ReleaseAudioCertificationValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_timeline import (
-    ReleaseAudioTimelineError,
-    ReleaseAudioTimelineNotFoundError,
-    ReleaseAudioTimelineStateError,
-    ReleaseAudioTimelineStore,
-    ReleaseAudioTimelineValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_regression import (
-    ReleaseAudioRegressionError,
-    ReleaseAudioRegressionNotFoundError,
-    ReleaseAudioRegressionStateError,
-    ReleaseAudioRegressionStore,
-    ReleaseAudioRegressionValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_baseline_governance import (
-    ReleaseAudioBaselineGovernanceError,
-    ReleaseAudioBaselineGovernanceNotFoundError,
-    ReleaseAudioBaselineGovernanceStateError,
-    ReleaseAudioBaselineGovernanceStore,
-    ReleaseAudioBaselineGovernanceValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_regression_response import (
-    ReleaseAudioRegressionResponseError,
-    ReleaseAudioRegressionResponseNotFoundError,
-    ReleaseAudioRegressionResponseStateError,
-    ReleaseAudioRegressionResponseStore,
-    ReleaseAudioRegressionResponseValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_quality_observatory import (
-    ReleaseAudioQualityObservatoryError,
-    ReleaseAudioQualityObservatoryNotFoundError,
-    ReleaseAudioQualityObservatoryStateError,
-    ReleaseAudioQualityObservatoryStore,
-    ReleaseAudioQualityObservatoryValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_quality_actions import (
-    ReleaseAudioQualityActionQueueError,
-    ReleaseAudioQualityActionQueueNotFoundError,
-    ReleaseAudioQualityActionQueueStateError,
-    ReleaseAudioQualityActionQueueStore,
-    ReleaseAudioQualityActionQueueValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_quality_action_signoff import (
-    ReleaseAudioQualityActionQueueSignoffError,
-    ReleaseAudioQualityActionQueueSignoffNotFoundError,
-    ReleaseAudioQualityActionQueueSignoffStateError,
-    ReleaseAudioQualityActionQueueSignoffStore,
-    ReleaseAudioQualityActionQueueSignoffValidationError,
-)
-from song_agent.application.legacy_dependencies.release_audio_command_center import (
-    ReleaseAudioCommandCenterError,
-    ReleaseAudioCommandCenterNotFoundError,
-    ReleaseAudioCommandCenterStateError,
-    ReleaseAudioCommandCenterStore,
-)
+from song_agent.domains.quality.release_audio import build_release_audio_qa_report, read_release_audio_qa, release_audio_allows_signoff, release_audio_report_integrity_ok, release_audio_source_hash, release_audio_summary, write_release_audio_qa
+from song_agent.domains.quality.audio_review_evidence import AudioReviewEvidenceError, AudioReviewEvidenceNotFoundError, AudioReviewEvidenceStateError, AudioReviewEvidenceStore, audio_review_summary_allows_signoff, audio_review_summary_public, release_audio_review_gate
+from song_agent.domains.quality.audio_revision import AudioRevisionError, AudioRevisionNotFoundError, AudioRevisionStateError, AudioRevisionStore
+from song_agent.domains.quality.audio_lab import AudioLabError, AudioLabNotFoundError, AudioLabStateError, AudioLabStore, AudioLabValidationError
+from song_agent.domains.quality.audio_fix_sprints import AudioFixSprintError, AudioFixSprintNotFoundError, AudioFixSprintStateError, AudioFixSprintStore, AudioFixSprintValidationError
+from song_agent.domains.quality.audio_campaigns import AudioCampaignError, AudioCampaignNotFoundError, AudioCampaignStateError, AudioCampaignStore, AudioCampaignValidationError
+from song_agent.domains.quality.audio_campaign_governance import AudioCampaignGovernanceError, AudioCampaignGovernanceNotFoundError, AudioCampaignGovernanceStateError, AudioCampaignGovernanceStore
+from song_agent.domains.quality.audio_campaign_planner import AudioCampaignPlannerError, AudioCampaignPlannerNotFoundError, AudioCampaignPlannerStateError, AudioCampaignPlannerStore, AudioCampaignPlannerValidationError
+from song_agent.domains.quality.audio_campaign_remediation import AudioCampaignRemediationError, AudioCampaignRemediationNotFoundError, AudioCampaignRemediationStateError, AudioCampaignRemediationStore, AudioCampaignRemediationValidationError
+from song_agent.domains.quality.release_audio_certification import ReleaseAudioCertificationError, ReleaseAudioCertificationNotFoundError, ReleaseAudioCertificationStateError, ReleaseAudioCertificationStore, ReleaseAudioCertificationValidationError
+from song_agent.domains.quality.release_audio_timeline import ReleaseAudioTimelineError, ReleaseAudioTimelineNotFoundError, ReleaseAudioTimelineStateError, ReleaseAudioTimelineStore, ReleaseAudioTimelineValidationError
+from song_agent.domains.quality.release_audio_regression import ReleaseAudioRegressionError, ReleaseAudioRegressionNotFoundError, ReleaseAudioRegressionStateError, ReleaseAudioRegressionStore, ReleaseAudioRegressionValidationError
+from song_agent.domains.quality.release_audio_baseline_governance import ReleaseAudioBaselineGovernanceError, ReleaseAudioBaselineGovernanceNotFoundError, ReleaseAudioBaselineGovernanceStateError, ReleaseAudioBaselineGovernanceStore, ReleaseAudioBaselineGovernanceValidationError
+from song_agent.domains.quality.release_audio_regression_response import ReleaseAudioRegressionResponseError, ReleaseAudioRegressionResponseNotFoundError, ReleaseAudioRegressionResponseStateError, ReleaseAudioRegressionResponseStore, ReleaseAudioRegressionResponseValidationError
+from song_agent.domains.quality.release_audio_quality_observatory import ReleaseAudioQualityObservatoryError, ReleaseAudioQualityObservatoryNotFoundError, ReleaseAudioQualityObservatoryStateError, ReleaseAudioQualityObservatoryStore, ReleaseAudioQualityObservatoryValidationError
+from song_agent.domains.quality.release_audio_quality_actions import ReleaseAudioQualityActionQueueError, ReleaseAudioQualityActionQueueNotFoundError, ReleaseAudioQualityActionQueueStateError, ReleaseAudioQualityActionQueueStore, ReleaseAudioQualityActionQueueValidationError
+from song_agent.domains.quality.release_audio_quality_action_signoff import ReleaseAudioQualityActionQueueSignoffError, ReleaseAudioQualityActionQueueSignoffNotFoundError, ReleaseAudioQualityActionQueueSignoffStateError, ReleaseAudioQualityActionQueueSignoffStore, ReleaseAudioQualityActionQueueSignoffValidationError
+from song_agent.domains.quality.release_audio_command_center import ReleaseAudioCommandCenterError, ReleaseAudioCommandCenterNotFoundError, ReleaseAudioCommandCenterStateError, ReleaseAudioCommandCenterStore
 from song_agent.application.legacy_dependencies.unified_command_center import (
     UnifiedCommandCenterError,
     UnifiedCommandCenterNotFoundError,

@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from song_agent.application.legacy_dependencies.audio_health import analyze_wav_health, audio_health_allows_release, audio_health_integrity_ok, audio_health_summary
-from song_agent.application.legacy_dependencies.mix_controls import file_sha256, mix_state_hash, mix_state_integrity_ok, song_plan_hash, stable_hash
+from song_agent.domains.quality.audio_health import analyze_wav_health, audio_health_allows_release, audio_health_integrity_ok, audio_health_summary
+from song_agent.domains.quality.mix_controls import file_sha256, mix_state_hash, mix_state_integrity_ok, song_plan_hash, stable_hash
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.creation.redaction import sanitize_metadata
 from song_agent.domains.creation.schemas.song import SongPlan

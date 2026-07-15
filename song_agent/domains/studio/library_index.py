@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent.domains.studio.assets import AssetStore, CreativeAsset, asset_content_summary
 from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import now_iso
+from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.studio.reference_analysis import get_analysis_report, get_slice_manifest
 from song_agent.domains.studio.references import ReferenceItem, ReferenceStore, reference_metadata_summary

@@ -61,7 +61,7 @@ class JobStoreEditJob:
                 result_plan = apply_asset_refs_to_plan(result.plan, self.asset_store, asset_snapshot["asset_refs"])
                 result = EditedSongPlanResult(plan=result_plan, summary=result.summary, warnings=result.warnings)
             if metadata.get("edit_source") == "audition_review" and isinstance(metadata.get("review_edit"), dict):
-                from song_agent.application.legacy_dependencies.review_edits import ReviewEditIntent
+                from song_agent.domains.quality.review_edits import ReviewEditIntent
 
                 review_edit_result = apply_review_edit(parent_plan, ReviewEditIntent.from_dict(metadata["review_edit"]))
                 result = review_edit_result

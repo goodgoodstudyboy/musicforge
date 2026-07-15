@@ -11,7 +11,7 @@ from typing import Any
 
 from song_agent.domains.creation.music_quality import attach_quality
 from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import now_iso
+from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, render_audio
 from song_agent.domains.creation.renderers.midi import PROGRAMS_BY_ROLE, _header_chunk, _meta_track, _music_track, _track_role

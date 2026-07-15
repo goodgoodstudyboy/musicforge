@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import now_iso
+from song_agent.domains.studio.project_repository import now_iso
 
 
 AB_ID_PATTERN = re.compile(r"^ab-[0-9]{3,5}$")

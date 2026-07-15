@@ -8,7 +8,7 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.acceptance_analytics",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -22,35 +22,35 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.acceptance_fix_plan_reviews",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.acceptance_fix_planning",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.acceptance_fix_sprints",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.acceptance_kb",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.acceptance_profiles",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -92,7 +92,7 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_artifacts",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -106,105 +106,105 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_campaign_archive_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_campaign_governance",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_campaign_planner",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_campaign_remediation",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_campaign_remediation_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_campaign_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_campaigns",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_encoding",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_encoding_profiles",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_fix_sprints",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_health",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_lab",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_profiles",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_review_evidence",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.audio_revision",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -225,14 +225,14 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.candidate_groups",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.candidate_scoring",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -400,14 +400,14 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.human_review_pack",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.human_review_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -442,14 +442,14 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.mastering_profiles",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.mastering_qa",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -463,21 +463,21 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.mix_controls",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.mix_render",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.music_acceptance",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -750,7 +750,7 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.quality",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -785,133 +785,133 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_baseline_governance",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_baseline_governance_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_certification",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_certification_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_command_center",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_command_center_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_quality_action_signoff",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_quality_action_signoff_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_quality_actions",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_quality_actions_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_quality_observatory",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_quality_observatory_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_regression",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_regression_response",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_regression_response_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_regression_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_timeline",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.release_audio_timeline_verifier",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -1254,56 +1254,56 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_edits",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_judge",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_sprint_actions",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_sprint_closeout",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_sprint_metrics",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_sprint_recommendations",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_sprints",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.review_tasks",
       "owner": "musicforge-quality",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",

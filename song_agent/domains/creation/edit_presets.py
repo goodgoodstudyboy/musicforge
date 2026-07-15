@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent.domains.creation.edits import EDIT_TYPES, EditIntent, PRESERVE_FIELDS, SUPPORTED_HARMONY_CHORDS, validate_edit_intent
 from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import now_iso
+from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.schemas.song import SongPlan
 
 

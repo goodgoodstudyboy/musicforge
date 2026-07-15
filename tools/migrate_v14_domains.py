@@ -26,14 +26,19 @@ def migrate(root: Path, contexts: set[str], *, plan: bool = False) -> int:
         print("domain modules selected: 0")
         return 0
     wrapper_targets = _wrapper_targets(root)
-    target_wrappers = {target: wrapper for wrapper, target in wrapper_targets.items()}
+    target_wrappers = _target_wrappers(root, wrapper_targets)
     missing_cross = _missing_cross_boundaries(root, selected, ownership, target_wrappers)
     if missing_cross:
         raise ValueError("Cross-domain compatibility imports lack wrappers: " + ", ".join(sorted(missing_cross)))
+    adopted = {
+        source: target
+        for source, target in selected.items()
+        if _existing_module_path_or_none(root, target) is not None
+    }
     collisions = [
         target
-        for target in selected.values()
-        if _module_path(root, target).exists()
+        for source, target in adopted.items()
+        if not _facade_points_to(root / str(ownership[source]["path"]), target)
     ]
     if collisions:
         raise ValueError("Domain migration targets already exist: " + ", ".join(sorted(collisions)))
@@ -46,6 +51,7 @@ def migrate(root: Path, contexts: set[str], *, plan: bool = False) -> int:
         "contexts": sorted(contexts),
         "module_count": len(selected),
         "active_caller_rewrite_count": active_rewrites,
+        "adopted_module_count": len(adopted),
         "selected_modules": dict(sorted(selected.items())),
     }
     if plan:
@@ -55,8 +61,15 @@ def migrate(root: Path, contexts: set[str], *, plan: bool = False) -> int:
     exports: dict[str, list[str]] = {}
     for source_module, target_module in sorted(selected.items()):
         source_path = root / str(ownership[source_module]["path"])
-        source = source_path.read_text(encoding="utf-8")
+        target_existing = _existing_module_path_or_none(root, target_module)
+        source = (
+            target_existing.read_text(encoding="utf-8")
+            if source_module in adopted and target_existing is not None
+            else source_path.read_text(encoding="utf-8")
+        )
         exports[source_module] = _module_exports(source)
+        if source_module in adopted:
+            continue
         rewritten = _rewrite_domain_source(
             source,
             source_module=source_module,
@@ -71,6 +84,7 @@ def migrate(root: Path, contexts: set[str], *, plan: bool = False) -> int:
         target_path.write_text(rewritten, encoding="utf-8")
 
     _rewrite_active_callers(root, wrapper_targets, selected)
+    _canonicalize_domain_imports(root)
 
     for source_module, target_module in sorted(selected.items()):
         source_path = root / str(ownership[source_module]["path"])
@@ -151,6 +165,34 @@ def _wrapper_targets(root: Path) -> dict[str, str]:
     return result
 
 
+def _target_wrappers(root: Path, wrapper_targets: dict[str, str]) -> dict[str, str]:
+    result = {target: wrapper for wrapper, target in wrapper_targets.items()}
+    manifest = _read_manifest(root)
+    for wave in manifest.get("waves") or []:
+        for row in wave.get("modules") or []:
+            source = str(row.get("source") or "")
+            target = str(row.get("target") or "")
+            if source and target:
+                result[source] = target
+    return result
+
+
+def _canonicalize_domain_imports(root: Path) -> int:
+    replacements = {
+        wrapper: target
+        for wrapper, target in _wrapper_targets(root).items()
+        if target.startswith("song_agent.domains.")
+    }
+    changed = 0
+    for path in sorted((root / "song_agent" / "domains").rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        updated = _rewrite_imports(source, replacements)
+        if updated != source:
+            path.write_text(updated, encoding="utf-8")
+            changed += 1
+    return changed
+
+
 def _missing_cross_boundaries(
     root: Path,
     selected: dict[str, str],
@@ -201,7 +243,12 @@ def _dynamic_imports(
 
 
 def _active_rewrite_count(root: Path, wrappers: dict[str, str], selected: dict[str, str]) -> int:
-    selected_wrappers = {wrapper for wrapper, target in wrappers.items() if target in selected}
+    selected_targets = set(selected.values())
+    selected_wrappers = {
+        wrapper
+        for wrapper, target in wrappers.items()
+        if target in selected or target in selected_targets
+    }
     count = 0
     for path in (root / "song_agent").rglob("*.py"):
         source = path.read_text(encoding="utf-8")
@@ -210,7 +257,12 @@ def _active_rewrite_count(root: Path, wrappers: dict[str, str], selected: dict[s
 
 
 def _rewrite_active_callers(root: Path, wrappers: dict[str, str], selected: dict[str, str]) -> None:
-    replacements = {wrapper: selected[target] for wrapper, target in wrappers.items() if target in selected}
+    selected_targets = set(selected.values())
+    replacements = {
+        wrapper: selected[target] if target in selected else target
+        for wrapper, target in wrappers.items()
+        if target in selected or target in selected_targets
+    }
     if not replacements:
         return
     for path in sorted((root / "song_agent").rglob("*.py")):
@@ -405,6 +457,19 @@ def _existing_module_path(root: Path, module: str) -> Path:
     base = root.joinpath(*module.split("."))
     module_path = base.with_suffix(".py")
     return module_path if module_path.is_file() else base / "__init__.py"
+
+
+def _existing_module_path_or_none(root: Path, module: str) -> Path | None:
+    path = _existing_module_path(root, module)
+    return path if path.is_file() else None
+
+
+def _facade_points_to(path: Path, target_module: str) -> bool:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return any(
+        isinstance(node, ast.ImportFrom) and node.module == target_module
+        for node in tree.body
+    )
 
 
 def _ensure_packages(root: Path, directory: Path) -> None:

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.acceptance_profiles."""
 
-import song_agent.acceptance_profiles as _implementation
+from song_agent.domains.quality.acceptance_profiles import ACCEPTANCE_PROFILE_SCHEMA_VERSION, AcceptanceProfile, Any, BUILTIN_ACCEPTANCE_PROFILES, annotations, dataclass, get_acceptance_profile, list_acceptance_profiles, profile_payload, sanitize_metadata
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('ACCEPTANCE_PROFILE_SCHEMA_VERSION', 'AcceptanceProfile', 'Any', 'BUILTIN_ACCEPTANCE_PROFILES', 'annotations', 'dataclass', 'get_acceptance_profile', 'list_acceptance_profiles', 'profile_payload', 'sanitize_metadata')

@@ -123,7 +123,7 @@ def test_candidate_group_store_renders_midi_and_audio(tmp_path: Path) -> None:
 
     config = RendererConfig(soundfont_path=str(tmp_path / "soundfont.sf2"))
     Path(config.soundfont_path).write_bytes(b"sf2")
-    from song_agent import candidate_groups as candidate_groups_module
+    from song_agent.domains.quality import candidate_groups as candidate_groups_module
 
     original_render_audio = candidate_groups_module.render_audio
     try:

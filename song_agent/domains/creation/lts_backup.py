@@ -12,7 +12,7 @@ from typing import Any
 
 from song_agent.platform.version import VERSION as __version__
 from song_agent.domains.creation.lts_backup_verifier import LEGAL_SIDECAR_ENTRIES, MAINTENANCE_BACKUP_PACKAGE_TYPE, maintenance_backup_manifest_hash, verify_maintenance_backup_zip, write_maintenance_backup_verification_report
-from song_agent.application.legacy_dependencies.music_acceptance import stable_hash
+from song_agent.domains.quality.music_acceptance import stable_hash
 from song_agent.domains.studio.projectio import read_json, write_json
 
 

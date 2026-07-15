@@ -1,7 +1,5 @@
-"""Application import boundary for the quality acceptance-diff domain."""
+"""Application boundary for song_agent.domains.quality.acceptance_diff."""
 
-import song_agent.domains.quality.acceptance_diff as _implementation
+from song_agent.domains.quality.acceptance_diff import ACCEPTANCE_DIFF_SCHEMA_VERSION, Any, _cases_by_song, _delta, _row_status, annotations, build_acceptance_diff, sanitize_metadata
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('ACCEPTANCE_DIFF_SCHEMA_VERSION', 'Any', '_cases_by_song', '_delta', '_row_status', 'annotations', 'build_acceptance_diff', 'sanitize_metadata')

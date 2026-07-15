@@ -334,7 +334,7 @@ def _copy_stems(
 
 
 def _copy_mix_exports(run_dir: Path, export_dir: Path, files: list[dict[str, Any]]) -> dict[str, Any]:
-    from song_agent.application.legacy_dependencies.mix_controls import mix_patch_hash, mix_patch_integrity_ok, mix_state_hash, mix_state_integrity_ok
+    from song_agent.domains.quality.mix_controls import mix_patch_hash, mix_patch_integrity_ok, mix_state_hash, mix_state_integrity_ok
     from song_agent.domains.creation.stem_health import read_stem_health_report, stem_health_integrity_ok, stem_health_summary
 
     summary: dict[str, Any] = {}
@@ -562,7 +562,7 @@ def _final_review_sprint_summary(project_export: dict[str, Any] | None) -> dict[
     if not isinstance(project_export, dict):
         return {}
     try:
-        from song_agent.application.legacy_dependencies.review_sprints import review_sprint_project_rollup
+        from song_agent.domains.quality.review_sprints import review_sprint_project_rollup
 
         sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
         if not sprints:

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.audio_artifacts."""
 
-import song_agent.audio_artifacts as _implementation
+from song_agent.domains.quality.audio_artifacts import AUDIO_ARTIFACT_FILENAME, AUDIO_ARTIFACT_SCHEMA_VERSION, Any, Path, RendererConfig, RendererProfile, _INTEGRITY_EXCLUDE_KEYS, _file_state, _json_file_state, _renderer_profile_payload, _safe_text, _sha256_path, _state_for_source, annotations, audio_artifact_current, audio_artifact_integrity_hash, audio_artifact_integrity_ok, audio_artifact_source_hash, audio_artifact_stale_reasons, audio_artifact_stale_reasons_for_profile, audio_artifact_summary, build_audio_artifact_manifest, hashlib, json, now_iso, read_audio_artifact_manifest, read_json, renderer_profile_hash, sanitize_metadata, stable_hash, write_audio_artifact_manifest, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('AUDIO_ARTIFACT_FILENAME', 'AUDIO_ARTIFACT_SCHEMA_VERSION', 'Any', 'Path', 'RendererConfig', 'RendererProfile', '_INTEGRITY_EXCLUDE_KEYS', '_file_state', '_json_file_state', '_renderer_profile_payload', '_safe_text', '_sha256_path', '_state_for_source', 'annotations', 'audio_artifact_current', 'audio_artifact_integrity_hash', 'audio_artifact_integrity_ok', 'audio_artifact_source_hash', 'audio_artifact_stale_reasons', 'audio_artifact_stale_reasons_for_profile', 'audio_artifact_summary', 'build_audio_artifact_manifest', 'hashlib', 'json', 'now_iso', 'read_audio_artifact_manifest', 'read_json', 'renderer_profile_hash', 'sanitize_metadata', 'stable_hash', 'write_audio_artifact_manifest', 'write_json')

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.audio_health."""
 
-import song_agent.audio_health as _implementation
+from song_agent.domains.quality.audio_health import AUDIO_HEALTH_SCHEMA_VERSION, Any, DEFAULT_CLIPPING_FAILURE_RATIO, DEFAULT_CLIPPING_WARNING_RATIO, DEFAULT_LEADING_SILENCE_WARNING_SECONDS, DEFAULT_MAX_DURATION_SECONDS, DEFAULT_MIN_DURATION_SECONDS, DEFAULT_MIN_PEAK, DEFAULT_MIN_RMS, DEFAULT_NEAR_SILENCE_THRESHOLD, DEFAULT_TRAILING_SILENCE_WARNING_SECONDS, INTEGRITY_EXCLUDE_KEYS, Path, _check, _check_expected, _decode_sample, _default_report_id, _finalize_report, _pcm_metrics, analyze_wav_bytes, analyze_wav_health, annotations, audio_health_allows_release, audio_health_integrity_hash, audio_health_integrity_ok, audio_health_summary, hashlib, io, math, now_iso, sanitize_metadata, stable_hash, wave
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('AUDIO_HEALTH_SCHEMA_VERSION', 'Any', 'DEFAULT_CLIPPING_FAILURE_RATIO', 'DEFAULT_CLIPPING_WARNING_RATIO', 'DEFAULT_LEADING_SILENCE_WARNING_SECONDS', 'DEFAULT_MAX_DURATION_SECONDS', 'DEFAULT_MIN_DURATION_SECONDS', 'DEFAULT_MIN_PEAK', 'DEFAULT_MIN_RMS', 'DEFAULT_NEAR_SILENCE_THRESHOLD', 'DEFAULT_TRAILING_SILENCE_WARNING_SECONDS', 'INTEGRITY_EXCLUDE_KEYS', 'Path', '_check', '_check_expected', '_decode_sample', '_default_report_id', '_finalize_report', '_pcm_metrics', 'analyze_wav_bytes', 'analyze_wav_health', 'annotations', 'audio_health_allows_release', 'audio_health_integrity_hash', 'audio_health_integrity_ok', 'audio_health_summary', 'hashlib', 'io', 'math', 'now_iso', 'sanitize_metadata', 'stable_hash', 'wave')

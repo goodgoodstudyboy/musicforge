@@ -58,7 +58,7 @@ from song_agent.application.legacy_dependencies.unified_command_center_signoff i
     UnifiedCommandCenterSignoffStateError,
     UnifiedCommandCenterSignoffStore,
 )
-from song_agent.application.legacy_dependencies.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
+from song_agent.domains.quality.audio_encoding import AudioEncodingError, AudioEncodingNotFoundError, AudioEncodingStateError, AudioEncodingStore, encoded_audio_gate, normalize_required_profiles, resolve_target_audio_format_profiles
 from song_agent.domains.creation.encoded_audio_acceptance import EncodedAudioAcceptanceError, EncodedAudioAcceptanceNotFoundError, EncodedAudioAcceptanceStateError, EncodedAudioAcceptanceStore, encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok, encoded_audio_review_integrity_hash, encoded_audio_review_integrity_ok
 from song_agent.application.legacy_dependencies.format_decisions import (
     FormatDecisionError,
@@ -73,7 +73,7 @@ from song_agent.application.legacy_dependencies.rights_clearance import (
     RightsClearanceStateError,
     RightsClearanceStore,
 )
-from song_agent.application.legacy_dependencies.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
+from song_agent.domains.quality.audio_encoding_profiles import AudioEncodingProfileError, AudioEncodingProfileNotFoundError, AudioEncodingProfileStore
 from song_agent.application.legacy_dependencies.releases import (
     ReleaseConflictError,
     ReleaseNotFoundError,
@@ -170,48 +170,11 @@ from song_agent.application.legacy_dependencies.submission_evidence_verifier imp
     verify_submission_evidence_package,
     write_submission_evidence_verification_report,
 )
-from song_agent.application.legacy_dependencies.acceptance_analytics import (
-    AcceptanceAnalyticsError,
-    AcceptanceAnalyticsNotFoundError,
-    AcceptanceAnalyticsStateError,
-    AcceptanceAnalyticsStore,
-    AnalyticsScope,
-    acceptance_analytics_summary,
-    release_acceptance_analytics_evidence,
-)
-from song_agent.application.legacy_dependencies.acceptance_fix_sprints import (
-    AcceptanceFixSprintError,
-    AcceptanceFixSprintNotFoundError,
-    AcceptanceFixSprintStateError,
-    AcceptanceFixSprintStore,
-    acceptance_fix_closeout_summary,
-    fix_sprint_summary,
-    latest_fix_sprint_summary,
-)
-from song_agent.application.legacy_dependencies.acceptance_fix_planning import (
-    AcceptanceFixPlanError,
-    AcceptanceFixPlanNotFoundError,
-    AcceptanceFixPlanStateError,
-    AcceptanceFixPlanningStore,
-    fix_plan_summary,
-    latest_fix_plan_summary,
-)
-from song_agent.application.legacy_dependencies.acceptance_fix_plan_reviews import (
-    AcceptanceFixPlanReviewError,
-    AcceptanceFixPlanReviewNotFoundError,
-    AcceptanceFixPlanReviewStateError,
-    AcceptanceFixPlanReviewStore,
-    REVIEW_READY_STATUSES,
-    fix_plan_review_summary,
-    latest_fix_plan_review_summary,
-)
-from song_agent.application.legacy_dependencies.acceptance_kb import (
-    AcceptanceKnowledgeBaseError,
-    AcceptanceKnowledgeBaseNotFoundError,
-    AcceptanceKnowledgeBaseStore,
-    knowledge_entry_summary,
-    knowledge_report_summary,
-)
+from song_agent.domains.quality.acceptance_analytics import AcceptanceAnalyticsError, AcceptanceAnalyticsNotFoundError, AcceptanceAnalyticsStateError, AcceptanceAnalyticsStore, AnalyticsScope, acceptance_analytics_summary, release_acceptance_analytics_evidence
+from song_agent.domains.quality.acceptance_fix_sprints import AcceptanceFixSprintError, AcceptanceFixSprintNotFoundError, AcceptanceFixSprintStateError, AcceptanceFixSprintStore, acceptance_fix_closeout_summary, fix_sprint_summary, latest_fix_sprint_summary
+from song_agent.domains.quality.acceptance_fix_planning import AcceptanceFixPlanError, AcceptanceFixPlanNotFoundError, AcceptanceFixPlanStateError, AcceptanceFixPlanningStore, fix_plan_summary, latest_fix_plan_summary
+from song_agent.domains.quality.acceptance_fix_plan_reviews import AcceptanceFixPlanReviewError, AcceptanceFixPlanReviewNotFoundError, AcceptanceFixPlanReviewStateError, AcceptanceFixPlanReviewStore, REVIEW_READY_STATUSES, fix_plan_review_summary, latest_fix_plan_review_summary
+from song_agent.domains.quality.acceptance_kb import AcceptanceKnowledgeBaseError, AcceptanceKnowledgeBaseNotFoundError, AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
 from song_agent.domains.creation.planning_rule_simulation import PlanningRuleSimulationError, PlanningRuleSimulationNotFoundError, PlanningRuleSimulationStateError, PlanningRuleSimulationStore, planning_simulation_summary, ruleset_summary
 from song_agent.domains.creation.planning_rule_governance import PlanningRuleGovernanceError, PlanningRuleGovernanceNotFoundError, PlanningRuleGovernanceStateError, PlanningRuleGovernanceStore, active_governance_summary, governance_summary, promotion_summary
 

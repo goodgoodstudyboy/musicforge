@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.audio_campaign_governance."""
 
-import song_agent.audio_campaign_governance as _implementation
+from song_agent.domains.quality.audio_campaign_governance import AUDIO_CAMPAIGN_GOVERNANCE_SCHEMA_VERSION, Any, AudioCampaignAnalyticsStore, AudioCampaignGovernanceError, AudioCampaignGovernanceNotFoundError, AudioCampaignGovernanceStateError, AudioCampaignGovernanceStore, AudioCampaignNotFoundError, AudioCampaignStateError, AudioCampaignStore, Path, _append_jsonl, _archive_readme, _bounded, _build_governance_report, _check, _file_record, _gate_failed, _integrity_hash, _integrity_ok, _public_campaign, _public_verification, _safe_int, _sha256_path, _validate_change_request_id, annotations, build_audio_campaign_analytics, json, now_iso, read_json, sanitize_metadata, sanitize_sensitive_text, stable_hash, threading, verify_audio_campaign_archive_package, verify_audio_campaign_package, write_audio_campaign_archive_verification_report, write_json, zipfile
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('AUDIO_CAMPAIGN_GOVERNANCE_SCHEMA_VERSION', 'Any', 'AudioCampaignAnalyticsStore', 'AudioCampaignGovernanceError', 'AudioCampaignGovernanceNotFoundError', 'AudioCampaignGovernanceStateError', 'AudioCampaignGovernanceStore', 'AudioCampaignNotFoundError', 'AudioCampaignStateError', 'AudioCampaignStore', 'Path', '_append_jsonl', '_archive_readme', '_bounded', '_build_governance_report', '_check', '_file_record', '_gate_failed', '_integrity_hash', '_integrity_ok', '_public_campaign', '_public_verification', '_safe_int', '_sha256_path', '_validate_change_request_id', 'annotations', 'build_audio_campaign_analytics', 'json', 'now_iso', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'stable_hash', 'threading', 'verify_audio_campaign_archive_package', 'verify_audio_campaign_package', 'write_audio_campaign_archive_verification_report', 'write_json', 'zipfile')

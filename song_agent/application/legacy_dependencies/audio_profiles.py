@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.audio_profiles."""
 
-import song_agent.audio_profiles as _implementation
+from song_agent.domains.quality.audio_profiles import AUDIO_PROFILE_ROOT, AUDIO_PROFILE_SCHEMA_VERSION, Any, AudioProfileError, AudioProfileNotFoundError, AudioProfileStore, Path, RendererConfig, RendererError, RendererProfile, _bounded, _profile_id, _sha256_path, annotations, dataclass, hashlib, json, legacy_renderer_profile, now_iso, re, read_json, renderer_profile_hash, sanitize_metadata, sanitize_sensitive_text, stable_hash, test_renderer_config, threading, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('AUDIO_PROFILE_ROOT', 'AUDIO_PROFILE_SCHEMA_VERSION', 'Any', 'AudioProfileError', 'AudioProfileNotFoundError', 'AudioProfileStore', 'Path', 'RendererConfig', 'RendererError', 'RendererProfile', '_bounded', '_profile_id', '_sha256_path', 'annotations', 'dataclass', 'hashlib', 'json', 'legacy_renderer_profile', 'now_iso', 're', 'read_json', 'renderer_profile_hash', 'sanitize_metadata', 'sanitize_sensitive_text', 'stable_hash', 'test_renderer_config', 'threading', 'write_json')

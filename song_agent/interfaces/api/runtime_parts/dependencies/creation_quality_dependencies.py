@@ -1,37 +1,16 @@
 from __future__ import annotations
 
 from song_agent.domains.creation.planning_rule_impact import PlanningRuleImpactError, PlanningRuleImpactNotFoundError, PlanningRuleImpactStateError, PlanningRuleImpactStore, planning_rule_impact_report_hash, planning_rule_impact_summary
-from song_agent.application.legacy_dependencies.acceptance_diff import build_acceptance_diff
-from song_agent.application.legacy_dependencies.acceptance_profiles import list_acceptance_profiles
-from song_agent.application.legacy_dependencies.audio_profiles import AudioProfileError, AudioProfileNotFoundError, AudioProfileStore
-from song_agent.application.legacy_dependencies.mastering_profiles import MasteringProfileError, MasteringProfileNotFoundError, MasteringProfileStore
-from song_agent.application.legacy_dependencies.mastering_qa import MasteringNotFoundError, MasteringQAError, MasteringStateError, MasteringStore
-from song_agent.application.legacy_dependencies.music_acceptance import (
-    AcceptanceNotFoundError,
-    AcceptanceStateError,
-    AcceptanceStore,
-    AcceptanceValidationError,
-    acceptance_report_summary,
-    acceptance_signoff_summary,
-    acceptance_suite_summary,
-    listening_review_summary,
-)
-from song_agent.application.legacy_dependencies.mix_controls import (
-    MixControlError,
-    MixControlStateError,
-    MixControlStore,
-    mix_state_hash,
-    mix_state_integrity_ok,
-    mix_state_stale_reasons,
-)
-from song_agent.application.legacy_dependencies.mix_render import MixRenderStore, mix_preview_integrity_ok
+from song_agent.domains.quality.acceptance_diff import build_acceptance_diff
+from song_agent.domains.quality.acceptance_profiles import list_acceptance_profiles
+from song_agent.domains.quality.audio_profiles import AudioProfileError, AudioProfileNotFoundError, AudioProfileStore
+from song_agent.domains.quality.mastering_profiles import MasteringProfileError, MasteringProfileNotFoundError, MasteringProfileStore
+from song_agent.domains.quality.mastering_qa import MasteringNotFoundError, MasteringQAError, MasteringStateError, MasteringStore
+from song_agent.domains.quality.music_acceptance import AcceptanceNotFoundError, AcceptanceStateError, AcceptanceStore, AcceptanceValidationError, acceptance_report_summary, acceptance_signoff_summary, acceptance_suite_summary, listening_review_summary
+from song_agent.domains.quality.mix_controls import MixControlError, MixControlStateError, MixControlStore, mix_state_hash, mix_state_integrity_ok, mix_state_stale_reasons
+from song_agent.domains.quality.mix_render import MixRenderStore, mix_preview_integrity_ok
 from song_agent.domains.creation.stem_health import read_stem_health_report, stem_health_allows_signoff, stem_health_integrity_ok, stem_health_source_state, stem_health_stale_reasons, stem_health_summary
-from song_agent.application.legacy_dependencies.human_review_pack import (
-    HumanReviewPackNotFoundError,
-    HumanReviewPackStateError,
-    HumanReviewPackStore,
-    HumanReviewPackValidationError,
-)
+from song_agent.domains.quality.human_review_pack import HumanReviewPackNotFoundError, HumanReviewPackStateError, HumanReviewPackStore, HumanReviewPackValidationError
 from song_agent.domains.creation.regression_songbook import builtin_songbook
 from song_agent.domains.studio.context_packs import ContextPackStaleError, ContextPackStore, apply_context_pack, context_pack_public_dict, context_pack_snapshot, merge_context_refs, write_context_pack_snapshot
 from song_agent.domains.studio.library_index import LibraryIndexStore, asset_source_hash, recommend_library_context, search_library
@@ -41,81 +20,14 @@ from song_agent.domains.studio.prompt_templates import PromptTemplateStore
 from song_agent.domains.studio.projectio import ProjectPaths, append_event, read_json, slugify, write_json
 from song_agent.domains.studio.project_compare import compare_project_versions
 from song_agent.domains.creation.provider_edits import ProviderEditPatch, apply_provider_edit_patch, create_provider_edit_preview, delete_provider_edit_preview, generate_provider_edit_candidates, generate_provider_edit_patch, mark_provider_edit_preview_applied, preview_candidate_plan, preview_patch, preview_stale, read_provider_edit_preview, song_plan_hash
-from song_agent.application.legacy_dependencies.review_edits import (
-    ReviewEditError,
-    ReviewEditStore,
-    ReviewEditUnavailableError,
-    apply_review_edit,
-    build_review_edit,
-    review_edit_instruction_for_provider,
-    review_edit_metadata,
-    review_edit_summary,
-)
-from song_agent.application.legacy_dependencies.review_tasks import (
-    ReviewTaskError,
-    ReviewTaskStateError,
-    ReviewTaskStore,
-    apply_candidate_intents,
-    build_provider_review_candidates,
-    build_review_decision_report,
-    build_local_review_candidates,
-    candidate_apply_metadata,
-    ensure_candidate_current,
-    _ensure_task_open_for_apply,
-    ensure_task_current,
-    mark_task_archived,
-    mark_task_resolved,
-    review_candidate_summary,
-    review_candidate_source_breakdown,
-    review_decision_summary,
-    review_task_summary,
-    task_list_summary,
-)
-from song_agent.application.legacy_dependencies.review_judge import (
-    REVIEW_JUDGE_TEMPLATE_ID,
-    judge_report_summary,
-    judge_summary_for_apply,
-    mark_judge_report_stale,
-    read_judge_report_with_stale,
-    run_provider_review_judge,
-    sprint_judge_summary,
-)
-from song_agent.application.legacy_dependencies.review_sprints import (
-    ReviewSprintError,
-    ReviewSprintStateError,
-    ReviewSprintStore,
-    review_sprint_export_summary,
-)
-from song_agent.application.legacy_dependencies.review_sprint_recommendations import (
-    build_review_sprint_recommendation_report,
-    recommendation_report_summary,
-)
-from song_agent.application.legacy_dependencies.review_sprint_actions import (
-    ReviewSprintActionQueueStore,
-    SprintActionItem,
-    SprintActionQueue,
-    action_queue_collection_summary,
-    action_queue_summary,
-    build_action_queue_from_recommendation_report,
-    queue_report_is_stale,
-)
-from song_agent.application.legacy_dependencies.review_sprint_metrics import (
-    ReviewMetricsStore,
-    build_project_review_metrics,
-    build_sprint_metrics_report,
-    project_review_metrics_summary,
-    sprint_metrics_summary,
-)
-from song_agent.application.legacy_dependencies.review_sprint_closeout import (
-    build_closeout_report,
-    build_signoff_record,
-    closeout_allows_close,
-    closeout_report_summary,
-    closeout_source_hash,
-    mark_closeout_report_forced,
-    mark_closeout_report_stale,
-    signoff_summary,
-)
+from song_agent.domains.quality.review_edits import ReviewEditError, ReviewEditStore, ReviewEditUnavailableError, apply_review_edit, build_review_edit, review_edit_instruction_for_provider, review_edit_metadata, review_edit_summary
+from song_agent.domains.quality.review_tasks import ReviewTaskError, ReviewTaskStateError, ReviewTaskStore, apply_candidate_intents, build_provider_review_candidates, build_review_decision_report, build_local_review_candidates, candidate_apply_metadata, ensure_candidate_current, _ensure_task_open_for_apply, ensure_task_current, mark_task_archived, mark_task_resolved, review_candidate_summary, review_candidate_source_breakdown, review_decision_summary, review_task_summary, task_list_summary
+from song_agent.domains.quality.review_judge import REVIEW_JUDGE_TEMPLATE_ID, judge_report_summary, judge_summary_for_apply, mark_judge_report_stale, read_judge_report_with_stale, run_provider_review_judge, sprint_judge_summary
+from song_agent.domains.quality.review_sprints import ReviewSprintError, ReviewSprintStateError, ReviewSprintStore, review_sprint_export_summary
+from song_agent.domains.quality.review_sprint_recommendations import build_review_sprint_recommendation_report, recommendation_report_summary
+from song_agent.domains.quality.review_sprint_actions import ReviewSprintActionQueueStore, SprintActionItem, SprintActionQueue, action_queue_collection_summary, action_queue_summary, build_action_queue_from_recommendation_report, queue_report_is_stale
+from song_agent.domains.quality.review_sprint_metrics import ReviewMetricsStore, build_project_review_metrics, build_sprint_metrics_report, project_review_metrics_summary, sprint_metrics_summary
+from song_agent.domains.quality.review_sprint_closeout import build_closeout_report, build_signoff_record, closeout_allows_close, closeout_report_summary, closeout_source_hash, mark_closeout_report_forced, mark_closeout_report_stale, signoff_summary
 from song_agent.domains.creation.provider_usage import build_provider_usage_report, collect_candidate_group_provider_usage_records, collect_project_provider_usage_records, usage_record_from_file
 from song_agent.domains.studio.prompt_ab import PromptABStore
 from song_agent.domains.studio.projects import ProjectStore

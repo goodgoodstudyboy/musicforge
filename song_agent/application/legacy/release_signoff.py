@@ -6,7 +6,7 @@ from typing import Any
 
 from song_agent.application.policy_compatibility import evaluate_legacy_release_policy
 
-from song_agent.application.legacy_dependencies.audio_encoding import encoded_audio_gate, normalize_required_profiles
+from song_agent.domains.quality.audio_encoding import encoded_audio_gate, normalize_required_profiles
 
 from song_agent.application.legacy_dependencies.release_export import (
     build_release_export_zip,

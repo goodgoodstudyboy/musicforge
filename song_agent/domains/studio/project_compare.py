@@ -6,7 +6,7 @@ from typing import Any
 
 from song_agent.domains.studio.project_quality import QualityGateConfig, evaluate_quality_gate
 from song_agent.domains.studio.projectio import read_json
-from song_agent.domains.studio.projects import ProjectDocument, ProjectVersion
+from song_agent.domains.studio.project_repository import ProjectDocument, ProjectVersion
 from song_agent.domains.creation.schemas.song import SongPlan
 
 

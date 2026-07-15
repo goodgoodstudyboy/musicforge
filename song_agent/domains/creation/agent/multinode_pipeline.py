@@ -12,7 +12,7 @@ from song_agent.domains.creation.agent.provider_pipeline import _client_for_conf
 from song_agent.domains.creation.node_graph import NODE_DEPENDENCIES, affected_nodes_for_retry
 from song_agent.domains.creation.node_store import NodeRecord, NodeStore, PIPELINE_NODE_ORDER
 from song_agent.domains.creation.provider import ProviderConfig, ProviderOutputError
-from song_agent.application.legacy_dependencies.quality import REQUIRED_TRACKS, validate_song_plan
+from song_agent.domains.quality.quality import REQUIRED_TRACKS, validate_song_plan
 from song_agent.domains.creation.schemas.agent_nodes import ArrangementPlan, ArrangementTrack, CriticIssue, CriticReport, HarmonyPlan, LyricPlan, LyricSection, MelodyPhrase, MelodyPlan, RepairAction, RepairPlan, SectionHarmony, SongBrief, SonicPalette, StructurePlan, StructureSectionPlan
 from song_agent.domains.creation.schemas.song import MotifPlan, NoteEvent, SongPlan, SongRequest, SongSection, TrackPlan
 
@@ -25,7 +25,7 @@ PROVIDER_BACKED_NODES = {
     "lyric_planner",
     "harmony_planner",
 }
-NODE_PROMPT_DIR = Path(__file__).resolve().parents[1] / "prompts" / "nodes"
+NODE_PROMPT_DIR = Path(__file__).resolve().parents[3] / "prompts" / "nodes"
 
 
 def generate_multinode_song_plan(

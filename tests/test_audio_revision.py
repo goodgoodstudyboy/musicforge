@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import song_agent.audio_revision as audio_revision_module
+import song_agent.domains.quality.audio_revision as audio_revision_module
 from song_agent.audio_revision import CANDIDATE_INTEGRITY_EXCLUDE, _object_hash
 from song_agent.projectio import read_json, write_json
 from song_agent.release_verifier import verify_release_zip

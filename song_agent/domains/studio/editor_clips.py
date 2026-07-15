@@ -10,7 +10,7 @@ from typing import Any
 from song_agent.domains.studio.assets import AssetStore, CreativeAsset, asset_content_summary, sanitize_asset_metadata
 from song_agent.domains.creation.midi_analysis import notes_for_slice, parse_midi
 from song_agent.domains.studio.projectio import read_json
-from song_agent.domains.studio.projects import ProjectStore
+from song_agent.domains.studio.project_repository import ProjectStore
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
 from song_agent.domains.studio.reference_analysis import reference_context, require_fresh_slices
 from song_agent.domains.studio.references import ReferenceStore

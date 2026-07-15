@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.release_audio."""
 
-import song_agent.release_audio as _implementation
+from song_agent.domains.quality.release_audio import Any, AudioProfileStore, BLOCKED_RELEASE_KEYS, Path, ProjectStore, RELEASE_AUDIO_QA_SCHEMA_VERSION, ReleaseAudioError, ReleaseDocument, ReleaseStore, _artifact_stale_reasons, _file_state, _json_state, _sha256, analyze_wav_health, annotations, audio_artifact_stale_reasons_for_profile, audio_artifact_summary, audio_health_allows_release, audio_health_integrity_ok, audio_health_summary, build_release_audio_qa_report, final_export_dir, json, now_iso, read_json, read_release_audio_qa, release_audio_allows_signoff, release_audio_report_hash, release_audio_report_integrity_ok, release_audio_source_hash, release_audio_summary, release_source_hash, sanitize_metadata, stable_hash, write_json, write_release_audio_qa
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'AudioProfileStore', 'BLOCKED_RELEASE_KEYS', 'Path', 'ProjectStore', 'RELEASE_AUDIO_QA_SCHEMA_VERSION', 'ReleaseAudioError', 'ReleaseDocument', 'ReleaseStore', '_artifact_stale_reasons', '_file_state', '_json_state', '_sha256', 'analyze_wav_health', 'annotations', 'audio_artifact_stale_reasons_for_profile', 'audio_artifact_summary', 'audio_health_allows_release', 'audio_health_integrity_ok', 'audio_health_summary', 'build_release_audio_qa_report', 'final_export_dir', 'json', 'now_iso', 'read_json', 'read_release_audio_qa', 'release_audio_allows_signoff', 'release_audio_report_hash', 'release_audio_report_integrity_ok', 'release_audio_source_hash', 'release_audio_summary', 'release_source_hash', 'sanitize_metadata', 'stable_hash', 'write_json', 'write_release_audio_qa')

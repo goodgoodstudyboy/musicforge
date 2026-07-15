@@ -7,7 +7,7 @@ from song_agent.domains.creation.provider import ProviderConfig, ProviderConfigE
 from song_agent.domains.creation.providers.mock import MockProviderClient
 from song_agent.domains.creation.providers.openai_compatible import OpenAICompatibleClient
 from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.application.legacy_dependencies.quality import validate_song_plan
+from song_agent.domains.quality.quality import validate_song_plan
 from song_agent.domains.creation.schemas.song import SongPlan, SongRequest
 
 

@@ -327,6 +327,6 @@ class SongPlan:
         return asdict(self)
 
     def validate(self) -> None:
-        from song_agent.application.legacy_dependencies.quality import validate_song_plan
+        from song_agent.domains.quality.quality import validate_song_plan
 
         validate_song_plan(self)

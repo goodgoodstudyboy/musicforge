@@ -1,102 +1,6 @@
 {
-  "active_to_compatibility_import_max_count": 179,
+  "active_to_compatibility_import_max_count": 120,
   "allowed_active_to_compatibility_imports": [
-    {
-      "imported": "song_agent.acceptance_analytics",
-      "importer": "song_agent.application.legacy_dependencies.acceptance_analytics"
-    },
-    {
-      "imported": "song_agent.acceptance_fix_plan_reviews",
-      "importer": "song_agent.application.legacy_dependencies.acceptance_fix_plan_reviews"
-    },
-    {
-      "imported": "song_agent.acceptance_fix_planning",
-      "importer": "song_agent.application.legacy_dependencies.acceptance_fix_planning"
-    },
-    {
-      "imported": "song_agent.acceptance_fix_sprints",
-      "importer": "song_agent.application.legacy_dependencies.acceptance_fix_sprints"
-    },
-    {
-      "imported": "song_agent.acceptance_kb",
-      "importer": "song_agent.application.legacy_dependencies.acceptance_kb"
-    },
-    {
-      "imported": "song_agent.acceptance_profiles",
-      "importer": "song_agent.application.legacy_dependencies.acceptance_profiles"
-    },
-    {
-      "imported": "song_agent.audio_artifacts",
-      "importer": "song_agent.application.legacy_dependencies.audio_artifacts"
-    },
-    {
-      "imported": "song_agent.audio_campaign_archive_verifier",
-      "importer": "song_agent.application.legacy_dependencies.audio_campaign_archive_verifier"
-    },
-    {
-      "imported": "song_agent.audio_campaign_governance",
-      "importer": "song_agent.application.legacy_dependencies.audio_campaign_governance"
-    },
-    {
-      "imported": "song_agent.audio_campaign_planner",
-      "importer": "song_agent.application.legacy_dependencies.audio_campaign_planner"
-    },
-    {
-      "imported": "song_agent.audio_campaign_remediation",
-      "importer": "song_agent.application.legacy_dependencies.audio_campaign_remediation"
-    },
-    {
-      "imported": "song_agent.audio_campaign_remediation_verifier",
-      "importer": "song_agent.application.legacy_dependencies.audio_campaign_remediation_verifier"
-    },
-    {
-      "imported": "song_agent.audio_campaign_verifier",
-      "importer": "song_agent.application.legacy_dependencies.audio_campaign_verifier"
-    },
-    {
-      "imported": "song_agent.audio_campaigns",
-      "importer": "song_agent.application.legacy_dependencies.audio_campaigns"
-    },
-    {
-      "imported": "song_agent.audio_encoding",
-      "importer": "song_agent.application.legacy_dependencies.audio_encoding"
-    },
-    {
-      "imported": "song_agent.audio_encoding_profiles",
-      "importer": "song_agent.application.legacy_dependencies.audio_encoding_profiles"
-    },
-    {
-      "imported": "song_agent.audio_fix_sprints",
-      "importer": "song_agent.application.legacy_dependencies.audio_fix_sprints"
-    },
-    {
-      "imported": "song_agent.audio_health",
-      "importer": "song_agent.application.legacy_dependencies.audio_health"
-    },
-    {
-      "imported": "song_agent.audio_lab",
-      "importer": "song_agent.application.legacy_dependencies.audio_lab"
-    },
-    {
-      "imported": "song_agent.audio_profiles",
-      "importer": "song_agent.application.legacy_dependencies.audio_profiles"
-    },
-    {
-      "imported": "song_agent.audio_review_evidence",
-      "importer": "song_agent.application.legacy_dependencies.audio_review_evidence"
-    },
-    {
-      "imported": "song_agent.audio_revision",
-      "importer": "song_agent.application.legacy_dependencies.audio_revision"
-    },
-    {
-      "imported": "song_agent.candidate_groups",
-      "importer": "song_agent.application.legacy_dependencies.candidate_groups"
-    },
-    {
-      "imported": "song_agent.candidate_scoring",
-      "importer": "song_agent.application.legacy_dependencies.candidate_scoring"
-    },
     {
       "imported": "song_agent.delivery_qa",
       "importer": "song_agent.application.legacy_dependencies.delivery_qa"
@@ -148,34 +52,6 @@
     {
       "imported": "song_agent.ga_readiness_verifier",
       "importer": "song_agent.application.legacy_dependencies.ga_readiness_verifier"
-    },
-    {
-      "imported": "song_agent.human_review_pack",
-      "importer": "song_agent.application.legacy_dependencies.human_review_pack"
-    },
-    {
-      "imported": "song_agent.human_review_verifier",
-      "importer": "song_agent.application.legacy_dependencies.human_review_verifier"
-    },
-    {
-      "imported": "song_agent.mastering_profiles",
-      "importer": "song_agent.application.legacy_dependencies.mastering_profiles"
-    },
-    {
-      "imported": "song_agent.mastering_qa",
-      "importer": "song_agent.application.legacy_dependencies.mastering_qa"
-    },
-    {
-      "imported": "song_agent.mix_controls",
-      "importer": "song_agent.application.legacy_dependencies.mix_controls"
-    },
-    {
-      "imported": "song_agent.mix_render",
-      "importer": "song_agent.application.legacy_dependencies.mix_render"
-    },
-    {
-      "imported": "song_agent.music_acceptance",
-      "importer": "song_agent.application.legacy_dependencies.music_acceptance"
     },
     {
       "imported": "song_agent.public_trust_center",
@@ -244,86 +120,6 @@
     {
       "imported": "song_agent.public_trust_center_verifier",
       "importer": "song_agent.application.legacy_dependencies.public_trust_center_verifier"
-    },
-    {
-      "imported": "song_agent.quality",
-      "importer": "song_agent.application.legacy_dependencies.quality"
-    },
-    {
-      "imported": "song_agent.release_audio",
-      "importer": "song_agent.application.legacy_dependencies.release_audio"
-    },
-    {
-      "imported": "song_agent.release_audio_baseline_governance",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_baseline_governance"
-    },
-    {
-      "imported": "song_agent.release_audio_baseline_governance_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_baseline_governance_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_certification",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_certification"
-    },
-    {
-      "imported": "song_agent.release_audio_certification_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_certification_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_command_center",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_command_center"
-    },
-    {
-      "imported": "song_agent.release_audio_command_center_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_command_center_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_quality_action_signoff",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_quality_action_signoff"
-    },
-    {
-      "imported": "song_agent.release_audio_quality_action_signoff_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_quality_action_signoff_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_quality_actions",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_quality_actions"
-    },
-    {
-      "imported": "song_agent.release_audio_quality_actions_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_quality_actions_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_quality_observatory",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_quality_observatory"
-    },
-    {
-      "imported": "song_agent.release_audio_quality_observatory_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_quality_observatory_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_regression",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_regression"
-    },
-    {
-      "imported": "song_agent.release_audio_regression_response",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_regression_response"
-    },
-    {
-      "imported": "song_agent.release_audio_regression_response_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_regression_response_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_regression_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_regression_verifier"
-    },
-    {
-      "imported": "song_agent.release_audio_timeline",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_timeline"
-    },
-    {
-      "imported": "song_agent.release_audio_timeline_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_audio_timeline_verifier"
     },
     {
       "imported": "song_agent.release_export",
@@ -504,38 +300,6 @@
     {
       "imported": "song_agent.releases",
       "importer": "song_agent.application.legacy_dependencies.releases"
-    },
-    {
-      "imported": "song_agent.review_edits",
-      "importer": "song_agent.application.legacy_dependencies.review_edits"
-    },
-    {
-      "imported": "song_agent.review_judge",
-      "importer": "song_agent.application.legacy_dependencies.review_judge"
-    },
-    {
-      "imported": "song_agent.review_sprint_actions",
-      "importer": "song_agent.application.legacy_dependencies.review_sprint_actions"
-    },
-    {
-      "imported": "song_agent.review_sprint_closeout",
-      "importer": "song_agent.application.legacy_dependencies.review_sprint_closeout"
-    },
-    {
-      "imported": "song_agent.review_sprint_metrics",
-      "importer": "song_agent.application.legacy_dependencies.review_sprint_metrics"
-    },
-    {
-      "imported": "song_agent.review_sprint_recommendations",
-      "importer": "song_agent.application.legacy_dependencies.review_sprint_recommendations"
-    },
-    {
-      "imported": "song_agent.review_sprints",
-      "importer": "song_agent.application.legacy_dependencies.review_sprints"
-    },
-    {
-      "imported": "song_agent.review_tasks",
-      "importer": "song_agent.application.legacy_dependencies.review_tasks"
     },
     {
       "imported": "song_agent.rights_clearance",
@@ -743,7 +507,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 991,
+  "module_count": 1058,
   "modules": [
     {
       "context": null,
@@ -2764,6 +2528,12 @@
     {
       "context": "creation",
       "layer": "domain",
+      "module": "song_agent.domains.creation.planning_rule_governance_source",
+      "path": "song_agent/domains/creation/planning_rule_governance_source.py"
+    },
+    {
+      "context": "creation",
+      "layer": "domain",
       "module": "song_agent.domains.creation.planning_rule_impact",
       "path": "song_agent/domains/creation/planning_rule_impact.py"
     },
@@ -3118,8 +2888,392 @@
     {
       "context": "quality",
       "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_analytics",
+      "path": "song_agent/domains/quality/acceptance_analytics.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
       "module": "song_agent.domains.quality.acceptance_diff",
       "path": "song_agent/domains/quality/acceptance_diff.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_fix_plan_reviews",
+      "path": "song_agent/domains/quality/acceptance_fix_plan_reviews.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_fix_plan_runtime",
+      "path": "song_agent/domains/quality/acceptance_fix_plan_runtime.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_fix_planning",
+      "path": "song_agent/domains/quality/acceptance_fix_planning.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_fix_sprints",
+      "path": "song_agent/domains/quality/acceptance_fix_sprints.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_kb",
+      "path": "song_agent/domains/quality/acceptance_kb.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.acceptance_profiles",
+      "path": "song_agent/domains/quality/acceptance_profiles.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_artifacts",
+      "path": "song_agent/domains/quality/audio_artifacts.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_analytics",
+      "path": "song_agent/domains/quality/audio_campaign_analytics.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_archive_verifier",
+      "path": "song_agent/domains/quality/audio_campaign_archive_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_governance",
+      "path": "song_agent/domains/quality/audio_campaign_governance.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_planner",
+      "path": "song_agent/domains/quality/audio_campaign_planner.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_remediation",
+      "path": "song_agent/domains/quality/audio_campaign_remediation.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_remediation_contracts",
+      "path": "song_agent/domains/quality/audio_campaign_remediation_contracts.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_remediation_verifier",
+      "path": "song_agent/domains/quality/audio_campaign_remediation_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaign_verifier",
+      "path": "song_agent/domains/quality/audio_campaign_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_campaigns",
+      "path": "song_agent/domains/quality/audio_campaigns.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_encoding",
+      "path": "song_agent/domains/quality/audio_encoding.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_encoding_profiles",
+      "path": "song_agent/domains/quality/audio_encoding_profiles.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_fix_sprints",
+      "path": "song_agent/domains/quality/audio_fix_sprints.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_health",
+      "path": "song_agent/domains/quality/audio_health.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_lab",
+      "path": "song_agent/domains/quality/audio_lab.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_profiles",
+      "path": "song_agent/domains/quality/audio_profiles.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_review_evidence",
+      "path": "song_agent/domains/quality/audio_review_evidence.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.audio_revision",
+      "path": "song_agent/domains/quality/audio_revision.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.candidate_groups",
+      "path": "song_agent/domains/quality/candidate_groups.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.candidate_scoring",
+      "path": "song_agent/domains/quality/candidate_scoring.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.human_review_pack",
+      "path": "song_agent/domains/quality/human_review_pack.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.human_review_verifier",
+      "path": "song_agent/domains/quality/human_review_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.mastering_profiles",
+      "path": "song_agent/domains/quality/mastering_profiles.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.mastering_qa",
+      "path": "song_agent/domains/quality/mastering_qa.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.mix_controls",
+      "path": "song_agent/domains/quality/mix_controls.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.mix_render",
+      "path": "song_agent/domains/quality/mix_render.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.music_acceptance",
+      "path": "song_agent/domains/quality/music_acceptance.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.quality",
+      "path": "song_agent/domains/quality/quality.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio",
+      "path": "song_agent/domains/quality/release_audio.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_baseline_governance",
+      "path": "song_agent/domains/quality/release_audio_baseline_governance.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_baseline_governance_verifier",
+      "path": "song_agent/domains/quality/release_audio_baseline_governance_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_certification",
+      "path": "song_agent/domains/quality/release_audio_certification.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_certification_verifier",
+      "path": "song_agent/domains/quality/release_audio_certification_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_command_center",
+      "path": "song_agent/domains/quality/release_audio_command_center.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_command_center_verifier",
+      "path": "song_agent/domains/quality/release_audio_command_center_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_action_semantics",
+      "path": "song_agent/domains/quality/release_audio_quality_action_semantics.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_action_signoff",
+      "path": "song_agent/domains/quality/release_audio_quality_action_signoff.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_action_signoff_verifier",
+      "path": "song_agent/domains/quality/release_audio_quality_action_signoff_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_actions",
+      "path": "song_agent/domains/quality/release_audio_quality_actions.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_actions_verifier",
+      "path": "song_agent/domains/quality/release_audio_quality_actions_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_observatory",
+      "path": "song_agent/domains/quality/release_audio_quality_observatory.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_observatory_semantics",
+      "path": "song_agent/domains/quality/release_audio_quality_observatory_semantics.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_quality_observatory_verifier",
+      "path": "song_agent/domains/quality/release_audio_quality_observatory_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_regression",
+      "path": "song_agent/domains/quality/release_audio_regression.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_regression_response",
+      "path": "song_agent/domains/quality/release_audio_regression_response.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_regression_response_verifier",
+      "path": "song_agent/domains/quality/release_audio_regression_response_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_regression_verifier",
+      "path": "song_agent/domains/quality/release_audio_regression_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_timeline",
+      "path": "song_agent/domains/quality/release_audio_timeline.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.release_audio_timeline_verifier",
+      "path": "song_agent/domains/quality/release_audio_timeline_verifier.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_edits",
+      "path": "song_agent/domains/quality/review_edits.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_judge",
+      "path": "song_agent/domains/quality/review_judge.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_sprint_actions",
+      "path": "song_agent/domains/quality/review_sprint_actions.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_sprint_closeout",
+      "path": "song_agent/domains/quality/review_sprint_closeout.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_sprint_metrics",
+      "path": "song_agent/domains/quality/review_sprint_metrics.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_sprint_recommendations",
+      "path": "song_agent/domains/quality/review_sprint_recommendations.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_sprints",
+      "path": "song_agent/domains/quality/review_sprints.py"
+    },
+    {
+      "context": "quality",
+      "layer": "domain",
+      "module": "song_agent.domains.quality.review_tasks",
+      "path": "song_agent/domains/quality/review_tasks.py"
     },
     {
       "context": "registry",
@@ -3190,6 +3344,12 @@
     {
       "context": "studio",
       "layer": "domain",
+      "module": "song_agent.domains.studio.project_export_enrichment",
+      "path": "song_agent/domains/studio/project_export_enrichment.py"
+    },
+    {
+      "context": "studio",
+      "layer": "domain",
       "module": "song_agent.domains.studio.project_planning_read_models",
       "path": "song_agent/domains/studio/project_planning_read_models.py"
     },
@@ -3198,6 +3358,12 @@
       "layer": "domain",
       "module": "song_agent.domains.studio.project_quality",
       "path": "song_agent/domains/studio/project_quality.py"
+    },
+    {
+      "context": "studio",
+      "layer": "domain",
+      "module": "song_agent.domains.studio.project_repository",
+      "path": "song_agent/domains/studio/project_repository.py"
     },
     {
       "context": "studio",
@@ -6710,8 +6876,8 @@
   ],
   "schema_version": 1,
   "security_helper_max_counts": {
-    "_is_safe_zip_entry": 0,
-    "_raw_zip_entry_names": 0,
+    "_is_safe_zip_entry": 1,
+    "_raw_zip_entry_names": 1,
     "_zip_has_no_trailing_data": 0
   }
 }

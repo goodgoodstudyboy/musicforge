@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.quality.human_review_verifier."""
 
-import song_agent.human_review_verifier as _implementation
+from song_agent.domains.quality.human_review_verifier import Any, DEFAULT_BLOCKED_METADATA_KEYS, DEFAULT_MAX_ENTRY_COUNT, DEFAULT_MAX_UNCOMPRESSED_SIZE_MB, DEFAULT_MAX_ZIP_SIZE_MB, HEX_SHA256, HUMAN_REVIEW_VERIFICATION_SCHEMA_VERSION, LEGAL_SIDECAR_ENTRIES, LOCAL_PATH_VALUE_PATTERNS, MAX_TEXT_SCAN_BYTES, Path, PurePosixPath, REQUIRED_ENTRIES, SENSITIVE_VALUE_PATTERNS, VERIFIER_REPORT_BLOCKED_KEYS, _HumanReviewPackVerifier, _blocked_key_findings, _counts, _is_safe_zip_entry, _main, _raw_zip_entry_names, _redaction_findings, _sha256_entry, _sha256_file, annotations, datetime, hashlib, human_review_verification_exit_code, human_review_verification_summary, json, print_human_review_verification_report, re, sanitize_metadata, struct, sys, timezone, verify_human_review_pack, write_human_review_verification_report, write_json, zipfile
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'DEFAULT_BLOCKED_METADATA_KEYS', 'DEFAULT_MAX_ENTRY_COUNT', 'DEFAULT_MAX_UNCOMPRESSED_SIZE_MB', 'DEFAULT_MAX_ZIP_SIZE_MB', 'HEX_SHA256', 'HUMAN_REVIEW_VERIFICATION_SCHEMA_VERSION', 'LEGAL_SIDECAR_ENTRIES', 'LOCAL_PATH_VALUE_PATTERNS', 'MAX_TEXT_SCAN_BYTES', 'Path', 'PurePosixPath', 'REQUIRED_ENTRIES', 'SENSITIVE_VALUE_PATTERNS', 'VERIFIER_REPORT_BLOCKED_KEYS', '_HumanReviewPackVerifier', '_blocked_key_findings', '_counts', '_is_safe_zip_entry', '_main', '_raw_zip_entry_names', '_redaction_findings', '_sha256_entry', '_sha256_file', 'annotations', 'datetime', 'hashlib', 'human_review_verification_exit_code', 'human_review_verification_summary', 'json', 'print_human_review_verification_report', 're', 'sanitize_metadata', 'struct', 'sys', 'timezone', 'verify_human_review_pack', 'write_human_review_verification_report', 'write_json', 'zipfile')

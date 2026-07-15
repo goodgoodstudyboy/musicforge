@@ -9,7 +9,7 @@ from typing import Any
 
 from song_agent.platform.version import VERSION as __version__
 from song_agent.domains.creation.lts_backup import LTSBackupStore
-from song_agent.application.legacy_dependencies.music_acceptance import stable_hash
+from song_agent.domains.quality.music_acceptance import stable_hash
 from song_agent.domains.studio.projectio import read_json, write_json
 
 

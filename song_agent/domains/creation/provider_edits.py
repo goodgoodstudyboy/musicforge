@@ -12,8 +12,8 @@ from song_agent.domains.creation.music_quality import attach_quality
 from song_agent.domains.studio.prompt_templates import PromptTemplate, render_prompt_template
 from song_agent.domains.creation.provider import ProviderConfig, ProviderConfigError, ProviderEditResponse, ProviderOutputError
 from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import now_iso
-from song_agent.application.legacy_dependencies.quality import validate_song_plan
+from song_agent.domains.studio.project_repository import now_iso
+from song_agent.domains.quality.quality import validate_song_plan
 from song_agent.domains.creation.schemas.song import SongPlan
 
 

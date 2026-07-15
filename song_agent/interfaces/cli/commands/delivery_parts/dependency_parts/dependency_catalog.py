@@ -206,9 +206,9 @@ from song_agent.application.legacy_dependencies.release_operations_reviewer_pack
 
 from song_agent.application.legacy_dependencies.release_operations_retrospective import retrospective_summary
 
-from song_agent.application.legacy_dependencies.audio_encoding import AudioEncodingStore
+from song_agent.domains.quality.audio_encoding import AudioEncodingStore
 
-from song_agent.application.legacy_dependencies.audio_encoding_profiles import AudioEncodingProfileStore
+from song_agent.domains.quality.audio_encoding_profiles import AudioEncodingProfileStore
 
 from song_agent.domains.studio.projects import ProjectStore
 

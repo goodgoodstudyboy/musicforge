@@ -7,11 +7,11 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from song_agent.application.legacy_dependencies.audio_encoding import AudioEncodingStateError, AudioEncodingStore, detect_audio_header, encoded_manifest_integrity_ok, encoded_manifest_uses_fake, normalize_required_profiles, validate_relative_path
-from song_agent.application.legacy_dependencies.audio_encoding_profiles import audio_encoding_profile_hash
+from song_agent.domains.quality.audio_encoding import AudioEncodingStateError, AudioEncodingStore, detect_audio_header, encoded_manifest_integrity_ok, encoded_manifest_uses_fake, normalize_required_profiles, validate_relative_path
+from song_agent.domains.quality.audio_encoding_profiles import audio_encoding_profile_hash
 from song_agent.application.legacy_dependencies.distribution import DistributionStore, DistributionTarget
 from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import ProjectStore, now_iso
+from song_agent.domains.studio.project_repository import ProjectStore, now_iso
 from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata, sanitize_sensitive_text
 from song_agent.application.legacy_dependencies.releases import BLOCKED_RELEASE_KEYS, ReleaseStore, stable_hash
 
