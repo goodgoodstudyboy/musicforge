@@ -1,53 +1,5 @@
-from __future__ import annotations
+"""Compatibility facade for song_agent.domains.creation.agent.provider_pipeline."""
 
-from pathlib import Path
-from typing import Any
+from song_agent.domains.creation.agent.provider_pipeline import Any, MockProviderClient, OpenAICompatibleClient, PROMPT_PATH, Path, ProviderConfig, ProviderConfigError, ProviderOutputError, SongPlan, SongRequest, _client_for_config, annotations, attach_quality, generate_provider_song_plan, load_provider_prompt, validate_song_plan
 
-from song_agent.provider import (
-    ProviderConfig,
-    ProviderConfigError,
-    ProviderOutputError,
-)
-from song_agent.providers.mock import MockProviderClient
-from song_agent.providers.openai_compatible import OpenAICompatibleClient
-from song_agent.music_quality import attach_quality
-from song_agent.quality import validate_song_plan
-from song_agent.schemas.song import SongPlan, SongRequest
-
-
-PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "provider_song_plan.md"
-
-
-def generate_provider_song_plan(
-    request: SongRequest,
-    config: ProviderConfig,
-    client: Any | None = None,
-) -> SongPlan:
-    config.validate_ready_for_provider()
-    client = client or _client_for_config(config)
-    try:
-        if config.wire_api == "mock":
-            data = client.generate_song_plan_json(request, config)
-        else:
-            data = client.generate_song_plan_json(request, config, load_provider_prompt())
-        if not isinstance(data, dict):
-            raise ProviderOutputError("Provider output must be a JSON object.")
-        plan = SongPlan.from_dict(data)
-        validate_song_plan(plan)
-        return attach_quality(plan) if plan.quality is None else plan
-    except ProviderOutputError:
-        raise
-    except ValueError as exc:
-        raise ProviderOutputError(f"Provider output did not match SongPlan: {exc}") from exc
-
-
-def load_provider_prompt(path: Path = PROMPT_PATH) -> str:
-    return path.read_text(encoding="utf-8")
-
-
-def _client_for_config(config: ProviderConfig) -> Any:
-    if config.wire_api == "mock":
-        return MockProviderClient()
-    if config.wire_api == "openai_chat_completions":
-        return OpenAICompatibleClient()
-    raise ProviderConfigError(f"Unsupported provider wire_api: {config.wire_api}.")
+__all__ = ('Any', 'MockProviderClient', 'OpenAICompatibleClient', 'PROMPT_PATH', 'Path', 'ProviderConfig', 'ProviderConfigError', 'ProviderOutputError', 'SongPlan', 'SongRequest', '_client_for_config', 'annotations', 'attach_quality', 'generate_provider_song_plan', 'load_provider_prompt', 'validate_song_plan')

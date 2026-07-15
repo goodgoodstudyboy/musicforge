@@ -326,6 +326,7 @@
     "tests/test_unified_release_program_vault_operations.py": "unit",
     "tests/test_v13_reviewer_package.py": "unit",
     "tests/test_v14_architecture_cutover.py": "contract",
+    "tests/test_v14_domain_migration.py": "unit",
     "tests/test_v14_migration_baseline.py": "unit",
     "tests/test_verification_kernel.py": "unit",
     "tests/test_webui.py": "integration"

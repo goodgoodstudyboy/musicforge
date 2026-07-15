@@ -1,2 +1,4 @@
-"""Data contracts used between the LLM, validators, and renderers."""
+"""Compatibility facade for song_agent.domains.creation.schemas."""
 
+
+__all__ = ()

@@ -4,16 +4,16 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from song_agent.application.legacy_dependencies.agent__multinode_pipeline import generate_multinode_song_plan
-from song_agent.application.legacy_dependencies.agent__pipeline import SongAgent
-from song_agent.application.legacy_dependencies.agent__provider_pipeline import generate_provider_song_plan
-from song_agent.application.legacy_dependencies.node_store import NodeStore
-from song_agent.application.legacy_dependencies.projectio import ProjectPaths, default_run_dir, read_json, write_json
-from song_agent.application.legacy_dependencies.provider import ProviderConfig
+from song_agent.domains.creation.agent.multinode_pipeline import generate_multinode_song_plan
+from song_agent.domains.creation.agent.pipeline import SongAgent
+from song_agent.domains.creation.agent.provider_pipeline import generate_provider_song_plan
+from song_agent.domains.creation.node_store import NodeStore
+from song_agent.domains.studio.projectio import ProjectPaths, default_run_dir, read_json, write_json
+from song_agent.domains.creation.provider import ProviderConfig
 from song_agent.application.legacy_dependencies.quality import validate_song_plan
-from song_agent.application.legacy_dependencies.renderers__midi import render_midi
-from song_agent.application.legacy_dependencies.runtime import GraphRunner, PipelineStep, ResumeMismatchError
-from song_agent.application.legacy_dependencies.schemas__song import SongRequest
+from song_agent.domains.creation.renderers.midi import render_midi
+from song_agent.domains.creation.runtime import GraphRunner, PipelineStep, ResumeMismatchError
+from song_agent.domains.creation.schemas.song import SongRequest
 from song_agent.application.legacy_dependencies.state import ArtifactRef, RunState
 
 
@@ -144,12 +144,12 @@ def _build_steps(
             state.add_artifact("provider_snapshot", ArtifactRef("json", str(provider_snapshot_path), "Masked provider snapshot."))
 
     def validate(state: RunState, current_paths: ProjectPaths) -> None:
-        from song_agent.application.legacy_dependencies.schemas__song import SongPlan
+        from song_agent.domains.creation.schemas.song import SongPlan
 
         validate_song_plan(SongPlan.from_dict(read_json(plan_path)))
 
     def render(state: RunState, current_paths: ProjectPaths) -> None:
-        from song_agent.application.legacy_dependencies.schemas__song import SongPlan
+        from song_agent.domains.creation.schemas.song import SongPlan
 
         render_midi(SongPlan.from_dict(read_json(plan_path)), midi_path)
         state.add_artifact("midi", ArtifactRef("midi", str(midi_path), "Rendered MIDI."))

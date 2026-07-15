@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.creation.runtime_views."""
 
-import song_agent.runtime_views as _implementation
+from song_agent.domains.creation.runtime_views import Any, Path, SongPlan, _as_dict, _as_dict_or_empty, _as_list, _audio_view, _beats_per_bar, _dedupe, _normalize_check, _positive_float, _quality_score, _quality_view_from_plan, _quality_warnings, _section_intents_by_name, _total_bars, analyze_song_quality, annotations, build_quality_view, build_runtime_views, build_summary_view, build_timeline_view, build_tracks_view, build_validator_view, quality_issues_for_plan, read_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'Path', 'SongPlan', '_as_dict', '_as_dict_or_empty', '_as_list', '_audio_view', '_beats_per_bar', '_dedupe', '_normalize_check', '_positive_float', '_quality_score', '_quality_view_from_plan', '_quality_warnings', '_section_intents_by_name', '_total_bars', 'analyze_song_quality', 'annotations', 'build_quality_view', 'build_runtime_views', 'build_summary_view', 'build_timeline_view', 'build_tracks_view', 'build_validator_view', 'quality_issues_for_plan', 'read_json')

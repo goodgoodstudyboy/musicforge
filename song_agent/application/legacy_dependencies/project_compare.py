@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.studio.project_compare."""
 
-import song_agent.project_compare as _implementation
+from song_agent.domains.studio.project_compare import Any, Path, ProjectDocument, ProjectVersion, QualityGateConfig, SongPlan, _artifact_links, _average_velocity, _compare_sections, _compare_tracks, _edit_view, _find_version, _gate_view, _provider_patch_view, _quality_delta, _quality_view, _read_plan, _recommend, _section_data, _short_text, _song_beats, _track_data, _version_view, annotations, compare_project_versions, evaluate_quality_gate, json, read_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'Path', 'ProjectDocument', 'ProjectVersion', 'QualityGateConfig', 'SongPlan', '_artifact_links', '_average_velocity', '_compare_sections', '_compare_tracks', '_edit_view', '_find_version', '_gate_view', '_provider_patch_view', '_quality_delta', '_quality_view', '_read_plan', '_recommend', '_section_data', '_short_text', '_song_beats', '_track_data', '_version_view', 'annotations', 'compare_project_versions', 'evaluate_quality_gate', 'json', 'read_json')

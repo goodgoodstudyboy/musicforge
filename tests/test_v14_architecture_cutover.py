@@ -21,7 +21,9 @@ def test_v14_phase_architecture_ratchet_passes_without_hiding_debt() -> None:
     report = evaluate_v14_architecture(ROOT)
 
     assert report["status"] == "passed", report["blockers"]
-    assert report["metrics"]["active_to_compatibility_import_count"] == 224
+    assert report["metrics"]["active_to_compatibility_import_count"] == 179
+    assert report["metrics"]["active_to_compatibility_by_context"].get("creation", 0) == 0
+    assert report["metrics"]["active_to_compatibility_by_context"].get("studio", 0) == 0
     assert report["metrics"]["anonymous_part_file_count"] == 0
     assert report["metrics"]["interface_wildcard_import_count"] == 0
     assert report["metrics"]["interface_store_reference_count"] == 0

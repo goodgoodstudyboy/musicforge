@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.creation.agent.provider_pipeline."""
 
-import song_agent.agent.provider_pipeline as _implementation
+from song_agent.domains.creation.agent.provider_pipeline import Any, MockProviderClient, OpenAICompatibleClient, PROMPT_PATH, Path, ProviderConfig, ProviderConfigError, ProviderOutputError, SongPlan, SongRequest, _client_for_config, annotations, attach_quality, generate_provider_song_plan, load_provider_prompt, validate_song_plan
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'MockProviderClient', 'OpenAICompatibleClient', 'PROMPT_PATH', 'Path', 'ProviderConfig', 'ProviderConfigError', 'ProviderOutputError', 'SongPlan', 'SongRequest', '_client_for_config', 'annotations', 'attach_quality', 'generate_provider_song_plan', 'load_provider_prompt', 'validate_song_plan')

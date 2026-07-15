@@ -16,19 +16,13 @@ from song_agent.application.program import ProgramApplicationService
 
 from song_agent.application.generation.service import generate_request
 
-from song_agent.application.legacy_dependencies.auth import build_auth_config
+from song_agent.domains.creation.auth import build_auth_config
 
-from song_agent.application.legacy_dependencies.projectio import read_json, write_json
+from song_agent.domains.studio.projectio import read_json, write_json
 
-from song_agent.application.legacy_dependencies.provider import (
-    ProviderConfig,
-    ProviderError,
-    load_provider_config,
-    provider_configured,
-    test_provider_config,
-)
+from song_agent.domains.creation.provider import ProviderConfig, ProviderError, load_provider_config, provider_configured, test_provider_config
 
-from song_agent.application.legacy_dependencies.schemas__song import SongRequest
+from song_agent.domains.creation.schemas.song import SongRequest
 
 from song_agent.application.interface_persistence import write_interface_document
 
@@ -78,7 +72,7 @@ from song_agent.application.legacy_dependencies.unified_command_center_release_t
 
 from song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier import write_unified_command_center_release_train_lifecycle_verification_report
 
-from song_agent.application.legacy_dependencies.projectio import read_json
+from song_agent.domains.studio.projectio import read_json
 
 from song_agent.application.legacy_dependencies.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStore
 

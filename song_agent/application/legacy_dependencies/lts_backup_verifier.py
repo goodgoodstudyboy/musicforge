@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.creation.lts_backup_verifier."""
 
-import song_agent.lts_backup_verifier as _implementation
+from song_agent.domains.creation.lts_backup_verifier import Any, LEGAL_SIDECAR_ENTRIES, MAINTENANCE_BACKUP_PACKAGE_TYPE, MAINTENANCE_BACKUP_SCHEMA_VERSION, MAINTENANCE_BACKUP_VERIFICATION_PACKAGE_TYPE, Path, PurePosixPath, _SENSITIVE_BYTES_PATTERNS, _add_check, _is_forbidden_entry, _is_safe_entry_name, _now, _read_json_entry, _report, _sha256_file, _verify_entries, _verify_manifest, _verify_manifest_entries, _verify_redaction, annotations, datetime, hashlib, json, maintenance_backup_manifest_hash, maintenance_backup_manifest_integrity_ok, maintenance_backup_verification_exit_code, print_maintenance_backup_verification_report, re, stable_hash, timezone, verify_maintenance_backup_zip, write_json, write_maintenance_backup_verification_report, zipfile
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'LEGAL_SIDECAR_ENTRIES', 'MAINTENANCE_BACKUP_PACKAGE_TYPE', 'MAINTENANCE_BACKUP_SCHEMA_VERSION', 'MAINTENANCE_BACKUP_VERIFICATION_PACKAGE_TYPE', 'Path', 'PurePosixPath', '_SENSITIVE_BYTES_PATTERNS', '_add_check', '_is_forbidden_entry', '_is_safe_entry_name', '_now', '_read_json_entry', '_report', '_sha256_file', '_verify_entries', '_verify_manifest', '_verify_manifest_entries', '_verify_redaction', 'annotations', 'datetime', 'hashlib', 'json', 'maintenance_backup_manifest_hash', 'maintenance_backup_manifest_integrity_ok', 'maintenance_backup_verification_exit_code', 'print_maintenance_backup_verification_report', 're', 'stable_hash', 'timezone', 'verify_maintenance_backup_zip', 'write_json', 'write_maintenance_backup_verification_report', 'zipfile')

@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.creation.regression_songbook."""
 
-import song_agent.regression_songbook as _implementation
+from song_agent.domains.creation.regression_songbook import Any, BUILTIN_REGRESSION_SONGS, BUILTIN_SONGBOOK_ID, BUILTIN_SONGBOOK_VERSION, REGRESSION_SONGBOOK_SCHEMA_VERSION, RegressionSong, annotations, builtin_songbook, dataclass, get_regression_song, list_regression_songs, sanitize_metadata
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'BUILTIN_REGRESSION_SONGS', 'BUILTIN_SONGBOOK_ID', 'BUILTIN_SONGBOOK_VERSION', 'REGRESSION_SONGBOOK_SCHEMA_VERSION', 'RegressionSong', 'annotations', 'builtin_songbook', 'dataclass', 'get_regression_song', 'list_regression_songs', 'sanitize_metadata')

@@ -14,19 +14,13 @@ from typing import Any
 
 from song_agent.application.generation.service import generate_request
 
-from song_agent.application.legacy_dependencies.auth import build_auth_config
+from song_agent.domains.creation.auth import build_auth_config
 
-from song_agent.application.legacy_dependencies.projectio import read_json, write_json
+from song_agent.domains.studio.projectio import read_json, write_json
 
-from song_agent.application.legacy_dependencies.provider import (
-    ProviderConfig,
-    ProviderError,
-    load_provider_config,
-    provider_configured,
-    test_provider_config,
-)
+from song_agent.domains.creation.provider import ProviderConfig, ProviderError, load_provider_config, provider_configured, test_provider_config
 
-from song_agent.application.legacy_dependencies.schemas__song import SongRequest
+from song_agent.domains.creation.schemas.song import SongRequest
 
 from song_agent.application.interface_persistence import write_interface_document
 
@@ -91,7 +85,7 @@ from song_agent.application.legacy_dependencies.acceptance_profiles import get_a
 
 from song_agent.application.legacy_dependencies.music_acceptance import AcceptanceStore, build_acceptance_report, default_acceptance_song_cases
 
-from song_agent.application.legacy_dependencies.music_health import music_health_allows_review
+from song_agent.domains.creation.music_health import music_health_allows_review
 
 from song_agent.application.legacy_dependencies.release_audio_baseline_governance_verifier import (
     release_audio_baseline_registry_verification_exit_code,
@@ -199,7 +193,7 @@ from song_agent.application.legacy_dependencies.audio_profiles import AudioProfi
 
 from song_agent.application.legacy_dependencies.audio_review_evidence import AudioReviewEvidenceStore, audio_review_summary_public
 
-from song_agent.application.legacy_dependencies.projects import ProjectStore
+from song_agent.domains.studio.projects import ProjectStore
 
 from song_agent.application.legacy_dependencies.releases import ReleaseStore
 
@@ -207,7 +201,7 @@ from song_agent.application.legacy_dependencies.audio_encoding import AudioEncod
 
 from song_agent.application.legacy_dependencies.audio_encoding_profiles import AudioEncodingProfileStore
 
-from song_agent.application.legacy_dependencies.encoded_audio_acceptance import EncodedAudioAcceptanceStore, encoded_audio_acceptance_summary_public
+from song_agent.domains.creation.encoded_audio_acceptance import EncodedAudioAcceptanceStore, encoded_audio_acceptance_summary_public
 
 from song_agent.application.legacy_dependencies.distribution import DistributionStore
 
@@ -223,13 +217,13 @@ from song_agent.application.legacy_dependencies.acceptance_fix_planning import A
 
 from song_agent.application.legacy_dependencies.acceptance_fix_plan_reviews import AcceptanceFixPlanReviewStore, fix_plan_review_summary
 
-from song_agent.application.legacy_dependencies.planning_rule_simulation import PlanningRuleSimulationStore, ruleset_summary
+from song_agent.domains.creation.planning_rule_simulation import PlanningRuleSimulationStore, ruleset_summary
 
-from song_agent.application.legacy_dependencies.planning_rule_simulation import PlanningRuleSimulationStore, planning_simulation_summary
+from song_agent.domains.creation.planning_rule_simulation import PlanningRuleSimulationStore, planning_simulation_summary
 
-from song_agent.application.legacy_dependencies.planning_rule_governance import PlanningRuleGovernanceStore, governance_summary, promotion_summary
+from song_agent.domains.creation.planning_rule_governance import PlanningRuleGovernanceStore, governance_summary, promotion_summary
 
-from song_agent.application.legacy_dependencies.planning_rule_impact import PlanningRuleImpactStore, planning_rule_impact_summary
+from song_agent.domains.creation.planning_rule_impact import PlanningRuleImpactStore, planning_rule_impact_summary
 
 from song_agent.application.legacy_dependencies.acceptance_kb import AcceptanceKnowledgeBaseStore, knowledge_entry_summary, knowledge_report_summary
 

@@ -1,5 +1,5 @@
-"""Compatibility exports for the canonical run-state contracts."""
+"""Compatibility facade for song_agent.domains.creation.state."""
 
-from song_agent.platform.contracts.run_state import ArtifactRef, RunState, StepStatus
+from song_agent.domains.creation.state import ArtifactRef, RunState, StepStatus
 
-__all__ = ["ArtifactRef", "RunState", "StepStatus"]
+__all__ = ('ArtifactRef', 'RunState', 'StepStatus')

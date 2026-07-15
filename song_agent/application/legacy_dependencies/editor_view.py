@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.studio.editor_view."""
 
-import song_agent.editor_view as _implementation
+from song_agent.domains.studio.editor_view import Any, Counter, DEFAULT_PITCH_MAX, DEFAULT_PITCH_MIN, EDITOR_VIEW_SCHEMA_VERSION, EditorPatch, EditorPatchResult, SongPlan, _changed_section_names, _changed_track_names, _derived_note, _moved_names, _note_key, _pitch_range, _rename_count, _section_id_for_beat, _stable_sections, _stable_tracks, _view_notes_for_track, annotations, build_editor_diff, build_editor_state, build_editor_view, build_editor_view_from_result
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'Counter', 'DEFAULT_PITCH_MAX', 'DEFAULT_PITCH_MIN', 'EDITOR_VIEW_SCHEMA_VERSION', 'EditorPatch', 'EditorPatchResult', 'SongPlan', '_changed_section_names', '_changed_track_names', '_derived_note', '_moved_names', '_note_key', '_pitch_range', '_rename_count', '_section_id_for_beat', '_stable_sections', '_stable_tracks', '_view_notes_for_track', 'annotations', 'build_editor_diff', 'build_editor_state', 'build_editor_view', 'build_editor_view_from_result')

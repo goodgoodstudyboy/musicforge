@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.creation.node_graph."""
 
-import song_agent.node_graph as _implementation
+from song_agent.domains.creation.node_graph import NODE_DEPENDENCIES, PIPELINE_NODE_ORDER, _known_node, affected_nodes_for_retry, annotations, downstream_nodes, upstream_nodes, validate_node_name
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('NODE_DEPENDENCIES', 'PIPELINE_NODE_ORDER', '_known_node', 'affected_nodes_for_retry', 'annotations', 'downstream_nodes', 'upstream_nodes', 'validate_node_name')

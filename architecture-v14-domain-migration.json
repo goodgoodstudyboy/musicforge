@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "baseline_tag": "v13.8.0",
+  "waves": [
+    {
+      "contexts": [
+        "creation",
+        "studio"
+      ],
+      "module_count": 59,
+      "active_caller_rewrite_count": 96,
+      "modules": [
+        {
+          "source": "song_agent.agent",
+          "target": "song_agent.domains.creation.agent",
+          "exports_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "export_count": 0
+        },
+        {
+          "source": "song_agent.agent.multinode_pipeline",
+          "target": "song_agent.domains.creation.agent.multinode_pipeline",
+          "exports_hash": "5cead519521013981aa16edfaf8c5738054d056fac390dfce48dce4fdba90a7b",
+          "export_count": 82
+        },
+        {
+          "source": "song_agent.agent.pipeline",
+          "target": "song_agent.domains.creation.agent.pipeline",
+          "exports_hash": "3f13de232c8e5214e088f9cdc96c2bba586ea9c804e2e4c875ad7991454fc733",
+          "export_count": 20
+        },
+        {
+          "source": "song_agent.agent.provider_pipeline",
+          "target": "song_agent.domains.creation.agent.provider_pipeline",
+          "exports_hash": "9b6bba6f560dc166de24dd0684fee1b3e2a931a21af97aed1ac164790cb3060b",
+          "export_count": 16
+        },
+        {
+          "source": "song_agent.assets",
+          "target": "song_agent.domains.studio.assets",
+          "exports_hash": "34af4c6fb257fd55eb1d5bb1630b3a8fbdfe90121a801f07ac69bbf41a75b576",
+          "export_count": 76
+        },
+        {
+          "source": "song_agent.auth",
+          "target": "song_agent.domains.creation.auth",
+          "exports_hash": "4920b54360bb276a6fd95d6d2a8e8cac1032caf4d5ed0b4f71d96abdf3773f7a",
+          "export_count": 13
+        },
+        {
+          "source": "song_agent.batching",
+          "target": "song_agent.domains.creation.batching",
+          "exports_hash": "e9875311aaede8dddc19419a30b06d09f5434c2aac377a3deaa2b3ab29beba42",
+          "export_count": 39
+        },
+        {
+          "source": "song_agent.context_packs",
+          "target": "song_agent.domains.studio.context_packs",
+          "exports_hash": "bf058068a3e05bd540f6deb80ee671d18268282c28d7f5564735dfe0bdf4d4da",
+          "export_count": 44
+        },
+        {
+          "source": "song_agent.edit_presets",
+          "target": "song_agent.domains.creation.edit_presets",
+          "exports_hash": "c991960a86049a08f55fb25dbc43f588ef03adbbab36b4320c126a6670b8bd18",
+          "export_count": 41
+        },
+        {
+          "source": "song_agent.editor_audition",
+          "target": "song_agent.domains.studio.editor_audition",
+          "exports_hash": "ec2869e234ac64632f8916cd630803ffa6f9194e572581ba9a2e763ebeb28128",
+          "export_count": 73
+        },
+        {
+          "source": "song_agent.editor_clips",
+          "target": "song_agent.domains.studio.editor_clips",
+          "exports_hash": "a7c28dfa8ba599986328864da65fc11481ae0883b3cbdce79cd4668a4dfe4e8f",
+          "export_count": 77
+        },
+        {
+          "source": "song_agent.editor_review",
+          "target": "song_agent.domains.studio.editor_review",
+          "exports_hash": "35c8ee282e565b8593cedbccc027fecfccf4c5e0b2fc98bf829373f04c2edf01",
+          "export_count": 55
+        },
+        {
+          "source": "song_agent.editor_templates",
+          "target": "song_agent.domains.studio.editor_templates",
+          "exports_hash": "f24ade3c81fe546145dc61fa7880e2b2e57613ff111220423d3381858e150637",
+          "export_count": 80
+        },
+        {
+          "source": "song_agent.editor_view",
+          "target": "song_agent.domains.studio.editor_view",
+          "exports_hash": "352cd82dd1da610a61684cf2839812e69def3eb4174918a481be95dfb4ffffca",
+          "export_count": 24
+        },
+        {
+          "source": "song_agent.edits",
+          "target": "song_agent.domains.creation.edits",
+          "exports_hash": "b358b93adb4441b23eb1d78709bc10891708bd0c344c51c141a414a8a9f7bdd4",
+          "export_count": 58
+        },
+        {
+          "source": "song_agent.encoded_audio_acceptance",
+          "target": "song_agent.domains.creation.encoded_audio_acceptance",
+          "exports_hash": "71bced575fe0e40d6fd170addff195636bfacd665036c4a1ebcb147e590d209e",
+          "export_count": 69
+        },
+        {
+          "source": "song_agent.final_export",
+          "target": "song_agent.domains.creation.final_export",
+          "exports_hash": "919f924f780d7b6db8d7c4f9efe90fc4e4191e84950e69cb18c701813078b8e0",
+          "export_count": 72
+        },
+        {
+          "source": "song_agent.library_index",
+          "target": "song_agent.domains.studio.library_index",
+          "exports_hash": "47b40c44b82bbd785636fa9b423f681ca36b35136abc9a63b460302a2aa7c776",
+          "export_count": 67
+        },
+        {
+          "source": "song_agent.lts_backup",
+          "target": "song_agent.domains.creation.lts_backup",
+          "exports_hash": "52b8d62b7c88f48e0906bbd32ba61a96ea9761ea9f8f2e8b455a2d86ba04de2b",
+          "export_count": 39
+        },
+        {
+          "source": "song_agent.lts_backup_verifier",
+          "target": "song_agent.domains.creation.lts_backup_verifier",
+          "exports_hash": "7e1d6cd9a7d2a997261a4f10f36b2600b70a8f4a3fa3608e8ea0ab16593d8c80",
+          "export_count": 34
+        },
+        {
+          "source": "song_agent.lts_maintenance",
+          "target": "song_agent.domains.creation.lts_maintenance",
+          "exports_hash": "068fddcb0adb807a9d4a1c56daf4d9f31612a21947bf2af34f6b8746db7b01e8",
+          "export_count": 30
+        },
+        {
+          "source": "song_agent.midi_analysis",
+          "target": "song_agent.domains.creation.midi_analysis",
+          "exports_hash": "7c2b20379f216b45c94781361ad167c3e843e6eae62f76cc4b82954092c67ef8",
+          "export_count": 38
+        },
+        {
+          "source": "song_agent.music_health",
+          "target": "song_agent.domains.creation.music_health",
+          "exports_hash": "56bd1ba037e0b2de1a2e8e3ee5a0f34782858cf39dd68690db7e2cba1c16c14c",
+          "export_count": 42
+        },
+        {
+          "source": "song_agent.music_quality",
+          "target": "song_agent.domains.creation.music_quality",
+          "exports_hash": "9bf262eef3520b73463be623adc8a21711856c5b0546004a4098fa83ad801d59",
+          "export_count": 49
+        },
+        {
+          "source": "song_agent.node_graph",
+          "target": "song_agent.domains.creation.node_graph",
+          "exports_hash": "fed3603c29cca5a1bc3878fa51d38786e7ff1109df439390400f12ea19562216",
+          "export_count": 8
+        },
+        {
+          "source": "song_agent.node_store",
+          "target": "song_agent.domains.creation.node_store",
+          "exports_hash": "40bb3d7ab95d966581d6fda22bbfbe8e0765190774ab68b0b1c8382fc2e6ea43",
+          "export_count": 20
+        },
+        {
+          "source": "song_agent.persistence_cli",
+          "target": "song_agent.domains.creation.persistence_cli",
+          "exports_hash": "9748ea167741d85f774cef08eaff4c326be2faa0f29a617d2fca7c53e389cccf",
+          "export_count": 11
+        },
+        {
+          "source": "song_agent.planning_rule_governance",
+          "target": "song_agent.domains.creation.planning_rule_governance",
+          "exports_hash": "481fd3c9ec73fd143ba3b0ccebe6b33f8a8b0fc8637a4d6c6a6fbff930664fc6",
+          "export_count": 49
+        },
+        {
+          "source": "song_agent.planning_rule_impact",
+          "target": "song_agent.domains.creation.planning_rule_impact",
+          "exports_hash": "d9dfa2f2e078702e0c7748032f2529b8ab1513975f3ae48ba32993842b1dd55b",
+          "export_count": 63
+        },
+        {
+          "source": "song_agent.planning_rule_simulation",
+          "target": "song_agent.domains.creation.planning_rule_simulation",
+          "exports_hash": "99e319b9998f5d178e1ddffce1a59a0cbcbeb4aae1c2b694d76b471d5e30190e",
+          "export_count": 71
+        },
+        {
+          "source": "song_agent.project_compare",
+          "target": "song_agent.domains.studio.project_compare",
+          "exports_hash": "daedb3a6f59f7f4770ab13b1b3085cfb68a58f5f8493b782a6a8e4336f9201d9",
+          "export_count": 28
+        },
+        {
+          "source": "song_agent.project_quality",
+          "target": "song_agent.domains.studio.project_quality",
+          "exports_hash": "ea9d82e43df77318198edf478dc03548ac711e6e7dac7711e2f2b47d25a1ed0b",
+          "export_count": 23
+        },
+        {
+          "source": "song_agent.projectio",
+          "target": "song_agent.domains.studio.projectio",
+          "exports_hash": "8cced3217b4de59653c3f83aca1fcd6676a8ca23be766fc40532862b692cc9c4",
+          "export_count": 21
+        },
+        {
+          "source": "song_agent.projects",
+          "target": "song_agent.domains.studio.projects",
+          "exports_hash": "30cc69f9015c2a4d66935762fc35590fa1ace3bddb9ae0a0d5e56b4d582452d2",
+          "export_count": 70
+        },
+        {
+          "source": "song_agent.prompt_ab",
+          "target": "song_agent.domains.studio.prompt_ab",
+          "exports_hash": "91cb459a1343877f550486e675bcf2d74f34f5ed09abfce440ccb02f6f5f6784",
+          "export_count": 16
+        },
+        {
+          "source": "song_agent.prompt_templates",
+          "target": "song_agent.domains.studio.prompt_templates",
+          "exports_hash": "1fae1f99f5163600ebaf4bd2b18dd7ddc092b3f12428f43ff5b55f2b14a65478",
+          "export_count": 31
+        },
+        {
+          "source": "song_agent.provider",
+          "target": "song_agent.domains.creation.provider",
+          "exports_hash": "af4bd82f9b99c3e1cfeeb7ad1f75fa06c1bd0fa80542c91ba9595d0b215666f6",
+          "export_count": 26
+        },
+        {
+          "source": "song_agent.provider_edits",
+          "target": "song_agent.domains.creation.provider_edits",
+          "exports_hash": "464959a0ad290ad0e7c5056cfce24d1b0632a7ae40a21a70c18cec20e612051b",
+          "export_count": 68
+        },
+        {
+          "source": "song_agent.provider_usage",
+          "target": "song_agent.domains.creation.provider_usage",
+          "exports_hash": "362595c358aab0fd05513cd6cf60ae25f98209af62e5a8622d4fa60308aca556",
+          "export_count": 19
+        },
+        {
+          "source": "song_agent.providers",
+          "target": "song_agent.domains.creation.providers",
+          "exports_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "export_count": 0
+        },
+        {
+          "source": "song_agent.providers.base",
+          "target": "song_agent.domains.creation.providers.base",
+          "exports_hash": "6ffac9e381bf971a5022a04b58693621b3bd8be04d07a0d21f5c44068e8e3e04",
+          "export_count": 5
+        },
+        {
+          "source": "song_agent.providers.mock",
+          "target": "song_agent.domains.creation.providers.mock",
+          "exports_hash": "47548828640f6229385bf47ba3b3281d89078db1218f86f9b0ca8bd1b4f631b8",
+          "export_count": 12
+        },
+        {
+          "source": "song_agent.providers.openai_compatible",
+          "target": "song_agent.domains.creation.providers.openai_compatible",
+          "exports_hash": "bf4b3c5ac01632d64c35af777e0b56ce9c9691c54d31f67fc12b8c8c2ab4aac5",
+          "export_count": 22
+        },
+        {
+          "source": "song_agent.redaction",
+          "target": "song_agent.domains.creation.redaction",
+          "exports_hash": "2bfc3d7aae1b7091cb25982bdd3c2854fdfda0030862b15db560a1e57e0224b1",
+          "export_count": 4
+        },
+        {
+          "source": "song_agent.reference_analysis",
+          "target": "song_agent.domains.studio.reference_analysis",
+          "exports_hash": "2827414aa02c3e719e5398ad989a20f3865ce71838c790ef777462046b361e84",
+          "export_count": 83
+        },
+        {
+          "source": "song_agent.references",
+          "target": "song_agent.domains.studio.references",
+          "exports_hash": "604f9df8b0c0679b9a456709ecc384e921a1f0619542b05c544f038452f9f083",
+          "export_count": 66
+        },
+        {
+          "source": "song_agent.regression_songbook",
+          "target": "song_agent.domains.creation.regression_songbook",
+          "exports_hash": "34158eabdaa4ebc694db5f128e229b3b0525c3820102f689867a073de2499be8",
+          "export_count": 12
+        },
+        {
+          "source": "song_agent.renderers",
+          "target": "song_agent.domains.creation.renderers",
+          "exports_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "export_count": 0
+        },
+        {
+          "source": "song_agent.renderers.audio",
+          "target": "song_agent.domains.creation.renderers.audio",
+          "exports_hash": "cbf9338a41411f6260650d4266b272c1a0144bfd5189dd585117e7194a863c3d",
+          "export_count": 30
+        },
+        {
+          "source": "song_agent.renderers.midi",
+          "target": "song_agent.domains.creation.renderers.midi",
+          "exports_hash": "ad43d1bdff9de206cc57d53a36f360f2c68a9893b40bb85eaef875a5a725e656",
+          "export_count": 18
+        },
+        {
+          "source": "song_agent.runtime",
+          "target": "song_agent.domains.creation.runtime",
+          "exports_hash": "0a0a984bfa2a901755985bef83cbacb045b650f07dad16a101c232e76b8ac158",
+          "export_count": 15
+        },
+        {
+          "source": "song_agent.runtime_views",
+          "target": "song_agent.domains.creation.runtime_views",
+          "exports_hash": "7bb7c5b63e596c473b7961b317b5d86522cad715a525a35d77795895b179c7e2",
+          "export_count": 26
+        },
+        {
+          "source": "song_agent.schemas",
+          "target": "song_agent.domains.creation.schemas",
+          "exports_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "export_count": 0
+        },
+        {
+          "source": "song_agent.schemas.agent_nodes",
+          "target": "song_agent.domains.creation.schemas.agent_nodes",
+          "exports_hash": "4e9bfe24cef21403b91324fcb9d295f7ab0a469c5486e5587015e6412a6ce19b",
+          "export_count": 29
+        },
+        {
+          "source": "song_agent.schemas.song",
+          "target": "song_agent.domains.creation.schemas.song",
+          "exports_hash": "d147a15fbfeb037a4a3967e6aba1883c54a8b0d9796181730139034b0e797727",
+          "export_count": 20
+        },
+        {
+          "source": "song_agent.song_editor",
+          "target": "song_agent.domains.studio.song_editor",
+          "exports_hash": "ed839248e9ee9c97c92809664aa4d21db8b6f66ee90f73b190a31376360db4a4",
+          "export_count": 132
+        },
+        {
+          "source": "song_agent.state",
+          "target": "song_agent.domains.creation.state",
+          "exports_hash": "dee22e7cd762a1c27559d1f248a62dd659b20d6874127d0ce89922956a17dc1e",
+          "export_count": 3
+        },
+        {
+          "source": "song_agent.stem_health",
+          "target": "song_agent.domains.creation.stem_health",
+          "exports_hash": "8e5032aee79cb7a07cbbb6b69c6ff314fcb576bb65618e10e6b3ea61c4d1a83b",
+          "export_count": 34
+        },
+        {
+          "source": "song_agent.stems",
+          "target": "song_agent.domains.creation.stems",
+          "exports_hash": "e8021a3ffdf3416c020221b54c2efcd5cd68d5026ce504d8f8924fb53dca75c1",
+          "export_count": 44
+        }
+      ]
+    }
+  ]
+}

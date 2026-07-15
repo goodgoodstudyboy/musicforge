@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from song_agent.renderers.audio import save_renderer_config_from_dict
-import song_agent.editor_audition as editor_audition_module
+import song_agent.domains.studio.editor_audition as editor_audition_module
 import song_agent.server as server_module
 
 from tests.test_server_edits import create_project_version, request_bytes, request_json, start_test_server, stop_test_server

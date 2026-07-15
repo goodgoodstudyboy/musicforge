@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.creation.batching."""
 
-import song_agent.batching as _implementation
+from song_agent.domains.creation.batching import AUDIO_STATUSES, Any, BATCH_ROOT, BATCH_STATUSES, BatchDocument, BatchItem, BatchState, BatchStore, CSV_COLUMNS, GENERATION_MODES, ITEM_STATUSES, PIPELINE_MODES, Path, REQUIRED_CSV_COLUMNS, STEM_STATUSES, SongRequest, StringIO, _clean, _parse_int_field, _validate_duration, _validate_tempo, annotations, csv, dataclass, datetime, field, json, now_iso, parse_batch_csv, read_json, recalculate_counts, shutil, slugify, threading, timezone, validate_generation_mode, validate_max_concurrency, validate_pipeline_mode, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('AUDIO_STATUSES', 'Any', 'BATCH_ROOT', 'BATCH_STATUSES', 'BatchDocument', 'BatchItem', 'BatchState', 'BatchStore', 'CSV_COLUMNS', 'GENERATION_MODES', 'ITEM_STATUSES', 'PIPELINE_MODES', 'Path', 'REQUIRED_CSV_COLUMNS', 'STEM_STATUSES', 'SongRequest', 'StringIO', '_clean', '_parse_int_field', '_validate_duration', '_validate_tempo', 'annotations', 'csv', 'dataclass', 'datetime', 'field', 'json', 'now_iso', 'parse_batch_csv', 'read_json', 'recalculate_counts', 'shutil', 'slugify', 'threading', 'timezone', 'validate_generation_mode', 'validate_max_concurrency', 'validate_pipeline_mode', 'write_json')

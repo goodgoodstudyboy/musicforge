@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.studio.prompt_templates."""
 
-import song_agent.prompt_templates as _implementation
+from song_agent.domains.studio.prompt_templates import Any, BLOCKED_PROMPT_PATTERNS, BUILT_IN_TEMPLATES, MAX_PROMPT_CHARS, MAX_TEMPLATE_JSON_BYTES, PROMPT_TEMPLATE_PATH, PROVIDER_EDIT_CANDIDATES_SCHEMA, PROVIDER_EDIT_PATCH_SCHEMA, PROVIDER_REVIEW_JUDGE_SCHEMA, Path, PromptTemplate, PromptTemplateStore, SCHEMA_VERSION, TEMPLATE_ID_PATTERN, _bounded_text, _built_in_template, _clean_template_id, _mapping, _optional_str, _prompt_text, _validate_prompt_text, annotations, asdict, dataclass, json, now_iso, re, read_json, render_prompt_template, threading, write_json
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'BLOCKED_PROMPT_PATTERNS', 'BUILT_IN_TEMPLATES', 'MAX_PROMPT_CHARS', 'MAX_TEMPLATE_JSON_BYTES', 'PROMPT_TEMPLATE_PATH', 'PROVIDER_EDIT_CANDIDATES_SCHEMA', 'PROVIDER_EDIT_PATCH_SCHEMA', 'PROVIDER_REVIEW_JUDGE_SCHEMA', 'Path', 'PromptTemplate', 'PromptTemplateStore', 'SCHEMA_VERSION', 'TEMPLATE_ID_PATTERN', '_bounded_text', '_built_in_template', '_clean_template_id', '_mapping', '_optional_str', '_prompt_text', '_validate_prompt_text', 'annotations', 'asdict', 'dataclass', 'json', 'now_iso', 're', 'read_json', 'render_prompt_template', 'threading', 'write_json')

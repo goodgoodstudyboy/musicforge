@@ -19,11 +19,11 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 from urllib.parse import parse_qs
 from song_agent.platform.version import VERSION as __version__
-from song_agent.application.legacy_dependencies.agent__multinode_pipeline import rerun_multinode_from_node
+from song_agent.domains.creation.agent.multinode_pipeline import rerun_multinode_from_node
 from song_agent.application.audio_campaigns.release_coverage import audio_campaign_release_track_coverage
 from song_agent.application.generation.service import generate_request
 from song_agent.application.jobs.model import JobState
-from song_agent.application.legacy_dependencies.auth import AuthConfig, validate_bearer_header
+from song_agent.domains.creation.auth import AuthConfig, validate_bearer_header
 from song_agent.application.legacy_dependencies.audio_artifacts import (
     AUDIO_ARTIFACT_FILENAME,
     audio_artifact_current,
@@ -33,18 +33,8 @@ from song_agent.application.legacy_dependencies.audio_artifacts import (
     read_audio_artifact_manifest,
     write_audio_artifact_manifest,
 )
-from song_agent.application.legacy_dependencies.assets import (
-    AssetStore,
-    apply_asset_refs_to_plan,
-    asset_audio_path,
-    asset_midi_path,
-    asset_public_dict,
-    asset_prompt_summaries,
-    asset_refs_snapshot,
-    extract_assets_from_song_plan,
-    write_asset_refs_snapshot,
-)
-from song_agent.application.legacy_dependencies.batching import BatchDocument, BatchStore, now_iso
+from song_agent.domains.studio.assets import AssetStore, apply_asset_refs_to_plan, asset_audio_path, asset_midi_path, asset_public_dict, asset_prompt_summaries, asset_refs_snapshot, extract_assets_from_song_plan, write_asset_refs_snapshot
+from song_agent.domains.creation.batching import BatchDocument, BatchStore, now_iso
 from song_agent.application.legacy_dependencies.candidate_groups import (
     CandidateGroup,
     CandidateGroupStore,
@@ -53,51 +43,14 @@ from song_agent.application.legacy_dependencies.candidate_groups import (
     candidate_midi_path,
 )
 from song_agent.application.legacy_dependencies.candidate_scoring import score_provider_edit_candidate
-from song_agent.application.legacy_dependencies.edits import (
-    EditIntent,
-    EditedSongPlanResult,
-    apply_edit_intent,
-    build_edit_metadata,
-    build_edit_targets,
-    edit_change_summary,
-    edit_variant_type,
-    validate_edit_intent,
-)
-from song_agent.application.legacy_dependencies.edit_presets import EditPresetStore, merge_preset_intent
-from song_agent.application.legacy_dependencies.editor_clips import (
-    EditorClipError,
-    EditorClipUnavailableError,
-    build_clip_insert_patch,
-    build_editor_clip_from_ref,
-    list_editor_clips,
-)
-from song_agent.application.legacy_dependencies.editor_templates import (
-    EditorTemplateError,
-    EditorTemplateStore,
-    EditorTemplateUnavailableError,
-    build_multitrack_clip_from_ref,
-    build_multitrack_clip_insert_patch,
-    section_template_public_dict,
-    suggest_lane_mappings,
-    track_template_public_dict,
-)
-from song_agent.application.legacy_dependencies.editor_audition import (
-    EditorAuditionError,
-    EditorAuditionStore,
-    EditorAuditionUnavailableError,
-    audition_summary_for_preview,
-)
-from song_agent.application.legacy_dependencies.editor_review import EditorReviewError, audition_asset_payload
-from song_agent.application.legacy_dependencies.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
-from song_agent.application.legacy_dependencies.final_export import (
-    FinalExportError,
-    FinalExportOptions,
-    build_final_export_bundle,
-    build_final_export_zip,
-    final_export_dir,
-    final_export_zip_path,
-    read_final_export_manifest,
-)
+from song_agent.domains.creation.edits import EditIntent, EditedSongPlanResult, apply_edit_intent, build_edit_metadata, build_edit_targets, edit_change_summary, edit_variant_type, validate_edit_intent
+from song_agent.domains.creation.edit_presets import EditPresetStore, merge_preset_intent
+from song_agent.domains.studio.editor_clips import EditorClipError, EditorClipUnavailableError, build_clip_insert_patch, build_editor_clip_from_ref, list_editor_clips
+from song_agent.domains.studio.editor_templates import EditorTemplateError, EditorTemplateStore, EditorTemplateUnavailableError, build_multitrack_clip_from_ref, build_multitrack_clip_insert_patch, section_template_public_dict, suggest_lane_mappings, track_template_public_dict
+from song_agent.domains.studio.editor_audition import EditorAuditionError, EditorAuditionStore, EditorAuditionUnavailableError, audition_summary_for_preview
+from song_agent.domains.studio.editor_review import EditorReviewError, audition_asset_payload
+from song_agent.domains.studio.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
+from song_agent.domains.creation.final_export import FinalExportError, FinalExportOptions, build_final_export_bundle, build_final_export_zip, final_export_dir, final_export_zip_path, read_final_export_manifest
 from song_agent.application.legacy_dependencies.delivery_qa import (
     build_delivery_qa_report,
     build_delivery_signoff_record,

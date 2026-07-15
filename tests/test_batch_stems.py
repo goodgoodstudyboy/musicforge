@@ -133,7 +133,7 @@ def test_render_batch_stems_completes_items_and_export(tmp_path, monkeypatch):
 
 def test_render_batch_stem_audio_completes_items(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.stems.render_audio", fake_render_audio)
+    monkeypatch.setattr("song_agent.domains.creation.stems.render_audio", fake_render_audio)
     server = start_test_server()
     try:
         configure_renderer(tmp_path, server)

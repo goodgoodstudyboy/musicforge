@@ -139,7 +139,7 @@ def test_asset_midi_and_audio_preview(tmp_path: Path) -> None:
             stderr = ""
         return Result()
 
-    from song_agent import assets as assets_module
+    from song_agent.domains.studio import assets as assets_module
 
     soundfont = tmp_path / "soundfont.sf2"
     soundfont.write_bytes(b"sf2")
