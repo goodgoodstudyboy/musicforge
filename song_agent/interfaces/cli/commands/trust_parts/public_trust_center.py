@@ -20,7 +20,7 @@ def _execute_public_trust_center(argv: list[str]) -> None:
 
 
     pass
-    from song_agent.application.legacy_dependencies.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, accepted_evidence_summary
+    from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance import PublicTrustCenterDistributionKitAcceptanceStore, accepted_evidence_summary
     pass
     parser = build_public_trust_center_parser()
     args = parser.parse_args(raw_args[1:])

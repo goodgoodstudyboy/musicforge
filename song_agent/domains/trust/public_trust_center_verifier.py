@@ -1,0 +1,12 @@
+from __future__ import annotations
+
+from typing import Any as __Any
+
+from song_agent.domains.trust.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package as __signoff_verify
+from song_agent.domains.trust.public_trust_center_core_verifier import Any, Callable, DEFAULT_BLOCKED_METADATA_KEYS, DEFAULT_MAX_ENTRY_COUNT, DEFAULT_MAX_UNCOMPRESSED_SIZE_MB, DEFAULT_MAX_ZIP_SIZE_MB, HEX_SHA256, INLINE_EVENT_RE, LEGAL_SIDECAR_ENTRIES, LOCAL_PATH_VALUE_PATTERNS, MAX_TEXT_SCAN_BYTES, PTC_BLOCKED_KEYS, PTC_HTML_PAGES, PTC_PACKAGE_TYPE, PTC_VERIFICATION_SCHEMA_VERSION, Path, PurePosixPath, REQUIRED_ENTRIES, SENSITIVE_VALUE_PATTERNS, VERIFIER_BLOCKED_KEYS, _PublicTrustCenterVerifier, _allowed_public_false_positive, _blocked_key_findings, _contains_local_path, _counts, _delivery_anchor_rows_from_fingerprint_sidecars, _delivery_payload_key, _delivery_payloads_from_data_docs, _delivery_payloads_from_fingerprint_sidecars, _delivery_payloads_from_sidecars, _delivery_public_payload, _delivery_readiness, _delivery_risk_register, _delivery_summary_key, _delivery_verification_index_from_independent_sidecars, _find_registry_current_entry, _fingerprint_key, _is_forbidden_public_entry, _is_safe_zip_entry, _normalize_newlines, _package_index, _package_verification_index_from_independent_sidecars, _package_verification_sidecars, _packages_from_sidecars, _portfolio_readiness, _raw_zip_entry_names, _read_zip_json, _redaction_findings, _release_readiness, _sha256_entry, _sha256_file, _sha256_text, _summary_from_source, _verification_index, _verification_sidecars, _verifications_from_sidecars, annotations, datetime, expected_public_trust_center_documents, hashlib, json, print_public_trust_center_verification_report, public_trust_center_manifest_hash, public_trust_center_report_hash, public_trust_center_verification_exit_code, re, sanitize_metadata, stable_hash, struct, timezone, write_json, write_public_trust_center_verification_report, zipfile
+from song_agent.domains.trust.public_trust_center_core_verifier import verify_public_trust_center_package as __core_verify
+
+
+def verify_public_trust_center_package(*args: __Any, **kwargs: __Any) -> dict[str, __Any]:
+    kwargs['_acceptance_board_signoff_verifier'] = __signoff_verify
+    return __core_verify(*args, **kwargs)

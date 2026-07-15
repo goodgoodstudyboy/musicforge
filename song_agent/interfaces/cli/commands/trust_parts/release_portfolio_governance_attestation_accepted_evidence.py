@@ -10,7 +10,7 @@ from .release_portfolio_governance_signoff import _build_public_trust_center_sto
 
 def _execute_release_portfolio_governance_attestation_accepted_evidence(argv: list[str]) -> None:
     raw_args = ['release-portfolio-governance-attestation-accepted-evidence', *argv]
-    from song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore, accepted_evidence_summary
+    from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence import ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore, accepted_evidence_summary
     pass
     pass
     parser = build_release_portfolio_governance_attestation_accepted_evidence_parser()

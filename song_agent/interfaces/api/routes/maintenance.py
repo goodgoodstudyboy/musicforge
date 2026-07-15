@@ -8,7 +8,7 @@ class MaintenanceRoutes:
         if method != "GET":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        from song_agent.application.legacy_dependencies.ga_readiness import build_ga_readiness_report
+        from song_agent.domains.trust.ga_readiness import build_ga_readiness_report
 
         report = build_ga_readiness_report(repo_root=_interfaces_api_runtime.Path.cwd())
         self._send_json({"ok": report.get("status") != "blocked", "report": report, "summary": report.get("summary", {})})
@@ -17,7 +17,7 @@ class MaintenanceRoutes:
         if method != "POST":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        from song_agent.application.legacy_dependencies.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+        from song_agent.domains.trust.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
         from song_agent.release_check.runner import run_release_check_matrix
 
         payload = self._optional_json_body()
@@ -62,7 +62,7 @@ class MaintenanceRoutes:
         if method != "GET":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        from song_agent.application.legacy_dependencies.ga_readiness import REQUIRED_DOCS
+        from song_agent.domains.trust.ga_readiness import REQUIRED_DOCS
 
         docs = []
         for rel in REQUIRED_DOCS:

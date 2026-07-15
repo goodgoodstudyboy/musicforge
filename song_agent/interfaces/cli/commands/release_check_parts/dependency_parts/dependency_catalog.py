@@ -29,11 +29,11 @@ from song_agent.interfaces.cli.registry import CommandSpec
 
 from song_agent.release_check.matrix import release_check_profiles
 
-from song_agent.application.legacy_dependencies.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
+from song_agent.domains.trust.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
 
 from song_agent.release_check.runner import run_release_check_matrix
 
-from song_agent.application.legacy_dependencies.ga_readiness_verifier import verify_ga_readiness_report, write_ga_readiness_verification_report
+from song_agent.domains.trust.ga_readiness_verifier import verify_ga_readiness_report, write_ga_readiness_verification_report
 
 from song_agent.release_check.matrix import release_check_definitions_as_dicts, select_check_definitions
 

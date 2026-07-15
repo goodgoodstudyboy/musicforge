@@ -893,6 +893,483 @@
           "export_count": 60
         }
       ]
+    },
+    {
+      "contexts": [
+        "trust"
+      ],
+      "module_count": 78,
+      "active_caller_rewrite_count": 507,
+      "modules": [
+        {
+          "source": "song_agent.ga_readiness",
+          "target": "song_agent.domains.trust.ga_readiness",
+          "exports_hash": "424d48840c82f3ae24d37cebc32cb2087e72f10e690ea15d56ef1e10689d9aa3",
+          "export_count": 96
+        },
+        {
+          "source": "song_agent.ga_readiness_verifier",
+          "target": "song_agent.domains.trust.ga_readiness_verifier",
+          "exports_hash": "3d87f88450b2b81893efe1a27bc9aeb5a47deeb39a9f47c4912d69a1917af126",
+          "export_count": 90
+        },
+        {
+          "source": "song_agent.public_trust_center",
+          "target": "song_agent.domains.trust.public_trust_center",
+          "exports_hash": "bdb875571a084dd84939b9c21a6bc2e82ecb1297557b40bf79617a02f0fe4f07",
+          "export_count": 121
+        },
+        {
+          "source": "song_agent.public_trust_center_acceptance_board",
+          "target": "song_agent.domains.trust.public_trust_center_acceptance_board",
+          "exports_hash": "04325922179260355fd182cf86746b6c8d2ed098ef1925d41004943bf5a5049b",
+          "export_count": 100
+        },
+        {
+          "source": "song_agent.public_trust_center_acceptance_board_signoff_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_acceptance_board_signoff_verifier",
+          "exports_hash": "60598206ec70056118160e7796aa3f6cab1c0b4834acbf5c4589effdb1b6f541",
+          "export_count": 58
+        },
+        {
+          "source": "song_agent.public_trust_center_acceptance_board_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_acceptance_board_verifier",
+          "exports_hash": "08d8cfa13e7d212fdc056f16a92a1889788afac7a7629004f9709e79de71494e",
+          "export_count": 56
+        },
+        {
+          "source": "song_agent.public_trust_center_anchor_registry",
+          "target": "song_agent.domains.trust.public_trust_center_anchor_registry",
+          "exports_hash": "566452643d2c20f59755ae340551006b40e05aeaf9c8a6998726da2308f8787b",
+          "export_count": 62
+        },
+        {
+          "source": "song_agent.public_trust_center_anchor_registry_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_anchor_registry_verifier",
+          "exports_hash": "9d52eb9ae2ceeb66ce8b81106efdfb2bc3def02d90e1f42cde69f765b43c3446",
+          "export_count": 54
+        },
+        {
+          "source": "song_agent.public_trust_center_anchor_transparency",
+          "target": "song_agent.domains.trust.public_trust_center_anchor_transparency",
+          "exports_hash": "740a3b2fcc9d0e9af4794b7d2b63d4cdd6cad83bac5ba545e4639b7b75b9b31d",
+          "export_count": 63
+        },
+        {
+          "source": "song_agent.public_trust_center_anchor_transparency_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_anchor_transparency_verifier",
+          "exports_hash": "2841492df467527592bf3edbfab576fdb3a124f46f06f782a034029170eb7374",
+          "export_count": 51
+        },
+        {
+          "source": "song_agent.public_trust_center_distribution_kit",
+          "target": "song_agent.domains.trust.public_trust_center_distribution_kit",
+          "exports_hash": "33088cefd3ad90e267d61cbf525a86eaea3927d8b1c0a1fd20874c1127cc14d5",
+          "export_count": 55
+        },
+        {
+          "source": "song_agent.public_trust_center_distribution_kit_acceptance",
+          "target": "song_agent.domains.trust.public_trust_center_distribution_kit_acceptance",
+          "exports_hash": "7cf79ffb46b2e437982b22480ba42f82c2b3058a9df10479684bafd8b2b80933",
+          "export_count": 81
+        },
+        {
+          "source": "song_agent.public_trust_center_distribution_kit_acceptance_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_verifier",
+          "exports_hash": "469655eff41d1f2691913ffb26b41affd263e51f174399ddd08c0441db17201d",
+          "export_count": 47
+        },
+        {
+          "source": "song_agent.public_trust_center_distribution_kit_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_distribution_kit_verifier",
+          "exports_hash": "6c182638b9413b72093fd28f1c787cb182c4ecaf00bf7c771083ec4e30621ab0",
+          "export_count": 51
+        },
+        {
+          "source": "song_agent.public_trust_center_publication",
+          "target": "song_agent.domains.trust.public_trust_center_publication",
+          "exports_hash": "14c7b9e926044cd5b390c34d61ef99ff198f803a4d5cb580090998805234b101",
+          "export_count": 96
+        },
+        {
+          "source": "song_agent.public_trust_center_publication_monitoring",
+          "target": "song_agent.domains.trust.public_trust_center_publication_monitoring",
+          "exports_hash": "0f0337e348970adf4a0437fb44c98351ebbcaf6cf6ff03dbf4da3e1a9f32e97d",
+          "export_count": 73
+        },
+        {
+          "source": "song_agent.public_trust_center_publication_monitoring_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_publication_monitoring_verifier",
+          "exports_hash": "f07d91b75d3ff70d937eff196e7db0b466b8672c9eea71d65bbfc47b3917c234",
+          "export_count": 59
+        },
+        {
+          "source": "song_agent.public_trust_center_publication_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_publication_verifier",
+          "exports_hash": "f4185b35eac796a71571cd0e4c461d2d413a69dcc36c35c2879eefa4505daf61",
+          "export_count": 70
+        },
+        {
+          "source": "song_agent.public_trust_center_verifier",
+          "target": "song_agent.domains.trust.public_trust_center_verifier",
+          "exports_hash": "3b46ac527d2c8d6adc646b5aff35792823d6da23bb4eab7b0cd6bc9cc7bf6645",
+          "export_count": 74
+        },
+        {
+          "source": "song_agent.release_operations",
+          "target": "song_agent.domains.trust.release_operations",
+          "exports_hash": "c011fe78c0e26c77b88a3e45545e1d17d6cadcb65d12653fcfeab269324afeb9",
+          "export_count": 103
+        },
+        {
+          "source": "song_agent.release_operations_archive_verifier",
+          "target": "song_agent.domains.trust.release_operations_archive_verifier",
+          "exports_hash": "a5acbb0156a313f922362f1cc8e45adc9f1535df65b05b6b0062dac538e4de39",
+          "export_count": 45
+        },
+        {
+          "source": "song_agent.release_operations_audit",
+          "target": "song_agent.domains.trust.release_operations_audit",
+          "exports_hash": "36b18b15386780d240db34aefa36fdf67ed835b10047bceaa6b95b163582b574",
+          "export_count": 82
+        },
+        {
+          "source": "song_agent.release_operations_audit_verifier",
+          "target": "song_agent.domains.trust.release_operations_audit_verifier",
+          "exports_hash": "5fb091b99940751015d77d2ea12cd3d11d022285028e69509e55fe3dddcda9db",
+          "export_count": 45
+        },
+        {
+          "source": "song_agent.release_operations_retrospective",
+          "target": "song_agent.domains.trust.release_operations_retrospective",
+          "exports_hash": "3424b0f537391b781be2cd03296775d4bfc1fc872cb2cc1b0998c48748ab3d61",
+          "export_count": 22
+        },
+        {
+          "source": "song_agent.release_operations_reviewer_pack",
+          "target": "song_agent.domains.trust.release_operations_reviewer_pack",
+          "exports_hash": "8e80a453663be094cf55cfc5f9e93cd39ea8409d0d1d166a4caef21c4a0b65d6",
+          "export_count": 61
+        },
+        {
+          "source": "song_agent.release_operations_reviewer_pack_verifier",
+          "target": "song_agent.domains.trust.release_operations_reviewer_pack_verifier",
+          "exports_hash": "424b81fd7014c9109fac94be8e34c9345dc23a41fea41ec4bcf3b85c043e083d",
+          "export_count": 42
+        },
+        {
+          "source": "song_agent.release_operations_runbook",
+          "target": "song_agent.domains.trust.release_operations_runbook",
+          "exports_hash": "c3fec50091da3bfae4bdd39c9566a46b5b7c520a8364b22c2cb44eebb7266c8a",
+          "export_count": 83
+        },
+        {
+          "source": "song_agent.release_operations_runbook_verifier",
+          "target": "song_agent.domains.trust.release_operations_runbook_verifier",
+          "exports_hash": "c6f90a016e0b1112b22654de169e380bf3b0e441f90264e3bf824fb505e5f3cf",
+          "export_count": 42
+        },
+        {
+          "source": "song_agent.release_operations_signoff",
+          "target": "song_agent.domains.trust.release_operations_signoff",
+          "exports_hash": "e9d148d18332797694cf4e849e9514286468261284cce5b14c5c352a4af0a35a",
+          "export_count": 65
+        },
+        {
+          "source": "song_agent.release_operations_verifier",
+          "target": "song_agent.domains.trust.release_operations_verifier",
+          "exports_hash": "abe206e71413dd89305dccc747d3fb4eecc45ee60834a58511551a0757d1c164",
+          "export_count": 41
+        },
+        {
+          "source": "song_agent.release_portfolio_audit",
+          "target": "song_agent.domains.trust.release_portfolio_audit",
+          "exports_hash": "e44848ba436b88dd1b8ef92209798f17c26e48c6125b7bf3f3d6e897be6124c7",
+          "export_count": 88
+        },
+        {
+          "source": "song_agent.release_portfolio_audit_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_audit_verifier",
+          "exports_hash": "af853a475a59fdc24bb67a99c1bbd198f909d39f684fd2812c8fe379acc84351",
+          "export_count": 43
+        },
+        {
+          "source": "song_agent.release_portfolio_governance",
+          "target": "song_agent.domains.trust.release_portfolio_governance",
+          "exports_hash": "6b7578609a688411439b0f3ef64fb83844d929a8fea47f5cce9bfba2ac79bf87",
+          "export_count": 83
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_archive_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_archive_verifier",
+          "exports_hash": "722e56999377252ea9782b2ceefd62a4aba518e2358ede886b88ae49831194cf",
+          "export_count": 47
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation",
+          "exports_hash": "1735d2977f74ab14de923d3aa420b371984e14e62ab78a89368cd07cde6f30ff",
+          "export_count": 72
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_accepted_evidence",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence",
+          "exports_hash": "eae5024f71f690126b2fb2003ac87c9ec881084e13452a479719bcecb7ab4b6d",
+          "export_count": 56
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_accepted_evidence_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_verifier",
+          "exports_hash": "a308b2abfe29d07bfe6b1a9bc5e05a6ead407e1565c972bb0905d248cce05038",
+          "export_count": 45
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_portal",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_portal",
+          "exports_hash": "b8d1b174d9cb63da8ce119d61e8b6475b3c6e403cf3234d859c65f25de85e4a4",
+          "export_count": 67
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_portal_review",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_review",
+          "exports_hash": "90cb2f79546a86b3ed5743c55700371bd150da3893ae906d37640bbebad8cb83",
+          "export_count": 64
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_portal_review_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_review_verifier",
+          "exports_hash": "eedd9d181768eddee1e2d2dd07cb87c529eb9104a33ada1b69f7ad04d5d54c26",
+          "export_count": 57
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_portal_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_verifier",
+          "exports_hash": "1c3dd35c0be85c22beac0a1aa1c2cefd0a06ec2918c2f35612b481456203d1d0",
+          "export_count": 48
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_registry",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_registry",
+          "exports_hash": "b38b4385e1482baa62f6a9afb86c257147867f3c2192e97232f0f862f07f6b81",
+          "export_count": 61
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_registry_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_registry_verifier",
+          "exports_hash": "4b33a1ed7239b69f5a3d312f3a6a84f5a59d5b0d59e8de6a216cd78e9c8b072f",
+          "export_count": 51
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_transparency",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency",
+          "exports_hash": "e201fe13167750554542c1f045414c10236ded4ee3283c8cd4becda8310fd0b5",
+          "export_count": 74
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_transparency_acknowledgement",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_acknowledgement",
+          "exports_hash": "acae9787930837eeba9151bb725928fa47d3b6f04e6c547d617cedd55a7bbe73",
+          "export_count": 72
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_transparency_acknowledgement_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_acknowledgement_verifier",
+          "exports_hash": "6c135e4d23f0e2168fc111557ab606642fe33b0bbe7dc8984b215adcf1ed272e",
+          "export_count": 46
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_transparency_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_verifier",
+          "exports_hash": "5ae4bdf710c5f23b065b1762913342b963dd6c0fa43c54226d97bb9db1c43a3c",
+          "export_count": 55
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_attestation_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_attestation_verifier",
+          "exports_hash": "85bb43aa26688d507e9a1c9a95fbe9ca76289ffde8847266add2c671a31ce2a6",
+          "export_count": 45
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_audit",
+          "target": "song_agent.domains.trust.release_portfolio_governance_audit",
+          "exports_hash": "b89f50dee4ae0c4d54863844fa5073996ba39c4d1e80713ce7f82af9d0d66270",
+          "export_count": 83
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_audit_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_audit_verifier",
+          "exports_hash": "439eb404d92ee7a3df0a968d9d99354f9ada1f34627abd6b1c486ec32c55fad0",
+          "export_count": 44
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_evidence_vault",
+          "target": "song_agent.domains.trust.release_portfolio_governance_evidence_vault",
+          "exports_hash": "af42701db2a185fc85a37fcf7024b4fec3dc773c45c0e98f9b3980259a0d8a4c",
+          "export_count": 92
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_evidence_vault_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_evidence_vault_verifier",
+          "exports_hash": "5f6b306e4f208b6c162adc7e83863305601ed98d5050dbf7afc118f0fee788b9",
+          "export_count": 47
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_final_board",
+          "target": "song_agent.domains.trust.release_portfolio_governance_final_board",
+          "exports_hash": "6e1dd8655be74ef7d3c05c04a72fa525a2a2f0f22925df9d09b4dc9a96bcbf8f",
+          "export_count": 82
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_final_board_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_final_board_verifier",
+          "exports_hash": "d8aa784fb095876ef010adabdc9d6d932498f58f3539053daa7806694fdc6c15",
+          "export_count": 45
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_reviewer_pack",
+          "target": "song_agent.domains.trust.release_portfolio_governance_reviewer_pack",
+          "exports_hash": "b45e1260cbbf1d81f6b065abb7eb4912bf19c2e8733be1af835e049fb315a7cc",
+          "export_count": 74
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_reviewer_pack_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_reviewer_pack_verifier",
+          "exports_hash": "7f77168f895db2f64ccb1e7a9bfa2b60850c265facf50d6d13db5235334d32c1",
+          "export_count": 44
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_signoff",
+          "target": "song_agent.domains.trust.release_portfolio_governance_signoff",
+          "exports_hash": "75daccee5e08be05525c035836452dfb0b8418649dff883f8e29767e7d95eb8e",
+          "export_count": 62
+        },
+        {
+          "source": "song_agent.release_portfolio_governance_verifier",
+          "target": "song_agent.domains.trust.release_portfolio_governance_verifier",
+          "exports_hash": "ba93d3e9a7822523435fb5cca16bc16d2c049912a7c634d7fee5f00982e00972",
+          "export_count": 44
+        },
+        {
+          "source": "song_agent.trust_operations_assurance_watch",
+          "target": "song_agent.domains.trust.trust_operations_assurance_watch",
+          "exports_hash": "690ad3118c7d5370e8577c6c9331269fdd7b3671abb3daaaf72f7d0f247c6077",
+          "export_count": 75
+        },
+        {
+          "source": "song_agent.trust_operations_assurance_watch_signoff",
+          "target": "song_agent.domains.trust.trust_operations_assurance_watch_signoff",
+          "exports_hash": "9fed907d0f2c06092a0bd4453388fd19254a6e90f45c5cadc3f035dcdf985ff4",
+          "export_count": 61
+        },
+        {
+          "source": "song_agent.trust_operations_assurance_watch_signoff_verifier",
+          "target": "song_agent.domains.trust.trust_operations_assurance_watch_signoff_verifier",
+          "exports_hash": "e5ca5ddefddce417589356a7866a2e09212b56ded140d44ee810fe70b60f9e85",
+          "export_count": 56
+        },
+        {
+          "source": "song_agent.trust_operations_assurance_watch_verifier",
+          "target": "song_agent.domains.trust.trust_operations_assurance_watch_verifier",
+          "exports_hash": "89a1d839bfd08ad72560763018ae8b0b4ece64e9ed8a4968751e7c685107183f",
+          "export_count": 64
+        },
+        {
+          "source": "song_agent.trust_operations_continuous_assurance",
+          "target": "song_agent.domains.trust.trust_operations_continuous_assurance",
+          "exports_hash": "f838b28b448d66037c067b23894aa3d972b349d109dc489fe62954503e5ea05f",
+          "export_count": 69
+        },
+        {
+          "source": "song_agent.trust_operations_continuous_assurance_verifier",
+          "target": "song_agent.domains.trust.trust_operations_continuous_assurance_verifier",
+          "exports_hash": "13133dba209af48edcb5f4ed28b84c32633355e8b8894d3969dcd472ea3cbd45",
+          "export_count": 62
+        },
+        {
+          "source": "song_agent.trust_operations_control_signoff",
+          "target": "song_agent.domains.trust.trust_operations_control_signoff",
+          "exports_hash": "ea2867adadb3eba3552867eb2d63e21e86dafeb8f482b3c1db1fe1effbca6c55",
+          "export_count": 60
+        },
+        {
+          "source": "song_agent.trust_operations_control_signoff_verifier",
+          "target": "song_agent.domains.trust.trust_operations_control_signoff_verifier",
+          "exports_hash": "a48dfbc0da895c7ac2bff26fdff0af46016617a20fd2fcd52ffe20521e3ed250",
+          "export_count": 57
+        },
+        {
+          "source": "song_agent.trust_operations_controls",
+          "target": "song_agent.domains.trust.trust_operations_controls",
+          "exports_hash": "092274fc0321b108bb627b8f8866fd598fa581083c267601e34dd38647c93c44",
+          "export_count": 66
+        },
+        {
+          "source": "song_agent.trust_operations_controls_verifier",
+          "target": "song_agent.domains.trust.trust_operations_controls_verifier",
+          "exports_hash": "a9997db1d011a5b321aac8a5ff1eb9eddd02c821df63cfa50cb4e63c3aaeeb56",
+          "export_count": 70
+        },
+        {
+          "source": "song_agent.trust_operations_final_readiness",
+          "target": "song_agent.domains.trust.trust_operations_final_readiness",
+          "exports_hash": "58b52442288895b4c2b0ee37b74dbb661c0de11362d3caf1e0bc5159c68df363",
+          "export_count": 63
+        },
+        {
+          "source": "song_agent.trust_operations_final_readiness_verifier",
+          "target": "song_agent.domains.trust.trust_operations_final_readiness_verifier",
+          "exports_hash": "b8e8af73bb5287ff01164cbc9d7d896d75c00778fcb387128ef2bde4e1ee179e",
+          "export_count": 68
+        },
+        {
+          "source": "song_agent.trust_operations_hub",
+          "target": "song_agent.domains.trust.trust_operations_hub",
+          "exports_hash": "8c38670e2b98bc22d3f5f6307c299de3747aedf04a478b4d6b2be313c060548c",
+          "export_count": 83
+        },
+        {
+          "source": "song_agent.trust_operations_hub_incident_verifier",
+          "target": "song_agent.domains.trust.trust_operations_hub_incident_verifier",
+          "exports_hash": "04ca7432a14b12a2d47480edc09b8c3b0295c06371678e1b6fba97c3d4535e04",
+          "export_count": 54
+        },
+        {
+          "source": "song_agent.trust_operations_hub_incidents",
+          "target": "song_agent.domains.trust.trust_operations_hub_incidents",
+          "exports_hash": "0992b6130b2a17a061fc521e1b5cde75fc7bf69232922caea8701977e84726be",
+          "export_count": 75
+        },
+        {
+          "source": "song_agent.trust_operations_hub_runbook",
+          "target": "song_agent.domains.trust.trust_operations_hub_runbook",
+          "exports_hash": "1615cd0a7a7372e48deba12dd65ad347235a82e96e6483f0ac157e951b7e4475",
+          "export_count": 60
+        },
+        {
+          "source": "song_agent.trust_operations_hub_runbook_verifier",
+          "target": "song_agent.domains.trust.trust_operations_hub_runbook_verifier",
+          "exports_hash": "80fbfc33a398020a49eda805af87d47898431d97579b92d26f4cf1cef9665ea4",
+          "export_count": 49
+        },
+        {
+          "source": "song_agent.trust_operations_hub_verifier",
+          "target": "song_agent.domains.trust.trust_operations_hub_verifier",
+          "exports_hash": "23c49ef5939fe5986d4d25bda5708612929603e6ed9c853cc5521aca13377415",
+          "export_count": 72
+        },
+        {
+          "source": "song_agent.trust_operations_incident_knowledge",
+          "target": "song_agent.domains.trust.trust_operations_incident_knowledge",
+          "exports_hash": "8557d9a986f00c1e3d67912b2e2ae9dc8421c81ddc549993b4cf579ac262ee40",
+          "export_count": 62
+        },
+        {
+          "source": "song_agent.trust_operations_incident_knowledge_verifier",
+          "target": "song_agent.domains.trust.trust_operations_incident_knowledge_verifier",
+          "exports_hash": "081fbaae50aa3fea305e8e8e111b8dd7174e757a3d27557c5bf330f3992139a0",
+          "export_count": 57
+        }
+      ]
     }
   ]
 }

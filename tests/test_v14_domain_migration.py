@@ -35,7 +35,8 @@ def test_migrated_facades_preserve_export_identity() -> None:
     assert waves[("creation", "studio")] == 59
     assert waves[("quality",)] == 61
     assert waves[("delivery",)] == 24
-    assert len(rows) == 144
+    assert waves[("trust",)] == 78
+    assert len(rows) == 222
     for row in rows:
         facade = importlib.import_module(str(row["source"]))
         owner = importlib.import_module(str(row["target"]))
@@ -65,5 +66,6 @@ def test_domain_migration_has_no_dynamic_facade_or_active_debt() -> None:
     assert "studio" not in contexts
     assert "quality" not in contexts
     assert "delivery" not in contexts
+    assert "trust" not in contexts
     assert snapshot["cycles"] == []
     assert snapshot["boundary_violations"] == []

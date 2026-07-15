@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
+from song_agent.domains.delivery.releases import stable_hash
+
+
+PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path"}
+
+
+AUDIT_ENTRY_HASH_EXCLUDE_KEYS = {"entry_hash"}
+
+
+AUDIT_REPORT_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "updated_at"}
+
+
+AUDIT_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", "zip"}
+
+
+def audit_entry_hash(entry: dict[str, Any]) -> str:
+    return stable_hash(_entry_hash_payload(entry))
+
+
+def audit_ledger_hash(entries: list[dict[str, Any]]) -> str:
+    return stable_hash([entry.get("entry_hash") for entry in entries])
+
+
+def audit_ledger_integrity_ok(entries: list[dict[str, Any]]) -> bool:
+    previous = ""
+    seen: set[str] = set()
+    for index, entry in enumerate(entries, start=1):
+        if int(entry.get("sequence") or 0) != index:
+            return False
+        if str(entry.get("previous_entry_hash") or "") != previous:
+            return False
+        actual = audit_entry_hash(entry)
+        if entry.get("entry_hash") != actual or actual in seen:
+            return False
+        seen.add(actual)
+        previous = actual
+    return True
+
+
+def audit_report_integrity_hash(report: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (report or {}).items() if key not in AUDIT_REPORT_HASH_EXCLUDE_KEYS})
+
+
+def audit_manifest_integrity_hash(manifest: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (manifest or {}).items() if key not in AUDIT_MANIFEST_HASH_EXCLUDE_KEYS})
+
+
+def _entry_hash_payload(entry: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in (entry or {}).items() if key not in AUDIT_ENTRY_HASH_EXCLUDE_KEYS}

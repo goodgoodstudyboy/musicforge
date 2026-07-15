@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.trust.release_operations_retrospective."""
 
-import song_agent.release_operations_retrospective as _implementation
+from song_agent.domains.trust.release_operations_retrospective import Any, DEFAULT_BLOCKED_METADATA_KEYS, OPERATIONS_RETROSPECTIVE_SCHEMA_VERSION, RETROSPECTIVE_BLOCKED_KEYS, RETROSPECTIVE_HASH_EXCLUDE_KEYS, _change_request_summary, _duration_seconds, _first_time, _manual_action_summary, _recommendations, _risk_hotspots, _stage_durations, _timeline, _verifier_outcomes, annotations, build_operations_retrospective_report, datetime, operations_retrospective_integrity_hash, operations_retrospective_integrity_ok, retrospective_summary, sanitize_metadata, stable_hash
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'DEFAULT_BLOCKED_METADATA_KEYS', 'OPERATIONS_RETROSPECTIVE_SCHEMA_VERSION', 'RETROSPECTIVE_BLOCKED_KEYS', 'RETROSPECTIVE_HASH_EXCLUDE_KEYS', '_change_request_summary', '_duration_seconds', '_first_time', '_manual_action_summary', '_recommendations', '_risk_hotspots', '_stage_durations', '_timeline', '_verifier_outcomes', 'annotations', 'build_operations_retrospective_report', 'datetime', 'operations_retrospective_integrity_hash', 'operations_retrospective_integrity_ok', 'retrospective_summary', 'sanitize_metadata', 'stable_hash')

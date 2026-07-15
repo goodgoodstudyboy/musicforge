@@ -1,318 +1,6 @@
 {
-  "active_to_compatibility_import_max_count": 96,
+  "active_to_compatibility_import_max_count": 18,
   "allowed_active_to_compatibility_imports": [
-    {
-      "imported": "song_agent.ga_readiness",
-      "importer": "song_agent.application.legacy_dependencies.ga_readiness"
-    },
-    {
-      "imported": "song_agent.ga_readiness_verifier",
-      "importer": "song_agent.application.legacy_dependencies.ga_readiness_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center"
-    },
-    {
-      "imported": "song_agent.public_trust_center_acceptance_board",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_acceptance_board"
-    },
-    {
-      "imported": "song_agent.public_trust_center_acceptance_board_signoff_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_acceptance_board_signoff_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_acceptance_board_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_acceptance_board_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_anchor_registry",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_anchor_registry"
-    },
-    {
-      "imported": "song_agent.public_trust_center_anchor_registry_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_anchor_registry_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_anchor_transparency",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_anchor_transparency"
-    },
-    {
-      "imported": "song_agent.public_trust_center_anchor_transparency_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_anchor_transparency_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_distribution_kit",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_distribution_kit"
-    },
-    {
-      "imported": "song_agent.public_trust_center_distribution_kit_acceptance",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_distribution_kit_acceptance"
-    },
-    {
-      "imported": "song_agent.public_trust_center_distribution_kit_acceptance_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_distribution_kit_acceptance_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_distribution_kit_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_distribution_kit_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_publication",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_publication"
-    },
-    {
-      "imported": "song_agent.public_trust_center_publication_monitoring",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_publication_monitoring"
-    },
-    {
-      "imported": "song_agent.public_trust_center_publication_monitoring_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_publication_monitoring_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_publication_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_publication_verifier"
-    },
-    {
-      "imported": "song_agent.public_trust_center_verifier",
-      "importer": "song_agent.application.legacy_dependencies.public_trust_center_verifier"
-    },
-    {
-      "imported": "song_agent.release_operations",
-      "importer": "song_agent.application.legacy_dependencies.release_operations"
-    },
-    {
-      "imported": "song_agent.release_operations_archive_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_archive_verifier"
-    },
-    {
-      "imported": "song_agent.release_operations_audit",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_audit"
-    },
-    {
-      "imported": "song_agent.release_operations_audit_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_audit_verifier"
-    },
-    {
-      "imported": "song_agent.release_operations_retrospective",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_retrospective"
-    },
-    {
-      "imported": "song_agent.release_operations_reviewer_pack",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_reviewer_pack"
-    },
-    {
-      "imported": "song_agent.release_operations_reviewer_pack_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_reviewer_pack_verifier"
-    },
-    {
-      "imported": "song_agent.release_operations_runbook",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_runbook"
-    },
-    {
-      "imported": "song_agent.release_operations_runbook_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_runbook_verifier"
-    },
-    {
-      "imported": "song_agent.release_operations_signoff",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_signoff"
-    },
-    {
-      "imported": "song_agent.release_operations_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_operations_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_audit",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_audit"
-    },
-    {
-      "imported": "song_agent.release_portfolio_audit_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_audit_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_archive_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_archive_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_accepted_evidence",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_accepted_evidence"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_accepted_evidence_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_accepted_evidence_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_portal",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_portal"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_portal_review",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_portal_review"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_portal_review_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_portal_review_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_portal_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_portal_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_registry",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_registry"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_registry_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_registry_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_transparency",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_transparency"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_transparency_acknowledgement",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_transparency_acknowledgement"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_transparency_acknowledgement_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_transparency_acknowledgement_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_transparency_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_transparency_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_attestation_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_attestation_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_audit",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_audit"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_audit_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_audit_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_evidence_vault",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_evidence_vault"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_evidence_vault_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_evidence_vault_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_final_board",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_final_board"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_final_board_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_final_board_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_reviewer_pack",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_reviewer_pack"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_reviewer_pack_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_reviewer_pack_verifier"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_signoff",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_signoff"
-    },
-    {
-      "imported": "song_agent.release_portfolio_governance_verifier",
-      "importer": "song_agent.application.legacy_dependencies.release_portfolio_governance_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_assurance_watch",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_assurance_watch"
-    },
-    {
-      "imported": "song_agent.trust_operations_assurance_watch_signoff",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_assurance_watch_signoff"
-    },
-    {
-      "imported": "song_agent.trust_operations_assurance_watch_signoff_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_assurance_watch_signoff_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_assurance_watch_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_assurance_watch_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_continuous_assurance",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_continuous_assurance"
-    },
-    {
-      "imported": "song_agent.trust_operations_continuous_assurance_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_continuous_assurance_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_control_signoff",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_control_signoff"
-    },
-    {
-      "imported": "song_agent.trust_operations_control_signoff_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_control_signoff_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_controls",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_controls"
-    },
-    {
-      "imported": "song_agent.trust_operations_controls_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_controls_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_final_readiness",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_final_readiness"
-    },
-    {
-      "imported": "song_agent.trust_operations_final_readiness_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_final_readiness_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_hub",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_hub"
-    },
-    {
-      "imported": "song_agent.trust_operations_hub_incident_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_hub_incident_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_hub_incidents",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_hub_incidents"
-    },
-    {
-      "imported": "song_agent.trust_operations_hub_runbook",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_hub_runbook"
-    },
-    {
-      "imported": "song_agent.trust_operations_hub_runbook_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_hub_runbook_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_hub_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_hub_verifier"
-    },
-    {
-      "imported": "song_agent.trust_operations_incident_knowledge",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_incident_knowledge"
-    },
-    {
-      "imported": "song_agent.trust_operations_incident_knowledge_verifier",
-      "importer": "song_agent.application.legacy_dependencies.trust_operations_incident_knowledge_verifier"
-    },
     {
       "imported": "song_agent.unified_command_center",
       "importer": "song_agent.application.legacy_dependencies.unified_command_center"
@@ -411,7 +99,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 1083,
+  "module_count": 1204,
   "modules": [
     {
       "context": null,
@@ -3472,6 +3160,732 @@
       "layer": "domain",
       "module": "song_agent.domains.trust",
       "path": "song_agent/domains/trust/__init__.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.attestation_store_ports",
+      "path": "song_agent/domains/trust/attestation_store_ports.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.ga_readiness",
+      "path": "song_agent/domains/trust/ga_readiness.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.ga_readiness_contracts",
+      "path": "song_agent/domains/trust/ga_readiness_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.ga_readiness_verifier",
+      "path": "song_agent/domains/trust/ga_readiness_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center",
+      "path": "song_agent/domains/trust/public_trust_center.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_acceptance_board",
+      "path": "song_agent/domains/trust/public_trust_center_acceptance_board.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_acceptance_board_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_acceptance_board_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_acceptance_board_signoff_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_acceptance_board_signoff_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_acceptance_board_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_acceptance_board_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_anchor_registry",
+      "path": "song_agent/domains/trust/public_trust_center_anchor_registry.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_anchor_registry_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_anchor_registry_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_anchor_registry_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_anchor_registry_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_anchor_transparency",
+      "path": "song_agent/domains/trust/public_trust_center_anchor_transparency.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_anchor_transparency_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_anchor_transparency_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_anchor_transparency_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_anchor_transparency_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_core_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_core_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_distribution_kit",
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_distribution_kit_acceptance",
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_distribution_kit_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_distribution_kit_core_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit_core_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_distribution_kit_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_publication",
+      "path": "song_agent/domains/trust/public_trust_center_publication.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_publication_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_publication_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_publication_monitoring",
+      "path": "song_agent/domains/trust/public_trust_center_publication_monitoring.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_publication_monitoring_contracts",
+      "path": "song_agent/domains/trust/public_trust_center_publication_monitoring_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_publication_monitoring_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_publication_monitoring_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_publication_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_publication_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.public_trust_center_verifier",
+      "path": "song_agent/domains/trust/public_trust_center_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations",
+      "path": "song_agent/domains/trust/release_operations.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_archive_verifier",
+      "path": "song_agent/domains/trust/release_operations_archive_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_audit",
+      "path": "song_agent/domains/trust/release_operations_audit.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_audit_contracts",
+      "path": "song_agent/domains/trust/release_operations_audit_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_audit_verifier",
+      "path": "song_agent/domains/trust/release_operations_audit_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_contracts",
+      "path": "song_agent/domains/trust/release_operations_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_retrospective",
+      "path": "song_agent/domains/trust/release_operations_retrospective.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_retrospective_contracts",
+      "path": "song_agent/domains/trust/release_operations_retrospective_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_reviewer_pack",
+      "path": "song_agent/domains/trust/release_operations_reviewer_pack.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_reviewer_pack_contracts",
+      "path": "song_agent/domains/trust/release_operations_reviewer_pack_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_reviewer_pack_verifier",
+      "path": "song_agent/domains/trust/release_operations_reviewer_pack_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_runbook",
+      "path": "song_agent/domains/trust/release_operations_runbook.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_runbook_contracts",
+      "path": "song_agent/domains/trust/release_operations_runbook_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_runbook_verifier",
+      "path": "song_agent/domains/trust/release_operations_runbook_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_signoff",
+      "path": "song_agent/domains/trust/release_operations_signoff.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_signoff_contracts",
+      "path": "song_agent/domains/trust/release_operations_signoff_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_operations_verifier",
+      "path": "song_agent/domains/trust/release_operations_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_audit",
+      "path": "song_agent/domains/trust/release_portfolio_audit.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_audit_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_audit_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_audit_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_audit_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance",
+      "path": "song_agent/domains/trust/release_portfolio_governance.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_archive_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_archive_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_read_model",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_read_model.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_portal",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_review",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_review_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_review_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_portal_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_registry",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_registry.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_registry_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_registry_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_registry_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_registry_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_acknowledgement",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_acknowledgement_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_acknowledgement_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_transparency_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_attestation_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_audit",
+      "path": "song_agent/domains/trust/release_portfolio_governance_audit.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_audit_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_audit_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_audit_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_audit_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_evidence_vault",
+      "path": "song_agent/domains/trust/release_portfolio_governance_evidence_vault.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_evidence_vault_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_evidence_vault_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_evidence_vault_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_evidence_vault_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_final_board",
+      "path": "song_agent/domains/trust/release_portfolio_governance_final_board.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_final_board_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_final_board_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_final_board_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_final_board_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_reviewer_pack",
+      "path": "song_agent/domains/trust/release_portfolio_governance_reviewer_pack.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_reviewer_pack_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_reviewer_pack_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_reviewer_pack_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_reviewer_pack_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_signoff",
+      "path": "song_agent/domains/trust/release_portfolio_governance_signoff.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_signoff_contracts",
+      "path": "song_agent/domains/trust/release_portfolio_governance_signoff_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.release_portfolio_governance_verifier",
+      "path": "song_agent/domains/trust/release_portfolio_governance_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_assurance_watch",
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_assurance_watch_contracts",
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_assurance_watch_signoff",
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch_signoff.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_assurance_watch_signoff_contracts",
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch_signoff_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_assurance_watch_signoff_verifier",
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch_signoff_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_assurance_watch_verifier",
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_continuous_assurance",
+      "path": "song_agent/domains/trust/trust_operations_continuous_assurance.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_continuous_assurance_contracts",
+      "path": "song_agent/domains/trust/trust_operations_continuous_assurance_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_continuous_assurance_verifier",
+      "path": "song_agent/domains/trust/trust_operations_continuous_assurance_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_control_signoff",
+      "path": "song_agent/domains/trust/trust_operations_control_signoff.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_control_signoff_contracts",
+      "path": "song_agent/domains/trust/trust_operations_control_signoff_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_control_signoff_verifier",
+      "path": "song_agent/domains/trust/trust_operations_control_signoff_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_controls",
+      "path": "song_agent/domains/trust/trust_operations_controls.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_controls_contracts",
+      "path": "song_agent/domains/trust/trust_operations_controls_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_controls_verifier",
+      "path": "song_agent/domains/trust/trust_operations_controls_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_final_readiness",
+      "path": "song_agent/domains/trust/trust_operations_final_readiness.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_final_readiness_contracts",
+      "path": "song_agent/domains/trust/trust_operations_final_readiness_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_final_readiness_verifier",
+      "path": "song_agent/domains/trust/trust_operations_final_readiness_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub",
+      "path": "song_agent/domains/trust/trust_operations_hub.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_contracts",
+      "path": "song_agent/domains/trust/trust_operations_hub_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_incident_verifier",
+      "path": "song_agent/domains/trust/trust_operations_hub_incident_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_incidents",
+      "path": "song_agent/domains/trust/trust_operations_hub_incidents.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_incidents_contracts",
+      "path": "song_agent/domains/trust/trust_operations_hub_incidents_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_runbook",
+      "path": "song_agent/domains/trust/trust_operations_hub_runbook.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_runbook_contracts",
+      "path": "song_agent/domains/trust/trust_operations_hub_runbook_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_runbook_verifier",
+      "path": "song_agent/domains/trust/trust_operations_hub_runbook_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_hub_verifier",
+      "path": "song_agent/domains/trust/trust_operations_hub_verifier.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_incident_knowledge",
+      "path": "song_agent/domains/trust/trust_operations_incident_knowledge.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_incident_knowledge_contracts",
+      "path": "song_agent/domains/trust/trust_operations_incident_knowledge_contracts.py"
+    },
+    {
+      "context": "trust",
+      "layer": "domain",
+      "module": "song_agent.domains.trust.trust_operations_incident_knowledge_verifier",
+      "path": "song_agent/domains/trust/trust_operations_incident_knowledge_verifier.py"
     },
     {
       "context": "creation",
@@ -6930,8 +7344,8 @@
   ],
   "schema_version": 1,
   "security_helper_max_counts": {
-    "_is_safe_zip_entry": 5,
-    "_raw_zip_entry_names": 5,
+    "_is_safe_zip_entry": 36,
+    "_raw_zip_entry_names": 43,
     "_zip_has_no_trailing_data": 0
   }
 }
