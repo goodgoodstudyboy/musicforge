@@ -20,6 +20,7 @@ from song_agent.release_check.lts_cutover import run_lts_cutover_smoke
 from song_agent.release_check_evidence_policy import run_policy_gate_cutover_smoke
 from song_agent.release_check_governance_v137 import run_release_check_ci_docs_governance_smoke
 from song_agent.release_check.lts_recertification import run_lts_recertification_smoke
+from song_agent.release_check.v14_architecture import run_v14_architecture_cutover_smoke
 
 
 DOMAIN = "meta"
@@ -90,6 +91,7 @@ CALLABLES = {
     "_v136_policy_gate_cutover_smoke": run_policy_gate_cutover_smoke,
     "_v137_release_check_ci_docs_governance_smoke": run_release_check_ci_docs_governance_smoke,
     "_v138_lts_recertification_smoke": run_lts_recertification_smoke,
+    "_v140_architecture_cutover_smoke": run_v14_architecture_cutover_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

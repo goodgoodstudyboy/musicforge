@@ -1,7 +1,8 @@
 # Maintenance Policy
 
-MusicForge v10 is the GA/LTS baseline. Maintenance work should preserve stable
-local operation before adding new proof-chain layers.
+MusicForge v13.8 is the supported LTS baseline while v14 performs the explicit
+domain cutover and compatibility retirement. Maintenance work must preserve
+stable local operation and the v13 evidence contracts throughout that migration.
 
 ## Supported Work
 
@@ -19,6 +20,8 @@ local operation before adding new proof-chain layers.
 - Hotfix releases must include a regression for the reproduced issue.
 - Signed evidence and archives remain immutable unless reset through the
   established Change Request flow for that domain.
+- v14 migration commits must reduce or preserve every architecture debt limit;
+  changing ownership labels or baseline allowances is not a migration.
 
 ## Long-Term Checks
 

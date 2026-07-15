@@ -1,8 +1,9 @@
 # Evidence Graph and Gate Policies
 
-MusicForge v12.19 introduces one runtime-verified Evidence Graph and a
-declarative policy engine for new GA and Release gates. A graph node is not a
-copy of a package summary. It exists only when all of these agree:
+MusicForge v13.8 uses one runtime-verified Evidence Graph and declarative policy
+engine for current GA and Release gates. v14 preserves these contracts while
+moving their implementation into owned domain vertical slices. A graph node is
+not a copy of a package summary. It exists only when all of these agree:
 
 - the external package currently exists;
 - the external verification report has the registered package type, valid
@@ -81,10 +82,10 @@ For Release signoff API requests, use `gate_policy` and
 
 ## Legacy Migration
 
-The historical GA `--require-*` flags remain compatibility aliases during the
-v12 line and emit a deprecation warning. New gates must use a policy and an
-Evidence Graph manifest. The aliases are scheduled for removal in v13.0 after
-parity and migration checks are complete.
+The historical GA `--require-*` flags are v13 compatibility aliases and emit a
+deprecation warning. New gates must use a policy and an Evidence Graph manifest.
+v14 removes aliases only after CLI/API differential tests prove parity and the
+decision is recorded in `docs/deprecations.json`.
 
 Runtime-verifier selection comes from the capability registry. A manifest
 cannot name or replace a verifier. Capability inventory is available through

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "release_version": "14.0.0",
+  "baseline_tag": "v13.8.0",
+  "current_phase": 1,
+  "enforce_final_targets": false,
+  "limits": {
+    "active_to_compatibility_import_count": 224,
+    "active_to_compatibility_by_context": {
+      "creation": 28,
+      "studio": 17,
+      "quality": 59,
+      "delivery": 24,
+      "trust": 78,
+      "program": 18
+    },
+    "anonymous_part_file_count": 147,
+    "interface_wildcard_import_count": 249,
+    "active_dynamic_forwarding_count": 1498,
+    "interface_store_reference_count": 248,
+    "interface_oversized_function_count": 43,
+    "new_flat_module_count": 0
+  },
+  "final_targets": {
+    "production_cycle_count": 0,
+    "boundary_violation_count": 0,
+    "dependency_exception_count": 0,
+    "active_to_compatibility_import_count": 0,
+    "anonymous_part_file_count": 0,
+    "interface_wildcard_import_count": 0,
+    "active_dynamic_forwarding_count": 0,
+    "interface_store_reference_count": 0,
+    "interface_oversized_function_count": 0,
+    "new_flat_module_count": 0
+  },
+  "composition_roots": [
+    "song_agent/interfaces/api/runtime_parts/dependencies/",
+    "song_agent/interfaces/cli/commands/"
+  ],
+  "policy": {
+    "limit_increase": "forbidden",
+    "ownership_reclassification": "explicit_migration_only",
+    "public_compatibility": "static_facade_only",
+    "final_active_compatibility_implementation_lines": 0
+  }
+}

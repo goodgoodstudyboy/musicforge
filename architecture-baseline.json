@@ -923,7 +923,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 917,
+  "module_count": 918,
   "modules": [
     {
       "context": null,
@@ -5508,6 +5508,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check.runner",
       "path": "song_agent/release_check/runner.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_architecture",
+      "path": "song_agent/release_check/v14_architecture.py"
     },
     {
       "context": null,

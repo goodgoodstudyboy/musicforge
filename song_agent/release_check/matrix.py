@@ -256,7 +256,7 @@ def _command(
     )
 
 
-BASE_PROFILES = ("full", "quick", "latest", "ga", "v13")
+BASE_PROFILES = ("full", "quick", "latest", "ga", "v13", "v14")
 LATEST_PROFILES = ("full", "quick", "latest")
 V7_PROFILES = ("full", "v7")
 GA_PROFILES = ("full", "quick", "latest", "ga")
@@ -265,7 +265,8 @@ V11_PROFILES = ("full", "quick", "latest", "ga", "v11")
 V12_PROFILES = ("full", "quick", "latest", "ga", "v12")
 V12_ACCELERATED_PROFILES = ("full", "latest", "ga", "v12")
 V13_PROFILES = ("full", "latest", "ga", "v13")
-CURRENT_NO_LEGACY_PROFILES = frozenset({"latest", "ga", "v13", "security"})
+V14_PROFILES = ("full", "latest", "ga", "security", "v14")
+CURRENT_NO_LEGACY_PROFILES = frozenset({"latest", "ga", "v13", "v14", "security"})
 
 LEGACY_COMPATIBILITY_CALLABLES = frozenset(
     {
@@ -476,6 +477,7 @@ _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v136.policy_gate_cutover_smoke", "v13.6 Evidence Graph and Policy main-gate cutover smoke", "_v136_policy_gate_cutover_smoke", group="architecture", version="13.6", risk="critical", timeout_seconds=180, tags=("v13", "ga", "architecture", "evidence-graph", "policy", "capabilities"), profiles=V13_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga")),
     _callable("v137.release_check_ci_docs_governance_smoke", "v13.7 Release Check, CI, test marker, and documentation governance smoke", "_v137_release_check_ci_docs_governance_smoke", group="release-check", version="13.7", risk="critical", timeout_seconds=180, tags=("v13", "ga", "release-check", "ci", "documentation", "reviewer-package"), profiles=(*V13_PROFILES, "security"), duration_budget_seconds=120, budget_enforced_profiles=("v13", "latest", "ga", "security")),
     _callable("v138.lts_recertification_smoke", "v13.8 final LTS recertification smoke", "_v138_lts_recertification_smoke", group="architecture", version="13.8", risk="critical", timeout_seconds=240, tags=("v13", "ga", "architecture", "lts", "migration", "reviewer-package"), profiles=(*V13_PROFILES, "security"), duration_budget_seconds=180, budget_enforced_profiles=("v13", "latest", "ga", "security", "full")),
+    _callable("v140.architecture_cutover_smoke", "v14.0 domain cutover architecture ratchet", "_v140_architecture_cutover_smoke", group="architecture", version="14.0", risk="critical", timeout_seconds=120, tags=("v14", "ga", "architecture", "compatibility", "ratchet"), profiles=V14_PROFILES, duration_budget_seconds=60, budget_enforced_profiles=V14_PROFILES),
 )
 
 
@@ -536,8 +538,8 @@ def _govern_definition(definition: ReleaseCheckDefinition) -> ReleaseCheckDefini
 
 CHECK_DEFINITIONS = tuple(_govern_definition(definition) for definition in _RAW_CHECK_DEFINITIONS)
 
-KNOWN_PROFILES = {"full", "nightly", "security", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "ga", "publish"}
-PROFILE_ORDER = ("full", "quick", "latest", "security", "nightly", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "ga", "publish")
+KNOWN_PROFILES = {"full", "nightly", "security", "quick", "latest", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "ga", "publish"}
+PROFILE_ORDER = ("full", "quick", "latest", "security", "nightly", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "ga", "publish")
 
 
 def release_check_profiles() -> tuple[str, ...]:

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_for_version": "13.8.0",
+  "generated_for_version": "14.0.0",
   "entries": [
     {
       "old_path": "song_agent/release_checks.py",
@@ -51,6 +51,26 @@
       "introduced_version": "12.18.0",
       "removal_version": "13.0.0",
       "rollback_strategy": "Keep the bounded public entrypoint facades and restore their v12.18 registry delegation if needed."
+    },
+    {
+      "old_path": "song_agent/application/legacy_dependencies/",
+      "replacement": "song_agent/domains/* plus song_agent/application use cases",
+      "import_usage_count": 490,
+      "cli_api_aliases": [],
+      "data_schema_impact": "none; public JSON, ZIP, CLI, API, and Studio contracts remain under differential tests",
+      "introduced_version": "13.5.0",
+      "removal_version": "14.0.0",
+      "rollback_strategy": "Revert the independently reviewed domain migration commit; never restore a dynamic facade over partially migrated state."
+    },
+    {
+      "old_path": "active flat song_agent domain implementations",
+      "replacement": "song_agent/domains/{creation,studio,quality,delivery,trust,program}",
+      "import_usage_count": 224,
+      "cli_api_aliases": [],
+      "data_schema_impact": "historical signed evidence remains byte-readable; public Python imports may remain static facades",
+      "introduced_version": "1.0.0",
+      "removal_version": "14.0.0",
+      "rollback_strategy": "Use the v13.8.0 release and verified workspace backup; signed evidence is not rewritten during code migration."
     }
   ]
 }

@@ -44,3 +44,13 @@ v13.8 recertifies the active modular LTS line while retaining the explicitly
 cataloged compatibility surface for v13 consumers. The reviewer package shows
 both total and active source size; compatibility retirement remains a v14.0
 major-version task and cannot grow during the v13 LTS line.
+
+## v14 Execution
+
+`architecture-v14-migration.json` freezes the v13.8.0 inventory and
+`architecture-v14-policy.json` ratchets every migration wave. ARCH-007,
+ARCH-008, ARCH-010, ARCH-012, and QUAL-001 remain open until the final v14
+policy independently recomputes zero active compatibility edges, zero anonymous
+parts/wildcards/dynamic forwarding, and all final type/coverage/complexity
+targets. Moving a deadline, changing a layer label, or deleting a test does not
+close these entries.

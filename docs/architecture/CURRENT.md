@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v13.8 is a local-first modular monolith. It remains one Python
+MusicForge v13.8.0 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. Active v12/v13 Program
 paths follow `interfaces -> application -> domains -> platform`. Earlier music
 capabilities remain operational through flat compatibility implementations;
