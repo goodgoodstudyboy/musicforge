@@ -387,9 +387,15 @@
     },
     {
       "path": "material/v13.0.1-v13.8-MusicForge全面取证审计与真实模块化整改施工图-2026-07-14.md",
-      "status": "active",
+      "status": "historical",
       "title": "v13.0.1-v13.8 MusicForge 全面取证审计与真实模块化整改施工图",
       "version": "13.0.1-v13.8"
+    },
+    {
+      "path": "material/v14.0.0-MusicForge领域纵向迁移兼容层清退与接口收敛施工图-2026-07-15.md",
+      "status": "active",
+      "title": "v14.0.0 MusicForge 领域纵向迁移、兼容层清退与接口收敛施工图",
+      "version": "14.0.0"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",
