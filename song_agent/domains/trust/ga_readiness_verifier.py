@@ -1750,7 +1750,7 @@ def _verify_unified_command_center_evidence(
         return
     zip_path = Path(command_center_path)
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_verifier import UNIFIED_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_package
+        from song_agent.domains.program.unified_command_center_verifier import UNIFIED_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_package
 
         verification_report = read_json(Path(command_center_verification_report_path))
         runtime_report = verify_unified_command_center_package(
@@ -1810,7 +1810,7 @@ def _verify_unified_command_center_archive_evidence(
         return
     zip_path = Path(archive_path)
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_archive_verifier import UNIFIED_COMMAND_CENTER_ARCHIVE_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_archive_package
+        from song_agent.domains.program.unified_command_center_archive_verifier import UNIFIED_COMMAND_CENTER_ARCHIVE_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_archive_package
 
         verification_report = read_json(Path(archive_verification_report_path))
         runtime_report = verify_unified_command_center_archive_package(
@@ -1851,7 +1851,7 @@ def _verify_unified_command_center_handoff_evidence(
         return
     zip_path = Path(handoff_path)
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_handoff_verifier import UNIFIED_COMMAND_CENTER_HANDOFF_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_handoff_package
+        from song_agent.domains.program.unified_command_center_handoff_verifier import UNIFIED_COMMAND_CENTER_HANDOFF_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_handoff_package
 
         verification_report = read_json(Path(handoff_verification_report_path))
         runtime_report = verify_unified_command_center_handoff_package(
@@ -1895,7 +1895,7 @@ def _verify_unified_command_center_continuous_review_evidence(
         return
     zip_path = Path(review_path)
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_continuous_review_verifier import verify_unified_command_center_continuous_review_package
+        from song_agent.domains.program.unified_command_center_continuous_review_verifier import verify_unified_command_center_continuous_review_package
 
         verification_report = read_json(Path(review_verification_report_path))
         runtime_report = verify_unified_command_center_continuous_review_package(
@@ -1954,7 +1954,7 @@ def _verify_unified_command_center_drift_response_evidence(
         return
     zip_path = Path(response_path)
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_drift_response_verifier import verify_unified_command_center_drift_response_package
+        from song_agent.domains.program.unified_command_center_drift_response_verifier import verify_unified_command_center_drift_response_package
 
         verification_report = read_json(Path(response_verification_report_path))
         runtime_report = verify_unified_command_center_drift_response_package(
@@ -2025,7 +2025,7 @@ def _verify_unified_command_center_evidence_review_evidence(
         return
     zip_path = Path(review_path)
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_evidence_review_verifier import verify_unified_command_center_evidence_review_acceptance_package, verify_unified_command_center_evidence_review_package
+        from song_agent.domains.program.unified_command_center_evidence_review_verifier import verify_unified_command_center_evidence_review_acceptance_package, verify_unified_command_center_evidence_review_package
 
         verification_report = read_json(Path(review_verification_report_path))
         runtime_report = verify_unified_command_center_evidence_review_package(
@@ -2119,7 +2119,7 @@ def _verify_unified_command_center_reviewer_decision_board_evidence(
         return
     zip_path = Path(board_path)
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_reviewer_decision_board_verifier import verify_unified_command_center_reviewer_decision_board_package
+        from song_agent.domains.program.unified_command_center_reviewer_decision_board_verifier import verify_unified_command_center_reviewer_decision_board_package
 
         verification_report = read_json(Path(board_verification_report_path))
         runtime_report = verify_unified_command_center_reviewer_decision_board_package(

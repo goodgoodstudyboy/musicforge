@@ -32,7 +32,7 @@ from song_agent.domains.creation.provider_usage import build_provider_usage_repo
 from song_agent.domains.studio.prompt_ab import PromptABStore
 from song_agent.domains.studio.projects import ProjectStore
 from song_agent.domains.studio.references import MAX_REFERENCE_WAV_BYTES, ReferenceStore, reference_file_url, reference_prompt_summaries, reference_public_dict, reference_refs_snapshot, write_reference_refs_snapshot
-from song_agent.application.legacy_dependencies.redaction import sanitize_metadata
+from song_agent.domains.creation.redaction import sanitize_metadata
 from song_agent.domains.studio.reference_analysis import ReferenceAnalysisError, analyze_reference, create_asset_from_slice, generate_slices, get_analysis_report, get_slice_manifest, render_reference_slice_audio, render_reference_slice_midi, require_fresh_analysis, require_fresh_slices, slice_audio_path, slice_midi_path
 from song_agent.domains.studio.project_quality import QualityGateConfig, evaluate_quality_gate, load_quality_gate_config, save_quality_gate_config
 from song_agent.domains.creation.provider import ProviderError, load_provider_config, provider_configured, reset_provider_config, save_provider_config_from_dict, test_provider_config

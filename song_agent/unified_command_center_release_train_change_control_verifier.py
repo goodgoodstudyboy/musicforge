@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_command_center_release_train_change_control_verifier."""
 
-from song_agent.domains.program import unified_command_center_release_train_change_control_verifier as _implementation
+from song_agent.domains.program.unified_command_center_release_train_change_control_verifier import Any, Path, REQUIRED_ENTRIES, SENSITIVE_PATTERNS, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_SCHEMA_VERSION, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_VERIFICATION_PACKAGE_TYPE, _check, _current_train_checks, _document_binding_checks, _external_reset_proof_checks, _finish, _history_checks, _integrity_hash, _integrity_ok, _is_safe_entry, _manifest_checks, _parse_jsonl, _read_json_entry, _read_json_file, _redaction_check, _reset_semantics_checks, _safe_check_key, _sha256_bytes, _sha256_path, annotations, json, re, read_json, sanitize_sensitive_text, stable_hash, unified_command_center_release_train_change_control_verification_exit_code, verify_unified_command_center_release_train_change_control_package, verify_unified_command_center_release_train_package, write_json, write_unified_command_center_release_train_change_control_verification_report, zipfile
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'Path', 'REQUIRED_ENTRIES', 'SENSITIVE_PATTERNS', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_SCHEMA_VERSION', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_VERIFICATION_PACKAGE_TYPE', '_check', '_current_train_checks', '_document_binding_checks', '_external_reset_proof_checks', '_finish', '_history_checks', '_integrity_hash', '_integrity_ok', '_is_safe_entry', '_manifest_checks', '_parse_jsonl', '_read_json_entry', '_read_json_file', '_redaction_check', '_reset_semantics_checks', '_safe_check_key', '_sha256_bytes', '_sha256_path', 'annotations', 'json', 're', 'read_json', 'sanitize_sensitive_text', 'stable_hash', 'unified_command_center_release_train_change_control_verification_exit_code', 'verify_unified_command_center_release_train_change_control_package', 'verify_unified_command_center_release_train_package', 'write_json', 'write_unified_command_center_release_train_change_control_verification_report', 'zipfile')

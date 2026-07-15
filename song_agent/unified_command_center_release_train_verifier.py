@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_command_center_release_train_verifier."""
 
-from song_agent.domains.program import unified_command_center_release_train_verifier as _implementation
+from song_agent.domains.program.unified_command_center_release_train_verifier import Any, EXPECTED_EVIDENCE_PACKAGE_TYPES, Path, REQUIRED_ENTRIES, SENSITIVE_PATTERNS, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_SCHEMA_VERSION, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_VERIFICATION_PACKAGE_TYPE, _check, _dependency_semantics_checks, _document_binding_checks, _evidence_key, _external_evidence_manifest_checks, _external_row_checks, _external_signoff_binding_checks, _finish, _has_cycle, _history_checks, _integrity_hash, _integrity_ok, _is_safe_entry, _manifest_checks, _parse_jsonl, _read_json_entry, _read_json_file, _redaction_check, _report_manifest_hash, _report_zip_sha, _safe_check_key, _sha256_bytes, _sha256_path, _signoff_binding_checks, _zip_manifest_hash, annotations, json, re, read_json, sanitize_sensitive_text, stable_hash, unified_command_center_release_train_verification_exit_code, verify_unified_command_center_release_train_package, write_json, write_unified_command_center_release_train_verification_report, zipfile
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'EXPECTED_EVIDENCE_PACKAGE_TYPES', 'Path', 'REQUIRED_ENTRIES', 'SENSITIVE_PATTERNS', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_SCHEMA_VERSION', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_VERIFICATION_PACKAGE_TYPE', '_check', '_dependency_semantics_checks', '_document_binding_checks', '_evidence_key', '_external_evidence_manifest_checks', '_external_row_checks', '_external_signoff_binding_checks', '_finish', '_has_cycle', '_history_checks', '_integrity_hash', '_integrity_ok', '_is_safe_entry', '_manifest_checks', '_parse_jsonl', '_read_json_entry', '_read_json_file', '_redaction_check', '_report_manifest_hash', '_report_zip_sha', '_safe_check_key', '_sha256_bytes', '_sha256_path', '_signoff_binding_checks', '_zip_manifest_hash', 'annotations', 'json', 're', 'read_json', 'sanitize_sensitive_text', 'stable_hash', 'unified_command_center_release_train_verification_exit_code', 'verify_unified_command_center_release_train_package', 'write_json', 'write_unified_command_center_release_train_verification_report', 'zipfile')

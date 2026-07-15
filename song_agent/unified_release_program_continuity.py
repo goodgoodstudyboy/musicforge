@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_release_program_continuity."""
 
-from song_agent.domains.program import unified_release_program_continuity as _implementation
+from song_agent.domains.program.unified_release_program_continuity import Any, ArchiveBuilder, CONTINUITY_BLOCKED_METADATA_KEYS, HistoryChain, Path, REQUIRED_ENTRIES, SignoffService, UNIFIED_RELEASE_PROGRAM_CONTINUITY_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_CONTINUITY_SCHEMA_VERSION, UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_VERIFICATION_PACKAGE_TYPE, UnifiedReleaseProgramContinuityError, UnifiedReleaseProgramContinuityNotFoundError, UnifiedReleaseProgramContinuityStateError, UnifiedReleaseProgramContinuityStore, UnifiedReleaseProgramStore, UnifiedReleaseProgramVaultOperationsStore, WorkspaceLock, _archive_manifest_document, _bounded, _file_record, _gate_failed, _integrity_hash, _integrity_ok, _json_line, _read_history, _read_optional_json, _read_required_doc, _safe_id, _sanitize_payload, _sha256_path, _signoff_binding_document, _source_binding_from_context, _with_integrity, annotations, now_iso, program_json_facade, read_json, sanitize_metadata, sanitize_sensitive_text, shutil, stable_hash, tempfile, verify_unified_release_program_continuity_package, verify_unified_release_program_vault_operations_package, write_json, write_unified_release_program_continuity_verification_report
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'ArchiveBuilder', 'CONTINUITY_BLOCKED_METADATA_KEYS', 'HistoryChain', 'Path', 'REQUIRED_ENTRIES', 'SignoffService', 'UNIFIED_RELEASE_PROGRAM_CONTINUITY_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_CONTINUITY_SCHEMA_VERSION', 'UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_VERIFICATION_PACKAGE_TYPE', 'UnifiedReleaseProgramContinuityError', 'UnifiedReleaseProgramContinuityNotFoundError', 'UnifiedReleaseProgramContinuityStateError', 'UnifiedReleaseProgramContinuityStore', 'UnifiedReleaseProgramStore', 'UnifiedReleaseProgramVaultOperationsStore', 'WorkspaceLock', '_archive_manifest_document', '_bounded', '_file_record', '_gate_failed', '_integrity_hash', '_integrity_ok', '_json_line', '_read_history', '_read_optional_json', '_read_required_doc', '_safe_id', '_sanitize_payload', '_sha256_path', '_signoff_binding_document', '_source_binding_from_context', '_with_integrity', 'annotations', 'now_iso', 'program_json_facade', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'shutil', 'stable_hash', 'tempfile', 'verify_unified_release_program_continuity_package', 'verify_unified_release_program_vault_operations_package', 'write_json', 'write_unified_release_program_continuity_verification_report')

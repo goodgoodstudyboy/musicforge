@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from song_agent.domains.quality.music_acceptance import stable_hash
 
 

@@ -1562,84 +1562,84 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_archive_verifier",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_continuous_review",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_continuous_review_verifier",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_drift_response",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_drift_response_verifier",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_evidence_review",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_evidence_review_verifier",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_handoff",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_handoff_verifier",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train_change_control",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -1653,7 +1653,7 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train_handoff",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -1667,7 +1667,7 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_release_train_lifecycle",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
@@ -1688,28 +1688,28 @@
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_reviewer_decision_board",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_reviewer_decision_board_verifier",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_signoff",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",
       "removal_target_version": "14.0.0"
     },
     {
-      "active_import_count": 1,
+      "active_import_count": 0,
       "module": "song_agent.unified_command_center_verifier",
       "owner": "musicforge-program",
       "reason": "Supported v13 compatibility module isolated behind an active anti-corruption boundary.",

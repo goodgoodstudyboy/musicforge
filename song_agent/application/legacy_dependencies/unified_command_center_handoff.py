@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.program.unified_command_center_handoff."""
 
-import song_agent.unified_command_center_handoff as _implementation
+from song_agent.domains.program.unified_command_center_handoff import Any, Path, UNIFIED_COMMAND_CENTER_HANDOFF_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_HANDOFF_SCHEMA_VERSION, UnifiedCommandCenterHandoffError, UnifiedCommandCenterHandoffStateError, UnifiedCommandCenterHandoffStore, UnifiedCommandCenterSignoffStore, _file_record, _gate_failed, _handoff_report, _instructions, _integrity_hash, _package_index, _readme, _sha256_path, annotations, now_iso, read_json, sanitize_metadata, shutil, stable_hash, threading, verify_unified_command_center_handoff_archive, verify_unified_command_center_handoff_package, write_json, write_unified_command_center_handoff_verification_report, zipfile
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'Path', 'UNIFIED_COMMAND_CENTER_HANDOFF_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_HANDOFF_SCHEMA_VERSION', 'UnifiedCommandCenterHandoffError', 'UnifiedCommandCenterHandoffStateError', 'UnifiedCommandCenterHandoffStore', 'UnifiedCommandCenterSignoffStore', '_file_record', '_gate_failed', '_handoff_report', '_instructions', '_integrity_hash', '_package_index', '_readme', '_sha256_path', 'annotations', 'now_iso', 'read_json', 'sanitize_metadata', 'shutil', 'stable_hash', 'threading', 'verify_unified_command_center_handoff_archive', 'verify_unified_command_center_handoff_package', 'write_json', 'write_unified_command_center_handoff_verification_report', 'zipfile')

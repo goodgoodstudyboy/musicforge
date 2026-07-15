@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_release_program_vault."""
 
-from song_agent.domains.program import unified_release_program_vault as _implementation
+from song_agent.domains.program.unified_release_program_vault import Any, ArchiveBuilder, HistoryChain, Path, UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION, UnifiedReleaseProgramHandoffStore, UnifiedReleaseProgramOperationsStore, UnifiedReleaseProgramStore, UnifiedReleaseProgramVaultError, UnifiedReleaseProgramVaultNotFoundError, UnifiedReleaseProgramVaultStateError, UnifiedReleaseProgramVaultStore, VAULT_BLOCKED_METADATA_KEYS, WorkspaceLock, _anchor_document, _auditor_guide, _chain_events, _file_record, _gate_failed, _integrity_hash, _integrity_ok, _json_bytes, _manifest_document, _package_row, _proof_export_doc, _proof_row, _public_row, _public_verification_summary, _read_optional_json, _replay_steps, _sanitize_payload, _sha256_bytes, _sha256_path, _verification_export_doc, _verification_row, _with_integrity, annotations, now_iso, program_json_facade, read_json, sanitize_metadata, sanitize_sensitive_text, shutil, stable_hash, verify_unified_release_program_vault_package, write_json, write_unified_release_program_vault_verification_report, zipfile
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'ArchiveBuilder', 'HistoryChain', 'Path', 'UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VAULT_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION', 'UnifiedReleaseProgramHandoffStore', 'UnifiedReleaseProgramOperationsStore', 'UnifiedReleaseProgramStore', 'UnifiedReleaseProgramVaultError', 'UnifiedReleaseProgramVaultNotFoundError', 'UnifiedReleaseProgramVaultStateError', 'UnifiedReleaseProgramVaultStore', 'VAULT_BLOCKED_METADATA_KEYS', 'WorkspaceLock', '_anchor_document', '_auditor_guide', '_chain_events', '_file_record', '_gate_failed', '_integrity_hash', '_integrity_ok', '_json_bytes', '_manifest_document', '_package_row', '_proof_export_doc', '_proof_row', '_public_row', '_public_verification_summary', '_read_optional_json', '_replay_steps', '_sanitize_payload', '_sha256_bytes', '_sha256_path', '_verification_export_doc', '_verification_row', '_with_integrity', 'annotations', 'now_iso', 'program_json_facade', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'shutil', 'stable_hash', 'verify_unified_release_program_vault_package', 'write_json', 'write_unified_release_program_vault_verification_report', 'zipfile')

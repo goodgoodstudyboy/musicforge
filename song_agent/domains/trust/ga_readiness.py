@@ -1779,8 +1779,8 @@ def _unified_command_center_summary(
     if command_center_zip_path is None:
         return {"status": "missing", "message": "Unified Command Center package was not provided."}
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center import evidence_to_verifier_kwargs as unified_command_center_evidence_to_kwargs
-        from song_agent.application.legacy_dependencies.unified_command_center_verifier import verify_unified_command_center_package
+        from song_agent.domains.program.unified_command_center import evidence_to_verifier_kwargs as unified_command_center_evidence_to_kwargs
+        from song_agent.domains.program.unified_command_center_verifier import verify_unified_command_center_package
 
         zip_path = Path(command_center_zip_path)
         evidence: dict[str, Any] = {
@@ -1854,7 +1854,7 @@ def _unified_command_center_archive_summary(
     if required and (command_center_zip_path is None or command_center_verification_report_path is None):
         return {"status": "failed", "message": "Unified Command Center Archive requires current Unified Command Center ZIP and verification report."}
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_archive_verifier import verify_unified_command_center_archive_package
+        from song_agent.domains.program.unified_command_center_archive_verifier import verify_unified_command_center_archive_package
 
         runtime_report = verify_unified_command_center_archive_package(
             archive_zip_path,
@@ -1892,7 +1892,7 @@ def _unified_command_center_handoff_summary(
     if required and (archive_zip_path is None or archive_verification_report_path is None):
         return {"status": "failed", "message": "Unified Command Center Handoff requires current Archive ZIP and verification report."}
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_handoff_verifier import verify_unified_command_center_handoff_package
+        from song_agent.domains.program.unified_command_center_handoff_verifier import verify_unified_command_center_handoff_package
 
         runtime_report = verify_unified_command_center_handoff_package(
             handoff_zip_path,
@@ -1935,7 +1935,7 @@ def _unified_command_center_continuous_review_summary(
     if required and (archive_zip_path is None or archive_verification_report_path is None or handoff_zip_path is None or handoff_verification_report_path is None or command_center_zip_path is None or command_center_verification_report_path is None):
         return {"status": "failed", "message": "Unified Command Center Continuous Review requires current UCC, Archive, and Handoff evidence."}
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_continuous_review_verifier import verify_unified_command_center_continuous_review_package
+        from song_agent.domains.program.unified_command_center_continuous_review_verifier import verify_unified_command_center_continuous_review_package
 
         runtime_report = verify_unified_command_center_continuous_review_package(
             review_zip_path,
@@ -1992,7 +1992,7 @@ def _unified_command_center_drift_response_summary(
     if required and (source_review_zip_path is None or source_review_verification_report_path is None or recheck_review_zip_path is None or recheck_review_verification_report_path is None or change_request_binding_report_path is None):
         return {"status": "failed", "message": "Unified Command Center Drift Response requires source/recheck Continuous Review evidence and external Change Request proof."}
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_drift_response_verifier import verify_unified_command_center_drift_response_package
+        from song_agent.domains.program.unified_command_center_drift_response_verifier import verify_unified_command_center_drift_response_package
 
         runtime_report = verify_unified_command_center_drift_response_package(
             response_zip_path,
@@ -2064,7 +2064,7 @@ def _unified_command_center_evidence_review_summary(
     if require_accepted and (acceptance_zip_path is None or acceptance_verification_report_path is None):
         return {"status": "failed", "message": "Unified Command Center Evidence Review accepted response evidence is required."}
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_evidence_review_verifier import verify_unified_command_center_evidence_review_acceptance_package, verify_unified_command_center_evidence_review_package
+        from song_agent.domains.program.unified_command_center_evidence_review_verifier import verify_unified_command_center_evidence_review_acceptance_package, verify_unified_command_center_evidence_review_package
 
         runtime_report = verify_unified_command_center_evidence_review_package(
             review_zip_path,
@@ -2141,7 +2141,7 @@ def _unified_command_center_reviewer_decision_board_summary(
     if required and board_verification_report_path is None:
         return {"status": "failed", "message": "Unified Command Center Reviewer Decision Board requires a verification report."}
     try:
-        from song_agent.application.legacy_dependencies.unified_command_center_reviewer_decision_board_verifier import verify_unified_command_center_reviewer_decision_board_package
+        from song_agent.domains.program.unified_command_center_reviewer_decision_board_verifier import verify_unified_command_center_reviewer_decision_board_package
 
         runtime_report = verify_unified_command_center_reviewer_decision_board_package(
             board_zip_path,

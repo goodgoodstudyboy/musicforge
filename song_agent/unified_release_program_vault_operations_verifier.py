@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_release_program_vault_operations_verifier."""
 
-from song_agent.domains.program import unified_release_program_vault_operations_verifier as _implementation
+from song_agent.domains.program.unified_release_program_vault_operations_verifier import Any, PackageSpec, Path, REQUIRED_ENTRIES, UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_SCHEMA_VERSION, UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_VERIFICATION_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE, _binding_checks, _check, _current_generation, _current_vault_checks, _deep_vault_checks, _entry_sha256_for_current_vault_hash, _external_binding_checks, _finish, _has_blocking_failures, _history_checks, _integrity_ok, _is_safe_entry, _manifest_checks, _parse_jsonl, _raw_unsafe_entry_names, _read_json_entry, _redaction_check, _safe_check_key, _sha256_bytes, _sha256_path, _zip_has_no_trailing_data, annotations, archive_redaction_check, build_verification_report, json, re, read_json, sanitize_sensitive_text, stable_hash, tempfile, unified_release_program_vault_operations_verification_exit_code, verify_package_envelope, verify_unified_release_program_vault_operations_package, verify_unified_release_program_vault_package, write_json, write_unified_release_program_vault_operations_verification_report, zipfile
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'PackageSpec', 'Path', 'REQUIRED_ENTRIES', 'UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_SCHEMA_VERSION', 'UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_VERIFICATION_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE', '_binding_checks', '_check', '_current_generation', '_current_vault_checks', '_deep_vault_checks', '_entry_sha256_for_current_vault_hash', '_external_binding_checks', '_finish', '_has_blocking_failures', '_history_checks', '_integrity_ok', '_is_safe_entry', '_manifest_checks', '_parse_jsonl', '_raw_unsafe_entry_names', '_read_json_entry', '_redaction_check', '_safe_check_key', '_sha256_bytes', '_sha256_path', '_zip_has_no_trailing_data', 'annotations', 'archive_redaction_check', 'build_verification_report', 'json', 're', 'read_json', 'sanitize_sensitive_text', 'stable_hash', 'tempfile', 'unified_release_program_vault_operations_verification_exit_code', 'verify_package_envelope', 'verify_unified_release_program_vault_operations_package', 'verify_unified_release_program_vault_package', 'write_json', 'write_unified_release_program_vault_operations_verification_report', 'zipfile')

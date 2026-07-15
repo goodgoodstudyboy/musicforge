@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier."""
 
-from song_agent.domains.program import unified_command_center_release_train_lifecycle_verifier as _implementation
+from song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier import Any, Path, REQUIRED_ENTRIES, SENSITIVE_PATTERNS, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_VERIFICATION_PACKAGE_TYPE, _check, _document_binding_checks, _external_change_control_state, _external_train_state, _finish, _integrity_hash, _integrity_ok, _is_safe_entry, _ledger_chain_checks, _manifest_checks, _parse_jsonl, _read_json_entry, _redaction_check, _reset_proof_state, _semantic_checks, _sha256_bytes, _sha256_path, _train_history_from_zip, annotations, json, re, read_json, sanitize_sensitive_text, stable_hash, unified_command_center_release_train_lifecycle_verification_exit_code, verify_unified_command_center_release_train_change_control_package, verify_unified_command_center_release_train_lifecycle_package, verify_unified_command_center_release_train_package, write_json, write_unified_command_center_release_train_lifecycle_verification_report, zipfile
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'Path', 'REQUIRED_ENTRIES', 'SENSITIVE_PATTERNS', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION', 'UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_VERIFICATION_PACKAGE_TYPE', '_check', '_document_binding_checks', '_external_change_control_state', '_external_train_state', '_finish', '_integrity_hash', '_integrity_ok', '_is_safe_entry', '_ledger_chain_checks', '_manifest_checks', '_parse_jsonl', '_read_json_entry', '_redaction_check', '_reset_proof_state', '_semantic_checks', '_sha256_bytes', '_sha256_path', '_train_history_from_zip', 'annotations', 'json', 're', 'read_json', 'sanitize_sensitive_text', 'stable_hash', 'unified_command_center_release_train_lifecycle_verification_exit_code', 'verify_unified_command_center_release_train_change_control_package', 'verify_unified_command_center_release_train_lifecycle_package', 'verify_unified_command_center_release_train_package', 'write_json', 'write_unified_command_center_release_train_lifecycle_verification_report', 'zipfile')

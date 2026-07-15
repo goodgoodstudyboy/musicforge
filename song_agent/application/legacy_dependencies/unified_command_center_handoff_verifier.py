@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.program.unified_command_center_handoff_verifier."""
 
-import song_agent.unified_command_center_handoff_verifier as _implementation
+from song_agent.domains.program.unified_command_center_handoff_verifier import Any, Path, REQUIRED_ENTRIES, SENSITIVE_PATTERNS, UNIFIED_COMMAND_CENTER_ARCHIVE_VERIFICATION_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_HANDOFF_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_HANDOFF_SCHEMA_VERSION, UNIFIED_COMMAND_CENTER_HANDOFF_VERIFICATION_PACKAGE_TYPE, _check, _current_archive_checks, _finish, _integrity_hash, _integrity_ok, _is_safe_entry, _manifest_checks, _read_json_entry, _read_json_file, _redaction_check, _sha256_bytes, _sha256_path, annotations, json, re, sanitize_sensitive_text, stable_hash, unified_command_center_handoff_verification_exit_code, verify_unified_command_center_archive_package, verify_unified_command_center_handoff_package, write_json, write_unified_command_center_handoff_verification_report, zipfile
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'Path', 'REQUIRED_ENTRIES', 'SENSITIVE_PATTERNS', 'UNIFIED_COMMAND_CENTER_ARCHIVE_VERIFICATION_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_HANDOFF_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_HANDOFF_SCHEMA_VERSION', 'UNIFIED_COMMAND_CENTER_HANDOFF_VERIFICATION_PACKAGE_TYPE', '_check', '_current_archive_checks', '_finish', '_integrity_hash', '_integrity_ok', '_is_safe_entry', '_manifest_checks', '_read_json_entry', '_read_json_file', '_redaction_check', '_sha256_bytes', '_sha256_path', 'annotations', 'json', 're', 'sanitize_sensitive_text', 'stable_hash', 'unified_command_center_handoff_verification_exit_code', 'verify_unified_command_center_archive_package', 'verify_unified_command_center_handoff_package', 'write_json', 'write_unified_command_center_handoff_verification_report', 'zipfile')

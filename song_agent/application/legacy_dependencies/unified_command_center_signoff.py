@@ -1,7 +1,5 @@
-"""Single active import boundary for a pre-v13 compatibility module."""
+"""Application boundary for song_agent.domains.program.unified_command_center_signoff."""
 
-import song_agent.unified_command_center_signoff as _implementation
+from song_agent.domains.program.unified_command_center_signoff import Any, Path, UNIFIED_COMMAND_CENTER_ARCHIVE_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_ARCHIVE_SCHEMA_VERSION, UNIFIED_COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION, UnifiedCommandCenterNotFoundError, UnifiedCommandCenterSignoffError, UnifiedCommandCenterSignoffNotFoundError, UnifiedCommandCenterSignoffStateError, UnifiedCommandCenterSignoffStore, UnifiedCommandCenterStateError, UnifiedCommandCenterStore, _archive_readme, _bounded, _file_record, _gate_failed, _integrity_hash, _integrity_ok, _safe_id, _sha256_path, annotations, json, now_iso, read_json, sanitize_metadata, sanitize_sensitive_text, shutil, stable_hash, threading, verify_unified_command_center_archive_package, verify_unified_command_center_package, write_json, write_unified_command_center_archive_verification_report, zipfile
 
-globals().update({name: getattr(_implementation, name) for name in dir(_implementation) if not name.startswith('__')})
-
-__all__ = tuple(name for name in globals() if not name.startswith('__'))
+__all__ = ('Any', 'Path', 'UNIFIED_COMMAND_CENTER_ARCHIVE_PACKAGE_TYPE', 'UNIFIED_COMMAND_CENTER_ARCHIVE_SCHEMA_VERSION', 'UNIFIED_COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION', 'UnifiedCommandCenterNotFoundError', 'UnifiedCommandCenterSignoffError', 'UnifiedCommandCenterSignoffNotFoundError', 'UnifiedCommandCenterSignoffStateError', 'UnifiedCommandCenterSignoffStore', 'UnifiedCommandCenterStateError', 'UnifiedCommandCenterStore', '_archive_readme', '_bounded', '_file_record', '_gate_failed', '_integrity_hash', '_integrity_ok', '_safe_id', '_sha256_path', 'annotations', 'json', 'now_iso', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'shutil', 'stable_hash', 'threading', 'verify_unified_command_center_archive_package', 'verify_unified_command_center_package', 'write_json', 'write_unified_command_center_archive_verification_report', 'zipfile')

@@ -468,10 +468,16 @@ def _existing_module_path_or_none(root: Path, module: str) -> Path | None:
 
 def _facade_points_to(path: Path, target_module: str) -> bool:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    return any(
-        isinstance(node, ast.ImportFrom) and node.module == target_module
-        for node in tree.body
-    )
+    parent, _, leaf = target_module.rpartition(".")
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom):
+            if node.module == target_module:
+                return True
+            if node.module == parent and any(alias.name == leaf for alias in node.names):
+                return True
+        if isinstance(node, ast.Import) and any(alias.name == target_module for alias in node.names):
+            return True
+    return False
 
 
 def _ensure_packages(root: Path, directory: Path) -> None:

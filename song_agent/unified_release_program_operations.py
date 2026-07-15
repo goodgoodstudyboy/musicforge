@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_release_program_operations."""
 
-from song_agent.domains.program import unified_release_program_operations as _implementation
+from song_agent.domains.program.unified_release_program_operations import Any, ArchiveBuilder, ChangeRequestService, HistoryChain, Path, ResetAuthorization, ResetService, SignoffService, UNIFIED_RELEASE_PROGRAM_CONTINUOUS_REVIEW_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_LIFECYCLE_AUDIT_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_OPERATIONS_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION, UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE, UnifiedReleaseProgramOperationsError, UnifiedReleaseProgramOperationsNotFoundError, UnifiedReleaseProgramOperationsStateError, UnifiedReleaseProgramOperationsStore, UnifiedReleaseProgramStore, WorkspaceLock, _archive_source, _bounded, _check, _file_record, _gate_failed, _history_checks, _history_text, _integrity_hash, _integrity_ok, _operations_manifest, _runbook_summary, _safe_id, _sha256_path, _with_integrity, annotations, json, now_iso, program_json_facade, read_json, sanitize_metadata, sanitize_sensitive_text, shutil, stable_hash, verify_unified_release_program_operations_package, verify_unified_release_program_package, write_json, write_unified_release_program_operations_verification_report, zipfile
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'ArchiveBuilder', 'ChangeRequestService', 'HistoryChain', 'Path', 'ResetAuthorization', 'ResetService', 'SignoffService', 'UNIFIED_RELEASE_PROGRAM_CONTINUOUS_REVIEW_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_LIFECYCLE_AUDIT_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_OPERATIONS_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION', 'UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE', 'UnifiedReleaseProgramOperationsError', 'UnifiedReleaseProgramOperationsNotFoundError', 'UnifiedReleaseProgramOperationsStateError', 'UnifiedReleaseProgramOperationsStore', 'UnifiedReleaseProgramStore', 'WorkspaceLock', '_archive_source', '_bounded', '_check', '_file_record', '_gate_failed', '_history_checks', '_history_text', '_integrity_hash', '_integrity_ok', '_operations_manifest', '_runbook_summary', '_safe_id', '_sha256_path', '_with_integrity', 'annotations', 'json', 'now_iso', 'program_json_facade', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'shutil', 'stable_hash', 'verify_unified_release_program_operations_package', 'verify_unified_release_program_package', 'write_json', 'write_unified_release_program_operations_verification_report', 'zipfile')

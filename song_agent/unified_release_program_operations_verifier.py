@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_release_program_operations_verifier."""
 
-from song_agent.domains.program import unified_release_program_operations_verifier as _implementation
+from song_agent.domains.program.unified_release_program_operations_verifier import Any, PackageSpec, Path, REQUIRED_ENTRIES, UNIFIED_RELEASE_PROGRAM_CONTINUOUS_REVIEW_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_LIFECYCLE_AUDIT_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_OPERATIONS_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION, UNIFIED_RELEASE_PROGRAM_OPERATIONS_VERIFICATION_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE, _check, _document_binding_checks, _external_program_state, _finish, _hash_chain_checks, _history_checks, _integrity_hash, _integrity_ok, _is_safe_entry, _manifest_checks, _parse_jsonl, _program_history_from_zip, _read_json_entry, _redaction_check, _semantic_checks, _sha256_bytes, _sha256_path, annotations, archive_redaction_check, build_verification_report, json, read_json, sanitize_sensitive_text, stable_hash, unified_release_program_operations_verification_exit_code, verify_package_envelope, verify_unified_release_program_operations_package, verify_unified_release_program_package, write_json, write_unified_release_program_operations_verification_report, zipfile
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'PackageSpec', 'Path', 'REQUIRED_ENTRIES', 'UNIFIED_RELEASE_PROGRAM_CONTINUOUS_REVIEW_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_LIFECYCLE_AUDIT_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_OPERATIONS_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION', 'UNIFIED_RELEASE_PROGRAM_OPERATIONS_VERIFICATION_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE', '_check', '_document_binding_checks', '_external_program_state', '_finish', '_hash_chain_checks', '_history_checks', '_integrity_hash', '_integrity_ok', '_is_safe_entry', '_manifest_checks', '_parse_jsonl', '_program_history_from_zip', '_read_json_entry', '_redaction_check', '_semantic_checks', '_sha256_bytes', '_sha256_path', 'annotations', 'archive_redaction_check', 'build_verification_report', 'json', 'read_json', 'sanitize_sensitive_text', 'stable_hash', 'unified_release_program_operations_verification_exit_code', 'verify_package_envelope', 'verify_unified_release_program_operations_package', 'verify_unified_release_program_package', 'write_json', 'write_unified_release_program_operations_verification_report', 'zipfile')

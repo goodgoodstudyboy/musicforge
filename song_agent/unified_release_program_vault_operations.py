@@ -1,12 +1,5 @@
-"""Compatibility import for the canonical Program implementation."""
+"""Compatibility facade for song_agent.domains.program.unified_release_program_vault_operations."""
 
-from song_agent.domains.program import unified_release_program_vault_operations as _implementation
+from song_agent.domains.program.unified_release_program_vault_operations import Any, ArchiveBuilder, HistoryChain, Path, SignoffService, UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_SCHEMA_VERSION, UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE, UnifiedReleaseProgramStore, UnifiedReleaseProgramVaultOperationsError, UnifiedReleaseProgramVaultOperationsNotFoundError, UnifiedReleaseProgramVaultOperationsStateError, UnifiedReleaseProgramVaultOperationsStore, UnifiedReleaseProgramVaultStore, VAULT_OPERATIONS_BLOCKED_METADATA_KEYS, WorkspaceLock, _archive_manifest_document, _bounded, _file_record, _gate_failed, _integrity_hash, _integrity_ok, _json_line, _read_history, _read_optional_json, _recipient_guide, _safe_id, _sanitize_payload, _sha256_path, _signoff_binding_document, _with_integrity, annotations, now_iso, program_json_facade, read_json, sanitize_metadata, sanitize_sensitive_text, shutil, stable_hash, verify_unified_release_program_vault_operations_package, verify_unified_release_program_vault_package, write_json, write_unified_release_program_vault_operations_verification_report
 
-globals().update(
-    {
-        name: getattr(_implementation, name)
-        for name in dir(_implementation)
-        if not name.startswith("__")
-    }
-)
-__all__ = tuple(name for name in globals() if not name.startswith("__"))
+__all__ = ('Any', 'ArchiveBuilder', 'HistoryChain', 'Path', 'SignoffService', 'UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_PACKAGE_TYPE', 'UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_SCHEMA_VERSION', 'UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE', 'UnifiedReleaseProgramStore', 'UnifiedReleaseProgramVaultOperationsError', 'UnifiedReleaseProgramVaultOperationsNotFoundError', 'UnifiedReleaseProgramVaultOperationsStateError', 'UnifiedReleaseProgramVaultOperationsStore', 'UnifiedReleaseProgramVaultStore', 'VAULT_OPERATIONS_BLOCKED_METADATA_KEYS', 'WorkspaceLock', '_archive_manifest_document', '_bounded', '_file_record', '_gate_failed', '_integrity_hash', '_integrity_ok', '_json_line', '_read_history', '_read_optional_json', '_recipient_guide', '_safe_id', '_sanitize_payload', '_sha256_path', '_signoff_binding_document', '_with_integrity', 'annotations', 'now_iso', 'program_json_facade', 'read_json', 'sanitize_metadata', 'sanitize_sensitive_text', 'shutil', 'stable_hash', 'verify_unified_release_program_vault_operations_package', 'verify_unified_release_program_vault_package', 'write_json', 'write_unified_release_program_vault_operations_verification_report')
