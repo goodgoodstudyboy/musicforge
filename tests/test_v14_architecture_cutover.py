@@ -22,7 +22,9 @@ def test_v14_phase_architecture_ratchet_passes_without_hiding_debt() -> None:
 
     assert report["status"] == "passed", report["blockers"]
     assert report["metrics"]["active_to_compatibility_import_count"] == 224
-    assert report["metrics"]["anonymous_part_file_count"] == 147
+    assert report["metrics"]["anonymous_part_file_count"] == 0
+    assert report["metrics"]["interface_wildcard_import_count"] == 0
+    assert report["metrics"]["interface_store_reference_count"] == 0
     assert report["metrics"]["new_flat_module_count"] == 0
 
 

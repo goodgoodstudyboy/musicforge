@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
-from song_agent.interfaces.api.runtime import *
+import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 
 class StudioAcceptance_ItemsDispatch:
     def _dispatch_studio_acceptance_items(self, method, path, parsed) -> bool:
-        fix_plan_review_route = _match_acceptance_fix_plan_review_route(path)
+        fix_plan_review_route = _interfaces_api_runtime._match_acceptance_fix_plan_review_route(path)
         if fix_plan_review_route is not None:
             self._handle_acceptance_fix_plan_review_route(method, fix_plan_review_route)
             return True
-        fix_plan_route = _match_acceptance_fix_plan_route(path)
+        fix_plan_route = _interfaces_api_runtime._match_acceptance_fix_plan_route(path)
         if fix_plan_route is not None:
             self._handle_acceptance_fix_plan_route(method, fix_plan_route)
             return True
@@ -31,15 +31,15 @@ class StudioAcceptance_ItemsDispatch:
         if path == '/api/acceptance/kb/recommend':
             self._handle_acceptance_kb_recommend(method)
             return True
-        kb_entry_route = _match_acceptance_kb_entry_route(path)
+        kb_entry_route = _interfaces_api_runtime._match_acceptance_kb_entry_route(path)
         if kb_entry_route is not None:
             self._handle_acceptance_kb_entry_route(method, kb_entry_route)
             return True
-        kb_report_id = _match_acceptance_kb_report_route(path)
+        kb_report_id = _interfaces_api_runtime._match_acceptance_kb_report_route(path)
         if kb_report_id is not None:
             self._handle_acceptance_kb_report(method, kb_report_id)
             return True
-        fix_sprint_route = _match_acceptance_fix_sprint_route(path)
+        fix_sprint_route = _interfaces_api_runtime._match_acceptance_fix_sprint_route(path)
         if fix_sprint_route is not None:
             self._handle_acceptance_fix_sprint_route(method, fix_sprint_route)
             return True
@@ -49,12 +49,12 @@ class StudioAcceptance_ItemsDispatch:
         if path == '/api/acceptance/analytics/refresh':
             self._handle_acceptance_analytics_refresh(method, parsed.query)
             return True
-        analytics_recommendation_route = _match_acceptance_analytics_recommendation_route(path)
+        analytics_recommendation_route = _interfaces_api_runtime._match_acceptance_analytics_recommendation_route(path)
         if analytics_recommendation_route is not None:
             report_id, recommendation_id = analytics_recommendation_route
             self._handle_acceptance_analytics_recommendation(method, report_id, recommendation_id)
             return True
-        analytics_report_route = _match_acceptance_analytics_report_route(path)
+        analytics_report_route = _interfaces_api_runtime._match_acceptance_analytics_report_route(path)
         if analytics_report_route is not None:
             self._handle_acceptance_analytics_report(method, analytics_report_route)
             return True

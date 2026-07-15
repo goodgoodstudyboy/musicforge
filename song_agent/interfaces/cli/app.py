@@ -13,6 +13,7 @@ from .commands import program as program_commands
 from .commands import program_context as program_context_commands
 from .commands import maintenance as maintenance_commands
 from .commands import release_check as release_check_commands
+import song_agent.interfaces.cli.composition as _composition
 from .registry import CommandRegistry
 
 

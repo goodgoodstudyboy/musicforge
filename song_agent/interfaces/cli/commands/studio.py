@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.interfaces.cli.bindings import BINDINGS as CLI_BINDINGS
 import argparse
 import json
 import sys
@@ -20,10 +22,8 @@ from song_agent.application.legacy_dependencies.schemas__song import SongRequest
 from song_agent.application.interface_persistence import write_interface_document
 
 from song_agent.interfaces.cli.registry import CommandSpec
-from song_agent.interfaces.cli.symbols import resolve as _resolve_symbol
-
 def build_serve_parser(*args: Any, **kwargs: Any) -> Any:
-    return _resolve_symbol('creation', 'build_serve_parser')(*args, **kwargs)
+    return CLI_BINDINGS.creation.build_serve_parser(*args, **kwargs)
 
 def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")

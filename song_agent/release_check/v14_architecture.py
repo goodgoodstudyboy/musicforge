@@ -69,6 +69,10 @@ def run_v14_architecture_cutover_smoke(root: Path) -> tuple[bool, str]:
 
 def _v14_metrics(root: Path, snapshot: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     ownership = {str(row["module"]): row for row in snapshot["modules"]}
+    composition_roots = tuple(
+        str(path).replace("\\", "/").rstrip("/")
+        for path in policy.get("composition_roots") or []
+    )
     edge_contexts = Counter(
         str(ownership.get(str(row["imported"]), {}).get("context") or "unknown")
         for row in snapshot["active_to_compatibility_imports"]
@@ -92,7 +96,11 @@ def _v14_metrics(root: Path, snapshot: dict[str, Any], policy: dict[str, Any]) -
                 if any(alias.name == "*" for alias in node.names):
                     wildcard_imports.append({"module": module, "line": node.lineno, "target": node.module or ""})
                 for alias in node.names:
-                    if alias.name.endswith("Store"):
+                    in_composition_root = any(
+                        relative == composition_root or relative.startswith(composition_root + "/")
+                        for composition_root in composition_roots
+                    )
+                    if alias.name.endswith("Store") and not in_composition_root:
                         store_references.append(
                             {"module": module, "path": relative, "line": node.lineno, "name": alias.name}
                         )

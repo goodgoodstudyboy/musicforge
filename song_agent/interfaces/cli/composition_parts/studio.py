@@ -1,0 +1,9 @@
+from __future__ import annotations
+
+from song_agent.interfaces.cli.bindings import BINDINGS
+
+from song_agent.interfaces.cli.commands.studio import _writable_status as _studio_private_writable_status
+from song_agent.interfaces.cli.commands.studio import build_verify_human_review_pack_parser as _studio_build_verify_human_review_pack_parser
+
+BINDINGS.studio._writable_status = _studio_private_writable_status
+BINDINGS.studio.build_verify_human_review_pack_parser = _studio_build_verify_human_review_pack_parser

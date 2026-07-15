@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from .batch_runner_parts.part_001 import BatchRunnerPart001
+from .batch_runner_parts.recover_existing_batches import BatchRunnerRecoverExistingBatches
 
-from .batch_runner_parts.part_002 import BatchRunnerPart002
+from .batch_runner_parts.render_stems import BatchRunnerRenderStems
 
-from .batch_runner_parts.part_003 import BatchRunnerPart003
+from .batch_runner_parts.sync_running_items import BatchRunnerSyncRunningItems
 
-from .batch_runner_parts.part_004 import BatchRunnerPart004
+from .batch_runner_parts.finish_batch import BatchRunnerFinishBatch
 
-class BatchRunner(BatchRunnerPart001, BatchRunnerPart002, BatchRunnerPart003, BatchRunnerPart004):
+class BatchRunner(BatchRunnerRecoverExistingBatches, BatchRunnerRenderStems, BatchRunnerSyncRunningItems, BatchRunnerFinishBatch):
     pass
 
 __all__ = ['BatchRunner']

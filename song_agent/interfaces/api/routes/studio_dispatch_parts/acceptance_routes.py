@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
-from song_agent.interfaces.api.runtime import *
+import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 
 class StudioAcceptance_RoutesDispatch:
     def _dispatch_studio_acceptance_routes(self, method, path, parsed) -> bool:
-        planning_ruleset_route = _match_planning_ruleset_route(path)
+        planning_ruleset_route = _interfaces_api_runtime._match_planning_ruleset_route(path)
         if planning_ruleset_route is not None:
             self._handle_planning_ruleset_route(method, planning_ruleset_route)
             return True
         if path == '/api/acceptance/planning-simulations':
             self._handle_planning_simulations_root(method, parsed.query)
             return True
-        planning_simulation_route = _match_planning_simulation_route(path)
+        planning_simulation_route = _interfaces_api_runtime._match_planning_simulation_route(path)
         if planning_simulation_route is not None:
             self._handle_planning_simulation_route(method, planning_simulation_route)
             return True
@@ -34,11 +34,11 @@ class StudioAcceptance_RoutesDispatch:
         if path == '/api/acceptance/planning-rule-governance/events':
             self._handle_planning_rule_governance_events(method, parsed.query)
             return True
-        governance_version_route = _match_planning_rule_governance_version_route(path)
+        governance_version_route = _interfaces_api_runtime._match_planning_rule_governance_version_route(path)
         if governance_version_route is not None:
             self._handle_planning_rule_governance_version_route(method, governance_version_route)
             return True
-        governance_promotion_route = _match_planning_rule_governance_promotion_route(path)
+        governance_promotion_route = _interfaces_api_runtime._match_planning_rule_governance_promotion_route(path)
         if governance_promotion_route is not None:
             self._handle_planning_rule_governance_promotion_route(method, governance_promotion_route)
             return True
@@ -48,7 +48,7 @@ class StudioAcceptance_RoutesDispatch:
         if path == '/api/acceptance/planning-rule-impact/latest':
             self._handle_planning_rule_impact_latest(method, parsed.query)
             return True
-        impact_report_route = _match_planning_rule_impact_report_route(path)
+        impact_report_route = _interfaces_api_runtime._match_planning_rule_impact_report_route(path)
         if impact_report_route is not None:
             self._handle_planning_rule_impact_report_route(method, impact_report_route)
             return True

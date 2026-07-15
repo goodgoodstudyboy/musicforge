@@ -2,41 +2,41 @@ from __future__ import annotations
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
-from song_agent.interfaces.api.runtime import *
+import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-from .quality_parts.part_001 import QualityRoutesPart001
+from .quality_parts.acceptance_suites import QualityRoutesAcceptanceSuites
 
-from .quality_parts.part_002 import QualityRoutesPart002
+from .quality_parts.release_audio_revisions import QualityRoutesReleaseAudioRevisions
 
-from .quality_parts.part_003 import QualityRoutesPart003
+from .quality_parts.release_encoded_audio import QualityRoutesReleaseEncodedAudio
 
-from .quality_parts.part_004 import QualityRoutesPart004
+from .quality_parts.audio_fix_sprint import QualityRoutesAudioFixSprint
 
-from .quality_parts.part_005 import QualityRoutesPart005
+from .quality_parts.release_audio_campaign_plan import QualityRoutesReleaseAudioCampaignPlan
 
-from .quality_parts.part_006 import QualityRoutesPart006
+from .quality_parts.release_audio_timeline import QualityRoutesReleaseAudioTimeline
 
-from .quality_parts.part_007 import QualityRoutesPart007
+from .quality_parts.release_audio_command_center import QualityRoutesReleaseAudioCommandCenter
 
-from .quality_parts.part_008 import QualityRoutesPart008
+from .quality_parts.audio_quality_actions import QualityRoutesAudioQualityActions
 
-from .quality_parts.part_009 import QualityRoutesPart009
+from .quality_parts.release_format_decisions import QualityRoutesReleaseFormatDecisions
 
-from .quality_parts.part_010 import QualityRoutesPart010
+from .quality_parts.release_encoded_audio_acceptance_export_gate import QualityRoutesReleaseEncodedAudioAcceptanceExportGate
 
-from .quality_parts.part_011 import QualityRoutesPart011
+from .quality_parts.release_acceptance_gate import QualityRoutesReleaseAcceptanceGate
 
-from .quality_parts.part_012 import QualityRoutesPart012
+from .quality_parts.release_acceptance_fix_sprint_gate import QualityRoutesReleaseAcceptanceFixSprintGate
 
-from .quality_parts.part_013 import QualityRoutesPart013
+from .quality_parts.acceptance import QualityRoutesAcceptance
 
-from .quality_parts.part_014 import QualityRoutesPart014
+from .quality_parts.acceptance_analytics_refresh import QualityRoutesAcceptanceAnalyticsRefresh
 
-from .quality_parts.part_015 import QualityRoutesPart015
+from .quality_parts.planning_rule_governance_promotion import QualityRoutesPlanningRuleGovernancePromotion
 
-from .quality_parts.part_016 import QualityRoutesPart016
+from .quality_parts.acceptance_fix_sprint import QualityRoutesAcceptanceFixSprint
 
-from .quality_parts.part_017 import QualityRoutesPart017
+from .quality_parts.render_editor_preview_audio import QualityRoutesRenderEditorPreviewAudio
 
-class QualityRoutes(QualityRoutesPart001, QualityRoutesPart002, QualityRoutesPart003, QualityRoutesPart004, QualityRoutesPart005, QualityRoutesPart006, QualityRoutesPart007, QualityRoutesPart008, QualityRoutesPart009, QualityRoutesPart010, QualityRoutesPart011, QualityRoutesPart012, QualityRoutesPart013, QualityRoutesPart014, QualityRoutesPart015, QualityRoutesPart016, QualityRoutesPart017):
+class QualityRoutes(QualityRoutesAcceptanceSuites, QualityRoutesReleaseAudioRevisions, QualityRoutesReleaseEncodedAudio, QualityRoutesAudioFixSprint, QualityRoutesReleaseAudioCampaignPlan, QualityRoutesReleaseAudioTimeline, QualityRoutesReleaseAudioCommandCenter, QualityRoutesAudioQualityActions, QualityRoutesReleaseFormatDecisions, QualityRoutesReleaseEncodedAudioAcceptanceExportGate, QualityRoutesReleaseAcceptanceGate, QualityRoutesReleaseAcceptanceFixSprintGate, QualityRoutesAcceptance, QualityRoutesAcceptanceAnalyticsRefresh, QualityRoutesPlanningRuleGovernancePromotion, QualityRoutesAcceptanceFixSprint, QualityRoutesRenderEditorPreviewAudio):
     pass

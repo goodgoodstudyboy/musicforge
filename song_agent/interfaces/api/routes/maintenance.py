@@ -1,21 +1,21 @@
 from __future__ import annotations
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
-from song_agent.interfaces.api.runtime import *
+import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class MaintenanceRoutes:
     def _handle_ga_route(self, method: str) -> None:
         if method != "GET":
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         from song_agent.application.legacy_dependencies.ga_readiness import build_ga_readiness_report
 
-        report = build_ga_readiness_report(repo_root=Path.cwd())
+        report = build_ga_readiness_report(repo_root=_interfaces_api_runtime.Path.cwd())
         self._send_json({"ok": report.get("status") != "blocked", "report": report, "summary": report.get("summary", {})})
 
     def _handle_ga_check_route(self, method: str) -> None:
         if method != "POST":
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         from song_agent.application.legacy_dependencies.ga_readiness import build_ga_readiness_report, write_ga_readiness_report
         from song_agent.release_check.runner import run_release_check_matrix
@@ -33,10 +33,10 @@ class MaintenanceRoutes:
                     manifest=payload.get("evidence_manifest"),
                 )
             except Exception as exc:
-                self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
+                self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
                 return
         report = build_ga_readiness_report(
-            repo_root=Path.cwd(),
+            repo_root=_interfaces_api_runtime.Path.cwd(),
             policy=policy_id,
             evidence_manifest_path=evidence_manifest,
             strict=bool(payload.get("strict", False)),
@@ -60,13 +60,13 @@ class MaintenanceRoutes:
 
     def _handle_docs_index_route(self, method: str) -> None:
         if method != "GET":
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         from song_agent.application.legacy_dependencies.ga_readiness import REQUIRED_DOCS
 
         docs = []
         for rel in REQUIRED_DOCS:
-            path = Path(rel)
+            path = _interfaces_api_runtime.Path(rel)
             docs.append(
                 {
                     "path": rel,
@@ -77,12 +77,12 @@ class MaintenanceRoutes:
         self._send_json({"ok": True, "docs": docs, "summary": {"required_count": len(REQUIRED_DOCS), "present_count": sum(1 for item in docs if item["exists"])}})
 
     def _handle_maintenance_route(self, method: str, path: str) -> None:
-        from song_agent.application.legacy_dependencies.lts_maintenance import LTSMaintenanceStore
+        from song_agent.application.legacy_dependencies import lts_maintenance
 
-        store = LTSMaintenanceStore(repo_root=Path.cwd())
+        store = lts_maintenance.LTSMaintenanceStore(repo_root=_interfaces_api_runtime.Path.cwd())
         if path == "/api/maintenance/status":
             if method != "GET":
-                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
             status = store.status()
             self._send_json({"ok": status.get("status") != "blocked", "status": status, "summary": {"status": status.get("status"), "backup_count": status.get("backups", {}).get("count")}})
@@ -96,14 +96,14 @@ class MaintenanceRoutes:
                 payload = self._optional_json_body()
                 result = store.backups.create_backup(mode=str(payload.get("mode") or "workspace"))
                 ok = result.get("verification", {}).get("status") == "passed"
-                self._send_json({"ok": ok, **result}, status=HTTPStatus.CREATED if ok else HTTPStatus.CONFLICT)
+                self._send_json({"ok": ok, **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED if ok else _interfaces_api_runtime.HTTPStatus.CONFLICT)
                 return
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         parts = [part for part in path.split("/") if part]
         if len(parts) >= 3 and parts[0] == "api" and parts[1] == "maintenance" and parts[2] == "backups":
             if len(parts) < 4:
-                self._send_error(HTTPStatus.NOT_FOUND, "Backup id required.")
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Backup id required.")
                 return
             backup_id = parts[3]
             tail = "/".join(parts[4:])
@@ -119,14 +119,14 @@ class MaintenanceRoutes:
                 return
             if tail == "restore-plan" and method == "POST":
                 payload = self._read_json_body()
-                plan = store.backups.restore_plan(backup_id=backup_id, target=Path(str(payload.get("target") or "")))
+                plan = store.backups.restore_plan(backup_id=backup_id, target=_interfaces_api_runtime.Path(str(payload.get("target") or "")))
                 self._send_json({"ok": plan.get("status") == "ready", "restore_plan": plan})
                 return
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         if path == "/api/maintenance/upgrade/preflight":
             if method != "POST":
-                self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
             payload = self._optional_json_body()
             report = store.run_upgrade_preflight(
@@ -134,7 +134,7 @@ class MaintenanceRoutes:
                 require_verified_backup=bool(payload.get("require_verified_backup", False)),
                 allow_dirty=bool(payload.get("allow_dirty", False)),
             )
-            self._send_json({"ok": report.get("status") != "blocked", "preflight": report, "summary": report.get("summary", {})}, status=HTTPStatus.CREATED)
+            self._send_json({"ok": report.get("status") != "blocked", "preflight": report, "summary": report.get("summary", {})}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
             return
         if path == "/api/maintenance/migrations":
             if method == "GET":
@@ -143,9 +143,9 @@ class MaintenanceRoutes:
             if method == "POST":
                 payload = self._optional_json_body()
                 result = store.run_migrations(require_backup=bool(payload.get("require_backup", False)))
-                self._send_json({"ok": True, **result}, status=HTTPStatus.CREATED)
+                self._send_json({"ok": True, **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         if path == "/api/maintenance/checks":
             if method == "GET":
@@ -155,12 +155,12 @@ class MaintenanceRoutes:
             if method == "POST":
                 payload = self._optional_json_body()
                 report = store.run_check(profile=str(payload.get("profile") or "daily"))
-                self._send_json({"ok": report.get("status") == "passed", "report": report, "summary": {"status": report.get("status")}}, status=HTTPStatus.CREATED)
+                self._send_json({"ok": report.get("status") == "passed", "report": report, "summary": {"status": report.get("status")}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return
-            self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
         if len(parts) == 4 and parts[:3] == ["api", "maintenance", "checks"] and method == "GET":
-            report = read_json(store.check_runs_dir / parts[3] / "maintenance-check-report.json")
+            report = _interfaces_api_runtime.read_json(store.check_runs_dir / parts[3] / "maintenance-check-report.json")
             self._send_json({"ok": True, "report": report})
             return
-        self._send_error(HTTPStatus.NOT_FOUND, "Maintenance route not found.")
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Maintenance route not found.")

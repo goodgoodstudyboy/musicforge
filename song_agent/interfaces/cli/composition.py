@@ -1,0 +1,10 @@
+from __future__ import annotations
+
+import song_agent.interfaces.cli.composition_parts.creation as _creation_composition
+import song_agent.interfaces.cli.composition_parts.delivery as _delivery_composition
+import song_agent.interfaces.cli.composition_parts.maintenance as _maintenance_composition
+import song_agent.interfaces.cli.composition_parts.program as _program_composition
+import song_agent.interfaces.cli.composition_parts.quality as _quality_composition
+import song_agent.interfaces.cli.composition_parts.release_check as _release_check_composition
+import song_agent.interfaces.cli.composition_parts.studio as _studio_composition
+import song_agent.interfaces.cli.composition_parts.trust as _trust_composition
