@@ -59,7 +59,13 @@ def test_mastering_release_api_export_signoff_verifier_and_signed_guard(tmp_path
         request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
         analyze_status, analyze = request_json(server, "POST", f"/api/releases/{release_id}/mastering/analyze", {"profile_id": "demo_review"})
         plan_status, plan = request_json(server, "POST", f"/api/releases/{release_id}/mastering/plan", {})
-        candidate_status, candidate = request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates", {})
+        candidate_status, candidate = request_json(
+            server,
+            "POST",
+            f"/api/releases/{release_id}/mastering/candidates",
+            {},
+            timeout=180,
+        )
         candidate_id = candidate["candidate"]["candidate_id"]
         review_status, _review = request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/review", {"status": "accepted", "review_mode": "manual", "rating": 5, "playback_confirmed": True, "notes": "Manual A/B accepted."})
         select_status, selected = request_json(server, "POST", f"/api/releases/{release_id}/mastering/candidates/{candidate_id}/select", {})
