@@ -19,6 +19,9 @@ This file contains the current v13 major line. Earlier history is preserved in
   compatibility edges from 225 to 224 without breaking `song_agent.state`.
 - Hardened Program atomic writes and pytest temp ownership for deep Windows
   paths, concurrent xdist runs, timeout recovery, and PID reuse.
+- Removed absolute ZIP paths from public verification summaries, hardened
+  POSIX path redaction, and stabilized hosted legacy smoke requests under
+  parallel Linux CI load.
 
 ## v13.7.0 - 2026-07-15
 

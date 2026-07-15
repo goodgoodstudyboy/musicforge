@@ -89,6 +89,7 @@ def test_release_audio_timeline_lifecycle_ga_and_verifier(tmp_path: Path, monkey
     assert refreshed["status"] == "passed"
     assert signed["signoff"]["status"] == "signed"
     assert verification["status"] == "passed", verification.get("blockers")
+    assert verification["summary"]["zip_path"] == "release-audio-timeline.zip"
     assert ga_report["summary"]["release_audio_timeline_status"] == "passed"
     assert ga_verification["status"] != "failed", ga_verification.get("blockers")
     assert _verification_check_status(ga_verification, "ga_readiness_release_audio_timeline_ga_binding") == "passed"
@@ -198,7 +199,6 @@ def test_release_audio_timeline_blocks_tampered_current_certification_zip(tmp_pa
         _append_unexpected_file_to_zip(store.certification_store.zip_path(release_id))
 
         refreshed = store.refresh_timeline(release_id)
-        timeline_id = refreshed["timeline_id"]
         gate = store.gate(release_id, required=True, require_signed=False, require_current_certification=True)
     finally:
         stop_test_server(server)

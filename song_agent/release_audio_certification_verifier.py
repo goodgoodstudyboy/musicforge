@@ -47,7 +47,7 @@ def verify_release_audio_certification_package(
     zip_path = Path(zip_path)
     checks: list[dict[str, Any]] = []
     summary: dict[str, Any] = {
-        "zip_path": str(zip_path),
+        "zip_path": zip_path.name,
         "zip_sha256": None,
         "zip_size_bytes": 0,
         "manifest_hash": None,

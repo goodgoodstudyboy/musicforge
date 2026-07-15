@@ -26044,7 +26044,7 @@ def _release_http_bytes(server: Any, method: str, path: str, payload: dict[str, 
 
 
 def _release_http_request(server: Any, method: str, path: str, *, payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any] | bytes]:
-    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=15)
+    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=60)
     body = None
     headers = {}
     if payload is not None:

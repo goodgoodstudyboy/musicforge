@@ -33,7 +33,7 @@ def verify_audio_campaign_remediation_package(
 ) -> dict[str, Any]:
     zip_path = Path(zip_path)
     checks: list[dict[str, Any]] = []
-    summary = {"zip_path": str(zip_path), "zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None, "release_id": None, "campaign_id": None, "issue_count": 0}
+    summary = {"zip_path": zip_path.name, "zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None, "release_id": None, "campaign_id": None, "issue_count": 0}
     if not zip_path.exists():
         return _finish(checks, summary, _check("audio_campaign_remediation_zip_exists", False, "Audio Campaign remediation ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)

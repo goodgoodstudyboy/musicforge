@@ -84,6 +84,7 @@ def test_release_audio_certification_lifecycle_ga_and_verifier(tmp_path: Path, m
     assert report["campaign_id"] == campaign_id
     assert signoff["signoff"]["status"] == "signed"
     assert verification["status"] == "passed", verification.get("blockers")
+    assert verification["summary"]["zip_path"] == "release-audio-certification.zip"
     assert ga_report["summary"]["release_audio_certification_status"] == "passed"
     assert ga_verification["status"] != "failed", ga_verification.get("blockers")
     assert _verification_check_status(ga_verification, "ga_readiness_release_audio_certification_ga_binding") == "passed"

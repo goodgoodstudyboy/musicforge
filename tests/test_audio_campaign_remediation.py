@@ -85,6 +85,7 @@ def test_audio_campaign_remediation_lifecycle_and_verifier(tmp_path: Path, monke
     assert closeout["status"] == "passed"
     assert signed["signoff"]["status"] == "signed"
     assert verification["status"] == "passed", verification["blockers"]
+    assert verification["summary"]["zip_path"] == "audio-campaign-remediation.zip"
 
 
 def test_audio_campaign_remediation_blocks_stale_final_export(tmp_path: Path, monkeypatch) -> None:
