@@ -22,6 +22,8 @@ This file contains the current v13 major line. Earlier history is preserved in
 - Removed absolute ZIP paths from public verification summaries, hardened
   POSIX path redaction, and stabilized hosted legacy smoke requests under
   parallel Linux CI load.
+- Stabilized the Windows authentication route matrix against transient hosted
+  runner connection aborts without reducing protected-route coverage.
 
 ## v13.7.0 - 2026-07-15
 

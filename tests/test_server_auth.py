@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 from http.client import HTTPConnection
 
 from song_agent.auth import AuthConfig
@@ -23,7 +24,6 @@ def stop_test_server(server):
 
 
 def request_json(server, method, path, payload=None, token=None):
-    connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=10)
     body = None
     headers = {}
     if payload is not None:
@@ -32,14 +32,25 @@ def request_json(server, method, path, payload=None, token=None):
         headers["Content-Length"] = str(len(body))
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
-    connection.request(method, path, body=body, headers=headers)
-    response = connection.getresponse()
-    data = response.read()
-    auth_header = response.getheader("WWW-Authenticate")
-    connection.close()
-    if response.getheader("Content-Type", "").startswith("application/json"):
-        return response.status, json.loads(data.decode("utf-8")), auth_header
-    return response.status, data, auth_header
+
+    for attempt in range(3):
+        connection = HTTPConnection(server.server_address[0], server.server_address[1], timeout=10)
+        try:
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            data = response.read()
+            auth_header = response.getheader("WWW-Authenticate")
+            if response.getheader("Content-Type", "").startswith("application/json"):
+                return response.status, json.loads(data.decode("utf-8")), auth_header
+            return response.status, data, auth_header
+        except (ConnectionError, TimeoutError):
+            if attempt == 2:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+        finally:
+            connection.close()
+
+    raise AssertionError("HTTP request retry loop exited unexpectedly")
 
 
 def auth_server():
