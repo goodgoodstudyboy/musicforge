@@ -5197,8 +5197,8 @@
     },
     "song_agent/platform/persistence/v14_migration.py": {
       "summary": {
-        "covered_lines": 188,
-        "missing_lines": 27,
+        "covered_lines": 189,
+        "missing_lines": 26,
         "num_statements": 215
       }
     },
@@ -5260,9 +5260,9 @@
     },
     "song_agent/platform/verification/hashing.py": {
       "summary": {
-        "covered_lines": 31,
-        "missing_lines": 6,
-        "num_statements": 37
+        "covered_lines": 35,
+        "missing_lines": 12,
+        "num_statements": 47
       }
     },
     "song_agent/platform/verification/history.py": {
@@ -5883,16 +5883,16 @@
     },
     "song_agent/release_check/v14_certification.py": {
       "summary": {
-        "covered_lines": 104,
-        "missing_lines": 31,
+        "covered_lines": 112,
+        "missing_lines": 23,
         "num_statements": 135
       }
     },
     "song_agent/release_check/v14_compatibility.py": {
       "summary": {
-        "covered_lines": 120,
-        "missing_lines": 42,
-        "num_statements": 162
+        "covered_lines": 146,
+        "missing_lines": 18,
+        "num_statements": 164
       }
     },
     "song_agent/release_check/v14_contracts.py": {
@@ -5904,16 +5904,16 @@
     },
     "song_agent/release_check/v14_quality.py": {
       "summary": {
-        "covered_lines": 178,
-        "missing_lines": 55,
-        "num_statements": 233
+        "covered_lines": 205,
+        "missing_lines": 42,
+        "num_statements": 247
       }
     },
     "song_agent/release_check/v14_reviewer.py": {
       "summary": {
-        "covered_lines": 36,
-        "missing_lines": 129,
-        "num_statements": 165
+        "covered_lines": 141,
+        "missing_lines": 27,
+        "num_statements": 168
       }
     },
     "song_agent/release_check_architecture.py": {
@@ -6982,6 +6982,6 @@
     }
   },
   "package_type": "musicforge_v14_coverage_evidence",
-  "schema_version": 1,
-  "source_report_sha256": "121420e4acb1b58bba5e841f53f6367bac34dd159be9e00ff7dc0b3e768ba940"
+  "schema_version": 2,
+  "source_report_semantic_hash": "c3a1db8a37a1fde13136e41e5174295e46a02cd7d362335b656725a4e49a9cf6"
 }

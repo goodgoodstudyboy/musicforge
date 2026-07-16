@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from song_agent import __version__
 from song_agent.architecture_guardrails import build_architecture_snapshot
 from song_agent.capabilities import capability_registry
 from song_agent.platform.verification.hashing import integrity_hash, integrity_ok
@@ -116,7 +117,7 @@ def write_v14_reviewer_manifest(
     manifest = {
         "schema_version": 1,
         "package_type": "musicforge_v14_reviewer_package_manifest",
-        "release_version": "14.0.0",
+        "release_version": __version__,
         "final_sha": final_sha,
         "source_tree_hash": source_tree_hash,
         "files": rows,
@@ -143,6 +144,8 @@ def verify_v14_reviewer_package(
     manifest = _read_json(package / MANIFEST_NAME)
     if manifest.get("package_type") != "musicforge_v14_reviewer_package_manifest":
         blockers.append("v14_reviewer_manifest_type")
+    if manifest.get("release_version") != __version__:
+        blockers.append("v14_reviewer_release_version")
     if not integrity_ok(manifest):
         blockers.append("v14_reviewer_manifest_integrity")
     rows = manifest.get("files") or []

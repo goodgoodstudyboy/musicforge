@@ -4,6 +4,18 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.0.1 - 2026-07-15
+
+- Made v14 facade, source-tree, and tracked coverage hashes independent of
+  platform line endings so Windows-generated architecture evidence verifies on
+  Linux and clean GitHub Actions checkouts.
+- Replaced machine-specific raw coverage provenance with canonical semantic
+  coverage evidence and added schema, package type, file count, and semantic
+  hash validation.
+- Added cross-platform hash regressions and adjusted the three v14 hard
+  duration budgets to measured shared-runner execution times without reducing
+  architecture, security, typing, or coverage requirements.
+
 ## v14.0.0 - 2026-07-15
 
 - Migrated 270 production modules into the Creation, Studio, Quality, Delivery,

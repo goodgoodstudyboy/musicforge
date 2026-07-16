@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from song_agent.architecture_guardrails import build_architecture_snapshot
-from song_agent.platform.verification.hashing import stable_hash
+from song_agent.platform.verification.hashing import sha256_text_file, stable_hash
 
 
 OUTPUT_PATH = Path("architecture-v14-compatibility-retirement.json")
@@ -180,9 +180,10 @@ def _module_path(root: Path, module: str) -> Path | None:
 
 
 def _file_hash(path: Path) -> str:
-    import hashlib
-
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    value = sha256_text_file(path)
+    if value is None:
+        raise FileNotFoundError(path)
+    return value
 
 
 def _read_json(path: Path) -> dict[str, Any]:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from song_agent import __version__
 from song_agent.release_check.v14_reviewer import (
     build_v14_reviewer_package,
     verify_v14_reviewer_package,
@@ -21,8 +22,10 @@ def test_v14_reviewer_package_recomputes_source_evidence(tmp_path: Path) -> None
     package = build_v14_reviewer_package(ROOT, tmp_path / "reviewer")
 
     report = verify_v14_reviewer_package(package, ROOT)
+    manifest = json.loads((package / "reviewer-package-manifest.json").read_text(encoding="utf-8"))
 
     assert report["status"] == "passed", report["blockers"]
+    assert manifest["release_version"] == __version__
 
 
 def test_v14_reviewer_package_rejects_resigned_source_report(tmp_path: Path) -> None:

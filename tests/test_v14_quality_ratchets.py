@@ -8,6 +8,7 @@ import pytest
 from song_agent.release_check.v14_quality import (
     _mypy_blockers,
     _typing_blockers,
+    active_source_tree_hash,
     collect_complexity_metrics,
     collect_typing_metrics,
     evaluate_v14_quality,
@@ -15,7 +16,7 @@ from song_agent.release_check.v14_quality import (
 from tools.migrate_v14_private_document_types import migrate_private_document_types
 from tools.split_v14_active_functions import split_active_functions
 from tools.split_v14_interface_functions import _split_one, split_interfaces
-from tools.update_v14_quality_policy import _ratchet_mypy_policy, _ratchet_typing_policy
+from tools.update_v14_quality_policy import _ratchet_mypy_policy, _ratchet_typing_policy, _write_compact_coverage
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -139,3 +140,38 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
                 "untyped_public_function_count": 0,
             },
         )
+
+
+def test_v14_source_tree_hash_is_independent_of_line_endings(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "platform" / "sample.py"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"VALUE = 1\n")
+    expected = active_source_tree_hash(tmp_path)
+
+    target.write_bytes(b"VALUE = 1\r\n")
+
+    assert active_source_tree_hash(tmp_path) == expected
+
+
+def test_v14_compact_coverage_excludes_machine_specific_metadata(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    files = {
+        "song_agent/platform/sample.py": {
+            "summary": {"num_statements": 2, "covered_lines": 2, "missing_lines": 0}
+        }
+    }
+    first = root / "first.json"
+    second = root / "second.json"
+    first.write_text(json.dumps({"meta": {"generated_at": "one"}, "files": files}), encoding="utf-8")
+    second.write_text(json.dumps({"meta": {"generated_at": "two"}, "files": files}), encoding="utf-8")
+    first_output = root / "first-compact.json"
+    second_output = root / "second-compact.json"
+
+    _write_compact_coverage(first, first_output, root)
+    _write_compact_coverage(second, second_output, root)
+
+    first_document = json.loads(first_output.read_text(encoding="utf-8"))
+    assert first_document == json.loads(second_output.read_text(encoding="utf-8"))
+    assert first_document["schema_version"] == 2
+    assert "source_report_sha256" not in first_document

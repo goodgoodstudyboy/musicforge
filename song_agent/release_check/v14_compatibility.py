@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import ast
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from song_agent.architecture_guardrails import build_architecture_snapshot
-from song_agent.platform.verification.hashing import stable_hash
+from song_agent.platform.verification.hashing import sha256_text_file, stable_hash
 
 
 RETIREMENT_PATH = "architecture-v14-compatibility-retirement.json"
@@ -244,7 +243,10 @@ def _call_name(node: ast.Call) -> str:
 
 
 def _file_hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    value = sha256_text_file(path)
+    if value is None:
+        raise FileNotFoundError(path)
+    return value
 
 
 def _module_path(root: Path, module: str) -> Path | None:

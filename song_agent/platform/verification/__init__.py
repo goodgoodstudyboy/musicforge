@@ -2,11 +2,13 @@
 
 from song_agent.platform.verification.engine import verify_package_envelope
 from song_agent.platform.verification.hashing import (
+    canonical_text_bytes,
     integrity_hash,
     integrity_ok,
     sha256_bytes,
     sha256_file,
     sha256_or_integrity,
+    sha256_text_file,
     stable_hash,
 )
 from song_agent.platform.verification.model import build_check, build_verification_report
@@ -21,6 +23,7 @@ from song_agent.platform.verification.zip_security import (
 __all__ = [
     "build_check",
     "build_verification_report",
+    "canonical_text_bytes",
     "integrity_hash",
     "integrity_ok",
     "is_safe_zip_entry",
@@ -29,6 +32,7 @@ __all__ = [
     "sha256_bytes",
     "sha256_file",
     "sha256_or_integrity",
+    "sha256_text_file",
     "stable_hash",
     "verify_package_envelope",
     "VerifierCapability",

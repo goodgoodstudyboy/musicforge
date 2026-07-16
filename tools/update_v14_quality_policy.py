@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
@@ -11,7 +10,9 @@ from song_agent.release_check.v14_quality import (
     build_v14_quality_policy,
     collect_mypy_metrics,
     collect_typing_metrics,
+    coverage_semantic_hash,
 )
+from song_agent.platform.verification.hashing import sha256_text_file
 
 
 def main() -> int:
@@ -42,7 +43,7 @@ def main() -> int:
         document["coverage"].update(
             {
                 "report_path": output.relative_to(root).as_posix(),
-                "report_sha256": _sha256(output),
+                "report_sha256": _text_sha256(output),
                 "source_tree_hash": active_source_tree_hash(root),
             }
         )
@@ -126,17 +127,20 @@ def _write_compact_coverage(source: Path, target: Path, root: Path) -> None:
             }
         }
     document = {
-        "schema_version": 1,
+        "schema_version": 2,
         "package_type": "musicforge_v14_coverage_evidence",
-        "source_report_sha256": _sha256(source),
+        "source_report_semantic_hash": coverage_semantic_hash(files),
         "file_count": len(files),
         "files": dict(sorted(files.items())),
     }
     target.write_text(json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _text_sha256(path: Path) -> str:
+    value = sha256_text_file(path)
+    if value is None:
+        raise FileNotFoundError(path)
+    return value
 
 
 if __name__ == "__main__":

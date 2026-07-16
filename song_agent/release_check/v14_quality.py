@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import Any, Iterable
 
-from song_agent.platform.verification.hashing import stable_hash
+from song_agent.platform.verification.hashing import canonical_text_bytes, sha256_text_file, stable_hash
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
@@ -182,6 +182,15 @@ def collect_coverage_metrics(root: Path, policy: dict[str, Any]) -> dict[str, An
     if not report_path.is_file():
         return {"status": "missing", "blockers": ["v14_quality_coverage_report_missing"], "layers": {}}
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    files = report.get("files") or {}
+    if report.get("schema_version") != 2:
+        blockers.append("v14_quality_coverage_schema")
+    if report.get("package_type") != "musicforge_v14_coverage_evidence":
+        blockers.append("v14_quality_coverage_package_type")
+    if int(report.get("file_count") or -1) != len(files):
+        blockers.append("v14_quality_coverage_file_count")
+    if report.get("source_report_semantic_hash") != coverage_semantic_hash(files):
+        blockers.append("v14_quality_coverage_semantic_hash")
     expected_hash = str(coverage_policy.get("report_sha256") or "")
     if expected_hash and _file_hash(report_path) != expected_hash:
         blockers.append("v14_quality_coverage_report_hash")
@@ -222,9 +231,13 @@ def active_source_tree_hash(root: Path) -> str:
     for path in paths:
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(canonical_text_bytes(path.read_bytes()))
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def coverage_semantic_hash(files: dict[str, Any]) -> str:
+    return stable_hash({"files": files})
 
 
 def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None) -> dict[str, Any]:
@@ -428,4 +441,7 @@ def _rooted(root: Path, path: Path | str) -> Path:
 
 
 def _file_hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    value = sha256_text_file(path)
+    if value is None:
+        raise FileNotFoundError(path)
+    return value

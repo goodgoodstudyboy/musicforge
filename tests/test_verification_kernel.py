@@ -11,7 +11,7 @@ from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.contracts.packages import PackageSpec
 from song_agent.platform.verification.engine import verify_package_envelope
 from song_agent.platform.verification.external_bindings import evidence_identity_checks
-from song_agent.platform.verification.hashing import integrity_hash, sha256_bytes
+from song_agent.platform.verification.hashing import integrity_hash, sha256_bytes, sha256_text_file
 from song_agent.platform.verification.history import history_chain_checks
 
 
@@ -30,6 +30,16 @@ ACTIVE_V12_VERIFIERS = (
     "unified_release_program_continuity_command_center_acceptance_verifier.py",
     "unified_release_program_continuity_command_center_acceptance_change_verifier.py",
 )
+
+
+def test_text_hash_is_independent_of_platform_line_endings(tmp_path: Path) -> None:
+    target = tmp_path / "evidence.txt"
+    target.write_bytes(b"first\nsecond\n")
+    expected = sha256_text_file(target)
+
+    target.write_bytes(b"first\r\nsecond\r\n")
+
+    assert sha256_text_file(target) == expected
 
 
 def _spec(*, nested: bool = False) -> PackageSpec:
