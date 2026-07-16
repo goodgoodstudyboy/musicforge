@@ -56,6 +56,7 @@ def test_release_check_hard_budget_failure_is_blocking(tmp_path: Path) -> None:
 
 
 def test_release_check_profile_budget_is_blocking(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setitem(PROFILE_DURATION_BUDGET_SECONDS, "latest", 0.001)
     definition = ReleaseCheckDefinition(
         check_id="performance.profile",
