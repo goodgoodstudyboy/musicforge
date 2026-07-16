@@ -5,7 +5,7 @@ from pathlib import Path
 
 from song_agent.release_check.matrix import ReleaseCheckDefinition, get_check_definition
 from song_agent.release_check.runner import run_release_check_matrix
-from song_agent.release_check.performance import PROFILE_DURATION_BUDGET_SECONDS
+from song_agent.release_check.performance import PROFILE_DURATION_BUDGET_SECONDS, performance_summary
 
 
 def _slow_definition(*, warning_only: bool) -> ReleaseCheckDefinition:
@@ -77,6 +77,16 @@ def test_release_check_profile_budget_is_blocking(tmp_path: Path, monkeypatch) -
     assert report.ok is False
     assert report.results[-1].check_id == "release_check.profile_duration_budget"
     assert report.results[-1].status == "failed"
+
+
+def test_github_actions_uses_shared_runner_profile_budget(monkeypatch) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+
+    summary = performance_summary([], profile="latest", duration_ms=850_000)
+
+    assert summary["profile_duration_budget_seconds"] == 900.0
+    assert summary["duration_budget_status"] == "passed"
+    assert summary["profile_over_budget"] is False
 
 
 def test_full_pytest_uses_aggregate_budget_and_only_suppresses_duplicate_zip_warning() -> None:

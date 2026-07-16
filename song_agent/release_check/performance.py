@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Iterable
 
 
@@ -10,6 +11,11 @@ PROFILE_DURATION_BUDGET_SECONDS: dict[str, float] = {
     "v13": 600.0,
     "latest": 480.0,
     "ga": 600.0,
+}
+CI_PROFILE_DURATION_BUDGET_SECONDS: dict[str, float] = {
+    "security": 1500.0,
+    "latest": 900.0,
+    "ga": 1200.0,
 }
 PROFILE_BUDGET_WARNING_ONLY: frozenset[str] = frozenset()
 
@@ -49,7 +55,7 @@ def performance_summary(
         for result in rows
         if getattr(result, "duration_budget_status", "not_configured") in {"warning", "failed"}
     ]
-    profile_budget = PROFILE_DURATION_BUDGET_SECONDS.get(str(profile))
+    profile_budget = _profile_duration_budget(str(profile))
     profile_over_budget = profile_budget is not None and duration_ms > int(profile_budget * 1000)
     hard_check_overrun = any(row.get("duration_budget_status") == "failed" for row in checks_over_budget)
     if hard_check_overrun:
@@ -70,6 +76,12 @@ def performance_summary(
         "profile_budget_warning_only": str(profile) in PROFILE_BUDGET_WARNING_ONLY,
         "slow_check_threshold_seconds": float(slow_check_seconds),
     }
+
+
+def _profile_duration_budget(profile: str) -> float | None:
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        return CI_PROFILE_DURATION_BUDGET_SECONDS.get(profile, PROFILE_DURATION_BUDGET_SECONDS.get(profile))
+    return PROFILE_DURATION_BUDGET_SECONDS.get(profile)
 
 
 def _performance_row(result: Any) -> dict[str, Any]:

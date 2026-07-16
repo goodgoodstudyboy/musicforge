@@ -12,7 +12,7 @@ and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.m
 - Replaced machine-specific raw coverage provenance with canonical semantic
   coverage evidence and added schema, package type, file count, and semantic
   hash validation.
-- Added cross-platform hash regressions and adjusted the three v14 hard
+- Added cross-platform hash regressions and adjusted v14 check and CI profile
   duration budgets to measured shared-runner execution times without reducing
   architecture, security, typing, or coverage requirements.
 
