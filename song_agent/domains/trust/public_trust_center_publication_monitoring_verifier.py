@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -400,7 +402,7 @@ class _MonitoringVerifier:
         self.redaction_findings = findings
         self._add_check("redaction", "ptcpm_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in monitoring package." if findings else "No sensitive values found in monitoring package.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -413,7 +415,7 @@ class _MonitoringVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return value if isinstance(value, dict) else {}
 
-    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[dict[str, Any]]:
+    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -440,7 +442,7 @@ class _MonitoringVerifier:
         self._add_check(scope, check_id, "failed" if bad_lines else "passed", "blocking", "Invalid incident event JSONL lines: " + ", ".join(str(item) for item in bad_lines[:8]) if bad_lines else f"{name} parses as JSONL.")
         return rows
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         incident_summary = self.rebuilt_incident_summary or (self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {})
@@ -486,14 +488,14 @@ class _MonitoringVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _probe(probe_results: dict[str, Any], target_type: str) -> dict[str, Any]:
+def _probe(probe_results: ImplementationDocument, target_type: str) -> ImplementationDocument:
     for probe in probe_results.get("probes", []) if isinstance(probe_results.get("probes"), list) else []:
         if isinstance(probe, dict) and probe.get("target_type") == target_type:
             return probe
     return {}
 
 
-def _rebuild_incidents_from_events(events: list[dict[str, Any]], *, center_id: str, channel_id: str, monitor_id: str, publication_id: Any) -> tuple[list[dict[str, Any]], dict[str, int], list[str]]:
+def _rebuild_incidents_from_events(events: list[ImplementationDocument], *, center_id: str, channel_id: str, monitor_id: str, publication_id: Any) -> tuple[list[ImplementationDocument], dict[str, int], list[str]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     invalid: list[str] = []
     for event in events:
@@ -524,7 +526,7 @@ def _rebuild_incidents_from_events(events: list[dict[str, Any]], *, center_id: s
     return rows, summary, invalid
 
 
-def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, incident_id: str, events: list[dict[str, Any]]) -> dict[str, Any]:
+def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, incident_id: str, events: list[ImplementationDocument]) -> ImplementationDocument:
     if not events:
         return {}
     opened = next((event for event in events if event.get("event_type") == "opened"), events[0])
@@ -570,7 +572,7 @@ def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, inci
     }
 
 
-def _incident_comparable(incident: dict[str, Any]) -> dict[str, Any]:
+def _incident_comparable(incident: ImplementationDocument) -> ImplementationDocument:
     return {key: incident.get(key) for key in (
         "schema_version",
         "package_type",
@@ -612,7 +614,7 @@ def _manual_action_for_drift(issue_type: str) -> str:
     return "investigate_publication_monitoring_drift"
 
 
-def _incident_event_chain_valid(events: list[dict[str, Any]]) -> bool:
+def _incident_event_chain_valid(events: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for index, event in enumerate(events, start=1):
         if int(event.get("sequence") or 0) != index:
@@ -629,7 +631,7 @@ def _incident_event_chain_valid(events: list[dict[str, Any]]) -> bool:
     return True
 
 
-def _publication_state_row(channel_state: dict[str, Any], publication_id: str) -> dict[str, Any]:
+def _publication_state_row(channel_state: ImplementationDocument, publication_id: str) -> ImplementationDocument:
     for row in channel_state.get("publications", []) if isinstance(channel_state.get("publications"), list) else []:
         if isinstance(row, dict) and str(row.get("publication_id") or "") == str(publication_id):
             return row
@@ -669,7 +671,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _read_json_file(path: Path | None) -> dict[str, Any]:
+def _read_json_file(path: Path | None) -> ImplementationDocument:
     if path is None:
         return {}
     try:
@@ -699,7 +701,7 @@ def _counts(values: list[str]) -> dict[str, int]:
     return counts
 
 
-def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern in [*SENSITIVE_VALUE_PATTERNS, *LOCAL_PATH_VALUE_PATTERNS]:
         regex = pattern[0] if isinstance(pattern, tuple) else pattern
@@ -708,7 +710,7 @@ def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(name: str, value: Any) -> list[dict[str, Any]]:
+def _blocked_key_findings(name: str, value: Any) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, nested in value.items():

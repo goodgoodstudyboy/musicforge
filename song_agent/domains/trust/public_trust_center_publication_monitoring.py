@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -412,7 +414,7 @@ class PublicTrustCenterPublicationMonitoringStore:
         write_public_trust_center_publication_monitoring_verification_report(report, self.run_dir(center_id, channel_id, monitor_id, run_id) / "monitoring-verification-report.json")
         return report
 
-    def _resolve_publication_id(self, center_id: str, channel_id: str, monitor: dict[str, Any], payload: dict[str, Any]) -> str:
+    def _resolve_publication_id(self, center_id: str, channel_id: str, monitor: ImplementationDocument, payload: ImplementationDocument) -> str:
         explicit = str(payload.get("publication_id") or "").strip()
         if explicit and explicit != "current":
             return _safe_id(explicit)
@@ -430,11 +432,11 @@ class PublicTrustCenterPublicationMonitoringStore:
         publication_id: str,
         publication_zip: Path,
         mirror_dir: Path,
-        channel_state: dict[str, Any],
-        publication_verification: dict[str, Any],
-        mirror_verification: dict[str, Any],
+        channel_state: ImplementationDocument,
+        publication_verification: ImplementationDocument,
+        mirror_verification: ImplementationDocument,
         now: str,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         state_row = _publication_state_row(channel_state, publication_id)
         probes = [
             {
@@ -492,13 +494,13 @@ class PublicTrustCenterPublicationMonitoringStore:
 
     def _build_drift_report(
         self,
-        monitor: dict[str, Any],
-        probe_results: dict[str, Any],
-        channel_state: dict[str, Any],
-        publication_verification: dict[str, Any],
-        mirror_verification: dict[str, Any],
+        monitor: ImplementationDocument,
+        probe_results: ImplementationDocument,
+        channel_state: ImplementationDocument,
+        publication_verification: ImplementationDocument,
+        mirror_verification: ImplementationDocument,
         now: str,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         publication_id = str(probe_results.get("publication_id") or "")
         state_row = _publication_state_row(channel_state, publication_id)
         drifts: list[dict[str, Any]] = []
@@ -568,7 +570,7 @@ class PublicTrustCenterPublicationMonitoringStore:
         data["integrity_hash"] = monitoring_hash(data)
         return data
 
-    def _sync_incidents(self, center_id: str, channel_id: str, monitor_id: str, publication_id: str, drift_report: dict[str, Any], probe_results: dict[str, Any], channel_state: dict[str, Any], now: str) -> list[dict[str, Any]]:
+    def _sync_incidents(self, center_id: str, channel_id: str, monitor_id: str, publication_id: str, drift_report: ImplementationDocument, probe_results: ImplementationDocument, channel_state: ImplementationDocument, now: str) -> list[ImplementationDocument]:
         incidents: list[dict[str, Any]] = []
         for drift in drift_report.get("drifts", []) if isinstance(drift_report.get("drifts"), list) else []:
             if not isinstance(drift, dict):
@@ -614,7 +616,7 @@ class PublicTrustCenterPublicationMonitoringStore:
                 rows.append(_sanitize(incident))
         return rows
 
-    def _incident_report(self, center_id: str, channel_id: str, monitor_id: str, run_id: str, publication_id: str, incidents: list[dict[str, Any]], now: str) -> dict[str, Any]:
+    def _incident_report(self, center_id: str, channel_id: str, monitor_id: str, run_id: str, publication_id: str, incidents: list[ImplementationDocument], now: str) -> ImplementationDocument:
         rows = sorted(incidents, key=lambda item: str(item.get("incident_id") or ""))
         data = {
             "schema_version": PUBLICATION_MONITORING_SCHEMA_VERSION,
@@ -637,7 +639,7 @@ class PublicTrustCenterPublicationMonitoringStore:
         data["integrity_hash"] = monitoring_hash(data)
         return data
 
-    def _incident_transition(self, center_id: str, channel_id: str, monitor_id: str, incident_id: str, event_type: str, payload: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+    def _incident_transition(self, center_id: str, channel_id: str, monitor_id: str, incident_id: str, event_type: str, payload: ImplementationDocument, *, now: str | None = None) -> ImplementationDocument:
         with self.lock:
             now = now or now_iso()
             if not self.incident_events_path(center_id, channel_id, monitor_id, incident_id).exists():
@@ -646,7 +648,7 @@ class PublicTrustCenterPublicationMonitoringStore:
             incident = self._rebuild_incident(center_id, channel_id, monitor_id, incident_id, None, now)
             return _sanitize(incident)
 
-    def _incident_events_for_report(self, center_id: str, channel_id: str, monitor_id: str, incident_report: dict[str, Any]) -> list[dict[str, Any]]:
+    def _incident_events_for_report(self, center_id: str, channel_id: str, monitor_id: str, incident_report: ImplementationDocument) -> list[ImplementationDocument]:
         rows: list[dict[str, Any]] = []
         seen: set[str] = set()
         for incident in incident_report.get("incidents", []) if isinstance(incident_report.get("incidents"), list) else []:
@@ -660,20 +662,20 @@ class PublicTrustCenterPublicationMonitoringStore:
             rows.extend(events)
         return sorted(rows, key=lambda item: (str(item.get("incident_id") or ""), int(item.get("sequence") or 0), str(item.get("event_id") or "")))
 
-    def _append_monitor_event(self, center_id: str, channel_id: str, monitor_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> dict[str, Any]:
+    def _append_monitor_event(self, center_id: str, channel_id: str, monitor_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> ImplementationDocument:
         events = _read_jsonl(self.events_path(center_id, channel_id, monitor_id))
         event = _event(str(event_type), payload, events[-1].get("event_hash") if events else None, now, "ptc-pub-mon-event", len(events) + 1)
         _append_jsonl(self.events_path(center_id, channel_id, monitor_id), event)
         return event
 
-    def _append_incident_event(self, center_id: str, channel_id: str, monitor_id: str, incident_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> dict[str, Any]:
+    def _append_incident_event(self, center_id: str, channel_id: str, monitor_id: str, incident_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> ImplementationDocument:
         events = _read_jsonl(self.incident_events_path(center_id, channel_id, monitor_id, incident_id))
         event = _event(str(event_type), sanitize_metadata(payload, blocked_keys=PUBLICATION_MONITORING_BLOCKED_KEYS), events[-1].get("event_hash") if events else None, now, "ptc-pub-inc-event", len(events) + 1)
         event["incident_id"] = incident_id
         _append_jsonl(self.incident_events_path(center_id, channel_id, monitor_id, incident_id), event)
         return event
 
-    def _rebuild_incident(self, center_id: str, channel_id: str, monitor_id: str, incident_id: str, publication_id: str | None, now: str) -> dict[str, Any]:
+    def _rebuild_incident(self, center_id: str, channel_id: str, monitor_id: str, incident_id: str, publication_id: str | None, now: str) -> ImplementationDocument:
         events = _read_jsonl(self.incident_events_path(center_id, channel_id, monitor_id, incident_id))
         incident = _incident_from_events(center_id, channel_id, monitor_id, incident_id, events)
         if not incident:
@@ -689,13 +691,13 @@ class PublicTrustCenterPublicationMonitoringStore:
         _write_json(self.incident_path(center_id, channel_id, monitor_id, incident_id), incident)
         return incident
 
-    def _read_run(self, center_id: str, channel_id: str, monitor_id: str, run_id: str) -> dict[str, Any]:
+    def _read_run(self, center_id: str, channel_id: str, monitor_id: str, run_id: str) -> ImplementationDocument:
         run = _read_json_default(self.run_path(center_id, channel_id, monitor_id, run_id), default={})
         if not run:
             raise PublicTrustCenterPublicationMonitoringNotFoundError("Publication monitoring run not found.")
         return run
 
-    def _assert_run_artifacts_current(self, run: dict[str, Any], probe_results: dict[str, Any], drift_report: dict[str, Any], incident_report: dict[str, Any], channel_state_snapshot: dict[str, Any]) -> None:
+    def _assert_run_artifacts_current(self, run: ImplementationDocument, probe_results: ImplementationDocument, drift_report: ImplementationDocument, incident_report: ImplementationDocument, channel_state_snapshot: ImplementationDocument) -> None:
         if run.get("integrity_hash") != monitoring_hash(run):
             raise PublicTrustCenterPublicationMonitoringStateError("Monitoring run integrity failed.")
         if probe_results.get("integrity_hash") != monitoring_hash(probe_results):
@@ -709,7 +711,7 @@ class PublicTrustCenterPublicationMonitoringStore:
         if channel_state_snapshot and run.get("source", {}).get("channel_state_snapshot_hash") != publication_channel_state_hash(channel_state_snapshot):
             raise PublicTrustCenterPublicationMonitoringStateError("Monitoring channel state snapshot is stale.")
 
-    def _file_index(self, export_dir: Path) -> dict[str, Any]:
+    def _file_index(self, export_dir: Path) -> ImplementationDocument:
         data = {"schema_version": PUBLICATION_MONITORING_SCHEMA_VERSION, "source_hash": stable_hash([_file_record(export_dir, path) for path in _walk_files(export_dir)]), "files": [_file_record(export_dir, path) for path in _walk_files(export_dir) if path.name != "file-index.json"]}
         data["integrity_hash"] = monitoring_hash(data)
         return data
@@ -756,7 +758,7 @@ def _default_drift_policy() -> dict[str, str]:
     }
 
 
-def _drift(drift_type: str, severity: str, message: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+def _drift(drift_type: str, severity: str, message: str, evidence: ImplementationDocument | None = None) -> ImplementationDocument:
     return {"drift_id": "drift-" + stable_hash({"type": drift_type, "message": message, "evidence": evidence or {}})[:12], "drift_type": drift_type, "severity": severity, "message": message, "evidence": evidence or {}, "manual_action": {"status": "manual_required", "action_type": _manual_action_for_drift(drift_type)}}
 
 
@@ -768,7 +770,7 @@ def _manual_action_for_drift(drift_type: str) -> str:
     return "investigate_publication_drift"
 
 
-def _overall_severity(drifts: list[dict[str, Any]]) -> str:
+def _overall_severity(drifts: list[ImplementationDocument]) -> str:
     severities = [str(item.get("severity") or "") for item in drifts]
     if "critical" in severities:
         return "critical"
@@ -779,7 +781,7 @@ def _overall_severity(drifts: list[dict[str, Any]]) -> str:
     return "none"
 
 
-def _run_status(drift_report: dict[str, Any], incident_report: dict[str, Any]) -> str:
+def _run_status(drift_report: ImplementationDocument, incident_report: ImplementationDocument) -> str:
     summary = incident_report.get("summary") if isinstance(incident_report.get("summary"), dict) else {}
     if drift_report.get("status") == "failed" or int(summary.get("critical_count") or 0) > 0:
         return "failed"
@@ -788,18 +790,18 @@ def _run_status(drift_report: dict[str, Any], incident_report: dict[str, Any]) -
     return "passed"
 
 
-def _publication_state_row(channel_state: dict[str, Any], publication_id: str) -> dict[str, Any]:
+def _publication_state_row(channel_state: ImplementationDocument, publication_id: str) -> ImplementationDocument:
     for row in channel_state.get("publications", []) if isinstance(channel_state.get("publications"), list) else []:
         if isinstance(row, dict) and str(row.get("publication_id") or "") == str(publication_id):
             return row
     return {}
 
 
-def _check_status_map(report: dict[str, Any]) -> dict[str, str]:
+def _check_status_map(report: ImplementationDocument) -> dict[str, str]:
     return {str(item.get("check_id") or ""): str(item.get("status") or "") for item in report.get("checks", []) if isinstance(item, dict)}
 
 
-def _event(event_type: str, payload: dict[str, Any], previous_event_hash: str | None, now: str, prefix: str, index: int) -> dict[str, Any]:
+def _event(event_type: str, payload: ImplementationDocument, previous_event_hash: str | None, now: str, prefix: str, index: int) -> ImplementationDocument:
     payload = sanitize_metadata(payload, blocked_keys=PUBLICATION_MONITORING_BLOCKED_KEYS)
     event = {
         "event_id": f"{prefix}-{index:06d}",
@@ -813,7 +815,7 @@ def _event(event_type: str, payload: dict[str, Any], previous_event_hash: str | 
     return event
 
 
-def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, incident_id: str, events: list[dict[str, Any]]) -> dict[str, Any]:
+def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, incident_id: str, events: list[ImplementationDocument]) -> ImplementationDocument:
     if not events:
         return {}
     opened = next((event for event in events if event.get("event_type") == "opened"), events[0])
@@ -870,7 +872,7 @@ def _incident_title(issue_type: str) -> str:
     }.get(issue_type, "Publication monitoring drift detected")
 
 
-def _event_chain_valid(events: list[dict[str, Any]]) -> bool:
+def _event_chain_valid(events: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in events:
         if event.get("previous_event_hash") != previous:
@@ -901,7 +903,7 @@ def _public_path_hint(value: Any) -> str | None:
     return Path(str(value)).name
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     _mkdir(path.parent)
     tmp_path = path.with_name(f".tmp-{os.getpid()}-{threading.get_ident()}.json")
     try:
@@ -915,7 +917,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> Path:
     return path
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not os.path.exists(_fs_path(path)):
         return dict(default or {})
     try:
@@ -926,20 +928,20 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+def _write_jsonl(path: Path, rows: list[ImplementationDocument]) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(_sanitize(row), ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -955,14 +957,14 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _checksum_json(export_dir: Path) -> dict[str, Any]:
+def _checksum_json(export_dir: Path) -> ImplementationDocument:
     rows = [_file_record(export_dir, path) for path in _walk_files(export_dir) if path.relative_to(export_dir).as_posix() not in {"checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt", "monitoring-manifest.json"}]
     data = {"schema_version": PUBLICATION_MONITORING_SCHEMA_VERSION, "files": rows}
     data["integrity_hash"] = monitoring_hash(data)
     return data
 
 
-def _write_sha256sums(export_dir: Path, checksum_json: dict[str, Any]) -> None:
+def _write_sha256sums(export_dir: Path, checksum_json: ImplementationDocument) -> None:
     lines = [f"{item.get('sha256')}  {item.get('path')}" for item in checksum_json.get("files", []) if isinstance(item, dict)]
     (export_dir / "checksum" / "SHA256SUMS.txt").write_text(sanitize_sensitive_text("\n".join(lines) + "\n"), encoding="utf-8")
 
@@ -980,7 +982,7 @@ def _write_readme(export_dir: Path) -> None:
     (export_dir / "README.txt").write_text(sanitize_sensitive_text(text), encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

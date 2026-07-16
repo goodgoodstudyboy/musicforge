@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import re
 import threading
 from dataclasses import dataclass
@@ -319,7 +321,7 @@ def audio_encoding_profile_integrity_ok(profile: dict[str, Any]) -> bool:
     return bool(expected) and expected == audio_encoding_profile_hash(profile)
 
 
-def _profile_from_payload(payload: dict[str, Any], *, now: str) -> AudioEncodingProfile:
+def _profile_from_payload(payload: ImplementationDocument, *, now: str) -> AudioEncodingProfile:
     data = {
         "schema_version": AUDIO_ENCODING_PROFILE_SCHEMA_VERSION,
         "profile_id": payload.get("profile_id"),

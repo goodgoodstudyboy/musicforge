@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -176,21 +178,21 @@ def release_audio_quality_action_queue_signoff_archive_verification_exit_code(re
 
 
 def _external_queue_checks(
-    queue: dict[str, Any],
-    source_binding: dict[str, Any],
-    items: dict[str, Any],
-    results: dict[str, Any],
-    manual_actions: dict[str, Any],
-    queue_summary: dict[str, Any],
-    queue_verification: dict[str, Any],
-    signoff: dict[str, Any],
+    queue: ImplementationDocument,
+    source_binding: ImplementationDocument,
+    items: ImplementationDocument,
+    results: ImplementationDocument,
+    manual_actions: ImplementationDocument,
+    queue_summary: ImplementationDocument,
+    queue_verification: ImplementationDocument,
+    signoff: ImplementationDocument,
     *,
     queue_zip_path: Path | str | None,
     queue_verification_report_path: Path | str | None,
     observatory_zip_path: Path | str | None,
     observatory_verification_report_path: Path | str | None,
     evidence_root: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not queue_zip_path or not queue_verification_report_path:
         return [_check("release_audio_quality_action_queue_signoff_archive_current_queue_required", False, "Current queue ZIP and queue verification report are required.")]
@@ -242,7 +244,7 @@ def _external_queue_checks(
     return checks
 
 
-def _document_binding_checks(documents: dict[str, dict[str, Any]], history: list[dict[str, Any]], *, require_signed: bool, require_no_unresolved_manual: bool) -> list[dict[str, Any]]:
+def _document_binding_checks(documents: dict[str, ImplementationDocument], history: list[ImplementationDocument], *, require_signed: bool, require_no_unresolved_manual: bool) -> list[ImplementationDocument]:
     manifest = documents["manifest"]
     queue = documents["queue"]
     source = documents["source_binding"]
@@ -285,7 +287,7 @@ def _document_binding_checks(documents: dict[str, dict[str, Any]], history: list
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
@@ -310,7 +312,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check["check_id"] for check in checks if check.get("status") == "warning"]
@@ -330,18 +332,18 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     data = json.loads(archive.read(name).decode("utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"{name} must contain a JSON object.")
     return data
 
 
-def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[dict[str, Any]]:
+def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for line in archive.read(name).decode("utf-8").splitlines():
         if not line.strip():
@@ -352,7 +354,7 @@ def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[dict[str, Any
     return rows
 
 
-def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
+def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -366,11 +368,11 @@ def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
     return bool(history)
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -385,7 +387,7 @@ def _semantic_hash(value: Any) -> str:
     return stable_hash(scrub(value))
 
 
-def _public_queue_verification_report(report: dict[str, Any]) -> dict[str, Any]:
+def _public_queue_verification_report(report: ImplementationDocument) -> ImplementationDocument:
     public = {
         key: value
         for key, value in report.items()
@@ -411,7 +413,7 @@ def _is_safe_entry(name: str) -> bool:
     return all(part and part not in {".", ".."} and ":" not in part for part in parts)
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     offenders: list[str] = []
     for name in names:
         if name.endswith("/"):

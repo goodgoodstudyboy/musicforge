@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -365,7 +367,7 @@ def validate_marker_id(marker_id: str) -> str:
     return marker_id
 
 
-def _matches_filters(row: dict[str, Any], filters: dict[str, Any]) -> bool:
+def _matches_filters(row: ImplementationDocument, filters: ImplementationDocument) -> bool:
     if filters.get("source") and row.get("source") != filters.get("source"):
         return False
     review = row.get("review") if isinstance(row.get("review"), dict) else {}
@@ -385,7 +387,7 @@ def _matches_filters(row: dict[str, Any], filters: dict[str, Any]) -> bool:
     return True
 
 
-def _sort_rows(rows: list[dict[str, Any]], filters: dict[str, Any]) -> list[dict[str, Any]]:
+def _sort_rows(rows: list[ImplementationDocument], filters: ImplementationDocument) -> list[ImplementationDocument]:
     sort = str(filters.get("sort") or "updated").strip()
     if sort not in {"rating", "updated", "created", "note_count", "duration"}:
         sort = "updated"
@@ -408,11 +410,11 @@ def _sort_rows(rows: list[dict[str, Any]], filters: dict[str, Any]) -> list[dict
     return sorted(rows, key=key, reverse=reverse)
 
 
-def _reviewed(review: dict[str, Any]) -> bool:
+def _reviewed(review: ImplementationDocument) -> bool:
     return bool(review.get("rating")) or bool(review.get("favorite")) or str(review.get("status") or "unreviewed") != "unreviewed" or bool(review.get("notes")) or bool(review.get("tags")) or bool(review.get("markers"))
 
 
-def _next_marker_id(markers: list[dict[str, Any]]) -> str:
+def _next_marker_id(markers: list[ImplementationDocument]) -> str:
     existing = {str(item.get("marker_id") or "") for item in markers}
     for index in range(1, 1_000_000):
         marker_id = f"marker-{index:03d}"
@@ -472,7 +474,7 @@ def _limit(value: Any, *, default: int) -> int:
     return max(1, min(limit, 500))
 
 
-def _section_from_range(plan: SongPlan, range_data: dict[str, Any]) -> SongSection:
+def _section_from_range(plan: SongPlan, range_data: ImplementationDocument) -> SongSection:
     mode = str(range_data.get("mode") or "")
     if mode == "section":
         section_name = str(range_data.get("section_name") or "")
@@ -506,7 +508,7 @@ def _select_asset_track(plan: SongPlan, asset_type: str, track_id: str) -> Track
     raise EditorReviewError(f"{role} track not found.")
 
 
-def _relative_note(note: NoteEvent) -> dict[str, Any]:
+def _relative_note(note: NoteEvent) -> ImplementationDocument:
     return {
         "pitch": note.pitch,
         "start_beat": round(float(note.start_beat), 3),
@@ -515,7 +517,7 @@ def _relative_note(note: NoteEvent) -> dict[str, Any]:
     }
 
 
-def _motif_content(section: SongSection, track: TrackPlan, notes: list[NoteEvent], rel_notes: list[dict[str, Any]]) -> dict[str, Any]:
+def _motif_content(section: SongSection, track: TrackPlan, notes: list[NoteEvent], rel_notes: list[ImplementationDocument]) -> ImplementationDocument:
     anchor = notes[0].pitch
     return {
         "kind": "motif",

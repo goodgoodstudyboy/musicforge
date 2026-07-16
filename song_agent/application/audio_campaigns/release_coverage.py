@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from typing import Any
 
 from song_agent.domains.delivery.releases import stable_hash
@@ -51,7 +53,7 @@ def _track_release_key(track: Any) -> str:
     )
 
 
-def _case_release_key(case: dict[str, Any]) -> str:
+def _case_release_key(case: ImplementationDocument) -> str:
     return _identity_key(case.get("project_id"), case.get("version_id"), case.get("final_export_hash"))
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from typing import Any, Iterable
 
 from song_agent.platform.contracts.evidence import EvidenceRef
@@ -126,7 +128,7 @@ def evaluate_gate_rows(
     }
 
 
-def _gate_node(component_id: str, key: str, value: dict[str, Any]) -> EvidenceNode:
+def _gate_node(component_id: str, key: str, value: ImplementationDocument) -> EvidenceNode:
     status = str(value.get("status") or "failed").lower()
     passed = status in _PASSING_STATES
     blockers = () if passed else tuple(str(row) for row in value.get("blockers") or (f"legacy_gate.{key}",))

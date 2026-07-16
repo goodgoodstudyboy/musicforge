@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -7,110 +9,68 @@ import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 
 class StudioRoutesApplyReviewTaskCandidate:
-    def _apply_review_task_candidate(
-        self,
-        project_id: str,
-        task_store: ReviewTaskStore,
-        task: Any,
-        candidate: Any,
-        parent: Any,
-        parent_job: JobState,
-        parent_plan: SongPlan,
-        payload: dict[str, Any],
-    ) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.Any]:
+    def _apply_review_task_candidate_part_01(self, project_id: str, task_store: ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: JobState, parent_plan: SongPlan, payload: ImplementationDocument, _split_state):
         _interfaces_api_runtime._ensure_task_open_for_apply(task)
-        if candidate.status != "ready":
-            raise _interfaces_api_runtime.ReviewTaskStateError("Candidate is not ready.")
-        result = _interfaces_api_runtime.apply_candidate_intents(parent_plan, [_interfaces_api_runtime.EditIntent.from_dict(item) for item in candidate.intents])
+        if candidate.status != 'ready':
+            raise _interfaces_api_runtime.ReviewTaskStateError('Candidate is not ready.')
+        _split_state['result'] = _interfaces_api_runtime.apply_candidate_intents(parent_plan, [_interfaces_api_runtime.EditIntent.from_dict(item) for item in candidate.intents])
         primary = _interfaces_api_runtime.EditIntent.from_dict(candidate.intents[0])
-        name = str(payload.get("name") or payload.get("version_name") or f"Review Candidate {candidate.candidate_id}")
-        job = self.store.create_edit_job(
-            project_id=project_id,
-            parent_version_id=parent.version_id,
-            parent_job=parent_job,
-            parent_plan=parent_plan,
-            intent=primary,
-            name=name,
-            start_immediately=False,
-            asset_refs=payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else None,
-            reference_refs=payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else None,
-            context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
-        )
+        name = str(payload.get('name') or payload.get('version_name') or f'Review Candidate {candidate.candidate_id}')
+        _split_state['job'] = self.store.create_edit_job(project_id=project_id, parent_version_id=parent.version_id, parent_job=parent_job, parent_plan=parent_plan, intent=primary, name=name, start_immediately=False, asset_refs=payload.get('asset_refs') if isinstance(payload.get('asset_refs'), list) else None, reference_refs=payload.get('reference_refs') if isinstance(payload.get('reference_refs'), list) else None, context_pack=payload.get('context_pack') if isinstance(payload.get('context_pack'), dict) else None)
         decision_report = _interfaces_api_runtime._try_read_review_decision_report(task_store, task.task_id)
         judge_report = self._read_review_task_judge_report(project_id, task_store, task, task_store.list_candidates(task.task_id), parent_plan=parent_plan)
-        metadata = {
-            **job.edit_metadata,
-            **_interfaces_api_runtime.candidate_apply_metadata(task, candidate, result, decision_report=decision_report),
-            "edit_type": primary.edit_type,
-            "target": primary.target.to_dict(),
-            "instruction": primary.instruction,
-            "preserve": list(primary.preserve),
-            "strength": primary.strength,
-        }
-        judge_apply_summary = _interfaces_api_runtime.judge_summary_for_apply(judge_report, candidate_id=candidate.candidate_id, stale=bool(judge_report.get("stale"))) if judge_report else {}
+        metadata = {**_split_state['job'].edit_metadata, **_interfaces_api_runtime.candidate_apply_metadata(task, candidate, _split_state['result'], decision_report=decision_report), 'edit_type': primary.edit_type, 'target': primary.target.to_dict(), 'instruction': primary.instruction, 'preserve': list(primary.preserve), 'strength': primary.strength}
+        judge_apply_summary = _interfaces_api_runtime.judge_summary_for_apply(judge_report, candidate_id=candidate.candidate_id, stale=bool(judge_report.get('stale'))) if judge_report else {}
         if judge_apply_summary:
-            metadata["review_judge"] = judge_apply_summary
+            metadata['review_judge'] = judge_apply_summary
         sprint_membership = self._review_sprint_membership_summary(project_id, task.task_id)
         if sprint_membership:
-            metadata["review_sprint"] = sprint_membership
+            metadata['review_sprint'] = sprint_membership
         sprint_recommendation = self._review_sprint_recommendation_summary_for_task(project_id, task.task_id)
         if sprint_recommendation:
-            metadata["review_sprint_recommendation"] = sprint_recommendation
+            metadata['review_sprint_recommendation'] = sprint_recommendation
         sprint_action_queue = self._review_sprint_action_queue_summary_for_task(project_id, task.task_id)
         if sprint_action_queue:
-            metadata["review_sprint_action_queue"] = sprint_action_queue
-        job.edit_metadata = metadata
-        job.input_payload["review_task_id"] = task.task_id
-        job.input_payload["review_candidate_id"] = candidate.candidate_id
-        job.input_payload["review_task"] = _interfaces_api_runtime.review_task_summary(task, candidate)
-        job.input_payload["review_candidate"] = _interfaces_api_runtime.review_candidate_summary(candidate)
+            metadata['review_sprint_action_queue'] = sprint_action_queue
+        _split_state['job'].edit_metadata = metadata
+        _split_state['job'].input_payload['review_task_id'] = task.task_id
+        _split_state['job'].input_payload['review_candidate_id'] = candidate.candidate_id
+        _split_state['job'].input_payload['review_task'] = _interfaces_api_runtime.review_task_summary(task, candidate)
+        _split_state['job'].input_payload['review_candidate'] = _interfaces_api_runtime.review_candidate_summary(candidate)
         if decision_report:
-            job.input_payload["review_decision"] = _interfaces_api_runtime.review_decision_summary(decision_report)
+            _split_state['job'].input_payload['review_decision'] = _interfaces_api_runtime.review_decision_summary(decision_report)
         if judge_apply_summary:
-            job.input_payload["review_judge"] = judge_apply_summary
+            _split_state['job'].input_payload['review_judge'] = judge_apply_summary
         if sprint_membership:
-            job.input_payload["review_sprint"] = sprint_membership
+            _split_state['job'].input_payload['review_sprint'] = sprint_membership
         if sprint_recommendation:
-            job.input_payload["review_sprint_recommendation"] = sprint_recommendation
+            _split_state['job'].input_payload['review_sprint_recommendation'] = sprint_recommendation
         if sprint_action_queue:
-            job.input_payload["review_sprint_action_queue"] = sprint_action_queue
-        persist_interface_job(self.store, job)
-        write_interface_document(_interfaces_api_runtime.ProjectPaths.create(_interfaces_api_runtime.Path(job.output_dir)).data / "edit-metadata.json", metadata)
-        self.store.start_job(job.job_id)
-        document = self.project_store.add_version_from_job(
-            project_id,
-            job,
-            name=name,
-            note=str(payload.get("note") or payload.get("version_note") or ""),
-            parent_version_id=parent.version_id,
-            variant_type=_interfaces_api_runtime.edit_variant_type(primary.edit_type),
-            change_summary=str(payload.get("change_summary") or f"Review task {task.task_id} candidate {candidate.candidate_id}"),
-        )
-        version = next(version for version in document.versions if version.job_id == job.job_id)
-        candidate = task_store.update_candidate(
-            type(candidate).from_dict({**candidate.to_dict(), "status": "applied"}),
-            event="review_candidate_applied",
-            payload={"version_id": version.version_id, "job_id": job.job_id},
-            now=_interfaces_api_runtime._utc_now(),
-        )
-        task = task_store.update_task(
-            type(task).from_dict(
-                {
-                    **task.to_dict(),
-                    "status": "applied",
-                    "selected_candidate_id": candidate.candidate_id,
-                    "applied_version_id": version.version_id,
-                    "applied_job_id": job.job_id,
-                }
-            ),
-            event="review_task_candidate_applied",
-            payload={"candidate_id": candidate.candidate_id, "version_id": version.version_id, "job_id": job.job_id},
-            now=_interfaces_api_runtime._utc_now(),
-        )
-        self.project_store.append_event(project_id, "review_task_candidate_applied", {"task_id": task.task_id, "candidate_id": candidate.candidate_id, "version_id": version.version_id, "job_id": job.job_id})
-        return task, candidate, version, job, result
+            _split_state['job'].input_payload['review_sprint_action_queue'] = sprint_action_queue
+        persist_interface_job(self.store, _split_state['job'])
+        write_interface_document(_interfaces_api_runtime.ProjectPaths.create(_interfaces_api_runtime.Path(_split_state['job'].output_dir)).data / 'edit-metadata.json', metadata)
+        self.store.start_job(_split_state['job'].job_id)
+        document = self.project_store.add_version_from_job(project_id, _split_state['job'], name=name, note=str(payload.get('note') or payload.get('version_note') or ''), parent_version_id=parent.version_id, variant_type=_interfaces_api_runtime.edit_variant_type(primary.edit_type), change_summary=str(payload.get('change_summary') or f'Review task {task.task_id} candidate {candidate.candidate_id}'))
+        _split_state['version'] = next((_split_state['version'] for _split_state['version'] in document.versions if _split_state['version'].job_id == _split_state['job'].job_id))
+        return (False, None)
 
-    def _create_review_task_follow_up(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any]:
+    def _apply_review_task_candidate_part_02(self, project_id: str, task_store: ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: JobState, parent_plan: SongPlan, payload: ImplementationDocument, _split_state):
+        candidate = task_store.update_candidate(type(candidate).from_dict({**candidate.to_dict(), 'status': 'applied'}), event='review_candidate_applied', payload={'version_id': _split_state['version'].version_id, 'job_id': _split_state['job'].job_id}, now=_interfaces_api_runtime._utc_now())
+        task = task_store.update_task(type(task).from_dict({**task.to_dict(), 'status': 'applied', 'selected_candidate_id': candidate.candidate_id, 'applied_version_id': _split_state['version'].version_id, 'applied_job_id': _split_state['job'].job_id}), event='review_task_candidate_applied', payload={'candidate_id': candidate.candidate_id, 'version_id': _split_state['version'].version_id, 'job_id': _split_state['job'].job_id}, now=_interfaces_api_runtime._utc_now())
+        self.project_store.append_event(project_id, 'review_task_candidate_applied', {'task_id': task.task_id, 'candidate_id': candidate.candidate_id, 'version_id': _split_state['version'].version_id, 'job_id': _split_state['job'].job_id})
+        return (True, (task, candidate, _split_state['version'], _split_state['job'], _split_state['result']))
+        return (False, None)
+
+    def _apply_review_task_candidate(self, project_id: str, task_store: ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: JobState, parent_plan: SongPlan, payload: ImplementationDocument) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.Any]:
+        _split_state = {}
+        _split_result = self._apply_review_task_candidate_part_01(project_id, task_store, task, candidate, parent, parent_job, parent_plan, payload, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self._apply_review_task_candidate_part_02(project_id, task_store, task, candidate, parent, parent_job, parent_plan, payload, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+
+    def _create_review_task_follow_up(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: ImplementationDocument) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any]:
         if task.status != "applied" or not task.applied_version_id:
             raise _interfaces_api_runtime.ReviewTaskStateError("Only applied review tasks can be marked needs_more_work.")
         candidate = task_store.read_candidate(task.task_id, task.selected_candidate_id or "")
@@ -325,10 +285,10 @@ class StudioRoutesApplyReviewTaskCandidate:
             raise ValueError("Request body must be a JSON object.")
         return data
 
-    def _merge_editor_patch_metadata(self, left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict[str, _interfaces_api_runtime.Any]:
+    def _merge_editor_patch_metadata(self, left: ImplementationDocument | None, right: ImplementationDocument | None) -> dict[str, _interfaces_api_runtime.Any]:
         return _interfaces_api_runtime._merge_editor_patch_metadata(left, right)
 
-    def _send_json(self, data: dict[str, Any], status: HTTPStatus = _interfaces_api_runtime.HTTPStatus.OK) -> None:
+    def _send_json(self, data: ImplementationDocument, status: HTTPStatus = _interfaces_api_runtime.HTTPStatus.OK) -> None:
         body = _interfaces_api_runtime.json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status.value)
         self.send_header("Content-Type", "application/json; charset=utf-8")

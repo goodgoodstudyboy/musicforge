@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import math
@@ -560,7 +562,7 @@ def pan_to_midi_cc(pan: int) -> int:
     return int(round((_pan(pan) + 100) * 127 / 200))
 
 
-def _source_state(*, plan: SongPlan, midi_path: Path, project_id: str, version_id: str) -> dict[str, Any]:
+def _source_state(*, plan: SongPlan, midi_path: Path, project_id: str, version_id: str) -> ImplementationDocument:
     return {
         "project_id": project_id,
         "version_id": version_id,
@@ -572,7 +574,7 @@ def _source_state(*, plan: SongPlan, midi_path: Path, project_id: str, version_i
     }
 
 
-def _clean_operation(operation: dict[str, Any]) -> dict[str, Any]:
+def _clean_operation(operation: ImplementationDocument) -> ImplementationDocument:
     op = str(operation.get("op") or "").strip()
     if op not in SUPPORTED_MIX_OPS:
         raise MixControlError(f"Unsupported mix operation: {op}.")
@@ -632,7 +634,7 @@ def _first_track(plan: SongPlan, *, preferred_roles: list[str] | None = None) ->
     return track_id_for_index(0) if plan.tracks else "track-001"
 
 
-def _roles_from_payload(payload: dict[str, Any]) -> list[str]:
+def _roles_from_payload(payload: ImplementationDocument) -> list[str]:
     value = payload.get("target_roles")
     if isinstance(value, list):
         return [str(item) for item in value]

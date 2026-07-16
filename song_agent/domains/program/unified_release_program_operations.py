@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import zipfile
@@ -547,7 +549,7 @@ class UnifiedReleaseProgramOperationsStore:
     def read_change_history(self, program_id: str) -> list[dict[str, Any]]:
         return HistoryChain(self.change_history_path(program_id), sanitizer=sanitize_metadata).read()
 
-    def _current_program_binding(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_program_binding(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         if self.program_store.latest_signoff_state(program_id).get("status") != "signed":
             raise UnifiedReleaseProgramOperationsStateError("Unified Release Program must be currently signed.")
         program_zip = Path(payload.get("program_zip") or payload.get("program_zip_path") or self.program_store.zip_path(program_id))
@@ -580,14 +582,14 @@ class UnifiedReleaseProgramOperationsStore:
             }
         )
 
-    def _program_binding_best_effort(self, program_id: str) -> dict[str, Any]:
+    def _program_binding_best_effort(self, program_id: str) -> ImplementationDocument:
         try:
             return self._current_program_binding(program_id, {})
         except Exception:
             state = self.program_store.latest_signoff_state(program_id)
             return {"program_id": program_id, "signoff_state": state.get("status"), "signoff_hash": state.get("signoff_hash")}
 
-    def _current_program_state(self, program_id: str, payload: dict[str, Any], *, require: bool) -> dict[str, Any]:
+    def _current_program_state(self, program_id: str, payload: ImplementationDocument, *, require: bool) -> ImplementationDocument:
         checks: list[dict[str, Any]] = []
         state: dict[str, Any] = {"checks": checks}
         if not require:
@@ -624,7 +626,7 @@ class UnifiedReleaseProgramOperationsStore:
         state.update({"program_zip_sha256": _sha256_path(paths["program_zip"]), "program_zip_size_bytes": paths["program_zip"].stat().st_size, "program_manifest_hash": runtime.get("manifest_hash"), "verification_report_hash": _integrity_hash(external), "verification_status": external.get("status"), "runtime_status": runtime.get("status"), "signoff_binding_hash": binding.get("integrity_hash"), "external_evidence_manifest_hash": evidence_manifest.get("integrity_hash")})
         return sanitize_metadata(state)
 
-    def _assert_request_current(self, program_id: str, request: dict[str, Any], payload: dict[str, Any]) -> None:
+    def _assert_request_current(self, program_id: str, request: ImplementationDocument, payload: ImplementationDocument) -> None:
         current = self._current_program_binding(program_id, payload)
         expected = request.get("source") if isinstance(request.get("source"), dict) else {}
         fields = ("signoff_hash", "signoff_binding_hash", "program_zip_sha256", "program_manifest_hash", "verification_report_hash", "external_evidence_manifest_hash", "source_hash")
@@ -632,7 +634,7 @@ class UnifiedReleaseProgramOperationsStore:
         if mismatched:
             raise UnifiedReleaseProgramOperationsStateError(f"Program Change Request binding is stale: {', '.join(mismatched)}")
 
-    def _archive_documents(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _archive_documents(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         current = self._current_program_state(program_id, payload, require=True)
         failures = [row for row in current.get("checks", []) if row.get("status") == "failed"]
         if failures:
@@ -652,23 +654,23 @@ class UnifiedReleaseProgramOperationsStore:
         evidence = _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_operations_evidence_index", "program_id": program_id, "items": [{"evidence_type": "program", **current}, {"evidence_type": "continuous_review", "status": review.get("status"), "review_hash": review.get("integrity_hash")}, {"evidence_type": "lifecycle_audit", "status": lifecycle.get("status"), "lifecycle_hash": lifecycle.get("integrity_hash")}], "summary": {"item_count": 3}})
         return {"program": program_summary, "program_verification": verification_summary, "signoff": signoff_summary, "binding": binding, "external_manifest": external_summary, "change_control": change_control, "review": review, "lifecycle": lifecycle, "evidence": evidence}
 
-    def _assert_archive_current(self, program_id: str, payload: dict[str, Any]) -> None:
+    def _assert_archive_current(self, program_id: str, payload: ImplementationDocument) -> None:
         manifest = read_json(self.archive_manifest_path(program_id))
         docs = self._archive_documents(program_id, payload)
         expected_source = _archive_source(docs)
         if manifest.get("source") != expected_source:
             raise UnifiedReleaseProgramOperationsStateError("Program Operations Archive export is stale. Re-export before ZIP.")
 
-    def _request_summary(self, program_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    def _request_summary(self, program_id: str, request: ImplementationDocument) -> ImplementationDocument:
         request_id = str(request.get("change_request_id") or "")
         approval = read_json(self.approval_path(program_id, request_id)) if self.approval_path(program_id, request_id).exists() else {}
         reset = read_json(self.reset_proof_path(program_id, request_id)) if self.reset_proof_path(program_id, request_id).exists() else {}
         return sanitize_metadata({"change_request_id": request_id, "status": request.get("status"), "change_type": request.get("change_type"), "reason": request.get("reason"), "request_hash": request.get("integrity_hash"), "approval_hash": approval.get("integrity_hash") or request.get("approval_hash"), "reset_proof_hash": reset.get("integrity_hash") or request.get("reset_proof_hash"), "reset_event_hash": request.get("reset_event_hash"), "previous_signoff_hash": (request.get("target") or {}).get("program_signoff_hash")})
 
-    def _append_change_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_change_history(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return HistoryChain(self.change_history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
-    def _lifecycle_ledger(self, program_id: str, program_history: list[dict[str, Any]], change_history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _lifecycle_ledger(self, program_id: str, program_history: list[ImplementationDocument], change_history: list[ImplementationDocument]) -> list[ImplementationDocument]:
         rows = []
         previous = ""
         source_rows = [("program_history", row) for row in program_history] + [("change_control_history", row) for row in change_history]
@@ -704,7 +706,7 @@ class UnifiedReleaseProgramOperationsStore:
         return f"urpcrv-{len([path for path in base.glob('urpcrv-*')]) + 1:06d}"
 
 
-def _operations_manifest(program_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _operations_manifest(program_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION,
@@ -725,7 +727,7 @@ def _operations_manifest(program_id: str, docs: dict[str, Any], files: list[dict
     return manifest
 
 
-def _archive_source(docs: dict[str, Any]) -> dict[str, Any]:
+def _archive_source(docs: ImplementationDocument) -> ImplementationDocument:
     return {
         "program_summary_hash": docs["program"].get("integrity_hash"),
         "program_verification_summary_hash": docs["program_verification"].get("integrity_hash"),
@@ -739,7 +741,7 @@ def _archive_source(docs: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _runbook_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+def _runbook_summary(items: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "safe_count": sum(1 for row in items if row.get("safe")),
         "completed_count": sum(1 for row in items if row.get("status") == "completed"),
@@ -749,7 +751,7 @@ def _runbook_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _history_checks(prefix: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _history_checks(prefix: str, rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks = []
     previous = ""
     for index, event in enumerate(rows):
@@ -762,15 +764,15 @@ def _history_checks(prefix: str, rows: list[dict[str, Any]]) -> list[dict[str, A
     return checks
 
 
-def _history_text(rows: list[dict[str, Any]]) -> str:
+def _history_text(rows: list[ImplementationDocument]) -> str:
     return "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     return SignoffService.seal(sanitize_metadata(doc), payload_hash=False)
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}}
 
 
@@ -784,19 +786,19 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 

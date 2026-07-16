@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import json
@@ -377,7 +379,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
             "accepted_evidence_id": evidence.get("evidence_id"),
         }
 
-    def _current_kit_binding(self, center_id: str, *, require_verified: bool) -> dict[str, Any]:
+    def _current_kit_binding(self, center_id: str, *, require_verified: bool) -> ImplementationDocument:
         zip_path = self.distribution_kit_store.zip_path(center_id)
         if not zip_path.exists() or not zip_path.is_file():
             raise PublicTrustCenterDistributionKitAcceptanceStateError("Distribution Kit ZIP is missing.")
@@ -405,7 +407,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
             }
         )
 
-    def _evidence_source(self, center_id: str, response: dict[str, Any], verification: dict[str, Any], binding: dict[str, Any]) -> dict[str, Any]:
+    def _evidence_source(self, center_id: str, response: ImplementationDocument, verification: ImplementationDocument, binding: ImplementationDocument) -> ImplementationDocument:
         response_id = str(response.get("response_id") or "")
         binding_summary = _read_json_default(self.response_binding_summary_path(center_id, response_id), default={})
         payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
@@ -430,7 +432,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
             }
         )
 
-    def _ensure_evidence_exportable(self, center_id: str, evidence: dict[str, Any]) -> None:
+    def _ensure_evidence_exportable(self, center_id: str, evidence: ImplementationDocument) -> None:
         if not evidence or evidence.get("status") != "current" or evidence.get("result") != "accepted":
             raise PublicTrustCenterDistributionKitAcceptanceStateError("Accepted evidence is not current accepted evidence.")
         source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
@@ -460,7 +462,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
                 continue
         return sorted(candidates)[-1][1] if candidates else ""
 
-    def _find_change_request(self, center_id: str, response_id: str) -> dict[str, Any]:
+    def _find_change_request(self, center_id: str, response_id: str) -> ImplementationDocument:
         for item in self.list_change_requests(center_id):
             if item.get("response_id") == response_id:
                 return item
@@ -554,7 +556,7 @@ def redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings)}
 
 
-def _evidence_documents(evidence: dict[str, Any], *, response_verification_report: dict[str, Any] | None = None, response_binding_summary: dict[str, Any] | None = None) -> dict[str, Any]:
+def _evidence_documents(evidence: ImplementationDocument, *, response_verification_report: ImplementationDocument | None = None, response_binding_summary: ImplementationDocument | None = None) -> ImplementationDocument:
     source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
     public = evidence.get("public_response") if isinstance(evidence.get("public_response"), dict) else {}
     binding = evidence.get("kit_binding") if isinstance(evidence.get("kit_binding"), dict) else {}
@@ -607,7 +609,7 @@ def _evidence_documents(evidence: dict[str, Any], *, response_verification_repor
     }
 
 
-def _public_response(response: dict[str, Any]) -> dict[str, Any]:
+def _public_response(response: ImplementationDocument) -> ImplementationDocument:
     payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else response
     reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
     public_findings = []
@@ -628,11 +630,11 @@ def _public_response(response: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _response_binding_summary(record: dict[str, Any], current_binding: dict[str, Any]) -> dict[str, Any]:
+def _response_binding_summary(record: ImplementationDocument, current_binding: ImplementationDocument) -> ImplementationDocument:
     return _sanitize({"response_id": record.get("response_id"), "status": record.get("status"), "kit_binding_status": record.get("kit_binding_status"), "response_binding": record.get("kit_binding"), "current_binding": current_binding, "response_payload_hash": record.get("response_payload_hash"), "response_integrity_hash": record.get("integrity_hash")})
 
 
-def _response_state_status(result: str, stale: bool, verification: dict[str, Any]) -> str:
+def _response_state_status(result: str, stale: bool, verification: ImplementationDocument) -> str:
     if verification.get("status") == "failed":
         return "invalid"
     prefix = result if result in ACCEPTANCE_ALLOWED_RESULTS else "invalid"
@@ -641,17 +643,17 @@ def _response_state_status(result: str, stale: bool, verification: dict[str, Any
     return prefix + ("_stale" if stale else "_current")
 
 
-def _response_binding_stale(response: dict[str, Any], binding: dict[str, Any]) -> bool:
+def _response_binding_stale(response: ImplementationDocument, binding: ImplementationDocument) -> bool:
     response_binding = response.get("kit_binding") if isinstance(response.get("kit_binding"), dict) else {}
     keys = ["distribution_kit_zip_sha256", "distribution_kit_zip_size_bytes", "distribution_kit_manifest_hash", "distribution_kit_report_hash", "distribution_kit_source_hash", "distribution_kit_verification_report_hash"]
     return any(response_binding.get(key) != binding.get(key) for key in keys)
 
 
-def _binding_from_response(response: dict[str, Any]) -> dict[str, Any]:
+def _binding_from_response(response: ImplementationDocument) -> ImplementationDocument:
     return dict(response.get("kit_binding") if isinstance(response.get("kit_binding"), dict) else {})
 
 
-def _require_response_binding(response: dict[str, Any]) -> None:
+def _require_response_binding(response: ImplementationDocument) -> None:
     if response.get("response_type") != ACCEPTANCE_RESPONSE_TYPE:
         raise PublicTrustCenterDistributionKitAcceptanceStateError("Acceptance response_type is invalid.")
     required = ["distribution_kit_zip_sha256", "distribution_kit_zip_size_bytes", "distribution_kit_manifest_hash", "distribution_kit_report_hash", "distribution_kit_source_hash", "distribution_kit_verification_report_hash"]
@@ -665,12 +667,12 @@ def _require_response_binding(response: dict[str, Any]) -> None:
         raise PublicTrustCenterDistributionKitAcceptanceStateError("Acceptance response review_mode must be external_manual.")
 
 
-def _reject_path_payload(payload: dict[str, Any]) -> None:
+def _reject_path_payload(payload: ImplementationDocument) -> None:
     if any(payload.get(key) for key in ("source_path", "local_path", "file_path")):
         raise PublicTrustCenterDistributionKitAcceptanceStateError("Distribution Kit acceptance import only accepts uploaded content; source_path/local_path/file_path are not allowed.")
 
 
-def _payload_bytes(payload: dict[str, Any], *, max_size: int) -> bytes:
+def _payload_bytes(payload: ImplementationDocument, *, max_size: int) -> bytes:
     if payload.get("content_base64"):
         try:
             raw = base64.b64decode(str(payload.get("content_base64")), validate=True)
@@ -694,7 +696,7 @@ def _payload_bytes(payload: dict[str, Any], *, max_size: int) -> bytes:
     return raw
 
 
-def _response_payload_from_bytes(raw: bytes) -> dict[str, Any]:
+def _response_payload_from_bytes(raw: bytes) -> ImplementationDocument:
     try:
         if raw[:4] == b"PK\x03\x04":
             import io
@@ -715,7 +717,7 @@ def _response_payload_from_bytes(raw: bytes) -> dict[str, Any]:
     return _sanitize(value)
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -724,7 +726,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -734,7 +736,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return _sanitize(value if isinstance(value, dict) else dict(default or {}))
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_text(path, json.dumps(_sanitize(payload), ensure_ascii=False, indent=2) + "\n")
     return path
@@ -751,13 +753,13 @@ def _read_text(path: Path) -> str:
         return handle.read()
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 
@@ -797,7 +799,7 @@ def _sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _evidence_readme(evidence: dict[str, Any]) -> str:
+def _evidence_readme(evidence: ImplementationDocument) -> str:
     return sanitize_sensitive_text("\n".join(["MusicForge Distribution Kit Accepted Evidence", "", f"Center ID: {evidence.get('center_id')}", f"Evidence ID: {evidence.get('evidence_id')}", f"Status: {evidence.get('status')}", ""]))
 
 
@@ -836,11 +838,11 @@ def _next_change_request_id(root: Path) -> str:
     return f"ptcdkcr-{len(list(root.glob('ptcdkcr-*.json'))) + 1:06d}"
 
 
-def _check(check_id: str, ok: bool, message: str) -> dict[str, Any]:
+def _check(check_id: str, ok: bool, message: str) -> ImplementationDocument:
     return {"scope": "response", "check_id": check_id, "status": "passed" if ok else "failed", "severity": "blocking", "message": message}
 
 
-def _redaction_findings(scope: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     sanitized = sanitize_sensitive_text(text)
     if sanitized != text:

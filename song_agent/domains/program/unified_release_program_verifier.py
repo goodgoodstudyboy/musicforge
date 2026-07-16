@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -193,7 +195,7 @@ def unified_release_program_verification_exit_code(report: dict[str, Any]) -> in
     return 0 if report.get("status") == "passed" else 1
 
 
-def _external_manifest_checks(path: Path | str | None, items: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _external_manifest_checks(path: Path | str | None, items: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not path:
         if require:
@@ -225,7 +227,7 @@ def _external_manifest_checks(path: Path | str | None, items: dict[str, Any], *,
     return checks
 
 
-def _external_handoff_checks(path: Path | str | None, items: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _external_handoff_checks(path: Path | str | None, items: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not path:
         return []
     external = _read_json_file(Path(path))
@@ -240,7 +242,7 @@ def _external_handoff_checks(path: Path | str | None, items: dict[str, Any], *, 
     return checks
 
 
-def _external_row_fingerprint_checks(key: str, expected: dict[str, Any], external_row: dict[str, Any]) -> list[dict[str, Any]]:
+def _external_row_fingerprint_checks(key: str, expected: ImplementationDocument, external_row: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     prefix = f"urp_external_evidence_{_safe_check_key(key)}"
     fp = expected.get("fingerprint") if isinstance(expected.get("fingerprint"), dict) else {}
@@ -249,7 +251,7 @@ def _external_row_fingerprint_checks(key: str, expected: dict[str, Any], externa
     return checks
 
 
-def _runtime_handoff_checks(key: str, expected: dict[str, Any], external_row: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _runtime_handoff_checks(key: str, expected: ImplementationDocument, external_row: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     prefix = f"urp_handoff_runtime_{_safe_check_key(key)}"
     zip_path = Path(str(external_row.get("handoff_zip") or external_row.get("handoff_zip_path") or ""))
     report_path = Path(str(external_row.get("handoff_verification_report") or external_row.get("handoff_verification_report_path") or ""))
@@ -301,18 +303,18 @@ def _runtime_handoff_checks(key: str, expected: dict[str, Any], external_row: di
 
 
 def _document_binding_checks(
-    manifest: dict[str, Any],
-    report: dict[str, Any],
-    items: dict[str, Any],
-    external_manifest: dict[str, Any],
-    dependency: dict[str, Any],
-    readiness: dict[str, Any],
-    risk: dict[str, Any],
-    exceptions: dict[str, Any],
-    gap_plan: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    report: ImplementationDocument,
+    items: ImplementationDocument,
+    external_manifest: ImplementationDocument,
+    dependency: ImplementationDocument,
+    readiness: ImplementationDocument,
+    risk: ImplementationDocument,
+    exceptions: ImplementationDocument,
+    gap_plan: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+) -> list[ImplementationDocument]:
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     source_hash = report.get("source_hash")
     checks = [
@@ -333,7 +335,7 @@ def _document_binding_checks(
     return checks
 
 
-def _dependency_semantics_checks(dependency: dict[str, Any], readiness: dict[str, Any], report: dict[str, Any]) -> list[dict[str, Any]]:
+def _dependency_semantics_checks(dependency: ImplementationDocument, readiness: ImplementationDocument, report: ImplementationDocument) -> list[ImplementationDocument]:
     rows = [row for row in readiness.get("rows", []) if isinstance(row, dict)]
     row_status = {str(row.get("item_id")): str(row.get("status")) for row in rows if row.get("item_id")}
     edges = [row for row in dependency.get("edges", []) if isinstance(row, dict)]
@@ -352,7 +354,7 @@ def _dependency_semantics_checks(dependency: dict[str, Any], readiness: dict[str
     ]
 
 
-def _history_checks(history: list[dict[str, Any]], signoff: dict[str, Any]) -> list[dict[str, Any]]:
+def _history_checks(history: list[ImplementationDocument], signoff: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     previous = ""
     signoff_event: dict[str, Any] | None = None
@@ -379,19 +381,19 @@ def _history_checks(history: list[dict[str, Any]], signoff: dict[str, Any]) -> l
 
 
 def _signoff_binding_checks(
-    binding: dict[str, Any],
-    signoff: dict[str, Any],
-    history: list[dict[str, Any]],
-    report: dict[str, Any],
-    items: dict[str, Any],
-    external_manifest: dict[str, Any],
-    dependency: dict[str, Any],
-    readiness: dict[str, Any],
-    risk: dict[str, Any],
-    exceptions: dict[str, Any],
+    binding: ImplementationDocument,
+    signoff: ImplementationDocument,
+    history: list[ImplementationDocument],
+    report: ImplementationDocument,
+    items: ImplementationDocument,
+    external_manifest: ImplementationDocument,
+    dependency: ImplementationDocument,
+    readiness: ImplementationDocument,
+    risk: ImplementationDocument,
+    exceptions: ImplementationDocument,
     *,
     require: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if not binding:
         return [_check("urp_signoff_binding_required", not require, "Program signoff binding is present when required.")]
     signoff_event = next((row for row in reversed(history) if row.get("event_type") == "unified_release_program_signoff_created"), {})
@@ -414,19 +416,19 @@ def _signoff_binding_checks(
 
 def _external_signoff_binding_checks(
     path: Path | str | None,
-    binding: dict[str, Any],
-    signoff: dict[str, Any],
-    history: list[dict[str, Any]],
-    report: dict[str, Any],
-    items: dict[str, Any],
-    external_manifest: dict[str, Any],
-    dependency: dict[str, Any],
-    readiness: dict[str, Any],
-    risk: dict[str, Any],
-    exceptions: dict[str, Any],
+    binding: ImplementationDocument,
+    signoff: ImplementationDocument,
+    history: list[ImplementationDocument],
+    report: ImplementationDocument,
+    items: ImplementationDocument,
+    external_manifest: ImplementationDocument,
+    dependency: ImplementationDocument,
+    readiness: ImplementationDocument,
+    risk: ImplementationDocument,
+    exceptions: ImplementationDocument,
     *,
     require: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if not path:
         if require:
             return [_check("urp_external_signoff_binding_required", False, "External Program signoff binding proof is required.")]
@@ -449,7 +451,7 @@ def _external_signoff_binding_checks(
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str], expected_entries: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str], expected_entries: set[str]) -> list[ImplementationDocument]:
     files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     file_paths = {str(row.get("path")) for row in files}
     expected_files = expected_entries - {"manifest.json"}
@@ -467,7 +469,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _file_index_checks(file_index: dict[str, Any], expected_files: set[str]) -> list[dict[str, Any]]:
+def _file_index_checks(file_index: ImplementationDocument, expected_files: set[str]) -> list[ImplementationDocument]:
     rows = [row for row in file_index.get("files", []) if isinstance(row, dict)]
     paths = {str(row.get("path")) for row in rows}
     return [
@@ -476,7 +478,7 @@ def _file_index_checks(file_index: dict[str, Any], expected_files: set[str]) -> 
     ]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, first_check: ImplementationDocument | None = None) -> ImplementationDocument:
     if first_check is not None:
         checks.insert(0, first_check)
     return build_verification_report(
@@ -487,33 +489,33 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: 
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     return read_json(path)
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _verification_zip_sha256(report: dict[str, Any]) -> str | None:
+def _verification_zip_sha256(report: ImplementationDocument) -> str | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return report.get("zip_sha256") or summary.get("zip_sha256")
 
 
-def _verification_manifest_hash(report: dict[str, Any]) -> str | None:
+def _verification_manifest_hash(report: ImplementationDocument) -> str | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return report.get("manifest_hash") or summary.get("manifest_hash")
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urp_redaction_scan")
 
 
-def _item_key(row: dict[str, Any]) -> str:
+def _item_key(row: ImplementationDocument) -> str:
     return "|".join(str(row.get(key) or "") for key in ("item_id", "train_id", "handoff_id"))
 
 

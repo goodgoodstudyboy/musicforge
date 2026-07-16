@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 from pathlib import Path
@@ -148,7 +150,7 @@ def audio_artifact_summary(manifest: dict[str, Any], *, wav_path: Path | None = 
     )
 
 
-def _renderer_profile_payload(profile: RendererProfile | None, config: RendererConfig) -> dict[str, Any]:
+def _renderer_profile_payload(profile: RendererProfile | None, config: RendererConfig) -> ImplementationDocument:
     if profile is not None:
         return {
             "profile_id": profile.profile_id,
@@ -184,13 +186,13 @@ def _renderer_profile_payload(profile: RendererProfile | None, config: RendererC
     }
 
 
-def _file_state(path: Path) -> dict[str, Any]:
+def _file_state(path: Path) -> ImplementationDocument:
     if not path.exists() or not path.is_file() or path.is_symlink():
         return {"exists": False}
     return {"exists": True, "name": path.name, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _json_file_state(path: Path) -> dict[str, Any]:
+def _json_file_state(path: Path) -> ImplementationDocument:
     state = _file_state(path)
     if not state.get("exists"):
         return state
@@ -202,7 +204,7 @@ def _json_file_state(path: Path) -> dict[str, Any]:
     return state
 
 
-def _state_for_source(value: Any) -> dict[str, Any]:
+def _state_for_source(value: Any) -> ImplementationDocument:
     data = value if isinstance(value, dict) else {}
     return {
         "exists": bool(data.get("exists", False)),

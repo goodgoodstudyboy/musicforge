@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -234,7 +236,7 @@ def scan_release_payload_for_sensitive_values(payload: Any) -> list[dict[str, An
     return sanitize_metadata(findings, blocked_keys=BLOCKED_RELEASE_KEYS)
 
 
-def _track_source_state(track: ReleaseTrack, project_store: ProjectStore) -> dict[str, Any]:
+def _track_source_state(track: ReleaseTrack, project_store: ProjectStore) -> ImplementationDocument:
     state: dict[str, Any] = {"track_id": track.track_id, "project_id": track.project_id, "version_id": track.version_id}
     try:
         document = project_store.get_project(track.project_id)
@@ -267,7 +269,7 @@ def _track_source_state(track: ReleaseTrack, project_store: ProjectStore) -> dic
     return sanitize_metadata(state, blocked_keys=BLOCKED_RELEASE_KEYS)
 
 
-def _release_checks(release: ReleaseDocument, options: dict[str, Any], source: dict[str, Any]) -> list[dict[str, Any]]:
+def _release_checks(release: ReleaseDocument, options: ImplementationDocument, source: ImplementationDocument) -> list[ImplementationDocument]:
     expected = _expected_track_count(release.release_type)
     track_positions = [(track.disc_number, track.track_number) for track in release.tracks]
     duplicate_positions = len(track_positions) != len(set(track_positions))
@@ -282,7 +284,7 @@ def _release_checks(release: ReleaseDocument, options: dict[str, Any], source: d
     return checks
 
 
-def _track_checks(track: ReleaseTrack, *, project_store: ProjectStore, options: dict[str, Any], source: dict[str, Any]) -> list[dict[str, Any]]:
+def _track_checks(track: ReleaseTrack, *, project_store: ProjectStore, options: ImplementationDocument, source: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     try:
         document = project_store.get_project(track.project_id)
@@ -324,7 +326,7 @@ def _track_checks(track: ReleaseTrack, *, project_store: ProjectStore, options: 
     return checks
 
 
-def _cross_track_checks(release: ReleaseDocument) -> list[dict[str, Any]]:
+def _cross_track_checks(release: ReleaseDocument) -> list[ImplementationDocument]:
     titles = [track.title.strip().lower() for track in release.tracks if track.title.strip()]
     artists = {track.artist or release.primary_artist for track in release.tracks if track.artist or release.primary_artist}
     return [
@@ -333,12 +335,12 @@ def _cross_track_checks(release: ReleaseDocument) -> list[dict[str, Any]]:
     ]
 
 
-def _redaction_check(payload: dict[str, Any]) -> dict[str, Any]:
+def _redaction_check(payload: ImplementationDocument) -> ImplementationDocument:
     findings = scan_release_payload_for_sensitive_values(payload)
     return _check("redaction_scan", bool(findings), "blocking", "Release payload contains sensitive fields or values.", len(findings))
 
 
-def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> dict[str, Any]:
+def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "scope": "release",
@@ -352,13 +354,13 @@ def _check(check_id: str, failed: bool, severity: str, message: str, count: int 
     )
 
 
-def _track_check(track: ReleaseTrack, check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> dict[str, Any]:
+def _track_check(track: ReleaseTrack, check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> ImplementationDocument:
     data = _check(check_id, failed, severity, message, count)
     data.update({"scope": "track", "track_id": track.track_id, "project_id": track.project_id, "version_id": track.version_id})
     return sanitize_metadata(data, blocked_keys=BLOCKED_RELEASE_KEYS)
 
 
-def _check_message(check: dict[str, Any]) -> dict[str, Any]:
+def _check_message(check: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "scope": check.get("scope"),
@@ -390,7 +392,7 @@ def _validate_relative_path(path: str) -> str:
     return PurePosixPath(*parts).as_posix()
 
 
-def _manifest_has_unsafe_paths(manifest: dict[str, Any]) -> bool:
+def _manifest_has_unsafe_paths(manifest: ImplementationDocument) -> bool:
     for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
         if not isinstance(item, dict):
             continue
@@ -401,7 +403,7 @@ def _manifest_has_unsafe_paths(manifest: dict[str, Any]) -> bool:
     return False
 
 
-def _project_zip_ok(project_dir: Path, manifest: dict[str, Any]) -> bool:
+def _project_zip_ok(project_dir: Path, manifest: ImplementationDocument) -> bool:
     zip_path = final_export_zip_path(project_dir)
     export_dir = final_export_dir(project_dir)
     if not zip_path.exists() or not zip_path.is_file() or zip_path.is_symlink():
@@ -416,7 +418,7 @@ def _project_zip_ok(project_dir: Path, manifest: dict[str, Any]) -> bool:
         return False
 
 
-def _qa_options(options: dict[str, Any]) -> dict[str, Any]:
+def _qa_options(options: ImplementationDocument) -> ImplementationDocument:
     return {
         "require_audio": bool(options.get("require_audio", False)),
         "require_stems": bool(options.get("require_stems", False)),
@@ -424,7 +426,7 @@ def _qa_options(options: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     try:
@@ -434,7 +436,7 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _raw_release_document(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:
+def _raw_release_document(release_store: ReleaseStore, release_id: str) -> ImplementationDocument:
     return _read_optional_json(release_store.release_dir(release_id) / "release.json")
 
 

@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -140,7 +142,7 @@ class _FinalHandoffVerifier:
         strict: bool,
         require_signed: bool,
         require_current: bool,
-        external_paths: dict[str, Any],
+        external_paths: ImplementationDocument,
         max_zip_size_mb: int,
         max_uncompressed_size_mb: int,
         max_entry_count: int,
@@ -250,7 +252,7 @@ class _FinalHandoffVerifier:
         except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             self._add_check("history", "tofr_history_parse", "failed", "blocking", f"final-handoff-history.jsonl cannot be parsed: {exc}")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, entry: str, label: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, entry: str, label: str, check_id: str) -> ImplementationDocument:
         try:
             value = json.loads(archive.read(entry).decode("utf-8"))
         except (KeyError, UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:
@@ -432,7 +434,7 @@ class _FinalHandoffVerifier:
             self._add_exact_check("external", "tofr_current_" + spec["component_type"] + "_manifest_hash", row.get("manifest_hash"), manifest.get("integrity_hash"), f"{spec['component_type']} manifest hash")
         self._verify_current_delivery_sources(rows)
 
-    def _verify_current_delivery_sources(self, rows: list[dict[str, Any]]) -> None:
+    def _verify_current_delivery_sources(self, rows: list[ImplementationDocument]) -> None:
         package_types = {str(spec["component_type"]) for spec in DELIVERY_VERIFICATION_COMPONENTS}
         expected_rows = {
             (str(row.get("component_type") or ""), str(row.get("component_id") or "")): row
@@ -489,7 +491,7 @@ class _FinalHandoffVerifier:
         self.redaction_findings = findings
         self._add_check("security", "tofr_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Final Handoff package." if findings else "No sensitive values found in Final Handoff package.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         summary = {
@@ -532,7 +534,7 @@ class _FinalHandoffVerifier:
             blocked_keys=VERIFIER_BLOCKED_KEYS,
         )
 
-    def _add_check(self, category: str, check_id: str, status: str, severity: str, message: str, details: dict[str, Any] | None = None) -> None:
+    def _add_check(self, category: str, check_id: str, status: str, severity: str, message: str, details: ImplementationDocument | None = None) -> None:
         self.checks.append({"category": category, "check_id": check_id, "status": status, "severity": severity, "message": message, "details": details or {}})
 
     def _add_exact_check(self, category: str, check_id: str, actual: Any, expected: Any, label: str) -> None:
@@ -547,14 +549,14 @@ def stable_summary_hash(summaries: dict[str, dict[str, Any]]) -> str:
     return stable_hash({"summaries": summaries})
 
 
-def _row_by_type(evidence_index: dict[str, Any], component_type: str) -> dict[str, Any]:
+def _row_by_type(evidence_index: ImplementationDocument, component_type: str) -> ImplementationDocument:
     for row in evidence_index.get("items", []) if isinstance(evidence_index.get("items"), list) else []:
         if isinstance(row, dict) and row.get("component_type") == component_type:
             return row
     return {}
 
 
-def _summary_projection(summary: dict[str, Any]) -> dict[str, Any]:
+def _summary_projection(summary: ImplementationDocument) -> ImplementationDocument:
     return {
         "component_type": summary.get("component_type"),
         "component_id": summary.get("component_id"),
@@ -568,7 +570,7 @@ def _summary_projection(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _row_summary_projection(row: dict[str, Any]) -> dict[str, Any]:
+def _row_summary_projection(row: ImplementationDocument) -> ImplementationDocument:
     return {
         "component_type": row.get("component_type"),
         "component_id": row.get("component_id"),
@@ -582,7 +584,7 @@ def _row_summary_projection(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _row_key(row: dict[str, Any]) -> tuple[str, str]:
+def _row_key(row: ImplementationDocument) -> tuple[str, str]:
     return (str(row.get("component_type") or ""), str(row.get("component_id") or ""))
 
 
@@ -611,7 +613,7 @@ def _first_path(*values: Path | str | None) -> Path | None:
     return None
 
 
-def _component_id_from_report(report: dict[str, Any], prefix: str, index: int) -> str:
+def _component_id_from_report(report: ImplementationDocument, prefix: str, index: int) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     for key in ("component_id", "target_id", "submission_id", "release_id", "operations_id", "package_id"):
         value = report.get(key) or summary.get(key)
@@ -620,7 +622,7 @@ def _component_id_from_report(report: dict[str, Any], prefix: str, index: int) -
     return f"{prefix}-{index + 1:03d}"
 
 
-def _read_json_file(path: Path | None) -> dict[str, Any]:
+def _read_json_file(path: Path | None) -> ImplementationDocument:
     if path is None or not path.exists():
         return {}
     try:
@@ -630,7 +632,7 @@ def _read_json_file(path: Path | None) -> dict[str, Any]:
         return {}
 
 
-def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     if not zip_path or not zip_path.exists():
         return {}
     try:

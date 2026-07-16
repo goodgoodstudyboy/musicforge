@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import threading
@@ -218,7 +220,7 @@ class AcceptanceFixPlanReviewStore:
         keys = ("plan_hash", "plan_source_hash", "fix_sprint_hash", "fix_items_hash", "delta_hash", "closeout_hash", "source_hash")
         return any(str(current.get(key) or "") != str(stored.get(key) or "") for key in keys) or current.get("kb_entry_hashes") != stored.get("kb_entry_hashes")
 
-    def _build_review(self, review_id: str, plan_id: str, payload: dict[str, Any], *, created_at: str, now: str) -> AcceptanceFixPlanReview:
+    def _build_review(self, review_id: str, plan_id: str, payload: ImplementationDocument, *, created_at: str, now: str) -> AcceptanceFixPlanReview:
         plan = self.plan_store.read_plan(plan_id)
         state = self._source_state(plan.plan_id, plan=plan)
         sprint = state["sprint"]
@@ -263,7 +265,7 @@ class AcceptanceFixPlanReviewStore:
             created_by=_bounded(payload.get("created_by"), 120) or "developer",
         )
 
-    def _source_state(self, plan_id: str, *, plan: AcceptanceFixPlan | None = None) -> dict[str, Any]:
+    def _source_state(self, plan_id: str, *, plan: AcceptanceFixPlan | None = None) -> ImplementationDocument:
         plan = plan or self.plan_store.read_plan(plan_id)
         if self.plan_store.plan_is_stale(plan):
             raise AcceptanceFixPlanReviewStateError("Acceptance Fix Plan is stale. Refresh the plan before reviewing outcomes.")
@@ -305,7 +307,7 @@ class AcceptanceFixPlanReviewStore:
             "source_hash": stable_hash(source_payload),
         }
 
-    def _kb_summaries(self, plan: AcceptanceFixPlan, items: list[AcceptanceFixItem]) -> dict[str, dict[str, Any]]:
+    def _kb_summaries(self, plan: AcceptanceFixPlan, items: list[AcceptanceFixItem]) -> dict[str, ImplementationDocument]:
         ids: set[str] = set()
         for item in plan.planned_items:
             knowledge = item.get("knowledge") if isinstance(item.get("knowledge"), dict) else {}
@@ -393,7 +395,7 @@ def write_acceptance_fix_plan_review_summary(path: Path, store: AcceptanceFixPla
     return summary
 
 
-def _item_outcomes(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: dict[str, Any], closeout: dict[str, Any], kb_summaries: dict[str, dict[str, Any]], *, project_store: ProjectStore) -> list[dict[str, Any]]:
+def _item_outcomes(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: ImplementationDocument, closeout: ImplementationDocument, kb_summaries: dict[str, ImplementationDocument], *, project_store: ProjectStore) -> list[ImplementationDocument]:
     planned_by_id = {str(item.get("planned_item_id") or ""): item for item in plan.planned_items}
     items_by_planned = {str(item.source.get("planned_item_id") or ""): item for item in items}
     delta_summary = delta.get("summary") if isinstance(delta.get("summary"), dict) else {}
@@ -478,7 +480,7 @@ def _item_outcomes(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: 
     return rows
 
 
-def _review_summary(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: dict[str, Any], closeout: dict[str, Any], item_outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+def _review_summary(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: ImplementationDocument, closeout: ImplementationDocument, item_outcomes: list[ImplementationDocument]) -> ImplementationDocument:
     delta_summary = delta.get("summary") if isinstance(delta.get("summary"), dict) else {}
     statuses = [str(item.get("outcome", {}).get("evidence_status") or "") for item in item_outcomes if isinstance(item.get("outcome"), dict)]
     warnings = []
@@ -529,7 +531,7 @@ def _review_summary(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items:
     )
 
 
-def _calibration_hints(plan: AcceptanceFixPlan, item_outcomes: list[dict[str, Any]], summary: dict[str, Any]) -> list[dict[str, Any]]:
+def _calibration_hints(plan: AcceptanceFixPlan, item_outcomes: list[ImplementationDocument], summary: ImplementationDocument) -> list[ImplementationDocument]:
     hints = []
     for item in item_outcomes:
         outcome = item.get("outcome") if isinstance(item.get("outcome"), dict) else {}
@@ -545,7 +547,7 @@ def _calibration_hints(plan: AcceptanceFixPlan, item_outcomes: list[dict[str, An
     return [sanitize_metadata({**hint, "suggestion": _bounded(hint.get("suggestion"), 400), "reason": _bounded(hint.get("reason"), 300)}) for hint in hints[:12]]
 
 
-def _plan_effectiveness_score(delta_summary: dict[str, Any], items: list[AcceptanceFixItem], closeout: dict[str, Any], item_outcomes: list[dict[str, Any]]) -> int:
+def _plan_effectiveness_score(delta_summary: ImplementationDocument, items: list[AcceptanceFixItem], closeout: ImplementationDocument, item_outcomes: list[ImplementationDocument]) -> int:
     score = 50
     if delta_summary.get("status") == "improved":
         score += 20
@@ -586,7 +588,7 @@ def _plan_effectiveness_score(delta_summary: dict[str, Any], items: list[Accepta
     return max(0, min(100, score))
 
 
-def _ranking_alignment_score(planned_items: list[dict[str, Any]], item_outcomes: list[dict[str, Any]]) -> int:
+def _ranking_alignment_score(planned_items: list[ImplementationDocument], item_outcomes: list[ImplementationDocument]) -> int:
     if len(planned_items) <= 1:
         return 100
     outcome_by_id = {str(item.get("planned_item_id") or ""): item for item in item_outcomes}
@@ -610,7 +612,7 @@ def _ranking_alignment_score(planned_items: list[dict[str, Any]], item_outcomes:
     return max(0, min(100, int(round(100 - (inversions / total) * 100))))
 
 
-def _evidence_status(item: AcceptanceFixItem | None, delta_summary: dict[str, Any], kb_ids: list[str], kb_summaries: dict[str, dict[str, Any]], task_statuses: list[str], forced: bool) -> str:
+def _evidence_status(item: AcceptanceFixItem | None, delta_summary: ImplementationDocument, kb_ids: list[str], kb_summaries: dict[str, ImplementationDocument], task_statuses: list[str], forced: bool) -> str:
     if item is None:
         return "not_executed"
     if item.status not in {"fixed", "closed", "waived"}:
@@ -631,7 +633,7 @@ def _evidence_status(item: AcceptanceFixItem | None, delta_summary: dict[str, An
     return "unknown"
 
 
-def _item_effectiveness_score(item: AcceptanceFixItem | None, delta_summary: dict[str, Any], evidence_status: str, task_statuses: list[str], forced: bool) -> int:
+def _item_effectiveness_score(item: AcceptanceFixItem | None, delta_summary: ImplementationDocument, evidence_status: str, task_statuses: list[str], forced: bool) -> int:
     score = 0
     if evidence_status == "supported":
         score = 72
@@ -678,7 +680,7 @@ def _kb_helpfulness(evidence_status: str, kb_ids: list[str]) -> str:
     return {"supported": "helpful", "mixed": "mixed", "unsupported": "misleading", "unknown": "neutral", "not_executed": "unknown"}.get(evidence_status, "unknown")
 
 
-def _overall_kb_helpfulness(item_outcomes: list[dict[str, Any]]) -> str:
+def _overall_kb_helpfulness(item_outcomes: list[ImplementationDocument]) -> str:
     values = [str((item.get("outcome") if isinstance(item.get("outcome"), dict) else {}).get("kb_evidence_helpfulness") or "missing") for item in item_outcomes]
     if not values or all(value == "missing" for value in values):
         return "missing"
@@ -702,7 +704,7 @@ def _task_statuses(item: AcceptanceFixItem | None, project_store: ProjectStore) 
     return [str(task.status or "missing")]
 
 
-def _song_delta_status(delta: dict[str, Any], planned_or_item: dict[str, Any]) -> str:
+def _song_delta_status(delta: ImplementationDocument, planned_or_item: ImplementationDocument) -> str:
     target = planned_or_item.get("target") if isinstance(planned_or_item.get("target"), dict) else {}
     song_id = str(target.get("song_id") or "")
     for row in delta.get("song_deltas", []) if isinstance(delta.get("song_deltas"), list) else []:
@@ -724,23 +726,23 @@ def _song_delta_status(delta: dict[str, Any], planned_or_item: dict[str, Any]) -
     return str(summary.get("status") or "unknown")
 
 
-def _plan_source(plan: AcceptanceFixPlan) -> dict[str, Any]:
+def _plan_source(plan: AcceptanceFixPlan) -> ImplementationDocument:
     return sanitize_metadata({"plan_id": plan.plan_id, "status": plan.status, "scope": plan.scope, "source": plan.source, "summary": plan.summary, "planned_items": plan.planned_items, "strategy": plan.strategy, "warnings": plan.warnings, "execution": plan.execution})
 
 
-def _sprint_source(sprint: AcceptanceFixSprint) -> dict[str, Any]:
+def _sprint_source(sprint: AcceptanceFixSprint) -> ImplementationDocument:
     return sanitize_metadata({"fix_sprint_id": sprint.fix_sprint_id, "status": sprint.status, "scope": sprint.scope, "source": sprint.source, "settings": sprint.settings, "counts": sprint.counts, "recheck": sprint.recheck, "delta_summary": sprint.delta_summary, "closeout_summary": sprint.closeout_summary})
 
 
-def _item_source(item: AcceptanceFixItem) -> dict[str, Any]:
+def _item_source(item: AcceptanceFixItem) -> ImplementationDocument:
     return sanitize_metadata({"item_id": item.item_id, "status": item.status, "priority": item.priority, "severity": item.severity, "source": item.source, "target": item.target, "evidence": item.evidence, "review_task_id": item.review_task_id, "resolution": item.resolution})
 
 
-def _delta_source(delta: dict[str, Any]) -> dict[str, Any]:
+def _delta_source(delta: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata({"source": delta.get("source") if isinstance(delta.get("source"), dict) else {}, "recheck": delta.get("recheck") if isinstance(delta.get("recheck"), dict) else {}, "summary": delta.get("summary") if isinstance(delta.get("summary"), dict) else {}, "song_deltas": delta.get("song_deltas") if isinstance(delta.get("song_deltas"), list) else [], "issue_deltas": delta.get("issue_deltas") if isinstance(delta.get("issue_deltas"), list) else []})
 
 
-def _closeout_source(closeout: dict[str, Any]) -> dict[str, Any]:
+def _closeout_source(closeout: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata({"status": closeout.get("status"), "forced": bool(closeout.get("forced", False)), "summary": closeout.get("summary") if isinstance(closeout.get("summary"), dict) else {}, "checks": closeout.get("checks") if isinstance(closeout.get("checks"), list) else []})
 
 
@@ -754,7 +756,7 @@ def _review_matches_project(review: AcceptanceFixPlanReview, project_id: str) ->
     return False
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {})
 
 
@@ -802,7 +804,7 @@ def _lock_for_root(root: Path) -> threading.RLock:
         return _LOCKS[key]
 
 
-def _append_event(path: Path, event: str, payload: dict[str, Any] | None = None, now: str | None = None) -> None:
+def _append_event(path: Path, event: str, payload: ImplementationDocument | None = None, now: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     record = sanitize_metadata({"timestamp": now or now_iso(), "event": event, **(payload or {})})
     with path.open("a", encoding="utf-8") as file:

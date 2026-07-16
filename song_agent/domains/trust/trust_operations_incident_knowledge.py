@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -409,7 +411,7 @@ class TrustOperationsIncidentKnowledgeStore:
         _write_json(self.verification_report_path(hub_id), report)
         return report
 
-    def _set_entry_status(self, hub_id: str, entry_id: str, status: str, *, now: str | None) -> dict[str, Any]:
+    def _set_entry_status(self, hub_id: str, entry_id: str, status: str, *, now: str | None) -> ImplementationDocument:
         with self.lock:
             now = now or _now()
             entry = self.read_entry(hub_id, entry_id)
@@ -420,7 +422,7 @@ class TrustOperationsIncidentKnowledgeStore:
             self._refresh_base_summary(hub_id, now=now)
             return _sanitize(entry)
 
-    def _source_summary(self, hub_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _source_summary(self, hub_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         incident_report = _read_json_default(Path(payload.get("incident_board_verification_report_path")) if payload.get("incident_board_verification_report_path") else self.incident_store.verification_report_path(hub_id), default={})
         hub_report = _read_json_default(Path(payload.get("hub_verification_report_path")) if payload.get("hub_verification_report_path") else self._hub_verification_path_from_incident(hub_id, incident_report), default={})
         board = _read_json_default(self.incident_store.board_path(hub_id), default={})
@@ -438,7 +440,7 @@ class TrustOperationsIncidentKnowledgeStore:
         source["source_hash"] = stable_hash(source)
         return source
 
-    def _hub_verification_path_from_incident(self, hub_id: str, incident_report: dict[str, Any]) -> Path:
+    def _hub_verification_path_from_incident(self, hub_id: str, incident_report: ImplementationDocument) -> Path:
         hub_report_hash = str(incident_report.get("hub_verification_report_hash") or "")
         current = _read_json_default(self.hub_store.current_report_path(hub_id), default={})
         report_id = str(current.get("report_id") or "")
@@ -449,13 +451,13 @@ class TrustOperationsIncidentKnowledgeStore:
                 return candidate
         return candidate
 
-    def _incident_eligible(self, incident: dict[str, Any]) -> bool:
+    def _incident_eligible(self, incident: ImplementationDocument) -> bool:
         if incident.get("status") != "closed" or incident.get("stale"):
             return False
         closeout = _read_json_default(self.incident_store.closeout_path(str(incident.get("hub_id") or ""), str(incident.get("incident_id") or "")), default={})
         return closeout.get("status") == "passed" and closeout.get("integrity_hash") == incident_hash(closeout)
 
-    def _entry_from_incident(self, hub_id: str, entry_id: str, incident: dict[str, Any], source: dict[str, Any], existing: dict[str, Any] | None, now: str) -> dict[str, Any]:
+    def _entry_from_incident(self, hub_id: str, entry_id: str, incident: ImplementationDocument, source: ImplementationDocument, existing: ImplementationDocument | None, now: str) -> ImplementationDocument:
         detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
         closeout = _read_json_default(self.incident_store.closeout_path(hub_id, str(incident.get("incident_id") or "")), default={})
         classification = _classify_incident(incident)
@@ -496,7 +498,7 @@ class TrustOperationsIncidentKnowledgeStore:
         entry["integrity_hash"] = knowledge_hash(entry)
         return entry
 
-    def _guard_checks(self, hub_id: str, guard: dict[str, Any]) -> list[dict[str, Any]]:
+    def _guard_checks(self, hub_id: str, guard: ImplementationDocument) -> list[ImplementationDocument]:
         guard_type = str(guard.get("guard_type") or "manual_required")
         if guard_type == "manual_required":
             return [{"check_id": "guard_manual_required", "status": "manual_required", "severity": "manual", "message": "Manual regression guard requires human execution."}]
@@ -532,7 +534,7 @@ class TrustOperationsIncidentKnowledgeStore:
             return [{"check_id": "zip_safety_regression", "status": "passed" if not zip_blockers else "failed", "severity": "blocking", "message": "No ZIP safety blockers found." if not zip_blockers else "ZIP safety blockers remain."}]
         return [{"check_id": "generic_regression_guard", "status": "passed" if docs else "failed", "severity": "blocking", "message": "Generic guard source is current." if docs else "Generic guard source is missing."}]
 
-    def _latest_guard_runs(self, hub_id: str, guards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _latest_guard_runs(self, hub_id: str, guards: list[ImplementationDocument]) -> list[ImplementationDocument]:
         rows = []
         for guard in guards:
             path = self.guard_run_path(hub_id, str(guard.get("guard_id") or ""))
@@ -540,7 +542,7 @@ class TrustOperationsIncidentKnowledgeStore:
                 rows.append(_read_json(path))
         return rows
 
-    def _assert_source_current(self, hub_id: str, base: dict[str, Any]) -> None:
+    def _assert_source_current(self, hub_id: str, base: ImplementationDocument) -> None:
         current = self._source_summary(hub_id, {})
         expected = base.get("source") if isinstance(base.get("source"), dict) else {}
         for key in ("incident_verification_report_hash", "incident_zip_sha256", "incident_manifest_hash", "hub_verification_report_hash"):
@@ -567,7 +569,7 @@ class TrustOperationsIncidentKnowledgeStore:
 
 
 
-def _knowledge_report_status(base: dict[str, Any], guards_doc: dict[str, Any], runs_doc: dict[str, Any], recurrence: dict[str, Any]) -> str:
+def _knowledge_report_status(base: ImplementationDocument, guards_doc: ImplementationDocument, runs_doc: ImplementationDocument, recurrence: ImplementationDocument) -> str:
     del base
     guards = guards_doc.get("guards") if isinstance(guards_doc.get("guards"), list) else []
     runs = runs_doc.get("runs") if isinstance(runs_doc.get("runs"), list) else []
@@ -580,7 +582,7 @@ def _knowledge_report_status(base: dict[str, Any], guards_doc: dict[str, Any], r
     return "passed"
 
 
-def _knowledge_summary(entries: list[dict[str, Any]], guards: list[dict[str, Any]], recurrence: dict[str, Any] | None = None, runs: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def _knowledge_summary(entries: list[ImplementationDocument], guards: list[ImplementationDocument], recurrence: ImplementationDocument | None = None, runs: list[ImplementationDocument] | None = None) -> ImplementationDocument:
     recurrence = recurrence or {}
     runs = runs or []
     active_entries = [item for item in entries if item.get("status") != "hidden"]
@@ -597,11 +599,11 @@ def _knowledge_summary(entries: list[dict[str, Any]], guards: list[dict[str, Any
     }
 
 
-def _entries_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
+def _entries_summary(entries: list[ImplementationDocument]) -> ImplementationDocument:
     return _knowledge_summary(entries, [], {})
 
 
-def _guards_summary(guards: list[dict[str, Any]]) -> dict[str, Any]:
+def _guards_summary(guards: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "guard_count": len(guards),
         "active_guard_count": sum(1 for item in guards if item.get("status") == "active"),
@@ -610,7 +612,7 @@ def _guards_summary(guards: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _guard_run_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
+def _guard_run_summary(runs: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "run_count": len(runs),
         "passed_count": sum(1 for item in runs if item.get("status") == "passed"),
@@ -619,7 +621,7 @@ def _guard_run_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _incident_matches_entry(incident: dict[str, Any], entry: dict[str, Any]) -> bool:
+def _incident_matches_entry(incident: ImplementationDocument, entry: ImplementationDocument) -> bool:
     detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
     return (
         str(detected.get("component_type") or "") == str(entry.get("component_type") or "")
@@ -635,7 +637,7 @@ def _write_readme(root: Path) -> None:
     )
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = path.relative_to(root).as_posix()
     return {"path": rel, "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
@@ -665,7 +667,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json(path: Path) -> ImplementationDocument:
     return read_json(path)
 
 
@@ -676,7 +678,7 @@ def _read_json_default(path: Path, default: Any | None = None) -> Any:
         return {} if default is None else default
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     _mkdir(path.parent)
     return write_json(path, _sanitize(payload))
 

@@ -76,77 +76,49 @@ class TrustRoutes(TrustRoutesTrustOperations, TrustRoutesTrustOperationsAssuranc
             if self._dispatch_portfolio_final_actions(method, parts, portfolio_id, action):
                 return
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Release Portfolio Audit route not found.')
-        except _interfaces_api_runtime.ReleasePortfolioAuditNotFoundError as exc:
+        except (
+            _interfaces_api_runtime.ReleasePortfolioAuditNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAuditNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceReviewerPackNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceFinalBoardNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceEvidenceVaultNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationRegistryNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalReviewNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationAcceptedEvidenceNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyNotFoundError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementNotFoundError,
+            FileNotFoundError,
+        ) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioAuditStateError as exc:
+        except (
+            _interfaces_api_runtime.ReleasePortfolioAuditStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAuditStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceReviewerPackStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceFinalBoardStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceEvidenceVaultStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationRegistryStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalReviewStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyStateError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStateError,
+        ) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioAuditError as exc:
+        except (
+            _interfaces_api_runtime.ReleasePortfolioAuditError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAuditError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceReviewerPackError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceFinalBoardError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceEvidenceVaultError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationRegistryError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalReviewError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationAcceptedEvidenceError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyError,
+            _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementError,
+        ) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAuditNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAuditStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAuditError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceReviewerPackNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceReviewerPackStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceReviewerPackError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceFinalBoardNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceFinalBoardStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceFinalBoardError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceEvidenceVaultNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceEvidenceVaultStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceEvidenceVaultError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationRegistryNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationRegistryStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationRegistryError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalReviewNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalReviewStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalReviewError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationAcceptedEvidenceNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationAcceptedEvidenceError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStateError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-        except FileNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))

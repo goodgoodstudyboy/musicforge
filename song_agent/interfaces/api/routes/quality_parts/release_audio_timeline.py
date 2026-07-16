@@ -5,114 +5,118 @@ from song_agent.application.interface_persistence import persist_interface_job, 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesReleaseAudioTimeline:
+    def _handle_release_audio_timeline_part_01(self, method: str, release_id: str, tail: str, _split_state):
+        if tail in {'', '/'}:
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self._send_json({'ok': True, **self.release_audio_timeline_store.list_timelines(release_id)})
+            return (True, None)
+        if tail == '/refresh':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            _split_state['result'] = self.release_audio_timeline_store.refresh_timeline(release_id, force_new=bool(_split_state['payload'].get('force_new', False)))
+            self._send_json({'ok': _split_state['result'].get('status') == 'passed', **_split_state['result']})
+            return (True, None)
+        if tail == '/current':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['timeline_id'] = self.release_audio_timeline_store._resolve_timeline_id(release_id, None)
+            _split_state['report'] = self.release_audio_timeline_store.read_timeline(release_id, _split_state['timeline_id'])
+            signoff = _interfaces_api_runtime.read_json(self.release_audio_timeline_store.signoff_path(release_id, _split_state['timeline_id'])) if self.release_audio_timeline_store.signoff_path(release_id, _split_state['timeline_id']).exists() else {}
+            self._send_json({'ok': True, 'release_id': release_id, 'timeline_id': _split_state['timeline_id'], 'report': _split_state['report'], 'signoff': signoff, 'summary': _split_state['report'].get('summary', {})})
+            return (True, None)
+        parts = [part for part in tail.split('/') if part]
+        if not parts:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Release Audio Timeline route not found.')
+            return (True, None)
+        _split_state['timeline_id'] = parts[0]
+        _split_state['action'] = parts[1] if len(parts) > 1 else ''
+        if _split_state['action'] == '':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['report'] = self.release_audio_timeline_store.read_timeline(release_id, _split_state['timeline_id'])
+            signoff = _interfaces_api_runtime.read_json(self.release_audio_timeline_store.signoff_path(release_id, _split_state['timeline_id'])) if self.release_audio_timeline_store.signoff_path(release_id, _split_state['timeline_id']).exists() else {}
+            self._send_json({'ok': True, 'release_id': release_id, 'timeline_id': _split_state['timeline_id'], 'report': _split_state['report'], 'signoff': signoff, 'summary': _split_state['report'].get('summary', {})})
+            return (True, None)
+        if _split_state['action'] == 'events':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self._send_json({'ok': True, **self.release_audio_timeline_store.read_events(release_id, _split_state['timeline_id'])})
+            return (True, None)
+        if _split_state['action'] == 'tracks':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self._send_json({'ok': True, 'track_index': self.release_audio_timeline_store.read_track_index(release_id, _split_state['timeline_id'])})
+            return (True, None)
+        if _split_state['action'] == 'trend':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self._send_json({'ok': True, 'quality_trend': self.release_audio_timeline_store.read_quality_trend(release_id, _split_state['timeline_id'])})
+            return (True, None)
+        if _split_state['action'] == 'risks':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self._send_json({'ok': True, 'risk_register': self.release_audio_timeline_store.read_risk_register(release_id, _split_state['timeline_id'])})
+            return (True, None)
+        if _split_state['action'] == 'signoff':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.release_audio_timeline_store.signoff_timeline(release_id, _split_state['timeline_id'], self._read_json_body())
+            self._send_json({'ok': True, **_split_state['result']}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        return (False, None)
+
+    def _handle_release_audio_timeline_part_02(self, method: str, release_id: str, tail: str, _split_state):
+        if _split_state['action'] == 'export':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.release_audio_timeline_store.export_timeline(release_id, _split_state['timeline_id'])
+            self._send_json({'ok': _split_state['result'].get('status') == 'passed', **_split_state['result']})
+            return (True, None)
+        if _split_state['action'] == 'zip':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.release_audio_timeline_store.build_zip(release_id, _split_state['timeline_id'])
+            self._send_json({'ok': _split_state['result'].get('status') == 'passed', **_split_state['result'], 'summary': {'zip_sha256': _split_state['result'].get('zip_sha256')}})
+            return (True, None)
+        if _split_state['action'] == 'verify':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            _split_state['report'] = self.release_audio_timeline_store.verify_zip(release_id, _split_state['timeline_id'], strict=bool(_split_state['payload'].get('strict', True)), require_passed=bool(_split_state['payload'].get('require_passed', True)), require_signed=bool(_split_state['payload'].get('require_signed', False)), require_real_audio=bool(_split_state['payload'].get('require_real_audio', True)), require_manual_review=bool(_split_state['payload'].get('require_manual_review', True)), require_current_certification=bool(_split_state['payload'].get('require_current_certification', True)))
+            self._send_json({'ok': _split_state['report'].get('status') == 'passed', 'verification': _split_state['report'], 'summary': _split_state['report'].get('summary', {}), 'status': _split_state['report'].get('status')})
+            return (True, None)
+        if _split_state['action'] == 'download':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self._send_file(self.release_audio_timeline_store.zip_path(release_id, _split_state['timeline_id']), 'application/zip', filename='release-audio-timeline.zip')
+            return (True, None)
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Release Audio Timeline route not found.')
+        return (False, None)
+
     def _handle_release_audio_timeline(self, method: str, release_id: str, tail: str) -> None:
+        _split_state = {}
         try:
-            if tail in {"", "/"}:
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self._send_json({"ok": True, **self.release_audio_timeline_store.list_timelines(release_id)})
-                return
-            if tail == "/refresh":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                result = self.release_audio_timeline_store.refresh_timeline(release_id, force_new=bool(payload.get("force_new", False)))
-                self._send_json({"ok": result.get("status") == "passed", **result})
-                return
-            if tail == "/current":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                timeline_id = self.release_audio_timeline_store._resolve_timeline_id(release_id, None)
-                report = self.release_audio_timeline_store.read_timeline(release_id, timeline_id)
-                signoff = _interfaces_api_runtime.read_json(self.release_audio_timeline_store.signoff_path(release_id, timeline_id)) if self.release_audio_timeline_store.signoff_path(release_id, timeline_id).exists() else {}
-                self._send_json({"ok": True, "release_id": release_id, "timeline_id": timeline_id, "report": report, "signoff": signoff, "summary": report.get("summary", {})})
-                return
-            parts = [part for part in tail.split("/") if part]
-            if not parts:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Release Audio Timeline route not found.")
-                return
-            timeline_id = parts[0]
-            action = parts[1] if len(parts) > 1 else ""
-            if action == "":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                report = self.release_audio_timeline_store.read_timeline(release_id, timeline_id)
-                signoff = _interfaces_api_runtime.read_json(self.release_audio_timeline_store.signoff_path(release_id, timeline_id)) if self.release_audio_timeline_store.signoff_path(release_id, timeline_id).exists() else {}
-                self._send_json({"ok": True, "release_id": release_id, "timeline_id": timeline_id, "report": report, "signoff": signoff, "summary": report.get("summary", {})})
-                return
-            if action == "events":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self._send_json({"ok": True, **self.release_audio_timeline_store.read_events(release_id, timeline_id)})
-                return
-            if action == "tracks":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self._send_json({"ok": True, "track_index": self.release_audio_timeline_store.read_track_index(release_id, timeline_id)})
-                return
-            if action == "trend":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self._send_json({"ok": True, "quality_trend": self.release_audio_timeline_store.read_quality_trend(release_id, timeline_id)})
-                return
-            if action == "risks":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self._send_json({"ok": True, "risk_register": self.release_audio_timeline_store.read_risk_register(release_id, timeline_id)})
-                return
-            if action == "signoff":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.release_audio_timeline_store.signoff_timeline(release_id, timeline_id, self._read_json_body())
-                self._send_json({"ok": True, **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            if action == "export":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.release_audio_timeline_store.export_timeline(release_id, timeline_id)
-                self._send_json({"ok": result.get("status") == "passed", **result})
-                return
-            if action == "zip":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.release_audio_timeline_store.build_zip(release_id, timeline_id)
-                self._send_json({"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}})
-                return
-            if action == "verify":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                report = self.release_audio_timeline_store.verify_zip(
-                    release_id,
-                    timeline_id,
-                    strict=bool(payload.get("strict", True)),
-                    require_passed=bool(payload.get("require_passed", True)),
-                    require_signed=bool(payload.get("require_signed", False)),
-                    require_real_audio=bool(payload.get("require_real_audio", True)),
-                    require_manual_review=bool(payload.get("require_manual_review", True)),
-                    require_current_certification=bool(payload.get("require_current_certification", True)),
-                )
-                self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
-                return
-            if action == "download":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self._send_file(self.release_audio_timeline_store.zip_path(release_id, timeline_id), "application/zip", filename="release-audio-timeline.zip")
-                return
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Release Audio Timeline route not found.")
+            _split_result = self._handle_release_audio_timeline_part_01(method, release_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_release_audio_timeline_part_02(method, release_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
         except _interfaces_api_runtime.ReleaseNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
         except _interfaces_api_runtime.ReleaseAudioTimelineNotFoundError as exc:

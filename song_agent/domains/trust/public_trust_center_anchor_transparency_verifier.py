@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -275,7 +277,7 @@ class _AnchorTransparencyVerifier:
         self._verify_registry_summary(source)
         self._verify_chain(source)
 
-    def _verify_ledger(self, latest: dict[str, Any], source: dict[str, Any]) -> None:
+    def _verify_ledger(self, latest: ImplementationDocument, source: ImplementationDocument) -> None:
         ok = True
         previous = None
         for index, event in enumerate(self.ledger_events, start=1):
@@ -291,7 +293,7 @@ class _AnchorTransparencyVerifier:
         for key in ("registry_hash", "registry_zip_sha256", "registry_manifest_hash", "registry_verification_status", "registry_verification_report_hash", "current_entry_id", "current_anchor_hash", "current_entry_status", "ptc_zip_sha256", "ptc_manifest_hash", "ptc_source_hash"):
             self._add_exact_check("ledger", f"ptcat_source_{key}", source.get(key), latest_state.get(key), f"Report source {key}")
 
-    def _verify_checkpoint(self, checkpoint: dict[str, Any], latest: dict[str, Any], source: dict[str, Any], label: str) -> None:
+    def _verify_checkpoint(self, checkpoint: ImplementationDocument, latest: ImplementationDocument, source: ImplementationDocument, label: str) -> None:
         prefix = f"ptcat_{label}_checkpoint"
         self._add_exact_check("checkpoint", f"{prefix}_package_type", checkpoint.get("package_type"), ANCHOR_CHECKPOINT_PACKAGE_TYPE, f"{label} checkpoint package_type")
         self._add_hash_check("checkpoint", f"{prefix}_integrity", checkpoint.get("integrity_hash"), anchor_checkpoint_hash(checkpoint), f"{label} checkpoint integrity")
@@ -301,7 +303,7 @@ class _AnchorTransparencyVerifier:
         for key in ("current_entry_id", "current_anchor_hash", "registry_hash", "registry_zip_sha256", "registry_manifest_hash", "ptc_zip_sha256", "ptc_manifest_hash", "ptc_source_hash"):
             self._add_exact_check("checkpoint", f"{prefix}_{key}", checkpoint.get(key), source.get(key), f"{label} checkpoint {key}")
 
-    def _verify_registry_summary(self, source: dict[str, Any]) -> None:
+    def _verify_registry_summary(self, source: ImplementationDocument) -> None:
         summary = self.registry_summary.get("summary") if isinstance(self.registry_summary.get("summary"), dict) else {}
         current = self.registry_summary.get("current_entry") if isinstance(self.registry_summary.get("current_entry"), dict) else {}
         anchor = self.registry_summary.get("current_anchor") if isinstance(self.registry_summary.get("current_anchor"), dict) else {}
@@ -334,7 +336,7 @@ class _AnchorTransparencyVerifier:
             self._add_hash_check("registry", "ptcat_external_anchor_registry_zip_sha256", registry_report.get("zip_sha256"), source.get("registry_zip_sha256"), "External Anchor Registry ZIP sha256")
             self._add_hash_check("registry", "ptcat_external_anchor_registry_manifest_hash", registry_report.get("manifest_hash"), source.get("registry_manifest_hash"), "External Anchor Registry manifest hash")
 
-    def _verify_chain(self, source: dict[str, Any]) -> None:
+    def _verify_chain(self, source: ImplementationDocument) -> None:
         self._add_hash_check("chain", "ptcat_chain_integrity", self.chain.get("integrity_hash"), stable_hash({key: value for key, value in self.chain.items() if key != "integrity_hash"}), "Chain of custody integrity")
         self._add_hash_check("chain", "ptcat_chain_source_hash", self.chain.get("source_hash"), self.report_doc.get("source_hash"), "Chain source hash")
         self._add_exact_check("chain", "ptcat_chain_events_match_ledger", self.chain.get("events"), self.ledger_events, "Chain events derive from ledger")
@@ -373,7 +375,7 @@ class _AnchorTransparencyVerifier:
                 self.redaction_findings.extend(_blocked_key_findings(name, value))
         self._add_check("redaction", "ptcat_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned text entries.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if not name or info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name or 'entry'} is missing.")
@@ -386,7 +388,7 @@ class _AnchorTransparencyVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return value if isinstance(value, dict) else {}
 
-    def _read_ledger_entry(self, archive: zipfile.ZipFile, name: str) -> list[dict[str, Any]]:
+    def _read_ledger_entry(self, archive: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check("ledger", "ptcat_ledger_parse", "failed", "blocking", "ledger.jsonl is missing.")
@@ -403,7 +405,7 @@ class _AnchorTransparencyVerifier:
         self._add_check("ledger", "ptcat_ledger_parse", "passed", "blocking", "ledger.jsonl parses as JSONL.")
         return events
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = anchor_transparency_summary(self.report_doc)
@@ -466,7 +468,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern in SENSITIVE_VALUE_PATTERNS + LOCAL_PATH_VALUE_PATTERNS:
         compiled = pattern[0] if isinstance(pattern, tuple) and pattern else pattern
@@ -476,7 +478,7 @@ def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[dict[str, Any]]:
+def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():

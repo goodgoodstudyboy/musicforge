@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import copy
 import json
 import re
@@ -280,7 +282,7 @@ class TemplatePackStore:
         except DistributionTemplateError as exc:
             return _validation_report([("template_payload", str(exc))])
 
-    def _write_pack(self, pack: TemplatePack) -> dict[str, Any]:
+    def _write_pack(self, pack: TemplatePack) -> ImplementationDocument:
         data = pack.to_dict()
         write_json(self.pack_path(pack.template_pack_id), data)
         return data
@@ -566,7 +568,7 @@ def _builtin_template_by_id(template_pack_id: str) -> TemplatePack | None:
     return None
 
 
-def _template_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _template_payload(payload: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(payload, dict):
         raise DistributionTemplateError("Template payload must be a JSON object.")
     data = payload.get("template") if isinstance(payload.get("template"), dict) else payload
@@ -584,7 +586,7 @@ def _payload_size(payload: Any) -> int:
     return len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
 
 
-def _safe_rules(value: Any) -> dict[str, Any]:
+def _safe_rules(value: Any) -> ImplementationDocument:
     if value is None:
         return {}
     if not isinstance(value, dict):
@@ -605,7 +607,7 @@ def _safe_rules(value: Any) -> dict[str, Any]:
     return sanitize_metadata(result, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _safe_mapping(value: Any) -> dict[str, Any]:
+def _safe_mapping(value: Any) -> ImplementationDocument:
     if value is None:
         return {}
     if not isinstance(value, dict):
@@ -658,7 +660,7 @@ def _safe_file_pattern(pattern: str, *, key: str | None = None) -> str:
     return text
 
 
-def _safe_checklist(value: Any) -> list[dict[str, Any]]:
+def _safe_checklist(value: Any) -> list[ImplementationDocument]:
     if value is None:
         return []
     if not isinstance(value, list):
@@ -733,7 +735,7 @@ def _validate_relative_path(path: str) -> str:
     return PurePosixPath(*parts).as_posix()
 
 
-def _validation_report(errors: list[tuple[str, str]], *, redaction_findings: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def _validation_report(errors: list[tuple[str, str]], *, redaction_findings: list[ImplementationDocument] | None = None) -> ImplementationDocument:
     checks = [
         {
             "scope": "distribution_template",
@@ -758,7 +760,7 @@ def _validation_report(errors: list[tuple[str, str]], *, redaction_findings: lis
     )
 
 
-def _first_validation_error(report: dict[str, Any]) -> str:
+def _first_validation_error(report: ImplementationDocument) -> str:
     blockers = report.get("blockers") if isinstance(report.get("blockers"), list) else []
     if blockers:
         return str(blockers[0].get("message") or "Distribution template validation failed.")

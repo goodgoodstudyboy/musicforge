@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import re
 from typing import Any
 
@@ -84,7 +86,7 @@ def mark_release_metadata_qa_stale(report: dict[str, Any] | None, *, current_sou
     return sanitize_metadata(data, blocked_keys=METADATA_BLOCKED_KEYS)
 
 
-def _release_checks(release: ReleaseDocument, metadata: dict[str, Any]) -> list[dict[str, Any]]:
+def _release_checks(release: ReleaseDocument, metadata: ImplementationDocument) -> list[ImplementationDocument]:
     if not metadata:
         return [_check("metadata_exists", True, "blocking", "metadata.json is missing.", 1)]
     release_meta = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
@@ -112,7 +114,7 @@ def _release_checks(release: ReleaseDocument, metadata: dict[str, Any]) -> list[
     return checks
 
 
-def _track_checks(release: ReleaseDocument, metadata: dict[str, Any]) -> list[dict[str, Any]]:
+def _track_checks(release: ReleaseDocument, metadata: ImplementationDocument) -> list[ImplementationDocument]:
     tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
     release_track_ids = {track.track_id for track in release.tracks}
     metadata_track_ids = {str(item.get("track_id")) for item in tracks if isinstance(item, dict)}
@@ -151,7 +153,7 @@ def _track_checks(release: ReleaseDocument, metadata: dict[str, Any]) -> list[di
     return checks
 
 
-def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> dict[str, Any]:
+def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "scope": "release",
@@ -165,7 +167,7 @@ def _check(check_id: str, failed: bool, severity: str, message: str, count: int 
     )
 
 
-def _track_check(track_id: str | None, check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> dict[str, Any]:
+def _track_check(track_id: str | None, check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> ImplementationDocument:
     data = _check(check_id, failed, severity, message, count)
     data["scope"] = "track"
     if track_id is not None:
@@ -173,7 +175,7 @@ def _track_check(track_id: str | None, check_id: str, failed: bool, severity: st
     return sanitize_metadata(data, blocked_keys=METADATA_BLOCKED_KEYS)
 
 
-def _check_message(check: dict[str, Any]) -> dict[str, Any]:
+def _check_message(check: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "scope": check.get("scope"),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from pathlib import Path
 from typing import Any
@@ -189,13 +191,13 @@ def write_release_audio_qa(release_store: ReleaseStore, release_id: str, report:
     return clean
 
 
-def _file_state(path: Path) -> dict[str, Any]:
+def _file_state(path: Path) -> ImplementationDocument:
     if not path.exists() or not path.is_file() or path.is_symlink():
         return {"exists": False}
     return {"exists": True, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
-def _json_state(path: Path) -> dict[str, Any]:
+def _json_state(path: Path) -> ImplementationDocument:
     if not path.exists() or not path.is_file() or path.is_symlink():
         return {"exists": False}
     try:
@@ -213,7 +215,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _artifact_stale_reasons(artifact: dict[str, Any], *, wav_path: Path, midi_path: Path, song_plan_path: Path, project_store: ProjectStore) -> list[str]:
+def _artifact_stale_reasons(artifact: ImplementationDocument, *, wav_path: Path, midi_path: Path, song_plan_path: Path, project_store: ProjectStore) -> list[str]:
     renderer = artifact.get("renderer") if isinstance(artifact.get("renderer"), dict) else {}
     profile_id = str(renderer.get("profile_id") or "")
     profile = None

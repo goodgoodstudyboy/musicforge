@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -108,7 +110,7 @@ def print_maintenance_backup_verification_report(report: dict[str, Any]) -> None
         print(f"- {check.get('check_id')}: {marker} - {check.get('message')}")
 
 
-def _verify_entries(checks: list[dict[str, Any]], entries: list[zipfile.ZipInfo], *, max_uncompressed_size_mb: int, max_entry_count: int) -> None:
+def _verify_entries(checks: list[ImplementationDocument], entries: list[zipfile.ZipInfo], *, max_uncompressed_size_mb: int, max_entry_count: int) -> None:
     names = [info.filename for info in entries]
     raw_names = [str(getattr(info, "orig_filename", info.filename)) for info in entries]
     duplicates = sorted({name for name in names if names.count(name) > 1})
@@ -166,7 +168,7 @@ def _verify_entries(checks: list[dict[str, Any]], entries: list[zipfile.ZipInfo]
     )
 
 
-def _verify_manifest(checks: list[dict[str, Any]], manifest: dict[str, Any]) -> None:
+def _verify_manifest(checks: list[ImplementationDocument], manifest: ImplementationDocument) -> None:
     _add_check(
         checks,
         "lts_backup_manifest_package_type",
@@ -190,7 +192,7 @@ def _verify_manifest(checks: list[dict[str, Any]], manifest: dict[str, Any]) -> 
     )
 
 
-def _verify_manifest_entries(checks: list[dict[str, Any]], archive: zipfile.ZipFile, manifest: dict[str, Any], entry_names: list[str], *, strict: bool) -> None:
+def _verify_manifest_entries(checks: list[ImplementationDocument], archive: zipfile.ZipFile, manifest: ImplementationDocument, entry_names: list[str], *, strict: bool) -> None:
     manifest_files = [item for item in manifest.get("files", []) if isinstance(item, dict)]
     declared_paths = [str(item.get("path") or "") for item in manifest_files]
     invalid_declared = [path for path in declared_paths if not path.startswith("data/musicforge/") or not _is_safe_entry_name(path)]
@@ -245,7 +247,7 @@ def _verify_manifest_entries(checks: list[dict[str, Any]], archive: zipfile.ZipF
     )
 
 
-def _verify_redaction(checks: list[dict[str, Any]], archive: zipfile.ZipFile, entries: list[zipfile.ZipInfo]) -> None:
+def _verify_redaction(checks: list[ImplementationDocument], archive: zipfile.ZipFile, entries: list[zipfile.ZipInfo]) -> None:
     findings: list[dict[str, Any]] = []
     for info in entries:
         if info.is_dir() or info.file_size > 10 * 1024 * 1024:
@@ -268,7 +270,7 @@ def _verify_redaction(checks: list[dict[str, Any]], archive: zipfile.ZipFile, en
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     with archive.open(name) as file:
         data = json.loads(file.read().decode("utf-8"))
     if not isinstance(data, dict):
@@ -276,7 +278,7 @@ def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
     return data
 
 
-def _report(target: Path, checks: list[dict[str, Any]], manifest: dict[str, Any]) -> dict[str, Any]:
+def _report(target: Path, checks: list[ImplementationDocument], manifest: ImplementationDocument) -> ImplementationDocument:
     blockers = [check for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
     warnings = [check for check in checks if check.get("status") == "warning" or check.get("severity") == "warning"]
     report = {
@@ -336,7 +338,7 @@ def _is_forbidden_entry(name: str) -> bool:
     return False
 
 
-def _add_check(checks: list[dict[str, Any]], check_id: str, status: str, severity: str, message: str, detail: dict[str, Any] | None = None) -> None:
+def _add_check(checks: list[ImplementationDocument], check_id: str, status: str, severity: str, message: str, detail: ImplementationDocument | None = None) -> None:
     checks.append({"check_id": check_id, "status": status, "severity": severity, "message": message, "detail": detail or {}})
 
 

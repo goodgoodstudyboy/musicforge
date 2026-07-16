@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import csv
 import hashlib
 import io
@@ -317,7 +319,7 @@ def distribution_export_summary(manifest: dict[str, Any] | None) -> dict[str, An
     )
 
 
-def _write_package_json(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: dict[str, Any], now: str) -> None:
+def _write_package_json(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: ImplementationDocument, now: str) -> None:
     _write_json(
         export_dir / "package.json",
         sanitize_metadata(
@@ -336,7 +338,7 @@ def _write_package_json(export_dir: Path, release: Any, target: DistributionTarg
     )
 
 
-def _copy_release_file(source_root: Path, export_dir: Path, rel: str, records: list[dict[str, Any]], *, csv_safe: bool = False) -> None:
+def _copy_release_file(source_root: Path, export_dir: Path, rel: str, records: list[ImplementationDocument], *, csv_safe: bool = False) -> None:
     source = (source_root / _validate_relative_path(rel)).resolve()
     _ensure_within(source_root, source)
     if not source.exists() or not source.is_file() or source.is_symlink():
@@ -356,13 +358,13 @@ def _copy_release_file(source_root: Path, export_dir: Path, rel: str, records: l
     records.append(_file_record(export_dir, target))
 
 
-def _selected_artwork(store: DistributionStore, release_id: str, target: DistributionTarget) -> dict[str, Any]:
+def _selected_artwork(store: DistributionStore, release_id: str, target: DistributionTarget) -> ImplementationDocument:
     artwork_id = str((target.options or {}).get("artwork_id") or "").strip()
     artwork = read_distribution_artwork(store, release_id, artwork_id) if artwork_id else latest_distribution_artwork(store, release_id)
     return artwork if isinstance(artwork, dict) else {}
 
 
-def _copy_layout_entries(store: DistributionStore, release_id: str, release_export_dir: Path, export_dir: Path, layout_plan: dict[str, Any], *, artwork: dict[str, Any]) -> list[dict[str, Any]]:
+def _copy_layout_entries(store: DistributionStore, release_id: str, release_export_dir: Path, export_dir: Path, layout_plan: ImplementationDocument, *, artwork: ImplementationDocument) -> list[ImplementationDocument]:
     records: list[dict[str, Any]] = []
     encoded_root = store.release_store.release_dir(release_id).resolve() / "encoded-audio"
     for entry in layout_plan.get("entries", []) if isinstance(layout_plan.get("entries"), list) else []:
@@ -401,7 +403,7 @@ def _copy_layout_entries(store: DistributionStore, release_id: str, release_expo
     return records
 
 
-def _write_encoded_audio_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+def _write_encoded_audio_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[ImplementationDocument]) -> ImplementationDocument:
     template = store.resolve_target_template(target)
     profile_ids = [profile_id for profile_id in resolve_target_audio_format_profiles(target, template) if profile_id != "wav_master"]
     encoding_store = AudioEncodingStore(store.release_store, project_store=store.release_store.project_store)
@@ -423,7 +425,7 @@ def _write_encoded_audio_sidecars(store: DistributionStore, release_id: str, tar
     return sanitize_metadata({"status": "included", "profiles": copied_profiles, "summary_path": "encoded-audio/summary.json"}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _write_encoded_audio_acceptance_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+def _write_encoded_audio_acceptance_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[ImplementationDocument]) -> ImplementationDocument:
     template = store.resolve_target_template(target)
     profile_ids = [profile_id for profile_id in resolve_target_audio_format_profiles(target, template) if profile_id != "wav_master"]
     if not profile_ids:
@@ -441,7 +443,7 @@ def _write_encoded_audio_acceptance_sidecars(store: DistributionStore, release_i
         return {"status": "missing", "required_profiles": profile_ids}
 
 
-def _write_format_decision_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+def _write_format_decision_sidecars(store: DistributionStore, release_id: str, target: DistributionTarget, export_dir: Path, records: list[ImplementationDocument]) -> ImplementationDocument:
     try:
         summary = FormatDecisionStore(store.release_store, project_store=store.release_store.project_store, distribution_store=store).export_distribution(release_id, target, export_dir)
     except Exception:
@@ -452,7 +454,7 @@ def _write_format_decision_sidecars(store: DistributionStore, release_id: str, t
     return sanitize_metadata(summary, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _write_rights_clearance_sidecars(store: DistributionStore, release_id: str, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+def _write_rights_clearance_sidecars(store: DistributionStore, release_id: str, export_dir: Path, records: list[ImplementationDocument]) -> ImplementationDocument:
     try:
         summary = RightsClearanceStore(store.release_store).export_package_summary(release_id, export_dir)
     except Exception:
@@ -463,7 +465,7 @@ def _write_rights_clearance_sidecars(store: DistributionStore, release_id: str, 
     return sanitize_metadata(summary, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _artwork_record(artwork: dict[str, Any], layout_plan: dict[str, Any]) -> dict[str, Any]:
+def _artwork_record(artwork: ImplementationDocument, layout_plan: ImplementationDocument) -> ImplementationDocument:
     if not artwork:
         return {}
     entries = layout_plan.get("entries") if isinstance(layout_plan.get("entries"), list) else []
@@ -471,7 +473,7 @@ def _artwork_record(artwork: dict[str, Any], layout_plan: dict[str, Any]) -> dic
     return sanitize_metadata({**artwork, "package_path": package_path}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: dict[str, Any], artwork: dict[str, Any], *, checklist: dict[str, Any] | None = None, write_checklist: bool = True) -> bool:
+def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: ImplementationDocument, artwork: ImplementationDocument, *, checklist: ImplementationDocument | None = None, write_checklist: bool = True) -> bool:
     checklist = {
         "package_id": package_id,
         "release_id": release.release_id,
@@ -489,7 +491,7 @@ def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, pack
     return write_checklist
 
 
-def _write_readme(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, release: Any, target: DistributionTarget, package_id: str, qa_report: ImplementationDocument) -> None:
     lines = [
         f"MusicForge Distribution Package: {sanitize_sensitive_text(release.name)}",
         "",
@@ -503,7 +505,7 @@ def _write_readme(export_dir: Path, release: Any, target: DistributionTarget, pa
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_template_files(export_dir: Path, template: dict[str, Any], checklist: dict[str, Any]) -> None:
+def _write_template_files(export_dir: Path, template: ImplementationDocument, checklist: ImplementationDocument) -> None:
     _write_json(export_dir / "template-pack.json", sanitize_metadata(template, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
     _write_json(export_dir / "template-summary.json", template_summary(template))
     payload = checklist_export_payload(checklist, template)
@@ -511,7 +513,7 @@ def _write_template_files(export_dir: Path, template: dict[str, Any], checklist:
     (export_dir / "docs" / "checklist.md").write_text(checklist_markdown(checklist, template), encoding="utf-8")
 
 
-def _write_template_platform_csv(export_dir: Path, store: DistributionStore, release_id: str, template: dict[str, Any]) -> Path | None:
+def _write_template_platform_csv(export_dir: Path, store: DistributionStore, release_id: str, template: ImplementationDocument) -> Path | None:
     mapping = template_mapping(template)
     rows = mapping.get("platform_csv") if isinstance(mapping.get("platform_csv"), list) else []
     if not rows:
@@ -542,7 +544,7 @@ def _write_template_platform_csv(export_dir: Path, store: DistributionStore, rel
     return target
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.parent / f".tmp-{os.getpid()}-{threading.get_ident()}.json"
     tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -550,7 +552,7 @@ def _write_json(path: Path, data: dict[str, Any]) -> Path:
     return path
 
 
-def _profile_public(profile_id: str) -> dict[str, Any]:
+def _profile_public(profile_id: str) -> ImplementationDocument:
     profile = get_distribution_profile(profile_id)
     return {key: profile.get(key) for key in ("profile_id", "name", "description", "profile_hash")}
 
@@ -571,7 +573,7 @@ def _escape_csv_cell(cell: str) -> str:
     return text
 
 
-def _distribution_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
+def _distribution_signoff_export_summary(signoff: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "status": signoff.get("status") or "not_signed",
@@ -585,7 +587,7 @@ def _distribution_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, A
     )
 
 
-def _distribution_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[str, Any]:
+def _distribution_signoff_sidecar_record(signoff_public: ImplementationDocument) -> ImplementationDocument:
     return {
         "path": "distribution-signoff.json",
         "payload_hash": stable_hash(_distribution_signoff_hash_payload(signoff_public)),
@@ -593,11 +595,11 @@ def _distribution_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict
     }
 
 
-def _distribution_signoff_hash_payload(signoff_public: dict[str, Any]) -> dict[str, Any]:
+def _distribution_signoff_hash_payload(signoff_public: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in signoff_public.items() if key not in DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_file(path)}
 

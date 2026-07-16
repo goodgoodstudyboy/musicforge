@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -204,7 +206,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             blocked_keys=FINAL_BOARD_BLOCKED_KEYS,
         )
 
-    def _source_with_responses(self, portfolio_id: str, responses: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def _source_with_responses(self, portfolio_id: str, responses: list[ImplementationDocument] | None = None) -> ImplementationDocument:
         rows = responses if responses is not None else self.list_reviewer_responses(portfolio_id)
         source = self.build_source(portfolio_id)
         source["reviewer_responses_hash"] = stable_hash([item.get("integrity_hash") for item in rows])
@@ -577,7 +579,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             blocked_keys=FINAL_BOARD_BLOCKED_KEYS,
         )
 
-    def _final_board_findings(self, portfolio_id: str, source: dict[str, Any], responses: list[dict[str, Any]], payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _final_board_findings(self, portfolio_id: str, source: ImplementationDocument, responses: list[ImplementationDocument], payload: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         gates: list[dict[str, Any]] = []
@@ -675,7 +677,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                 pass
         return f"fcr-{(max(nums) if nums else 0) + 1:06d}"
 
-    def _append_history(self, portfolio_id: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_history(self, portfolio_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.history_path(portfolio_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -683,7 +685,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
-    def _history_has_current_signoff_archive_event(self, portfolio_id: str, signoff: dict[str, Any], event_type: str) -> bool:
+    def _history_has_current_signoff_archive_event(self, portfolio_id: str, signoff: ImplementationDocument, event_type: str) -> bool:
         signoff_id = str(signoff.get("signoff_id") or "")
         signoff_hash = str(signoff.get("integrity_hash") or "")
         if not signoff_id and not signoff_hash:
@@ -727,7 +729,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                     return True
         return False
 
-    def _append_change_event(self, portfolio_id: str, event_type: str, item: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_change_event(self, portfolio_id: str, event_type: str, item: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.change_request_events_path(portfolio_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -790,7 +792,7 @@ def final_board_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     return sanitize_metadata({"status": data.get("status"), "readiness": data.get("readiness"), "portfolio_id": data.get("portfolio_id"), "source_hash": data.get("source_hash"), "integrity_hash": data.get("integrity_hash"), "integrity_ok": final_board_report_integrity_ok(data), **summary}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
 
-def _summary_from_source(source: dict[str, Any], responses: list[dict[str, Any]], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary_from_source(source: ImplementationDocument, responses: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "queue_count": int(source.get("queue_count") or 0),
         "signed_queue_count": int(source.get("signed_queue_count") or 0),
@@ -809,7 +811,7 @@ def _summary_from_source(source: dict[str, Any], responses: list[dict[str, Any]]
     }
 
 
-def _reviewer_response_status(responses: list[dict[str, Any]], source: dict[str, Any]) -> str:
+def _reviewer_response_status(responses: list[ImplementationDocument], source: ImplementationDocument) -> str:
     if not responses:
         return "missing"
     valid_current: list[dict[str, Any]] = []
@@ -831,22 +833,22 @@ def _reviewer_response_status(responses: list[dict[str, Any]], source: dict[str,
     return decision if decision in RESPONSE_DECISIONS else "missing"
 
 
-def _response_summary(item: dict[str, Any]) -> dict[str, Any]:
+def _response_summary(item: ImplementationDocument) -> ImplementationDocument:
     return {"response_id": item.get("response_id"), "decision": item.get("decision"), "reviewer": item.get("reviewer", {}), "integrity_hash": item.get("integrity_hash"), "integrity_ok": final_board_response_integrity_ok(item)}
 
 
-def _reviewer_response_bundle(portfolio_id: str, responses: list[dict[str, Any]], source: dict[str, Any]) -> dict[str, Any]:
+def _reviewer_response_bundle(portfolio_id: str, responses: list[ImplementationDocument], source: ImplementationDocument) -> ImplementationDocument:
     bundle = {"portfolio_id": portfolio_id, "status": _reviewer_response_status(responses, source), "count": len(responses), "items": [_response_summary(item) for item in responses]}
     bundle["payload_hash"] = stable_hash({key: value for key, value in bundle.items() if key != "payload_hash"})
     return bundle
 
 
-def _verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return {"status": report.get("status") or "missing", "zip_sha256": report.get("zip_sha256"), "zip_size_bytes": report.get("zip_size_bytes"), "manifest_hash": report.get("manifest_hash"), "summary": summary}
 
 
-def _sanitize_findings(value: Any) -> list[dict[str, Any]]:
+def _sanitize_findings(value: Any) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if not isinstance(value, list):
         return rows
@@ -875,7 +877,7 @@ def _reject_forbidden_keys(value: Any) -> None:
             _reject_forbidden_keys(item)
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return default if default is not None else {}
     try:
@@ -885,7 +887,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
 
-def _read_zip_json(path: Path, name: str) -> dict[str, Any]:
+def _read_zip_json(path: Path, name: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(path, "r") as archive:
             value = json.loads(archive.read(name).decode("utf-8"))
@@ -894,12 +896,12 @@ def _read_zip_json(path: Path, name: str) -> dict[str, Any]:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(data, blocked_keys=FINAL_BOARD_BLOCKED_KEYS))
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(root.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -947,7 +949,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -956,12 +958,12 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
 
 
-def _final_board_markdown(report: dict[str, Any], signoff: dict[str, Any]) -> str:
+def _final_board_markdown(report: ImplementationDocument, signoff: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return "\n".join(["# Portfolio Governance Final Board", "", f"Portfolio: {report.get('portfolio_id')}", f"Report status: {report.get('status')}", f"Signoff status: {signoff.get('status')}", f"Queues: {summary.get('signed_queue_count', 0)}/{summary.get('queue_count', 0)}", f"Archives: {summary.get('archive_verified_count', 0)}", ""])
 
 
-def _reviewer_response_markdown(responses: list[dict[str, Any]]) -> str:
+def _reviewer_response_markdown(responses: list[ImplementationDocument]) -> str:
     lines = ["# Reviewer Responses", ""]
     for item in responses:
         reviewer = item.get("reviewer") if isinstance(item.get("reviewer"), dict) else {}
@@ -970,16 +972,16 @@ def _reviewer_response_markdown(responses: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any], signoff: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument, signoff: ImplementationDocument) -> None:
     lines = ["MusicForge Release Portfolio Governance Final Board Archive", "", f"Portfolio ID: {report.get('portfolio_id')}", f"Report Status: {report.get('status')}", f"Signoff Status: {signoff.get('status')}", "", "Verify with: python -m song_agent.cli verify-release-portfolio-governance-final-board-package portfolio-governance-final-board-archive.zip --strict --require-signed --require-reviewer-pack --require-audit --require-archives"]
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": message}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": message}
 
 

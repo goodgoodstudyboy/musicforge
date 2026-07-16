@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import threading
@@ -289,7 +291,7 @@ class AcceptanceKnowledgeBaseStore:
             entry = KnowledgeEntry.from_dict({**entry.to_dict(), "status": "hidden", "updated_at": now})
         return entry
 
-    def _review_task_sources(self, items: list[Any]) -> list[dict[str, Any]]:
+    def _review_task_sources(self, items: list[Any]) -> list[ImplementationDocument]:
         sources = []
         for item in items:
             data = item.to_dict() if hasattr(item, "to_dict") else item if isinstance(item, dict) else {}
@@ -324,7 +326,7 @@ class AcceptanceKnowledgeBaseStore:
             index += 1
         return f"akbr-{index:06d}"
 
-    def _with_stale(self, report: dict[str, Any]) -> dict[str, Any]:
+    def _with_stale(self, report: ImplementationDocument) -> ImplementationDocument:
         entries = self.search_entries(report.get("scope") if isinstance(report.get("scope"), dict) else {})
         current_hash = _entries_source_hash(entries)
         stored_hash = str(report.get("source_hash") or "")
@@ -545,7 +547,7 @@ def knowledge_entry_summary(entry: KnowledgeEntry | dict[str, Any]) -> dict[str,
     )
 
 
-def _issue_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
+def _issue_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
     grouped: dict[str, list[KnowledgeEntry]] = {}
     for entry in entries:
         for issue in entry.target.get("issue_types", []) if isinstance(entry.target.get("issue_types"), list) else ["other"]:
@@ -567,7 +569,7 @@ def _issue_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (-int(item.get("entry_count") or 0), str(item.get("issue_type") or "")))
 
 
-def _style_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
+def _style_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
     grouped: dict[str, list[KnowledgeEntry]] = {}
     for entry in entries:
         grouped.setdefault(str(entry.target.get("style") or "unknown"), []).append(entry)
@@ -580,7 +582,7 @@ def _style_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (-int(item.get("entry_count") or 0), str(item.get("style") or "")))
 
 
-def _song_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
+def _song_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
     grouped: dict[str, list[KnowledgeEntry]] = {}
     for entry in entries:
         grouped.setdefault(str(entry.target.get("song_id") or "unknown"), []).append(entry)
@@ -599,7 +601,7 @@ def _song_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (-int(item.get("entry_count") or 0), str(item.get("song_id") or "")))
 
 
-def _fix_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
+def _fix_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
     return [
         {
             "pattern": "manual_review_task_resolution",
@@ -610,7 +612,7 @@ def _fix_patterns(entries: list[KnowledgeEntry]) -> list[dict[str, Any]]:
     ] if entries else []
 
 
-def _knowledge_recommendations(issue_patterns: list[dict[str, Any]], style_patterns: list[dict[str, Any]], song_patterns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _knowledge_recommendations(issue_patterns: list[ImplementationDocument], style_patterns: list[ImplementationDocument], song_patterns: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows = []
     if issue_patterns:
         weakest = sorted(issue_patterns, key=lambda item: float(item.get("average_effectiveness_score") or 0))[0]
@@ -631,23 +633,23 @@ def _entries_source_hash(entries: list[KnowledgeEntry]) -> str:
     return stable_hash(payload)
 
 
-def _sprint_source(sprint: AcceptanceFixSprint) -> dict[str, Any]:
+def _sprint_source(sprint: AcceptanceFixSprint) -> ImplementationDocument:
     return {"fix_sprint_id": sprint.fix_sprint_id, "status": sprint.status, "scope": sprint.scope, "source": sprint.source, "recheck": sprint.recheck, "delta_summary": sprint.delta_summary, "closeout_summary": sprint.closeout_summary}
 
 
-def _item_source(item: dict[str, Any]) -> dict[str, Any]:
+def _item_source(item: ImplementationDocument) -> ImplementationDocument:
     return {"item_id": item.get("item_id"), "status": item.get("status"), "source": item.get("source"), "target": item.get("target"), "review_task_id": item.get("review_task_id"), "resolution": item.get("resolution")}
 
 
-def _delta_source(delta: dict[str, Any]) -> dict[str, Any]:
+def _delta_source(delta: ImplementationDocument) -> ImplementationDocument:
     return {"source": delta.get("source"), "recheck": delta.get("recheck"), "summary": delta.get("summary"), "issue_deltas": delta.get("issue_deltas"), "song_deltas": delta.get("song_deltas")}
 
 
-def _closeout_source(closeout: dict[str, Any]) -> dict[str, Any]:
+def _closeout_source(closeout: ImplementationDocument) -> ImplementationDocument:
     return {"status": closeout.get("status"), "forced": closeout.get("forced"), "checks": closeout.get("checks"), "summary": closeout.get("summary")}
 
 
-def _issue_types_from_item(item: dict[str, Any]) -> list[str]:
+def _issue_types_from_item(item: ImplementationDocument) -> list[str]:
     target = item.get("target") if isinstance(item.get("target"), dict) else {}
     source = item.get("source") if isinstance(item.get("source"), dict) else {}
     evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
@@ -671,7 +673,7 @@ def _issue_types_from_text(text: str) -> list[str]:
     return found or ["other"]
 
 
-def _issue_types_from_payload(payload: dict[str, Any]) -> list[str]:
+def _issue_types_from_payload(payload: ImplementationDocument) -> list[str]:
     raw = payload.get("issue_types")
     if isinstance(raw, list):
         return [str(item).strip().lower() for item in raw if str(item).strip()]
@@ -685,7 +687,7 @@ def _normalize_issue(value: Any) -> str:
     return str(value or "").strip().lower()
 
 
-def _style_from_items(items: list[dict[str, Any]]) -> str:
+def _style_from_items(items: list[ImplementationDocument]) -> str:
     for item in items:
         target = item.get("target") if isinstance(item.get("target"), dict) else {}
         if target.get("style"):
@@ -693,7 +695,7 @@ def _style_from_items(items: list[dict[str, Any]]) -> str:
     return "unknown"
 
 
-def _safe_scope(scope: dict[str, Any]) -> dict[str, Any]:
+def _safe_scope(scope: ImplementationDocument) -> ImplementationDocument:
     return {"type": str(scope.get("type") or "global"), "project_id": scope.get("project_id"), "release_id": scope.get("release_id"), "song_id": scope.get("song_id"), "style": scope.get("style"), "issue_type": scope.get("issue_type")}
 
 
@@ -725,7 +727,7 @@ def _normalize_text(value: Any) -> str:
     return re.sub(r"[^a-z0-9_ -]+", "", str(value or "").lower()).strip()
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {})
 
 
@@ -750,7 +752,7 @@ def _validate_id(value: str, prefix: str) -> str:
     return value
 
 
-def _append_event(path: Path, event_type: str, payload: dict[str, Any], now: str | None = None) -> None:
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument, now: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     event = sanitize_metadata({"event_type": event_type, "created_at": now or now_iso(), "payload": payload})
     with path.open("a", encoding="utf-8") as handle:

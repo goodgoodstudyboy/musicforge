@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import ast
 from dataclasses import dataclass
 from importlib import import_module
@@ -92,7 +94,7 @@ ACTIVE_LIFECYCLE_CAPABILITIES = (
 active_lifecycle_registry = LifecycleCapabilityRegistry(ACTIVE_LIFECYCLE_CAPABILITIES)
 
 
-def _adoption_row(capability: LifecycleCapability) -> dict[str, Any]:
+def _adoption_row(capability: LifecycleCapability) -> ImplementationDocument:
     module = import_module(capability.module)
     store = getattr(module, capability.store_class)
     source_path = Path(module.__file__ or "")

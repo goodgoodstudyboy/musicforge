@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from pathlib import Path, PurePosixPath
 from typing import Any
 import hashlib
@@ -317,17 +319,17 @@ def layout_check_items(plan: dict[str, Any]) -> list[dict[str, Any]]:
 def _entry(
     *,
     kind: str,
-    track: dict[str, Any] | None,
+    track: ImplementationDocument | None,
     pattern: str,
     source_rel: str,
     source_kind: str,
     ext: str,
-    audio_format: dict[str, Any],
+    audio_format: ImplementationDocument,
     required: bool,
     exists: bool,
-    release_info: dict[str, Any],
-    target_info: dict[str, Any],
-) -> dict[str, Any]:
+    release_info: ImplementationDocument,
+    target_info: ImplementationDocument,
+) -> ImplementationDocument:
     track_id = str((track or {}).get("track_id") or "")
     profile_id = str(audio_format.get("profile_id") or "") if kind == "audio" and isinstance(audio_format, dict) else ""
     entry_id = f"{kind}:{track_id}" if track_id else f"{kind}:cover"
@@ -360,7 +362,7 @@ def _entry(
     return sanitize_metadata(entry, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _add_entry(entries: list[dict[str, Any]], warnings: list[dict[str, Any]], errors: list[dict[str, Any]], used_paths: dict[str, str], entry: dict[str, Any]) -> None:
+def _add_entry(entries: list[ImplementationDocument], warnings: list[ImplementationDocument], errors: list[ImplementationDocument], used_paths: dict[str, str], entry: ImplementationDocument) -> None:
     if entry.get("error"):
         error_text = str(entry.get("error") or "")
         kind = str(entry.get("kind") or "entry")
@@ -388,7 +390,7 @@ def _add_entry(entries: list[dict[str, Any]], warnings: list[dict[str, Any]], er
     entries.append(entry)
 
 
-def _render_pattern(kind: str, pattern: str, *, track: dict[str, Any] | None, release_info: dict[str, Any], target_info: dict[str, Any], ext: str, audio_format: dict[str, Any] | None = None) -> str:
+def _render_pattern(kind: str, pattern: str, *, track: ImplementationDocument | None, release_info: ImplementationDocument, target_info: ImplementationDocument, ext: str, audio_format: ImplementationDocument | None = None) -> str:
     _ensure_variables_allowed(kind, pattern)
     audio_format = audio_format if isinstance(audio_format, dict) else {}
     values: dict[str, Any] = {
@@ -441,7 +443,7 @@ def validate_layout_path(path: str) -> str:
     return PurePosixPath(*parts).as_posix()
 
 
-def _pattern_errors(kind: str, pattern: str) -> list[dict[str, Any]]:
+def _pattern_errors(kind: str, pattern: str) -> list[ImplementationDocument]:
     errors: list[dict[str, Any]] = []
     try:
         _ensure_variables_allowed(kind, pattern)
@@ -484,7 +486,7 @@ def _with_default_prefix(pattern: str, prefix: str) -> str:
     return f"{prefix}/{text}"
 
 
-def _release_info(release: Any | dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+def _release_info(release: Any | ImplementationDocument, metadata: ImplementationDocument) -> ImplementationDocument:
     meta_release = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
     return {
         "release_id": _attr(release, "release_id") or (release.get("release_id") if isinstance(release, dict) else None),
@@ -494,7 +496,7 @@ def _release_info(release: Any | dict[str, Any], metadata: dict[str, Any]) -> di
     }
 
 
-def _target_info(target: Any) -> dict[str, Any]:
+def _target_info(target: Any) -> ImplementationDocument:
     options = _attr(target, "options") if not isinstance(target, dict) else target.get("options")
     return {
         "target_id": _attr(target, "target_id") or (target.get("target_id") if isinstance(target, dict) else None),
@@ -503,19 +505,19 @@ def _target_info(target: Any) -> dict[str, Any]:
     }
 
 
-def _metadata_tracks_by_id(metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _metadata_tracks_by_id(metadata: ImplementationDocument) -> dict[str, ImplementationDocument]:
     tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
     return {str(item.get("track_id") or ""): item for item in tracks if isinstance(item, dict) and item.get("track_id")}
 
 
-def _track_context(track: dict[str, Any], metadata: dict[str, Any] | None, release_info: dict[str, Any]) -> dict[str, Any]:
+def _track_context(track: ImplementationDocument, metadata: ImplementationDocument | None, release_info: ImplementationDocument) -> ImplementationDocument:
     metadata = metadata if isinstance(metadata, dict) else {}
     merged = {**track, **{key: value for key, value in metadata.items() if value not in (None, "", [])}}
     merged["language"] = merged.get("language") or release_info.get("language")
     return merged
 
 
-def _audio_source_rel(root: Path | None, track: dict[str, Any], *, target_info: dict[str, Any], encoded_audio_summary: dict[str, Any] | None, encoded_audio_root: Path | None, profile_id: str) -> tuple[str, str, str, dict[str, Any]]:
+def _audio_source_rel(root: Path | None, track: ImplementationDocument, *, target_info: ImplementationDocument, encoded_audio_summary: ImplementationDocument | None, encoded_audio_root: Path | None, profile_id: str) -> tuple[str, str, str, ImplementationDocument]:
     profile_id = _validate_profile_id(profile_id or "wav_master")
     if profile_id != "wav_master":
         profile = _encoded_profile_summary(encoded_audio_summary, profile_id)
@@ -533,7 +535,7 @@ def _audio_source_rel(root: Path | None, track: dict[str, Any], *, target_info: 
     return validate_layout_path(fallback), Path(fallback).suffix.lower().lstrip(".") or "wav", "release_export", {"profile_id": "wav_master", "format": "wav", "extension": "wav", "codec": "pcm_s16le"}
 
 
-def _encoded_profile_summary(summary: dict[str, Any] | None, profile_id: str) -> dict[str, Any]:
+def _encoded_profile_summary(summary: ImplementationDocument | None, profile_id: str) -> ImplementationDocument:
     profiles = summary.get("profiles") if isinstance(summary, dict) and isinstance(summary.get("profiles"), list) else []
     for row in profiles:
         if isinstance(row, dict) and row.get("profile_id") == profile_id:
@@ -541,7 +543,7 @@ def _encoded_profile_summary(summary: dict[str, Any] | None, profile_id: str) ->
     return {"profile_id": profile_id, "format": profile_id.split("_", 1)[0], "extension": profile_id.split("_", 1)[0], "codec": ""}
 
 
-def _target_audio_profile_ids(target_info: dict[str, Any], rules: dict[str, Any]) -> list[str]:
+def _target_audio_profile_ids(target_info: ImplementationDocument, rules: ImplementationDocument) -> list[str]:
     options = target_info.get("options") if isinstance(target_info.get("options"), dict) else {}
     profiles = _normalize_profile_ids(options.get("audio_format_profiles"))
     if not profiles:
@@ -559,12 +561,12 @@ def _validate_profile_id(value: str) -> str:
     return normalize_required_profiles([value])[0]
 
 
-def _lyrics_source_rel(track: dict[str, Any]) -> str:
+def _lyrics_source_rel(track: ImplementationDocument) -> str:
     title = slugify(str(track.get("title") or track.get("track_id") or "track"))[:60]
     return validate_layout_path(f"lyrics/{int(track.get('track_number') or 1):02d}-{title}.txt")
 
 
-def _artwork_source_rel(artwork: dict[str, Any] | None) -> str:
+def _artwork_source_rel(artwork: ImplementationDocument | None) -> str:
     if not artwork:
         return "distribution-artwork/missing"
     return validate_layout_path(f"distribution-artwork/{_slug_value(artwork.get('artwork_id') or artwork.get('stored_filename'), 'cover')}")
@@ -589,11 +591,11 @@ def _attr(value: Any, name: str) -> Any:
     return getattr(value, name, None)
 
 
-def _entry_hash_payload(entry: dict[str, Any]) -> dict[str, Any]:
+def _entry_hash_payload(entry: ImplementationDocument) -> ImplementationDocument:
     return {key: entry.get(key) for key in ("entry_id", "kind", "track_id", "source_rel", "source_kind", "path", "pattern", "ext", "audio_format", "required", "exists", "status", "collision", "original_path", "collision_index")}
 
 
-def _layout_hash_payload(plan: dict[str, Any]) -> dict[str, Any]:
+def _layout_hash_payload(plan: ImplementationDocument) -> ImplementationDocument:
     return {
         key: value
         for key, value in plan.items()
@@ -601,7 +603,7 @@ def _layout_hash_payload(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _check(check_id: str, passed: bool, severity: str, message: str, *, count: int | None = None, warning_when_false: bool = False) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, severity: str, message: str, *, count: int | None = None, warning_when_false: bool = False) -> ImplementationDocument:
     status = "passed" if passed else "warning" if warning_when_false else "failed"
     item: dict[str, Any] = {"scope": "layout", "check_id": check_id, "status": status, "severity": severity, "message": message}
     if count is not None:

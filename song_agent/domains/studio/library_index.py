@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -526,7 +528,7 @@ def reference_roles(reference_type: str) -> list[str]:
     }.get(reference_type, ["reference"])
 
 
-def _matches_filters(item: LibraryItem, request: dict[str, Any]) -> bool:
+def _matches_filters(item: LibraryItem, request: ImplementationDocument) -> bool:
     item_kinds = _string_set(request.get("item_kinds"))
     if item_kinds and item.item_kind not in item_kinds:
         return False
@@ -547,7 +549,7 @@ def _matches_filters(item: LibraryItem, request: dict[str, Any]) -> bool:
     return True
 
 
-def _type_role_points(item: LibraryItem, request: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+def _type_role_points(item: LibraryItem, request: ImplementationDocument) -> tuple[int, list[ImplementationDocument]]:
     points = 0
     breakdown = []
     requested_types = _string_set(request.get("asset_types") if item.item_kind == "asset" else request.get("reference_types"))
@@ -564,7 +566,7 @@ def _type_role_points(item: LibraryItem, request: dict[str, Any]) -> tuple[int, 
     return min(20, points), breakdown
 
 
-def _style_mood_points(item: LibraryItem, request: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+def _style_mood_points(item: LibraryItem, request: ImplementationDocument) -> tuple[int, list[ImplementationDocument]]:
     points = 0
     breakdown = []
     for field, max_points in (("style", 8), ("mood", 7)):
@@ -577,7 +579,7 @@ def _style_mood_points(item: LibraryItem, request: dict[str, Any]) -> tuple[int,
     return min(15, points), breakdown
 
 
-def _musical_points(item: LibraryItem, request: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+def _musical_points(item: LibraryItem, request: ImplementationDocument) -> tuple[int, list[ImplementationDocument]]:
     points = 0
     breakdown = []
     tempo = _optional_int(request.get("tempo_bpm"))
@@ -598,7 +600,7 @@ def _musical_points(item: LibraryItem, request: dict[str, Any]) -> tuple[int, li
     return min(15, points), breakdown
 
 
-def _utility_points(item: LibraryItem) -> tuple[int, list[dict[str, Any]]]:
+def _utility_points(item: LibraryItem) -> tuple[int, list[ImplementationDocument]]:
     points = 0
     breakdown = []
     if item.quality_score is not None:
@@ -615,20 +617,20 @@ def _utility_points(item: LibraryItem) -> tuple[int, list[dict[str, Any]]]:
     return min(10, points), breakdown
 
 
-def _reason(reason: str, points: int, detail: str) -> dict[str, Any]:
+def _reason(reason: str, points: int, detail: str) -> ImplementationDocument:
     return {"reason": reason, "points": int(points), "detail": sanitize_sensitive_text(detail)}
 
 
-def _safe_query_summary(request: dict[str, Any]) -> dict[str, Any]:
+def _safe_query_summary(request: ImplementationDocument) -> ImplementationDocument:
     allowed = {"query", "item_kinds", "asset_types", "reference_types", "roles", "style", "mood", "key", "tempo_bpm", "meter", "limit"}
     return sanitize_metadata({key: request.get(key) for key in allowed if key in request})
 
 
-def _has_search_constraints(request: dict[str, Any]) -> bool:
+def _has_search_constraints(request: ImplementationDocument) -> bool:
     return any(request.get(key) for key in ("query", "item_kinds", "asset_types", "reference_types", "roles", "style", "mood", "key", "tempo_bpm", "meter", "tag", "favorite_only"))
 
 
-def _role_for_result(result: dict[str, Any]) -> str:
+def _role_for_result(result: ImplementationDocument) -> str:
     roles = result.get("features", {}).get("roles") if isinstance(result.get("features"), dict) else []
     if isinstance(roles, list) and roles:
         return str(roles[0])
@@ -660,11 +662,11 @@ def _density_hint(note_count: int, duration_beats: float) -> str:
     return "sparse"
 
 
-def _source_summary(source: dict[str, Any]) -> dict[str, Any]:
+def _source_summary(source: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata({key: source.get(key) for key in ("source_type", "project_id", "version_id", "job_id", "reference_id", "slice_id", "candidate_group_id", "candidate_id") if source.get(key)})
 
 
-def _source_origin(source: dict[str, Any]) -> dict[str, Any]:
+def _source_origin(source: ImplementationDocument) -> ImplementationDocument:
     return {
         "project_id": source.get("project_id"),
         "version_id": source.get("version_id"),
@@ -672,7 +674,7 @@ def _source_origin(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _roles_from_analysis(summary: dict[str, Any]) -> list[str]:
+def _roles_from_analysis(summary: ImplementationDocument) -> list[str]:
     roles = []
     for track in summary.get("track_summaries", []) if isinstance(summary.get("track_summaries"), list) else []:
         if isinstance(track, dict) and track.get("likely_role"):
@@ -680,7 +682,7 @@ def _roles_from_analysis(summary: dict[str, Any]) -> list[str]:
     return roles
 
 
-def _reference_analysis_features(reference_type: str, summary: dict[str, Any]) -> dict[str, Any]:
+def _reference_analysis_features(reference_type: str, summary: ImplementationDocument) -> ImplementationDocument:
     features: dict[str, Any] = {}
     if reference_type == "audio_wav":
         features.update(
@@ -718,7 +720,7 @@ def _reference_analysis_features(reference_type: str, summary: dict[str, Any]) -
     return features
 
 
-def _compact_analysis_for_index(summary: dict[str, Any]) -> dict[str, Any]:
+def _compact_analysis_for_index(summary: ImplementationDocument) -> ImplementationDocument:
     compact = {
         key: summary.get(key)
         for key in ("duration_seconds", "sample_rate", "channels", "track_count", "tempo_bpm", "meter", "line_count", "keywords", "safe_excerpt")
@@ -739,7 +741,7 @@ def _compact_analysis_for_index(summary: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def _tempo_from_analysis(summary: dict[str, Any]) -> int | None:
+def _tempo_from_analysis(summary: ImplementationDocument) -> int | None:
     for key in ("tempo_bpm", "manual_tempo_bpm"):
         value = _optional_int(summary.get(key))
         if value:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import shutil
@@ -138,7 +140,7 @@ class AudioRevisionStore:
                 continue
         return issues
 
-    def _list_raw_issues(self, release_id: str, session_id: str) -> list[dict[str, Any]]:
+    def _list_raw_issues(self, release_id: str, session_id: str) -> list[ImplementationDocument]:
         issues_dir = self.session_dir(release_id, session_id) / "issues"
         issues = []
         if not issues_dir.exists():
@@ -782,7 +784,7 @@ class AudioRevisionStore:
             return {**summary, "status": "failed" if required else "warning", "message": "Audio revision closeout has unresolved blockers."}
         return {**summary, "status": "passed" if summary.get("status") == "passed" else "warning" if summary.get("session_count") else "missing", "message": "Audio revision closeout gate passed."}
 
-    def _issues_from_audio_markers(self, release_id: str, session_id: str, payload: dict[str, Any], *, now: str) -> list[dict[str, Any]]:
+    def _issues_from_audio_markers(self, release_id: str, session_id: str, payload: ImplementationDocument, *, now: str) -> list[ImplementationDocument]:
         include_categories = {str(item) for item in payload.get("include_categories", []) if str(item).strip()} if isinstance(payload.get("include_categories"), list) else set(REVISION_CATEGORIES)
         min_severity = str(payload.get("min_severity") or "low")
         track_ids = {str(item) for item in payload.get("track_ids", []) if str(item).strip()} if isinstance(payload.get("track_ids"), list) else set()
@@ -807,7 +809,7 @@ class AudioRevisionStore:
                 issues.append(self._build_issue(release_id, session_id, issue_id, track=track, review=review, marker=marker, now=now))
         return issues
 
-    def _build_issue(self, release_id: str, session_id: str, issue_id: str, *, track: Any, review: dict[str, Any], marker: dict[str, Any], now: str) -> dict[str, Any]:
+    def _build_issue(self, release_id: str, session_id: str, issue_id: str, *, track: Any, review: ImplementationDocument, marker: ImplementationDocument, now: str) -> ImplementationDocument:
         source_review_id = str(review.get("review_id") or "")
         source_marker_id = str(marker.get("marker_id") or "")
         source = {
@@ -849,7 +851,7 @@ class AudioRevisionStore:
         issue["integrity_hash"] = _object_hash(issue, ISSUE_INTEGRITY_EXCLUDE)
         return sanitize_metadata(issue, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
-    def _with_session_current_state(self, session: dict[str, Any]) -> dict[str, Any]:
+    def _with_session_current_state(self, session: ImplementationDocument) -> ImplementationDocument:
         reasons = []
         if not session_integrity_ok(session):
             reasons.append("session_integrity")
@@ -863,7 +865,7 @@ class AudioRevisionStore:
         clean["stale"] = bool(reasons)
         return sanitize_metadata(clean, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
-    def _with_issue_current_state(self, issue: dict[str, Any]) -> dict[str, Any]:
+    def _with_issue_current_state(self, issue: ImplementationDocument) -> ImplementationDocument:
         reasons = []
         if not issue_integrity_ok(issue):
             reasons.append("issue_integrity")
@@ -887,7 +889,7 @@ class AudioRevisionStore:
         clean["stale"] = bool(reasons)
         return sanitize_metadata(clean, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
-    def _with_candidate_current_state(self, candidate: dict[str, Any]) -> dict[str, Any]:
+    def _with_candidate_current_state(self, candidate: ImplementationDocument) -> ImplementationDocument:
         reasons = []
         if not candidate_integrity_ok(candidate):
             reasons.append("candidate_integrity")
@@ -903,7 +905,7 @@ class AudioRevisionStore:
             clean["status"] = "stale"
         return sanitize_metadata(clean, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
-    def _candidate_stale_reasons(self, candidate: dict[str, Any], *, context: dict[str, Any]) -> list[str]:
+    def _candidate_stale_reasons(self, candidate: ImplementationDocument, *, context: ImplementationDocument) -> list[str]:
         reasons: list[str] = []
         patch_payload = candidate.get("patch") if isinstance(candidate.get("patch"), dict) else {}
         try:
@@ -937,7 +939,7 @@ class AudioRevisionStore:
                 reasons.append(reason)
         return sorted(set(reasons))
 
-    def _candidate_source(self, release_id: str, issue: dict[str, Any], mix_state: dict[str, Any], context: dict[str, Any], *, review_id: str, marker_id: str) -> dict[str, Any]:
+    def _candidate_source(self, release_id: str, issue: ImplementationDocument, mix_state: ImplementationDocument, context: ImplementationDocument, *, review_id: str, marker_id: str) -> ImplementationDocument:
         audio_context = self.audio_review_store.track_audio_context(release_id, str(issue.get("track_id") or ""), require_reviewable=False)
         evidence = audio_context.get("audio_evidence") if isinstance(audio_context.get("audio_evidence"), dict) else {}
         return {
@@ -956,7 +958,7 @@ class AudioRevisionStore:
             "issue_hash": issue.get("integrity_hash"),
         }
 
-    def _session_source(self, release_id: str) -> dict[str, Any]:
+    def _session_source(self, release_id: str) -> ImplementationDocument:
         release = self.release_store.get_release(release_id)
         return {
             "release_id": release_id,
@@ -969,7 +971,7 @@ class AudioRevisionStore:
             "track_identities": [{"track_id": track.track_id, "project_id": track.project_id} for track in release.tracks],
         }
 
-    def _version_context(self, project_id: str, version_id: str) -> dict[str, Any]:
+    def _version_context(self, project_id: str, version_id: str) -> ImplementationDocument:
         document, version, job, plan, midi_path = _project_version_context(self.project_store, self.job_store, project_id, version_id)
         state = MixControlStore(self.project_store.project_dir(project_id)).get_or_create_state(project_id=project_id, version_id=version_id, plan=plan, midi_path=midi_path, now=now_iso())
         stale = mix_state_stale_reasons(state, plan=plan, midi_path=midi_path)
@@ -1017,7 +1019,7 @@ class AudioRevisionStore:
         self.release_store.save_release(release)
         self.release_store.append_event(release_id, "release_track_version_replaced", {"track_id": track_id, "project_id": project_id, "version_id": version_id})
 
-    def _refresh_release_audio_qa(self, release_id: str, *, now: str) -> dict[str, Any]:
+    def _refresh_release_audio_qa(self, release_id: str, *, now: str) -> ImplementationDocument:
         release = self.release_store.get_release(release_id)
         report = build_release_audio_qa_report(
             release=release,
@@ -1028,7 +1030,7 @@ class AudioRevisionStore:
         )
         return write_release_audio_qa(self.release_store, release_id, report)
 
-    def _refresh_project_delivery_qa(self, project_id: str, *, now: str) -> dict[str, Any]:
+    def _refresh_project_delivery_qa(self, project_id: str, *, now: str) -> ImplementationDocument:
         project_dir = self.project_store.project_dir(project_id)
         manifest = read_json(final_export_dir(project_dir) / "manifest.json")
         report = build_delivery_qa_report(
@@ -1073,7 +1075,7 @@ class AudioRevisionStore:
         )
         return MixControlStore(self.project_store.project_dir(project_id)).write_state(state)
 
-    def _refresh_session_counts(self, release_id: str, session_id: str, *, status: str | None = None, now: str | None = None) -> dict[str, Any]:
+    def _refresh_session_counts(self, release_id: str, session_id: str, *, status: str | None = None, now: str | None = None) -> ImplementationDocument:
         now = now or now_iso()
         session = self.read_session(release_id, session_id)
         issues = self.list_issues(release_id, session_id)
@@ -1091,7 +1093,7 @@ class AudioRevisionStore:
         self._write_issue_index(release_id, session_id)
         return self.read_session(release_id, session_id)
 
-    def _refresh_session_source(self, release_id: str, session_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def _refresh_session_source(self, release_id: str, session_id: str, *, now: str | None = None) -> ImplementationDocument:
         now = now or now_iso()
         path = self.session_dir(release_id, session_id) / "session.json"
         if not path.exists():
@@ -1176,7 +1178,7 @@ class AudioRevisionStore:
         if session.get("stale") or not session_integrity_ok(session):
             raise AudioRevisionStateError("Audio revision session is stale or tampered.")
 
-    def _append_event(self, release_id: str, session_id: str, event_type: str, payload: dict[str, Any], now: str) -> None:
+    def _append_event(self, release_id: str, session_id: str, event_type: str, payload: ImplementationDocument, now: str) -> None:
         root = self.session_dir(release_id, session_id)
         root.mkdir(parents=True, exist_ok=True)
         event = sanitize_metadata({"timestamp": now, "type": event_type, "payload": payload}, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
@@ -1311,7 +1313,7 @@ def _revision_marker_count(store: AudioRevisionStore, release_id: str) -> int:
     return count
 
 
-def _candidate_strategies(issue: dict[str, Any], plan: SongPlan, *, max_count: int) -> list[dict[str, Any]]:
+def _candidate_strategies(issue: ImplementationDocument, plan: SongPlan, *, max_count: int) -> list[ImplementationDocument]:
     base_marker = {
         "category": issue.get("category"),
         "severity": issue.get("severity"),
@@ -1365,7 +1367,7 @@ def _track_by_role(plan: SongPlan, role: str) -> str:
     return "track-001"
 
 
-def _candidate_score(strategy: dict[str, Any], audio_health: dict[str, Any], stem_health: dict[str, Any]) -> dict[str, Any]:
+def _candidate_score(strategy: ImplementationDocument, audio_health: ImplementationDocument, stem_health: ImplementationDocument) -> ImplementationDocument:
     operations = strategy.get("operations") if isinstance(strategy.get("operations"), list) else []
     score = 65
     if audio_health.get("status") == "passed":
@@ -1382,7 +1384,7 @@ def _candidate_score(strategy: dict[str, Any], audio_health: dict[str, Any], ste
     return {"deterministic_score": score, "risk_score": risk, "expected_improvement": max(0, score - risk)}
 
 
-def _candidate_stem_health(*, project_id: str, version_id: str, plan: SongPlan, midi_path: Path, mix_state: dict[str, Any], candidate_dir: Path, now: str) -> dict[str, Any]:
+def _candidate_stem_health(*, project_id: str, version_id: str, plan: SongPlan, midi_path: Path, mix_state: ImplementationDocument, candidate_dir: Path, now: str) -> ImplementationDocument:
     run_dir = candidate_dir / "stem-run"
     paths = ProjectPaths.create(run_dir)
     write_json(paths.data / "song-plan.json", plan.to_dict())
@@ -1401,7 +1403,7 @@ def _candidate_stem_health(*, project_id: str, version_id: str, plan: SongPlan, 
         return {"status": "failed", "warnings": [sanitize_sensitive_text(str(exc))[:160]], "integrity_hash": stable_hash(str(exc))}
 
 
-def _active_revision_markers(audio_review_store: AudioReviewEvidenceStore, release_id: str) -> list[dict[str, Any]]:
+def _active_revision_markers(audio_review_store: AudioReviewEvidenceStore, release_id: str) -> list[ImplementationDocument]:
     markers: list[dict[str, Any]] = []
     for review in audio_review_store.list_reviews(release_id):
         if review.get("stale") or not review_integrity_ok(review):
@@ -1434,7 +1436,7 @@ def _active_revision_markers(audio_review_store: AudioReviewEvidenceStore, relea
     return sorted(markers, key=lambda item: str(item.get("marker_key") or ""))
 
 
-def _covered_marker_ids(issues: list[dict[str, Any]]) -> set[str]:
+def _covered_marker_ids(issues: list[ImplementationDocument]) -> set[str]:
     covered: set[str] = set()
     for issue in issues:
         review_id = str(issue.get("source_review_id") or "")
@@ -1457,7 +1459,7 @@ def _render_revision_audio(midi_path: Path, wav_path: Path) -> tuple[str, str | 
         return "failed", sanitize_sensitive_text(str(exc))[:500], RendererConfig()
 
 
-def _renderer_summary(config: RendererConfig) -> dict[str, Any]:
+def _renderer_summary(config: RendererConfig) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "renderer_type": config.renderer_type,
@@ -1470,7 +1472,7 @@ def _renderer_summary(config: RendererConfig) -> dict[str, Any]:
     )
 
 
-def _object_hash(value: dict[str, Any], exclude: set[str]) -> str:
+def _object_hash(value: ImplementationDocument, exclude: set[str]) -> str:
     return stable_hash(sanitize_metadata({key: item for key, item in value.items() if key not in exclude}, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"}))
 
 
@@ -1513,7 +1515,7 @@ def _validate_candidate_id(value: str) -> str:
     return value
 
 
-def _stale_summary(summary: dict[str, Any]) -> dict[str, Any]:
+def _stale_summary(summary: ImplementationDocument) -> ImplementationDocument:
     data = dict(summary) if isinstance(summary, dict) else {}
     if data:
         data["status"] = "stale"

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -392,7 +394,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         _write_json(self.verification_report_path(queue_id), report)
         return report
 
-    def _closeout_source(self, queue_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def _closeout_source(self, queue_id: str, payload: ImplementationDocument) -> tuple[ImplementationDocument, ImplementationDocument, ImplementationDocument, ImplementationDocument]:
         watch_zip = Path(payload.get("watch_package_path") or payload.get("assurance_watch_package_path") or self.watch_store.watch_zip_path(queue_id))
         watch_report_path = Path(payload.get("watch_verification_report_path") or payload.get("assurance_watch_verification_report_path") or self.watch_store.verification_report_path(queue_id))
         watch_report = _read_json_required(watch_report_path, "Assurance Watch verification report is required.")
@@ -423,7 +425,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         }
         return source, watch_report, hub_report, assurance_report
 
-    def _closeout_blockers(self, source: dict[str, Any], watch_report: dict[str, Any], hub_report: dict[str, Any], assurance_report: dict[str, Any]) -> list[dict[str, Any]]:
+    def _closeout_blockers(self, source: ImplementationDocument, watch_report: ImplementationDocument, hub_report: ImplementationDocument, assurance_report: ImplementationDocument) -> list[ImplementationDocument]:
         blockers: list[dict[str, Any]] = []
         if watch_report.get("package_type") != "musicforge_trust_operations_assurance_watch_verification":
             blockers.append(_blocker("watch_verification_package_type", "Assurance Watch verification report package_type is invalid."))
@@ -445,7 +447,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
                 blockers.append(_blocker("continuous_assurance_not_bound", "Assurance Watch verification does not bind the Continuous Assurance verification report."))
         return blockers
 
-    def _ensure_signoff_current(self, queue_id: str, signoff: dict[str, Any], payload: dict[str, Any]) -> None:
+    def _ensure_signoff_current(self, queue_id: str, signoff: ImplementationDocument, payload: ImplementationDocument) -> None:
         if signoff.get("integrity_hash") != watch_signoff_hash(signoff):
             raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch signoff integrity failed.")
         current_source, _watch_report, _hub_report, _assurance_report = self._closeout_source(queue_id, payload)
@@ -454,7 +456,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
             if signoff_source.get(key) != current_source.get(key):
                 raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch signoff source is stale. Reset before archiving.")
 
-    def _archive_report(self, queue_id: str, signoff: dict[str, Any], closeout: dict[str, Any], now: str) -> dict[str, Any]:
+    def _archive_report(self, queue_id: str, signoff: ImplementationDocument, closeout: ImplementationDocument, now: str) -> ImplementationDocument:
         report = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_REPORT_PACKAGE_TYPE,
@@ -470,7 +472,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         report["integrity_hash"] = watch_signoff_hash(report)
         return report
 
-    def _source_summary(self, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _source_summary(self, signoff: ImplementationDocument) -> ImplementationDocument:
         doc = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SOURCE_PACKAGE_TYPE,
@@ -481,7 +483,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
 
-    def _watch_queue_summary(self, queue_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _watch_queue_summary(self, queue_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         queue = self.watch_store.read_queue(queue_id)
         doc = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
@@ -496,7 +498,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
 
-    def _drift_action_pack_summary(self, queue_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _drift_action_pack_summary(self, queue_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         action_pack = _read_json_default(self.watch_store.action_pack_path(queue_id), default={})
         doc = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
@@ -510,7 +512,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
 
-    def _external_summary(self, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _external_summary(self, signoff: ImplementationDocument) -> ImplementationDocument:
         source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
         doc = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
@@ -527,7 +529,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
 
-    def _change_requests_doc(self, queue_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _change_requests_doc(self, queue_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         rows = self.list_change_requests(queue_id)
         doc = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
@@ -540,17 +542,17 @@ class TrustOperationsAssuranceWatchSignoffStore:
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
 
-    def _read_change_request(self, queue_id: str, change_request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, queue_id: str, change_request_id: str) -> ImplementationDocument:
         request = _read_json_default(self.change_request_path(queue_id, change_request_id), default={})
         if not request:
             raise TrustOperationsAssuranceWatchSignoffNotFoundError(f"Assurance Watch change request not found: {change_request_id}")
         return request
 
-    def _ensure_change_request_integrity(self, request: dict[str, Any]) -> None:
+    def _ensure_change_request_integrity(self, request: ImplementationDocument) -> None:
         if request.get("integrity_hash") != watch_signoff_hash(request):
             raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch change request integrity failed.")
 
-    def _history_events(self, queue_id: str) -> list[dict[str, Any]]:
+    def _history_events(self, queue_id: str) -> list[ImplementationDocument]:
         path = self.history_path(queue_id)
         if not path.exists():
             return []
@@ -564,7 +566,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
                 rows.append(_sanitize(item))
         return rows
 
-    def _signoff_state(self, queue_id: str) -> dict[str, Any]:
+    def _signoff_state(self, queue_id: str) -> ImplementationDocument:
         active_hash: str | None = None
         active_id: str | None = None
         for event in self._history_events(queue_id):
@@ -593,7 +595,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
         if self._history_has_event(queue_id, "watch_signoff_archive_zip_built", signoff_hash):
             raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch signoff archive ZIP was already built for this signoff. Reset before rebuilding archive ZIP.")
 
-    def _append_history(self, queue_id: str, payload: dict[str, Any]) -> None:
+    def _append_history(self, queue_id: str, payload: ImplementationDocument) -> None:
         events = self._history_events(queue_id)
         event = _sanitize(payload)
         event["previous_event_hash"] = events[-1].get("event_hash") if events else None
@@ -614,17 +616,17 @@ class TrustOperationsAssuranceWatchSignoffStore:
 
 
 
-def _history_hash(events: list[dict[str, Any]]) -> str:
+def _history_hash(events: list[ImplementationDocument]) -> str:
     return stable_hash({"events": events})
 
 
-def _blocker(code: str, message: str) -> dict[str, Any]:
+def _blocker(code: str, message: str) -> ImplementationDocument:
     item = {"code": code, "message": message, "severity": "blocking"}
     item["integrity_hash"] = stable_hash(item)
     return item
 
 
-def _read_json_required(path: Path, message: str) -> dict[str, Any]:
+def _read_json_required(path: Path, message: str) -> ImplementationDocument:
     if not path.exists():
         raise TrustOperationsAssuranceWatchSignoffStateError(message)
     try:
@@ -633,7 +635,7 @@ def _read_json_required(path: Path, message: str) -> dict[str, Any]:
         raise TrustOperationsAssuranceWatchSignoffStateError(message) from exc
 
 
-def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     if not zip_path:
         raise TrustOperationsAssuranceWatchSignoffStateError(f"Required ZIP entry is missing or invalid: {entry}")
     try:
@@ -644,7 +646,7 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
         raise TrustOperationsAssuranceWatchSignoffStateError(f"Required ZIP entry is missing or invalid: {entry}") from exc
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         if not path or not path.exists():
             return dict(default)
@@ -653,12 +655,12 @@ def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]
         return dict(default)
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     _mkdir(path.parent)
     return write_json(path, _sanitize(payload))
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
@@ -679,7 +681,7 @@ def _read_text(path: Path) -> str:
         return ""
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

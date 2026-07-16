@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import threading
 import zipfile
@@ -380,16 +382,16 @@ class AudioCampaignStore:
                 continue
         return f"{prefix}-{max_seen + 1:06d}"
 
-    def _read_raw_campaign(self, campaign_id: str) -> dict[str, Any]:
+    def _read_raw_campaign(self, campaign_id: str) -> ImplementationDocument:
         path = self.campaign_path(campaign_id)
         if not path.exists():
             raise AudioCampaignNotFoundError(f"Audio Campaign not found: {campaign_id}.")
         return read_json(path)
 
-    def _is_signed_campaign(self, campaign: dict[str, Any], campaign_id: str) -> bool:
+    def _is_signed_campaign(self, campaign: ImplementationDocument, campaign_id: str) -> bool:
         return campaign.get("status") == "signed" or bool(campaign.get("signoff_hash")) or self.signoff_path(campaign_id).exists()
 
-    def _assert_signed_snapshot_valid(self, campaign_id: str, campaign: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _assert_signed_snapshot_valid(self, campaign_id: str, campaign: ImplementationDocument | None = None) -> ImplementationDocument:
         campaign = campaign or self._read_raw_campaign(campaign_id)
         if campaign.get("status") != "signed":
             raise AudioCampaignStateError("Audio Campaign signoff state is inconsistent.")
@@ -423,10 +425,10 @@ class AudioCampaignStore:
             raise AudioCampaignStateError("Signed Audio Campaign source no longer matches signoff.")
         return {"campaign": campaign, "signoff": signoff, "report": report, "case_index": case_index}
 
-    def _write_campaign(self, campaign: dict[str, Any]) -> None:
+    def _write_campaign(self, campaign: ImplementationDocument) -> None:
         write_json(self.campaign_path(str(campaign.get("campaign_id"))), sanitize_metadata(campaign))
 
-    def _write_case_index(self, campaign: dict[str, Any]) -> None:
+    def _write_case_index(self, campaign: ImplementationDocument) -> None:
         case_index = sanitize_metadata(
             {
                 "schema_version": AUDIO_CAMPAIGN_SCHEMA_VERSION,
@@ -456,7 +458,7 @@ class AudioCampaignStore:
         case_index["integrity_hash"] = _integrity_hash(case_index)
         write_json(self.case_index_path(str(campaign.get("campaign_id"))), case_index)
 
-    def _refresh_case_snapshots(self, campaign: dict[str, Any], *, write: bool) -> dict[str, Any]:
+    def _refresh_case_snapshots(self, campaign: ImplementationDocument, *, write: bool) -> ImplementationDocument:
         by_key = {}
         sessions = []
         for session_id in campaign.get("source", {}).get("session_ids", []):
@@ -496,7 +498,7 @@ class AudioCampaignStore:
             self._write_case_index(campaign)
         return campaign
 
-    def _find_existing_sprint_for_session(self, session_id: str) -> dict[str, Any] | None:
+    def _find_existing_sprint_for_session(self, session_id: str) -> ImplementationDocument | None:
         for row in self.audio_fix_sprint_store.list_sprints():
             sprint_id = str(row.get("fix_sprint_id") or "")
             try:
@@ -508,7 +510,7 @@ class AudioCampaignStore:
         return None
 
 
-def _build_campaign_report(campaign: dict[str, Any], fix_store: AudioFixSprintStore) -> dict[str, Any]:
+def _build_campaign_report(campaign: ImplementationDocument, fix_store: AudioFixSprintStore) -> ImplementationDocument:
     settings = campaign.get("settings") if isinstance(campaign.get("settings"), dict) else {}
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
@@ -646,7 +648,7 @@ def _build_campaign_report(campaign: dict[str, Any], fix_store: AudioFixSprintSt
     return report
 
 
-def _checks_from_summary(summary: dict[str, Any], blockers: list[dict[str, Any]], settings: dict[str, Any]) -> list[dict[str, Any]]:
+def _checks_from_summary(summary: ImplementationDocument, blockers: list[ImplementationDocument], settings: ImplementationDocument) -> list[ImplementationDocument]:
     return [
         _check("audio_campaign_has_cases", int(summary.get("case_count") or 0) > 0, "Campaign contains at least one case."),
         _check("audio_campaign_real_audio", not settings.get("require_real_renderer") or int(summary.get("real_audio_count") or 0) == int(summary.get("case_count") or 0), "All cases use release-ready real audio."),
@@ -658,7 +660,7 @@ def _checks_from_summary(summary: dict[str, Any], blockers: list[dict[str, Any]]
     ]
 
 
-def _cases_from_sessions(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _cases_from_sessions(sessions: list[ImplementationDocument]) -> list[ImplementationDocument]:
     cases: list[dict[str, Any]] = []
     counter = 0
     for session in sessions:
@@ -696,7 +698,7 @@ def _cases_from_sessions(sessions: list[dict[str, Any]]) -> list[dict[str, Any]]
     return cases
 
 
-def _source_from_sessions(session_ids: list[str], sessions: list[dict[str, Any]]) -> dict[str, Any]:
+def _source_from_sessions(session_ids: list[str], sessions: list[ImplementationDocument]) -> ImplementationDocument:
     source = {
         "source_type": "audio_lab_sessions",
         "session_ids": session_ids,
@@ -707,7 +709,7 @@ def _source_from_sessions(session_ids: list[str], sessions: list[dict[str, Any]]
     return source
 
 
-def _settings_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _settings_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
     allow_test = bool(payload.get("allow_test_audio") or payload.get("allow_test_fake_audio"))
     return {
         "require_real_renderer": not allow_test and bool(payload.get("require_real_renderer", True)),
@@ -718,7 +720,7 @@ def _settings_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _session_ids_from_payload(payload: dict[str, Any]) -> list[str]:
+def _session_ids_from_payload(payload: ImplementationDocument) -> list[str]:
     raw = payload.get("session_ids") or payload.get("from_sessions") or payload.get("from_session") or payload.get("session_id")
     if isinstance(raw, list):
         values = raw
@@ -730,7 +732,7 @@ def _session_ids_from_payload(payload: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(session_ids))
 
 
-def _sessions_requiring_fix(campaign: dict[str, Any]) -> list[str]:
+def _sessions_requiring_fix(campaign: ImplementationDocument) -> list[str]:
     sessions = []
     settings = campaign.get("settings") if isinstance(campaign.get("settings"), dict) else {}
     for case in campaign.get("cases", []):
@@ -741,7 +743,7 @@ def _sessions_requiring_fix(campaign: dict[str, Any]) -> list[str]:
     return sessions
 
 
-def _case_requires_fix(case: dict[str, Any], settings: dict[str, Any]) -> bool:
+def _case_requires_fix(case: ImplementationDocument, settings: ImplementationDocument) -> bool:
     review = case.get("review") if isinstance(case.get("review"), dict) else {}
     if review.get("status") in {"needs_fix", "rejected"}:
         return True
@@ -750,7 +752,7 @@ def _case_requires_fix(case: dict[str, Any], settings: dict[str, Any]) -> bool:
     return any(str(marker.get("severity") or "") in HIGH_SEVERITIES for marker in case.get("markers", []) if isinstance(marker, dict))
 
 
-def _campaign_fix_sprint_for_session(campaign: dict[str, Any], session_id: str) -> str | None:
+def _campaign_fix_sprint_for_session(campaign: ImplementationDocument, session_id: str) -> str | None:
     for case in campaign.get("cases", []):
         if case.get("session_id") == session_id:
             sprint_id = case.get("fix", {}).get("fix_sprint_id") if isinstance(case.get("fix"), dict) else None
@@ -759,7 +761,7 @@ def _campaign_fix_sprint_for_session(campaign: dict[str, Any], session_id: str) 
     return None
 
 
-def _case_source(case: dict[str, Any]) -> dict[str, Any]:
+def _case_source(case: ImplementationDocument) -> ImplementationDocument:
     return {
         "case_id": case.get("case_id"),
         "session_id": case.get("session_id"),
@@ -777,7 +779,7 @@ def _case_source(case: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _review_public(review: dict[str, Any]) -> dict[str, Any]:
+def _review_public(review: ImplementationDocument) -> ImplementationDocument:
     return {
         "status": review.get("status"),
         "rating": review.get("rating"),
@@ -789,7 +791,7 @@ def _review_public(review: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _check(check_id: str, passed: bool, message: str) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message}
 
 
@@ -811,7 +813,7 @@ def _blocker_message(blocker: str) -> str:
     }.get(blocker, blocker)
 
 
-def _readme(campaign: dict[str, Any], report: dict[str, Any]) -> str:
+def _readme(campaign: ImplementationDocument, report: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return "\n".join(
         [
@@ -829,11 +831,11 @@ def _readme(campaign: dict[str, Any], report: dict[str, Any]) -> str:
     )
 
 
-def _file_record(path: Path, root: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "sha256": _sha256_path(path), "size_bytes": path.stat().st_size}
 
 
-def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument) -> None:
     event = sanitize_metadata({"event_type": event_type, "created_at": now_iso(), "payload": payload})
     event["event_hash"] = stable_hash(event)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -841,11 +843,11 @@ def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 

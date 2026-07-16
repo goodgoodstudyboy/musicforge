@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.interfaces.api.runtime_parts.dependencies.program_dependencies import AnalyticsScope
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, json, parse_qs, unquote
@@ -179,7 +181,7 @@ def _match_release_track_tail(tail: str) -> tuple[str, str] | None:
         return None
     return unquote(parts[1]), action
 
-def _merge_editor_patch_metadata(left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict[str, Any]:
+def _merge_editor_patch_metadata(left: ImplementationDocument | None, right: ImplementationDocument | None) -> ImplementationDocument:
     merged: dict[str, Any] = {}
     for source in (left, right):
         if not isinstance(source, dict):

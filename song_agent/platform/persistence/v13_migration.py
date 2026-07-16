@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import tempfile
@@ -220,7 +222,7 @@ def verify_v13_migration_evidence(
     )
 
 
-def _migration_semantic_checks(context: dict[str, Any]) -> list[dict[str, Any]]:
+def _migration_semantic_checks(context: ImplementationDocument) -> list[ImplementationDocument]:
     archive = context["archive"]
     manifest = context["manifest"]
     try:
@@ -266,8 +268,8 @@ def _migration_semantic_checks(context: dict[str, Any]) -> list[dict[str, Any]]:
 def _migration_anchor_checks(
     archive_path: Path,
     anchor_path: Path,
-    envelope: dict[str, Any],
-) -> list[dict[str, Any]]:
+    envelope: ImplementationDocument,
+) -> list[ImplementationDocument]:
     exists = anchor_path.is_file()
     anchor: dict[str, Any] = {}
     readable = False
@@ -307,7 +309,7 @@ def _database_state_hash(database: MusicForgeDatabase) -> str:
     )
 
 
-def _source_rows(root: Path, expected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _source_rows(root: Path, expected: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows = []
     for row in expected:
         relative = str(row["path"])
@@ -318,13 +320,13 @@ def _source_rows(root: Path, expected: list[dict[str, Any]]) -> list[dict[str, A
     return rows
 
 
-def _integrity_document(document: dict[str, Any]) -> dict[str, Any]:
+def _integrity_document(document: ImplementationDocument) -> ImplementationDocument:
     result = dict(document)
     result["integrity_hash"] = integrity_hash(result)
     return result
 
 
-def _json_bytes(document: dict[str, Any]) -> bytes:
+def _json_bytes(document: ImplementationDocument) -> bytes:
     return (json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 

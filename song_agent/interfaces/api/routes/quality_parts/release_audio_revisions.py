@@ -5,137 +5,156 @@ from song_agent.application.interface_persistence import persist_interface_job, 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesReleaseAudioRevisions:
-    def _handle_release_audio_revisions(self, method: str, release_id: str, tail: str) -> None:
-        try:
-            if tail in {"", "/"}:
-                if method == "GET":
-                    sessions = self.audio_revision_store.list_sessions(release_id)
-                    summary = self.audio_revision_store.gate(release_id, required=False, now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, "release_id": release_id, "sessions": sessions, "summary": summary})
-                    return
-                if method == "POST":
-                    session = self.audio_revision_store.create_session(release_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, "release_id": release_id, "session": session, "summary": self.audio_revision_store.gate(release_id, required=False, now=_interfaces_api_runtime._utc_now())}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            if tail == "/summary":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
+    def _handle_release_audio_revisions_part_01(self, method: str, release_id: str, tail: str, _split_state):
+        if tail in {'', '/'}:
+            if method == 'GET':
+                sessions = self.audio_revision_store.list_sessions(release_id)
                 summary = self.audio_revision_store.gate(release_id, required=False, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "release_id": release_id, "summary": summary})
-                return
-            parts = [part for part in tail.strip("/").split("/") if part]
-            if not parts:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio revision route not found.")
-                return
-            session_id = parts[0]
-            if len(parts) == 1:
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                session = self.audio_revision_store.read_session(release_id, session_id)
-                issues = self.audio_revision_store.list_issues(release_id, session_id)
-                candidates = self.audio_revision_store.list_candidates(release_id, session_id)
-                closeout = self.audio_revision_store.read_closeout(release_id, session_id, default={})
-                self._send_json({"ok": True, "release_id": release_id, "session": session, "issues": issues, "candidates": candidates, "closeout": closeout})
-                return
-            if len(parts) == 2 and parts[1] == "refresh":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.audio_revision_store.refresh_recheck_status(release_id, session_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, **result})
-                return
-            if len(parts) == 2 and parts[1] == "close":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.audio_revision_store.close_session(release_id, session_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, **result})
-                return
-            if len(parts) == 2 and parts[1] == "archive":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                session = self.audio_revision_store.archive_session(release_id, session_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "release_id": release_id, "session": session})
-                return
-            if len(parts) >= 2 and parts[1] == "issues":
-                if len(parts) == 2:
-                    if method == "GET":
-                        self._send_json({"ok": True, "release_id": release_id, "session_id": session_id, "issues": self.audio_revision_store.list_issues(release_id, session_id)})
-                        return
-                    if method == "POST":
-                        issue = self.audio_revision_store.create_issue(release_id, session_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
-                        self._send_json({"ok": True, "release_id": release_id, "issue": issue}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                        return
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                issue_id = parts[2]
-                if len(parts) == 3:
-                    if method != "GET":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    issue = self.audio_revision_store.read_issue(release_id, session_id, issue_id)
-                    self._send_json({"ok": True, "release_id": release_id, "issue": issue})
-                    return
-                if len(parts) == 4 and parts[3] in {"waive", "reopen"}:
-                    if method != "POST":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    if parts[3] == "waive":
-                        issue = self.audio_revision_store.waive_issue(release_id, session_id, issue_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                    else:
-                        issue = self.audio_revision_store.reopen_issue(release_id, session_id, issue_id, now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, "release_id": release_id, "issue": issue})
-                    return
-                if len(parts) == 5 and parts[3] == "candidates" and parts[4] == "generate":
-                    if method != "POST":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    result = self.audio_revision_store.generate_candidates(release_id, session_id, issue_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                    return
-            if len(parts) >= 2 and parts[1] == "candidates":
-                if len(parts) == 2:
-                    if method != "GET":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    self._send_json({"ok": True, "release_id": release_id, "session_id": session_id, "candidates": self.audio_revision_store.list_candidates(release_id, session_id)})
-                    return
-                candidate_id = parts[2]
-                if len(parts) == 3:
-                    if method != "GET":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    candidate = self.audio_revision_store.read_candidate(release_id, session_id, candidate_id)
-                    self._send_json({"ok": True, "release_id": release_id, "candidate": candidate})
-                    return
-                if len(parts) == 4 and parts[3] in {"midi", "audio"}:
-                    if method != "GET":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    path, media_type, filename = self.audio_revision_store.download_candidate_artifact(release_id, session_id, candidate_id, "midi" if parts[3] == "midi" else "audio")
-                    self._send_file(path, media_type, filename=filename)
-                    return
-                if len(parts) == 4 and parts[3] in {"review", "select", "apply"}:
-                    if method != "POST":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    if parts[3] == "review":
-                        candidate = self.audio_revision_store.review_candidate(release_id, session_id, candidate_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
-                        self._send_json({"ok": True, "release_id": release_id, "candidate": candidate})
-                        return
-                    if parts[3] == "select":
-                        candidate = self.audio_revision_store.select_candidate(release_id, session_id, candidate_id, now=_interfaces_api_runtime._utc_now())
-                        self._send_json({"ok": True, "release_id": release_id, "candidate": candidate})
-                        return
-                    result = self.audio_revision_store.apply_candidate(release_id, session_id, candidate_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, **result})
-                    return
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio revision route not found.")
+                self._send_json({'ok': True, 'release_id': release_id, 'sessions': sessions, 'summary': summary})
+                return (True, None)
+            if method == 'POST':
+                session = self.audio_revision_store.create_session(release_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                self._send_json({'ok': True, 'release_id': release_id, 'session': session, 'summary': self.audio_revision_store.gate(release_id, required=False, now=_interfaces_api_runtime._utc_now())}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        if tail == '/summary':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            summary = self.audio_revision_store.gate(release_id, required=False, now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'release_id': release_id, 'summary': summary})
+            return (True, None)
+        _split_state['parts'] = [part for part in tail.strip('/').split('/') if part]
+        if not _split_state['parts']:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Audio revision route not found.')
+            return (True, None)
+        _split_state['session_id'] = _split_state['parts'][0]
+        if len(_split_state['parts']) == 1:
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            session = self.audio_revision_store.read_session(release_id, _split_state['session_id'])
+            issues = self.audio_revision_store.list_issues(release_id, _split_state['session_id'])
+            candidates = self.audio_revision_store.list_candidates(release_id, _split_state['session_id'])
+            closeout = self.audio_revision_store.read_closeout(release_id, _split_state['session_id'], default={})
+            self._send_json({'ok': True, 'release_id': release_id, 'session': session, 'issues': issues, 'candidates': candidates, 'closeout': closeout})
+            return (True, None)
+        if len(_split_state['parts']) == 2 and _split_state['parts'][1] == 'refresh':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.audio_revision_store.refresh_recheck_status(release_id, _split_state['session_id'], now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, **_split_state['result']})
+            return (True, None)
+        if len(_split_state['parts']) == 2 and _split_state['parts'][1] == 'close':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.audio_revision_store.close_session(release_id, _split_state['session_id'], self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, **_split_state['result']})
+            return (True, None)
+        if len(_split_state['parts']) == 2 and _split_state['parts'][1] == 'archive':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            session = self.audio_revision_store.archive_session(release_id, _split_state['session_id'], now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'release_id': release_id, 'session': session})
+            return (True, None)
+        return (False, None)
+
+    def _handle_release_audio_revisions_part_02(self, method: str, release_id: str, tail: str, _split_state):
+        if len(_split_state['parts']) >= 2 and _split_state['parts'][1] == 'issues':
+            if len(_split_state['parts']) == 2:
+                if method == 'GET':
+                    self._send_json({'ok': True, 'release_id': release_id, 'session_id': _split_state['session_id'], 'issues': self.audio_revision_store.list_issues(release_id, _split_state['session_id'])})
+                    return (True, None)
+                if method == 'POST':
+                    issue = self.audio_revision_store.create_issue(release_id, _split_state['session_id'], self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                    self._send_json({'ok': True, 'release_id': release_id, 'issue': issue}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                    return (True, None)
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            issue_id = _split_state['parts'][2]
+            if len(_split_state['parts']) == 3:
+                if method != 'GET':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                issue = self.audio_revision_store.read_issue(release_id, _split_state['session_id'], issue_id)
+                self._send_json({'ok': True, 'release_id': release_id, 'issue': issue})
+                return (True, None)
+            if len(_split_state['parts']) == 4 and _split_state['parts'][3] in {'waive', 'reopen'}:
+                if method != 'POST':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                if _split_state['parts'][3] == 'waive':
+                    issue = self.audio_revision_store.waive_issue(release_id, _split_state['session_id'], issue_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                else:
+                    issue = self.audio_revision_store.reopen_issue(release_id, _split_state['session_id'], issue_id, now=_interfaces_api_runtime._utc_now())
+                self._send_json({'ok': True, 'release_id': release_id, 'issue': issue})
+                return (True, None)
+            if len(_split_state['parts']) == 5 and _split_state['parts'][3] == 'candidates' and (_split_state['parts'][4] == 'generate'):
+                if method != 'POST':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                _split_state['result'] = self.audio_revision_store.generate_candidates(release_id, _split_state['session_id'], issue_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                self._send_json({'ok': True, **_split_state['result']}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                return (True, None)
+        return (False, None)
+
+    def _handle_release_audio_revisions_part_03(self, method: str, release_id: str, tail: str, _split_state):
+        if len(_split_state['parts']) >= 2 and _split_state['parts'][1] == 'candidates':
+            if len(_split_state['parts']) == 2:
+                if method != 'GET':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                self._send_json({'ok': True, 'release_id': release_id, 'session_id': _split_state['session_id'], 'candidates': self.audio_revision_store.list_candidates(release_id, _split_state['session_id'])})
+                return (True, None)
+            candidate_id = _split_state['parts'][2]
+            if len(_split_state['parts']) == 3:
+                if method != 'GET':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                candidate = self.audio_revision_store.read_candidate(release_id, _split_state['session_id'], candidate_id)
+                self._send_json({'ok': True, 'release_id': release_id, 'candidate': candidate})
+                return (True, None)
+            if len(_split_state['parts']) == 4 and _split_state['parts'][3] in {'midi', 'audio'}:
+                if method != 'GET':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                path, media_type, filename = self.audio_revision_store.download_candidate_artifact(release_id, _split_state['session_id'], candidate_id, 'midi' if _split_state['parts'][3] == 'midi' else 'audio')
+                self._send_file(path, media_type, filename=filename)
+                return (True, None)
+            if len(_split_state['parts']) == 4 and _split_state['parts'][3] in {'review', 'select', 'apply'}:
+                if method != 'POST':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                if _split_state['parts'][3] == 'review':
+                    candidate = self.audio_revision_store.review_candidate(release_id, _split_state['session_id'], candidate_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                    self._send_json({'ok': True, 'release_id': release_id, 'candidate': candidate})
+                    return (True, None)
+                if _split_state['parts'][3] == 'select':
+                    candidate = self.audio_revision_store.select_candidate(release_id, _split_state['session_id'], candidate_id, now=_interfaces_api_runtime._utc_now())
+                    self._send_json({'ok': True, 'release_id': release_id, 'candidate': candidate})
+                    return (True, None)
+                _split_state['result'] = self.audio_revision_store.apply_candidate(release_id, _split_state['session_id'], candidate_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                self._send_json({'ok': True, **_split_state['result']})
+                return (True, None)
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Audio revision route not found.')
+        return (False, None)
+
+    def _handle_release_audio_revisions(self, method: str, release_id: str, tail: str) -> None:
+        _split_state = {}
+        try:
+            _split_result = self._handle_release_audio_revisions_part_01(method, release_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_release_audio_revisions_part_02(method, release_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_release_audio_revisions_part_03(method, release_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
         except _interfaces_api_runtime.AudioRevisionNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
         except _interfaces_api_runtime.AudioRevisionStateError as exc:

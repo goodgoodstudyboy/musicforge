@@ -5,126 +5,120 @@ from song_agent.application.interface_persistence import persist_interface_job, 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesAudioQualityActions:
+    def _handle_audio_quality_actions_route_part_01(self, method: str, path: str, _split_state):
+        if path == '/api/audio-quality-actions':
+            if method == 'GET':
+                rows = self.release_audio_quality_action_queue_store.list_queues()
+                self._send_json({'ok': True, 'queues': rows, 'summary': {'queue_count': len(rows)}})
+                return (True, None)
+            if method == 'POST':
+                _split_state['payload'] = self._read_json_body()
+                queue = self.release_audio_quality_action_queue_store.create_from_observatory(_split_state['payload'].get('observatory_id', ''), name=_split_state['payload'].get('name'), include_risks=bool(_split_state['payload'].get('include_risks', True)), include_recommendations=bool(_split_state['payload'].get('include_recommendations', True)), severity_floor=str(_split_state['payload'].get('severity_floor') or 'warning'), policy=_split_state['payload'].get('policy') if isinstance(_split_state['payload'].get('policy'), dict) else {})
+                self._send_json({'ok': True, 'queue': queue, 'summary': queue.get('summary', {})}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        rest = path.removeprefix('/api/audio-quality-actions/').strip('/')
+        _split_state['parts'] = rest.split('/') if rest else []
+        if len(_split_state['parts']) == 1:
+            _split_state['queue_id'] = _split_state['parts'][0]
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            queue = self.release_audio_quality_action_queue_store.read_queue(_split_state['queue_id'])
+            _split_state['summary'] = self.release_audio_quality_action_queue_store.read_summary(_split_state['queue_id']) if self.release_audio_quality_action_queue_store.summary_path(_split_state['queue_id']).exists() else {}
+            self._send_json({'ok': True, 'queue': queue, 'summary_report': _split_state['summary'], 'summary': _split_state['summary'].get('summary', {}) if _split_state['summary'] else {}})
+            return (True, None)
+        return (False, None)
+
+    def _handle_audio_quality_actions_route_part_02(self, method: str, path: str, _split_state):
+        if len(_split_state['parts']) == 2:
+            _split_state['queue_id'], action = _split_state['parts']
+            if action == 'download':
+                if method != 'GET':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                self._send_file(self.release_audio_quality_action_queue_store.zip_path(_split_state['queue_id']), 'application/zip', filename='release-audio-quality-action-queue.zip')
+                return (True, None)
+            if action == 'archive-download':
+                if method != 'GET':
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                    return (True, None)
+                self._send_file(self.release_audio_quality_action_signoff_store.archive_zip_path(_split_state['queue_id']), 'application/zip', filename='release-audio-quality-action-queue-signoff-archive.zip')
+                return (True, None)
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            if action == 'refresh':
+                _split_state['summary'] = self.release_audio_quality_action_queue_store.refresh_status(_split_state['queue_id'])
+                self._send_json({'ok': _split_state['summary'].get('status') != 'stale', 'summary_report': _split_state['summary'], 'summary': _split_state['summary'].get('summary', {}), 'status': _split_state['summary'].get('status')})
+                return (True, None)
+            if action == 'run-safe':
+                result = self.release_audio_quality_action_queue_store.run_safe(_split_state['queue_id'])
+                self._send_json({'ok': result.get('status') not in {'failed', 'stale'}, **result})
+                return (True, None)
+            if action == 'export':
+                result = self.release_audio_quality_action_queue_store.export_package(_split_state['queue_id'])
+                self._send_json({'ok': result.get('status') not in {'failed', 'stale'}, **result})
+                return (True, None)
+            if action == 'zip':
+                result = self.release_audio_quality_action_queue_store.build_zip(_split_state['queue_id'])
+                self._send_json({'ok': result.get('status') not in {'failed', 'stale'}, **result})
+                return (True, None)
+            if action == 'verify':
+                report = self.release_audio_quality_action_queue_store.verify_zip(_split_state['queue_id'], strict=bool(_split_state['payload'].get('strict', True)), require_current_observatory=bool(_split_state['payload'].get('require_current_observatory', False)), observatory_zip_path=_split_state['payload'].get('observatory_zip'), observatory_verification_report_path=_split_state['payload'].get('observatory_verification_report'), evidence_root=_split_state['payload'].get('evidence_root') or self.release_store.root, require_no_blocking=bool(_split_state['payload'].get('require_no_blocking', True)))
+                self._send_json({'ok': report.get('status') == 'passed', 'verification': report, 'summary': report.get('summary', {}), 'status': report.get('status')})
+                return (True, None)
+            if action == 'manual-items':
+                result = self.release_audio_quality_action_signoff_store.list_manual_items(_split_state['queue_id'])
+                self._send_json({'ok': True, **result, 'status': 'passed'})
+                return (True, None)
+            if action == 'resolve-manual':
+                item_id = str(_split_state['payload'].get('item_id') or '')
+                result = self.release_audio_quality_action_signoff_store.resolve_manual_item(_split_state['queue_id'], item_id, _split_state['payload'])
+                self._send_json({'ok': True, 'resolution': result, 'status': 'passed'})
+                return (True, None)
+            if action == 'closeout':
+                closeout = self.release_audio_quality_action_signoff_store.refresh_closeout(_split_state['queue_id'])
+                self._send_json({'ok': closeout.get('status') == 'passed', 'closeout': closeout, 'summary': closeout.get('summary', {}), 'status': closeout.get('status')})
+                return (True, None)
+            if action == 'signoff':
+                result = self.release_audio_quality_action_signoff_store.signoff(_split_state['queue_id'], _split_state['payload'])
+                self._send_json({'ok': True, **result})
+                return (True, None)
+            if action == 'archive':
+                result = self.release_audio_quality_action_signoff_store.export_archive(_split_state['queue_id'])
+                self._send_json({'ok': result.get('status') == 'passed', **result})
+                return (True, None)
+            if action == 'archive-zip':
+                result = self.release_audio_quality_action_signoff_store.build_archive_zip(_split_state['queue_id'])
+                self._send_json({'ok': result.get('status') == 'passed', **result})
+                return (True, None)
+            if action == 'archive-verify':
+                report = self.release_audio_quality_action_signoff_store.verify_archive(_split_state['queue_id'], strict=bool(_split_state['payload'].get('strict', True)), require_current_queue=bool(_split_state['payload'].get('require_current_queue', True)), require_signed=bool(_split_state['payload'].get('require_signed', True)), queue_zip_path=_split_state['payload'].get('queue_zip'), queue_verification_report_path=_split_state['payload'].get('queue_verification_report'), observatory_zip_path=_split_state['payload'].get('observatory_zip'), observatory_verification_report_path=_split_state['payload'].get('observatory_verification_report'), evidence_root=_split_state['payload'].get('evidence_root') or self.release_store.root)
+                self._send_json({'ok': report.get('status') == 'passed', 'verification': report, 'summary': report.get('summary', {}), 'status': report.get('status')})
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Audio Quality Action Queue route not found.')
+            return (True, None)
+        return (False, None)
+
+    def _handle_audio_quality_actions_route_part_03(self, method: str, path: str, _split_state):
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Audio Quality Action Queue route not found.')
+        return (False, None)
+
     def _handle_audio_quality_actions_route(self, method: str, path: str) -> None:
+        _split_state = {}
         try:
-            if path == "/api/audio-quality-actions":
-                if method == "GET":
-                    rows = self.release_audio_quality_action_queue_store.list_queues()
-                    self._send_json({"ok": True, "queues": rows, "summary": {"queue_count": len(rows)}})
-                    return
-                if method == "POST":
-                    payload = self._read_json_body()
-                    queue = self.release_audio_quality_action_queue_store.create_from_observatory(
-                        payload.get("observatory_id", ""),
-                        name=payload.get("name"),
-                        include_risks=bool(payload.get("include_risks", True)),
-                        include_recommendations=bool(payload.get("include_recommendations", True)),
-                        severity_floor=str(payload.get("severity_floor") or "warning"),
-                        policy=payload.get("policy") if isinstance(payload.get("policy"), dict) else {},
-                    )
-                    self._send_json({"ok": True, "queue": queue, "summary": queue.get("summary", {})}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            rest = path.removeprefix("/api/audio-quality-actions/").strip("/")
-            parts = rest.split("/") if rest else []
-            if len(parts) == 1:
-                queue_id = parts[0]
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                queue = self.release_audio_quality_action_queue_store.read_queue(queue_id)
-                summary = self.release_audio_quality_action_queue_store.read_summary(queue_id) if self.release_audio_quality_action_queue_store.summary_path(queue_id).exists() else {}
-                self._send_json({"ok": True, "queue": queue, "summary_report": summary, "summary": summary.get("summary", {}) if summary else {}})
-                return
-            if len(parts) == 2:
-                queue_id, action = parts
-                if action == "download":
-                    if method != "GET":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    self._send_file(self.release_audio_quality_action_queue_store.zip_path(queue_id), "application/zip", filename="release-audio-quality-action-queue.zip")
-                    return
-                if action == "archive-download":
-                    if method != "GET":
-                        self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                        return
-                    self._send_file(self.release_audio_quality_action_signoff_store.archive_zip_path(queue_id), "application/zip", filename="release-audio-quality-action-queue-signoff-archive.zip")
-                    return
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                if action == "refresh":
-                    summary = self.release_audio_quality_action_queue_store.refresh_status(queue_id)
-                    self._send_json({"ok": summary.get("status") != "stale", "summary_report": summary, "summary": summary.get("summary", {}), "status": summary.get("status")})
-                    return
-                if action == "run-safe":
-                    result = self.release_audio_quality_action_queue_store.run_safe(queue_id)
-                    self._send_json({"ok": result.get("status") not in {"failed", "stale"}, **result})
-                    return
-                if action == "export":
-                    result = self.release_audio_quality_action_queue_store.export_package(queue_id)
-                    self._send_json({"ok": result.get("status") not in {"failed", "stale"}, **result})
-                    return
-                if action == "zip":
-                    result = self.release_audio_quality_action_queue_store.build_zip(queue_id)
-                    self._send_json({"ok": result.get("status") not in {"failed", "stale"}, **result})
-                    return
-                if action == "verify":
-                    report = self.release_audio_quality_action_queue_store.verify_zip(
-                        queue_id,
-                        strict=bool(payload.get("strict", True)),
-                        require_current_observatory=bool(payload.get("require_current_observatory", False)),
-                        observatory_zip_path=payload.get("observatory_zip"),
-                        observatory_verification_report_path=payload.get("observatory_verification_report"),
-                        evidence_root=payload.get("evidence_root") or self.release_store.root,
-                        require_no_blocking=bool(payload.get("require_no_blocking", True)),
-                    )
-                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
-                    return
-                if action == "manual-items":
-                    result = self.release_audio_quality_action_signoff_store.list_manual_items(queue_id)
-                    self._send_json({"ok": True, **result, "status": "passed"})
-                    return
-                if action == "resolve-manual":
-                    item_id = str(payload.get("item_id") or "")
-                    result = self.release_audio_quality_action_signoff_store.resolve_manual_item(queue_id, item_id, payload)
-                    self._send_json({"ok": True, "resolution": result, "status": "passed"})
-                    return
-                if action == "closeout":
-                    closeout = self.release_audio_quality_action_signoff_store.refresh_closeout(queue_id)
-                    self._send_json({"ok": closeout.get("status") == "passed", "closeout": closeout, "summary": closeout.get("summary", {}), "status": closeout.get("status")})
-                    return
-                if action == "signoff":
-                    result = self.release_audio_quality_action_signoff_store.signoff(queue_id, payload)
-                    self._send_json({"ok": True, **result})
-                    return
-                if action == "archive":
-                    result = self.release_audio_quality_action_signoff_store.export_archive(queue_id)
-                    self._send_json({"ok": result.get("status") == "passed", **result})
-                    return
-                if action == "archive-zip":
-                    result = self.release_audio_quality_action_signoff_store.build_archive_zip(queue_id)
-                    self._send_json({"ok": result.get("status") == "passed", **result})
-                    return
-                if action == "archive-verify":
-                    report = self.release_audio_quality_action_signoff_store.verify_archive(
-                        queue_id,
-                        strict=bool(payload.get("strict", True)),
-                        require_current_queue=bool(payload.get("require_current_queue", True)),
-                        require_signed=bool(payload.get("require_signed", True)),
-                        queue_zip_path=payload.get("queue_zip"),
-                        queue_verification_report_path=payload.get("queue_verification_report"),
-                        observatory_zip_path=payload.get("observatory_zip"),
-                        observatory_verification_report_path=payload.get("observatory_verification_report"),
-                        evidence_root=payload.get("evidence_root") or self.release_store.root,
-                    )
-                    self._send_json({"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")})
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio Quality Action Queue route not found.")
-                return
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio Quality Action Queue route not found.")
+            _split_result = self._handle_audio_quality_actions_route_part_01(method, path, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_audio_quality_actions_route_part_02(method, path, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_audio_quality_actions_route_part_03(method, path, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
         except _interfaces_api_runtime.ReleaseAudioQualityActionQueueNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
         except _interfaces_api_runtime.ReleaseAudioQualityActionQueueStateError as exc:

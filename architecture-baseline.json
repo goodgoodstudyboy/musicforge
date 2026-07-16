@@ -6,13 +6,13 @@
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
-    "song_agent/interfaces/api/routes/creation.py": 518,
+    "song_agent/interfaces/api/routes/creation.py": 478,
     "song_agent/interfaces/api/routes/delivery.py": 27,
     "song_agent/interfaces/api/routes/maintenance.py": 166,
     "song_agent/interfaces/api/routes/program.py": 68,
     "song_agent/interfaces/api/routes/quality.py": 42,
     "song_agent/interfaces/api/routes/studio.py": 85,
-    "song_agent/interfaces/api/routes/trust.py": 152,
+    "song_agent/interfaces/api/routes/trust.py": 124,
     "song_agent/interfaces/api/runtime.py": 43,
     "song_agent/interfaces/cli/commands/creation.py": 27,
     "song_agent/interfaces/cli/commands/delivery.py": 52,
@@ -26,7 +26,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 1223,
+  "module_count": 1225,
   "modules": [
     {
       "context": null,
@@ -5701,6 +5701,12 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.contracts.documents",
+      "path": "song_agent/platform/contracts/documents.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.contracts.errors",
       "path": "song_agent/platform/contracts/errors.py"
     },
@@ -6453,6 +6459,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check.v14_compatibility",
       "path": "song_agent/release_check/v14_compatibility.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_quality",
+      "path": "song_agent/release_check/v14_quality.py"
     },
     {
       "context": null,

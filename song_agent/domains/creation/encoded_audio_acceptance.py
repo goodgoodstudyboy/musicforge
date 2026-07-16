@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import shutil
@@ -537,7 +539,7 @@ class EncodedAudioAcceptanceStore:
             },
         }
 
-    def _build_review(self, release_id: str, review_id: str, payload: dict[str, Any], *, now: str, created_at: str | None = None) -> dict[str, Any]:
+    def _build_review(self, release_id: str, review_id: str, payload: ImplementationDocument, *, now: str, created_at: str | None = None) -> ImplementationDocument:
         profile_id = _validate_profile_id(str(payload.get("profile_id") or ""))
         track_id = _validate_track_id(str(payload.get("track_id") or ""))
         status = str(payload.get("status") or "accepted").strip()
@@ -592,7 +594,7 @@ class EncodedAudioAcceptanceStore:
         review["stale_reasons"] = []
         return sanitize_metadata(review, blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
 
-    def _health_track(self, release_id: str, manifest: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    def _health_track(self, release_id: str, manifest: ImplementationDocument, row: ImplementationDocument) -> ImplementationDocument:
         failures: list[str] = []
         warnings: list[str] = []
         profile_id = str(manifest.get("profile_id") or "")
@@ -669,7 +671,7 @@ class EncodedAudioAcceptanceStore:
         if document.status == "signed" or self.release_store.read_signoff(release_id, default={}):
             raise EncodedAudioAcceptanceStateError("Signed releases cannot change encoded audio acceptance evidence. Reset signoff first.")
 
-    def _append_event(self, release_id: str, event_type: str, payload: dict[str, Any], now: str) -> None:
+    def _append_event(self, release_id: str, event_type: str, payload: ImplementationDocument, now: str) -> None:
         root = self.root_dir(release_id)
         root.mkdir(parents=True, exist_ok=True)
         event = sanitize_metadata({"timestamp": now, "type": event_type, "payload": payload}, blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
@@ -1004,7 +1006,7 @@ def export_distribution_encoded_audio_acceptance(
     )
 
 
-def _normalize_markers(value: Any) -> list[dict[str, Any]]:
+def _normalize_markers(value: Any) -> list[ImplementationDocument]:
     markers = value if isinstance(value, list) else []
     result = []
     for index, item in enumerate(markers, start=1):
@@ -1031,7 +1033,7 @@ def _normalize_markers(value: Any) -> list[dict[str, Any]]:
     return result
 
 
-def _worst_status(reports: list[dict[str, Any]]) -> str:
+def _worst_status(reports: list[ImplementationDocument]) -> str:
     statuses = [
         (report.get("summary") or {}).get("status") if isinstance(report.get("summary"), dict) else report.get("status")
         for report in reports
@@ -1091,7 +1093,7 @@ def _sha256_file(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = validate_relative_path(path.resolve().relative_to(root.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_file(path)}
 

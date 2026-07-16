@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -333,7 +335,7 @@ class _KnowledgeVerifier:
         self._add_hash_check("external", "tohk_incident_package_incidents_integrity", self.external_incidents_doc.get("integrity_hash"), incident_hash(self.external_incidents_doc), "Incident package incidents integrity")
         self._add_hash_check("external", "tohk_incident_package_closeouts_integrity", self.external_closeout_summary.get("integrity_hash"), incident_hash(self.external_closeout_summary), "Incident package closeout summary integrity")
 
-    def _read_external_json_entry(self, archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+    def _read_external_json_entry(self, archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
         try:
             value = json.loads(archive.read(name).decode("utf-8"))
         except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -395,7 +397,7 @@ class _KnowledgeVerifier:
                 missing_external_guard.append(str(fact.get("incident_id") or incident_hash_value))
         self._add_check("external", "tohk_external_high_severity_guard_coverage", "failed" if missing_external_guard else "passed", "blocking", "External high severity incidents missing active regression guards: " + ", ".join(missing_external_guard[:5]) if missing_external_guard else "External high severity incidents are covered by active guards.")
 
-    def _external_incident_facts(self) -> dict[str, dict[str, Any]]:
+    def _external_incident_facts(self) -> dict[str, ImplementationDocument]:
         incidents = self.external_incidents_doc.get("incidents") if isinstance(self.external_incidents_doc.get("incidents"), list) else []
         closeouts = self.external_closeout_summary.get("closeouts") if isinstance(self.external_closeout_summary.get("closeouts"), list) else []
         closeout_by_id = {str(closeout.get("incident_id") or ""): closeout for closeout in closeouts if isinstance(closeout, dict)}
@@ -470,7 +472,7 @@ class _KnowledgeVerifier:
         self.redaction_findings = findings
         self._add_check("security", "tohk_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Knowledge package." if findings else "No sensitive values found in Knowledge package.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         summary = {
@@ -508,7 +510,7 @@ class _KnowledgeVerifier:
             blocked_keys=VERIFIER_BLOCKED_KEYS,
         )
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         try:
             raw = archive.read(name)
             value = json.loads(raw.decode("utf-8"))
@@ -531,7 +533,7 @@ class _KnowledgeVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     try:
         with open(_fs_path(path), "r", encoding="utf-8") as handle:
             value = json.load(handle)
@@ -540,7 +542,7 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _entry_matches_external_fact(entry: dict[str, Any], fact: dict[str, Any], source_summary: dict[str, Any]) -> bool:
+def _entry_matches_external_fact(entry: ImplementationDocument, fact: ImplementationDocument, source_summary: ImplementationDocument) -> bool:
     source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
     expected_source = {
         "incident_hash": source.get("incident_hash"),

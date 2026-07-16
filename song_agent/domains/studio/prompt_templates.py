@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import threading
@@ -210,7 +212,7 @@ def _validate_prompt_text(value: str, field_name: str) -> None:
             raise ValueError(f"{field_name} must not contain local absolute paths.")
 
 
-def _mapping(value: Any, field_name: str) -> dict[str, Any]:
+def _mapping(value: Any, field_name: str) -> ImplementationDocument:
     if value is None:
         return {}
     if not isinstance(value, dict):

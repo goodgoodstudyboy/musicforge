@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -37,7 +39,7 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
         sprint_store: ReviewSprintStore,
         task_store: ReviewTaskStore,
         sprint: Any,
-        payload: dict[str, Any] | None = None,
+        payload: ImplementationDocument | None = None,
     ) -> dict[str, _interfaces_api_runtime.Any]:
         payload = payload if isinstance(payload, dict) else {}
         requested = [str(item) for item in payload.get("task_ids", []) if str(item).strip()] if isinstance(payload.get("task_ids"), list) else []
@@ -230,7 +232,7 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
         except (OSError, ValueError, TypeError, FileNotFoundError, _interfaces_api_runtime.json.JSONDecodeError):
             return {}
 
-    def _generate_review_sprint_local_candidates(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _generate_review_sprint_local_candidates(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         if sprint.status not in {"open", "in_progress", "blocked"}:
             raise _interfaces_api_runtime.ReviewSprintStateError(f"Cannot generate candidates for a {sprint.status} review sprint.")
         sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)

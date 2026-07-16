@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 from pathlib import Path
 from typing import Any
@@ -325,7 +327,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
         existing = list(self.receiver_receipts_dir(program_id).glob("receipt-*.json")) if self.receiver_receipts_dir(program_id).exists() else []
         return f"receipt-{len(existing) + 1:06d}"
 
-    def _current_context(self, program_id: str, payload: dict[str, Any], *, require_passed: bool) -> dict[str, Any]:
+    def _current_context(self, program_id: str, payload: ImplementationDocument, *, require_passed: bool) -> ImplementationDocument:
         paths = {
             "continuity_zip_path": Path(payload.get("continuity_archive") or payload.get("continuity_zip") or self.continuity_store.archive_zip_path(program_id)),
             "continuity_verification_path": Path(payload.get("continuity_verification_report") or self.continuity_store.verification_report_path(program_id)),
@@ -380,7 +382,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             raise UnifiedReleaseProgramContinuityDistributionStateError("Continuity Distribution source evidence is not current: " + ", ".join(sorted(set(blockers))))
         return {**paths, "runtime": runtime, "external": external, "bindings": bindings, "blockers": sorted(set(blockers))}
 
-    def _build_documents(self, program_id: str, context: dict[str, Any]) -> dict[str, Any]:
+    def _build_documents(self, program_id: str, context: ImplementationDocument) -> ImplementationDocument:
         now = now_iso()
         package_rows = []
         verification_rows = []
@@ -475,7 +477,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
         return {"package_index": package_index, "verification_index": verification_index, "source_binding": source_binding, "custody_checklist": custody_checklist, "redaction_report": redaction_report, "receipt_template": receipt_template}
 
 
-def _manifest_document(program_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _manifest_document(program_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_DISTRIBUTION_SCHEMA_VERSION,
@@ -504,28 +506,28 @@ def _receiver_guide(program_id: str) -> str:
     return f"# MusicForge Continuity Distribution Receiver Guide\n\nProgram: {sanitize_sensitive_text(program_id)}\n\nVerify the kit, then fill the receiver receipt only with public-safe information.\n"
 
 
-def _sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_payload(payload: ImplementationDocument) -> ImplementationDocument:
     for forbidden in ("source_path", "local_path", "file_path"):
         if payload.get(forbidden):
             raise UnifiedReleaseProgramContinuityDistributionStateError(f"{forbidden} is not allowed for Continuity Distribution Kit.")
     return payload
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     doc = sanitize_metadata(doc, blocked_keys=CONTINUITY_DISTRIBUTION_BLOCKED_METADATA_KEYS)
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     return read_json(path)
@@ -543,7 +545,7 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return h.hexdigest()
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -559,5 +561,5 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}

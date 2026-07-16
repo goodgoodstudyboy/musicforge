@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -351,12 +353,12 @@ class AudioEncodingStore:
         self,
         release_id: str,
         profile: AudioEncodingProfile,
-        source_row: dict[str, Any],
+        source_row: ImplementationDocument,
         *,
         config: AudioEncoderConfig,
         runner: EncoderRunner,
         now: str,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         track_id = _validate_track_id(str(source_row.get("track_id") or ""))
         source_rel = validate_relative_path(str(source_row.get("source_path") or ""))
         release_export_dir = self.release_store.export_dir(release_id).resolve()
@@ -798,11 +800,11 @@ def encoded_audio_file_record(root: Path, path: Path) -> dict[str, Any]:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_file(path)}
 
 
-def _profile_source(profile: AudioEncodingProfile) -> dict[str, Any]:
+def _profile_source(profile: AudioEncodingProfile) -> ImplementationDocument:
     return {"profile_id": profile.profile_id, "profile_hash": audio_encoding_profile_hash(profile), "format": profile.format, "extension": profile.extension}
 
 
-def _track_result(profile: AudioEncodingProfile, track_id: str, source_row: dict[str, Any], *, status: str, message: str) -> dict[str, Any]:
+def _track_result(profile: AudioEncodingProfile, track_id: str, source_row: ImplementationDocument, *, status: str, message: str) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "track_id": track_id,
@@ -818,7 +820,7 @@ def _track_result(profile: AudioEncodingProfile, track_id: str, source_row: dict
     )
 
 
-def _encoder_result_public(result: dict[str, Any]) -> dict[str, Any]:
+def _encoder_result_public(result: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "status": result.get("status"),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import math
@@ -397,7 +399,7 @@ def not_analyzed_report(reference: ReferenceItem) -> dict[str, Any]:
     }
 
 
-def _analyze_wav(context: ReferenceContext, now: str) -> dict[str, Any]:
+def _analyze_wav(context: ReferenceContext, now: str) -> ImplementationDocument:
     report = _base_report(context.reference, now)
     try:
         with wave.open(str(context.source_path), "rb") as wav:
@@ -447,7 +449,7 @@ def _analyze_wav(context: ReferenceContext, now: str) -> dict[str, Any]:
     return report
 
 
-def _analyze_midi(context: ReferenceContext, now: str) -> dict[str, Any]:
+def _analyze_midi(context: ReferenceContext, now: str) -> ImplementationDocument:
     report = _base_report(context.reference, now)
     try:
         midi = parse_midi(context.source_path.read_bytes())
@@ -463,7 +465,7 @@ def _analyze_midi(context: ReferenceContext, now: str) -> dict[str, Any]:
     return report
 
 
-def _analyze_text(context: ReferenceContext, now: str) -> dict[str, Any]:
+def _analyze_text(context: ReferenceContext, now: str) -> ImplementationDocument:
     report = _base_report(context.reference, now)
     try:
         text = context.source_path.read_text(encoding="utf-8")
@@ -489,7 +491,7 @@ def _analyze_text(context: ReferenceContext, now: str) -> dict[str, Any]:
     return report
 
 
-def _base_report(reference: ReferenceItem, now: str, *, status: str = "completed", errors: list[str] | None = None) -> dict[str, Any]:
+def _base_report(reference: ReferenceItem, now: str, *, status: str = "completed", errors: list[str] | None = None) -> ImplementationDocument:
     return {
         "schema_version": REFERENCE_ANALYSIS_SCHEMA_VERSION,
         "reference_id": reference.reference_id,
@@ -573,7 +575,7 @@ def _chord_like_tokens(text: str) -> list[str]:
     return __import__("re").findall(r"\b[A-G](?:#|b)?(?:maj7|min7|m7|m|7|sus4|dim)?\b", text)
 
 
-def _find_slice(manifest: dict[str, Any], slice_id: str) -> dict[str, Any]:
+def _find_slice(manifest: ImplementationDocument, slice_id: str) -> ImplementationDocument:
     slice_id = _validate_slice_id(slice_id)
     for item in manifest.get("slices", []):
         if isinstance(item, dict) and item.get("slice_id") == slice_id:
@@ -581,7 +583,7 @@ def _find_slice(manifest: dict[str, Any], slice_id: str) -> dict[str, Any]:
     raise FileNotFoundError(slice_id)
 
 
-def _update_slice(manifest: dict[str, Any], slice_id: str, values: dict[str, Any]) -> dict[str, Any]:
+def _update_slice(manifest: ImplementationDocument, slice_id: str, values: ImplementationDocument) -> ImplementationDocument:
     updated = dict(manifest)
     slices = []
     found = False
@@ -598,12 +600,12 @@ def _update_slice(manifest: dict[str, Any], slice_id: str, values: dict[str, Any
     return _sanitize_report(updated)
 
 
-def _export_slice_summary(slice_item: dict[str, Any]) -> dict[str, Any]:
+def _export_slice_summary(slice_item: ImplementationDocument) -> ImplementationDocument:
     keys = ["slice_id", "slice_type", "name", "track_index", "channel", "start_beat", "duration_beats", "note_count", "pitch_min", "pitch_max", "quality_hint"]
     return {key: slice_item.get(key) for key in keys if slice_item.get(key) is not None}
 
 
-def _compact_provider_reference_summary(data: dict[str, Any]) -> dict[str, Any]:
+def _compact_provider_reference_summary(data: ImplementationDocument) -> ImplementationDocument:
     compact = {
         "reference_id": data.get("reference_id"),
         "reference_type": data.get("reference_type"),
@@ -623,7 +625,7 @@ def _compact_provider_reference_summary(data: dict[str, Any]) -> dict[str, Any]:
     return sanitize_metadata(compact)
 
 
-def _compact_analysis_inner(summary: Any) -> dict[str, Any]:
+def _compact_analysis_inner(summary: Any) -> ImplementationDocument:
     if not isinstance(summary, dict):
         return {}
     allowed = {
@@ -645,7 +647,7 @@ def _compact_analysis_inner(summary: Any) -> dict[str, Any]:
     return {key: summary.get(key) for key in allowed if key in summary}
 
 
-def _asset_notes(notes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _asset_notes(notes: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         {
             "pitch": int(note["pitch"]),
@@ -716,11 +718,11 @@ def _clean_tags(value: Any) -> list[str]:
     return tags[:32]
 
 
-def _sanitize_report(value: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_report(value: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(value)
 
 
-def _append_reference_event(reference_dir: Path, event_type: str, payload: dict[str, Any], timestamp: str | None = None) -> None:
+def _append_reference_event(reference_dir: Path, event_type: str, payload: ImplementationDocument, timestamp: str | None = None) -> None:
     event = {"timestamp": timestamp or now_iso(), "type": event_type, "payload": sanitize_metadata(payload)}
     reference_dir.mkdir(parents=True, exist_ok=True)
     with (reference_dir / "events.jsonl").open("a", encoding="utf-8") as file:

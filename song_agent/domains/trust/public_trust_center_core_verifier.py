@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -205,7 +207,7 @@ class _PublicTrustCenterVerifier:
         require_anchor_not_revoked: bool,
         require_anchor_transparency_current: bool,
         require_anchor_checkpoint: bool,
-        acceptance_board_signoff_verifier: Callable[..., dict[str, Any]] | None,
+        acceptance_board_signoff_verifier: Callable[..., ImplementationDocument] | None,
     ) -> None:
         self.zip_path = zip_path
         self.strict = strict
@@ -569,7 +571,7 @@ class _PublicTrustCenterVerifier:
         self._verify_independent_delivery_sidecar_hashes(delivery_doc, independent_sidecars)
         self._verify_independent_delivery_fingerprint_hashes(delivery_doc, fingerprint_sidecars)
 
-    def _verify_independent_sidecar_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
+    def _verify_independent_sidecar_hashes(self, sidecar_doc: ImplementationDocument, sidecars: dict[str, ImplementationDocument]) -> None:
         rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
         declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
         actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
@@ -577,7 +579,7 @@ class _PublicTrustCenterVerifier:
         for path, row in sorted(declared.items()):
             self._add_exact_check("data", "ptc_independent_verification_sidecar_hash", row.get("hash"), actual.get(path), f"Independent verification sidecar hash {path}")
 
-    def _verify_independent_delivery_sidecar_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
+    def _verify_independent_delivery_sidecar_hashes(self, sidecar_doc: ImplementationDocument, sidecars: dict[str, ImplementationDocument]) -> None:
         rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
         declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
         actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
@@ -585,7 +587,7 @@ class _PublicTrustCenterVerifier:
         for path, row in sorted(declared.items()):
             self._add_exact_check("data", "ptc_independent_delivery_sidecar_hash", row.get("hash"), actual.get(path), f"Independent delivery sidecar hash {path}")
 
-    def _verify_independent_delivery_fingerprint_hashes(self, sidecar_doc: dict[str, Any], sidecars: dict[str, dict[str, Any]]) -> None:
+    def _verify_independent_delivery_fingerprint_hashes(self, sidecar_doc: ImplementationDocument, sidecars: dict[str, ImplementationDocument]) -> None:
         rows = sidecar_doc.get("fingerprint_sidecars") if isinstance(sidecar_doc.get("fingerprint_sidecars"), list) else []
         declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
         actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
@@ -593,7 +595,7 @@ class _PublicTrustCenterVerifier:
         for path, row in sorted(declared.items()):
             self._add_exact_check("data", "ptc_independent_delivery_fingerprint_sidecar_hash", row.get("hash"), actual.get(path), f"Independent delivery fingerprint sidecar hash {path}")
 
-    def _verify_delivery_sidecar_evidence_bindings(self, sidecars: dict[str, dict[str, Any]], fingerprint_sidecars: dict[str, dict[str, Any]]) -> None:
+    def _verify_delivery_sidecar_evidence_bindings(self, sidecars: dict[str, ImplementationDocument], fingerprint_sidecars: dict[str, ImplementationDocument]) -> None:
         for path, doc in sorted(sidecars.items()):
             if not isinstance(doc, dict):
                 continue
@@ -850,7 +852,7 @@ class _PublicTrustCenterVerifier:
                 self.redaction_findings.extend(_blocked_key_findings(name, value))
         self._add_check("redaction", "ptc_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned text entries.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if not name or info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name or 'entry'} is missing.")
@@ -863,7 +865,7 @@ class _PublicTrustCenterVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return value if isinstance(value, dict) else {}
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
@@ -898,7 +900,7 @@ class _PublicTrustCenterVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary_from_source(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     package_count = len(source.get("public_package_fingerprints", []) if isinstance(source.get("public_package_fingerprints"), list) else [])
     verification_count = len(source.get("verification_fingerprints", []) if isinstance(source.get("verification_fingerprints"), list) else [])
     passed_verifications = sum(1 for item in source.get("verification_fingerprints", []) if isinstance(item, dict) and item.get("verification_status") == "passed")
@@ -927,7 +929,7 @@ def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]],
     }
 
 
-def _release_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _release_readiness(source: ImplementationDocument) -> list[ImplementationDocument]:
     rows = []
     for item in source.get("releases", []) if isinstance(source.get("releases"), list) else []:
         if not isinstance(item, dict):
@@ -946,15 +948,15 @@ def _release_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: str(item.get("release_id") or ""))
 
 
-def _delivery_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _delivery_readiness(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("delivery_readiness_matrix", []) if isinstance(item, dict)], key=lambda item: str(item.get("release_id") or ""))
 
 
-def _delivery_risk_register(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _delivery_risk_register(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("delivery_risk_register", []) if isinstance(item, dict)], key=lambda item: str(item.get("risk_id") or ""))
 
 
-def _portfolio_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _portfolio_readiness(source: ImplementationDocument) -> list[ImplementationDocument]:
     rows = []
     for item in source.get("portfolios", []) if isinstance(source.get("portfolios"), list) else []:
         if not isinstance(item, dict):
@@ -963,15 +965,15 @@ def _portfolio_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: str(item.get("portfolio_id") or ""))
 
 
-def _package_index(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _package_index(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("public_package_fingerprints", []) if isinstance(item, dict)], key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _verification_index(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _verification_index(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("verification_fingerprints", []) if isinstance(item, dict)], key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _package_verification_sidecars(source: ImplementationDocument) -> list[ImplementationDocument]:
     packages = _package_index(source)
     verifications = {
         _fingerprint_key(item): dict(item)
@@ -999,7 +1001,7 @@ def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _package_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _package_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, ImplementationDocument]) -> ImplementationDocument:
     packages: list[dict[str, Any]] = []
     verifications: list[dict[str, Any]] = []
     rows = []
@@ -1037,7 +1039,7 @@ def _package_verification_index_from_independent_sidecars(source_hash: Any, side
     }
 
 
-def _delivery_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]], fingerprint_sidecars: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+def _delivery_verification_index_from_independent_sidecars(source_hash: Any, sidecars: dict[str, ImplementationDocument], fingerprint_sidecars: dict[str, ImplementationDocument] | None = None) -> ImplementationDocument:
     summaries: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
     fingerprint_rows: list[dict[str, Any]] = []
@@ -1058,7 +1060,7 @@ def _delivery_verification_index_from_independent_sidecars(source_hash: Any, sid
     return {"source_hash": source_hash, "summaries": sorted(summaries, key=_delivery_summary_key), "sidecars": rows, "fingerprint_sidecars": fingerprint_rows}
 
 
-def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _verification_sidecars(source: ImplementationDocument) -> list[ImplementationDocument]:
     packages = {
         _fingerprint_key(item): dict(item)
         for item in source.get("public_package_fingerprints", [])
@@ -1083,7 +1085,7 @@ def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _packages_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
+def _packages_from_sidecars(sidecars: list[Any]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for item in sidecars:
         if not isinstance(item, dict):
@@ -1105,7 +1107,7 @@ def _packages_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _verifications_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
+def _verifications_from_sidecars(sidecars: list[Any]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for item in sidecars:
         if not isinstance(item, dict):
@@ -1128,7 +1130,7 @@ def _verifications_from_sidecars(sidecars: list[Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _delivery_payloads_from_sidecars(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _delivery_payloads_from_sidecars(sidecars: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for path, doc in sorted(sidecars.items()):
         del path
@@ -1140,7 +1142,7 @@ def _delivery_payloads_from_sidecars(sidecars: dict[str, dict[str, Any]]) -> lis
     return sorted(rows, key=_delivery_payload_key)
 
 
-def _delivery_payloads_from_fingerprint_sidecars(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _delivery_payloads_from_fingerprint_sidecars(sidecars: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for path, doc in sorted(sidecars.items()):
         del path
@@ -1151,7 +1153,7 @@ def _delivery_payloads_from_fingerprint_sidecars(sidecars: dict[str, dict[str, A
     return sorted(rows, key=_delivery_payload_key)
 
 
-def _delivery_anchor_rows_from_fingerprint_sidecars(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _delivery_anchor_rows_from_fingerprint_sidecars(sidecars: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for path, doc in sorted(sidecars.items()):
         if not isinstance(doc, dict):
@@ -1167,7 +1169,7 @@ def _delivery_anchor_rows_from_fingerprint_sidecars(sidecars: dict[str, dict[str
     return sorted(rows, key=lambda item: str(item.get("path") or ""))
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -1176,7 +1178,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _find_registry_current_entry(registry: dict[str, Any]) -> dict[str, Any]:
+def _find_registry_current_entry(registry: ImplementationDocument) -> ImplementationDocument:
     current_id = str(registry.get("current_entry_id") or "")
     for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
         if isinstance(entry, dict) and entry.get("entry_id") == current_id:
@@ -1184,7 +1186,7 @@ def _find_registry_current_entry(registry: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _delivery_payloads_from_data_docs(data_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _delivery_payloads_from_data_docs(data_docs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for domain, doc_name, row_key in (
         ("release", "delivery-index.json", "releases"),
@@ -1201,7 +1203,7 @@ def _delivery_payloads_from_data_docs(data_docs: dict[str, dict[str, Any]]) -> l
     return sorted(rows, key=_delivery_payload_key)
 
 
-def _delivery_public_payload(domain: str, item: dict[str, Any]) -> dict[str, Any]:
+def _delivery_public_payload(domain: str, item: ImplementationDocument) -> ImplementationDocument:
     allowed = {
         "release_id",
         "target_id",
@@ -1258,15 +1260,15 @@ def _delivery_public_payload(domain: str, item: dict[str, Any]) -> dict[str, Any
     return {"domain": domain, **{key: item.get(key) for key in sorted(allowed) if key in item}}
 
 
-def _delivery_summary_key(item: dict[str, Any]) -> tuple[str, str, str]:
+def _delivery_summary_key(item: ImplementationDocument) -> tuple[str, str, str]:
     return (str(item.get("release_id") or ""), str(item.get("domain") or ""), str(item.get("entity_id") or item.get("target_id") or item.get("submission_id") or ""))
 
 
-def _delivery_payload_key(item: dict[str, Any]) -> tuple[str, str, str, str]:
+def _delivery_payload_key(item: ImplementationDocument) -> tuple[str, str, str, str]:
     return (str(item.get("release_id") or ""), str(item.get("domain") or ""), str(item.get("target_id") or ""), str(item.get("submission_id") or item.get("entity_id") or ""))
 
 
-def _fingerprint_key(item: dict[str, Any]) -> tuple[str, str, str]:
+def _fingerprint_key(item: ImplementationDocument) -> tuple[str, str, str]:
     return (str(item.get("portfolio_id") or ""), str(item.get("package_type") or ""), str(item.get("profile") or ""))
 
 
@@ -1310,7 +1312,7 @@ def _normalize_newlines(text: str) -> str:
     return str(text or "").replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
         for match in pattern.finditer(text):
@@ -1334,7 +1336,7 @@ def _allowed_public_false_positive(value: str) -> bool:
     return lowered in {"sk-register", "sk-register.json"}
 
 
-def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[dict[str, Any]]:
+def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, child in value.items():

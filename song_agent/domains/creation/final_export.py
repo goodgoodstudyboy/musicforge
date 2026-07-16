@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import os
 import re
@@ -264,7 +266,7 @@ def _copy_optional(
     source: Path,
     relative_target: str,
     kind: str,
-    files: list[dict[str, Any]],
+    files: list[ImplementationDocument],
     *,
     required: bool = False,
 ) -> None:
@@ -292,7 +294,7 @@ def _copy_stems(
     run_dir: Path,
     export_dir: Path,
     options: FinalExportOptions,
-    files: list[dict[str, Any]],
+    files: list[ImplementationDocument],
     *,
     plan: SongPlan | None,
 ) -> None:
@@ -333,7 +335,7 @@ def _copy_stems(
             files.append({"kind": "stem_audio", "path": stem.audio_path, "exists": False, "required": False, "skipped": "disabled"})
 
 
-def _copy_mix_exports(run_dir: Path, export_dir: Path, files: list[dict[str, Any]]) -> dict[str, Any]:
+def _copy_mix_exports(run_dir: Path, export_dir: Path, files: list[ImplementationDocument]) -> ImplementationDocument:
     from song_agent.domains.quality.mix_controls import mix_patch_hash, mix_patch_integrity_ok, mix_state_hash, mix_state_integrity_ok
     from song_agent.domains.creation.stem_health import read_stem_health_report, stem_health_integrity_ok, stem_health_summary
 
@@ -374,7 +376,7 @@ def _copy_mix_exports(run_dir: Path, export_dir: Path, files: list[dict[str, Any
 def _write_quality_report(
     export_dir: Path,
     gate: QualityGateResult,
-    files: list[dict[str, Any]],
+    files: list[ImplementationDocument],
     *,
     plan: SongPlan | None,
 ) -> None:
@@ -388,10 +390,10 @@ def _write_asset_ref_summaries(
     run_dir: Path,
     export_dir: Path,
     version_id: str,
-    project_export: dict[str, Any] | None,
-    files: list[dict[str, Any]],
+    project_export: ImplementationDocument | None,
+    files: list[ImplementationDocument],
     enabled: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if not enabled:
         files.append({"kind": "asset_refs", "path": "assets", "exists": False, "required": False, "skipped": "disabled"})
         return []
@@ -415,7 +417,7 @@ def _write_asset_ref_summaries(
     return written
 
 
-def _final_version_asset_refs(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> list[dict[str, Any]]:
+def _final_version_asset_refs(run_dir: Path, version_id: str, project_export: ImplementationDocument | None) -> list[ImplementationDocument]:
     refs_by_id: dict[str, dict[str, Any]] = {}
     snapshot_path = run_dir / "data" / "asset-refs.json"
     if snapshot_path.exists():
@@ -444,10 +446,10 @@ def _write_reference_ref_summaries(
     run_dir: Path,
     export_dir: Path,
     version_id: str,
-    project_export: dict[str, Any] | None,
-    files: list[dict[str, Any]],
+    project_export: ImplementationDocument | None,
+    files: list[ImplementationDocument],
     enabled: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if not enabled:
         files.append({"kind": "reference_refs", "path": "references", "exists": False, "required": False, "skipped": "disabled"})
         return []
@@ -471,7 +473,7 @@ def _write_reference_ref_summaries(
     return written
 
 
-def _final_version_reference_refs(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> list[dict[str, Any]]:
+def _final_version_reference_refs(run_dir: Path, version_id: str, project_export: ImplementationDocument | None) -> list[ImplementationDocument]:
     refs_by_id: dict[str, dict[str, Any]] = {}
     snapshot_path = run_dir / "data" / "reference-refs.json"
     if snapshot_path.exists():
@@ -495,7 +497,7 @@ def _final_version_reference_refs(run_dir: Path, version_id: str, project_export
     return [refs_by_id[key] for key in sorted(refs_by_id)]
 
 
-def _final_version_context_pack(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_version_context_pack(run_dir: Path, version_id: str, project_export: ImplementationDocument | None) -> ImplementationDocument:
     snapshot_path = run_dir / "data" / "context-pack.json"
     if snapshot_path.exists():
         _ensure_within(run_dir, snapshot_path)
@@ -515,7 +517,7 @@ def _final_version_context_pack(run_dir: Path, version_id: str, project_export: 
     return {}
 
 
-def _final_version_edit_metadata(run_dir: Path, version_id: str, project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_version_edit_metadata(run_dir: Path, version_id: str, project_export: ImplementationDocument | None) -> ImplementationDocument:
     path = run_dir / "data" / "edit-metadata.json"
     if path.exists():
         try:
@@ -529,7 +531,7 @@ def _final_version_edit_metadata(run_dir: Path, version_id: str, project_export:
     return {}
 
 
-def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
+def _edit_metadata_export_summary(metadata: ImplementationDocument) -> ImplementationDocument:
     summary = {
         "edit_source": metadata.get("edit_source"),
         "edit_type": metadata.get("edit_type"),
@@ -558,7 +560,7 @@ def _edit_metadata_export_summary(metadata: dict[str, Any]) -> dict[str, Any]:
     return _drop_empty(_sanitize_asset_metadata(summary))
 
 
-def _final_review_sprint_summary(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_review_sprint_summary(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
     try:
@@ -572,7 +574,7 @@ def _final_review_sprint_summary(project_export: dict[str, Any] | None) -> dict[
         return {}
 
 
-def _final_review_sprint_recommendations(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_review_sprint_recommendations(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
@@ -591,7 +593,7 @@ def _final_review_sprint_recommendations(project_export: dict[str, Any] | None) 
     return _drop_empty(_sanitize_asset_metadata(summary))
 
 
-def _final_review_sprint_action_queues(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_review_sprint_action_queues(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
@@ -611,7 +613,7 @@ def _final_review_sprint_action_queues(project_export: dict[str, Any] | None) ->
     return _drop_empty(_sanitize_asset_metadata(summary))
 
 
-def _final_review_metrics(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_review_metrics(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
     project_summary = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
@@ -643,7 +645,7 @@ def _final_review_metrics(project_export: dict[str, Any] | None) -> dict[str, An
     return _drop_empty(_sanitize_asset_metadata(summary))
 
 
-def _final_review_judge(project_export: dict[str, Any] | None, edit_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+def _final_review_judge(project_export: ImplementationDocument | None, edit_metadata: ImplementationDocument | None = None) -> ImplementationDocument:
     edit_judge = edit_metadata.get("review_judge") if isinstance(edit_metadata, dict) and isinstance(edit_metadata.get("review_judge"), dict) else {}
     project_summary = project_export.get("review_metrics_summary") if isinstance(project_export, dict) and isinstance(project_export.get("review_metrics_summary"), dict) else {}
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)] if isinstance(project_export, dict) else []
@@ -675,7 +677,7 @@ def _final_review_judge(project_export: dict[str, Any] | None, edit_metadata: di
     return _drop_empty(_sanitize_asset_metadata(summary))
 
 
-def _final_review_sprint_closeout(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_review_sprint_closeout(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
     project_summary = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
@@ -705,7 +707,7 @@ def _final_review_sprint_closeout(project_export: dict[str, Any] | None) -> dict
     return _drop_empty(_sanitize_asset_metadata(summary))
 
 
-def _final_delivery_qa(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_delivery_qa(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("delivery_qa_summary"), dict):
         return {}
     summary = project_export["delivery_qa_summary"]
@@ -726,7 +728,7 @@ def _final_delivery_qa(project_export: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _final_acceptance_fix_sprint(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_acceptance_fix_sprint(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_fix_sprint_summary"), dict):
         return {}
     summary = project_export["acceptance_fix_sprint_summary"]
@@ -747,7 +749,7 @@ def _final_acceptance_fix_sprint(project_export: dict[str, Any] | None) -> dict[
     )
 
 
-def _final_acceptance_fix_plan(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_acceptance_fix_plan(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_fix_plan_summary"), dict):
         return {}
     summary = project_export["acceptance_fix_plan_summary"]
@@ -767,7 +769,7 @@ def _final_acceptance_fix_plan(project_export: dict[str, Any] | None) -> dict[st
     )
 
 
-def _final_acceptance_fix_plan_review(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_acceptance_fix_plan_review(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_fix_plan_review_summary"), dict):
         return {}
     summary = project_export["acceptance_fix_plan_review_summary"]
@@ -788,7 +790,7 @@ def _final_acceptance_fix_plan_review(project_export: dict[str, Any] | None) -> 
     )
 
 
-def _final_acceptance_kb(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_acceptance_kb(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("acceptance_kb_summary"), dict):
         return {}
     summary = project_export["acceptance_kb_summary"]
@@ -809,7 +811,7 @@ def _final_acceptance_kb(project_export: dict[str, Any] | None) -> dict[str, Any
     )
 
 
-def _final_planning_rule_simulation(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_planning_rule_simulation(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("planning_rule_simulation_summary"), dict):
         return {}
     summary = project_export["planning_rule_simulation_summary"]
@@ -829,7 +831,7 @@ def _final_planning_rule_simulation(project_export: dict[str, Any] | None) -> di
     )
 
 
-def _final_planning_rule_governance(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_planning_rule_governance(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("planning_rule_governance_summary"), dict):
         return {}
     summary = project_export["planning_rule_governance_summary"]
@@ -850,7 +852,7 @@ def _final_planning_rule_governance(project_export: dict[str, Any] | None) -> di
     )
 
 
-def _final_planning_rule_impact(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_planning_rule_impact(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("planning_rule_impact_summary"), dict):
         return {}
     summary = project_export["planning_rule_impact_summary"]
@@ -874,7 +876,7 @@ def _final_planning_rule_impact(project_export: dict[str, Any] | None) -> dict[s
     )
 
 
-def _final_delivery_signoff(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _final_delivery_signoff(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict) or not isinstance(project_export.get("delivery_signoff_summary"), dict):
         return {}
     summary = project_export["delivery_signoff_summary"]
@@ -893,7 +895,7 @@ def _final_delivery_signoff(project_export: dict[str, Any] | None) -> dict[str, 
     )
 
 
-def _context_pack_export_summary(pack: dict[str, Any]) -> dict[str, Any]:
+def _context_pack_export_summary(pack: ImplementationDocument) -> ImplementationDocument:
     summary = {
         "pack_id": str(pack.get("pack_id") or ""),
         "name": str(pack.get("name") or pack.get("pack_id") or ""),
@@ -906,7 +908,7 @@ def _context_pack_export_summary(pack: dict[str, Any]) -> dict[str, Any]:
     return _drop_empty(_sanitize_asset_metadata(summary))
 
 
-def _reference_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
+def _reference_ref_export_summary(ref: ImplementationDocument) -> ImplementationDocument:
     summary = {
         "reference_id": _safe_reference_id(str(ref.get("reference_id") or "")),
         "reference_type": str(ref.get("reference_type") or ""),
@@ -923,7 +925,7 @@ def _reference_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
     return _drop_empty(summary)
 
 
-def _asset_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
+def _asset_ref_export_summary(ref: ImplementationDocument) -> ImplementationDocument:
     summary = {
         "asset_id": _safe_asset_id(str(ref.get("asset_id") or "")),
         "asset_type": str(ref.get("asset_type") or ""),
@@ -939,7 +941,7 @@ def _asset_ref_export_summary(ref: dict[str, Any]) -> dict[str, Any]:
     return _drop_empty(summary)
 
 
-def _drop_empty(value: dict[str, Any]) -> dict[str, Any]:
+def _drop_empty(value: ImplementationDocument) -> ImplementationDocument:
     return {
         key: item
         for key, item in value.items()
@@ -963,7 +965,7 @@ def _sanitize_asset_metadata(value: Any) -> Any:
     return sanitize_metadata(value, blocked_keys=BLOCKED_ASSET_METADATA_KEYS)
 
 
-def _write_readme(export_dir: Path, project: Any, version: Any, gate: QualityGateResult, manifest: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, project: Any, version: Any, gate: QualityGateResult, manifest: ImplementationDocument) -> None:
     lines = [
         "MusicForge Final Export",
         "",
@@ -1012,7 +1014,7 @@ def _relative_to_run_dir(run_dir: Path, source: Path) -> str:
         raise ValueError("Refusing to copy a source outside the job run directory.") from exc
 
 
-def _unsafe_stem_path_records(run_dir: Path, manifest: Any, options: FinalExportOptions) -> list[dict[str, Any]]:
+def _unsafe_stem_path_records(run_dir: Path, manifest: Any, options: FinalExportOptions) -> list[ImplementationDocument]:
     records: list[dict[str, Any]] = []
     for stem in manifest.stems:
         try:
@@ -1027,7 +1029,7 @@ def _unsafe_stem_path_records(run_dir: Path, manifest: Any, options: FinalExport
     return records
 
 
-def _skipped_stem_record(kind: str, path: str, exc: Exception) -> dict[str, Any]:
+def _skipped_stem_record(kind: str, path: str, exc: Exception) -> ImplementationDocument:
     return {
         "kind": kind,
         "path": path,

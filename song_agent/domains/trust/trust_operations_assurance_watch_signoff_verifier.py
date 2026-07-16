@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -211,7 +213,7 @@ class _WatchSignoffVerifier:
         except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             self._add_check("history", "toaws_history_parse", "failed", "blocking", f"watch-signoff-history.jsonl cannot be parsed: {exc}")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, entry: str, label: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, entry: str, label: str, check_id: str) -> ImplementationDocument:
         try:
             value = json.loads(archive.read(entry).decode("utf-8"))
         except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -418,7 +420,7 @@ class _WatchSignoffVerifier:
                     findings.append({"path": f"{name}:{path}", "reason": "sensitive_value"})
         self._add_check("security", "toaws_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Assurance Watch Signoff archive." if findings else "No sensitive values found in Assurance Watch Signoff archive.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
         warnings = [check for check in self.checks if check.get("status") in {"failed", "warning"} and check.get("severity") != "blocking"]
         source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
@@ -472,7 +474,7 @@ class _WatchSignoffVerifier:
         self.checks.append(item)
 
 
-def _read_json_file(path: Path | None) -> dict[str, Any]:
+def _read_json_file(path: Path | None) -> ImplementationDocument:
     if not path:
         return {}
     try:
@@ -482,7 +484,7 @@ def _read_json_file(path: Path | None) -> dict[str, Any]:
         return {}
 
 
-def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     if not zip_path:
         return {}
     try:

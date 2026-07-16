@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -116,7 +118,7 @@ def build_observatory_documents_from_evidence_root(config: dict[str, Any], evide
     return build_observatory_documents(config, entries)
 
 
-def _build_release_entry_from_paths(release_dir: Path, release_doc: dict[str, Any]) -> dict[str, Any]:
+def _build_release_entry_from_paths(release_dir: Path, release_doc: ImplementationDocument) -> ImplementationDocument:
     release_id = str(release_doc.get("release_id") or release_dir.name)
     timeline_id = _current_timeline_id(release_dir)
     paths = {
@@ -132,7 +134,7 @@ def _build_release_entry_from_paths(release_dir: Path, release_doc: dict[str, An
     return _build_release_entry({"release_id": release_id, **release_doc}, paths, explicit=False)
 
 
-def _build_release_entry(release_doc: dict[str, Any], paths: dict[str, Path | None], *, explicit: bool) -> dict[str, Any]:
+def _build_release_entry(release_doc: ImplementationDocument, paths: dict[str, Path | None], *, explicit: bool) -> ImplementationDocument:
     release_id = str(release_doc.get("release_id") or "")
     components: list[dict[str, Any]] = []
     cert = _verification_component("release_audio_certification", release_id, paths.get("certification_zip"), paths.get("certification_verification_report"), verifier="certification")
@@ -174,7 +176,7 @@ def _verification_component(
     verifier: str,
     certification_zip: Path | None = None,
     certification_report: Path | None = None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     if not zip_path or not report_path or not Path(zip_path).exists() or not Path(report_path).exists():
         return {"component_type": component_type, "release_id": release_id, "present": False, "status": "missing", "message": f"{component_type} evidence is missing."}
     zip_path = Path(zip_path)
@@ -215,7 +217,7 @@ def _verification_component(
         return {"component_type": component_type, "release_id": release_id, "present": True, "status": "failed", "message": sanitize_sensitive_text(str(exc))}
 
 
-def _basic_component(component_type: str, release_id: str, zip_path: Path | None, report_path: Path | None) -> dict[str, Any]:
+def _basic_component(component_type: str, release_id: str, zip_path: Path | None, report_path: Path | None) -> ImplementationDocument:
     if not zip_path or not report_path or not Path(zip_path).exists() or not Path(report_path).exists():
         return {"component_type": component_type, "release_id": release_id, "present": False, "status": "missing"}
     zip_path = Path(zip_path)
@@ -238,7 +240,7 @@ def _basic_component(component_type: str, release_id: str, zip_path: Path | None
         return {"component_type": component_type, "release_id": release_id, "present": True, "status": "failed", "message": sanitize_sensitive_text(str(exc))}
 
 
-def _timeline_facts(timeline_zip: Path | None) -> dict[str, Any]:
+def _timeline_facts(timeline_zip: Path | None) -> ImplementationDocument:
     if not timeline_zip or not Path(timeline_zip).exists():
         return {"tracks": [], "issues": []}
     with zipfile.ZipFile(Path(timeline_zip)) as archive:
@@ -275,7 +277,7 @@ def _timeline_facts(timeline_zip: Path | None) -> dict[str, Any]:
     return {"release_id": report.get("release_id"), "tracks": tracks, "issues": issues, "trend_summary": trend.get("summary") or {}}
 
 
-def _source_row(facts: dict[str, Any]) -> dict[str, Any]:
+def _source_row(facts: ImplementationDocument) -> ImplementationDocument:
     tracks = facts.get("facts", {}).get("tracks", []) if isinstance(facts.get("facts"), dict) else []
     return {
         "release_id": facts.get("release_id"),
@@ -291,11 +293,11 @@ def _source_row(facts: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _external_facts_from_entry(entry: dict[str, Any]) -> dict[str, Any]:
+def _external_facts_from_entry(entry: ImplementationDocument) -> ImplementationDocument:
     return {"release_id": entry.get("release_id"), "status": entry.get("status"), "release": entry.get("release") or {}, "components": entry.get("components") or [], "facts": entry.get("facts") or {"tracks": [], "issues": []}}
 
 
-def _trend_report(config: dict[str, Any], facts: list[dict[str, Any]], *, source_hash: str) -> dict[str, Any]:
+def _trend_report(config: ImplementationDocument, facts: list[ImplementationDocument], *, source_hash: str) -> ImplementationDocument:
     releases = [_source_row(item) for item in facts]
     ratings = [row["average_manual_rating"] for row in releases if row.get("average_manual_rating") is not None]
     min_ratings = [row["minimum_manual_rating"] for row in releases if row.get("minimum_manual_rating") is not None]
@@ -315,7 +317,7 @@ def _trend_report(config: dict[str, Any], facts: list[dict[str, Any]], *, source
     }
 
 
-def _issue_heatmap(config: dict[str, Any], facts: list[dict[str, Any]], *, source_hash: str) -> dict[str, Any]:
+def _issue_heatmap(config: ImplementationDocument, facts: list[ImplementationDocument], *, source_hash: str) -> ImplementationDocument:
     buckets: dict[str, dict[str, Any]] = {}
     for item in facts:
         release_id = item.get("release_id")
@@ -340,7 +342,7 @@ def _issue_heatmap(config: dict[str, Any], facts: list[dict[str, Any]], *, sourc
     }
 
 
-def _baseline_drift(config: dict[str, Any], facts: list[dict[str, Any]], *, source_hash: str) -> dict[str, Any]:
+def _baseline_drift(config: ImplementationDocument, facts: list[ImplementationDocument], *, source_hash: str) -> ImplementationDocument:
     release_rows = [_source_row(item) for item in facts]
     drift_rows: list[dict[str, Any]] = []
     if len(release_rows) >= 2:
@@ -358,7 +360,7 @@ def _baseline_drift(config: dict[str, Any], facts: list[dict[str, Any]], *, sour
     return {"schema_version": RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, "observatory_id": config.get("observatory_id"), "source_hash": source_hash, "drift": drift_rows, "summary": {"drift_count": len([row for row in drift_rows if row.get("status") != "passed"])}}
 
 
-def _remediation_cost(config: dict[str, Any], facts: list[dict[str, Any]], *, source_hash: str) -> dict[str, Any]:
+def _remediation_cost(config: ImplementationDocument, facts: list[ImplementationDocument], *, source_hash: str) -> ImplementationDocument:
     rows = []
     for item in facts:
         source = _source_row(item)
@@ -366,7 +368,7 @@ def _remediation_cost(config: dict[str, Any], facts: list[dict[str, Any]], *, so
     return {"schema_version": RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, "observatory_id": config.get("observatory_id"), "source_hash": source_hash, "rows": rows, "summary": {"remediation_count": sum(int(row.get("remediation_count") or 0) for row in rows), "needs_fix_count": sum(int(row.get("needs_fix_count") or 0) for row in rows)}}
 
 
-def _risk_register(config: dict[str, Any], facts: list[dict[str, Any]], trend: dict[str, Any], heatmap: dict[str, Any], drift: dict[str, Any], remediation: dict[str, Any], *, thresholds: dict[str, Any], source_hash: str) -> dict[str, Any]:
+def _risk_register(config: ImplementationDocument, facts: list[ImplementationDocument], trend: ImplementationDocument, heatmap: ImplementationDocument, drift: ImplementationDocument, remediation: ImplementationDocument, *, thresholds: ImplementationDocument, source_hash: str) -> ImplementationDocument:
     risks: list[dict[str, Any]] = []
     for item in facts:
         failed = [component for component in item.get("components", []) if component.get("present", True) and component.get("status") != "passed"]
@@ -387,7 +389,7 @@ def _risk_register(config: dict[str, Any], facts: list[dict[str, Any]], trend: d
     return {"schema_version": RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, "observatory_id": config.get("observatory_id"), "source_hash": source_hash, "status": "failed" if critical else "warning" if warnings else "passed", "risks": risks, "summary": {"risk_count": len(risks), "critical_risk_count": len(critical), "warning_risk_count": len(warnings)}}
 
 
-def _recommendation_report(config: dict[str, Any], risk_register: dict[str, Any], *, source_hash: str) -> dict[str, Any]:
+def _recommendation_report(config: ImplementationDocument, risk_register: ImplementationDocument, *, source_hash: str) -> ImplementationDocument:
     recommendations = []
     for risk in risk_register.get("risks") or []:
         action = "refresh_audio_evidence" if risk.get("check_id") == "audio_evidence_not_current" else "open_audio_quality_review"
@@ -408,21 +410,21 @@ def _current_timeline_id(release_dir: Path) -> str | None:
     return candidates[0].parent.name if candidates else None
 
 
-def _default_thresholds(overrides: dict[str, Any]) -> dict[str, Any]:
+def _default_thresholds(overrides: ImplementationDocument) -> ImplementationDocument:
     thresholds = {"min_manual_rating": 3.0, "max_average_rating_drop": 0.25, "max_critical_issue_count": 0, "max_needs_fix_count": 0}
     thresholds.update({key: overrides[key] for key in thresholds if key in overrides})
     return thresholds
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _stable_config_hash(payload: dict[str, Any]) -> str:
+def _stable_config_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key not in {"integrity_hash", "created_at", "updated_at"}})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
@@ -438,7 +440,7 @@ def _sha256_path(path: Path | None) -> str | None:
     return digest.hexdigest()
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
@@ -467,7 +469,7 @@ def _delta(current: Any, baseline: Any) -> float:
     return round(current_num - baseline_num, 4)
 
 
-def _manual_rating(row: dict[str, Any]) -> float | None:
+def _manual_rating(row: ImplementationDocument) -> float | None:
     for key in ("manual_rating", "rating", "review_rating", "latest_manual_rating"):
         value = _num(row.get(key))
         if value is not None:

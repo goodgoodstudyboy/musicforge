@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import os
 import tempfile
@@ -154,7 +156,7 @@ class ProgramStateRepository:
         authority: Path,
         payload_hash: str,
         transaction_id: str,
-        metadata: dict[str, Any],
+        metadata: ImplementationDocument,
     ) -> int:
         now = _now()
         with self.database.transaction() as connection:
@@ -186,7 +188,7 @@ class ProgramStateRepository:
         authority: Path,
         payload_hash: str,
         version: int,
-        metadata: dict[str, Any],
+        metadata: ImplementationDocument,
         now: str,
     ) -> None:
         connection.execute(
@@ -240,7 +242,7 @@ class ProgramStateRepository:
         connection: Any,
         relative: str,
         version: int,
-        metadata: dict[str, Any],
+        metadata: ImplementationDocument,
         payload_hash: str,
         now: str,
     ) -> None:
@@ -344,7 +346,7 @@ def _program_workspace(path: Path | str) -> Path | None:
     return None
 
 
-def _document_metadata(relative: str, document: dict[str, Any]) -> dict[str, Any]:
+def _document_metadata(relative: str, document: ImplementationDocument) -> ImplementationDocument:
     parts = Path(relative).parts
     program_id = str(document.get("program_id") or (parts[1] if len(parts) > 1 else "unknown"))
     path_text = "/".join(parts).lower()
@@ -365,7 +367,7 @@ def _document_metadata(relative: str, document: dict[str, Any]) -> dict[str, Any
     }
 
 
-def _event(relative: str, version: int, payload_hash: str, event_type: str, previous: str, created_at: str) -> dict[str, Any]:
+def _event(relative: str, version: int, payload_hash: str, event_type: str, previous: str, created_at: str) -> ImplementationDocument:
     event = {
         "relative_path": relative, "document_version": version, "event_type": event_type,
         "previous_event_hash": previous, "payload_hash": payload_hash, "created_at": created_at,
@@ -383,14 +385,14 @@ def _record(row: Any) -> ProgramDocumentRecord:
     )
 
 
-def _json_bytes(value: dict[str, Any]) -> bytes:
+def _json_bytes(value: ImplementationDocument) -> bytes:
     text = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
     if os.linesep != "\n":
         text = text.replace("\n", os.linesep)
     return text.encode("utf-8")
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json(path: Path) -> ImplementationDocument:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ProgramPersistenceError(f"JSON document is not an object: {path.name}")

@@ -217,97 +217,102 @@ class QualityRoutesAcceptanceSuites:
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
 
-    def _handle_release_audio_reviews(self, method: str, release_id: str, tail: str) -> None:
-        try:
-            if tail in {"", "/"}:
-                if method == "GET":
-                    reviews = self.audio_review_store.list_reviews(release_id)
-                    summary = self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, "release_id": release_id, "reviews": reviews, "summary": _interfaces_api_runtime.audio_review_summary_public(summary)})
-                    return
-                if method == "POST":
-                    review = self.audio_review_store.create_review(release_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
-                    summary = self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": _interfaces_api_runtime.audio_review_summary_public(summary)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            if tail == "/summary":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
+    def _handle_release_audio_reviews_part_01(self, method: str, release_id: str, tail: str, _split_state):
+        if tail in {'', '/'}:
+            if method == 'GET':
+                reviews = self.audio_review_store.list_reviews(release_id)
                 summary = self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "release_id": release_id, "summary": _interfaces_api_runtime.audio_review_summary_public(summary), "audio_review_summary": summary})
-                return
-            if tail == "/refresh-summary":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self.audio_review_store._ensure_release_mutable(release_id)
-                summary = self.audio_review_store.write_summary(release_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "release_id": release_id, "summary": _interfaces_api_runtime.audio_review_summary_public(summary), "audio_review_summary": summary})
-                return
-            if tail == "/import-human-review-pack":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.audio_review_store.import_human_review_pack(release_id, self._read_json_body(), acceptance_store=self.acceptance_store, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            parts = [part for part in tail.strip("/").split("/") if part]
-            if not parts:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio review route not found.")
-                return
-            review_id = parts[0]
-            if len(parts) == 1:
-                if method == "GET":
-                    review = self.audio_review_store.read_review(release_id, review_id)
-                    self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": _interfaces_api_runtime.audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now()))})
-                    return
-                if method == "POST":
-                    review = self.audio_review_store.update_review(release_id, review_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": _interfaces_api_runtime.audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now()))})
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            if len(parts) == 2 and parts[1] == "delete":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.audio_review_store.delete_review(release_id, review_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "release_id": release_id, **result})
-                return
-            if len(parts) == 2 and parts[1] == "refresh":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                review = self.audio_review_store.refresh_review(release_id, review_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "release_id": release_id, "review": review, "summary": _interfaces_api_runtime.audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now()))})
-                return
-            if len(parts) == 4 and parts[1] == "markers" and parts[3] == "create-review-task":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = self.audio_review_store.create_review_task_from_marker(release_id, review_id, parts[2], self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                status = _interfaces_api_runtime.HTTPStatus.CREATED if result.get("status") == "created" else _interfaces_api_runtime.HTTPStatus.OK
-                self._send_json({"ok": True, "release_id": release_id, **result}, status=status)
-                return
-            if len(parts) == 4 and parts[1] == "markers" and parts[3] == "mix-patch-draft":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                result = _interfaces_api_runtime.MixRenderStore(self.project_store, self.store).marker_mix_patch_draft(
-                    release_store=self.release_store,
-                    audio_review_store=self.audio_review_store,
-                    release_id=release_id,
-                    review_id=review_id,
-                    marker_id=parts[2],
-                    payload=self._optional_json_body(),
-                    now=_interfaces_api_runtime._utc_now(),
-                )
-                self._send_json({"ok": True, "release_id": release_id, **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio review route not found.")
+                self._send_json({'ok': True, 'release_id': release_id, 'reviews': reviews, 'summary': _interfaces_api_runtime.audio_review_summary_public(summary)})
+                return (True, None)
+            if method == 'POST':
+                review = self.audio_review_store.create_review(release_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                summary = self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now())
+                self._send_json({'ok': True, 'release_id': release_id, 'review': review, 'summary': _interfaces_api_runtime.audio_review_summary_public(summary)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        if tail == '/summary':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            summary = self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'release_id': release_id, 'summary': _interfaces_api_runtime.audio_review_summary_public(summary), 'audio_review_summary': summary})
+            return (True, None)
+        if tail == '/refresh-summary':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self.audio_review_store._ensure_release_mutable(release_id)
+            summary = self.audio_review_store.write_summary(release_id, now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'release_id': release_id, 'summary': _interfaces_api_runtime.audio_review_summary_public(summary), 'audio_review_summary': summary})
+            return (True, None)
+        if tail == '/import-human-review-pack':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.audio_review_store.import_human_review_pack(release_id, self._read_json_body(), acceptance_store=self.acceptance_store, now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, **_split_state['result']}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        _split_state['parts'] = [part for part in tail.strip('/').split('/') if part]
+        if not _split_state['parts']:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Audio review route not found.')
+            return (True, None)
+        _split_state['review_id'] = _split_state['parts'][0]
+        if len(_split_state['parts']) == 1:
+            if method == 'GET':
+                review = self.audio_review_store.read_review(release_id, _split_state['review_id'])
+                self._send_json({'ok': True, 'release_id': release_id, 'review': review, 'summary': _interfaces_api_runtime.audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now()))})
+                return (True, None)
+            if method == 'POST':
+                review = self.audio_review_store.update_review(release_id, _split_state['review_id'], self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                self._send_json({'ok': True, 'release_id': release_id, 'review': review, 'summary': _interfaces_api_runtime.audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now()))})
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        if len(_split_state['parts']) == 2 and _split_state['parts'][1] == 'delete':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.audio_review_store.delete_review(release_id, _split_state['review_id'], now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'release_id': release_id, **_split_state['result']})
+            return (True, None)
+        if len(_split_state['parts']) == 2 and _split_state['parts'][1] == 'refresh':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            review = self.audio_review_store.refresh_review(release_id, _split_state['review_id'], now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'release_id': release_id, 'review': review, 'summary': _interfaces_api_runtime.audio_review_summary_public(self.audio_review_store.build_summary(release_id, now=_interfaces_api_runtime._utc_now()))})
+            return (True, None)
+        return (False, None)
+
+    def _handle_release_audio_reviews_part_02(self, method: str, release_id: str, tail: str, _split_state):
+        if len(_split_state['parts']) == 4 and _split_state['parts'][1] == 'markers' and (_split_state['parts'][3] == 'create-review-task'):
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = self.audio_review_store.create_review_task_from_marker(release_id, _split_state['review_id'], _split_state['parts'][2], self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+            status = _interfaces_api_runtime.HTTPStatus.CREATED if _split_state['result'].get('status') == 'created' else _interfaces_api_runtime.HTTPStatus.OK
+            self._send_json({'ok': True, 'release_id': release_id, **_split_state['result']}, status=status)
+            return (True, None)
+        if len(_split_state['parts']) == 4 and _split_state['parts'][1] == 'markers' and (_split_state['parts'][3] == 'mix-patch-draft'):
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['result'] = _interfaces_api_runtime.MixRenderStore(self.project_store, self.store).marker_mix_patch_draft(release_store=self.release_store, audio_review_store=self.audio_review_store, release_id=release_id, review_id=_split_state['review_id'], marker_id=_split_state['parts'][2], payload=self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'release_id': release_id, **_split_state['result']}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Audio review route not found.')
+        return (False, None)
+
+    def _handle_release_audio_reviews(self, method: str, release_id: str, tail: str) -> None:
+        _split_state = {}
+        try:
+            _split_result = self._handle_release_audio_reviews_part_01(method, release_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_release_audio_reviews_part_02(method, release_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
         except _interfaces_api_runtime.AudioReviewEvidenceNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
         except _interfaces_api_runtime.AudioReviewEvidenceStateError as exc:

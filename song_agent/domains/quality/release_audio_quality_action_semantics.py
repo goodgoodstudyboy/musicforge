@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -77,14 +79,14 @@ def build_expected_action_documents_from_observatory(
 
 
 def _source_binding_from_external(
-    config: dict[str, Any],
-    risk_register: dict[str, Any],
-    recommendation_report: dict[str, Any],
-    summary: dict[str, Any],
+    config: ImplementationDocument,
+    risk_register: ImplementationDocument,
+    recommendation_report: ImplementationDocument,
+    summary: ImplementationDocument,
     *,
     observatory_zip: Path,
-    verification: dict[str, Any],
-) -> dict[str, Any]:
+    verification: ImplementationDocument,
+) -> ImplementationDocument:
     observatory_id = str(config.get("observatory_id") or summary.get("observatory_id") or "")
     source_hash = stable_hash(
         {
@@ -129,12 +131,12 @@ def _source_binding_from_external(
 
 def _action_items_from_binding(
     queue_id: str,
-    binding: dict[str, Any],
+    binding: ImplementationDocument,
     *,
     include_risks: bool,
     include_recommendations: bool,
     severity_floor: str,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     severity_rank = {"info": 0, "warning": 1, "high": 2, "critical": 3, "blocking": 3}
     floor = severity_rank.get(str(severity_floor or "warning"), 1)
     risks = binding.get("risk_register", {}).get("risks") if isinstance(binding.get("risk_register"), dict) else []
@@ -205,7 +207,7 @@ def _action_items_from_binding(
     return items
 
 
-def _action_selection(*, include_risks: bool, include_recommendations: bool, severity_floor: str) -> dict[str, Any]:
+def _action_selection(*, include_risks: bool, include_recommendations: bool, severity_floor: str) -> ImplementationDocument:
     floor = str(severity_floor or "warning").strip().lower()
     if floor not in {"info", "warning", "high", "critical", "blocking"}:
         floor = "warning"
@@ -216,7 +218,7 @@ def _action_selection(*, include_risks: bool, include_recommendations: bool, sev
     }
 
 
-def _selection_from_documents(queue: dict[str, Any], source_binding: dict[str, Any]) -> dict[str, Any]:
+def _selection_from_documents(queue: ImplementationDocument, source_binding: ImplementationDocument) -> ImplementationDocument:
     selection = source_binding.get("action_selection") if isinstance(source_binding.get("action_selection"), dict) else {}
     if not selection and isinstance(queue.get("action_selection"), dict):
         selection = queue.get("action_selection") or {}
@@ -227,7 +229,7 @@ def _selection_from_documents(queue: dict[str, Any], source_binding: dict[str, A
     )
 
 
-def _with_action_selection(binding: dict[str, Any], selection: dict[str, Any]) -> dict[str, Any]:
+def _with_action_selection(binding: ImplementationDocument, selection: ImplementationDocument) -> ImplementationDocument:
     updated = dict(binding)
     updated["action_selection"] = _action_selection(
         include_risks=selection.get("include_risks", True),
@@ -264,11 +266,11 @@ def _recommendation_action(action: str) -> tuple[str, str]:
     return "manual_audio_lead_review", "manual_required"
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
@@ -284,5 +286,5 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return digest.hexdigest()
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))

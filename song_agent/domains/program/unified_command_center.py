@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 import threading
 import zipfile
@@ -343,7 +345,7 @@ class UnifiedCommandCenterStore:
                 continue
         return f"ucc-{(max(existing) + 1) if existing else 1:06d}"
 
-    def _ensure_docs(self, center_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
+    def _ensure_docs(self, center_id: str, evidence: ImplementationDocument) -> ImplementationDocument:
         if not self.report_path(center_id).exists():
             return self._build_documents(center_id, evidence)
         return {
@@ -358,7 +360,7 @@ class UnifiedCommandCenterStore:
             "verification_index": read_json(self.verification_index_path(center_id)),
         }
 
-    def _write_docs(self, center_id: str, docs: dict[str, dict[str, Any]]) -> None:
+    def _write_docs(self, center_id: str, docs: dict[str, ImplementationDocument]) -> None:
         center = self.read_center(center_id)
         center["status"] = docs["report"].get("status")
         center["updated_at"] = now_iso()
@@ -378,7 +380,7 @@ class UnifiedCommandCenterStore:
         if not self.runbook_result_path(center_id).exists():
             write_json(self.runbook_result_path(center_id), docs["runbook_result"])
 
-    def _build_documents(self, center_id: str, evidence: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _build_documents(self, center_id: str, evidence: ImplementationDocument) -> dict[str, ImplementationDocument]:
         center = self.read_center(center_id)
         requirements = _requirements(center.get("requirements", {}), evidence.get("requirements") if isinstance(evidence.get("requirements"), dict) else {})
         component_rows = [_component_row(defn, evidence, requirements) for defn in COMPONENT_DEFS]
@@ -413,7 +415,7 @@ class UnifiedCommandCenterStore:
         _sync_report_hashes(docs)
         return docs
 
-    def _build_manifest(self, center_id: str, export_dir: Path, docs: dict[str, Any]) -> dict[str, Any]:
+    def _build_manifest(self, center_id: str, export_dir: Path, docs: ImplementationDocument) -> ImplementationDocument:
         manifest = {
             "schema_version": UNIFIED_COMMAND_CENTER_SCHEMA_VERSION,
             "package_type": UNIFIED_COMMAND_CENTER_PACKAGE_TYPE,
@@ -487,7 +489,7 @@ def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
     return kwargs
 
 
-def _requirements(*sources: dict[str, Any]) -> dict[str, bool]:
+def _requirements(*sources: ImplementationDocument) -> dict[str, bool]:
     result = dict(DEFAULT_REQUIREMENTS)
     aliases = {
         "require_audio_command_center": "audio-command-center",
@@ -512,7 +514,7 @@ def _requirements(*sources: dict[str, Any]) -> dict[str, bool]:
     return result
 
 
-def _component_row(defn: dict[str, str], evidence: dict[str, Any], requirements: dict[str, bool]) -> dict[str, Any]:
+def _component_row(defn: dict[str, str], evidence: ImplementationDocument, requirements: dict[str, bool]) -> ImplementationDocument:
     key = defn["key"]
     required = bool(requirements.get(key, False))
     paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
@@ -553,7 +555,7 @@ def _component_row(defn: dict[str, str], evidence: dict[str, Any], requirements:
     )
 
 
-def _component_id(key: str, evidence: dict[str, Any]) -> str:
+def _component_id(key: str, evidence: ImplementationDocument) -> str:
     if key == "audio-command-center":
         return str(evidence.get("primary_release_id") or "")
     if key == "trust-operations-hub":
@@ -563,17 +565,17 @@ def _component_id(key: str, evidence: dict[str, Any]) -> str:
     return key
 
 
-def _empty_fingerprint(key: str) -> dict[str, Any]:
+def _empty_fingerprint(key: str) -> ImplementationDocument:
     doc = {"component_key": key, "status": "not_configured", "items": [], "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _graph_node(row: dict[str, Any]) -> dict[str, Any]:
+def _graph_node(row: ImplementationDocument) -> ImplementationDocument:
     return {"node_id": row["node_id"], "domain": row["domain"], "component_type": row["component_type"], "component_id": row.get("component_id"), "label": row["label"], "required": row["required"], "readiness": row["readiness"], "status": row["status"], "fingerprint": row.get("fingerprint", {})}
 
 
-def _graph_edges(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _graph_edges(nodes: list[ImplementationDocument]) -> list[ImplementationDocument]:
     ids = {row["node_id"] for row in nodes}
     edges: list[dict[str, Any]] = []
     if "audio.audio-command-center" in ids and "release.release" in ids:
@@ -587,7 +589,7 @@ def _graph_edges(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return edges
 
 
-def _inventory_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+def _inventory_summary(rows: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "total": len(rows),
         "ready": sum(1 for row in rows if row.get("readiness") == "ready"),
@@ -598,7 +600,7 @@ def _inventory_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _readiness_matrix(center_id: str, source_hash: str, rows: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _readiness_matrix(center_id: str, source_hash: str, rows: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     domains: list[dict[str, Any]] = []
     for domain in sorted({str(row.get("domain")) for row in rows}):
         domain_rows = [row for row in rows if row.get("domain") == domain]
@@ -623,7 +625,7 @@ def _readiness_matrix(center_id: str, source_hash: str, rows: list[dict[str, Any
     return matrix
 
 
-def _domain_status(rows: list[dict[str, Any]]) -> str:
+def _domain_status(rows: list[ImplementationDocument]) -> str:
     order = ["runtime_failed", "verification_failed", "stale", "blocked", "missing", "manual_required", "warning"]
     states = {str(row.get("readiness") or "") for row in rows}
     for item in order:
@@ -632,7 +634,7 @@ def _domain_status(rows: list[dict[str, Any]]) -> str:
     return "blocked"
 
 
-def _gap_item(row: dict[str, Any]) -> dict[str, Any]:
+def _gap_item(row: ImplementationDocument) -> ImplementationDocument:
     readiness = str(row.get("readiness") or "blocked")
     priority = {"runtime_failed": 10, "verification_failed": 20, "stale": 30, "missing": 40, "blocked": 50, "manual_required": 80, "warning": 90}.get(readiness, 60)
     item = {"gap_id": f"ucc-gap-{row.get('component_key')}", "priority": priority, "domain": row.get("domain"), "component_key": row.get("component_key"), "node_id": row.get("node_id"), "readiness": readiness, "title": f"Resolve {row.get('label')}", "reason": _message(row), "safe_action": _safe_action(row), "manual_action": None if _safe_action(row) else f"Complete manual remediation for {row.get('label')}.", "blocking": True}
@@ -640,14 +642,14 @@ def _gap_item(row: dict[str, Any]) -> dict[str, Any]:
     return item
 
 
-def _safe_action(row: dict[str, Any]) -> str | None:
+def _safe_action(row: ImplementationDocument) -> str | None:
     key = str(row.get("component_key") or "")
     if key in {"release", "audio-command-center", "trust-operations-hub", "public-trust-center", "distribution", "submission", "operations", "ga-readiness", "maintenance", "release-check"}:
         return f"{key}.verify"
     return None
 
 
-def _message(row: dict[str, Any]) -> str:
+def _message(row: ImplementationDocument) -> str:
     readiness = str(row.get("readiness") or "")
     label = str(row.get("label") or row.get("component_key") or "component")
     if readiness == "missing":
@@ -665,7 +667,7 @@ def _message(row: dict[str, Any]) -> str:
     return f"{label} is blocked."
 
 
-def _runbook(center_id: str, source_hash: str, gaps: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _runbook(center_id: str, source_hash: str, gaps: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     items = [
         {"item_id": "ucc-safe-001", "action": "unified_command_center.refresh", "safe": True, "status": "pending"},
         {"item_id": "ucc-safe-002", "action": "unified_command_center.export", "safe": True, "status": "pending"},
@@ -679,13 +681,13 @@ def _runbook(center_id: str, source_hash: str, gaps: list[dict[str, Any]], creat
     return doc
 
 
-def _runbook_result(center_id: str, source_hash: str | None, results: list[dict[str, Any]]) -> dict[str, Any]:
+def _runbook_result(center_id: str, source_hash: str | None, results: list[ImplementationDocument]) -> ImplementationDocument:
     doc = {"schema_version": UNIFIED_COMMAND_CENTER_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_runbook_result", "center_id": center_id, "created_at": now_iso(), "source_hash": source_hash, "results": results, "summary": {"completed_count": sum(1 for row in results if row.get("status") == "completed"), "failed_count": sum(1 for row in results if row.get("status") == "failed"), "manual_required_count": sum(1 for row in results if row.get("status") == "manual_required"), "skipped_unsupported_count": sum(1 for row in results if row.get("status") == "skipped_unsupported")}}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _verification_index(center_id: str, source_hash: str, rows: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _verification_index(center_id: str, source_hash: str, rows: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     items = []
     for row in rows:
         fp = row.get("fingerprint") or {}
@@ -695,12 +697,12 @@ def _verification_index(center_id: str, source_hash: str, rows: list[dict[str, A
     return doc
 
 
-def _report_summary(center: dict[str, Any], rows: list[dict[str, Any]], readiness: dict[str, Any]) -> dict[str, Any]:
+def _report_summary(center: ImplementationDocument, rows: list[ImplementationDocument], readiness: ImplementationDocument) -> ImplementationDocument:
     required = [row for row in rows if row.get("required")]
     return {"overall_status": readiness.get("overall_status"), "release_count": len(center.get("release_ids", [])), "required_components": len(required), "ready_components": sum(1 for row in required if row.get("readiness") == "ready"), "blocked_components": sum(1 for row in required if row.get("readiness") not in {"ready", "manual_required"}), "manual_required_components": sum(1 for row in required if row.get("readiness") == "manual_required")}
 
 
-def _sync_report_hashes(docs: dict[str, Any]) -> None:
+def _sync_report_hashes(docs: ImplementationDocument) -> None:
     report = docs["report"]
     report["document_hashes"] = {"source": docs["source"].get("integrity_hash"), "evidence_graph": docs["graph"].get("integrity_hash"), "evidence_inventory": docs["inventory"].get("integrity_hash"), "readiness_matrix": docs["readiness"].get("integrity_hash"), "gap_plan": docs["gap_plan"].get("integrity_hash"), "safe_runbook": docs["runbook"].get("integrity_hash"), "runbook_result": docs["runbook_result"].get("integrity_hash"), "verification_index": docs["verification_index"].get("integrity_hash")}
     report["evidence_graph_hash"] = docs["graph"].get("integrity_hash")
@@ -711,22 +713,22 @@ def _sync_report_hashes(docs: dict[str, Any]) -> None:
     report["integrity_hash"] = _integrity_hash(report)
 
 
-def _component_by_key(inventory: dict[str, Any], key: str) -> dict[str, Any]:
+def _component_by_key(inventory: ImplementationDocument, key: str) -> ImplementationDocument:
     for row in inventory.get("components", []):
         if isinstance(row, dict) and row.get("component_key") == key:
             return row
     return {"fingerprint": _empty_fingerprint(key)}
 
 
-def _readme(report: dict[str, Any]) -> str:
+def _readme(report: ImplementationDocument) -> str:
     return "\n".join(["MusicForge Unified Command Center", "", f"Center: {report.get('center_id')}", f"Status: {report.get('status')}", "", "Verify this package with verify-unified-command-center-package and the referenced external evidence packages.", ""])
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -750,7 +752,7 @@ def _path_list(value: Any) -> list[Any]:
     return [value] if value else []
 
 
-def _multi_component_result(key: str, paths: dict[str, Any]) -> dict[str, Any]:
+def _multi_component_result(key: str, paths: ImplementationDocument) -> ImplementationDocument:
     zips = _path_list(paths.get("zips") or paths.get("zip_paths") or paths.get("zip") or paths.get("zip_path"))
     reports = _path_list(paths.get("verification_reports") or paths.get("verification_report_paths") or paths.get("verification_report") or paths.get("verification_report_path"))
     checks: list[dict[str, Any]] = []
@@ -791,7 +793,7 @@ def _multi_component_result(key: str, paths: dict[str, Any]) -> dict[str, Any]:
     return _component_finish_for_store(key, fingerprint, checks)
 
 
-def _component_finish_for_store(key: str, fingerprint: dict[str, Any], checks: list[dict[str, Any]]) -> dict[str, Any]:
+def _component_finish_for_store(key: str, fingerprint: ImplementationDocument, checks: list[ImplementationDocument]) -> ImplementationDocument:
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     fingerprint["integrity_hash"] = _integrity_hash(fingerprint)
     result = {"component_key": key, "status": "passed" if not blockers else "failed", "readiness": "ready" if not blockers else "missing" if any("required" in item or "exists" in item for item in blockers) else "stale" if any("binding" in item for item in blockers) else "verification_failed", "fingerprint": fingerprint, "checks": checks, "blockers": blockers}
@@ -799,7 +801,7 @@ def _component_finish_for_store(key: str, fingerprint: dict[str, Any], checks: l
     return result
 
 
-def _component_instance_id(key: str, component: dict[str, Any], index: int) -> str:
+def _component_instance_id(key: str, component: ImplementationDocument, index: int) -> str:
     for report_key in ("external_report", "runtime_report"):
         report = component.get(report_key) if isinstance(component.get(report_key), dict) else {}
         summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
@@ -817,5 +819,5 @@ def _safe_component_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.:-]+", "-", value.strip()).strip("-") or "unknown"
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}

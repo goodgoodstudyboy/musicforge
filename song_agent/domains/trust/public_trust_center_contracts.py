@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import html
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
@@ -200,15 +202,15 @@ def expected_public_trust_center_documents(
     return data_docs, public_trust_center_html_pages(report, data_docs)
 
 
-def _package_index(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _package_index(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("public_package_fingerprints", []) if isinstance(item, dict)], key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _verification_index(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _verification_index(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("verification_fingerprints", []) if isinstance(item, dict)], key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _package_verification_sidecars(source: ImplementationDocument) -> list[ImplementationDocument]:
     packages = _package_index(source)
     verifications = {
         _fingerprint_key(item): dict(item)
@@ -236,7 +238,7 @@ def _package_verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _package_verification_index_from_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]] | None) -> dict[str, Any]:
+def _package_verification_index_from_sidecars(source_hash: Any, sidecars: dict[str, ImplementationDocument] | None) -> ImplementationDocument:
     rows = []
     for path, doc in sorted((sidecars or {}).items()):
         if not isinstance(doc, dict):
@@ -253,7 +255,7 @@ def _package_verification_index_from_sidecars(source_hash: Any, sidecars: dict[s
     }
 
 
-def _verification_sidecars_from_docs(sidecars: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _verification_sidecars_from_docs(sidecars: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for doc in sidecars.values():
         if not isinstance(doc, dict):
@@ -280,7 +282,7 @@ def _verification_sidecars_from_docs(sidecars: dict[str, dict[str, Any]]) -> lis
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type")), str(item.get("profile"))))
 
 
-def _delivery_verification_index_from_source(source_hash: Any, source: dict[str, Any]) -> dict[str, Any]:
+def _delivery_verification_index_from_source(source_hash: Any, source: ImplementationDocument) -> ImplementationDocument:
     rows: list[dict[str, Any]] = []
     for collection, domain in _DELIVERY_COLLECTION_DOMAINS:
         for item in source.get(collection, []) if isinstance(source.get(collection), list) else []:
@@ -289,7 +291,7 @@ def _delivery_verification_index_from_source(source_hash: Any, source: dict[str,
     return {"source_hash": source_hash, "summaries": sorted(rows, key=_delivery_summary_key), "sidecars": []}
 
 
-def _delivery_verification_index_from_sidecars(source_hash: Any, sidecars: dict[str, dict[str, Any]] | None) -> dict[str, Any]:
+def _delivery_verification_index_from_sidecars(source_hash: Any, sidecars: dict[str, ImplementationDocument] | None) -> ImplementationDocument:
     summaries: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
     fingerprint_rows: list[dict[str, Any]] = []
@@ -312,7 +314,7 @@ def _delivery_verification_index_from_sidecars(source_hash: Any, sidecars: dict[
     return {"source_hash": source_hash, "summaries": sorted(summaries, key=_delivery_summary_key), "sidecars": rows, "fingerprint_sidecars": fingerprint_rows}
 
 
-def _delivery_summary_from_item(domain: str, item: dict[str, Any]) -> dict[str, Any]:
+def _delivery_summary_from_item(domain: str, item: ImplementationDocument) -> ImplementationDocument:
     entity_id = str(item.get("target_id") or item.get("submission_id") or item.get("release_id") or "")
     row = {
         "domain": domain,
@@ -354,7 +356,7 @@ def _delivery_summary_from_item(domain: str, item: dict[str, Any]) -> dict[str, 
     return row
 
 
-def _delivery_public_payload(domain: str, item: dict[str, Any]) -> dict[str, Any]:
+def _delivery_public_payload(domain: str, item: ImplementationDocument) -> ImplementationDocument:
     allowed = {
         "release_id",
         "target_id",
@@ -411,11 +413,11 @@ def _delivery_public_payload(domain: str, item: dict[str, Any]) -> dict[str, Any
     return {"domain": domain, **{key: item.get(key) for key in sorted(allowed) if key in item}}
 
 
-def _delivery_summary_key(item: dict[str, Any]) -> tuple[str, str, str]:
+def _delivery_summary_key(item: ImplementationDocument) -> tuple[str, str, str]:
     return (str(item.get("release_id") or ""), str(item.get("domain") or ""), str(item.get("entity_id") or item.get("target_id") or item.get("submission_id") or ""))
 
 
-def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _verification_sidecars(source: ImplementationDocument) -> list[ImplementationDocument]:
     packages = {
         _fingerprint_key(item): dict(item)
         for item in source.get("public_package_fingerprints", [])
@@ -440,11 +442,11 @@ def _verification_sidecars(source: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (str(item.get("portfolio_id")), str(item.get("package_type"))))
 
 
-def _fingerprint_key(item: dict[str, Any]) -> tuple[str, str, str]:
+def _fingerprint_key(item: ImplementationDocument) -> tuple[str, str, str]:
     return (str(item.get("portfolio_id") or ""), str(item.get("package_type") or ""), str(item.get("profile") or ""))
 
 
-def _delivery_item_status(domain: str, item: dict[str, Any]) -> str:
+def _delivery_item_status(domain: str, item: ImplementationDocument) -> str:
     if domain == "distribution":
         return str(item.get("verification_status") or item.get("status") or "missing")
     if domain == "submission":

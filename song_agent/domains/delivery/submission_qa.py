@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from typing import Any
 
@@ -138,7 +140,7 @@ def mark_submission_qa_stale(report: dict[str, Any] | None, *, current_source_ha
     return sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _checks(store: SubmissionStore, release_id: str, submission: SubmissionBatch, source: dict[str, Any]) -> list[dict[str, Any]]:
+def _checks(store: SubmissionStore, release_id: str, submission: SubmissionBatch, source: ImplementationDocument) -> list[ImplementationDocument]:
     release = store.release_store.get_release(release_id)
     release_signoff = store.release_store.read_signoff(release_id, default={})
     checks = [
@@ -166,7 +168,7 @@ def _checks(store: SubmissionStore, release_id: str, submission: SubmissionBatch
     return [sanitize_metadata(check, blocked_keys=DISTRIBUTION_BLOCKED_KEYS) for check in checks]
 
 
-def _check(check_id: str, failed: bool, severity: str, message: str, *, count: int | None = None, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _check(check_id: str, failed: bool, severity: str, message: str, *, count: int | None = None, extra: ImplementationDocument | None = None) -> ImplementationDocument:
     item: dict[str, Any] = {
         "check_id": check_id,
         "status": "failed" if failed else "passed",
@@ -180,7 +182,7 @@ def _check(check_id: str, failed: bool, severity: str, message: str, *, count: i
     return item
 
 
-def _check_message(check: dict[str, Any]) -> dict[str, Any]:
+def _check_message(check: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "check_id": check.get("check_id"),

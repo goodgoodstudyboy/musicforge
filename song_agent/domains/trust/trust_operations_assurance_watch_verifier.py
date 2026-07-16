@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -209,7 +211,7 @@ class _WatchVerifier:
             if isinstance(item, dict):
                 self.history_events.append(item)
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, entry: str, label: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, entry: str, label: str, check_id: str) -> ImplementationDocument:
         try:
             value = json.loads(archive.read(entry).decode("utf-8"))
         except (KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -370,7 +372,7 @@ class _WatchVerifier:
         self.redaction_findings = findings
         self._add_check("redaction", "toaw_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive or local path text found." if findings else "No sensitive text found.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
         warnings = [check for check in self.checks if check.get("status") in {"failed", "warning"} and check.get("severity") != "blocking"]
         summary = self.queue.get("summary") if isinstance(self.queue.get("summary"), dict) else {}
@@ -409,7 +411,7 @@ class _WatchVerifier:
         self._add_check(category, check_id, "passed" if actual == expected else "failed", "blocking", message if actual == expected else f"{message}: expected {expected!r}, got {actual!r}")
 
 
-def _queue_summary(rows: list[dict[str, Any]], action_pack: dict[str, Any]) -> dict[str, Any]:
+def _queue_summary(rows: list[ImplementationDocument], action_pack: ImplementationDocument) -> ImplementationDocument:
     actions_summary = action_pack.get("summary") if isinstance(action_pack.get("summary"), dict) else {}
     return {
         "hub_count": len(rows),
@@ -423,7 +425,7 @@ def _queue_summary(rows: list[dict[str, Any]], action_pack: dict[str, Any]) -> d
     }
 
 
-def _queue_status(summary: dict[str, Any]) -> str:
+def _queue_status(summary: ImplementationDocument) -> str:
     if int(summary.get("failed_count") or 0) or int(summary.get("overdue_count") or 0) or int(summary.get("blocking_action_count") or 0):
         return "blocked"
     if int(summary.get("due_count") or 0) or int(summary.get("manual_action_count") or 0):
@@ -431,7 +433,7 @@ def _queue_status(summary: dict[str, Any]) -> str:
     return "clear"
 
 
-def _expected_rows_and_action_pack(queue: dict[str, Any], schedule: dict[str, Any], run_index: dict[str, Any], now: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _expected_rows_and_action_pack(queue: ImplementationDocument, schedule: ImplementationDocument, run_index: ImplementationDocument, now: str) -> tuple[list[ImplementationDocument], ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
     queue_id = str(queue.get("queue_id") or "")
@@ -511,19 +513,19 @@ def _expected_rows_and_action_pack(queue: dict[str, Any], schedule: dict[str, An
     return sorted(rows, key=lambda row: str(row.get("hub_id") or "")), action_pack
 
 
-def _external_summary_hash_for_queue(queue: dict[str, Any]) -> str | None:
+def _external_summary_hash_for_queue(queue: ImplementationDocument) -> str | None:
     source = queue.get("source") if isinstance(queue.get("source"), dict) else {}
     return source.get("external_verification_summary_hash")
 
 
-def _hub_ids_from_queue_or_run_index(queue: dict[str, Any], run_index: dict[str, Any]) -> list[str]:
+def _hub_ids_from_queue_or_run_index(queue: ImplementationDocument, run_index: ImplementationDocument) -> list[str]:
     ids = [str(row.get("hub_id") or "") for row in queue.get("rows", []) if isinstance(row, dict) and row.get("hub_id")]
     if not ids:
         ids = [str(row.get("hub_id") or "") for row in run_index.get("runs", []) if isinstance(row, dict) and row.get("hub_id")]
     return sorted(dict.fromkeys(item for item in ids if item)) or ["hub"]
 
 
-def _row_projection(row: dict[str, Any]) -> dict[str, Any]:
+def _row_projection(row: ImplementationDocument) -> ImplementationDocument:
     keys = [
         "hub_id",
         "latest_assurance_run_id",
@@ -540,7 +542,7 @@ def _row_projection(row: dict[str, Any]) -> dict[str, Any]:
     return {key: row.get(key) for key in keys}
 
 
-def _action_summary(actions: list[dict[str, Any]]) -> dict[str, Any]:
+def _action_summary(actions: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "action_count": len(actions),
         "blocking_count": sum(1 for action in actions if action.get("severity") in {"critical", "high"}),
@@ -575,7 +577,7 @@ def _parse_dt(value: str | None) -> datetime | None:
     return dt
 
 
-def _expected_actions_for_row(row: dict[str, Any]) -> list[tuple[str, str, str]]:
+def _expected_actions_for_row(row: ImplementationDocument) -> list[tuple[str, str, str]]:
     actions: list[tuple[str, str, str]] = []
     due_status = row.get("due_status")
     if due_status == "missing":
@@ -591,14 +593,14 @@ def _expected_actions_for_row(row: dict[str, Any]) -> list[tuple[str, str, str]]
     return actions
 
 
-def _external_item(summary: dict[str, Any], component_type: str) -> dict[str, Any]:
+def _external_item(summary: ImplementationDocument, component_type: str) -> ImplementationDocument:
     for item in summary.get("items", []) if isinstance(summary.get("items"), list) else []:
         if isinstance(item, dict) and item.get("component_type") == component_type:
             return item
     return {}
 
 
-def _read_json_file(path: Path | None) -> dict[str, Any]:
+def _read_json_file(path: Path | None) -> ImplementationDocument:
     if not path:
         return {}
     try:
@@ -608,7 +610,7 @@ def _read_json_file(path: Path | None) -> dict[str, Any]:
         return {}
 
 
-def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     if not zip_path:
         return {}
     try:

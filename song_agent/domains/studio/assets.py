@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -497,10 +499,10 @@ def _extract_asset_payload(
     *,
     section_name: str,
     track_name: str,
-    source: dict[str, Any],
+    source: ImplementationDocument,
     tags: list[str],
     name_prefix: str,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     section = _select_section(plan, section_name)
     quality_score = plan.quality.scores.overall if plan.quality and plan.quality.scores else None
     if asset_type == "motif":
@@ -551,7 +553,7 @@ def _extract_asset_payload(
     }
 
 
-def _motif_content(plan: SongPlan, section: SongSection, track: TrackPlan, notes: list[NoteEvent]) -> dict[str, Any]:
+def _motif_content(plan: SongPlan, section: SongSection, track: TrackPlan, notes: list[NoteEvent]) -> ImplementationDocument:
     if plan.quality and plan.quality.primary_motif and plan.quality.primary_motif.pitch_intervals:
         motif = plan.quality.primary_motif
         return {
@@ -615,7 +617,7 @@ def _notes_in_section(track: TrackPlan, section: SongSection) -> list[NoteEvent]
     return [note for note in track.notes if note.start_beat >= start and note.start_beat < end]
 
 
-def _relative_note(note: NoteEvent, section: SongSection) -> dict[str, Any]:
+def _relative_note(note: NoteEvent, section: SongSection) -> ImplementationDocument:
     section_start = (section.start_bar - 1) * 4
     return {
         "pitch": note.pitch,
@@ -703,7 +705,7 @@ def _with_preview(asset: CreativeAsset, **values: Any) -> CreativeAsset:
     return CreativeAsset.from_dict({**asset.to_dict(), "preview": preview, "updated_at": now_iso()})
 
 
-def _preview_dict(value: Any) -> dict[str, Any]:
+def _preview_dict(value: Any) -> ImplementationDocument:
     data = dict(value or {}) if isinstance(value, dict) else {}
     return {
         "midi_status": str(data.get("midi_status") or "not_started"),
@@ -789,7 +791,7 @@ def _optional_score(value: Any) -> int | None:
     return score
 
 
-def _asset_matches(asset: CreativeAsset, filters: dict[str, Any]) -> bool:
+def _asset_matches(asset: CreativeAsset, filters: ImplementationDocument) -> bool:
     q = str(filters.get("q") or "").strip().lower()
     if q and q not in f"{asset.name} {asset.description} {' '.join(asset.tags)}".lower():
         return False
@@ -829,7 +831,7 @@ def _default_asset_role(asset_type: str) -> str:
     }.get(asset_type, "reference")
 
 
-def _asset_source_summary(source: dict[str, Any]) -> dict[str, Any]:
+def _asset_source_summary(source: ImplementationDocument) -> ImplementationDocument:
     return {
         key: str(source.get(key) or "")
         for key in ("source_type", "project_id", "version_id", "job_id", "candidate_group_id", "candidate_id", "section_name", "track_name")
@@ -837,7 +839,7 @@ def _asset_source_summary(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _append_asset_event(asset_dir: Path, event_type: str, payload: dict[str, Any], timestamp: str | None = None) -> None:
+def _append_asset_event(asset_dir: Path, event_type: str, payload: ImplementationDocument, timestamp: str | None = None) -> None:
     event = {"timestamp": timestamp or now_iso(), "type": event_type, "payload": payload}
     asset_dir.mkdir(parents=True, exist_ok=True)
     with (asset_dir / "events.jsonl").open("a", encoding="utf-8") as file:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 import tempfile
 from pathlib import Path
@@ -506,7 +508,7 @@ class UnifiedReleaseProgramContinuityStore:
         if self.latest_signoff_state(program_id).get("signed"):
             raise UnifiedReleaseProgramContinuityStateError("Unified Release Program Continuity is signed. Create a successor continuity record before mutation.")
 
-    def _evidence_paths(self, program_id: str, payload: dict[str, Any]) -> dict[str, Path]:
+    def _evidence_paths(self, program_id: str, payload: ImplementationDocument) -> dict[str, Path]:
         local = _read_optional_json(self.local_evidence_manifest_path(program_id))
         return {
             "archive_path": Path(payload.get("vault_operations_archive") or local.get("vault_operations_archive") or self.vault_operations_store.archive_zip_path(program_id)),
@@ -514,7 +516,7 @@ class UnifiedReleaseProgramContinuityStore:
             "signoff_binding_path": Path(payload.get("vault_operations_signoff_binding") or local.get("vault_operations_signoff_binding") or self.vault_operations_store.signoff_binding_path(program_id)),
         }
 
-    def _vault_operations_context(self, program_id: str, payload: dict[str, Any], *, require_passed: bool) -> dict[str, Any]:
+    def _vault_operations_context(self, program_id: str, payload: ImplementationDocument, *, require_passed: bool) -> ImplementationDocument:
         paths = self._evidence_paths(program_id, payload)
         for label, path in (("Vault Operations archive", paths["archive_path"]), ("Vault Operations verification report", paths["verification_report_path"]), ("Vault Operations signoff binding", paths["signoff_binding_path"])):
             if not path.exists() or not path.is_file():
@@ -541,7 +543,7 @@ class UnifiedReleaseProgramContinuityStore:
             raise UnifiedReleaseProgramContinuityStateError("Vault Operations evidence is not current: " + ", ".join(sorted(set(blockers))))
         return {**paths, "runtime": runtime, "external": external, "signoff_binding": binding, "blockers": sorted(set(blockers))}
 
-    def _write_evidence_manifests(self, program_id: str, context: dict[str, Any], payload: dict[str, Any]) -> None:
+    def _write_evidence_manifests(self, program_id: str, context: ImplementationDocument, payload: ImplementationDocument) -> None:
         local = {
             "vault_operations_archive": str(context["archive_path"]),
             "vault_operations_verification_report": str(context["verification_report_path"]),
@@ -572,7 +574,7 @@ class UnifiedReleaseProgramContinuityStore:
         )
         write_json(self.external_evidence_manifest_path(program_id), evidence)
 
-    def _signed_archive_docs(self, program_id: str) -> dict[str, Any]:
+    def _signed_archive_docs(self, program_id: str) -> ImplementationDocument:
         state = self.latest_signoff_state(program_id)
         if not state.get("signed"):
             raise UnifiedReleaseProgramContinuityStateError("Continuity must be signed before archive export.")
@@ -631,7 +633,7 @@ class UnifiedReleaseProgramContinuityStore:
             blockers = ", ".join(str(item) for item in report.get("blockers") or []) or "unknown"
             raise UnifiedReleaseProgramContinuityStateError(f"Existing Continuity Archive ZIP failed verification: {blockers}")
 
-    def _assert_export_dir_matches_signed_docs(self, program_id: str, docs: dict[str, Any]) -> None:
+    def _assert_export_dir_matches_signed_docs(self, program_id: str, docs: ImplementationDocument) -> None:
         export_dir = self.export_dir(program_id)
         if not export_dir.exists():
             raise UnifiedReleaseProgramContinuityStateError("Continuity Archive export directory is missing.")
@@ -669,7 +671,7 @@ class UnifiedReleaseProgramContinuityStore:
             if source.get(key) != value:
                 raise UnifiedReleaseProgramContinuityStateError(f"Continuity Archive manifest source mismatch: {key}.")
 
-    def _write_continuity_report(self, program_id: str, policy: dict[str, Any], plan: dict[str, Any], drill: dict[str, Any], readiness: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    def _write_continuity_report(self, program_id: str, policy: ImplementationDocument, plan: ImplementationDocument, drill: ImplementationDocument, readiness: ImplementationDocument, context: ImplementationDocument) -> ImplementationDocument:
         blockers = list(readiness.get("blockers") or [])
         report = _with_integrity(
             {
@@ -692,7 +694,7 @@ class UnifiedReleaseProgramContinuityStore:
         write_json(self.report_path(program_id), report)
         return report
 
-    def _write_redaction_report(self, program_id: str) -> dict[str, Any]:
+    def _write_redaction_report(self, program_id: str) -> ImplementationDocument:
         report = _with_integrity(
             {
                 "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_SCHEMA_VERSION,
@@ -706,28 +708,28 @@ class UnifiedReleaseProgramContinuityStore:
         write_json(self.redaction_report_path(program_id), report)
         return report
 
-    def _read_policy(self, program_id: str) -> dict[str, Any]:
+    def _read_policy(self, program_id: str) -> ImplementationDocument:
         return _read_required_doc(self.policy_path(program_id), "Continuity policy")
 
-    def _read_plan(self, program_id: str) -> dict[str, Any]:
+    def _read_plan(self, program_id: str) -> ImplementationDocument:
         return _read_required_doc(self.recovery_plan_path(program_id), "Recovery plan")
 
-    def _read_drill(self, program_id: str) -> dict[str, Any]:
+    def _read_drill(self, program_id: str) -> ImplementationDocument:
         return _read_required_doc(self.drill_report_path(program_id), "Recovery drill report")
 
-    def _read_readiness(self, program_id: str) -> dict[str, Any]:
+    def _read_readiness(self, program_id: str) -> ImplementationDocument:
         return _read_required_doc(self.readiness_path(program_id), "Continuity readiness")
 
-    def _read_runbook(self, program_id: str) -> dict[str, Any]:
+    def _read_runbook(self, program_id: str) -> ImplementationDocument:
         return _read_required_doc(self.runbook_path(program_id), "Continuity runbook")
 
-    def _read_report(self, program_id: str) -> dict[str, Any]:
+    def _read_report(self, program_id: str) -> ImplementationDocument:
         return _read_required_doc(self.report_path(program_id), "Continuity report")
 
-    def _read_external_evidence_manifest(self, program_id: str) -> dict[str, Any]:
+    def _read_external_evidence_manifest(self, program_id: str) -> ImplementationDocument:
         return _read_required_doc(self.external_evidence_manifest_path(program_id), "Continuity external evidence manifest")
 
-    def _append_history(self, program_id: str, event: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, program_id: str, event: ImplementationDocument) -> ImplementationDocument:
         path = self.history_path(program_id)
         chain = HistoryChain(path, sanitizer=lambda value: sanitize_metadata(value, blocked_keys=CONTINUITY_BLOCKED_METADATA_KEYS))
         return chain.append({**event, "event_index": len(chain.read()) + 1})
@@ -736,7 +738,7 @@ class UnifiedReleaseProgramContinuityStore:
         return any(row.get("event_type") == event_type for row in _read_history(self.history_path(program_id)))
 
 
-def _source_binding_from_context(context: dict[str, Any]) -> dict[str, Any]:
+def _source_binding_from_context(context: ImplementationDocument) -> ImplementationDocument:
     return {
         "vault_operations_archive_sha256": _sha256_path(context["archive_path"]),
         "vault_operations_archive_size_bytes": context["archive_path"].stat().st_size if context["archive_path"].exists() else None,
@@ -748,7 +750,7 @@ def _source_binding_from_context(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _signoff_binding_document(program_id: str, signoff: dict[str, Any], event: dict[str, Any], policy: dict[str, Any], plan: dict[str, Any], drill: dict[str, Any], readiness: dict[str, Any], runbook: dict[str, Any], report: dict[str, Any], evidence_manifest: dict[str, Any]) -> dict[str, Any]:
+def _signoff_binding_document(program_id: str, signoff: ImplementationDocument, event: ImplementationDocument, policy: ImplementationDocument, plan: ImplementationDocument, drill: ImplementationDocument, readiness: ImplementationDocument, runbook: ImplementationDocument, report: ImplementationDocument, evidence_manifest: ImplementationDocument) -> ImplementationDocument:
     source = {key: signoff.get(key) for key in signoff if key.startswith("vault_operations_")}
     return _with_integrity(
         {
@@ -776,7 +778,7 @@ def _signoff_binding_document(program_id: str, signoff: dict[str, Any], event: d
     )
 
 
-def _archive_manifest_document(program_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _archive_manifest_document(program_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     source = {
         "policy_hash": docs["policy"].get("integrity_hash"),
         "recovery_plan_hash": docs["plan"].get("integrity_hash"),
@@ -809,7 +811,7 @@ def _archive_manifest_document(program_id: str, docs: dict[str, Any], files: lis
     return manifest
 
 
-def _read_required_doc(path: Path, label: str) -> dict[str, Any]:
+def _read_required_doc(path: Path, label: str) -> ImplementationDocument:
     if not path.exists():
         raise UnifiedReleaseProgramContinuityNotFoundError(f"{label} is missing.")
     doc = read_json(path)
@@ -818,41 +820,41 @@ def _read_required_doc(path: Path, label: str) -> dict[str, Any]:
     return doc
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     return read_json(path)
 
 
-def _read_history(path: Path) -> list[dict[str, Any]]:
+def _read_history(path: Path) -> list[ImplementationDocument]:
     return HistoryChain(path).read()
 
 
-def _json_line(doc: dict[str, Any]) -> str:
+def _json_line(doc: ImplementationDocument) -> str:
     import json
 
     return json.dumps(doc, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_payload(payload: ImplementationDocument) -> ImplementationDocument:
     for forbidden in ("source_path", "local_path", "file_path"):
         if payload.get(forbidden):
             raise UnifiedReleaseProgramContinuityStateError(f"{forbidden} is not allowed for Continuity.")
     return payload
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     return SignoffService.seal(
         sanitize_metadata(doc, blocked_keys=CONTINUITY_BLOCKED_METADATA_KEYS),
         payload_hash=False,
     )
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
@@ -868,7 +870,7 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return h.hexdigest()
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -884,5 +886,5 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}

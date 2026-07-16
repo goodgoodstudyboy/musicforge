@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -406,7 +408,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
             self.redaction_findings.extend(_redaction_findings(name, text))
         self._add_check("redaction", "ptcabs_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive issue(s)." if self.redaction_findings else "No sensitive values found in signoff archive.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -419,7 +421,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = {
@@ -462,7 +464,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _find_participant(signoff: dict[str, Any], response_id: str, evidence_id: str) -> dict[str, Any]:
+def _find_participant(signoff: ImplementationDocument, response_id: str, evidence_id: str) -> ImplementationDocument:
     quorum = signoff.get("quorum") if isinstance(signoff.get("quorum"), dict) else {}
     for item in quorum.get("participants", []) if isinstance(quorum.get("participants"), list) else []:
         if isinstance(item, dict) and item.get("response_id") == response_id and item.get("evidence_id") == evidence_id:
@@ -494,7 +496,7 @@ def _find_accepted_evidence_zip(root: Path, evidence_id: str) -> Path | None:
     return None
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
@@ -502,7 +504,7 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -549,7 +551,7 @@ def _safe_id(value: str) -> str:
     return text or "item"
 
 
-def _redaction_findings(scope: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
         if pattern.search(text):

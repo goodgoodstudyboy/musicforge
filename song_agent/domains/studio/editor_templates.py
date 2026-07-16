@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -790,28 +792,28 @@ def _project_version_plan(project_store: ProjectStore, project_id: str, version_
     return SongPlan.from_dict(read_json(path))
 
 
-def _track_by_id(state: dict[str, Any], track_id: str) -> dict[str, Any]:
+def _track_by_id(state: ImplementationDocument, track_id: str) -> ImplementationDocument:
     track = next((item for item in state.get("tracks", []) if item.get("track_id") == track_id), None)
     if track is None:
         raise EditorTemplateError("Unknown track_id.")
     return dict(track)
 
 
-def _section_by_id(state: dict[str, Any], section_id: str) -> dict[str, Any]:
+def _section_by_id(state: ImplementationDocument, section_id: str) -> ImplementationDocument:
     section = next((item for item in state.get("sections", []) if item.get("section_id") == section_id), None)
     if section is None:
         raise EditorTemplateError("Unknown section_id.")
     return dict(section)
 
 
-def _target_section(target: dict[str, Any], state: dict[str, Any]) -> dict[str, Any] | None:
+def _target_section(target: ImplementationDocument, state: ImplementationDocument) -> ImplementationDocument | None:
     section_id = str(target.get("section_id") or "").strip()
     if not section_id:
         return None
     return _section_by_id(state, section_id)
 
 
-def _target_start_beat(target: dict[str, Any], section: dict[str, Any] | None) -> float:
+def _target_start_beat(target: ImplementationDocument, section: ImplementationDocument | None) -> float:
     if "start_beat" in target:
         return _float_min(target.get("start_beat"), "target.start_beat", 0.0)
     if section is not None:
@@ -838,7 +840,7 @@ def _clean_lane_mappings(value: list[Any], *, valid_lane_ids: set[str] | None = 
     return mappings
 
 
-def _note_ids_in_replace_range(state: dict[str, Any], track_id: str, start: float, end: float) -> list[str]:
+def _note_ids_in_replace_range(state: ImplementationDocument, track_id: str, start: float, end: float) -> list[str]:
     track = _track_by_id(state, track_id)
     lane = next((item for item in state.get("lanes", []) if item.get("track_id") == track_id), None)
     raw_notes = lane.get("notes", []) if isinstance(lane, dict) else track.get("notes", [])
@@ -853,7 +855,7 @@ def _note_ids_in_replace_range(state: dict[str, Any], track_id: str, start: floa
     return ids
 
 
-def _lane_summary(lane: MultiTrackClipLane, *, target_track_id: str | None, mode: str, inserted: int, replaced: int) -> dict[str, Any]:
+def _lane_summary(lane: MultiTrackClipLane, *, target_track_id: str | None, mode: str, inserted: int, replaced: int) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "lane_id": lane.lane_id,
@@ -871,10 +873,10 @@ def _template_insert_metadata(
     clip: MultiTrackClip,
     *,
     template_group_id: str,
-    target: dict[str, Any],
-    options: dict[str, Any],
-    lane_mappings: list[dict[str, Any]],
-) -> dict[str, Any]:
+    target: ImplementationDocument,
+    options: ImplementationDocument,
+    lane_mappings: list[ImplementationDocument],
+) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "schema_version": EDITOR_TEMPLATE_SCHEMA_VERSION,
@@ -893,7 +895,7 @@ def _template_insert_metadata(
     )
 
 
-def _template_group_id(clip: MultiTrackClip, *, start_beat: float, operations: list[dict[str, Any]], lane_summaries: list[dict[str, Any]]) -> str:
+def _template_group_id(clip: MultiTrackClip, *, start_beat: float, operations: list[ImplementationDocument], lane_summaries: list[ImplementationDocument]) -> str:
     operation_fingerprint = [
         {key: value for key, value in operation.items() if key not in {"template_group_id", "clip_group_id"}}
         for operation in operations
@@ -914,7 +916,7 @@ def _template_group_id(clip: MultiTrackClip, *, start_beat: float, operations: l
     return f"template-{hashlib.sha1(payload.encode('utf-8')).hexdigest()[:12]}"
 
 
-def _mapping_score(lane: MultiTrackClipLane, track: dict[str, Any]) -> tuple[float, str]:
+def _mapping_score(lane: MultiTrackClipLane, track: ImplementationDocument) -> tuple[float, str]:
     lane_role = lane.role
     track_role = _role(track.get("role"))
     name = str(track.get("name") or "").lower()
@@ -935,7 +937,7 @@ def _ranges_overlap(left: tuple[str, float, float], right: tuple[str, float, flo
     return left[0] == right[0] and left[2] > right[1] and left[1] < right[2]
 
 
-def _range_from_payload(payload: dict[str, Any], *, default_start: float, default_end: float) -> tuple[float, float]:
+def _range_from_payload(payload: ImplementationDocument, *, default_start: float, default_end: float) -> tuple[float, float]:
     raw_range = payload.get("range") if isinstance(payload.get("range"), dict) else {}
     start = _float_min(raw_range.get("start_beat", default_start), "range.start_beat", 0.0)
     end = _float_min(raw_range.get("end_beat", default_end), "range.end_beat", 0.0)
@@ -956,7 +958,7 @@ def _safe_child(root: Path, child: str) -> Path:
     return target
 
 
-def _validate_template_size(data: dict[str, Any]) -> None:
+def _validate_template_size(data: ImplementationDocument) -> None:
     raw = json.dumps(data, ensure_ascii=False)
     if len(raw.encode("utf-8")) > MAX_TEMPLATE_JSON_BYTES:
         raise EditorTemplateError(f"editor template must be {MAX_TEMPLATE_JSON_BYTES} bytes or fewer.")

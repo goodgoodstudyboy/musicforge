@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, rerun_multinode_from_node
 
 import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
@@ -17,7 +19,7 @@ class JobStoreNodeRetry:
         job_id: str,
         node_name: str,
         affected_nodes: list[str],
-        provider_snapshot: dict[str, Any],
+        provider_snapshot: ImplementationDocument,
     ) -> None:
         job = self.get_job(job_id)
         if job is None:
@@ -153,7 +155,7 @@ class JobStoreNodeRetry:
             raise ValueError("Refusing to delete outside runs directory.")
         return target
 
-    def _provider_snapshot_for_retry(self, job: JobState) -> dict[str, Any]:
+    def _provider_snapshot_for_retry(self, job: JobState) -> ImplementationDocument:
         if job.provider_snapshot.get("mode") != "provider":
             return job.provider_snapshot
         provider_config, _sources = load_provider_config()

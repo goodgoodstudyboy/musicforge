@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import os
@@ -133,7 +135,7 @@ def distribution_artwork_summary(record: dict[str, Any] | None) -> dict[str, Any
     )
 
 
-def _payload_bytes(payload: dict[str, Any]) -> bytes:
+def _payload_bytes(payload: ImplementationDocument) -> bytes:
     if "source_path" in payload:
         raise DistributionArtworkError("Artwork source_path is not supported. Upload content_base64 instead.")
     encoded = str(payload.get("content_base64") or payload.get("data_base64") or "").strip()

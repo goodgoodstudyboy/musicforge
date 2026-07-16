@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from song_agent.domains.creation.schemas.song import MotifPlan, NoteEvent
 
 
-def _require_mapping(data: Any, name: str) -> dict[str, Any]:
+def _require_mapping(data: Any, name: str) -> ImplementationDocument:
     if not isinstance(data, dict):
         raise ValueError(f"{name} must be an object.")
     return data
@@ -22,7 +24,7 @@ def _string_list(data: Any, name: str) -> list[str]:
     return [str(item) for item in _require_list(data, name)]
 
 
-def _validated_note(data: dict[str, Any]) -> NoteEvent:
+def _validated_note(data: ImplementationDocument) -> NoteEvent:
     note = NoteEvent.from_dict(data)
     if note.pitch < 0 or note.pitch > 127:
         raise ValueError("note.pitch must be between 0 and 127.")
@@ -36,7 +38,7 @@ def _validated_note(data: dict[str, Any]) -> NoteEvent:
 
 
 def _range_int(
-    data: dict[str, Any],
+    data: ImplementationDocument,
     field_name: str,
     low: int,
     high: int,

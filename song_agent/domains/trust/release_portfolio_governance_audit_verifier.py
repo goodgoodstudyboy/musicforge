@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -371,7 +373,7 @@ class _PortfolioGovernanceAuditVerifier:
                     self.redaction_findings.extend(_blocked_key_findings(name, value))
         self._add_check("redaction", "portfolio_governance_audit_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned text entries.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -384,7 +386,7 @@ class _PortfolioGovernanceAuditVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
-    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[dict[str, Any]]:
+    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -411,7 +413,7 @@ class _PortfolioGovernanceAuditVerifier:
         self._add_check(scope, check_id, "failed" if errors else "passed", "blocking", "Invalid JSONL rows: " + "; ".join(errors[:5]) if errors else f"{name} parses as JSONL.")
         return rows
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         report = {
@@ -446,7 +448,7 @@ class _PortfolioGovernanceAuditVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _check_status(checks: list[dict[str, Any]], check_id: str) -> str:
+def _check_status(checks: list[ImplementationDocument], check_id: str) -> str:
     for item in checks:
         if item.get("check_id") == check_id:
             return str(item.get("status") or "")
@@ -476,7 +478,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, replacement in [*SENSITIVE_VALUE_PATTERNS, *LOCAL_PATH_VALUE_PATTERNS]:
         for match in pattern.finditer(text):
@@ -484,7 +486,7 @@ def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[dict[str, Any]]:
+def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():

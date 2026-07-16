@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -307,7 +309,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS,
         )
 
-    def _current_registry_state(self, center_id: str) -> dict[str, Any]:
+    def _current_registry_state(self, center_id: str) -> ImplementationDocument:
         registry = self.anchor_registry_store.read_registry(center_id, default={})
         if not registry:
             raise PublicTrustCenterAnchorTransparencyNotFoundError("Public Trust Center Anchor Registry does not exist.")
@@ -337,7 +339,7 @@ class PublicTrustCenterAnchorTransparencyStore:
         state["state_hash"] = stable_hash(state)
         return state
 
-    def _build_event(self, events: list[dict[str, Any]], center_id: str, event_type: str, state: dict[str, Any], payload: dict[str, Any], *, now: str) -> dict[str, Any]:
+    def _build_event(self, events: list[ImplementationDocument], center_id: str, event_type: str, state: ImplementationDocument, payload: ImplementationDocument, *, now: str) -> ImplementationDocument:
         previous = events[-1].get("event_hash") if events else None
         event = {
             "schema_version": ANCHOR_TRANSPARENCY_SCHEMA_VERSION,
@@ -362,12 +364,12 @@ class PublicTrustCenterAnchorTransparencyStore:
         event["event_hash"] = anchor_transparency_event_hash(event)
         return sanitize_metadata(event, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
-    def _write_ledger(self, center_id: str, events: list[dict[str, Any]]) -> None:
+    def _write_ledger(self, center_id: str, events: list[ImplementationDocument]) -> None:
         path = self.ledger_path(center_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_ledger_text(events), encoding="utf-8")
 
-    def _source_from_current(self, center_id: str, events: list[dict[str, Any]], checkpoint: dict[str, Any]) -> dict[str, Any]:
+    def _source_from_current(self, center_id: str, events: list[ImplementationDocument], checkpoint: ImplementationDocument) -> ImplementationDocument:
         latest = events[-1] if events else {}
         state = latest.get("state") if isinstance(latest.get("state"), dict) else {}
         source = {
@@ -396,7 +398,7 @@ class PublicTrustCenterAnchorTransparencyStore:
         }
         return sanitize_metadata(source, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
-    def _findings(self, events: list[dict[str, Any]], checkpoint: dict[str, Any], source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, events: list[ImplementationDocument], checkpoint: ImplementationDocument, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
@@ -420,7 +422,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             check(f"anchor_transparency_checkpoint_{key}", checkpoint.get(key) == source.get(key), f"Anchor checkpoint {key} matches source.")
         return blockers, warnings, checks
 
-    def _ensure_exportable(self, center_id: str, events: list[dict[str, Any]], report: dict[str, Any], checkpoint: dict[str, Any]) -> None:
+    def _ensure_exportable(self, center_id: str, events: list[ImplementationDocument], report: ImplementationDocument, checkpoint: ImplementationDocument) -> None:
         if not events:
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency ledger is empty.")
         if not anchor_transparency_report_integrity_ok(report):
@@ -438,7 +440,7 @@ class PublicTrustCenterAnchorTransparencyStore:
         if report.get("status") == "failed":
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report is failed.")
 
-    def _append_history(self, center_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, center_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         path = self.history_path(center_id)
         history = _read_json_default(path, default={"events": []})
         events = history.setdefault("events", [])
@@ -495,7 +497,7 @@ def anchor_transparency_manifest_integrity_ok(manifest: dict[str, Any] | None) -
 
 
 
-def _signature_envelope(payload_hash: str, *, key_id: str) -> dict[str, Any]:
+def _signature_envelope(payload_hash: str, *, key_id: str) -> ImplementationDocument:
     signature = {
         "mode": "local_deterministic_checkpoint",
         "key_id": key_id,
@@ -506,7 +508,7 @@ def _signature_envelope(payload_hash: str, *, key_id: str) -> dict[str, Any]:
     return signature
 
 
-def _event_type_for_state(state: dict[str, Any]) -> str:
+def _event_type_for_state(state: ImplementationDocument) -> str:
     if state.get("current_entry_status") == "revoked":
         return "anchor_revoked"
     if state.get("current_entry_status") == "published":
@@ -514,7 +516,7 @@ def _event_type_for_state(state: dict[str, Any]) -> str:
     return "anchor_registered"
 
 
-def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary_from_source(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "center_id": source.get("center_id"),
         "status": "failed" if blockers else "warning" if warnings else "current",
@@ -532,7 +534,7 @@ def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]],
     }
 
 
-def _registry_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _registry_verification_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary = anchor_registry_verification_summary(report if isinstance(report, dict) else {})
     return sanitize_metadata(
         {
@@ -547,7 +549,7 @@ def _registry_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _current_entry_summary(entry: dict[str, Any]) -> dict[str, Any]:
+def _current_entry_summary(entry: ImplementationDocument) -> ImplementationDocument:
     anchor = entry.get("anchor") if isinstance(entry.get("anchor"), dict) else {}
     return {
         "entry_id": entry.get("entry_id"),
@@ -560,7 +562,7 @@ def _current_entry_summary(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _current_entry(registry: dict[str, Any]) -> dict[str, Any]:
+def _current_entry(registry: ImplementationDocument) -> ImplementationDocument:
     current_id = str(registry.get("current_entry_id") or "")
     for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
         if isinstance(entry, dict) and entry.get("entry_id") == current_id:
@@ -568,7 +570,7 @@ def _current_entry(registry: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _event_chain_ok(events: list[dict[str, Any]]) -> bool:
+def _event_chain_ok(events: list[ImplementationDocument]) -> bool:
     previous = None
     for index, event in enumerate(events, start=1):
         if not isinstance(event, dict):
@@ -588,7 +590,7 @@ def source_or_none(report: dict[str, Any], key: str) -> Any:
     return source.get(key)
 
 
-def _state_row(report: dict[str, Any]) -> dict[str, str]:
+def _state_row(report: ImplementationDocument) -> dict[str, str]:
     return {
         "source_hash": str(report.get("source_hash") or ""),
         "report_hash": str(report.get("integrity_hash") or ""),
@@ -597,7 +599,7 @@ def _state_row(report: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     report = manifest.get("report") if isinstance(manifest.get("report"), dict) else {}
     ledger = manifest.get("ledger") if isinstance(manifest.get("ledger"), dict) else {}
     checkpoint = manifest.get("checkpoint") if isinstance(manifest.get("checkpoint"), dict) else {}
@@ -609,11 +611,11 @@ def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _ledger_text(events: list[dict[str, Any]]) -> str:
+def _ledger_text(events: list[ImplementationDocument]) -> str:
     return "".join(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n" for event in events)
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -621,7 +623,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
     return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -631,7 +633,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -640,12 +642,12 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(Path(path), sanitize_metadata(payload, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS))
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
     text = (
         "MusicForge Public Trust Center Anchor Transparency\n"
         "This package records an append-only local transparency ledger for Public Trust Center Anchor Registry states.\n"

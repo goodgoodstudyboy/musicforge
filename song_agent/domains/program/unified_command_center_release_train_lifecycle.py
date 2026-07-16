@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -221,7 +223,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
-    def _current_docs_for_export(self, train_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_docs_for_export(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         if not self.report_path(train_id).exists():
             raise UnifiedCommandCenterReleaseTrainLifecycleStateError("Release Train Lifecycle report is missing. Refresh before export.")
         saved = self._saved_inputs(train_id)
@@ -232,13 +234,13 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             raise UnifiedCommandCenterReleaseTrainLifecycleStateError("Release Train Lifecycle source is stale. Refresh before export.")
         return docs
 
-    def _assert_export_current(self, train_id: str, payload: dict[str, Any]) -> None:
+    def _assert_export_current(self, train_id: str, payload: ImplementationDocument) -> None:
         docs = self._current_docs_for_export(train_id, payload)
         manifest = read_json(self.manifest_path(train_id))
         if manifest.get("source_hash") != docs["report"].get("source_hash"):
             raise UnifiedCommandCenterReleaseTrainLifecycleStateError("Release Train Lifecycle export is stale. Re-export before ZIP.")
 
-    def _build_documents(self, train_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _build_documents(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         now = now_iso()
         train = self.train_store.read_train(train_id)
         history = self.train_store.read_history(train_id)
@@ -308,7 +310,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
         report["integrity_hash"] = _integrity_hash(report)
         return {"source": source, "report": report, "ledger": ledger, "ledger_text": ledger_text, "succession": succession, "coverage": coverage, "archive_history": archive_history, "readiness": readiness, "gap_plan": gap_plan, "evidence_index": evidence_index}
 
-    def _write_docs(self, train_id: str, docs: dict[str, Any]) -> None:
+    def _write_docs(self, train_id: str, docs: ImplementationDocument) -> None:
         write_json(self.report_path(train_id), docs["report"])
         self.ledger_path(train_id).write_text(docs["ledger_text"], encoding="utf-8")
         write_json(self.succession_path(train_id), docs["succession"])
@@ -318,7 +320,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
         write_json(self.gap_plan_path(train_id), docs["gap_plan"])
         write_json(self.evidence_index_path(train_id), docs["evidence_index"])
 
-    def _current_train_summary(self, train_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_train_summary(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         archive_path = Path(payload.get("train_archive") or payload.get("train_archive_path") or self.train_store.zip_path(train_id))
         verification_path = Path(payload.get("train_archive_verification_report") or payload.get("train_archive_verification_report_path") or self.train_store.verification_report_path(train_id))
         signoff_binding_path = Path(payload.get("train_signoff_binding") or payload.get("train_signoff_binding_path") or self.train_store.signoff_binding_path(train_id))
@@ -348,7 +350,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             "external_report_manifest_hash": external_report.get("manifest_hash"),
         }
 
-    def _change_control_summary(self, train_id: str, payload: dict[str, Any], *, require: bool) -> dict[str, Any]:
+    def _change_control_summary(self, train_id: str, payload: ImplementationDocument, *, require: bool) -> ImplementationDocument:
         zip_path = Path(payload.get("change_control_zip") or payload.get("change_control_zip_path") or self.change_control_store.zip_path(train_id))
         report_path = Path(payload.get("change_control_verification_report") or payload.get("change_control_verification_report_path") or self.change_control_store.verification_report_path(train_id))
         external = read_json(report_path) if report_path.exists() else {}
@@ -377,7 +379,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             "applied_reset_count": runtime.get("summary", {}).get("applied_reset_count", 0),
         }
 
-    def _reset_proof_summaries(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _reset_proof_summaries(self, payload: ImplementationDocument) -> list[ImplementationDocument]:
         rows = []
         for path_value in _reset_proof_paths(payload):
             path = Path(path_value)
@@ -385,7 +387,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             rows.append({"path": str(path), "exists": path.exists(), "change_request_id": proof.get("change_request_id"), "reset_proof_hash": proof.get("integrity_hash"), "previous_signoff_hash": proof.get("previous_signoff_hash"), "reset_event_hash": proof.get("reset_event_hash"), "status": proof.get("status"), "integrity_ok": _integrity_ok(proof)})
         return rows
 
-    def _archive_history_items(self, train_id: str) -> list[dict[str, Any]]:
+    def _archive_history_items(self, train_id: str) -> list[ImplementationDocument]:
         items = []
         base = self.train_store.archive_history_dir(train_id)
         if not base.exists():
@@ -402,7 +404,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             items.append(sanitize_metadata(row))
         return items
 
-    def _lifecycle_ledger(self, train_id: str, train_history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _lifecycle_ledger(self, train_id: str, train_history: list[ImplementationDocument]) -> list[ImplementationDocument]:
         source_rows = []
         for event in train_history:
             source_rows.append({"source": "release_train_history", "event": event})
@@ -436,14 +438,14 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             rows.append(event)
         return rows
 
-    def _saved_inputs(self, train_id: str) -> dict[str, Any]:
+    def _saved_inputs(self, train_id: str) -> ImplementationDocument:
         return read_json(self.source_inputs_path(train_id)) if self.source_inputs_path(train_id).exists() else {}
 
     def _saved_input(self, train_id: str, key: str) -> Any:
         return self._saved_inputs(train_id).get(key)
 
 
-def _source_inputs(payload: dict[str, Any]) -> dict[str, Any]:
+def _source_inputs(payload: ImplementationDocument) -> ImplementationDocument:
     return {
         "external_evidence_manifest": _path_text(payload.get("external_evidence_manifest") or payload.get("external_evidence_manifest_path")),
         "train_archive": _path_text(payload.get("train_archive") or payload.get("train_archive_path")),
@@ -455,7 +457,7 @@ def _source_inputs(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _merge_inputs(saved: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+def _merge_inputs(saved: ImplementationDocument, incoming: ImplementationDocument) -> ImplementationDocument:
     merged = dict(saved)
     for key, value in incoming.items():
         if value not in (None, "", []):
@@ -467,7 +469,7 @@ def _path_text(value: Any) -> str | None:
     return str(value) if value else None
 
 
-def _reset_proof_paths(payload: dict[str, Any]) -> list[str]:
+def _reset_proof_paths(payload: ImplementationDocument) -> list[str]:
     value = payload.get("reset_proofs") or payload.get("reset_proof_paths")
     rows = []
     if isinstance(value, list):
@@ -480,7 +482,7 @@ def _reset_proof_paths(payload: dict[str, Any]) -> list[str]:
     return rows
 
 
-def _succession_map(train_id: str, source_hash: str, signoff_events: list[dict[str, Any]], reset_events: list[dict[str, Any]], archive_history_items: list[dict[str, Any]], current_train: dict[str, Any]) -> dict[str, Any]:
+def _succession_map(train_id: str, source_hash: str, signoff_events: list[ImplementationDocument], reset_events: list[ImplementationDocument], archive_history_items: list[ImplementationDocument], current_train: ImplementationDocument) -> ImplementationDocument:
     reset_by_hash = {event.get("previous_signoff_hash"): event for event in reset_events}
     archive_by_hash = {row.get("previous_signoff_hash"): row for row in archive_history_items}
     items = []
@@ -494,7 +496,7 @@ def _succession_map(train_id: str, source_hash: str, signoff_events: list[dict[s
     return {"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_signoff_succession_map", "train_id": train_id, "source_hash": source_hash, "items": items, "summary": {"generation_count": len(items), "current_generation": len(items), "reset_count": len(reset_events)}}
 
 
-def _coverage_doc(train_id: str, source_hash: str, reset_events: list[dict[str, Any]], reset_proofs: list[dict[str, Any]], change_summary: dict[str, Any], archive_history_items: list[dict[str, Any]]) -> dict[str, Any]:
+def _coverage_doc(train_id: str, source_hash: str, reset_events: list[ImplementationDocument], reset_proofs: list[ImplementationDocument], change_summary: ImplementationDocument, archive_history_items: list[ImplementationDocument]) -> ImplementationDocument:
     proofs_by_event = {row.get("reset_event_hash"): row for row in reset_proofs}
     history_hashes = {row.get("previous_signoff_hash") for row in archive_history_items}
     items = []
@@ -506,7 +508,7 @@ def _coverage_doc(train_id: str, source_hash: str, reset_events: list[dict[str, 
     return {"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_change_reset_coverage", "train_id": train_id, "source_hash": source_hash, "items": items, "summary": {"request_count": len(items), "applied_count": len(items), "failed_count": sum(1 for row in items if row.get("status") != "passed")}}
 
 
-def _readiness_doc(train_id: str, source_hash: str, state: dict[str, Any], train_summary: dict[str, Any], change_summary: dict[str, Any], coverage: dict[str, Any]) -> dict[str, Any]:
+def _readiness_doc(train_id: str, source_hash: str, state: ImplementationDocument, train_summary: ImplementationDocument, change_summary: ImplementationDocument, coverage: ImplementationDocument) -> ImplementationDocument:
     checks = [
         {"check_id": "current_train_signed", "status": "passed" if state.get("status") == "signed" else "failed"},
         {"check_id": "current_train_archive_verified", "status": "passed" if train_summary.get("runtime_status") == "passed" and train_summary.get("verification_status") == "passed" and train_summary.get("zip_sha256") == train_summary.get("external_report_zip_sha256") and train_summary.get("manifest_hash") == train_summary.get("external_report_manifest_hash") else "failed"},
@@ -516,7 +518,7 @@ def _readiness_doc(train_id: str, source_hash: str, state: dict[str, Any], train
     return {"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_current_readiness_assertion", "train_id": train_id, "source_hash": source_hash, "status": "passed" if all(row["status"] == "passed" for row in checks) else "failed", "checks": checks}
 
 
-def _gap_items(readiness: dict[str, Any], coverage: dict[str, Any], has_reset: bool, change_summary: dict[str, Any]) -> list[dict[str, Any]]:
+def _gap_items(readiness: ImplementationDocument, coverage: ImplementationDocument, has_reset: bool, change_summary: ImplementationDocument) -> list[ImplementationDocument]:
     gaps = []
     for index, check in enumerate(readiness.get("checks", []), start=1):
         if check.get("status") != "passed":
@@ -529,7 +531,7 @@ def _gap_items(readiness: dict[str, Any], coverage: dict[str, Any], has_reset: b
     return gaps
 
 
-def _evidence_index_doc(train_id: str, source_hash: str, train_summary: dict[str, Any], change_summary: dict[str, Any], reset_proofs: list[dict[str, Any]]) -> dict[str, Any]:
+def _evidence_index_doc(train_id: str, source_hash: str, train_summary: ImplementationDocument, change_summary: ImplementationDocument, reset_proofs: list[ImplementationDocument]) -> ImplementationDocument:
     items = [
         {"evidence_type": "current_train", **{key: train_summary.get(key) for key in ("zip_sha256", "manifest_hash", "verification_report_hash", "signoff_binding_hash", "external_evidence_manifest_hash", "runtime_status")}},
     ]
@@ -553,7 +555,7 @@ def _lifecycle_event_type(event_type: str) -> str:
     return mapping.get(event_type, event_type or "unknown")
 
 
-def _manifest_document(train_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _manifest_document(train_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION,
@@ -580,7 +582,7 @@ def _manifest_document(train_id: str, docs: dict[str, Any], files: list[dict[str
     return manifest
 
 
-def _reviewer_guide(docs: dict[str, Any]) -> str:
+def _reviewer_guide(docs: ImplementationDocument) -> str:
     summary = docs["report"].get("summary", {})
     return "\n".join(
         [
@@ -596,25 +598,25 @@ def _reviewer_guide(docs: dict[str, Any]) -> str:
     )
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     doc = sanitize_metadata(doc)
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

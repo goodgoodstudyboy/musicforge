@@ -5,100 +5,109 @@ from song_agent.application.interface_persistence import persist_interface_job, 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesReference:
+    def _handle_reference_route_part_01(self, method: str, reference_id: str, tail: str, _split_state):
+        if tail == '':
+            if method == 'GET':
+                self._send_json({'reference': _interfaces_api_runtime.reference_public_dict(self.reference_store.read_reference(reference_id))})
+                return (True, None)
+            if method == 'POST':
+                _split_state['reference'] = self.reference_store.update_reference(reference_id, self._read_json_body())
+                self._send_json({'ok': True, 'reference': _interfaces_api_runtime.reference_public_dict(_split_state['reference'])})
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        if tail in {'/hide', '/unhide'}:
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['reference'] = self.reference_store.hide_reference(reference_id, hidden=tail == '/hide')
+            self._send_json({'ok': True, 'reference': _interfaces_api_runtime.reference_public_dict(_split_state['reference'])})
+            return (True, None)
+        if tail in {'/favorite', '/unfavorite'}:
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['reference'] = self.reference_store.favorite_reference(reference_id, favorite=tail == '/favorite')
+            self._send_json({'ok': True, 'reference': _interfaces_api_runtime.reference_public_dict(_split_state['reference'])})
+            return (True, None)
+        if tail == '/delete':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            self.reference_store.delete_reference(reference_id)
+            self._send_json({'ok': True, 'deleted': True, 'reference_id': reference_id})
+            return (True, None)
+        if tail == '/file':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['reference'] = self.reference_store.read_reference(reference_id)
+            self._send_file(self.reference_store.file_path(reference_id), _split_state['reference'].media_type, filename=_split_state['reference'].original_filename)
+            return (True, None)
+        if tail == '/analysis':
+            if method == 'GET':
+                self._send_json({'analysis': _interfaces_api_runtime.get_analysis_report(self.reference_store, reference_id)})
+                return (True, None)
+            if method == 'POST':
+                _split_state['payload'] = self._optional_json_body()
+                self._send_json({'ok': True, 'analysis': _interfaces_api_runtime.analyze_reference(self.reference_store, reference_id, force=bool(_split_state['payload'].get('force', False)), now=_interfaces_api_runtime._utc_now())})
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        if tail == '/analyze':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            self._send_json({'ok': True, 'analysis': _interfaces_api_runtime.analyze_reference(self.reference_store, reference_id, force=bool(_split_state['payload'].get('force', False)), now=_interfaces_api_runtime._utc_now())})
+            return (True, None)
+        if tail == '/slices':
+            if method == 'GET':
+                self._send_json({'manifest': _interfaces_api_runtime.get_slice_manifest(self.reference_store, reference_id)})
+                return (True, None)
+            if method == 'POST':
+                _split_state['payload'] = self._optional_json_body()
+                _interfaces_api_runtime.require_fresh_analysis(self.reference_store, reference_id)
+                self._send_json({'ok': True, 'manifest': _interfaces_api_runtime.generate_slices(self.reference_store, reference_id, force=bool(_split_state['payload'].get('force', False)), now=_interfaces_api_runtime._utc_now())})
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        if tail.startswith('/slices/'):
+            self._handle_reference_slice_route(method, reference_id, tail)
+            return (True, None)
+        return (False, None)
+
+    def _handle_reference_route_part_02(self, method: str, reference_id: str, tail: str, _split_state):
+        if tail in {'/link-project', '/unlink-project'}:
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._read_json_body()
+            project_id = str(_split_state['payload'].get('project_id') or '')
+            self.project_store.get_project(project_id)
+            _split_state['reference'] = self.reference_store.link_project(reference_id, project_id) if tail == '/link-project' else self.reference_store.unlink_project(reference_id, project_id)
+            self._send_json({'ok': True, 'reference': _interfaces_api_runtime.reference_public_dict(_split_state['reference'])})
+            return (True, None)
+        if tail == '/create-asset':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            asset = self.reference_store.create_asset_from_reference(reference_id, self._read_json_body(), self.asset_store)
+            self._send_json({'ok': True, 'asset': asset}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        return (False, None)
+
     def _handle_reference_route(self, method: str, reference_id: str, tail: str) -> None:
+        _split_state = {}
         try:
-            if tail == "":
-                if method == "GET":
-                    self._send_json({"reference": _interfaces_api_runtime.reference_public_dict(self.reference_store.read_reference(reference_id))})
-                    return
-                if method == "POST":
-                    reference = self.reference_store.update_reference(reference_id, self._read_json_body())
-                    self._send_json({"ok": True, "reference": _interfaces_api_runtime.reference_public_dict(reference)})
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            if tail in {"/hide", "/unhide"}:
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                reference = self.reference_store.hide_reference(reference_id, hidden=tail == "/hide")
-                self._send_json({"ok": True, "reference": _interfaces_api_runtime.reference_public_dict(reference)})
-                return
-            if tail in {"/favorite", "/unfavorite"}:
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                reference = self.reference_store.favorite_reference(reference_id, favorite=tail == "/favorite")
-                self._send_json({"ok": True, "reference": _interfaces_api_runtime.reference_public_dict(reference)})
-                return
-            if tail == "/delete":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                self.reference_store.delete_reference(reference_id)
-                self._send_json({"ok": True, "deleted": True, "reference_id": reference_id})
-                return
-            if tail == "/file":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                reference = self.reference_store.read_reference(reference_id)
-                self._send_file(self.reference_store.file_path(reference_id), reference.media_type, filename=reference.original_filename)
-                return
-            if tail == "/analysis":
-                if method == "GET":
-                    self._send_json({"analysis": _interfaces_api_runtime.get_analysis_report(self.reference_store, reference_id)})
-                    return
-                if method == "POST":
-                    payload = self._optional_json_body()
-                    self._send_json({"ok": True, "analysis": _interfaces_api_runtime.analyze_reference(self.reference_store, reference_id, force=bool(payload.get("force", False)), now=_interfaces_api_runtime._utc_now())})
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            if tail == "/analyze":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                self._send_json({"ok": True, "analysis": _interfaces_api_runtime.analyze_reference(self.reference_store, reference_id, force=bool(payload.get("force", False)), now=_interfaces_api_runtime._utc_now())})
-                return
-            if tail == "/slices":
-                if method == "GET":
-                    self._send_json({"manifest": _interfaces_api_runtime.get_slice_manifest(self.reference_store, reference_id)})
-                    return
-                if method == "POST":
-                    payload = self._optional_json_body()
-                    _interfaces_api_runtime.require_fresh_analysis(self.reference_store, reference_id)
-                    self._send_json({"ok": True, "manifest": _interfaces_api_runtime.generate_slices(self.reference_store, reference_id, force=bool(payload.get("force", False)), now=_interfaces_api_runtime._utc_now())})
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            if tail.startswith("/slices/"):
-                self._handle_reference_slice_route(method, reference_id, tail)
-                return
-            if tail in {"/link-project", "/unlink-project"}:
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._read_json_body()
-                project_id = str(payload.get("project_id") or "")
-                self.project_store.get_project(project_id)
-                reference = (
-                    self.reference_store.link_project(reference_id, project_id)
-                    if tail == "/link-project"
-                    else self.reference_store.unlink_project(reference_id, project_id)
-                )
-                self._send_json({"ok": True, "reference": _interfaces_api_runtime.reference_public_dict(reference)})
-                return
-            if tail == "/create-asset":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                asset = self.reference_store.create_asset_from_reference(reference_id, self._read_json_body(), self.asset_store)
-                self._send_json({"ok": True, "asset": asset}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
+            _split_result = self._handle_reference_route_part_01(method, reference_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_reference_route_part_02(method, reference_id, tail, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
         except FileNotFoundError:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Reference not found.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Reference not found.')
             return
         except _interfaces_api_runtime.ReferenceAnalysisError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
@@ -107,10 +116,10 @@ class CreationRoutesReference:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
             return
         except ValueError as exc:
-            status = _interfaces_api_runtime.HTTPStatus.CONFLICT if "Hidden references" in str(exc) or "cannot be converted" in str(exc) else _interfaces_api_runtime.HTTPStatus.BAD_REQUEST
+            status = _interfaces_api_runtime.HTTPStatus.CONFLICT if 'Hidden references' in str(exc) or 'cannot be converted' in str(exc) else _interfaces_api_runtime.HTTPStatus.BAD_REQUEST
             self._send_error(status, str(exc))
             return
-        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Reference route not found.")
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Reference route not found.')
 
     def _handle_reference_slice_route(self, method: str, reference_id: str, tail: str) -> None:
         parts = tail.strip("/").split("/")

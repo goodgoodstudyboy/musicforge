@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -227,7 +229,7 @@ class PublicTrustCenterDistributionKitStore:
             }
         )
 
-    def _current_source(self, center_id: str) -> dict[str, Any]:
+    def _current_source(self, center_id: str) -> ImplementationDocument:
         ptc_zip = self.trust_center_store.zip_path(center_id)
         anchor_path = self.trust_center_store.delivery_anchor_path(center_id)
         registry_zip = self.anchor_registry_store.zip_path(center_id)
@@ -274,7 +276,7 @@ class PublicTrustCenterDistributionKitStore:
         }
         return _sanitize(source)
 
-    def _verify_ptc(self, center_id: str) -> dict[str, Any]:
+    def _verify_ptc(self, center_id: str) -> ImplementationDocument:
         report = verify_public_trust_center_package(
             self.trust_center_store.zip_path(center_id),
             strict=True,
@@ -292,7 +294,7 @@ class PublicTrustCenterDistributionKitStore:
         write_public_trust_center_verification_report(report, self.trust_center_store.verification_report_path(center_id))
         return report
 
-    def _verify_registry(self, center_id: str) -> dict[str, Any]:
+    def _verify_registry(self, center_id: str) -> ImplementationDocument:
         report = verify_public_trust_center_anchor_registry_package(
             self.anchor_registry_store.zip_path(center_id),
             strict=True,
@@ -303,7 +305,7 @@ class PublicTrustCenterDistributionKitStore:
         write_public_trust_center_anchor_registry_verification_report(report, self.anchor_registry_store.verification_report_path(center_id))
         return report
 
-    def _verify_transparency(self, center_id: str) -> dict[str, Any]:
+    def _verify_transparency(self, center_id: str) -> ImplementationDocument:
         report = verify_public_trust_center_anchor_transparency_package(
             self.anchor_transparency_store.zip_path(center_id),
             strict=True,
@@ -328,13 +330,13 @@ class PublicTrustCenterDistributionKitStore:
             "verification-reports/anchor-transparency-verification-report.json": self.anchor_transparency_store.verification_report_path(center_id),
         }
 
-    def _file_index(self, export_dir: Path) -> dict[str, Any]:
+    def _file_index(self, export_dir: Path) -> ImplementationDocument:
         rows = [_file_record(export_dir, path) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name not in {"file-index.json", "distribution-kit-manifest.json"}]
         data = {"schema_version": DISTRIBUTION_KIT_SCHEMA_VERSION, "source_hash": self._report_source_hash(export_dir), "files": sorted(rows, key=lambda item: str(item.get("path") or ""))}
         data["integrity_hash"] = stable_hash({key: value for key, value in data.items() if key != "integrity_hash"})
         return data
 
-    def _verification_index(self, report: dict[str, Any]) -> dict[str, Any]:
+    def _verification_index(self, report: ImplementationDocument) -> ImplementationDocument:
         source = report.get("source") if isinstance(report.get("source"), dict) else {}
         rows = [
             {"name": "public_trust_center", "status": source.get("ptc_verification_status"), "verification_hash": source.get("ptc_verification_hash"), "report_path": "verification-reports/public-trust-center-verification-report.json", "package_path": "packages/public-trust-center.zip"},
@@ -345,7 +347,7 @@ class PublicTrustCenterDistributionKitStore:
         data["integrity_hash"] = stable_hash({key: value for key, value in data.items() if key != "integrity_hash"})
         return data
 
-    def _chain_of_custody(self, report: dict[str, Any]) -> dict[str, Any]:
+    def _chain_of_custody(self, report: ImplementationDocument) -> ImplementationDocument:
         source = report.get("source") if isinstance(report.get("source"), dict) else {}
         data = {
             "schema_version": DISTRIBUTION_KIT_SCHEMA_VERSION,
@@ -365,7 +367,7 @@ class PublicTrustCenterDistributionKitStore:
         report = _read_json_default(export_dir / "distribution-kit-report.json", default={})
         return report.get("source_hash")
 
-    def _findings(self, source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         checks: list[dict[str, Any]] = []
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
@@ -384,7 +386,7 @@ class PublicTrustCenterDistributionKitStore:
         check("distribution_kit_delivery_anchor_present", bool(source.get("delivery_anchor_hash")), "Delivery anchor is present.")
         return checks, blockers, warnings
 
-    def _ensure_exportable(self, center_id: str, report: dict[str, Any]) -> None:
+    def _ensure_exportable(self, center_id: str, report: ImplementationDocument) -> None:
         if not distribution_kit_report_integrity_ok(report):
             raise PublicTrustCenterDistributionKitStateError("Public Trust Center Distribution Kit Report integrity failed.")
         current = self._current_source(center_id)
@@ -393,7 +395,7 @@ class PublicTrustCenterDistributionKitStore:
         if report.get("status") == "failed":
             raise PublicTrustCenterDistributionKitStateError("Public Trust Center Distribution Kit Report is failed.")
 
-    def _append_history(self, center_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, center_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         path = self.history_path(center_id)
         history = _read_json_default(path, default={"events": []})
         events = history.setdefault("events", [])
@@ -432,7 +434,7 @@ def distribution_kit_summary(report: dict[str, Any]) -> dict[str, Any]:
     return _sanitize({"status": report.get("status"), "center_id": report.get("center_id"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "source_hash": report.get("source_hash")})
 
 
-def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary_from_source(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "center_id": source.get("center_id"),
         "ptc_status": source.get("ptc_verification_status"),
@@ -456,20 +458,20 @@ def _requirements() -> dict[str, bool]:
     }
 
 
-def _state_row(report: dict[str, Any]) -> dict[str, str]:
+def _state_row(report: ImplementationDocument) -> dict[str, str]:
     return {"source_hash": str(report.get("source_hash") or ""), "report_hash": str(report.get("integrity_hash") or "")}
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     report = manifest.get("report") if isinstance(manifest.get("report"), dict) else {}
     return {"source_hash": str(manifest.get("source_hash") or ""), "report_hash": str(report.get("integrity_hash") or "")}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -479,7 +481,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     if not zip_path.exists():
         return {}
     try:
@@ -513,7 +515,7 @@ def _write_verify(export_dir: Path) -> None:
     (export_dir / "VERIFY.txt").write_text(sanitize_sensitive_text(text), encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -531,7 +533,7 @@ def _sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _verification_hash(report: dict[str, Any]) -> str | None:
+def _verification_hash(report: ImplementationDocument) -> str | None:
     if not report:
         return None
     return stable_hash({key: value for key, value in report.items() if key != "generated_at"})
@@ -544,5 +546,5 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise PublicTrustCenterDistributionKitStateError("Resolved path escapes Public Trust Center Distribution Kit root.")
 
 
-def _sanitize(payload: dict[str, Any]) -> dict[str, Any]:
+def _sanitize(payload: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(payload, blocked_keys=DISTRIBUTION_KIT_BLOCKED_KEYS)

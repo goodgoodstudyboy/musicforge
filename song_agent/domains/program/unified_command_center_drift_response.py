@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import threading
 import zipfile
@@ -418,7 +420,7 @@ class UnifiedCommandCenterDriftResponseStore:
         except Exception as exc:
             return _gate_failed(f"Unified Command Center Drift Response gate failed: {sanitize_sensitive_text(str(exc))}")
 
-    def _required_docs(self, center_id: str, response_id: str) -> dict[str, Any]:
+    def _required_docs(self, center_id: str, response_id: str) -> ImplementationDocument:
         docs = {
             "case": self.read_case(center_id, response_id),
             "source": _read_json_required(self.source_path(center_id, response_id)),
@@ -435,7 +437,7 @@ class UnifiedCommandCenterDriftResponseStore:
                 raise UnifiedCommandCenterDriftResponseStateError(f"Drift Response {key} integrity failed.")
         return docs
 
-    def _write_all(self, center_id: str, response_id: str, case: dict[str, Any], source: dict[str, Any], plan: dict[str, Any], queue: dict[str, Any], results: dict[str, Any], cr_bindings: dict[str, Any], recheck: dict[str, Any], closeout: dict[str, Any], fingerprints: dict[str, Any]) -> None:
+    def _write_all(self, center_id: str, response_id: str, case: ImplementationDocument, source: ImplementationDocument, plan: ImplementationDocument, queue: ImplementationDocument, results: ImplementationDocument, cr_bindings: ImplementationDocument, recheck: ImplementationDocument, closeout: ImplementationDocument, fingerprints: ImplementationDocument) -> None:
         write_json(self.case_path(center_id, response_id), case)
         write_json(self.source_path(center_id, response_id), source)
         write_json(self.plan_path(center_id, response_id), plan)
@@ -448,7 +450,7 @@ class UnifiedCommandCenterDriftResponseStore:
         write_json(self.fingerprints_path(center_id, response_id), fingerprints)
         self._write_readme(center_id, response_id, closeout)
 
-    def _write_readme(self, center_id: str, response_id: str, closeout: dict[str, Any]) -> None:
+    def _write_readme(self, center_id: str, response_id: str, closeout: ImplementationDocument) -> None:
         text = "\n".join(
             [
                 "MusicForge Unified Command Center Drift Response",
@@ -463,7 +465,7 @@ class UnifiedCommandCenterDriftResponseStore:
         )
         (self.response_dir(center_id, response_id) / "README.txt").write_text(text, encoding="utf-8")
 
-    def _write_manifest(self, center_id: str, response_id: str, docs: dict[str, Any]) -> None:
+    def _write_manifest(self, center_id: str, response_id: str, docs: ImplementationDocument) -> None:
         self._write_readme(center_id, response_id, docs["closeout"])
         response_dir = self.response_dir(center_id, response_id)
         files = []
@@ -497,7 +499,7 @@ class UnifiedCommandCenterDriftResponseStore:
         manifest["integrity_hash"] = _integrity_hash(manifest)
         write_json(self.manifest_path(center_id, response_id), manifest)
 
-    def _append_event(self, center_id: str, response_id: str, event_type: str, payload: dict[str, Any]) -> None:
+    def _append_event(self, center_id: str, response_id: str, event_type: str, payload: ImplementationDocument) -> None:
         path = self.events_path(center_id, response_id)
         previous = ""
         if path.exists():
@@ -510,7 +512,7 @@ class UnifiedCommandCenterDriftResponseStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
-    def _ensure_open(self, docs: dict[str, Any]) -> None:
+    def _ensure_open(self, docs: ImplementationDocument) -> None:
         if docs["case"].get("status") == "closed" or docs["closeout"].get("status") == "closed":
             raise UnifiedCommandCenterDriftResponseStateError("Drift Response is closed.")
 
@@ -531,7 +533,7 @@ class UnifiedCommandCenterDriftResponseStore:
         return str(rows[-1].get("response_id"))
 
 
-def _source_document(center_id: str, response_id: str, source_docs: dict[str, Any], review_zip_path: Path, verification_path: Path) -> dict[str, Any]:
+def _source_document(center_id: str, response_id: str, source_docs: ImplementationDocument, review_zip_path: Path, verification_path: Path) -> ImplementationDocument:
     review_id = str(source_docs.get("plan", {}).get("review_id") or source_docs.get("drift_report", {}).get("review_id") or "")
     drift = source_docs.get("drift_report") if isinstance(source_docs.get("drift_report"), dict) else {}
     incidents = source_docs.get("incident_board") if isinstance(source_docs.get("incident_board"), dict) else {}
@@ -556,7 +558,7 @@ def _source_document(center_id: str, response_id: str, source_docs: dict[str, An
     return doc
 
 
-def _review_binding(review_id: str, review_zip_path: Path, verification_path: Path, verification: dict[str, Any], drift: dict[str, Any], incidents: dict[str, Any]) -> dict[str, Any]:
+def _review_binding(review_id: str, review_zip_path: Path, verification_path: Path, verification: ImplementationDocument, drift: ImplementationDocument, incidents: ImplementationDocument) -> ImplementationDocument:
     return {
         "review_id": review_id,
         "zip_sha256": _sha256_path(review_zip_path),
@@ -571,7 +573,7 @@ def _review_binding(review_id: str, review_zip_path: Path, verification_path: Pa
     }
 
 
-def _plan_document(center_id: str, response_id: str, drift: dict[str, Any], incidents: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+def _plan_document(center_id: str, response_id: str, drift: ImplementationDocument, incidents: ImplementationDocument, source: ImplementationDocument) -> ImplementationDocument:
     items = []
     for index, row in enumerate([item for item in drift.get("drifts", []) if isinstance(item, dict) and item.get("status") == "open"], start=1):
         action_type = "manual_change_request" if row.get("severity") in {"critical", "high"} else "safe_recheck_prepare"
@@ -592,7 +594,7 @@ def _plan_document(center_id: str, response_id: str, drift: dict[str, Any], inci
     return doc
 
 
-def _queue_document(center_id: str, response_id: str, plan: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+def _queue_document(center_id: str, response_id: str, plan: ImplementationDocument, source: ImplementationDocument) -> ImplementationDocument:
     items = []
     for index, row in enumerate(plan.get("items", []), start=1):
         manual = bool(row.get("requires_change_request"))
@@ -614,19 +616,19 @@ def _queue_document(center_id: str, response_id: str, plan: dict[str, Any], sour
     return doc
 
 
-def _results_document(center_id: str, response_id: str, source_hash: str | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _results_document(center_id: str, response_id: str, source_hash: str | None, rows: list[ImplementationDocument]) -> ImplementationDocument:
     doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_drift_response_action_results", "center_id": center_id, "response_id": response_id, "source_hash": source_hash, "results": rows, "summary": {"completed_count": sum(1 for row in rows if row.get("status") == "completed"), "manual_required_count": sum(1 for row in rows if row.get("status") == "manual_required"), "failed_count": sum(1 for row in rows if row.get("status") == "failed")}})
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _cr_bindings_document(center_id: str, response_id: str, source_hash: str | None, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _cr_bindings_document(center_id: str, response_id: str, source_hash: str | None, rows: list[ImplementationDocument]) -> ImplementationDocument:
     doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_drift_response_change_request_bindings", "center_id": center_id, "response_id": response_id, "source_hash": source_hash, "items": rows, "summary": {"binding_count": len(rows), "approved_count": sum(1 for row in rows if row.get("status") == "approved")}})
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _cr_binding_report_document(center_id: str, response_id: str, source_hash: str | None, queue: dict[str, Any], cr_bindings: dict[str, Any]) -> dict[str, Any]:
+def _cr_binding_report_document(center_id: str, response_id: str, source_hash: str | None, queue: ImplementationDocument, cr_bindings: ImplementationDocument) -> ImplementationDocument:
     queue_items = {str(row.get("item_id")): row for row in queue.get("items", []) if isinstance(row, dict)}
     rows = []
     for binding in [row for row in cr_bindings.get("items", []) if isinstance(row, dict)]:
@@ -671,14 +673,14 @@ def _cr_binding_report_document(center_id: str, response_id: str, source_hash: s
     return doc
 
 
-def _recheck_document(center_id: str, response_id: str, source_hash: str | None, binding: dict[str, Any] | None) -> dict[str, Any]:
+def _recheck_document(center_id: str, response_id: str, source_hash: str | None, binding: ImplementationDocument | None) -> ImplementationDocument:
     status = "passed" if binding and binding.get("verification_status") == "passed" and binding.get("drift_status") == "passed" else "missing"
     doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_drift_response_recheck_summary", "center_id": center_id, "response_id": response_id, "source_hash": source_hash, "status": status, "review": binding or {}, "summary": {"recheck_bound": bool(binding), "status": status}})
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _closeout_document(center_id: str, response_id: str, source_hash: str | None, queue: dict[str, Any], results: dict[str, Any], cr_bindings: dict[str, Any], recheck: dict[str, Any], *, status: str, closed_by: str | None = None, reason: str | None = None) -> dict[str, Any]:
+def _closeout_document(center_id: str, response_id: str, source_hash: str | None, queue: ImplementationDocument, results: ImplementationDocument, cr_bindings: ImplementationDocument, recheck: ImplementationDocument, *, status: str, closed_by: str | None = None, reason: str | None = None) -> ImplementationDocument:
     blockers = []
     manual_ids = {str(row.get("item_id")) for row in queue.get("items", []) if isinstance(row, dict) and not row.get("safe")}
     bound_ids = {str(row.get("item_id")) for row in cr_bindings.get("items", []) if isinstance(row, dict) and row.get("status") == "approved"}
@@ -719,37 +721,37 @@ def _closeout_document(center_id: str, response_id: str, source_hash: str | None
     return doc
 
 
-def _fingerprints_document(center_id: str, response_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _fingerprints_document(center_id: str, response_id: str, source: ImplementationDocument) -> ImplementationDocument:
     doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_drift_response_package_fingerprints", "center_id": center_id, "response_id": response_id, "source_hash": source.get("source_hash"), "items": [{"component": "source_review", **(source.get("source_review") or {})}]})
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _highest_severity(drift: dict[str, Any]) -> str:
+def _highest_severity(drift: ImplementationDocument) -> str:
     order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
     severities = [str(row.get("severity") or "low") for row in drift.get("drifts", []) if isinstance(row, dict)]
     return max(severities or ["low"], key=lambda value: order.get(value, 0))
 
 
-def _read_json_required(path: Path) -> dict[str, Any]:
+def _read_json_required(path: Path) -> ImplementationDocument:
     if not path.exists():
         raise UnifiedCommandCenterDriftResponseNotFoundError(f"Required Drift Response document is missing: {path.name}.")
     return read_json(path)
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"entry": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _approval_hash(binding: dict[str, Any]) -> str:
+def _approval_hash(binding: ImplementationDocument) -> str:
     return stable_hash(
         {
             "change_request_id": binding.get("change_request_id"),
@@ -784,5 +786,5 @@ def _safe_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.:-]+", "-", str(value)).strip("-")
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}

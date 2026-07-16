@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -265,13 +267,13 @@ class ProjectSummaryProvider(Protocol):
         self,
         project_dir: Path,
         document: ProjectDocument,
-    ) -> dict[str, Any]: ...
+    ) -> ImplementationDocument: ...
 
 
 def _empty_project_summary(
     project_dir: Path,
     document: ProjectDocument,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     return {}
 
 
@@ -707,7 +709,7 @@ class ProjectStore:
         raise RuntimeError("Unable to allocate a unique project directory.")
 
     @staticmethod
-    def _export_version(version: ProjectVersion) -> dict[str, Any]:
+    def _export_version(version: ProjectVersion) -> ImplementationDocument:
         output_dir = Path(version.output_dir) if version.output_dir else None
         return {
             **version.to_dict(),
@@ -757,7 +759,7 @@ def _find_version(document: ProjectDocument, version_id: str) -> ProjectVersion:
     raise FileNotFoundError(version_id)
 
 
-def _version_or_none(document: ProjectDocument, version_id: str | None) -> dict[str, Any] | None:
+def _version_or_none(document: ProjectDocument, version_id: str | None) -> ImplementationDocument | None:
     if not version_id:
         return None
     try:
@@ -766,7 +768,7 @@ def _version_or_none(document: ProjectDocument, version_id: str | None) -> dict[
         return None
 
 
-def _version_ref(version: ProjectVersion) -> dict[str, Any]:
+def _version_ref(version: ProjectVersion) -> ImplementationDocument:
     return {
         "version_id": version.version_id,
         "job_id": version.job_id,
@@ -777,7 +779,7 @@ def _version_ref(version: ProjectVersion) -> dict[str, Any]:
     }
 
 
-def _lineage_info(version: ProjectVersion) -> dict[str, Any]:
+def _lineage_info(version: ProjectVersion) -> ImplementationDocument:
     return {
         "parent_version_id": version.parent_version_id,
         "variant_type": version.variant_type,
@@ -794,7 +796,7 @@ def _artifact_flags(version: ProjectVersion) -> dict[str, bool]:
     }
 
 
-def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
+def _edit_info(version: ProjectVersion) -> ImplementationDocument | None:
     path = Path(version.output_dir) / "data" / "edit-metadata.json"
     if not path.exists():
         return None
@@ -835,7 +837,7 @@ def _edit_info(version: ProjectVersion) -> dict[str, Any] | None:
     }
 
 
-def _mix_info(version: ProjectVersion) -> dict[str, Any]:
+def _mix_info(version: ProjectVersion) -> ImplementationDocument:
     run_dir = Path(version.output_dir)
     summary: dict[str, Any] = {}
     state_path = run_dir / "data" / "mix-state.json"
@@ -876,7 +878,7 @@ def _mix_info(version: ProjectVersion) -> dict[str, Any]:
     return summary
 
 
-def _section_info(version: ProjectVersion) -> dict[str, dict[str, Any]]:
+def _section_info(version: ProjectVersion) -> dict[str, ImplementationDocument]:
     plan = _version_song_plan(version)
     if plan is None:
         return {}
@@ -889,7 +891,7 @@ def _section_info(version: ProjectVersion) -> dict[str, dict[str, Any]]:
     }
 
 
-def _track_info(version: ProjectVersion) -> dict[str, dict[str, Any]]:
+def _track_info(version: ProjectVersion) -> dict[str, ImplementationDocument]:
     plan = _version_song_plan(version)
     if plan is None:
         return {}
@@ -919,7 +921,7 @@ def _average_velocity(track: Any) -> float:
     return round(sum(note.velocity for note in track.notes) / len(track.notes), 2)
 
 
-def _diff_dict(left: dict[str, Any], right: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _diff_dict(left: ImplementationDocument, right: ImplementationDocument) -> dict[str, ImplementationDocument]:
     keys = sorted(set(left) | set(right))
     return {
         key: {"left": left.get(key), "right": right.get(key)}
@@ -928,7 +930,7 @@ def _diff_dict(left: dict[str, Any], right: dict[str, Any]) -> dict[str, dict[st
     }
 
 
-def _diff_optional(left: Any, right: Any) -> dict[str, Any]:
+def _diff_optional(left: Any, right: Any) -> ImplementationDocument:
     if left == right:
         return {}
     return {"left": left, "right": right}
@@ -981,7 +983,7 @@ def _optional_int(value: Any) -> int | None:
     return int(value)
 
 
-def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) -> list[dict[str, Any]]:
+def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) -> list[ImplementationDocument]:
     refs: dict[str, dict[str, Any]] = {}
 
     def add_ref(ref: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None) -> None:
@@ -1048,7 +1050,7 @@ def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) ->
     return sorted(refs.values(), key=lambda item: item["asset_id"])
 
 
-def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument) -> list[dict[str, Any]]:
+def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument) -> list[ImplementationDocument]:
     refs: dict[str, dict[str, Any]] = {}
 
     def add_ref(ref: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None, linked: bool = False) -> None:
@@ -1146,7 +1148,7 @@ def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument
     return sorted(refs.values(), key=lambda item: item["reference_id"])
 
 
-def _collect_project_context_packs(project_dir: Path, document: ProjectDocument) -> list[dict[str, Any]]:
+def _collect_project_context_packs(project_dir: Path, document: ProjectDocument) -> list[ImplementationDocument]:
     packs: dict[str, dict[str, Any]] = {}
 
     def add_pack(data: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None) -> None:

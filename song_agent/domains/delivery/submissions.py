@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import threading
@@ -749,7 +751,7 @@ def submission_item_current_snapshot(store: SubmissionStore, item: SubmissionIte
     )
 
 
-def _safe_distribution_manifest(store: DistributionStore, release_id: str, package_id: str | None) -> dict[str, Any]:
+def _safe_distribution_manifest(store: DistributionStore, release_id: str, package_id: str | None) -> ImplementationDocument:
     if not package_id:
         return {}
     try:
@@ -758,13 +760,13 @@ def _safe_distribution_manifest(store: DistributionStore, release_id: str, packa
         return {}
 
 
-def _record_item_submitted(item: SubmissionItem, payload: dict[str, Any]) -> None:
+def _record_item_submitted(item: SubmissionItem, payload: ImplementationDocument) -> None:
     item.status = "submitted"
     item.submitted_at = str(payload.get("submitted_at") or now_iso())
     item.external_reference = _optional_text(payload.get("external_reference"), 200)
 
 
-def _record_item_feedback(item: SubmissionItem, payload: dict[str, Any]) -> None:
+def _record_item_feedback(item: SubmissionItem, payload: ImplementationDocument) -> None:
     status = str(payload.get("status") or "needs_changes")
     if status not in {"feedback_received", "needs_changes", "rejected"}:
         status = "feedback_received"
@@ -780,7 +782,7 @@ def _record_item_feedback(item: SubmissionItem, payload: dict[str, Any]) -> None
     )
 
 
-def _record_item_accepted(item: SubmissionItem, payload: dict[str, Any]) -> None:
+def _record_item_accepted(item: SubmissionItem, payload: ImplementationDocument) -> None:
     item.status = "accepted"
     item.accepted_at = str(payload.get("accepted_at") or now_iso())
     if payload.get("external_reference"):
@@ -804,7 +806,7 @@ def _preserve_external_status(old: str, new: str) -> str:
     return old if old in {"submitted", "feedback_received", "needs_changes", "accepted", "rejected", "withdrawn"} else new
 
 
-def _target_ids_from_payload(payload: dict[str, Any]) -> list[str]:
+def _target_ids_from_payload(payload: ImplementationDocument) -> list[str]:
     raw = payload.get("target_ids")
     if not isinstance(raw, list):
         raw = payload.get("targets") if isinstance(payload.get("targets"), list) else []
@@ -816,7 +818,7 @@ def _target_ids_from_payload(payload: dict[str, Any]) -> list[str]:
     return ids
 
 
-def _stale_summary(summary: dict[str, Any] | None, reason: str) -> dict[str, Any]:
+def _stale_summary(summary: ImplementationDocument | None, reason: str) -> ImplementationDocument:
     data = dict(summary or {})
     if data:
         data["stale"] = True
@@ -825,7 +827,7 @@ def _stale_summary(summary: dict[str, Any] | None, reason: str) -> dict[str, Any
     return sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 

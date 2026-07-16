@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesAuditionContextPack:
-    def _handle_audition_context_pack(self, project_id: str, preview_id: str, audition_id: str, payload: dict[str, Any]) -> None:
+    def _handle_audition_context_pack(self, project_id: str, preview_id: str, audition_id: str, payload: ImplementationDocument) -> None:
         project_dir = self.project_store.project_dir(project_id)
         self.project_store.get_project(project_id)
         audition = _interfaces_api_runtime.EditorAuditionStore(project_dir).read_audition(preview_id, audition_id)
@@ -165,117 +167,81 @@ class CreationRoutesAuditionContextPack:
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Editor preview route not found.")
 
-    def _handle_project_editor_preview_apply(self, project_id: str, preview_id: str, payload: dict[str, Any]) -> None:
-        store = _interfaces_api_runtime.EditorPreviewStore(self.project_store.project_dir(project_id))
-        with self.project_store.lock, store.lock:
-            preview = store.read_preview(preview_id)
-            if preview.applied_version_id:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Editor preview has already been applied.")
-                return
-            try:
-                document, parent, parent_job, parent_plan = self._project_edit_parent(project_id, preview.parent_version_id)
-            except FileNotFoundError:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Parent version not found.")
-                return
-            if preview.parent_job_id != parent_job.job_id:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Editor preview parent job does not match the current version.")
-                return
-            if _interfaces_api_runtime.editor_song_plan_hash(parent_plan) != preview.base_plan_hash:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Editor preview is stale because the parent song-plan.json has changed.")
-                return
-            patch = store.read_patch(preview_id)
-            result = _interfaces_api_runtime.apply_editor_patch(parent_plan, patch)
-            result.plan.validate()
-            preview_plan_mismatch = False
-            try:
-                preview_plan = store.read_plan(preview_id)
-                preview_plan_mismatch = _interfaces_api_runtime.editor_song_plan_hash(preview_plan) != _interfaces_api_runtime.editor_song_plan_hash(result.plan)
-            except (OSError, ValueError, TypeError, KeyError):
-                preview_plan_mismatch = True
-            run_title = str(payload.get("version_name") or payload.get("name") or preview.label or "Editor Version")
-            run_dir = self.store._reserve_run_dir(run_title)
-            job_id = run_dir.name
-            now = _interfaces_api_runtime._utc_now()
-            metadata = _interfaces_api_runtime.editor_edit_metadata(
-                project_id=project_id,
-                parent_version_id=parent.version_id,
-                parent_job_id=parent_job.job_id,
-                preview_id=preview.preview_id,
-                patch=patch,
-                result=result,
-                created_at=now,
-            )
-            audition_summary = _interfaces_api_runtime.audition_summary_for_preview(self.project_store.project_dir(project_id), preview.preview_id)
-            if audition_summary.get("audition_count"):
-                metadata["audition_summary"] = audition_summary
-                if isinstance(metadata.get("summary"), dict):
-                    metadata["summary"]["audition_count"] = audition_summary.get("audition_count", 0)
-                    metadata["summary"]["audition_sources"] = audition_summary.get("sources", [])
-            if preview_plan_mismatch:
-                metadata["warnings"] = [
-                    *metadata.get("warnings", []),
-                    "Preview song-plan.json differed from recomputed editor patch result; applied recomputed plan.",
-                ]
-                metadata["preview_plan_mismatch"] = True
-            paths = _interfaces_api_runtime.ProjectPaths.create(run_dir)
-            plan_path = paths.data / "song-plan.json"
-            midi_path = paths.renders / "song.mid"
-            validator_report_path = paths.data / "validator-report.json"
-            request_payload = {
-                **parent.request,
-                "project_id": project_id,
-                "parent_version_id": parent.version_id,
-                "parent_job_id": parent_job.job_id,
-                "editor_preview_id": preview.preview_id,
-                "edit_type": "manual_editor_edit",
-            }
-            write_interface_document(paths.data / "request.json", request_payload)
-            write_interface_document(paths.data / "editor-patch.json", patch.to_dict())
-            write_interface_document(paths.data / "edit-metadata.json", metadata)
-            write_interface_document(plan_path, result.plan.to_dict())
-            _interfaces_api_runtime.render_midi(result.plan, midi_path)
-            _interfaces_api_runtime.clear_stem_artifacts(run_dir)
-            write_interface_document(validator_report_path, _interfaces_api_runtime._build_validator_report(plan_path, midi_path))
-            summary = _interfaces_api_runtime._build_summary(plan_path, midi_path)
-            summary["edit"] = metadata["summary"]
-            write_interface_document(paths.data / "run-summary.json", summary)
-            _interfaces_api_runtime.append_event(paths, {"event": "editor_preview_applied", "preview_id": preview.preview_id, "parent_version_id": parent.version_id})
-            job = _interfaces_api_runtime.JobState(
-                job_id=job_id,
-                title=run_title,
-                output_dir=str(run_dir),
-                status="completed",
-                created_at=now,
-                updated_at=now,
-                step="completed",
-                message="Editor patch applied.",
-                summary=summary,
-                input_payload=request_payload,
-                provider_snapshot={"mode": "local", "summary": "Visual editor patch"},
-                artifacts={**_interfaces_api_runtime._job_artifacts(run_dir, plan_path, midi_path, validator_report_path), "editor_patch": str(paths.data / "editor-patch.json")},
-                finished_at=now,
-                heartbeat_at=now,
-                generation_mode="local",
-                pipeline_mode=parent.pipeline_mode,
-                job_type="edit",
-                edit_metadata=metadata,
-            )
-            self.store.jobs[job.job_id] = job
-            persist_interface_job(self.store, job)
-            document = self.project_store.add_version_from_job(
-                project_id,
-                job,
-                name=run_title,
-                note=str(payload.get("version_note") or payload.get("note") or ""),
-                parent_version_id=parent.version_id,
-                variant_type="manual_editor_edit",
-                change_summary=str(payload.get("change_summary") or preview.label or "Visual editor patch"),
-            )
-            version = next(version for version in document.versions if version.job_id == job.job_id)
-            updated_preview = store.mark_applied(preview_id, version_id=version.version_id, job_id=job.job_id, now=_interfaces_api_runtime._utc_now())
-            self.project_store.append_event(
-                project_id,
-                "editor_preview_applied",
-                {"parent_version_id": parent.version_id, "preview_id": preview_id, "version_id": version.version_id, "job_id": job.job_id},
-            )
-        self._send_json({"ok": True, **document.to_dict(), "version": version.to_dict(), "job": job.to_dict(), "preview": updated_preview.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+    def _handle_project_editor_preview_apply_part_01(self, project_id: str, preview_id: str, payload: ImplementationDocument, _split_state):
+        _split_state['preview'] = _split_state['store'].read_preview(preview_id)
+        if _split_state['preview'].applied_version_id:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Editor preview has already been applied.')
+            return (True, None)
+        try:
+            _split_state['document'], _split_state['parent'], parent_job, parent_plan = self._project_edit_parent(project_id, _split_state['preview'].parent_version_id)
+        except FileNotFoundError:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Parent version not found.')
+            return (True, None)
+        if _split_state['preview'].parent_job_id != parent_job.job_id:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Editor preview parent job does not match the current version.')
+            return (True, None)
+        if _interfaces_api_runtime.editor_song_plan_hash(parent_plan) != _split_state['preview'].base_plan_hash:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Editor preview is stale because the parent song-plan.json has changed.')
+            return (True, None)
+        patch = _split_state['store'].read_patch(preview_id)
+        result = _interfaces_api_runtime.apply_editor_patch(parent_plan, patch)
+        result.plan.validate()
+        preview_plan_mismatch = False
+        try:
+            preview_plan = _split_state['store'].read_plan(preview_id)
+            preview_plan_mismatch = _interfaces_api_runtime.editor_song_plan_hash(preview_plan) != _interfaces_api_runtime.editor_song_plan_hash(result.plan)
+        except (OSError, ValueError, TypeError, KeyError):
+            preview_plan_mismatch = True
+        _split_state['run_title'] = str(payload.get('version_name') or payload.get('name') or _split_state['preview'].label or 'Editor Version')
+        _split_state['run_dir'] = self.store._reserve_run_dir(_split_state['run_title'])
+        _split_state['job_id'] = _split_state['run_dir'].name
+        _split_state['now'] = _interfaces_api_runtime._utc_now()
+        _split_state['metadata'] = _interfaces_api_runtime.editor_edit_metadata(project_id=project_id, parent_version_id=_split_state['parent'].version_id, parent_job_id=parent_job.job_id, preview_id=_split_state['preview'].preview_id, patch=patch, result=result, created_at=_split_state['now'])
+        audition_summary = _interfaces_api_runtime.audition_summary_for_preview(self.project_store.project_dir(project_id), _split_state['preview'].preview_id)
+        if audition_summary.get('audition_count'):
+            _split_state['metadata']['audition_summary'] = audition_summary
+            if isinstance(_split_state['metadata'].get('summary'), dict):
+                _split_state['metadata']['summary']['audition_count'] = audition_summary.get('audition_count', 0)
+                _split_state['metadata']['summary']['audition_sources'] = audition_summary.get('sources', [])
+        if preview_plan_mismatch:
+            _split_state['metadata']['warnings'] = [*_split_state['metadata'].get('warnings', []), 'Preview song-plan.json differed from recomputed editor patch result; applied recomputed plan.']
+            _split_state['metadata']['preview_plan_mismatch'] = True
+        _split_state['paths'] = _interfaces_api_runtime.ProjectPaths.create(_split_state['run_dir'])
+        _split_state['plan_path'] = _split_state['paths'].data / 'song-plan.json'
+        _split_state['midi_path'] = _split_state['paths'].renders / 'song.mid'
+        _split_state['validator_report_path'] = _split_state['paths'].data / 'validator-report.json'
+        _split_state['request_payload'] = {**_split_state['parent'].request, 'project_id': project_id, 'parent_version_id': _split_state['parent'].version_id, 'parent_job_id': parent_job.job_id, 'editor_preview_id': _split_state['preview'].preview_id, 'edit_type': 'manual_editor_edit'}
+        write_interface_document(_split_state['paths'].data / 'request.json', _split_state['request_payload'])
+        write_interface_document(_split_state['paths'].data / 'editor-patch.json', patch.to_dict())
+        write_interface_document(_split_state['paths'].data / 'edit-metadata.json', _split_state['metadata'])
+        write_interface_document(_split_state['plan_path'], result.plan.to_dict())
+        _interfaces_api_runtime.render_midi(result.plan, _split_state['midi_path'])
+        _interfaces_api_runtime.clear_stem_artifacts(_split_state['run_dir'])
+        write_interface_document(_split_state['validator_report_path'], _interfaces_api_runtime._build_validator_report(_split_state['plan_path'], _split_state['midi_path']))
+        _split_state['summary'] = _interfaces_api_runtime._build_summary(_split_state['plan_path'], _split_state['midi_path'])
+        _split_state['summary']['edit'] = _split_state['metadata']['summary']
+        return (False, None)
+
+    def _handle_project_editor_preview_apply_part_02(self, project_id: str, preview_id: str, payload: ImplementationDocument, _split_state):
+        write_interface_document(_split_state['paths'].data / 'run-summary.json', _split_state['summary'])
+        _interfaces_api_runtime.append_event(_split_state['paths'], {'event': 'editor_preview_applied', 'preview_id': _split_state['preview'].preview_id, 'parent_version_id': _split_state['parent'].version_id})
+        _split_state['job'] = _interfaces_api_runtime.JobState(job_id=_split_state['job_id'], title=_split_state['run_title'], output_dir=str(_split_state['run_dir']), status='completed', created_at=_split_state['now'], updated_at=_split_state['now'], step='completed', message='Editor patch applied.', summary=_split_state['summary'], input_payload=_split_state['request_payload'], provider_snapshot={'mode': 'local', 'summary': 'Visual editor patch'}, artifacts={**_interfaces_api_runtime._job_artifacts(_split_state['run_dir'], _split_state['plan_path'], _split_state['midi_path'], _split_state['validator_report_path']), 'editor_patch': str(_split_state['paths'].data / 'editor-patch.json')}, finished_at=_split_state['now'], heartbeat_at=_split_state['now'], generation_mode='local', pipeline_mode=_split_state['parent'].pipeline_mode, job_type='edit', edit_metadata=_split_state['metadata'])
+        self.store.jobs[_split_state['job'].job_id] = _split_state['job']
+        persist_interface_job(self.store, _split_state['job'])
+        _split_state['document'] = self.project_store.add_version_from_job(project_id, _split_state['job'], name=_split_state['run_title'], note=str(payload.get('version_note') or payload.get('note') or ''), parent_version_id=_split_state['parent'].version_id, variant_type='manual_editor_edit', change_summary=str(payload.get('change_summary') or _split_state['preview'].label or 'Visual editor patch'))
+        _split_state['version'] = next((_split_state['version'] for _split_state['version'] in _split_state['document'].versions if _split_state['version'].job_id == _split_state['job'].job_id))
+        _split_state['updated_preview'] = _split_state['store'].mark_applied(preview_id, version_id=_split_state['version'].version_id, job_id=_split_state['job'].job_id, now=_interfaces_api_runtime._utc_now())
+        self.project_store.append_event(project_id, 'editor_preview_applied', {'parent_version_id': _split_state['parent'].version_id, 'preview_id': preview_id, 'version_id': _split_state['version'].version_id, 'job_id': _split_state['job'].job_id})
+        return (False, None)
+
+    def _handle_project_editor_preview_apply(self, project_id: str, preview_id: str, payload: ImplementationDocument) -> None:
+        _split_state = {}
+        _split_state['store'] = _interfaces_api_runtime.EditorPreviewStore(self.project_store.project_dir(project_id))
+        with self.project_store.lock, _split_state['store'].lock:
+            _split_result = self._handle_project_editor_preview_apply_part_01(project_id, preview_id, payload, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_project_editor_preview_apply_part_02(project_id, preview_id, payload, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+        self._send_json({'ok': True, **_split_state['document'].to_dict(), 'version': _split_state['version'].to_dict(), 'job': _split_state['job'].to_dict(), 'preview': _split_state['updated_preview'].to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)

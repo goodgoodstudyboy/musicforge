@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -558,7 +560,7 @@ class _HubVerifier:
         self._verify_external_assurance_watch_signoff()
         self._verify_external_final_readiness()
 
-    def _verify_external_report(self, component_type: str, report: dict[str, Any], check_prefix: str) -> None:
+    def _verify_external_report(self, component_type: str, report: ImplementationDocument, check_prefix: str) -> None:
         expected = _evidence_by_type(self.evidence, component_type)
         report_hash = verification_hash(report)
         status = "passed" if report and report_hash == expected.get("verification_report_hash") else "failed"
@@ -569,7 +571,7 @@ class _HubVerifier:
             critical = int(summary.get("critical_incidents") or summary.get("open_critical_incidents") or 0)
             self._add_check("external", "toh_external_monitoring_no_open_critical_incidents", "passed" if critical == 0 else "failed", "blocking", "External monitoring report has no open critical incidents." if critical == 0 else "External monitoring report has open critical incidents.")
 
-    def _verify_external_delivery_reports(self, component_type: str, expected_rows: list[dict[str, Any]], reports: list[dict[str, Any]], check_prefix: str) -> None:
+    def _verify_external_delivery_reports(self, component_type: str, expected_rows: list[ImplementationDocument], reports: list[ImplementationDocument], check_prefix: str) -> None:
         expected_by_id = {str(row.get("component_id") or ""): row for row in expected_rows if str(row.get("component_id") or "")}
         report_by_id: dict[str, dict[str, Any]] = {}
         duplicate_ids: list[str] = []
@@ -595,7 +597,7 @@ class _HubVerifier:
             self._add_exact_check("external", f"{check_prefix}_{safe_id}_zip_sha256", report.get("zip_sha256"), expected.get("zip_sha256"), f"External {component_type} {component_id} ZIP sha256")
             self._add_exact_check("external", f"{check_prefix}_{safe_id}_manifest_hash", report.get("manifest_hash"), expected.get("manifest_hash"), f"External {component_type} {component_id} manifest hash")
 
-    def _verify_external_signoff(self, signoff: dict[str, Any]) -> None:
+    def _verify_external_signoff(self, signoff: ImplementationDocument) -> None:
         self._add_exact_check("external", "toh_hub_signoff_package_type", signoff.get("package_type"), TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE, "Hub signoff package_type")
         self._add_exact_check("external", "toh_hub_signoff_status", signoff.get("status"), "signed", "Hub signoff status")
         self._add_hash_check("external", "toh_hub_signoff_integrity", signoff.get("integrity_hash"), hub_hash(signoff), "Hub signoff integrity")
@@ -950,7 +952,7 @@ class _HubVerifier:
         self.redaction_findings = findings
         self._add_check("security", "toh_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Hub package." if findings else "No sensitive values found in Hub package.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         summary = {
@@ -981,7 +983,7 @@ class _HubVerifier:
             blocked_keys=VERIFIER_BLOCKED_KEYS,
         )
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         try:
             raw = archive.read(name)
             value = json.loads(raw.decode("utf-8"))
@@ -1004,7 +1006,7 @@ class _HubVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _expected_matrix_rows(source_state: dict[str, Any], evidence: dict[str, Any]) -> list[dict[str, Any]]:
+def _expected_matrix_rows(source_state: ImplementationDocument, evidence: ImplementationDocument) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     ptc = _evidence_by_type(evidence, "public_trust_center_verification")
     rows.append(_matrix_row_projection("public-trust-center:ptc-default", "public_trust_center", "public_trust_center_verified", _status_from_evidence(ptc)))
@@ -1022,7 +1024,7 @@ def _expected_matrix_rows(source_state: dict[str, Any], evidence: dict[str, Any]
     return sorted(rows, key=lambda item: (str(item.get("component_id") or ""), str(item.get("requirement") or "")))
 
 
-def _expected_delivery_matrix_rows(delivery_evidence: dict[str, Any]) -> list[dict[str, Any]]:
+def _expected_delivery_matrix_rows(delivery_evidence: ImplementationDocument) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     evidence_rows = [row for row in delivery_evidence.get("evidence", []) if isinstance(row, dict)]
     by_type: dict[str, list[dict[str, Any]]] = {}
@@ -1039,7 +1041,7 @@ def _expected_delivery_matrix_rows(delivery_evidence: dict[str, Any]) -> list[di
     return sorted(rows, key=lambda item: (str(item.get("component_id") or ""), str(item.get("requirement") or "")))
 
 
-def _status_from_evidence(evidence: dict[str, Any]) -> str:
+def _status_from_evidence(evidence: ImplementationDocument) -> str:
     if not evidence:
         return "missing"
     status = str(evidence.get("status") or "")
@@ -1052,15 +1054,15 @@ def _status_from_evidence(evidence: dict[str, Any]) -> str:
     return "missing"
 
 
-def _matrix_row_projection(component_id: str, component_type: str, requirement: str, status: str) -> dict[str, Any]:
+def _matrix_row_projection(component_id: str, component_type: str, requirement: str, status: str) -> ImplementationDocument:
     return {"component_id": component_id, "component_type": component_type, "requirement": requirement, "status": status}
 
 
-def _matrix_projection(row: dict[str, Any]) -> dict[str, Any]:
+def _matrix_projection(row: ImplementationDocument) -> ImplementationDocument:
     return {"component_id": row.get("component_id"), "component_type": row.get("component_type"), "requirement": row.get("requirement"), "status": row.get("status")}
 
 
-def _readiness_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+def _readiness_summary(rows: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "row_count": len(rows),
         "ready_count": sum(1 for row in rows if row.get("status") == "ready"),
@@ -1071,12 +1073,12 @@ def _readiness_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _combine_readiness_summaries(*summaries: dict[str, Any]) -> dict[str, int]:
+def _combine_readiness_summaries(*summaries: ImplementationDocument) -> dict[str, int]:
     keys = ("row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count")
     return {key: sum(int(summary.get(key) or 0) for summary in summaries if isinstance(summary, dict)) for key in keys}
 
 
-def _expected_blockers(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _expected_blockers(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     blockers = []
     for row in rows:
         if row.get("status") not in {"blocked", "stale", "missing", "not_configured"} or row.get("severity") != "blocking":
@@ -1092,7 +1094,7 @@ def _expected_blockers(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(blockers, key=lambda item: (str(item.get("component_id")), str(item.get("requirement"))))
 
 
-def _normalize_blockers(rows: list[Any]) -> list[dict[str, Any]]:
+def _normalize_blockers(rows: list[Any]) -> list[ImplementationDocument]:
     normalized = []
     for row in rows:
         if not isinstance(row, dict):
@@ -1101,15 +1103,15 @@ def _normalize_blockers(rows: list[Any]) -> list[dict[str, Any]]:
     return sorted(normalized, key=lambda item: (str(item.get("component_id")), str(item.get("requirement"))))
 
 
-def _evidence_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+def _evidence_summary(rows: list[ImplementationDocument]) -> dict[str, int]:
     return {"evidence_count": len(rows), "failed_count": sum(1 for row in rows if row.get("status") == "failed"), "stale_count": sum(1 for row in rows if row.get("status") == "stale")}
 
 
-def _verification_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+def _verification_summary(rows: list[ImplementationDocument]) -> dict[str, int]:
     return {"verification_count": len(rows), "passed_count": sum(1 for row in rows if row.get("status") == "passed"), "failed_count": sum(1 for row in rows if row.get("status") == "failed")}
 
 
-def _verification_from_evidence(row: dict[str, Any]) -> dict[str, Any]:
+def _verification_from_evidence(row: ImplementationDocument) -> ImplementationDocument:
     return _strip_none(
         {
             "verification_id": row.get("evidence_id"),
@@ -1127,21 +1129,21 @@ def _requirement_for_component(component_type: str) -> str:
     return {"public_trust_center_verification": "public_trust_center_verified", "publication_monitoring_verification": "publication_monitoring_clean"}.get(component_type, component_type)
 
 
-def _evidence_by_type(evidence: dict[str, Any], component_type: str) -> dict[str, Any]:
+def _evidence_by_type(evidence: ImplementationDocument, component_type: str) -> ImplementationDocument:
     for row in evidence.get("evidence", []) if isinstance(evidence.get("evidence"), list) else []:
         if isinstance(row, dict) and row.get("component_type") == component_type:
             return row
     return {}
 
 
-def _delivery_evidence_by_type(evidence: dict[str, Any], component_type: str) -> dict[str, Any]:
+def _delivery_evidence_by_type(evidence: ImplementationDocument, component_type: str) -> ImplementationDocument:
     for row in evidence.get("evidence", []) if isinstance(evidence.get("evidence"), list) else []:
         if isinstance(row, dict) and row.get("component_type") == component_type:
             return row
     return {}
 
 
-def _delivery_evidence_rows(evidence: dict[str, Any], component_type: str) -> list[dict[str, Any]]:
+def _delivery_evidence_rows(evidence: ImplementationDocument, component_type: str) -> list[ImplementationDocument]:
     return [row for row in evidence.get("evidence", []) if isinstance(row, dict) and row.get("component_type") == component_type]
 
 
@@ -1163,7 +1165,7 @@ def _combine_paths(paths: list[Path | str] | tuple[Path | str, ...] | None, path
     return combined
 
 
-def _external_delivery_component_id(component_type: str, report: dict[str, Any], index: int) -> str:
+def _external_delivery_component_id(component_type: str, report: ImplementationDocument, index: int) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     prefix = {
         "release_verification": "release",
@@ -1189,16 +1191,16 @@ def _check_safe_id(value: str) -> str:
     return cleaned or "unknown"
 
 
-def _source_publication_states(source_state: dict[str, Any]) -> list[dict[str, Any]]:
+def _source_publication_states(source_state: ImplementationDocument) -> list[ImplementationDocument]:
     sources = source_state.get("sources") if isinstance(source_state.get("sources"), dict) else {}
     return [row for row in sources.get("publication_channel_states", []) if isinstance(row, dict)]
 
 
-def _strip_none(payload: dict[str, Any]) -> dict[str, Any]:
+def _strip_none(payload: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in payload.items() if value is not None}
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     try:
         with open(_fs_path(path), "r", encoding="utf-8") as handle:
             value = json.load(handle)
@@ -1207,7 +1209,7 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))

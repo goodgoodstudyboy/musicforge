@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from pathlib import Path
 from typing import Any
 
@@ -59,7 +61,7 @@ def legacy_fix_plan_governance_source() -> dict[str, Any]:
     }
 
 
-def _version_evidence_stale(version: dict[str, Any], *, root: Path) -> bool:
+def _version_evidence_stale(version: ImplementationDocument, *, root: Path) -> bool:
     promoted = version.get("promoted_from") if isinstance(version.get("promoted_from"), dict) else {}
     simulation_id = str(promoted.get("simulation_id") or "")
     if not simulation_id:
@@ -78,7 +80,7 @@ def _version_evidence_stale(version: dict[str, Any], *, root: Path) -> bool:
     return not frozen or stable_hash(frozen) != str(version.get("ruleset_hash") or "")
 
 
-def _read_optional(path: Path) -> dict[str, Any]:
+def _read_optional(path: Path) -> ImplementationDocument:
     try:
         value = read_json(path)
     except (OSError, TypeError, ValueError):

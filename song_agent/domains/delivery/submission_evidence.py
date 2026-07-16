@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import json
@@ -615,7 +617,7 @@ class SubmissionEvidenceStore:
             )
         return result
 
-    def _empty_index(self, release_id: str, submission_id: str) -> dict[str, Any]:
+    def _empty_index(self, release_id: str, submission_id: str) -> ImplementationDocument:
         now = now_iso()
         return {
             "schema_version": SUBMISSION_EVIDENCE_SCHEMA_VERSION,
@@ -630,7 +632,7 @@ class SubmissionEvidenceStore:
             "latest_signoff_summary": {"status": "not_signed"},
         }
 
-    def _preflight_external_update(self, release_id: str, submission_id: str, item_id: str, *, allowed_statuses: set[str], require_ready_snapshot: bool, payload: dict[str, Any]) -> None:
+    def _preflight_external_update(self, release_id: str, submission_id: str, item_id: str, *, allowed_statuses: set[str], require_ready_snapshot: bool, payload: ImplementationDocument) -> None:
         _reject_blocked_payload(payload)
         self._ensure_mutable_evidence(release_id, submission_id)
         batch = self.submission_store.get_submission(release_id, submission_id)
@@ -654,7 +656,7 @@ class SubmissionEvidenceStore:
         if signoff.get("status") in {"signed", "force_signed"}:
             raise SubmissionEvidenceStateError("Submission evidence archive is signed. Reset evidence signoff before changing evidence.")
 
-    def _create_evidence(self, release_id: str, submission_id: str, item_id: str, payload: dict[str, Any], *, evidence_type: str, platform_status: str) -> dict[str, Any]:
+    def _create_evidence(self, release_id: str, submission_id: str, item_id: str, payload: ImplementationDocument, *, evidence_type: str, platform_status: str) -> ImplementationDocument:
         _reject_blocked_payload(payload)
         evidence_type = _validate_evidence_type(evidence_type)
         platform_status = _validate_platform_status(platform_status)
@@ -740,7 +742,7 @@ class SubmissionEvidenceStore:
         self.append_event(release_id, submission_id, "submission_evidence_recorded", {"item_id": item.item_id, "evidence_id": evidence_id, "evidence_type": evidence_type})
         return record
 
-    def _create_inline_attachments(self, release_id: str, submission_id: str, item_id: str, payload: dict[str, Any], index: dict[str, Any]) -> list[str]:
+    def _create_inline_attachments(self, release_id: str, submission_id: str, item_id: str, payload: ImplementationDocument, index: ImplementationDocument) -> list[str]:
         raw = payload.get("attachments")
         if not isinstance(raw, list):
             return []
@@ -754,7 +756,7 @@ class SubmissionEvidenceStore:
             index["attachments"] = latest.get("attachments", [])
         return [value for value in ids if value]
 
-    def _round_for_evidence(self, index: dict[str, Any], batch: SubmissionBatch, item: SubmissionItem, *, evidence_type: str, platform_status: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _round_for_evidence(self, index: ImplementationDocument, batch: SubmissionBatch, item: SubmissionItem, *, evidence_type: str, platform_status: str, payload: ImplementationDocument) -> ImplementationDocument:
         rounds = _index_rounds(index)
         item_rounds = [row for row in rounds if row.get("item_id") == item.item_id]
         if evidence_type == "resubmission_receipt":
@@ -765,7 +767,7 @@ class SubmissionEvidenceStore:
             return sorted(item_rounds, key=lambda row: int(row.get("round_number") or 0))[-1]
         return self._new_round(index, batch, item, round_type="initial_submission", status=platform_status, payload=payload)
 
-    def _new_round(self, index: dict[str, Any], batch: SubmissionBatch, item: SubmissionItem, *, round_type: str, status: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _new_round(self, index: ImplementationDocument, batch: SubmissionBatch, item: SubmissionItem, *, round_type: str, status: str, payload: ImplementationDocument) -> ImplementationDocument:
         rounds = _index_rounds(index)
         item_rounds = [row for row in rounds if row.get("item_id") == item.item_id]
         round_number = len(item_rounds) + 1
@@ -800,16 +802,16 @@ class SubmissionEvidenceStore:
         index["rounds"] = sorted(rounds, key=lambda value: (str(value.get("item_id") or ""), int(value.get("round_number") or 0)))
         return row
 
-    def _write_record_file(self, release_id: str, submission_id: str, record: dict[str, Any]) -> None:
+    def _write_record_file(self, release_id: str, submission_id: str, record: ImplementationDocument) -> None:
         path = self.evidence_dir(release_id, submission_id) / "items" / str(record.get("item_id")) / "evidence" / f"{record.get('evidence_id')}.json"
         write_json(path, sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
 
-    def _write_round_files(self, release_id: str, submission_id: str, index: dict[str, Any]) -> None:
+    def _write_round_files(self, release_id: str, submission_id: str, index: ImplementationDocument) -> None:
         for row in _index_rounds(index):
             path = self.evidence_dir(release_id, submission_id) / "items" / str(row.get("item_id")) / "rounds" / f"{row.get('round_id')}.json"
             write_json(path, sanitize_metadata(row, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
 
-    def _write_export_items(self, export_dir: Path, index: dict[str, Any], files: list[dict[str, Any]]) -> None:
+    def _write_export_items(self, export_dir: Path, index: ImplementationDocument, files: list[ImplementationDocument]) -> None:
         records = _index_records(index)
         rounds = _index_rounds(index)
         attachments = _index_attachments(index)
@@ -848,7 +850,7 @@ class SubmissionEvidenceStore:
                     shutil.copy2(bin_source, bin_dest)
                     files.append(_file_record(export_dir, bin_dest))
 
-    def _write_readme(self, export_dir: Path, batch: SubmissionBatch, report: dict[str, Any]) -> None:
+    def _write_readme(self, export_dir: Path, batch: SubmissionBatch, report: ImplementationDocument) -> None:
         lines = [
             f"MusicForge Submission Evidence Package: {sanitize_sensitive_text(batch.name)}",
             "",
@@ -861,7 +863,7 @@ class SubmissionEvidenceStore:
         ]
         (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    def _next_evidence_id(self, index: dict[str, Any]) -> str:
+    def _next_evidence_id(self, index: ImplementationDocument) -> str:
         used = {str(row.get("evidence_id") or "") for row in _index_records(index)}
         for number in range(1, 1_000_000):
             candidate = f"ev-{number:06d}"
@@ -869,7 +871,7 @@ class SubmissionEvidenceStore:
                 return candidate
         raise SubmissionEvidenceValidationError("Unable to allocate a unique evidence id.")
 
-    def _next_attachment_id(self, index: dict[str, Any]) -> str:
+    def _next_attachment_id(self, index: ImplementationDocument) -> str:
         used = {str(row.get("attachment_id") or "") for row in _index_attachments(index)}
         for number in range(1, 1_000_000):
             candidate = f"att-{number:06d}"
@@ -894,7 +896,7 @@ class SubmissionEvidenceStore:
         }
         return sanitize_metadata(source, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
-    def _report_source(self, batch: SubmissionBatch, index: dict[str, Any]) -> dict[str, Any]:
+    def _report_source(self, batch: SubmissionBatch, index: ImplementationDocument) -> ImplementationDocument:
         signoff = self.submission_store.read_signoff(batch.release_id, batch.submission_id, default={})
         submission_zip = self.submission_store.package_zip_path(batch.release_id, batch.submission_id)
         return {
@@ -906,7 +908,7 @@ class SubmissionEvidenceStore:
             "attachments": _index_attachments(index),
         }
 
-    def _evidence_stale_reasons(self, record: dict[str, Any]) -> list[str]:
+    def _evidence_stale_reasons(self, record: ImplementationDocument) -> list[str]:
         try:
             batch = self.submission_store.get_submission(str(record.get("release_id")), str(record.get("submission_id")))
             item = _find_item(batch, str(record.get("item_id")))
@@ -921,7 +923,7 @@ class SubmissionEvidenceStore:
             return ["evidence integrity mismatch"]
         return []
 
-    def _attachment_failure_reasons(self, attachment: dict[str, Any]) -> list[str]:
+    def _attachment_failure_reasons(self, attachment: ImplementationDocument) -> list[str]:
         reasons: list[str] = []
         if not submission_evidence_attachment_integrity_ok(attachment):
             reasons.append("attachment metadata integrity mismatch")
@@ -948,7 +950,7 @@ class SubmissionEvidenceStore:
         if accepted_time and any(str(row.get("recorded_at") or "") > accepted_time for row in blocking):
             raise SubmissionEvidenceStateError("Acceptance evidence is superseded by newer unresolved feedback.")
 
-    def _ensure_report_allows_signoff(self, report: dict[str, Any], *, require_submitted: bool, require_accepted: bool) -> None:
+    def _ensure_report_allows_signoff(self, report: ImplementationDocument, *, require_submitted: bool, require_accepted: bool) -> None:
         if not submission_evidence_report_integrity_ok(report):
             raise SubmissionEvidenceStateError("Submission evidence report integrity failed.")
         if report.get("status") == "failed":
@@ -1035,7 +1037,7 @@ def submission_evidence_report_summary(report: dict[str, Any] | None) -> dict[st
     )
 
 
-def _submission_evidence_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
+def _submission_evidence_signoff_export_summary(signoff: ImplementationDocument) -> ImplementationDocument:
     public = {
         "status": signoff.get("status") or "not_signed",
         "signed_by": signoff.get("signed_by"),
@@ -1050,7 +1052,7 @@ def _submission_evidence_signoff_export_summary(signoff: dict[str, Any]) -> dict
     return sanitize_metadata(public, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _submission_evidence_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[str, Any]:
+def _submission_evidence_signoff_sidecar_record(signoff_public: ImplementationDocument) -> ImplementationDocument:
     return {
         "path": "submission-evidence-signoff.json",
         "payload_hash": submission_evidence_signoff_payload_hash(signoff_public),
@@ -1058,15 +1060,15 @@ def _submission_evidence_signoff_sidecar_record(signoff_public: dict[str, Any]) 
     }
 
 
-def _index_records(index: dict[str, Any]) -> list[dict[str, Any]]:
+def _index_records(index: ImplementationDocument) -> list[ImplementationDocument]:
     return [row for row in index.get("evidence_records", []) if isinstance(row, dict)]
 
 
-def _index_attachments(index: dict[str, Any]) -> list[dict[str, Any]]:
+def _index_attachments(index: ImplementationDocument) -> list[ImplementationDocument]:
     return [row for row in index.get("attachments", []) if isinstance(row, dict)]
 
 
-def _index_rounds(index: dict[str, Any]) -> list[dict[str, Any]]:
+def _index_rounds(index: ImplementationDocument) -> list[ImplementationDocument]:
     return [row for row in index.get("rounds", []) if isinstance(row, dict)]
 
 
@@ -1077,14 +1079,14 @@ def _find_item(batch: SubmissionBatch, item_id: str) -> SubmissionItem:
     raise SubmissionNotFoundError(item_id)
 
 
-def _find_evidence(index: dict[str, Any], evidence_id: str) -> dict[str, Any]:
+def _find_evidence(index: ImplementationDocument, evidence_id: str) -> ImplementationDocument:
     for row in _index_records(index):
         if row.get("evidence_id") == evidence_id:
             return row
     raise SubmissionEvidenceNotFoundError(evidence_id)
 
 
-def _item_source_payload(item: SubmissionItem) -> dict[str, Any]:
+def _item_source_payload(item: SubmissionItem) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "item_id": item.item_id,
@@ -1103,7 +1105,7 @@ def _item_source_payload(item: SubmissionItem) -> dict[str, Any]:
     )
 
 
-def _attachment_hashes(index: dict[str, Any], attachment_ids: list[str]) -> list[dict[str, Any]]:
+def _attachment_hashes(index: ImplementationDocument, attachment_ids: list[str]) -> list[ImplementationDocument]:
     rows = []
     for row in _index_attachments(index):
         if row.get("attachment_id") in attachment_ids:
@@ -1111,7 +1113,7 @@ def _attachment_hashes(index: dict[str, Any], attachment_ids: list[str]) -> list
     return sorted(rows, key=lambda row: str(row.get("attachment_id") or ""))
 
 
-def _validated_attachment_ids(index: dict[str, Any], item_id: str, raw: Any) -> list[str]:
+def _validated_attachment_ids(index: ImplementationDocument, item_id: str, raw: Any) -> list[str]:
     if raw is None:
         return []
     if not isinstance(raw, list):
@@ -1138,7 +1140,7 @@ def _reject_blocked_payload(value: Any, *, path: str = "") -> None:
             _reject_blocked_payload(item, path=f"{path}[{index}]")
 
 
-def _attachment_bytes(payload: dict[str, Any]) -> bytes:
+def _attachment_bytes(payload: ImplementationDocument) -> bytes:
     raw = payload.get("content_base64") or payload.get("data_base64")
     if not raw:
         raise SubmissionEvidenceValidationError("Attachment upload requires content_base64 or data_base64.")
@@ -1195,7 +1197,7 @@ def _attachment_kind(content_type: str) -> str:
     return "note"
 
 
-def _attachment_redaction_summary(content_type: str, data: bytes) -> dict[str, Any]:
+def _attachment_redaction_summary(content_type: str, data: bytes) -> ImplementationDocument:
     if content_type.startswith("image/"):
         return {"status": "passed", "finding_count": 0, "scan": "binary_header_only"}
     try:
@@ -1249,7 +1251,7 @@ def _default_evidence_title(evidence_type: str) -> str:
     }.get(evidence_type, "Submission evidence")
 
 
-def _latest_blocking_after_acceptance(summary: dict[str, Any]) -> str | None:
+def _latest_blocking_after_acceptance(summary: ImplementationDocument) -> str | None:
     timeline = summary.get("timeline") if isinstance(summary.get("timeline"), list) else []
     accepted_at = max([str(row.get("recorded_at") or "") for row in timeline if isinstance(row, dict) and row.get("evidence_type") == "acceptance_confirmation"], default="")
     if not accepted_at:
@@ -1262,7 +1264,7 @@ def _latest_blocking_after_acceptance(summary: dict[str, Any]) -> str | None:
     return None
 
 
-def _check(scope: str, item_id: Any, check_id: str, status: str, severity: str, message: str, **extra: Any) -> dict[str, Any]:
+def _check(scope: str, item_id: Any, check_id: str, status: str, severity: str, message: str, **extra: Any) -> ImplementationDocument:
     row = {"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message}
     if item_id:
         row["item_id"] = item_id
@@ -1270,7 +1272,7 @@ def _check(scope: str, item_id: Any, check_id: str, status: str, severity: str, 
     return sanitize_metadata(row, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.parent / f".tmp-{os.getpid()}-{threading.get_ident()}.json"
     tmp_path.write_text(json.dumps(sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -1278,7 +1280,7 @@ def _write_json(path: Path, data: dict[str, Any]) -> Path:
     return path
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_file(path)}
 

@@ -5,112 +5,87 @@ from song_agent.application.interface_persistence import persist_interface_job, 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesProjectEdit:
-    def _handle_project_edit(self, method: str, project_id: str, version_id: str) -> None:
-        if method == "GET":
+    def _handle_project_edit_part_01(self, method: str, project_id: str, version_id: str, _split_state):
+        if method == 'GET':
             try:
-                document = self.project_store.sync_project(project_id, self.store.get_job)
-                version = next(version for version in document.versions if version.version_id == version_id)
+                _split_state['document'] = self.project_store.sync_project(project_id, self.store.get_job)
+                _split_state['version'] = next((_split_state['version'] for _split_state['version'] in _split_state['document'].versions if _split_state['version'].version_id == version_id))
             except StopIteration:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Version not found.")
-                return
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Version not found.')
+                return (True, None)
             except FileNotFoundError:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
-                return
-            metadata = _interfaces_api_runtime._read_edit_metadata_for_run(_interfaces_api_runtime.Path(version.output_dir))
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Project not found.')
+                return (True, None)
+            metadata = _interfaces_api_runtime._read_edit_metadata_for_run(_interfaces_api_runtime.Path(_split_state['version'].output_dir))
             if metadata is None:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Edit metadata not found.")
-                return
-            self._send_json({"version_id": version.version_id, "edit": metadata})
-            return
-        if method != "POST":
-            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-            return
-        payload = self._read_json_body()
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Edit metadata not found.')
+                return (True, None)
+            self._send_json({'version_id': _split_state['version'].version_id, 'edit': metadata})
+            return (True, None)
+        if method != 'POST':
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        _split_state['payload'] = self._read_json_body()
         try:
-            document = self.project_store.sync_project(project_id, self.store.get_job)
-            parent = next(version for version in document.versions if version.version_id == version_id)
+            _split_state['document'] = self.project_store.sync_project(project_id, self.store.get_job)
+            _split_state['parent'] = next((_split_state['version'] for _split_state['version'] in _split_state['document'].versions if _split_state['version'].version_id == version_id))
         except StopIteration:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Version not found.")
-            return
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Version not found.')
+            return (True, None)
         except FileNotFoundError:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
-            return
-        parent_job = self.store.get_job(parent.job_id)
-        if parent_job is None:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Parent version job is missing.")
-            return
-        if parent.status != "completed" or parent_job.status != "completed":
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Parent version must be completed before editing.")
-            return
-        parent_plan_path = _interfaces_api_runtime.Path(parent.output_dir) / "data" / "song-plan.json"
-        if not parent_plan_path.exists():
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Parent song-plan.json is missing.")
-            return
-        preset_ref = None
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Project not found.')
+            return (True, None)
+        _split_state['parent_job'] = self.store.get_job(_split_state['parent'].job_id)
+        if _split_state['parent_job'] is None:
+            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Parent version job is missing.')
+            return (True, None)
+        if _split_state['parent'].status != 'completed' or _split_state['parent_job'].status != 'completed':
+            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Parent version must be completed before editing.')
+            return (True, None)
+        _split_state['parent_plan_path'] = _interfaces_api_runtime.Path(_split_state['parent'].output_dir) / 'data' / 'song-plan.json'
+        if not _split_state['parent_plan_path'].exists():
+            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Parent song-plan.json is missing.')
+            return (True, None)
+        _split_state['preset_ref'] = None
+        return (False, None)
+
+    def _handle_project_edit_part_02(self, method: str, project_id: str, version_id: str, _split_state):
         try:
-            payload = self._expand_context_pack_payload(payload)
-            parent_plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(parent_plan_path))
-            preset_id = str(payload.get("preset_id") or "").strip()
-            intent_payload = payload
+            _split_state['payload'] = self._expand_context_pack_payload(_split_state['payload'])
+            parent_plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(_split_state['parent_plan_path']))
+            preset_id = str(_split_state['payload'].get('preset_id') or '').strip()
+            intent_payload = _split_state['payload']
             if preset_id:
                 preset = self.edit_preset_store.get_preset(preset_id)
-                intent_payload = _interfaces_api_runtime.merge_preset_intent(preset, payload, parent_plan)
-                preset_ref = preset.public_ref()
+                intent_payload = _interfaces_api_runtime.merge_preset_intent(preset, _split_state['payload'], parent_plan)
+                _split_state['preset_ref'] = preset.public_ref()
             intent = _interfaces_api_runtime.EditIntent.from_dict(intent_payload)
             _interfaces_api_runtime.validate_edit_intent(parent_plan, intent)
-            job = self.store.create_edit_job(
-                project_id=project_id,
-                parent_version_id=parent.version_id,
-                parent_job=parent_job,
-                parent_plan=parent_plan,
-                intent=intent,
-                preset=preset_ref,
-                name=str(payload.get("name") or ""),
-                start_immediately=bool(payload.get("start_immediately", True)),
-                asset_refs=payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else None,
-                reference_refs=payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else None,
-                context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
-            )
+            job = self.store.create_edit_job(project_id=project_id, parent_version_id=_split_state['parent'].version_id, parent_job=_split_state['parent_job'], parent_plan=parent_plan, intent=intent, preset=_split_state['preset_ref'], name=str(_split_state['payload'].get('name') or ''), start_immediately=bool(_split_state['payload'].get('start_immediately', True)), asset_refs=_split_state['payload'].get('asset_refs') if isinstance(_split_state['payload'].get('asset_refs'), list) else None, reference_refs=_split_state['payload'].get('reference_refs') if isinstance(_split_state['payload'].get('reference_refs'), list) else None, context_pack=_split_state['payload'].get('context_pack') if isinstance(_split_state['payload'].get('context_pack'), dict) else None)
             variant_type = _interfaces_api_runtime.edit_variant_type(intent.edit_type)
-            document = self.project_store.add_version_from_job(
-                project_id,
-                job,
-                name=str(payload.get("name") or "") or f"Edit {len(document.versions) + 1}",
-                note=str(payload.get("note") or ""),
-                parent_version_id=parent.version_id,
-                variant_type=variant_type,
-                change_summary=str(payload.get("change_summary") or _interfaces_api_runtime.edit_change_summary(intent)),
-            )
+            _split_state['document'] = self.project_store.add_version_from_job(project_id, job, name=str(_split_state['payload'].get('name') or '') or f"Edit {len(_split_state['document'].versions) + 1}", note=str(_split_state['payload'].get('note') or ''), parent_version_id=_split_state['parent'].version_id, variant_type=variant_type, change_summary=str(_split_state['payload'].get('change_summary') or _interfaces_api_runtime.edit_change_summary(intent)))
         except FileNotFoundError:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Edit preset not found.")
-            return
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Edit preset not found.')
+            return (True, None)
         except NotImplementedError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-            return
+            return (True, None)
         except ValueError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
-            return
-        version = next(version for version in document.versions if version.job_id == job.job_id)
-        self.project_store.append_event(
-            project_id,
-            "version_edit_created",
-            {
-                "parent_version_id": parent.version_id,
-                "version_id": version.version_id,
-                "job_id": job.job_id,
-                "edit_type": intent.edit_type,
-            },
-        )
-        self._send_json(
-            {
-                "ok": True,
-                **document.to_dict(),
-                "version": version.to_dict(),
-                "job": job.to_dict(),
-                "edit": job.edit_metadata,
-            },
-            status=_interfaces_api_runtime.HTTPStatus.ACCEPTED,
-        )
+            return (True, None)
+        _split_state['version'] = next((_split_state['version'] for _split_state['version'] in _split_state['document'].versions if _split_state['version'].job_id == job.job_id))
+        self.project_store.append_event(project_id, 'version_edit_created', {'parent_version_id': _split_state['parent'].version_id, 'version_id': _split_state['version'].version_id, 'job_id': job.job_id, 'edit_type': intent.edit_type})
+        self._send_json({'ok': True, **_split_state['document'].to_dict(), 'version': _split_state['version'].to_dict(), 'job': job.to_dict(), 'edit': job.edit_metadata}, status=_interfaces_api_runtime.HTTPStatus.ACCEPTED)
+        return (False, None)
+
+    def _handle_project_edit(self, method: str, project_id: str, version_id: str) -> None:
+        _split_state = {}
+        _split_result = self._handle_project_edit_part_01(method, project_id, version_id, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self._handle_project_edit_part_02(method, project_id, version_id, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
 
     def _handle_project_edit_targets(self, method: str, project_id: str, version_id: str) -> None:
         if method != "GET":

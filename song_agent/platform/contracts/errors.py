@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from typing import Any
 
 
@@ -13,7 +15,7 @@ class DomainError(Exception):
         *,
         http_status: int = 400,
         retryable: bool = False,
-        details: dict[str, Any] | None = None,
+        details: ImplementationDocument | None = None,
     ) -> None:
         super().__init__(message)
         self.error_code = str(error_code)

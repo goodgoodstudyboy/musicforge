@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -354,7 +356,7 @@ class _AssuranceVerifier:
             expected = [row for row in external_rows if row.get("evidence_type") == component_type]
             self._verify_delivery_reports(component_type, expected, reports)
 
-    def _verify_delivery_reports(self, component_type: str, expected: list[dict[str, Any]], reports: list[dict[str, Any]]) -> None:
+    def _verify_delivery_reports(self, component_type: str, expected: list[ImplementationDocument], reports: list[ImplementationDocument]) -> None:
         expected_by_hash = {str(row.get("verification_report_hash") or ""): row for row in expected}
         actual_hashes = {verification_hash(report): report for report in reports if report}
         self._add_exact_check("external", f"toa_{component_type}_verification_component_coverage", sorted(actual_hashes), sorted(expected_by_hash), f"{component_type} external report coverage")
@@ -397,7 +399,7 @@ class _AssuranceVerifier:
         self.redaction_findings = findings
         self._add_check("security", "toa_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Assurance archive." if findings else "No sensitive values found in Assurance archive.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         source = self.run_doc.get("source") if isinstance(self.run_doc.get("source"), dict) else {}
@@ -442,7 +444,7 @@ class _AssuranceVerifier:
             blocked_keys=VERIFIER_BLOCKED_KEYS,
         )
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         try:
             value = json.loads(archive.read(name).decode("utf-8"))
         except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -464,7 +466,7 @@ class _AssuranceVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _checks_summary(checks: list[dict[str, Any]]) -> dict[str, Any]:
+def _checks_summary(checks: list[ImplementationDocument]) -> ImplementationDocument:
     blocking_failed = [check for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
     warnings = [check for check in checks if check.get("status") in {"failed", "warning"} and check.get("severity") != "blocking"]
     return {
@@ -476,7 +478,7 @@ def _checks_summary(checks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _evidence_from_external(row: dict[str, Any]) -> dict[str, Any]:
+def _evidence_from_external(row: ImplementationDocument) -> ImplementationDocument:
     required = str(row.get("evidence_type") or "") in CORE_EVIDENCE_SPECS
     return {
         "evidence_id": f"{row.get('evidence_type')}:{row.get('component_id')}",
@@ -494,11 +496,11 @@ def _evidence_from_external(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _evidence_projection(row: dict[str, Any]) -> dict[str, Any]:
+def _evidence_projection(row: ImplementationDocument) -> ImplementationDocument:
     return {key: row.get(key) for key in ("evidence_id", "evidence_type", "component_id", "required", "package_type", "status", "zip_sha256", "zip_size_bytes", "manifest_hash", "verification_report_hash", "source_hash", "summary")}
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
         return value if isinstance(value, dict) else {}
@@ -506,7 +508,7 @@ def _read_json_file(path: Path) -> dict[str, Any]:
         return {}
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))

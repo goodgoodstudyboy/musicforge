@@ -55,11 +55,7 @@ def _configure_program(server: Any) -> None:
 
 
 class MusicForgeHTTPServer(ThreadingHTTPServer):
-    def __init__(
-        self,
-        server_address: tuple[str, int],
-        auth_config: AuthConfig | None = None,
-    ) -> None:
+    def __init___part_01(self, server_address: tuple[str, int], auth_config: AuthConfig | None, _split_state):
         super().__init__(server_address, MusicForgeHandler)
         self.auth_config = auth_config or AuthConfig(enabled=False)
         self.asset_store = AssetStore()
@@ -113,201 +109,80 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.planning_rule_governance_store = PlanningRuleGovernanceStore(simulation_store=self.planning_rule_simulation_store, project_store=self.project_store)
         self.acceptance_fix_plan_store.planning_rule_governance_store = self.planning_rule_governance_store
         self.planning_rule_impact_store = PlanningRuleImpactStore(governance_store=self.planning_rule_governance_store, plan_store=self.acceptance_fix_plan_store, review_store=self.acceptance_fix_plan_review_store, project_store=self.project_store)
-        self.audio_profile_store = AudioProfileStore(self.release_store.root.parent / "audio-profiles")
-        self.mastering_profile_store = MasteringProfileStore(self.release_store.root.parent / "mastering-profiles")
+        self.audio_profile_store = AudioProfileStore(self.release_store.root.parent / 'audio-profiles')
+        self.mastering_profile_store = MasteringProfileStore(self.release_store.root.parent / 'mastering-profiles')
         self.mastering_store = MasteringStore(self.release_store, project_store=self.project_store, profile_store=self.mastering_profile_store)
-        self.audio_encoding_profile_store = AudioEncodingProfileStore(self.release_store.root.parent / "audio-encoding-profiles")
+        self.audio_encoding_profile_store = AudioEncodingProfileStore(self.release_store.root.parent / 'audio-encoding-profiles')
         self.audio_encoding_store = AudioEncodingStore(self.release_store, project_store=self.project_store, profile_store=self.audio_encoding_profile_store)
         self.encoded_audio_acceptance_store = EncodedAudioAcceptanceStore(self.release_store, project_store=self.project_store, audio_encoding_store=self.audio_encoding_store)
         self.format_decision_store = FormatDecisionStore(self.release_store, project_store=self.project_store, encoding_store=self.audio_encoding_store, distribution_store=self.distribution_store)
-        self.rights_clearance_store = RightsClearanceStore(
-            self.release_store,
-            asset_store=self.asset_store,
-            reference_store=self.reference_store,
-            context_pack_store=self.context_pack_store,
-        )
-        self.release_operations_store = ReleaseOperationsStore(
-            release_store=self.release_store,
-            project_store=self.project_store,
-            distribution_store=self.distribution_store,
-            submission_store=self.submission_store,
-            submission_evidence_store=self.submission_evidence_store,
-            audio_review_store=self.audio_review_store,
-            mastering_store=self.mastering_store,
-            audio_encoding_store=self.audio_encoding_store,
-            encoded_audio_acceptance_store=self.encoded_audio_acceptance_store,
-            format_decision_store=self.format_decision_store,
-            rights_clearance_store=self.rights_clearance_store,
-        )
-        self.release_operations_runbook_store = ReleaseOperationsRunbookStore(
-            operations_store=self.release_operations_store,
-            release_store=self.release_store,
-            distribution_store=self.distribution_store,
-            submission_store=self.submission_store,
-            submission_evidence_store=self.submission_evidence_store,
-        )
-        self.release_operations_signoff_store = ReleaseOperationsSignoffStore(
-            operations_store=self.release_operations_store,
-            runbook_store=self.release_operations_runbook_store,
-            release_store=self.release_store,
-        )
-        self.release_operations_audit_store = ReleaseOperationsAuditStore(
-            operations_store=self.release_operations_store,
-            runbook_store=self.release_operations_runbook_store,
-            signoff_store=self.release_operations_signoff_store,
-            release_store=self.release_store,
-        )
-        self.release_operations_reviewer_pack_store = ReleaseOperationsReviewerPackStore(
-            audit_store=self.release_operations_audit_store,
-            signoff_store=self.release_operations_signoff_store,
-            release_store=self.release_store,
-        )
-        self.release_portfolio_audit_store = ReleasePortfolioAuditStore(
-            release_store=self.release_store,
-            operations_store=self.release_operations_store,
-            runbook_store=self.release_operations_runbook_store,
-            signoff_store=self.release_operations_signoff_store,
-            audit_store=self.release_operations_audit_store,
-            reviewer_pack_store=self.release_operations_reviewer_pack_store,
-        )
-        self.release_portfolio_governance_store = ReleasePortfolioGovernanceStore(
-            portfolio_store=self.release_portfolio_audit_store,
-            reviewer_pack_store=self.release_operations_reviewer_pack_store,
-            audit_store=self.release_operations_audit_store,
-            signoff_store=self.release_operations_signoff_store,
-        )
-        self.release_portfolio_governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(
-            governance_store=self.release_portfolio_governance_store,
-        )
-        self.release_portfolio_governance_audit_store = ReleasePortfolioGovernanceAuditStore(
-            portfolio_store=self.release_portfolio_audit_store,
-            governance_store=self.release_portfolio_governance_store,
-            signoff_store=self.release_portfolio_governance_signoff_store,
-        )
-        self.release_portfolio_governance_reviewer_pack_store = ReleasePortfolioGovernanceReviewerPackStore(
-            audit_store=self.release_portfolio_governance_audit_store,
-        )
-        self.release_portfolio_governance_final_board_store = ReleasePortfolioGovernanceFinalBoardStore(
-            portfolio_store=self.release_portfolio_audit_store,
-            audit_store=self.release_portfolio_governance_audit_store,
-            reviewer_pack_store=self.release_portfolio_governance_reviewer_pack_store,
-        )
-        self.release_portfolio_governance_evidence_vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(
-            portfolio_store=self.release_portfolio_audit_store,
-            governance_store=self.release_portfolio_governance_store,
-            signoff_store=self.release_portfolio_governance_signoff_store,
-            audit_store=self.release_portfolio_governance_audit_store,
-            reviewer_pack_store=self.release_portfolio_governance_reviewer_pack_store,
-            final_board_store=self.release_portfolio_governance_final_board_store,
-        )
-        self.release_portfolio_governance_attestation_store = ReleasePortfolioGovernanceAttestationStore(
-            portfolio_store=self.release_portfolio_audit_store,
-            final_board_store=self.release_portfolio_governance_final_board_store,
-            evidence_vault_store=self.release_portfolio_governance_evidence_vault_store,
-        )
-        self.release_portfolio_governance_attestation_registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(
-            attestation_store=self.release_portfolio_governance_attestation_store,
-        )
-        self.release_portfolio_governance_attestation_portal_store = ReleasePortfolioGovernanceAttestationPortalStore(
-            registry_store=self.release_portfolio_governance_attestation_registry_store,
-            attestation_store=self.release_portfolio_governance_attestation_store,
-        )
-        self.release_portfolio_governance_attestation_portal_review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(
-            portal_store=self.release_portfolio_governance_attestation_portal_store,
-        )
-        self.release_portfolio_governance_attestation_accepted_evidence_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(
-            review_store=self.release_portfolio_governance_attestation_portal_review_store,
-        )
-        self.release_portfolio_governance_attestation_transparency_store = ReleasePortfolioGovernanceAttestationTransparencyStore(
-            attestation_store=self.release_portfolio_governance_attestation_store,
-            registry_store=self.release_portfolio_governance_attestation_registry_store,
-            portal_store=self.release_portfolio_governance_attestation_portal_store,
-            accepted_evidence_store=self.release_portfolio_governance_attestation_accepted_evidence_store,
-        )
-        self.release_portfolio_governance_attestation_transparency_acknowledgement_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(
-            transparency_store=self.release_portfolio_governance_attestation_transparency_store,
-        )
-        self.public_trust_center_store = PublicTrustCenterStore(
-            release_store=self.release_store,
-            portfolio_store=self.release_portfolio_audit_store,
-            registry_store=self.release_portfolio_governance_attestation_registry_store,
-            portal_store=self.release_portfolio_governance_attestation_portal_store,
-            transparency_store=self.release_portfolio_governance_attestation_transparency_store,
-            acknowledgement_store=self.release_portfolio_governance_attestation_transparency_acknowledgement_store,
-            distribution_store=self.distribution_store,
-            submission_store=self.submission_store,
-            submission_evidence_store=self.submission_evidence_store,
-            operations_store=self.release_operations_store,
-            operations_runbook_store=self.release_operations_runbook_store,
-            operations_signoff_store=self.release_operations_signoff_store,
-            operations_audit_store=self.release_operations_audit_store,
-            operations_reviewer_pack_store=self.release_operations_reviewer_pack_store,
-        )
-        self.public_trust_center_anchor_registry_store = PublicTrustCenterAnchorRegistryStore(
-            trust_center_store=self.public_trust_center_store,
-        )
-        self.public_trust_center_anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(
-            anchor_registry_store=self.public_trust_center_anchor_registry_store,
-        )
-        self.public_trust_center_distribution_kit_store = PublicTrustCenterDistributionKitStore(
-            trust_center_store=self.public_trust_center_store,
-            anchor_registry_store=self.public_trust_center_anchor_registry_store,
-            anchor_transparency_store=self.public_trust_center_anchor_transparency_store,
-        )
-        self.public_trust_center_distribution_kit_acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(
-            distribution_kit_store=self.public_trust_center_distribution_kit_store,
-        )
-        self.public_trust_center_acceptance_board_store = PublicTrustCenterAcceptanceBoardStore(
-            acceptance_store=self.public_trust_center_distribution_kit_acceptance_store,
-        )
-        self.trust_operations_hub_store = TrustOperationsHubStore(self.release_store.root.parent / "trust-operations")
-        self.trust_operations_incident_store = TrustOperationsIncidentStore(
-            self.release_store.root.parent / "trust-operations-incidents",
-            hub_store=self.trust_operations_hub_store,
-        )
-        self.trust_operations_incident_knowledge_store = TrustOperationsIncidentKnowledgeStore(
-            self.release_store.root.parent / "trust-operations-knowledge",
-            hub_store=self.trust_operations_hub_store,
-            incident_store=self.trust_operations_incident_store,
-        )
-        self.trust_operations_control_store = TrustOperationsControlStore(
-            self.release_store.root.parent / "trust-operations-controls",
-            hub_store=self.trust_operations_hub_store,
-            incident_store=self.trust_operations_incident_store,
-            knowledge_store=self.trust_operations_incident_knowledge_store,
-        )
-        self.trust_operations_control_signoff_store = TrustOperationsControlSignoffStore(
-            self.release_store.root.parent / "trust-operations-control-signoffs",
-            control_store=self.trust_operations_control_store,
-            hub_store=self.trust_operations_hub_store,
-            incident_store=self.trust_operations_incident_store,
-            knowledge_store=self.trust_operations_incident_knowledge_store,
-        )
-        self.trust_operations_assurance_store = TrustOperationsAssuranceStore(
-            self.release_store.root.parent / "trust-operations-assurance",
-            hub_store=self.trust_operations_hub_store,
-        )
-        self.trust_operations_assurance_watch_store = TrustOperationsAssuranceWatchStore(
-            self.release_store.root.parent / "trust-operations-assurance-watch",
-            assurance_store=self.trust_operations_assurance_store,
-            hub_store=self.trust_operations_hub_store,
-        )
-        self.trust_operations_assurance_watch_signoff_store = TrustOperationsAssuranceWatchSignoffStore(
-            self.release_store.root.parent / "trust-operations-assurance-watch-signoffs",
-            watch_store=self.trust_operations_assurance_watch_store,
-            assurance_store=self.trust_operations_assurance_store,
-            hub_store=self.trust_operations_hub_store,
-        )
-        self.trust_operations_final_readiness_store = TrustOperationsFinalReadinessStore(
-            self.release_store.root.parent / "trust-operations-final-readiness",
-        )
-        self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / "distribution-templates")
+        self.rights_clearance_store = RightsClearanceStore(self.release_store, asset_store=self.asset_store, reference_store=self.reference_store, context_pack_store=self.context_pack_store)
+        return (False, None)
+
+    def __init___part_02(self, server_address: tuple[str, int], auth_config: AuthConfig | None, _split_state):
+        self.release_operations_store = ReleaseOperationsStore(release_store=self.release_store, project_store=self.project_store, distribution_store=self.distribution_store, submission_store=self.submission_store, submission_evidence_store=self.submission_evidence_store, audio_review_store=self.audio_review_store, mastering_store=self.mastering_store, audio_encoding_store=self.audio_encoding_store, encoded_audio_acceptance_store=self.encoded_audio_acceptance_store, format_decision_store=self.format_decision_store, rights_clearance_store=self.rights_clearance_store)
+        self.release_operations_runbook_store = ReleaseOperationsRunbookStore(operations_store=self.release_operations_store, release_store=self.release_store, distribution_store=self.distribution_store, submission_store=self.submission_store, submission_evidence_store=self.submission_evidence_store)
+        self.release_operations_signoff_store = ReleaseOperationsSignoffStore(operations_store=self.release_operations_store, runbook_store=self.release_operations_runbook_store, release_store=self.release_store)
+        self.release_operations_audit_store = ReleaseOperationsAuditStore(operations_store=self.release_operations_store, runbook_store=self.release_operations_runbook_store, signoff_store=self.release_operations_signoff_store, release_store=self.release_store)
+        self.release_operations_reviewer_pack_store = ReleaseOperationsReviewerPackStore(audit_store=self.release_operations_audit_store, signoff_store=self.release_operations_signoff_store, release_store=self.release_store)
+        self.release_portfolio_audit_store = ReleasePortfolioAuditStore(release_store=self.release_store, operations_store=self.release_operations_store, runbook_store=self.release_operations_runbook_store, signoff_store=self.release_operations_signoff_store, audit_store=self.release_operations_audit_store, reviewer_pack_store=self.release_operations_reviewer_pack_store)
+        self.release_portfolio_governance_store = ReleasePortfolioGovernanceStore(portfolio_store=self.release_portfolio_audit_store, reviewer_pack_store=self.release_operations_reviewer_pack_store, audit_store=self.release_operations_audit_store, signoff_store=self.release_operations_signoff_store)
+        self.release_portfolio_governance_signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=self.release_portfolio_governance_store)
+        self.release_portfolio_governance_audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=self.release_portfolio_audit_store, governance_store=self.release_portfolio_governance_store, signoff_store=self.release_portfolio_governance_signoff_store)
+        self.release_portfolio_governance_reviewer_pack_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=self.release_portfolio_governance_audit_store)
+        self.release_portfolio_governance_final_board_store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=self.release_portfolio_audit_store, audit_store=self.release_portfolio_governance_audit_store, reviewer_pack_store=self.release_portfolio_governance_reviewer_pack_store)
+        return (False, None)
+
+    def __init___part_03(self, server_address: tuple[str, int], auth_config: AuthConfig | None, _split_state):
+        self.release_portfolio_governance_evidence_vault_store = ReleasePortfolioGovernanceEvidenceVaultStore(portfolio_store=self.release_portfolio_audit_store, governance_store=self.release_portfolio_governance_store, signoff_store=self.release_portfolio_governance_signoff_store, audit_store=self.release_portfolio_governance_audit_store, reviewer_pack_store=self.release_portfolio_governance_reviewer_pack_store, final_board_store=self.release_portfolio_governance_final_board_store)
+        self.release_portfolio_governance_attestation_store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=self.release_portfolio_audit_store, final_board_store=self.release_portfolio_governance_final_board_store, evidence_vault_store=self.release_portfolio_governance_evidence_vault_store)
+        self.release_portfolio_governance_attestation_registry_store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=self.release_portfolio_governance_attestation_store)
+        self.release_portfolio_governance_attestation_portal_store = ReleasePortfolioGovernanceAttestationPortalStore(registry_store=self.release_portfolio_governance_attestation_registry_store, attestation_store=self.release_portfolio_governance_attestation_store)
+        self.release_portfolio_governance_attestation_portal_review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=self.release_portfolio_governance_attestation_portal_store)
+        self.release_portfolio_governance_attestation_accepted_evidence_store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=self.release_portfolio_governance_attestation_portal_review_store)
+        self.release_portfolio_governance_attestation_transparency_store = ReleasePortfolioGovernanceAttestationTransparencyStore(attestation_store=self.release_portfolio_governance_attestation_store, registry_store=self.release_portfolio_governance_attestation_registry_store, portal_store=self.release_portfolio_governance_attestation_portal_store, accepted_evidence_store=self.release_portfolio_governance_attestation_accepted_evidence_store)
+        self.release_portfolio_governance_attestation_transparency_acknowledgement_store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=self.release_portfolio_governance_attestation_transparency_store)
+        self.public_trust_center_store = PublicTrustCenterStore(release_store=self.release_store, portfolio_store=self.release_portfolio_audit_store, registry_store=self.release_portfolio_governance_attestation_registry_store, portal_store=self.release_portfolio_governance_attestation_portal_store, transparency_store=self.release_portfolio_governance_attestation_transparency_store, acknowledgement_store=self.release_portfolio_governance_attestation_transparency_acknowledgement_store, distribution_store=self.distribution_store, submission_store=self.submission_store, submission_evidence_store=self.submission_evidence_store, operations_store=self.release_operations_store, operations_runbook_store=self.release_operations_runbook_store, operations_signoff_store=self.release_operations_signoff_store, operations_audit_store=self.release_operations_audit_store, operations_reviewer_pack_store=self.release_operations_reviewer_pack_store)
+        self.public_trust_center_anchor_registry_store = PublicTrustCenterAnchorRegistryStore(trust_center_store=self.public_trust_center_store)
+        self.public_trust_center_anchor_transparency_store = PublicTrustCenterAnchorTransparencyStore(anchor_registry_store=self.public_trust_center_anchor_registry_store)
+        self.public_trust_center_distribution_kit_store = PublicTrustCenterDistributionKitStore(trust_center_store=self.public_trust_center_store, anchor_registry_store=self.public_trust_center_anchor_registry_store, anchor_transparency_store=self.public_trust_center_anchor_transparency_store)
+        self.public_trust_center_distribution_kit_acceptance_store = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=self.public_trust_center_distribution_kit_store)
+        self.public_trust_center_acceptance_board_store = PublicTrustCenterAcceptanceBoardStore(acceptance_store=self.public_trust_center_distribution_kit_acceptance_store)
+        self.trust_operations_hub_store = TrustOperationsHubStore(self.release_store.root.parent / 'trust-operations')
+        return (False, None)
+
+    def __init___part_04(self, server_address: tuple[str, int], auth_config: AuthConfig | None, _split_state):
+        self.trust_operations_incident_store = TrustOperationsIncidentStore(self.release_store.root.parent / 'trust-operations-incidents', hub_store=self.trust_operations_hub_store)
+        self.trust_operations_incident_knowledge_store = TrustOperationsIncidentKnowledgeStore(self.release_store.root.parent / 'trust-operations-knowledge', hub_store=self.trust_operations_hub_store, incident_store=self.trust_operations_incident_store)
+        self.trust_operations_control_store = TrustOperationsControlStore(self.release_store.root.parent / 'trust-operations-controls', hub_store=self.trust_operations_hub_store, incident_store=self.trust_operations_incident_store, knowledge_store=self.trust_operations_incident_knowledge_store)
+        self.trust_operations_control_signoff_store = TrustOperationsControlSignoffStore(self.release_store.root.parent / 'trust-operations-control-signoffs', control_store=self.trust_operations_control_store, hub_store=self.trust_operations_hub_store, incident_store=self.trust_operations_incident_store, knowledge_store=self.trust_operations_incident_knowledge_store)
+        self.trust_operations_assurance_store = TrustOperationsAssuranceStore(self.release_store.root.parent / 'trust-operations-assurance', hub_store=self.trust_operations_hub_store)
+        self.trust_operations_assurance_watch_store = TrustOperationsAssuranceWatchStore(self.release_store.root.parent / 'trust-operations-assurance-watch', assurance_store=self.trust_operations_assurance_store, hub_store=self.trust_operations_hub_store)
+        self.trust_operations_assurance_watch_signoff_store = TrustOperationsAssuranceWatchSignoffStore(self.release_store.root.parent / 'trust-operations-assurance-watch-signoffs', watch_store=self.trust_operations_assurance_watch_store, assurance_store=self.trust_operations_assurance_store, hub_store=self.trust_operations_hub_store)
+        self.trust_operations_final_readiness_store = TrustOperationsFinalReadinessStore(self.release_store.root.parent / 'trust-operations-final-readiness')
+        self.distribution_template_store = TemplatePackStore(self.release_store.root.parent / 'distribution-templates')
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
         self.editor_template_store = EditorTemplateStore()
         self.batch_runner = BatchRunner(self.batch_store, self.job_store, self.project_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
+        return (False, None)
+
+    def __init__(self, server_address: tuple[str, int], auth_config: AuthConfig | None=None) -> None:
+        _split_state = {}
+        _split_result = self.__init___part_01(server_address, auth_config, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self.__init___part_02(server_address, auth_config, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self.__init___part_03(server_address, auth_config, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self.__init___part_04(server_address, auth_config, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
 
     def server_close(self) -> None:
         self.batch_runner.shutdown()

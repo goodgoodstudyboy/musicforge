@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from pathlib import Path
 from typing import Any
@@ -28,7 +30,7 @@ def build_project_summary(project_dir: Path, document: ProjectDocument) -> dict[
     }
 
 
-def _collect_project_review_tasks(project_dir: Path) -> list[dict[str, Any]]:
+def _collect_project_review_tasks(project_dir: Path) -> list[ImplementationDocument]:
     from song_agent.domains.studio.prompt_templates import PromptTemplateStore
     from song_agent.domains.quality.review_judge import REVIEW_JUDGE_TEMPLATE_ID, judge_report_summary, mark_judge_report_stale, read_judge_report_with_stale
     from song_agent.domains.quality.review_tasks import ReviewTaskStore, review_candidate_source_breakdown, review_decision_summary, review_task_summary
@@ -82,7 +84,7 @@ def _project_version_song_plan(project_dir: Path, version_id: str) -> Any:
     raise FileNotFoundError(version_id)
 
 
-def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
+def _collect_project_review_sprints(project_dir: Path) -> list[ImplementationDocument]:
     from song_agent.domains.quality.review_sprints import ReviewSprintStore, review_sprint_export_summary
     from song_agent.domains.quality.review_sprint_actions import ReviewSprintActionQueueStore, action_queue_collection_summary
     from song_agent.domains.quality.review_sprint_metrics import ReviewMetricsStore, sprint_metrics_summary
@@ -109,7 +111,7 @@ def _collect_project_review_sprints(project_dir: Path) -> list[dict[str, Any]]:
     return sorted((_sanitize_asset_metadata(item) for item in summaries), key=lambda item: str(item.get("sprint_id") or ""))
 
 
-def _collect_project_review_metrics_summary(project_dir: Path) -> dict[str, Any]:
+def _collect_project_review_metrics_summary(project_dir: Path) -> ImplementationDocument:
     from song_agent.domains.quality.review_sprint_metrics import ReviewMetricsStore, project_review_metrics_summary
 
     try:
@@ -119,7 +121,7 @@ def _collect_project_review_metrics_summary(project_dir: Path) -> dict[str, Any]
         return {}
 
 
-def _collect_project_acceptance_fix_sprint_summary(project_id: str) -> dict[str, Any]:
+def _collect_project_acceptance_fix_sprint_summary(project_id: str) -> ImplementationDocument:
     from song_agent.domains.quality.acceptance_fix_sprints import AcceptanceFixSprintStore, latest_fix_sprint_summary
 
     try:
@@ -128,7 +130,7 @@ def _collect_project_acceptance_fix_sprint_summary(project_id: str) -> dict[str,
         return {"status": "missing"}
 
 
-def _collect_project_acceptance_fix_plan_summary(project_id: str) -> dict[str, Any]:
+def _collect_project_acceptance_fix_plan_summary(project_id: str) -> ImplementationDocument:
     from song_agent.domains.quality.acceptance_fix_planning import AcceptanceFixPlanningStore, latest_fix_plan_summary
 
     try:
@@ -137,7 +139,7 @@ def _collect_project_acceptance_fix_plan_summary(project_id: str) -> dict[str, A
         return {"status": "missing"}
 
 
-def _collect_project_acceptance_fix_plan_review_summary(project_id: str) -> dict[str, Any]:
+def _collect_project_acceptance_fix_plan_review_summary(project_id: str) -> ImplementationDocument:
     from song_agent.domains.quality.acceptance_fix_plan_reviews import AcceptanceFixPlanReviewStore, latest_fix_plan_review_summary
 
     try:
@@ -146,7 +148,7 @@ def _collect_project_acceptance_fix_plan_review_summary(project_id: str) -> dict
         return {"status": "missing"}
 
 
-def _collect_project_acceptance_kb_summary(project_id: str) -> dict[str, Any]:
+def _collect_project_acceptance_kb_summary(project_id: str) -> ImplementationDocument:
     from song_agent.domains.quality.acceptance_kb import AcceptanceKnowledgeBaseStore
 
     try:
@@ -155,28 +157,28 @@ def _collect_project_acceptance_kb_summary(project_id: str) -> dict[str, Any]:
         return {"status": "missing"}
 
 
-def _collect_project_planning_rule_simulation_summary(project_id: str) -> dict[str, Any]:
+def _collect_project_planning_rule_simulation_summary(project_id: str) -> ImplementationDocument:
     try:
         return _sanitize_asset_metadata(collect_planning_rule_simulation_summary(project_id))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {"status": "missing"}
 
 
-def _collect_project_planning_rule_governance_summary(project_id: str) -> dict[str, Any]:
+def _collect_project_planning_rule_governance_summary(project_id: str) -> ImplementationDocument:
     try:
         return _sanitize_asset_metadata(collect_planning_rule_governance_summary(project_id))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {"status": "missing"}
 
 
-def _collect_project_planning_rule_impact_summary(project_id: str) -> dict[str, Any]:
+def _collect_project_planning_rule_impact_summary(project_id: str) -> ImplementationDocument:
     try:
         return _sanitize_asset_metadata(collect_planning_rule_impact_summary(project_id))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {"status": "missing"}
 
 
-def _collect_project_delivery_qa_summary(project_dir: Path) -> dict[str, Any]:
+def _collect_project_delivery_qa_summary(project_dir: Path) -> ImplementationDocument:
     from song_agent.domains.delivery.delivery_qa import delivery_qa_summary
 
     try:
@@ -185,7 +187,7 @@ def _collect_project_delivery_qa_summary(project_dir: Path) -> dict[str, Any]:
         return {}
 
 
-def _collect_project_delivery_signoff_summary(project_dir: Path) -> dict[str, Any]:
+def _collect_project_delivery_signoff_summary(project_dir: Path) -> ImplementationDocument:
     from song_agent.domains.delivery.delivery_qa import delivery_signoff_summary
 
     try:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import threading
@@ -242,7 +244,7 @@ class PlanningRuleImpactStore:
         expected = str(data.get("integrity_hash") or data.get("report_hash") or "")
         return bool(expected and expected == planning_rule_impact_report_hash(data))
 
-    def _build_report(self, report_id: str, payload: dict[str, Any], *, created_at: str, now: str) -> PlanningRuleImpactReport:
+    def _build_report(self, report_id: str, payload: ImplementationDocument, *, created_at: str, now: str) -> PlanningRuleImpactReport:
         state = self._source_state(payload)
         active = state.get("active_version") if isinstance(state.get("active_version"), dict) else {}
         plan_samples = state["plan_samples"]
@@ -310,7 +312,7 @@ class PlanningRuleImpactStore:
         report.integrity_hash = planning_rule_impact_report_hash(report)
         return report
 
-    def _source_state(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _source_state(self, payload: ImplementationDocument | None = None) -> ImplementationDocument:
         payload = payload or {}
         scope = _scope(payload.get("scope"))
         include_legacy = bool(payload.get("include_legacy", True))
@@ -372,7 +374,7 @@ class PlanningRuleImpactStore:
             "source_stale": source_stale,
         }
 
-    def _plan_samples(self, *, scope: dict[str, Any], include_legacy: bool, include_superseded: bool, active_version_id: str | None) -> list[dict[str, Any]]:
+    def _plan_samples(self, *, scope: ImplementationDocument, include_legacy: bool, include_superseded: bool, active_version_id: str | None) -> list[ImplementationDocument]:
         rows: list[dict[str, Any]] = []
         for plan in self.plan_store.list_plans(include_archived=False):
             if not _plan_matches_scope(plan, scope):
@@ -403,7 +405,7 @@ class PlanningRuleImpactStore:
             rows.append(sanitize_metadata(row))
         return sorted(rows, key=lambda item: str(item.get("plan_id") or ""))
 
-    def _review_samples(self, plan_samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _review_samples(self, plan_samples: list[ImplementationDocument]) -> list[ImplementationDocument]:
         plan_versions = {str(item.get("plan_id") or ""): str(item.get("version_id") or "legacy_default") for item in plan_samples}
         rows: list[dict[str, Any]] = []
         for review in self.review_store.list_reviews(include_archived=False):
@@ -518,7 +520,7 @@ def planning_rule_impact_report_hash(report: PlanningRuleImpactReport | dict[str
     return stable_hash(payload)
 
 
-def _version_metrics(plan_samples: list[dict[str, Any]], review_samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _version_metrics(plan_samples: list[ImplementationDocument], review_samples: list[ImplementationDocument]) -> list[ImplementationDocument]:
     version_ids = sorted(set([str(item.get("version_id") or "legacy_default") for item in plan_samples] + [str(item.get("version_id") or "legacy_default") for item in review_samples]))
     rows = []
     for version_id in version_ids:
@@ -551,7 +553,7 @@ def _version_metrics(plan_samples: list[dict[str, Any]], review_samples: list[di
     return rows
 
 
-def _adoption_metrics(plan_samples: list[dict[str, Any]], active_version_id: str | None) -> dict[str, Any]:
+def _adoption_metrics(plan_samples: list[ImplementationDocument], active_version_id: str | None) -> ImplementationDocument:
     total = len(plan_samples)
     active_count = sum(1 for item in plan_samples if active_version_id and item.get("version_id") == active_version_id)
     legacy_count = sum(1 for item in plan_samples if item.get("version_id") == "legacy_default")
@@ -570,7 +572,7 @@ def _adoption_metrics(plan_samples: list[dict[str, Any]], active_version_id: str
     return {"active_plan_count": active_count, "legacy_plan_count": legacy_count, "superseded_plan_count": superseded_count, "total_plan_count": total, "active_adoption_rate": rate, "status": status}
 
 
-def _before_after_metrics(version_metrics: list[dict[str, Any]], active_version_id: str | None) -> dict[str, Any]:
+def _before_after_metrics(version_metrics: list[ImplementationDocument], active_version_id: str | None) -> ImplementationDocument:
     active = next((item for item in version_metrics if item.get("version_id") == active_version_id), {})
     baseline = [item for item in version_metrics if item.get("version_id") != active_version_id]
     baseline_reviews = sum(_int(item.get("review_count"), 0) for item in baseline)
@@ -590,7 +592,7 @@ def _before_after_metrics(version_metrics: list[dict[str, Any]], active_version_
     }
 
 
-def _risk_drift_metrics(version_metrics: list[dict[str, Any]], active_version_id: str | None, before_after: dict[str, Any]) -> dict[str, Any]:
+def _risk_drift_metrics(version_metrics: list[ImplementationDocument], active_version_id: str | None, before_after: ImplementationDocument) -> ImplementationDocument:
     active = next((item for item in version_metrics if item.get("version_id") == active_version_id), {})
     baseline = [item for item in version_metrics if item.get("version_id") != active_version_id]
     synthetic_rate = _int(active.get("synthetic_only_rate"), 0)
@@ -621,7 +623,7 @@ def _risk_drift_metrics(version_metrics: list[dict[str, Any]], active_version_id
     }
 
 
-def _impact_warnings(state: dict[str, Any], adoption: dict[str, Any], risk: dict[str, Any]) -> list[str]:
+def _impact_warnings(state: ImplementationDocument, adoption: ImplementationDocument, risk: ImplementationDocument) -> list[str]:
     warnings = list(risk.get("warnings") if isinstance(risk.get("warnings"), list) else [])
     active = state.get("active_version") if isinstance(state.get("active_version"), dict) else {}
     if active.get("status") == "missing":
@@ -635,7 +637,7 @@ def _impact_warnings(state: dict[str, Any], adoption: dict[str, Any], risk: dict
     return sorted(set(warnings))
 
 
-def _recommendation(adoption: dict[str, Any], before_after: dict[str, Any], risk: dict[str, Any], warnings: list[str]) -> str:
+def _recommendation(adoption: ImplementationDocument, before_after: ImplementationDocument, risk: ImplementationDocument, warnings: list[str]) -> str:
     active_reviews = _int(before_after.get("active_review_count"), 0)
     active_plans = _int(adoption.get("active_plan_count"), 0)
     effectiveness_delta = _int(before_after.get("effectiveness_delta"), 0)
@@ -659,7 +661,7 @@ def _recommendation(adoption: dict[str, Any], before_after: dict[str, Any], risk
     return "continue_monitoring"
 
 
-def _report_status(state: dict[str, Any], recommendation: str, warnings: list[str], active: dict[str, Any]) -> str:
+def _report_status(state: ImplementationDocument, recommendation: str, warnings: list[str], active: ImplementationDocument) -> str:
     if active.get("status") == "missing":
         return "missing"
     if active.get("integrity_ok") is False:
@@ -683,7 +685,7 @@ def _readiness_status(recommendation: str, warnings: list[str]) -> str:
     return "ready"
 
 
-def _plan_matches_scope(plan: AcceptanceFixPlan, scope: dict[str, Any]) -> bool:
+def _plan_matches_scope(plan: AcceptanceFixPlan, scope: ImplementationDocument) -> bool:
     scope_type = str(scope.get("type") or "global")
     if scope_type == "global":
         return True
@@ -726,7 +728,7 @@ def _review_observed_effectiveness(review: AcceptanceFixPlanReview) -> int:
     return _mean(values)
 
 
-def _scope(value: Any) -> dict[str, Any]:
+def _scope(value: Any) -> ImplementationDocument:
     raw = value if isinstance(value, dict) else {}
     scope_type = str(raw.get("type") or ("release" if raw.get("release_id") else "project" if raw.get("project_id") else "global"))
     if scope_type not in {"global", "release", "project"}:
@@ -734,7 +736,7 @@ def _scope(value: Any) -> dict[str, Any]:
     return sanitize_metadata({"type": scope_type, "release_id": _bounded(raw.get("release_id"), 120), "project_id": _bounded(raw.get("project_id"), 120)})
 
 
-def _scope_key(scope: dict[str, Any]) -> str:
+def _scope_key(scope: ImplementationDocument) -> str:
     if scope.get("type") == "release" and scope.get("release_id"):
         return "release-" + re.sub(r"[^A-Za-z0-9_.-]+", "-", str(scope["release_id"]))
     if scope.get("type") == "project" and scope.get("project_id"):
@@ -742,7 +744,7 @@ def _scope_key(scope: dict[str, Any]) -> str:
     return "global"
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {})
 
 
@@ -782,7 +784,7 @@ def _rate(part: int, total: int) -> int:
     return int(round((part / total) * 100))
 
 
-def _weighted_average(rows: list[dict[str, Any]], value_key: str, weight_key: str) -> int:
+def _weighted_average(rows: list[ImplementationDocument], value_key: str, weight_key: str) -> int:
     total_weight = sum(max(0, _int(item.get(weight_key), 0)) for item in rows)
     if total_weight <= 0:
         return 0
@@ -802,7 +804,7 @@ def _lock_for_root(root: Path) -> threading.RLock:
         return _LOCKS[key]
 
 
-def _append_event(path: Path, event: str, payload: dict[str, Any], now: str | None = None) -> None:
+def _append_event(path: Path, event: str, payload: ImplementationDocument, now: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     record = sanitize_metadata({"timestamp": now or now_iso(), "event": event, **payload})
     with path.open("a", encoding="utf-8") as file:

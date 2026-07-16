@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -60,7 +62,7 @@ def verify_package_envelope(
     )
 
 
-def _outer_archive_checks(target: Path, spec: PackageSpec) -> list[dict[str, Any]]:
+def _outer_archive_checks(target: Path, spec: PackageSpec) -> list[ImplementationDocument]:
     raw_unsafe = raw_unsafe_entry_names(target)
     return [
         build_check(f"{spec.check_prefix}_zip_size", target.stat().st_size <= spec.max_zip_size_mb * 1024 * 1024, "ZIP size is within limit."),
@@ -69,7 +71,7 @@ def _outer_archive_checks(target: Path, spec: PackageSpec) -> list[dict[str, Any
     ]
 
 
-def _entry_structure_checks(infos: list[zipfile.ZipInfo], names: list[str], spec: PackageSpec) -> list[dict[str, Any]]:
+def _entry_structure_checks(infos: list[zipfile.ZipInfo], names: list[str], spec: PackageSpec) -> list[ImplementationDocument]:
     name_set = set(names)
     duplicates = sorted({name for name in names if names.count(name) > 1})
     unsafe = sorted(name for name in names if not is_safe_zip_entry(name))
@@ -102,7 +104,7 @@ def _read_and_check_manifest(
     archive: zipfile.ZipFile,
     name_set: set[str],
     spec: PackageSpec,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+) -> tuple[ImplementationDocument, list[ImplementationDocument]]:
     manifest: dict[str, Any] = {}
     checks: list[dict[str, Any]] = []
     if spec.manifest_entry not in name_set:

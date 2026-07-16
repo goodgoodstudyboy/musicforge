@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -337,7 +339,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
                 return str(response.get("response_id") or "")
         return ""
 
-    def _findings(self, source: dict[str, Any], response: dict[str, Any], pack: dict[str, Any], verification: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, source: ImplementationDocument, response: ImplementationDocument, pack: ImplementationDocument, verification: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         checks: list[dict[str, Any]] = []
 
         def check(check_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
@@ -358,7 +360,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         warnings = [item for item in checks if item["status"] == "warning"]
         return blockers, warnings, checks
 
-    def _ensure_exportable(self, portfolio_id: str, evidence: dict[str, Any], *, profile: str) -> None:
+    def _ensure_exportable(self, portfolio_id: str, evidence: ImplementationDocument, *, profile: str) -> None:
         if not accepted_evidence_integrity_ok(evidence):
             raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError("Accepted Evidence integrity failed.")
         if evidence.get("status") != "current":
@@ -368,7 +370,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         if (evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}).get("external_review_status") != "accepted":
             raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError("Accepted Evidence public summary is not accepted.")
 
-    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: ImplementationDocument, *, now: str) -> None:
         path = self.history_path(portfolio_id, profile)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
@@ -414,11 +416,11 @@ def accepted_evidence_manifest_integrity_ok(manifest: dict[str, Any] | None) -> 
 
 
 
-def _accepted_evidence_public_document(evidence: dict[str, Any]) -> dict[str, Any]:
+def _accepted_evidence_public_document(evidence: ImplementationDocument) -> ImplementationDocument:
     return {"source_hash": evidence.get("source_hash"), "summary": accepted_evidence_summary(evidence), "public_summary": evidence.get("public_summary")}
 
 
-def _response_public_summary(response: dict[str, Any]) -> dict[str, Any]:
+def _response_public_summary(response: ImplementationDocument) -> ImplementationDocument:
     reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
     findings = response.get("findings") if isinstance(response.get("findings"), list) else []
     high = 0
@@ -445,7 +447,7 @@ def _response_public_summary(response: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _public_summary(source: dict[str, Any], response_public: dict[str, Any], status: str) -> dict[str, Any]:
+def _public_summary(source: ImplementationDocument, response_public: ImplementationDocument, status: str) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "external_review_status": status,
@@ -463,7 +465,7 @@ def _public_summary(source: dict[str, Any], response_public: dict[str, Any], sta
     )
 
 
-def _data_documents(evidence: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _data_documents(evidence: ImplementationDocument) -> dict[str, ImplementationDocument]:
     source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
     public = evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}
     return {
@@ -476,16 +478,16 @@ def _data_documents(evidence: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _state_tuple(evidence: dict[str, Any]) -> dict[str, str]:
+def _state_tuple(evidence: ImplementationDocument) -> dict[str, str]:
     return {"source_hash": str(evidence.get("source_hash") or ""), "accepted_evidence_id": str(evidence.get("accepted_evidence_id") or ""), "integrity_hash": str(evidence.get("integrity_hash") or "")}
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     row = manifest.get("accepted_evidence") if isinstance(manifest.get("accepted_evidence"), dict) else {}
     return {"source_hash": str(manifest.get("source_hash") or ""), "accepted_evidence_id": str(row.get("accepted_evidence_id") or ""), "integrity_hash": str(row.get("integrity_hash") or "")}
 
 
-def _source_stale_hash(source: dict[str, Any]) -> str:
+def _source_stale_hash(source: ImplementationDocument) -> str:
     # Avoid the public-summary portal rebuild cycle: accepted evidence binds the
     # reviewed portal source and package verification status, not a later portal
     # ZIP that only adds this public summary.
@@ -493,11 +495,11 @@ def _source_stale_hash(source: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (source or {}).items() if key not in ignored})
 
 
-def _evidence_id(portfolio_id: str, profile: str, source: dict[str, Any]) -> str:
+def _evidence_id(portfolio_id: str, profile: str, source: ImplementationDocument) -> str:
     return f"apae-{stable_hash({'portfolio_id': portfolio_id, 'profile': profile, 'source': source})[:12]}"
 
 
-def _readme(evidence: dict[str, Any]) -> str:
+def _readme(evidence: ImplementationDocument) -> str:
     public = evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}
     return "\n".join(
         [
@@ -513,7 +515,7 @@ def _readme(evidence: dict[str, Any]) -> str:
     )
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -524,7 +526,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
 
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(payload, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS))
 
@@ -539,7 +541,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError("Resolved path escapes Accepted Evidence directory.") from exc
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     matches = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:

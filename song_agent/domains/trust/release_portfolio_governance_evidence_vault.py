@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -439,7 +441,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
         queue_id: str | None = None,
         signoff_hash: str | None = None,
         signoff_status: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         zip_exists = zip_path.exists() and zip_path.is_file() and not zip_path.is_symlink()
         manifest = _read_json_default(manifest_path, default={})
         verification = _read_json_default(verification_path, default={})
@@ -471,7 +473,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
                 "verification_manifest_hash": verification.get("manifest_hash") if verification else None,
             }
 
-    def _findings(self, source: dict[str, Any], packages: list[dict[str, Any]], payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, source: ImplementationDocument, packages: list[ImplementationDocument], payload: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
@@ -523,7 +525,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
             check("redaction_scan", True, "No sensitive values found in Evidence Vault source.")
         return blockers, warnings, checks
 
-    def _ensure_exportable(self, portfolio_id: str, report: dict[str, Any], source: dict[str, Any], packages: list[dict[str, Any]]) -> None:
+    def _ensure_exportable(self, portfolio_id: str, report: ImplementationDocument, source: ImplementationDocument, packages: list[ImplementationDocument]) -> None:
         if not report:
             raise ReleasePortfolioGovernanceEvidenceVaultStateError("Evidence Vault Report does not exist. Refresh before export.")
         if not evidence_vault_report_integrity_ok(report):
@@ -561,7 +563,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
             return str(existing.get("report_id"))
         return "gev-000001"
 
-    def _append_history(self, portfolio_id: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_history(self, portfolio_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.history_path(portfolio_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -694,7 +696,7 @@ def evidence_vault_summary(report: dict[str, Any] | None) -> dict[str, Any]:
 
 
 
-def _package_verification_current(package: dict[str, Any]) -> bool:
+def _package_verification_current(package: ImplementationDocument) -> bool:
     if not package.get("exists") or not package.get("manifest_exists") or not package.get("verification_exists"):
         return False
     if package.get("verification_status") != "passed":
@@ -708,7 +710,7 @@ def _package_verification_current(package: dict[str, Any]) -> bool:
     return True
 
 
-def _nested_manifest_integrity_ok(package_type: str, manifest: dict[str, Any]) -> bool:
+def _nested_manifest_integrity_ok(package_type: str, manifest: ImplementationDocument) -> bool:
     if not manifest:
         return False
     if manifest.get("package_type") != package_type:
@@ -730,7 +732,7 @@ def _nested_manifest_integrity_ok(package_type: str, manifest: dict[str, Any]) -
     return False
 
 
-def _summary_from_source(source: dict[str, Any], packages: list[dict[str, Any]], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary_from_source(source: ImplementationDocument, packages: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     required = [item for item in packages if item.get("required")]
     current = [item for item in required if _package_verification_current(item)]
     return {
@@ -750,7 +752,7 @@ def _summary_from_source(source: dict[str, Any], packages: list[dict[str, Any]],
     }
 
 
-def _package_summaries(packages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _package_summaries(packages: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         {
             "package_id": item.get("package_id"),
@@ -772,7 +774,7 @@ def _package_summaries(packages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def _manifest_packages(packages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _manifest_packages(packages: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         {
             "package_id": item.get("package_id"),
@@ -797,7 +799,7 @@ def _manifest_packages(packages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def _package_source_row(package: dict[str, Any]) -> dict[str, Any]:
+def _package_source_row(package: ImplementationDocument) -> ImplementationDocument:
     return {
         "package_id": package.get("package_id"),
         "role": package.get("role"),
@@ -816,7 +818,7 @@ def _package_source_row(package: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return default if default is not None else {}
     try:
@@ -838,7 +840,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = path.relative_to(root).as_posix()
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -851,7 +853,7 @@ def _zip_entries(export_dir: Path) -> list[tuple[Path, str]]:
     return rows
 
 
-def _read_zip_json(zip_path: Path, name: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, name: str) -> ImplementationDocument:
     if not zip_path.exists():
         return {}
     try:
@@ -877,7 +879,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleasePortfolioGovernanceEvidenceVaultStateError("Resolved path escapes the Evidence Vault workspace.")
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(sanitize_metadata(value, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS), ensure_ascii=False, sort_keys=True)
     findings: list[dict[str, Any]] = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -886,7 +888,7 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
 
 
-def _vault_markdown(report: dict[str, Any], packages: list[dict[str, Any]]) -> str:
+def _vault_markdown(report: ImplementationDocument, packages: list[ImplementationDocument]) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     lines = [
         "# MusicForge Portfolio Governance Evidence Vault",
@@ -903,7 +905,7 @@ def _vault_markdown(report: dict[str, Any], packages: list[dict[str, Any]]) -> s
     return "\n".join(lines) + "\n"
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
     text = "\n".join(
         [
             "MusicForge Release Portfolio Governance Evidence Vault",
@@ -919,15 +921,15 @@ def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
     (export_dir / "README.txt").write_text(text + "\n", encoding="utf-8")
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": sanitize_sensitive_text(message)}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": sanitize_sensitive_text(message)}
 
 
-def _safe_queue_summary(queue: dict[str, Any], governance_store: ReleasePortfolioGovernanceStore) -> dict[str, Any]:
+def _safe_queue_summary(queue: ImplementationDocument, governance_store: ReleasePortfolioGovernanceStore) -> ImplementationDocument:
     try:
         execution = governance_store.read_execution_report(str(queue.get("queue_id") or ""), default={})
     except Exception:

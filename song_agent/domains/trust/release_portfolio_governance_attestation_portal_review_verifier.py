@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -328,7 +330,7 @@ class _ReviewZipVerifier:
             self._add_exact_check("manifest", f"portal_review_pack_manifest_portal_{key}", portal_row.get(key), source.get(key), f"Manifest portal {key}")
         self._verify_pack_data_bindings(source, pack)
 
-    def _verify_pack_data_bindings(self, source: dict[str, Any], pack: dict[str, Any]) -> None:
+    def _verify_pack_data_bindings(self, source: ImplementationDocument, pack: ImplementationDocument) -> None:
         for name, doc in self.data_docs.items():
             self._add_exact_check("data", f"portal_review_pack_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), pack.get("source_hash"), f"{name} source_hash")
         portal_verification = self.data_docs.get("portal-verification-summary.json", {})
@@ -442,7 +444,7 @@ class _ReviewZipVerifier:
                 self.redaction_findings.extend(_blocked_key_findings(name, value))
         self._add_check("redaction", f"{self.check_prefix}_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned text entries.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if not name or info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name or 'entry'} is missing.")
@@ -455,7 +457,7 @@ class _ReviewZipVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = review_pack_summary(self.main_doc) if self.package_kind == "pack" else response_summary(self.main_doc)
@@ -493,7 +495,7 @@ class _ReviewZipVerifier:
 
 
 class _ResponseDocumentVerifier:
-    def __init__(self, response: dict[str, Any], pack: dict[str, Any], *, now: str | None) -> None:
+    def __init__(self, response: ImplementationDocument, pack: ImplementationDocument, *, now: str | None) -> None:
         self.response = sanitize_metadata(response, blocked_keys=VERIFIER_BLOCKED_KEYS)
         self.pack = sanitize_metadata(pack, blocked_keys=VERIFIER_BLOCKED_KEYS)
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
@@ -543,7 +545,7 @@ class _ResponseDocumentVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _print_report(title: str, report: dict[str, Any]) -> None:
+def _print_report(title: str, report: ImplementationDocument) -> None:
     print(title)
     print(f"status: {report.get('status')}")
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
@@ -585,7 +587,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
         for match in pattern.finditer(text):
@@ -596,7 +598,7 @@ def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(name: str, value: Any, path: str = "") -> list[dict[str, Any]]:
+def _blocked_key_findings(name: str, value: Any, path: str = "") -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():
@@ -610,7 +612,7 @@ def _blocked_key_findings(name: str, value: Any, path: str = "") -> list[dict[st
     return findings
 
 
-def _unresolved_high_findings(response: dict[str, Any]) -> list[dict[str, Any]]:
+def _unresolved_high_findings(response: ImplementationDocument) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for finding in response.get("findings", []) if isinstance(response.get("findings"), list) else []:
         if not isinstance(finding, dict):

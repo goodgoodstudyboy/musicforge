@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -551,7 +553,7 @@ class PublicTrustCenterAcceptanceBoardStore:
         signoff = self.read_signoff(center_id, default={})
         return {"center_id": center_id, "readiness": report.get("readiness") or "missing", "status": report.get("status") or "missing", "signoff_status": signoff.get("status") or "unsigned", **summary}
 
-    def _build_source(self, center_id: str, policy: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _build_source(self, center_id: str, policy: ImplementationDocument) -> tuple[ImplementationDocument, list[ImplementationDocument], ImplementationDocument, ImplementationDocument, list[ImplementationDocument], list[ImplementationDocument]]:
         distribution_kit = _distribution_kit_state(self.distribution_kit_store, center_id)
         response_rows: list[dict[str, Any]] = []
         participants: list[dict[str, Any]] = []
@@ -689,7 +691,7 @@ class PublicTrustCenterAcceptanceBoardStore:
         }
         return source, participants, _response_index(source, response_rows), _accepted_evidence_index(source, evidence_rows), response_proofs, evidence_summaries
 
-    def _evidence_by_response(self, center_id: str) -> dict[str, dict[str, Any]]:
+    def _evidence_by_response(self, center_id: str) -> dict[str, ImplementationDocument]:
         root = self.acceptance_store.accepted_evidence_root(center_id)
         rows: dict[str, dict[str, Any]] = {}
         if not root.exists():
@@ -701,7 +703,7 @@ class PublicTrustCenterAcceptanceBoardStore:
                 rows[response_id] = evidence
         return rows
 
-    def _ensure_exportable(self, center_id: str, report: dict[str, Any]) -> None:
+    def _ensure_exportable(self, center_id: str, report: ImplementationDocument) -> None:
         if not report:
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board report is missing. Refresh before export.")
         policy = self.read_policy(center_id)
@@ -729,7 +731,7 @@ class PublicTrustCenterAcceptanceBoardStore:
         if zip_manifest.get("integrity_hash") != manifest.get("integrity_hash"):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board ZIP manifest does not match current export.")
 
-    def _signoff_source(self, center_id: str, verification: dict[str, Any]) -> dict[str, Any]:
+    def _signoff_source(self, center_id: str, verification: ImplementationDocument) -> ImplementationDocument:
         board_zip = self.zip_path(center_id)
         board_manifest = _read_zip_json(board_zip, "acceptance-board-manifest.json")
         report = self.read_report(center_id, default={})
@@ -782,7 +784,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             }
         )
 
-    def _ensure_signoff_integrity(self, signoff: dict[str, Any]) -> None:
+    def _ensure_signoff_integrity(self, signoff: ImplementationDocument) -> None:
         if not signoff:
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff is missing.")
         if signoff.get("integrity_hash") != acceptance_board_signoff_hash(signoff):
@@ -790,17 +792,17 @@ class PublicTrustCenterAcceptanceBoardStore:
         if signoff.get("source_hash") != stable_hash(signoff.get("source") if isinstance(signoff.get("source"), dict) else {}):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff source hash failed.")
 
-    def _ensure_signoff_current(self, center_id: str, signoff: dict[str, Any]) -> None:
+    def _ensure_signoff_current(self, center_id: str, signoff: ImplementationDocument) -> None:
         self._ensure_signoff_integrity(signoff)
         current_verification = _read_json_default(self.verification_report_path(center_id), default={})
         source = self._signoff_source(center_id, current_verification)
         if stable_hash(source) != signoff.get("source_hash"):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff source is stale. Reset signoff before archiving.")
 
-    def _append_signoff_history(self, center_id: str, payload: dict[str, Any]) -> None:
+    def _append_signoff_history(self, center_id: str, payload: ImplementationDocument) -> None:
         _append_jsonl(self.signoff_history_path(center_id), payload)
 
-    def _history_events(self, center_id: str) -> list[dict[str, Any]]:
+    def _history_events(self, center_id: str) -> list[ImplementationDocument]:
         path = self.signoff_history_path(center_id)
         if not path.exists():
             return []
@@ -828,17 +830,17 @@ class PublicTrustCenterAcceptanceBoardStore:
         if self._history_has_event(center_id, "board_signoff_archive_zip_built", signoff_hash):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff archive ZIP was already built for this signoff. Reset signoff before rebuilding archive ZIP.")
 
-    def _read_change_request(self, center_id: str, change_request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, center_id: str, change_request_id: str) -> ImplementationDocument:
         request = _read_json_default(self.change_request_path(center_id, change_request_id), default={})
         if not request:
             raise PublicTrustCenterAcceptanceBoardNotFoundError(f"Acceptance Board Change Request not found: {change_request_id}")
         return request
 
-    def _ensure_change_request_integrity(self, request: dict[str, Any]) -> None:
+    def _ensure_change_request_integrity(self, request: ImplementationDocument) -> None:
         if request.get("integrity_hash") != acceptance_board_change_request_hash(request):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board Change Request integrity failed.")
 
-    def _signoff_archive_documents(self, center_id: str, signoff: dict[str, Any], now: str) -> dict[str, Any]:
+    def _signoff_archive_documents(self, center_id: str, signoff: ImplementationDocument, now: str) -> ImplementationDocument:
         source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
         verification = _read_json_default(self.verification_report_path(center_id), default={})
         board_fingerprint = {
@@ -918,7 +920,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             "VERIFY.txt": _signoff_archive_verify_text(),
         }
 
-    def _write_cached_sidecars(self, center_id: str, source_hash: str, response_index: dict[str, Any], evidence_index: dict[str, Any], response_proofs: list[dict[str, Any]], evidence_summaries: list[dict[str, Any]]) -> None:
+    def _write_cached_sidecars(self, center_id: str, source_hash: str, response_index: ImplementationDocument, evidence_index: ImplementationDocument, response_proofs: list[ImplementationDocument], evidence_summaries: list[ImplementationDocument]) -> None:
         cache_dir = self._cache_dir(center_id, source_hash)
         if cache_dir.exists():
             shutil.rmtree(cache_dir)
@@ -938,7 +940,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             item["source_hash"] = source_hash
             _write_json(cache_dir / "evidence" / f"{_safe_id(str(item.get('evidence_id') or 'evidence'))}-summary.json", item)
 
-    def _sidecars_for_export(self, center_id: str, source_hash: str) -> dict[str, Any]:
+    def _sidecars_for_export(self, center_id: str, source_hash: str) -> ImplementationDocument:
         report = self.read_report(center_id, default={})
         cache_dir = self._cache_dir(center_id, source_hash)
         response_index = _read_json_default(cache_dir / "response-index.json", default={})
@@ -993,7 +995,7 @@ def redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings)}
 
 
-def _default_policy(center_id: str, now: str) -> dict[str, Any]:
+def _default_policy(center_id: str, now: str) -> ImplementationDocument:
     policy = {
         "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
         "package_type": ACCEPTANCE_BOARD_POLICY_PACKAGE_TYPE,
@@ -1009,7 +1011,7 @@ def _default_policy(center_id: str, now: str) -> dict[str, Any]:
     return policy
 
 
-def _normalize_requirements(payload: dict[str, Any]) -> dict[str, Any]:
+def _normalize_requirements(payload: ImplementationDocument) -> ImplementationDocument:
     payload = payload if isinstance(payload, dict) else {}
     roles = []
     for role in payload.get("required_roles", []) if isinstance(payload.get("required_roles"), list) else []:
@@ -1028,11 +1030,11 @@ def _normalize_requirements(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _role_rules(requirements: dict[str, Any]) -> list[dict[str, Any]]:
+def _role_rules(requirements: ImplementationDocument) -> list[ImplementationDocument]:
     return [{"role": role, "min_accepted_count": 1} for role in requirements.get("required_roles", []) if role]
 
 
-def _distribution_kit_state(distribution_kit_store: Any, center_id: str) -> dict[str, Any]:
+def _distribution_kit_state(distribution_kit_store: Any, center_id: str) -> ImplementationDocument:
     zip_path = distribution_kit_store.zip_path(center_id)
     report = distribution_kit_store.read_report(center_id, default={})
     verification = _read_json_default(distribution_kit_store.verification_report_path(center_id), default={})
@@ -1050,7 +1052,7 @@ def _distribution_kit_state(distribution_kit_store: Any, center_id: str) -> dict
     )
 
 
-def _public_response_from_record(response: dict[str, Any]) -> dict[str, Any]:
+def _public_response_from_record(response: ImplementationDocument) -> ImplementationDocument:
     payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
     reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
     findings = []
@@ -1060,12 +1062,12 @@ def _public_response_from_record(response: dict[str, Any]) -> dict[str, Any]:
     return _sanitize({"response_id": payload.get("response_id"), "result": payload.get("result"), "review_mode": payload.get("review_mode"), "reviewed_at": payload.get("reviewed_at"), "reviewer": {"name": reviewer.get("name"), "organization": reviewer.get("organization"), "role": reviewer.get("role")}, "verification_status": (payload.get("verification") if isinstance(payload.get("verification"), dict) else {}).get("status"), "comments_excerpt": sanitize_sensitive_text(str(payload.get("comments") or ""))[:500], "findings": findings})
 
 
-def _critical_findings(response: dict[str, Any]) -> list[dict[str, Any]]:
+def _critical_findings(response: ImplementationDocument) -> list[ImplementationDocument]:
     payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
     return [item for item in payload.get("findings", []) if isinstance(item, dict) and str(item.get("severity") or "").lower() == "critical"]
 
 
-def _participant_warnings(response: dict[str, Any], response_stale: bool, evidence_id: str, evidence_current: bool, evidence_verification_status: str) -> list[str]:
+def _participant_warnings(response: ImplementationDocument, response_stale: bool, evidence_id: str, evidence_current: bool, evidence_verification_status: str) -> list[str]:
     warnings: list[str] = []
     if response_stale:
         warnings.append("response_stale")
@@ -1082,7 +1084,7 @@ def _participant_warnings(response: dict[str, Any], response_stale: bool, eviden
     return warnings
 
 
-def _evaluate_board(policy: dict[str, Any], participants: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _evaluate_board(policy: ImplementationDocument, participants: list[ImplementationDocument]) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
     requirements = policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}
     counted = [item for item in participants if item.get("counts_for_quorum")]
     organizations = {str(item.get("organization") or "").strip().lower() for item in counted if str(item.get("organization") or "").strip()}
@@ -1119,7 +1121,7 @@ def _evaluate_board(policy: dict[str, Any], participants: list[dict[str, Any]]) 
     return checks, conflicts
 
 
-def _readiness(policy: dict[str, Any], participants: list[dict[str, Any]], blockers: list[dict[str, Any]], conflicts: list[dict[str, Any]]) -> str:
+def _readiness(policy: ImplementationDocument, participants: list[ImplementationDocument], blockers: list[ImplementationDocument], conflicts: list[ImplementationDocument]) -> str:
     if blockers or any(item.get("severity") == "blocking" for item in conflicts):
         if any(item.get("result") == "rejected" and item.get("current") for item in participants) and not bool((policy.get("requirements") or {}).get("allow_rejected", False)):
             return "rejected"
@@ -1133,7 +1135,7 @@ def _readiness(policy: dict[str, Any], participants: list[dict[str, Any]], block
     return "ready"
 
 
-def _board_summary(policy: dict[str, Any], participants: list[dict[str, Any]], checks: list[dict[str, Any]], conflicts: list[dict[str, Any]]) -> dict[str, Any]:
+def _board_summary(policy: ImplementationDocument, participants: list[ImplementationDocument], checks: list[ImplementationDocument], conflicts: list[ImplementationDocument]) -> ImplementationDocument:
     counted = [item for item in participants if item.get("counts_for_quorum")]
     organizations = {str(item.get("organization") or "").strip().lower() for item in counted if str(item.get("organization") or "").strip()}
     return {
@@ -1149,15 +1151,15 @@ def _board_summary(policy: dict[str, Any], participants: list[dict[str, Any]], c
     }
 
 
-def _response_index(source: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _response_index(source: ImplementationDocument, rows: list[ImplementationDocument]) -> ImplementationDocument:
     return {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": stable_hash(source), "items": rows}
 
 
-def _accepted_evidence_index(source: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _accepted_evidence_index(source: ImplementationDocument, rows: list[ImplementationDocument]) -> ImplementationDocument:
     return {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": stable_hash(source), "items": rows}
 
 
-def _quorum_evidence(report: dict[str, Any]) -> dict[str, Any]:
+def _quorum_evidence(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     policy = report.get("policy") if isinstance(report.get("policy"), dict) else {}
     participants = report.get("participants") if isinstance(report.get("participants"), list) else []
@@ -1166,22 +1168,22 @@ def _quorum_evidence(report: dict[str, Any]) -> dict[str, Any]:
     return {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": report.get("source_hash"), "policy_hash": policy.get("policy_hash"), "decision": {"readiness": report.get("readiness"), "quorum_status": summary.get("quorum_status"), "required_roles_status": summary.get("required_roles_status"), "conflict_status": summary.get("conflict_status")}, "counted_response_ids": counted, "required_roles": roles}
 
 
-def _check_status(checks: list[dict[str, Any]], check_id: str) -> str:
+def _check_status(checks: list[ImplementationDocument], check_id: str) -> str:
     for item in checks:
         if item.get("check_id") == check_id:
             return "passed" if item.get("status") == "passed" else "failed"
     return "missing"
 
 
-def _check(check_id: str, ok: bool, message: str) -> dict[str, Any]:
+def _check(check_id: str, ok: bool, message: str) -> ImplementationDocument:
     return {"scope": "board", "check_id": check_id, "status": "passed" if ok else "failed", "severity": "blocking", "message": message}
 
 
-def _conflict(conflict_type: str, severity: str, participants: list[str], message: str) -> dict[str, Any]:
+def _conflict(conflict_type: str, severity: str, participants: list[str], message: str) -> ImplementationDocument:
     return {"conflict_id": "", "type": conflict_type, "severity": severity, "participants": [item for item in participants if item], "message": message}
 
 
-def _readme(report: dict[str, Any]) -> str:
+def _readme(report: ImplementationDocument) -> str:
     return sanitize_sensitive_text("\n".join(["MusicForge Public Trust Center Acceptance Board", "", f"Center ID: {report.get('center_id')}", f"Readiness: {report.get('readiness')}", f"Status: {report.get('status')}", ""]))
 
 
@@ -1189,7 +1191,7 @@ def _verify_text() -> str:
     return "Verify this board package:\npython -m song_agent.cli verify-public-trust-center-acceptance-board-package public-trust-center-acceptance-board.zip --strict --require-ready --json\n"
 
 
-def _signoff_archive_readme(signoff: dict[str, Any]) -> str:
+def _signoff_archive_readme(signoff: ImplementationDocument) -> str:
     return sanitize_sensitive_text(
         "\n".join(
             [
@@ -1208,7 +1210,7 @@ def _signoff_archive_verify_text() -> str:
     return "Verify this signoff archive:\npython -m song_agent.cli verify-public-trust-center-acceptance-board-signoff-archive-package public-trust-center-acceptance-board-signoff-archive.zip --strict --require-signed --json\n"
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -1217,7 +1219,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -1239,7 +1241,7 @@ def _next_change_request_id(root: Path) -> str:
     return f"bcr-{max_index + 1:06d}"
 
 
-def _latest_applied_change_request(root: Path, signoff_hash: Any) -> dict[str, Any] | None:
+def _latest_applied_change_request(root: Path, signoff_hash: Any) -> ImplementationDocument | None:
     if not root.exists():
         return None
     rows: list[dict[str, Any]] = []
@@ -1258,7 +1260,7 @@ def _latest_applied_change_request(root: Path, signoff_hash: Any) -> dict[str, A
     }
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     write_json(path, _sanitize(payload))
     return path
@@ -1275,7 +1277,7 @@ def _read_text(path: Path) -> str:
         return handle.read()
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
@@ -1285,7 +1287,7 @@ def _mkdir(path: Path) -> None:
     os.makedirs(_fs_path(path), exist_ok=True)
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 
@@ -1346,7 +1348,7 @@ def _safe_id(value: str) -> str:
     return text or "item"
 
 
-def _redaction_findings(scope: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     sanitized = sanitize_sensitive_text(text)
     if sanitized != text:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 import threading
 import zipfile
@@ -334,7 +336,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             raise UnifiedCommandCenterContinuousReviewNotFoundError("Unified Command Center Continuous Review not found.")
         return str(sorted(reviews, key=lambda row: str(row.get("review_id") or ""))[-1].get("review_id"))
 
-    def _assert_external_baseline(self, center_id: str, payload: dict[str, Any]) -> None:
+    def _assert_external_baseline(self, center_id: str, payload: ImplementationDocument) -> None:
         source = self._collect_source(center_id, "preflight", scope={"include_handoff": bool(payload.get("include_handoff", True))}, payload=payload, write_reports=False)
         archive = source.get("inputs", {}).get("archive", {})
         handoff = source.get("inputs", {}).get("handoff", {})
@@ -343,7 +345,7 @@ class UnifiedCommandCenterContinuousReviewStore:
         if handoff.get("required", True) and handoff.get("status") != "passed":
             raise UnifiedCommandCenterContinuousReviewStateError("Unified Command Center Handoff verification must pass before creating a Continuous Review plan.")
 
-    def _collect_source(self, center_id: str, review_id: str, *, scope: dict[str, Any], payload: dict[str, Any], write_reports: bool) -> dict[str, Any]:
+    def _collect_source(self, center_id: str, review_id: str, *, scope: ImplementationDocument, payload: ImplementationDocument, write_reports: bool) -> ImplementationDocument:
         now = now_iso()
         archive_zip_override = payload.get("archive_zip") or payload.get("archive_zip_path")
         archive_report_override = payload.get("archive_verification_report") or payload.get("archive_verification_report_path")
@@ -417,15 +419,15 @@ class UnifiedCommandCenterContinuousReviewStore:
         self,
         center_id: str,
         review_id: str,
-        plan: dict[str, Any],
-        source: dict[str, Any],
-        drift: dict[str, Any],
-        incidents: dict[str, Any],
-        drill: dict[str, Any],
-        runbook: dict[str, Any],
-        runbook_result: dict[str, Any],
-        cr_drafts: dict[str, Any],
-        fingerprints: dict[str, Any],
+        plan: ImplementationDocument,
+        source: ImplementationDocument,
+        drift: ImplementationDocument,
+        incidents: ImplementationDocument,
+        drill: ImplementationDocument,
+        runbook: ImplementationDocument,
+        runbook_result: ImplementationDocument,
+        cr_drafts: ImplementationDocument,
+        fingerprints: ImplementationDocument,
     ) -> None:
         review_dir = self.review_dir(center_id, review_id)
         review_dir.mkdir(parents=True, exist_ok=True)
@@ -442,7 +444,7 @@ class UnifiedCommandCenterContinuousReviewStore:
         ):
             write_json(path, doc)
 
-    def _read_required_docs(self, center_id: str, review_id: str) -> dict[str, Any]:
+    def _read_required_docs(self, center_id: str, review_id: str) -> ImplementationDocument:
         docs = self.read_review(center_id, review_id)
         required = ["source", "drift_report", "incident_board", "recovery_drill", "runbook", "runbook_result", "change_request_drafts", "package_fingerprints"]
         missing = [key for key in required if not docs.get(key)]
@@ -450,7 +452,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             raise UnifiedCommandCenterContinuousReviewStateError(f"Continuous Review has not been run: missing {', '.join(missing)}.")
         return docs
 
-    def _write_export_manifest(self, center_id: str, review_id: str, docs: dict[str, Any]) -> None:
+    def _write_export_manifest(self, center_id: str, review_id: str, docs: ImplementationDocument) -> None:
         review_dir = self.review_dir(center_id, review_id)
         (review_dir / "README.txt").write_text(_readme(docs["drift_report"], docs["incident_board"]), encoding="utf-8")
         files = [_file_record(path, path.name) for path in sorted(review_dir.iterdir()) if path.is_file() and path.name not in {"manifest.json", "musicforge-unified-command-center-continuous-review.zip", "continuous-review-verification-report.json"}]
@@ -484,7 +486,7 @@ class UnifiedCommandCenterContinuousReviewStore:
         write_json(self.manifest_path(center_id, review_id), manifest)
 
 
-def _input_binding(component: str, zip_path: Path, external: dict[str, Any], runtime: dict[str, Any]) -> dict[str, Any]:
+def _input_binding(component: str, zip_path: Path, external: ImplementationDocument, runtime: ImplementationDocument) -> ImplementationDocument:
     return {
         "component": component,
         "status": "passed" if external.get("status") == "passed" and runtime.get("status") == "passed" else "failed",
@@ -498,7 +500,7 @@ def _input_binding(component: str, zip_path: Path, external: dict[str, Any], run
     }
 
 
-def _external_evidence_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def _external_evidence_rows(payload: ImplementationDocument) -> list[ImplementationDocument]:
     rows = []
     for value in payload.get("external_evidence", []) if isinstance(payload.get("external_evidence"), list) else []:
         if isinstance(value, dict):
@@ -524,7 +526,7 @@ def _evidence_is_blocking(status: Any) -> bool:
     return normalized not in {"passed", "not_configured", "not_required", "skipped"}
 
 
-def _report_binding(path_value: Any) -> dict[str, Any]:
+def _report_binding(path_value: Any) -> ImplementationDocument:
     if not path_value:
         return {"status": "not_configured", "report_hash": None}
     path = Path(path_value)
@@ -537,7 +539,7 @@ def _report_binding(path_value: Any) -> dict[str, Any]:
         return {"status": "failed", "error": sanitize_sensitive_text(str(exc)), "report_hash": None}
 
 
-def _review_payload_projection(payload: dict[str, Any]) -> dict[str, Any]:
+def _review_payload_projection(payload: ImplementationDocument) -> ImplementationDocument:
     keys = (
         "archive_zip",
         "archive_zip_path",
@@ -570,7 +572,7 @@ def _review_payload_projection(payload: dict[str, Any]) -> dict[str, Any]:
     return projection
 
 
-def _drift_report(center_id: str, review_id: str, plan: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+def _drift_report(center_id: str, review_id: str, plan: ImplementationDocument, source: ImplementationDocument) -> ImplementationDocument:
     drifts: list[dict[str, Any]] = []
     baseline = plan.get("source") if isinstance(plan.get("source"), dict) else {}
     inputs = source.get("inputs", {})
@@ -625,7 +627,7 @@ def _drift_report(center_id: str, review_id: str, plan: dict[str, Any], source: 
     return doc
 
 
-def _drift_row(index: int, component: str, kind: str, field: str, expected: Any, actual: Any, severity: str) -> dict[str, Any]:
+def _drift_row(index: int, component: str, kind: str, field: str, expected: Any, actual: Any, severity: str) -> ImplementationDocument:
     return {
         "drift_id": f"drift-{index:06d}",
         "component_type": component,
@@ -646,7 +648,7 @@ def _external_evidence_hash(rows: Any) -> str | None:
     return stable_hash(sanitize_metadata(rows))
 
 
-def _incident_board(center_id: str, review_id: str, drift: dict[str, Any]) -> dict[str, Any]:
+def _incident_board(center_id: str, review_id: str, drift: ImplementationDocument) -> ImplementationDocument:
     incidents = []
     for index, row in enumerate([item for item in drift.get("drifts", []) if item.get("severity") in {"critical", "high"}], start=1):
         incidents.append(
@@ -678,7 +680,7 @@ def _incident_board(center_id: str, review_id: str, drift: dict[str, Any]) -> di
     return doc
 
 
-def _recovery_drill_report(center_id: str, review_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _recovery_drill_report(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
     inputs = source.get("inputs", {})
     steps = []
     for component, step_id in (("archive", "verify_archive"), ("handoff", "verify_handoff"), ("ucc", "verify_ucc")):
@@ -706,7 +708,7 @@ def _recovery_drill_report(center_id: str, review_id: str, source: dict[str, Any
     return doc
 
 
-def _runbook(center_id: str, review_id: str, source: dict[str, Any], drift: dict[str, Any], incidents: dict[str, Any]) -> dict[str, Any]:
+def _runbook(center_id: str, review_id: str, source: ImplementationDocument, drift: ImplementationDocument, incidents: ImplementationDocument) -> ImplementationDocument:
     items = [
         {"item_id": "uccrv-safe-001", "action": "continuous_review.run", "safe": True, "status": "completed"},
         {"item_id": "uccrv-safe-002", "action": "continuous_review.verify", "safe": True, "status": "pending"},
@@ -729,7 +731,7 @@ def _runbook(center_id: str, review_id: str, source: dict[str, Any], drift: dict
     return doc
 
 
-def _runbook_result(center_id: str, review_id: str, source_hash: str | None, results: list[dict[str, Any]]) -> dict[str, Any]:
+def _runbook_result(center_id: str, review_id: str, source_hash: str | None, results: list[ImplementationDocument]) -> ImplementationDocument:
     doc = sanitize_metadata(
         {
             "schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION,
@@ -746,7 +748,7 @@ def _runbook_result(center_id: str, review_id: str, source_hash: str | None, res
     return doc
 
 
-def _change_request_drafts(center_id: str, review_id: str, incidents: dict[str, Any]) -> dict[str, Any]:
+def _change_request_drafts(center_id: str, review_id: str, incidents: ImplementationDocument) -> ImplementationDocument:
     drafts = []
     for row in incidents.get("incidents", []):
         drafts.append(
@@ -766,7 +768,7 @@ def _change_request_drafts(center_id: str, review_id: str, incidents: dict[str, 
     return doc
 
 
-def _package_fingerprints(center_id: str, review_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _package_fingerprints(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
     inputs = source.get("inputs", {})
     items = []
     for component in ("archive", "handoff", "ucc"):
@@ -777,7 +779,7 @@ def _package_fingerprints(center_id: str, review_id: str, source: dict[str, Any]
     return doc
 
 
-def _readme(drift: dict[str, Any], incidents: dict[str, Any]) -> str:
+def _readme(drift: ImplementationDocument, incidents: ImplementationDocument) -> str:
     return "\n".join(
         [
             "MusicForge Unified Command Center Continuous Review",
@@ -791,17 +793,17 @@ def _readme(drift: dict[str, Any], incidents: dict[str, Any]) -> str:
     )
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _read_json_if_exists(path: Path) -> dict[str, Any]:
+def _read_json_if_exists(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {"status": "missing"}
     return read_json(path)
 
 
-def _ucc_zip_summary(zip_path: Path) -> dict[str, Any]:
+def _ucc_zip_summary(zip_path: Path) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path) as archive:
             manifest = read_json_from_zip(archive, "manifest.json")
@@ -831,15 +833,15 @@ def _safe_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.:-]+", "-", str(value)).strip("-")
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

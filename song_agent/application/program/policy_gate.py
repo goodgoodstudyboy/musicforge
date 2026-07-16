@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +32,7 @@ class ProgramPolicyGate:
         policy_id: str,
         manifest: Path | str | None,
         manifest_id: str | None,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         if policy_id not in PROGRAM_POLICY_IDS:
             return _failed(policy_id, "program_policy_id")
         workspace = Path(self.program_store.root).parent.resolve()
@@ -58,7 +60,7 @@ class ProgramPolicyGate:
         result["program_id"] = program_id
         return result
 
-    def _evaluate_legacy(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _evaluate_legacy(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         legacy = self.program_store.gate(
             required=True,
             program_zip_path=payload.get("program_zip"),
@@ -78,7 +80,7 @@ class ProgramPolicyGate:
         return result
 
 
-def _failed(policy_id: str, blocker: str) -> dict[str, Any]:
+def _failed(policy_id: str, blocker: str) -> ImplementationDocument:
     return {
         "status": "failed",
         "hard_block": True,

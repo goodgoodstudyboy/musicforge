@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from collections import Counter
 from typing import Any
 
@@ -115,14 +117,14 @@ def build_editor_diff(parent: SongPlan, edited: SongPlan, patch: EditorPatch) ->
     }
 
 
-def _section_id_for_beat(start_beat: float, sections: list[dict[str, Any]]) -> str | None:
+def _section_id_for_beat(start_beat: float, sections: list[ImplementationDocument]) -> str | None:
     for section in sections:
         if float(section["start_beat"]) <= start_beat < float(section["end_beat"]):
             return str(section["section_id"])
     return sections[-1]["section_id"] if sections else None
 
 
-def _stable_sections(sections: list[dict[str, Any]], section_identity: dict[str, str | None] | None) -> list[dict[str, Any]]:
+def _stable_sections(sections: list[ImplementationDocument], section_identity: dict[str, str | None] | None) -> list[ImplementationDocument]:
     if not section_identity:
         return [dict(section, editable=True, derived=False) for section in sections]
     id_by_name = {name: section_id for section_id, name in section_identity.items() if name is not None}
@@ -139,7 +141,7 @@ def _stable_sections(sections: list[dict[str, Any]], section_identity: dict[str,
     return stable
 
 
-def _stable_tracks(tracks: list[dict[str, Any]], track_identity: dict[str, str | None] | None) -> list[dict[str, Any]]:
+def _stable_tracks(tracks: list[ImplementationDocument], track_identity: dict[str, str | None] | None) -> list[ImplementationDocument]:
     if not track_identity:
         return [dict(track, editable=True, derived=False) for track in tracks]
     id_by_name = {name: track_id for track_id, name in track_identity.items() if name is not None}
@@ -157,12 +159,12 @@ def _stable_tracks(tracks: list[dict[str, Any]], track_identity: dict[str, str |
 
 
 def _view_notes_for_track(
-    source_notes: list[dict[str, Any]],
-    note_identity: dict[str, dict[str, dict[str, Any]]] | None,
+    source_notes: list[ImplementationDocument],
+    note_identity: dict[str, dict[str, ImplementationDocument]] | None,
     track_id: str,
     *,
     track_derived: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if track_derived:
         return [_derived_note(track_id, index, note) for index, note in enumerate(source_notes, start=1)]
     if not note_identity or track_id not in note_identity:
@@ -182,7 +184,7 @@ def _view_notes_for_track(
     return notes
 
 
-def _note_key(note: dict[str, Any]) -> tuple[int, float, float, int]:
+def _note_key(note: ImplementationDocument) -> tuple[int, float, float, int]:
     return (
         int(note["pitch"]),
         round(float(note["start_beat"]), 6),
@@ -191,7 +193,7 @@ def _note_key(note: dict[str, Any]) -> tuple[int, float, float, int]:
     )
 
 
-def _derived_note(track_id: str, index: int, note: dict[str, Any]) -> dict[str, Any]:
+def _derived_note(track_id: str, index: int, note: ImplementationDocument) -> ImplementationDocument:
     return {
         **note,
         "note_id": f"derived-note-{track_id}-{index:04d}",

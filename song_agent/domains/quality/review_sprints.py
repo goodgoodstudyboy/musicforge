@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -546,7 +548,7 @@ def review_sprint_project_rollup(sprints: list[dict[str, Any]]) -> dict[str, Any
     )
 
 
-def _recommendation_summary_for_export(report: dict[str, Any] | None) -> dict[str, Any]:
+def _recommendation_summary_for_export(report: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(report, dict) or not report:
         return {}
     actions = [item for item in report.get("recommended_actions", []) if isinstance(item, dict)]
@@ -571,7 +573,7 @@ def _recommendation_summary_for_export(report: dict[str, Any] | None) -> dict[st
     )
 
 
-def _judge_summary_for_export(summary: dict[str, Any] | None) -> dict[str, Any]:
+def _judge_summary_for_export(summary: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(summary, dict) or not summary:
         return {}
     return sanitize_metadata(
@@ -589,7 +591,7 @@ def _judge_summary_for_export(summary: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _settings_from_dict(data: dict[str, Any]) -> dict[str, Any]:
+def _settings_from_dict(data: ImplementationDocument) -> ImplementationDocument:
     strategies = data.get("local_candidate_strategies")
     if isinstance(strategies, list):
         clean_strategies = [str(item).strip() for item in strategies if str(item).strip() in LOCAL_STRATEGIES]
@@ -609,7 +611,7 @@ def _settings_from_dict(data: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _task_ref_from_dict(data: dict[str, Any]) -> dict[str, Any]:
+def _task_ref_from_dict(data: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "task_id": validate_review_task_id(str(data.get("task_id") or "")),
@@ -623,11 +625,11 @@ def _task_ref_from_dict(data: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _task_ref(task: ReviewTask, order: int, *, lane: str, notes: str, now: str) -> dict[str, Any]:
+def _task_ref(task: ReviewTask, order: int, *, lane: str, notes: str, now: str) -> ImplementationDocument:
     return _task_ref_from_dict({"task_id": task.task_id, "order": order, "priority": task.priority, "lane": lane, "included": True, "notes": notes, "added_at": now})
 
 
-def _renumber_ref(ref: dict[str, Any], order: int) -> dict[str, Any]:
+def _renumber_ref(ref: ImplementationDocument, order: int) -> ImplementationDocument:
     return _task_ref_from_dict({**ref, "order": order})
 
 
@@ -689,7 +691,7 @@ def _sprint_has_progress(tasks: list[ReviewTask], task_store: ReviewTaskStore) -
     return any(task.status != "open" or task_store.list_candidates(task.task_id) for task in tasks)
 
 
-def _task_conflicts(sprint: ReviewSprint, task: ReviewTask, task_ids: set[str], task_store: ReviewTaskStore, parent_plan_hashes: dict[str, str]) -> list[dict[str, Any]]:
+def _task_conflicts(sprint: ReviewSprint, task: ReviewTask, task_ids: set[str], task_store: ReviewTaskStore, parent_plan_hashes: dict[str, str]) -> list[ImplementationDocument]:
     conflicts: list[dict[str, Any]] = []
     if sprint.settings.get("require_same_parent", True) and sprint.parent_version_id and task.parent_version_id != sprint.parent_version_id:
         conflicts.append(_conflict("blocking", "parent_mismatch", [task.task_id], f"Task parent {task.parent_version_id} differs from sprint parent {sprint.parent_version_id}."))
@@ -713,7 +715,7 @@ def _task_conflicts(sprint: ReviewSprint, task: ReviewTask, task_ids: set[str], 
     return conflicts
 
 
-def _pair_conflicts(left: ReviewTask, right: ReviewTask) -> list[dict[str, Any]]:
+def _pair_conflicts(left: ReviewTask, right: ReviewTask) -> list[ImplementationDocument]:
     if left.status not in {"open", "candidate_ready"} or right.status not in {"open", "candidate_ready"}:
         return []
     conflicts: list[dict[str, Any]] = []
@@ -738,11 +740,11 @@ def _pair_conflicts(left: ReviewTask, right: ReviewTask) -> list[dict[str, Any]]
     return conflicts
 
 
-def _conflict(severity: str, kind: str, task_ids: list[str], message: str, **extra: Any) -> dict[str, Any]:
+def _conflict(severity: str, kind: str, task_ids: list[str], message: str, **extra: Any) -> ImplementationDocument:
     return sanitize_metadata({"severity": severity, "kind": kind, "task_ids": task_ids, "message": message, **extra})
 
 
-def _with_conflict_id(conflict: dict[str, Any], index: int) -> dict[str, Any]:
+def _with_conflict_id(conflict: ImplementationDocument, index: int) -> ImplementationDocument:
     return {"conflict_id": f"conflict-{index:03d}", **conflict}
 
 
@@ -793,7 +795,7 @@ def _lock_for_project(project_dir: Path) -> threading.RLock:
         return _STORE_LOCKS[key]
 
 
-def _append_event(root: Path, event_type: str, payload: dict[str, Any], now: str) -> None:
+def _append_event(root: Path, event_type: str, payload: ImplementationDocument, now: str) -> None:
     event_path = root / "events.jsonl"
     event_path.parent.mkdir(parents=True, exist_ok=True)
     with event_path.open("a", encoding="utf-8") as file:

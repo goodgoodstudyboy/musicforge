@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import os
 import shutil
@@ -73,7 +75,7 @@ class FileUnitOfWork:
                 "previous_generation": intent["previous_generation"],
             }
 
-    def _prepare_intent(self, records: list[dict[str, Any]]) -> tuple[dict[str, Any], Path]:
+    def _prepare_intent(self, records: list[ImplementationDocument]) -> tuple[ImplementationDocument, Path]:
         previous = self.artifacts.read_pointer(self.namespace)
         intent = {
             "schema_version": 1,
@@ -91,7 +93,7 @@ class FileUnitOfWork:
         _write_json_atomic(path, intent)
         return intent, path
 
-    def _commit_generation(self, staging: Path, records: list[dict[str, Any]]) -> Path:
+    def _commit_generation(self, staging: Path, records: list[ImplementationDocument]) -> Path:
         generation = self.artifacts.generation_dir(self.namespace, self.transaction_id)
         if generation.exists():
             raise RuntimeError("Artifact generation already exists.")
@@ -101,7 +103,7 @@ class FileUnitOfWork:
             raise RuntimeError("Committed generation fingerprint mismatch.")
         return generation
 
-    def _write_pointer(self, intent: dict[str, Any]) -> Path:
+    def _write_pointer(self, intent: ImplementationDocument) -> Path:
         return self.artifacts.write_pointer_atomic(self.namespace, {
             "schema_version": 1,
             "namespace": self.namespace,
@@ -110,7 +112,7 @@ class FileUnitOfWork:
             "updated_at": _now(),
         })
 
-    def _record_commit(self, generation: Path, intent: dict[str, Any], pointer_hash: str) -> None:
+    def _record_commit(self, generation: Path, intent: ImplementationDocument, pointer_hash: str) -> None:
         with self.database.transaction() as connection:
             connection.execute(
                 """
@@ -127,7 +129,7 @@ class FileUnitOfWork:
             )
             self._crash("before_database_commit")
 
-    def _finalize_intent(self, intent: dict[str, Any], path: Path, pointer_hash: str) -> None:
+    def _finalize_intent(self, intent: ImplementationDocument, path: Path, pointer_hash: str) -> None:
         marker = self.artifacts.marker_path(self.transaction_id)
         marker.write_text(json.dumps({"transaction_id": self.transaction_id, "pointer_hash": pointer_hash}, sort_keys=True) + "\n", encoding="utf-8")
         intent.update({"status": "committed", "pointer_hash": pointer_hash, "committed_at": _now()})
@@ -143,7 +145,7 @@ class FileUnitOfWork:
             self.crash_hook(stage)
 
 
-def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+def _write_json_atomic(path: Path, value: ImplementationDocument) -> None:
     temp = path.with_suffix(path.suffix + f".{os.getpid()}.tmp")
     temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temp.replace(path)

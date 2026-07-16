@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from pathlib import Path
 from typing import Any
@@ -41,7 +43,7 @@ def compare_project_versions(document: ProjectDocument, left_id: str, right_id: 
     }
 
 
-def _version_view(project_id: str, version: ProjectVersion, plan: SongPlan | None) -> dict[str, Any]:
+def _version_view(project_id: str, version: ProjectVersion, plan: SongPlan | None) -> ImplementationDocument:
     return {
         "project_id": project_id,
         "version_id": version.version_id,
@@ -61,7 +63,7 @@ def _version_view(project_id: str, version: ProjectVersion, plan: SongPlan | Non
     }
 
 
-def _quality_view(version: ProjectVersion, plan: SongPlan | None) -> dict[str, Any]:
+def _quality_view(version: ProjectVersion, plan: SongPlan | None) -> ImplementationDocument:
     if plan is not None and plan.quality is not None and plan.quality.scores is not None:
         return {
             "overall": plan.quality.scores.overall,
@@ -75,7 +77,7 @@ def _quality_view(version: ProjectVersion, plan: SongPlan | None) -> dict[str, A
     }
 
 
-def _gate_view(version: ProjectVersion) -> dict[str, Any]:
+def _gate_view(version: ProjectVersion) -> ImplementationDocument:
     return {
         "status": version.quality_gate_status,
         "score": version.quality_gate_score,
@@ -83,7 +85,7 @@ def _gate_view(version: ProjectVersion) -> dict[str, Any]:
     }
 
 
-def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
+def _edit_view(version: ProjectVersion) -> ImplementationDocument | None:
     path = Path(version.output_dir) / "data" / "edit-metadata.json"
     if not path.exists():
         return None
@@ -130,7 +132,7 @@ def _edit_view(version: ProjectVersion) -> dict[str, Any] | None:
     }
 
 
-def _compare_sections(left: SongPlan | None, right: SongPlan | None) -> list[dict[str, Any]]:
+def _compare_sections(left: SongPlan | None, right: SongPlan | None) -> list[ImplementationDocument]:
     left_sections = {section.name: section for section in left.sections} if left else {}
     right_sections = {section.name: section for section in right.sections} if right else {}
     rows = []
@@ -143,7 +145,7 @@ def _compare_sections(left: SongPlan | None, right: SongPlan | None) -> list[dic
     return rows
 
 
-def _compare_tracks(left: SongPlan | None, right: SongPlan | None) -> list[dict[str, Any]]:
+def _compare_tracks(left: SongPlan | None, right: SongPlan | None) -> list[ImplementationDocument]:
     left_tracks = {track.name: track for track in left.tracks} if left else {}
     right_tracks = {track.name: track for track in right.tracks} if right else {}
     rows = []
@@ -156,7 +158,7 @@ def _compare_tracks(left: SongPlan | None, right: SongPlan | None) -> list[dict[
     return rows
 
 
-def _section_data(section: Any) -> dict[str, Any] | None:
+def _section_data(section: Any) -> ImplementationDocument | None:
     if section is None:
         return None
     return {
@@ -167,7 +169,7 @@ def _section_data(section: Any) -> dict[str, Any] | None:
     }
 
 
-def _track_data(track: Any, plan: SongPlan | None) -> dict[str, Any] | None:
+def _track_data(track: Any, plan: SongPlan | None) -> ImplementationDocument | None:
     if track is None:
         return None
     song_beats = _song_beats(plan)
@@ -179,7 +181,7 @@ def _track_data(track: Any, plan: SongPlan | None) -> dict[str, Any] | None:
     }
 
 
-def _artifact_links(version: ProjectVersion) -> dict[str, Any]:
+def _artifact_links(version: ProjectVersion) -> ImplementationDocument:
     return {
         "job_id": version.job_id,
         "midi": f"/api/jobs/{version.job_id}/midi" if version.has_midi else None,
@@ -189,7 +191,7 @@ def _artifact_links(version: ProjectVersion) -> dict[str, Any]:
     }
 
 
-def _recommend(left: dict[str, Any], right: dict[str, Any]) -> str:
+def _recommend(left: ImplementationDocument, right: ImplementationDocument) -> str:
     left_gate = left["gate"]["status"]
     right_gate = right["gate"]["status"]
     passing = {"passed", "warning"}
@@ -206,7 +208,7 @@ def _recommend(left: dict[str, Any], right: dict[str, Any]) -> str:
     return "right" if int(right_score) > int(left_score) else "left"
 
 
-def _quality_delta(left: dict[str, Any], right: dict[str, Any]) -> int | None:
+def _quality_delta(left: ImplementationDocument, right: ImplementationDocument) -> int | None:
     left_score = left["quality"].get("overall")
     right_score = right["quality"].get("overall")
     if left_score is None or right_score is None:
@@ -250,7 +252,7 @@ def _short_text(value: str | None) -> str | None:
     return text[:120] + ("..." if len(text) > 120 else "")
 
 
-def _provider_patch_view(value: Any) -> dict[str, Any] | None:
+def _provider_patch_view(value: Any) -> ImplementationDocument | None:
     if not isinstance(value, dict):
         return None
     operations = value.get("operations")

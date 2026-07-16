@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import json
@@ -290,7 +292,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
             result = {"response": response, "verification": report, "summary": response_summary(response)}
             return sanitize_metadata(result, blocked_keys=PORTAL_REVIEW_BLOCKED_KEYS)
 
-    def _ensure_external_response_source_binding(self, response: dict[str, Any], pack: dict[str, Any]) -> None:
+    def _ensure_external_response_source_binding(self, response: ImplementationDocument, pack: ImplementationDocument) -> None:
         review_pack_id = str(response.get("review_pack_id") or "").strip()
         review_pack_source_hash = str(response.get("review_pack_source_hash") or "").strip()
         if not review_pack_id:
@@ -414,7 +416,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
         _write_json(root / f"{change_request_id}.json", request)
         return sanitize_metadata({"change_request": request, "existing": False}, blocked_keys=PORTAL_REVIEW_BLOCKED_KEYS)
 
-    def _decode_response_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _decode_response_payload(self, payload: ImplementationDocument) -> ImplementationDocument:
         if isinstance(payload.get("response"), dict):
             return dict(payload["response"])
         encoded = str(payload.get("content_base64") or payload.get("data_base64") or "")
@@ -434,7 +436,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
         count = len(list(root.glob("aprr-*.json"))) if root.exists() else 0
         return f"aprr-{count + 1:06d}"
 
-    def _find_change_request_for_response(self, portfolio_id: str, response_id: str, profile: str) -> dict[str, Any]:
+    def _find_change_request_for_response(self, portfolio_id: str, response_id: str, profile: str) -> ImplementationDocument:
         root = self.change_requests_dir(portfolio_id, profile)
         if not root.exists():
             return {}
@@ -444,7 +446,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
                 return value
         return {}
 
-    def _pack_findings(self, source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _pack_findings(self, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         checks: list[dict[str, Any]] = []
 
         def add(check_id: str, ok: bool, message: str) -> None:
@@ -458,7 +460,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
         warnings: list[dict[str, Any]] = []
         return blockers, warnings, checks
 
-    def _append_history(self, portfolio_id: str, profile: str, event_type: str, payload: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_history(self, portfolio_id: str, profile: str, event_type: str, payload: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.pack_history_path(portfolio_id, profile)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
@@ -494,7 +496,7 @@ def review_pack_integrity_ok(pack: dict[str, Any]) -> bool:
 
 
 
-def _response_status(response: dict[str, Any], pack: dict[str, Any]) -> str:
+def _response_status(response: ImplementationDocument, pack: ImplementationDocument) -> str:
     if response.get("review_pack_source_hash") and pack.get("source_hash") and response.get("review_pack_source_hash") != pack.get("source_hash"):
         return "stale"
     decision = response.get("decision")
@@ -505,7 +507,7 @@ def _response_status(response: dict[str, Any], pack: dict[str, Any]) -> str:
     return "accepted" if decision == "accepted" else "action_required"
 
 
-def _has_unresolved_high_findings(response: dict[str, Any]) -> bool:
+def _has_unresolved_high_findings(response: ImplementationDocument) -> bool:
     for finding in response.get("findings", []) if isinstance(response.get("findings"), list) else []:
         if not isinstance(finding, dict):
             continue
@@ -516,7 +518,7 @@ def _has_unresolved_high_findings(response: dict[str, Any]) -> bool:
     return False
 
 
-def _response_from_bytes(data: bytes) -> dict[str, Any]:
+def _response_from_bytes(data: bytes) -> ImplementationDocument:
     if data.startswith(b"PK"):
         import io
 
@@ -525,12 +527,12 @@ def _response_from_bytes(data: bytes) -> dict[str, Any]:
     return json.loads(data.decode("utf-8"))
 
 
-def _pack_id(portfolio_id: str, profile: str, source: dict[str, Any]) -> str:
+def _pack_id(portfolio_id: str, profile: str, source: ImplementationDocument) -> str:
     digest = stable_hash({"portfolio_id": portfolio_id, "profile": profile, "source": source})[:12]
     return f"aprp-{digest}"
 
 
-def _pack_summary(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _pack_summary(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "status": "failed" if blockers else "warning" if warnings else "ready",
         "portfolio_id": source.get("portfolio_id"),
@@ -544,7 +546,7 @@ def _pack_summary(source: dict[str, Any], blockers: list[dict[str, Any]], warnin
     }
 
 
-def _pack_data_documents(pack: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _pack_data_documents(pack: ImplementationDocument) -> dict[str, ImplementationDocument]:
     source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
     return {
         "portal-summary.json": {"source_hash": pack.get("source_hash"), "summary": pack.get("summary"), "portal": _portal_binding(source)},
@@ -555,7 +557,7 @@ def _pack_data_documents(pack: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _response_schema(pack: dict[str, Any]) -> dict[str, Any]:
+def _response_schema(pack: ImplementationDocument) -> ImplementationDocument:
     return {
         "source_hash": pack.get("source_hash"),
         "package_type": PORTAL_REVIEW_RESPONSE_PACKAGE_TYPE,
@@ -566,7 +568,7 @@ def _response_schema(pack: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _response_form(pack: dict[str, Any]) -> dict[str, Any]:
+def _response_form(pack: ImplementationDocument) -> ImplementationDocument:
     return {
         "schema_version": PORTAL_REVIEW_SCHEMA_VERSION,
         "package_type": PORTAL_REVIEW_RESPONSE_PACKAGE_TYPE,
@@ -582,7 +584,7 @@ def _response_form(pack: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _portal_binding(source: dict[str, Any]) -> dict[str, Any]:
+def _portal_binding(source: ImplementationDocument) -> ImplementationDocument:
     return {
         "portal_zip_sha256": source.get("portal_zip_sha256"),
         "portal_zip_size_bytes": source.get("portal_zip_size_bytes"),
@@ -601,7 +603,7 @@ def _portal_binding(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _reviewer_guide(pack: dict[str, Any]) -> str:
+def _reviewer_guide(pack: ImplementationDocument) -> str:
     summary = pack.get("summary") if isinstance(pack.get("summary"), dict) else {}
     return "\n".join(
         [
@@ -618,7 +620,7 @@ def _reviewer_guide(pack: dict[str, Any]) -> str:
     )
 
 
-def _response_form_markdown(pack: dict[str, Any]) -> str:
+def _response_form_markdown(pack: ImplementationDocument) -> str:
     return "\n".join(
         [
             "# Portal Review Response Form",
@@ -633,7 +635,7 @@ def _response_form_markdown(pack: dict[str, Any]) -> str:
     )
 
 
-def _pack_readme(pack: dict[str, Any]) -> str:
+def _pack_readme(pack: ImplementationDocument) -> str:
     return "\n".join(
         [
             "MusicForge Public Attestation Portal Review Pack",
@@ -647,7 +649,7 @@ def _pack_readme(pack: dict[str, Any]) -> str:
     )
 
 
-def _response_markdown(response: dict[str, Any]) -> str:
+def _response_markdown(response: ImplementationDocument) -> str:
     reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
     return "\n".join(
         [
@@ -673,12 +675,12 @@ def redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if matches else "passed", "matches": matches[:20]}
 
 
-def _state_tuple(pack: dict[str, Any]) -> dict[str, str]:
+def _state_tuple(pack: ImplementationDocument) -> dict[str, str]:
     source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
     return {"source_hash": str(pack.get("source_hash") or ""), "portal_zip_sha256": str(source.get("portal_zip_sha256") or ""), "portal_verification_hash": str(source.get("portal_verification_hash") or "")}
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     data = path.read_bytes()
     return {"path": path.relative_to(root).as_posix(), "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
@@ -687,7 +689,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
     return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -697,7 +699,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(payload, blocked_keys=PORTAL_REVIEW_BLOCKED_KEYS))
 

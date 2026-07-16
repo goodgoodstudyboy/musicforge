@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from typing import Any
 
@@ -223,7 +225,7 @@ def _recommended_action(
     local_ready: list[ReviewCandidate],
     provider_ready: list[ReviewCandidate],
     has_decision: bool,
-    conflict_summary: dict[str, Any],
+    conflict_summary: ImplementationDocument,
 ) -> str:
     if task.status == "stale" or conflict_summary["stale"]:
         return "skip_stale"
@@ -253,7 +255,7 @@ def _score_breakdown(
     local_ready: list[ReviewCandidate],
     provider_ready: list[ReviewCandidate],
     has_decision: bool,
-    conflict_summary: dict[str, Any],
+    conflict_summary: ImplementationDocument,
 ) -> dict[str, int]:
     priority = round(int(task.priority or 0) * 0.25)
     status = {
@@ -288,7 +290,7 @@ def _score_breakdown(
     }
 
 
-def _action_reason(action: str, task: ReviewTask, conflict_summary: dict[str, Any], provider_summary: dict[str, Any], has_decision: bool) -> str:
+def _action_reason(action: str, task: ReviewTask, conflict_summary: ImplementationDocument, provider_summary: ImplementationDocument, has_decision: bool) -> str:
     if action == "skip_stale":
         return "ReviewTask is stale and should be refreshed outside the sprint."
     if action == "skip_archived":
@@ -312,7 +314,7 @@ def _action_reason(action: str, task: ReviewTask, conflict_summary: dict[str, An
     return sanitize_sensitive_text(f"No immediate sprint action is recommended. Decision report present: {bool(has_decision)}; warnings: {conflict_summary['warning_count']}; provider candidates: {provider_summary.get('provider_candidate_count')}.")
 
 
-def _action_warnings(task: ReviewTask, conflict_summary: dict[str, Any], decision_report: dict[str, Any] | None) -> list[str]:
+def _action_warnings(task: ReviewTask, conflict_summary: ImplementationDocument, decision_report: ImplementationDocument | None) -> list[str]:
     warnings = []
     if conflict_summary["warning_count"]:
         warnings.append("sprint_conflict_warning")
@@ -332,7 +334,7 @@ def _context_pack_preview(
     task: ReviewTask,
     library_index: LibraryIndex | None,
     project_document: Any | None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     query = review_task_context_recommendation_query(project_id=project_id, sprint=sprint, task=task, project_document=project_document)
     if library_index is None:
         return {"query": query, "asset_refs": [], "reference_refs": [], "warnings": ["library_index_unavailable"]}
@@ -352,7 +354,7 @@ def _context_pack_preview(
     )
 
 
-def _sprint_level_recommendation(actions: list[dict[str, Any]], conflict_report: dict[str, Any]) -> dict[str, Any]:
+def _sprint_level_recommendation(actions: list[ImplementationDocument], conflict_report: ImplementationDocument) -> ImplementationDocument:
     blocking_count = len([item for item in conflict_report.get("conflicts", []) if isinstance(item, dict) and item.get("severity") == "blocking"]) if isinstance(conflict_report.get("conflicts"), list) else 0
     next_action = actions[0]["action"] if actions else "no_action"
     ready_to_close = bool(actions) and all(item.get("action") in {"resolve", "no_action", "skip_archived"} for item in actions) and not blocking_count
@@ -367,7 +369,7 @@ def _sprint_level_recommendation(actions: list[dict[str, Any]], conflict_report:
     )
 
 
-def _sprint_reason(next_action: str, blocking_count: int, actions: list[dict[str, Any]]) -> str:
+def _sprint_reason(next_action: str, blocking_count: int, actions: list[ImplementationDocument]) -> str:
     if blocking_count:
         return "At least one ReviewTask has a blocking conflict; inspect conflicts before candidate work."
     if next_action == "generate_provider":
@@ -383,7 +385,7 @@ def _sprint_reason(next_action: str, blocking_count: int, actions: list[dict[str
     return "No ReviewTasks are available for recommendation."
 
 
-def _top_recommendation_summary(action: dict[str, Any]) -> dict[str, Any]:
+def _top_recommendation_summary(action: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "task_id": action.get("task_id"),
@@ -406,12 +408,12 @@ def _ref_order(sprint: ReviewSprint, task_id: str) -> int:
     return 9999
 
 
-def _task_conflicts(conflict_report: dict[str, Any], task_id: str) -> list[dict[str, Any]]:
+def _task_conflicts(conflict_report: ImplementationDocument, task_id: str) -> list[ImplementationDocument]:
     conflicts = conflict_report.get("conflicts") if isinstance(conflict_report, dict) else []
     return [dict(item) for item in conflicts if isinstance(item, dict) and task_id in [str(task) for task in item.get("task_ids", [])]]
 
 
-def _conflict_summary(conflicts: list[dict[str, Any]]) -> dict[str, Any]:
+def _conflict_summary(conflicts: list[ImplementationDocument]) -> ImplementationDocument:
     blocking = [item for item in conflicts if item.get("severity") == "blocking"]
     warnings = [item for item in conflicts if item.get("severity") == "warning"]
     return {
@@ -421,7 +423,7 @@ def _conflict_summary(conflicts: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _conflict_public(conflict: dict[str, Any]) -> dict[str, Any]:
+def _conflict_public(conflict: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "conflict_id": conflict.get("conflict_id"),
@@ -432,7 +434,7 @@ def _conflict_public(conflict: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _order_bucket(action: dict[str, Any]) -> int:
+def _order_bucket(action: ImplementationDocument) -> int:
     if action.get("action") == "inspect_conflict":
         return 0
     if action.get("action") in {"skip_stale", "skip_archived"}:
@@ -448,14 +450,14 @@ def _context_ref_count(preview: Any) -> int:
     return len(preview.get("asset_refs") or []) + len(preview.get("reference_refs") or [])
 
 
-def _try_read_decision_report(task_store: ReviewTaskStore, task_id: str) -> dict[str, Any]:
+def _try_read_decision_report(task_store: ReviewTaskStore, task_id: str) -> ImplementationDocument:
     try:
         return task_store.read_decision_report(task_id)
     except (FileNotFoundError, OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
 
 
-def _song_request_for_task(project_document: Any | None, task: ReviewTask) -> dict[str, Any]:
+def _song_request_for_task(project_document: Any | None, task: ReviewTask) -> ImplementationDocument:
     if project_document is not None:
         versions = getattr(project_document, "versions", [])
         for version in versions:

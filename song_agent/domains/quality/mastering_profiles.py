@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import re
 import threading
 from dataclasses import dataclass
@@ -308,7 +310,7 @@ def mastering_profile_integrity_ok(profile: dict[str, Any]) -> bool:
     return bool(expected) and expected == mastering_profile_hash(profile)
 
 
-def _profile_from_payload(payload: dict[str, Any], *, now: str) -> MasteringProfile:
+def _profile_from_payload(payload: ImplementationDocument, *, now: str) -> MasteringProfile:
     data = {
         "schema_version": MASTERING_PROFILE_SCHEMA_VERSION,
         "profile_id": payload.get("profile_id"),

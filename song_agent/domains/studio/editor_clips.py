@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -306,7 +308,7 @@ def build_clip_insert_patch(
     return sanitize_metadata(patch), clip.summary(), [sanitize_sensitive_text(item) for item in warnings]
 
 
-def _asset_clip_summary(asset: CreativeAsset) -> dict[str, Any]:
+def _asset_clip_summary(asset: CreativeAsset) -> ImplementationDocument:
     summary = _base_summary(
         source_type="asset",
         source_id=asset.asset_id,
@@ -328,7 +330,7 @@ def _asset_clip_summary(asset: CreativeAsset) -> dict[str, Any]:
     return sanitize_metadata(summary)
 
 
-def _reference_slice_summaries(reference_store: ReferenceStore) -> list[dict[str, Any]]:
+def _reference_slice_summaries(reference_store: ReferenceStore) -> list[ImplementationDocument]:
     summaries: list[dict[str, Any]] = []
     for reference in reference_store.list_references():
         if reference.reference_type != "midi":
@@ -365,7 +367,7 @@ def _reference_slice_summaries(reference_store: ReferenceStore) -> list[dict[str
     return summaries
 
 
-def _project_version_clip_summaries(project_store: ProjectStore, project_id: str) -> list[dict[str, Any]]:
+def _project_version_clip_summaries(project_store: ProjectStore, project_id: str) -> list[ImplementationDocument]:
     try:
         document = project_store.get_project(project_id)
     except FileNotFoundError:
@@ -426,7 +428,7 @@ def _project_version_clip_summaries(project_store: ProjectStore, project_id: str
     return versions
 
 
-def _clip_from_asset(clip_ref: dict[str, Any], store: AssetStore) -> EditorClip:
+def _clip_from_asset(clip_ref: ImplementationDocument, store: AssetStore) -> EditorClip:
     asset_id = _clean_id(clip_ref.get("asset_id") or clip_ref.get("source_id"), "asset_id")
     asset = store.read_asset(asset_id)
     if asset.hidden:
@@ -456,7 +458,7 @@ def _clip_from_asset(clip_ref: dict[str, Any], store: AssetStore) -> EditorClip:
     )
 
 
-def _clip_from_reference_slice(clip_ref: dict[str, Any], store: ReferenceStore) -> EditorClip:
+def _clip_from_reference_slice(clip_ref: ImplementationDocument, store: ReferenceStore) -> EditorClip:
     reference_id = _clean_id(clip_ref.get("reference_id") or clip_ref.get("source_id"), "reference_id")
     slice_id = _clean_id(clip_ref.get("slice_id"), "slice_id")
     context = reference_context(store, reference_id)
@@ -494,7 +496,7 @@ def _clip_from_reference_slice(clip_ref: dict[str, Any], store: ReferenceStore) 
     )
 
 
-def _clip_from_project_section(clip_ref: dict[str, Any], *, default_project_id: str, project_store: ProjectStore) -> EditorClip:
+def _clip_from_project_section(clip_ref: ImplementationDocument, *, default_project_id: str, project_store: ProjectStore) -> EditorClip:
     project_id = _clean_id(clip_ref.get("project_id") or default_project_id, "project_id")
     version_id = _clean_id(clip_ref.get("source_version_id") or clip_ref.get("version_id"), "source_version_id")
     section_id = _clean_id(clip_ref.get("section_id"), "section_id")
@@ -534,7 +536,7 @@ def _clip_from_project_section(clip_ref: dict[str, Any], *, default_project_id: 
     )
 
 
-def _clip_from_project_track_range(clip_ref: dict[str, Any], *, default_project_id: str, project_store: ProjectStore) -> EditorClip:
+def _clip_from_project_track_range(clip_ref: ImplementationDocument, *, default_project_id: str, project_store: ProjectStore) -> EditorClip:
     project_id = _clean_id(clip_ref.get("project_id") or default_project_id, "project_id")
     version_id = _clean_id(clip_ref.get("source_version_id") or clip_ref.get("version_id"), "source_version_id")
     track_id = _clean_id(clip_ref.get("track_id"), "track_id")
@@ -577,7 +579,7 @@ def _clip_from_project_track_range(clip_ref: dict[str, Any], *, default_project_
     )
 
 
-def _raw_asset_notes(asset: CreativeAsset) -> list[dict[str, Any]]:
+def _raw_asset_notes(asset: CreativeAsset) -> list[ImplementationDocument]:
     notes = asset.content.get("notes")
     if isinstance(notes, list) and notes:
         return [dict(note) for note in notes if isinstance(note, dict)]
@@ -615,7 +617,7 @@ def _asset_has_notes(asset: CreativeAsset) -> bool:
         return False
 
 
-def _normalize_notes(raw_notes: list[dict[str, Any]]) -> list[ClipNote]:
+def _normalize_notes(raw_notes: list[ImplementationDocument]) -> list[ClipNote]:
     notes = [ClipNote.from_dict(dict(note)) for note in raw_notes if isinstance(note, dict)]
     if not notes:
         raise EditorClipUnavailableError("Clip has no notes.")
@@ -644,20 +646,20 @@ def _clip_duration(notes: list[ClipNote], fallback: float) -> float:
     return round(max(0.25, min(MAX_EDITOR_CLIP_DURATION_BEATS, duration or float(fallback or 0.25))), 6)
 
 
-def _target_track_id(target: dict[str, Any], state: dict[str, Any]) -> str:
+def _target_track_id(target: ImplementationDocument, state: ImplementationDocument) -> str:
     track_id = _clean_id(target.get("track_id"), "track_id")
     _track_by_id(state, track_id)
     return track_id
 
 
-def _target_section(target: dict[str, Any], state: dict[str, Any]) -> dict[str, Any] | None:
+def _target_section(target: ImplementationDocument, state: ImplementationDocument) -> ImplementationDocument | None:
     section_id = str(target.get("section_id") or "").strip()
     if not section_id:
         return None
     return _section_by_id(state, section_id)
 
 
-def _target_start_beat(target: dict[str, Any], section: dict[str, Any] | None) -> float:
+def _target_start_beat(target: ImplementationDocument, section: ImplementationDocument | None) -> float:
     if "start_beat" in target:
         return _float_min(target.get("start_beat"), "target.start_beat", 0.0)
     if section is not None:
@@ -665,7 +667,7 @@ def _target_start_beat(target: dict[str, Any], section: dict[str, Any] | None) -
     raise EditorClipError("target.start_beat is required when section_id is not provided.")
 
 
-def _note_ids_in_replace_range(state: dict[str, Any], track_id: str, start: float, end: float) -> list[str]:
+def _note_ids_in_replace_range(state: ImplementationDocument, track_id: str, start: float, end: float) -> list[str]:
     track = _track_by_id(state, track_id)
     lane = next((item for item in state.get("lanes", []) if item.get("track_id") == track_id), None)
     raw_notes = lane.get("notes", []) if isinstance(lane, dict) else track.get("notes", [])
@@ -684,11 +686,11 @@ def _clip_insert_metadata(
     clip: EditorClip,
     *,
     group_id: str,
-    target: dict[str, Any],
-    options: dict[str, Any],
+    target: ImplementationDocument,
+    options: ImplementationDocument,
     inserted_note_count: int,
     replaced_note_count: int,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     metadata = {
         "schema_version": EDITOR_CLIP_SCHEMA_VERSION,
         "clip_group_id": group_id,
@@ -711,7 +713,7 @@ def _clip_insert_metadata(
     return sanitize_metadata(metadata)
 
 
-def _clip_group_id(clip: EditorClip, *, track_id: str, start_beat: float, operations: list[dict[str, Any]]) -> str:
+def _clip_group_id(clip: EditorClip, *, track_id: str, start_beat: float, operations: list[ImplementationDocument]) -> str:
     operation_fingerprint = [
         {
             key: value
@@ -751,7 +753,7 @@ def _base_summary(
     suggested_key: str,
     suggested_tempo: int | None,
     source_hash: str,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     return {
         "schema_version": EDITOR_CLIP_SCHEMA_VERSION,
         "source_type": source_type,
@@ -767,7 +769,7 @@ def _base_summary(
     }
 
 
-def _find_slice(manifest: dict[str, Any], slice_id: str) -> dict[str, Any]:
+def _find_slice(manifest: ImplementationDocument, slice_id: str) -> ImplementationDocument:
     for item in manifest.get("slices", []) if isinstance(manifest.get("slices"), list) else []:
         if str(item.get("slice_id") or "") == slice_id:
             return dict(item)
@@ -795,20 +797,20 @@ def _version_plan(output_dir: str | Path) -> SongPlan | None:
         return None
 
 
-def _check_project_source_hash(clip_ref: dict[str, Any], actual_hash: str) -> None:
+def _check_project_source_hash(clip_ref: ImplementationDocument, actual_hash: str) -> None:
     expected_hash = str(clip_ref.get("source_hash") or "").strip()
     if expected_hash and expected_hash != actual_hash:
         raise EditorClipUnavailableError("Project version clip is stale.")
 
 
-def _section_by_id(state: dict[str, Any], section_id: str) -> dict[str, Any]:
+def _section_by_id(state: ImplementationDocument, section_id: str) -> ImplementationDocument:
     section = next((item for item in state.get("sections", []) if item.get("section_id") == section_id), None)
     if section is None:
         raise EditorClipError("Unknown section_id.")
     return dict(section)
 
 
-def _track_by_id(state: dict[str, Any], track_id: str) -> dict[str, Any]:
+def _track_by_id(state: ImplementationDocument, track_id: str) -> ImplementationDocument:
     track = next((item for item in state.get("tracks", []) if item.get("track_id") == track_id), None)
     if track is None:
         raise EditorClipError("Unknown track_id.")

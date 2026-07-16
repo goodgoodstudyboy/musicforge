@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -48,5 +50,5 @@ def audit_manifest_integrity_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in AUDIT_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def _entry_hash_payload(entry: dict[str, Any]) -> dict[str, Any]:
+def _entry_hash_payload(entry: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in (entry or {}).items() if key not in AUDIT_ENTRY_HASH_EXCLUDE_KEYS}

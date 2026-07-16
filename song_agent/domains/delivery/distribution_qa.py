@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import csv
 import io
 import json
@@ -204,20 +206,20 @@ def raw_metadata_formula_findings(value: Any) -> list[dict[str, Any]]:
     return sanitize_metadata(findings, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _distribution_encoded_audio_gate(store: DistributionStore, release_id: str, profile_ids: list[str], *, required: bool) -> dict[str, Any]:
+def _distribution_encoded_audio_gate(store: DistributionStore, release_id: str, profile_ids: list[str], *, required: bool) -> ImplementationDocument:
     if not required:
         return {"status": "not_required", "require_encoded_audio": False, "required_audio_format_profiles": []}
     encoding_store = AudioEncodingStore(store.release_store, project_store=store.release_store.project_store)
     return encoded_audio_gate(encoding_store, release_id, required_profiles=profile_ids, required=True)
 
 
-def _encoded_audio_summary_for_layout(store: DistributionStore, release_id: str, profile_ids: list[str]) -> dict[str, Any]:
+def _encoded_audio_summary_for_layout(store: DistributionStore, release_id: str, profile_ids: list[str]) -> ImplementationDocument:
     if not profile_ids:
         return {}
     return AudioEncodingStore(store.release_store, project_store=store.release_store.project_store).get_summary(release_id)
 
 
-def _checks(store: DistributionStore, release: ReleaseDocument, target: DistributionTarget, source: dict[str, Any]) -> list[dict[str, Any]]:
+def _checks(store: DistributionStore, release: ReleaseDocument, target: DistributionTarget, source: ImplementationDocument) -> list[ImplementationDocument]:
     options = target.options if isinstance(target.options, dict) else {}
     checks: list[dict[str, Any]] = []
     export_manifest = _safe_release_export_manifest(store, release.release_id)
@@ -311,7 +313,7 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
     return [sanitize_metadata(check, blocked_keys=DISTRIBUTION_BLOCKED_KEYS) for check in checks]
 
 
-def _mapping_checks(metadata: dict[str, Any], template: dict[str, Any]) -> list[dict[str, Any]]:
+def _mapping_checks(metadata: ImplementationDocument, template: ImplementationDocument) -> list[ImplementationDocument]:
     mapping = template_mapping(template)
     rows = mapping.get("platform_csv") if isinstance(mapping.get("platform_csv"), list) else []
     tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
@@ -342,7 +344,7 @@ def _mapping_checks(metadata: dict[str, Any], template: dict[str, Any]) -> list[
     return checks
 
 
-def _identifier_checks(metadata: dict[str, Any], options: dict[str, Any]) -> list[dict[str, Any]]:
+def _identifier_checks(metadata: ImplementationDocument, options: ImplementationDocument) -> list[ImplementationDocument]:
     release_meta = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
     tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
     checks: list[dict[str, Any]] = []
@@ -354,7 +356,7 @@ def _identifier_checks(metadata: dict[str, Any], options: dict[str, Any]) -> lis
     return checks
 
 
-def _artwork_checks(store: DistributionStore, release_id: str, artwork: dict[str, Any], options: dict[str, Any]) -> list[dict[str, Any]]:
+def _artwork_checks(store: DistributionStore, release_id: str, artwork: ImplementationDocument, options: ImplementationDocument) -> list[ImplementationDocument]:
     path = distribution_artwork_file_path(store, release_id, artwork)
     min_px = int(options.get("artwork_min_px") or 0)
     max_bytes = int(options.get("artwork_max_bytes") or 0)
@@ -369,7 +371,7 @@ def _artwork_checks(store: DistributionStore, release_id: str, artwork: dict[str
     return checks
 
 
-def _selected_artwork(store: DistributionStore, release_id: str, target: DistributionTarget) -> dict[str, Any]:
+def _selected_artwork(store: DistributionStore, release_id: str, target: DistributionTarget) -> ImplementationDocument:
     artwork_id = str((target.options or {}).get("artwork_id") or "").strip()
     if artwork_id:
         try:
@@ -379,14 +381,14 @@ def _selected_artwork(store: DistributionStore, release_id: str, target: Distrib
     return latest_distribution_artwork(store, release_id)
 
 
-def _safe_release_export_manifest(store: DistributionStore, release_id: str) -> dict[str, Any]:
+def _safe_release_export_manifest(store: DistributionStore, release_id: str) -> ImplementationDocument:
     try:
         return read_release_export_manifest(store.release_store, release_id)
     except (OSError, FileNotFoundError, ValueError, json.JSONDecodeError):
         return {}
 
 
-def _missing_release_export_audio(store: DistributionStore, release_id: str, manifest: dict[str, Any]) -> list[str]:
+def _missing_release_export_audio(store: DistributionStore, release_id: str, manifest: ImplementationDocument) -> list[str]:
     tracks = manifest.get("tracks") if isinstance(manifest.get("tracks"), list) else []
     missing: list[str] = []
     for item in tracks:
@@ -414,7 +416,7 @@ def _formula_cell(cell: str) -> bool:
     return bool(text and text.startswith(FORMULA_PREFIXES) and not text.startswith("'"))
 
 
-def _check(check_id: str, failed: bool, severity: str, message: str, count: int | None = None, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _check(check_id: str, failed: bool, severity: str, message: str, count: int | None = None, extra: ImplementationDocument | None = None) -> ImplementationDocument:
     item = {
         "scope": "distribution",
         "check_id": check_id,
@@ -429,7 +431,7 @@ def _check(check_id: str, failed: bool, severity: str, message: str, count: int 
     return sanitize_metadata(item, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _check_message(check: dict[str, Any]) -> dict[str, Any]:
+def _check_message(check: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "scope": check.get("scope"),

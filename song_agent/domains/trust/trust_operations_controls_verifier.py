@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -364,7 +366,7 @@ class _ControlVerifier:
         self._add_exact_check("assessment", "tohc_assessment_status_matches_blockers", self.assessment.get("status"), expected_status, "Assessment status")
         self._add_exact_check("assessment", "tohc_assessment_summary_matches_results", {key: self.assessment.get("summary", {}).get(key) for key in ("result_count", "passed_count", "failed_count", "required_failed_count", "blocker_count", "manual_action_count")}, {**_results_summary(actual_results), "blocker_count": len(actual_blockers), "manual_action_count": len(actual_actions)}, "Assessment summary")
 
-    def _assessment_external_source(self) -> dict[str, Any]:
+    def _assessment_external_source(self) -> ImplementationDocument:
         source = dict(self.assessment.get("source") if isinstance(self.assessment.get("source"), dict) else {})
         for kind, report in self.external_reports.items():
             if report:
@@ -434,7 +436,7 @@ class _ControlVerifier:
                 high_missing.append(str(entry.get("entry_id") or entry_hash))
         self._add_check("external", "tohc_external_high_knowledge_control_coverage", "failed" if high_missing else "passed", "blocking", "External high Knowledge entries missing controls: " + ", ".join(high_missing[:5]) if high_missing else "External high Knowledge entries have derived controls.")
 
-    def _external_incident_facts(self) -> dict[str, dict[str, Any]]:
+    def _external_incident_facts(self) -> dict[str, ImplementationDocument]:
         incidents = self.external_incidents_doc.get("incidents") if isinstance(self.external_incidents_doc.get("incidents"), list) else []
         closeouts = self.external_closeouts_doc.get("closeouts") if isinstance(self.external_closeouts_doc.get("closeouts"), list) else []
         closeout_by_id = {str(closeout.get("incident_id") or ""): closeout for closeout in closeouts if isinstance(closeout, dict)}
@@ -499,7 +501,7 @@ class _ControlVerifier:
         self.redaction_findings = findings
         self._add_check("security", "tohc_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Control package." if findings else "No sensitive values found in Control package.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         source = self.assessment.get("source") if isinstance(self.assessment.get("source"), dict) else {}
@@ -544,7 +546,7 @@ class _ControlVerifier:
             blocked_keys=VERIFIER_BLOCKED_KEYS,
         )
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         try:
             raw = archive.read(name)
             value = json.loads(raw.decode("utf-8"))
@@ -557,7 +559,7 @@ class _ControlVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parsed.")
         return value
 
-    def _read_external_json_entry(self, archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+    def _read_external_json_entry(self, archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
         try:
             value = json.loads(archive.read(name).decode("utf-8"))
         except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -574,7 +576,7 @@ class _ControlVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _control_matches_external_entry(control: dict[str, Any], entry: dict[str, Any], fact: dict[str, Any], guard: dict[str, Any] | None, knowledge_report: dict[str, Any], incident_report: dict[str, Any]) -> bool:
+def _control_matches_external_entry(control: ImplementationDocument, entry: ImplementationDocument, fact: ImplementationDocument, guard: ImplementationDocument | None, knowledge_report: ImplementationDocument, incident_report: ImplementationDocument) -> bool:
     source = control.get("source") if isinstance(control.get("source"), dict) else {}
     scope = control.get("scope") if isinstance(control.get("scope"), dict) else {}
     recommended = entry.get("recommended_guard") if isinstance(entry.get("recommended_guard"), dict) else {}
@@ -606,7 +608,7 @@ def _control_matches_external_entry(control: dict[str, Any], entry: dict[str, An
     )
 
 
-def _result_projection(rows: list[Any]) -> list[dict[str, Any]]:
+def _result_projection(rows: list[Any]) -> list[ImplementationDocument]:
     out = []
     for row in rows:
         if not isinstance(row, dict):
@@ -615,7 +617,7 @@ def _result_projection(rows: list[Any]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda item: str(item.get("control_id") or ""))
 
 
-def _blocker_projection(rows: list[Any]) -> list[dict[str, Any]]:
+def _blocker_projection(rows: list[Any]) -> list[ImplementationDocument]:
     out = []
     for row in rows:
         if not isinstance(row, dict):
@@ -624,7 +626,7 @@ def _blocker_projection(rows: list[Any]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda item: str(item.get("control_id") or ""))
 
 
-def _action_projection(rows: list[Any]) -> list[dict[str, Any]]:
+def _action_projection(rows: list[Any]) -> list[ImplementationDocument]:
     out = []
     for row in rows:
         if not isinstance(row, dict):
@@ -633,7 +635,7 @@ def _action_projection(rows: list[Any]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda item: str(item.get("control_id") or ""))
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     try:
         with open(_fs_path(path), "r", encoding="utf-8") as handle:
             value = json.load(handle)

@@ -1,184 +1,172 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesProjectReviewTask:
+    def _handle_project_review_task_route_part_01(self, method: str, project_id: str, task_id: str, action: str, _split_state):
+        self.project_store.get_project(project_id)
+        _split_state['task_store'] = _interfaces_api_runtime.ReviewTaskStore(self.project_store.project_dir(project_id))
+        _split_state['task'] = _split_state['task_store'].read_task(task_id)
+        if _split_state['task'].project_id != project_id:
+            raise FileNotFoundError(task_id)
+        if action == 'detail':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['candidates'] = _split_state['task_store'].list_candidates(_split_state['task'].task_id)
+            _split_state['decision_report'] = _interfaces_api_runtime._try_read_review_decision_report(_split_state['task_store'], _split_state['task'].task_id)
+            _split_state['judge_report'] = self._read_review_task_judge_report(project_id, _split_state['task_store'], _split_state['task'], _split_state['candidates'])
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict(), 'candidates': [_split_state['candidate'].to_dict() for _split_state['candidate'] in _split_state['candidates']], 'decision_report': _split_state['decision_report'], 'judge_report': _split_state['judge_report'], 'judge_summary': _interfaces_api_runtime.judge_report_summary(_split_state['judge_report']), 'provider_summary': _interfaces_api_runtime.review_candidate_source_breakdown(_split_state['candidates']), 'events': _split_state['task_store'].read_events(_split_state['task'].task_id)})
+            return (True, None)
+        if action == 'candidates':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            _split_state['_document'], _split_state['parent'], _split_state['_parent_job'], _split_state['parent_plan'] = self._project_edit_parent(project_id, _split_state['task'].parent_version_id)
+            _interfaces_api_runtime.ensure_task_current(_split_state['task'], _split_state['parent_plan'])
+            strategies = _split_state['payload'].get('strategies') if isinstance(_split_state['payload'].get('strategies'), list) else None
+            _split_state['generated'] = []
+            for _split_state['candidate'], _split_state['candidate_plan'], _split_state['validator'], _split_state['summary'] in _interfaces_api_runtime.build_local_review_candidates(_split_state['task'], _split_state['parent_plan'], strategies=strategies):
+                _split_state['stored'] = _split_state['task_store'].create_candidate(task=_split_state['task'], candidate=_split_state['candidate'], candidate_plan=_split_state['candidate_plan'], validator=_split_state['validator'], summary=_split_state['summary'], render_midi_file=bool(_split_state['payload'].get('render_midi', True)), now=_interfaces_api_runtime._utc_now())
+                _split_state['generated'].append(_split_state['stored'])
+            _split_state['ranked'] = _split_state['task_store'].rank_candidates(_split_state['task'])
+            _split_state['task'] = _split_state['task_store'].update_counts(_split_state['task'], now=_interfaces_api_runtime._utc_now())
+            _split_state['decision_report'] = _split_state['task_store'].write_decision_report(_split_state['task'], _interfaces_api_runtime.build_review_decision_report(task=_split_state['task'], candidates=_split_state['ranked'], parent_plan=_split_state['parent_plan'], now=_interfaces_api_runtime._utc_now()), now=_interfaces_api_runtime._utc_now())
+            self.project_store.append_event(project_id, 'review_task_candidates_generated', {'task_id': _split_state['task'].task_id, 'candidate_count': len(_split_state['generated'])})
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict(), 'candidates': [_split_state['candidate'].to_dict() for _split_state['candidate'] in _split_state['ranked']], 'created': [_split_state['candidate'].to_dict() for _split_state['candidate'] in _split_state['generated']], 'decision_report': _split_state['decision_report'], 'provider_summary': _interfaces_api_runtime.review_candidate_source_breakdown(_split_state['ranked'])}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        return (False, None)
+
+    def _handle_project_review_task_route_part_02(self, method: str, project_id: str, task_id: str, action: str, _split_state):
+        if action == 'provider-candidates':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            _split_state['payload'] = self._expand_context_pack_payload(_split_state['payload'])
+            _split_state['_document'], _split_state['parent'], _split_state['_parent_job'], _split_state['parent_plan'] = self._project_edit_parent(project_id, _split_state['task'].parent_version_id)
+            _interfaces_api_runtime.ensure_task_current(_split_state['task'], _split_state['parent_plan'])
+            template_id = str(_split_state['payload'].get('template_id') or 'provider-review-candidates').strip()
+            template = self.prompt_template_store.get_template(template_id)
+            if not template.enabled:
+                self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Prompt template is disabled.')
+                return (True, None)
+            candidate_count = int(_split_state['payload'].get('candidate_count') or 3)
+            config, _sources = _interfaces_api_runtime.load_provider_config()
+            asset_snapshot = _interfaces_api_runtime.asset_refs_snapshot(self.asset_store, _split_state['payload'].get('asset_refs'), captured_at=_interfaces_api_runtime._utc_now())
+            asset_prompt_refs = _interfaces_api_runtime.asset_prompt_summaries(self.asset_store, _split_state['payload'].get('asset_refs'))
+            reference_snapshot = _interfaces_api_runtime.reference_refs_snapshot(self.reference_store, _split_state['payload'].get('reference_refs'), captured_at=_interfaces_api_runtime._utc_now())
+            reference_prompt_refs = _interfaces_api_runtime.reference_prompt_summaries(self.reference_store, _split_state['payload'].get('reference_refs'))
+            local_context = _split_state['task_store'].list_candidates(_split_state['task'].task_id) if bool(_split_state['payload'].get('include_local_context', True)) else []
+            generated_specs, provider_snapshot, instruction = _interfaces_api_runtime.build_provider_review_candidates(task=_split_state['task'], parent_plan=_split_state['parent_plan'], template=template, config=config, candidate_count=candidate_count, local_candidates=local_context, asset_references=asset_prompt_refs, reference_references=reference_prompt_refs)
+            _split_state['generated'] = []
+            for _split_state['candidate'], _split_state['candidate_plan'], _split_state['validator'], _split_state['summary'] in generated_specs:
+                _split_state['stored'] = _split_state['task_store'].create_candidate(task=_split_state['task'], candidate=_split_state['candidate'], candidate_plan=_split_state['candidate_plan'], validator=_split_state['validator'], summary=_split_state['summary'], render_midi_file=bool(_split_state['payload'].get('render_midi', True)), now=_interfaces_api_runtime._utc_now())
+                _split_state['generated'].append(_split_state['stored'])
+            _split_state['ranked'] = _split_state['task_store'].rank_candidates(_split_state['task'])
+            _split_state['task'] = _split_state['task_store'].update_counts(_split_state['task'], now=_interfaces_api_runtime._utc_now())
+            provider_usage = provider_snapshot.get('usage') if isinstance(provider_snapshot.get('usage'), dict) else {}
+            usage_record = _interfaces_api_runtime._provider_usage_record(config_snapshot=provider_snapshot, operation='provider_review_candidates', template_id=template.template_id, started_at=_interfaces_api_runtime._utc_now(), status='completed', provider_usage=provider_usage, request_id=provider_snapshot.get('request_id'))
+            write_interface_document(_split_state['task_store'].task_dir(_split_state['task'].task_id) / 'provider-usage.json', usage_record)
+            _split_state['decision_report'] = _split_state['task_store'].write_decision_report(_split_state['task'], _interfaces_api_runtime.build_review_decision_report(task=_split_state['task'], candidates=_split_state['ranked'], parent_plan=_split_state['parent_plan'], now=_interfaces_api_runtime._utc_now(), notes=str(_split_state['payload'].get('decision_note') or '')), now=_interfaces_api_runtime._utc_now())
+            if asset_snapshot['asset_refs']:
+                self.asset_store.mark_used(asset_snapshot['asset_refs'], {'usage_type': 'review_task_provider_candidates', 'project_id': project_id, 'review_task_id': _split_state['task'].task_id})
+            if reference_snapshot['reference_refs']:
+                self.reference_store.mark_used(reference_snapshot['reference_refs'], {'usage_type': 'review_task_provider_candidates', 'project_id': project_id, 'review_task_id': _split_state['task'].task_id})
+            self.project_store.append_event(project_id, 'review_task_provider_candidates_generated', {'task_id': _split_state['task'].task_id, 'candidate_count': len(_split_state['generated']), 'template_id': template.template_id})
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict(), 'candidates': [_split_state['candidate'].to_dict() for _split_state['candidate'] in _split_state['ranked']], 'created': [_split_state['candidate'].to_dict() for _split_state['candidate'] in _split_state['generated']], 'decision_report': _split_state['decision_report'], 'provider_summary': _interfaces_api_runtime.review_candidate_source_breakdown(_split_state['ranked']), 'provider_snapshot': provider_snapshot, 'instruction': instruction}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        return (False, None)
+
+    def _handle_project_review_task_route_part_03(self, method: str, project_id: str, task_id: str, action: str, _split_state):
+        if action == 'decision-report':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['candidates'] = _split_state['task_store'].rank_candidates(_split_state['task'])
+            _split_state['decision_report'] = _interfaces_api_runtime._try_read_review_decision_report(_split_state['task_store'], _split_state['task'].task_id)
+            if not _split_state['decision_report']:
+                _split_state['_document'], _parent, _split_state['_parent_job'], _split_state['parent_plan'] = self._project_edit_parent(project_id, _split_state['task'].parent_version_id)
+                _split_state['judge_report'] = self._read_review_task_judge_report(project_id, _split_state['task_store'], _split_state['task'], _split_state['candidates'], parent_plan=_split_state['parent_plan'])
+                _split_state['decision_report'] = _split_state['task_store'].write_decision_report(_split_state['task'], _interfaces_api_runtime.build_review_decision_report(task=_split_state['task'], candidates=_split_state['candidates'], parent_plan=_split_state['parent_plan'], now=_interfaces_api_runtime._utc_now(), judge_report=_split_state['judge_report']), now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict(), 'decision_report': _split_state['decision_report'], 'provider_summary': _interfaces_api_runtime.review_candidate_source_breakdown(_split_state['candidates'])})
+            return (True, None)
+        if action == 'decision-report-refresh':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            _split_state['_document'], _parent, _split_state['_parent_job'], _split_state['parent_plan'] = self._project_edit_parent(project_id, _split_state['task'].parent_version_id)
+            _interfaces_api_runtime.ensure_task_current(_split_state['task'], _split_state['parent_plan'])
+            _split_state['candidates'] = _split_state['task_store'].rank_candidates(_split_state['task'])
+            _split_state['judge_report'] = self._read_review_task_judge_report(project_id, _split_state['task_store'], _split_state['task'], _split_state['candidates'], parent_plan=_split_state['parent_plan'])
+            _split_state['decision_report'] = _split_state['task_store'].write_decision_report(_split_state['task'], _interfaces_api_runtime.build_review_decision_report(task=_split_state['task'], candidates=_split_state['candidates'], parent_plan=_split_state['parent_plan'], now=_interfaces_api_runtime._utc_now(), notes=str(_split_state['payload'].get('note') or ''), judge_report=_split_state['judge_report']), now=_interfaces_api_runtime._utc_now())
+            self.project_store.append_event(project_id, 'review_task_decision_report_refreshed', {'task_id': _split_state['task'].task_id, 'recommended_candidate_id': _split_state['decision_report'].get('recommended_candidate_id')})
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict(), 'decision_report': _split_state['decision_report'], 'provider_summary': _interfaces_api_runtime.review_candidate_source_breakdown(_split_state['candidates'])})
+            return (True, None)
+        if action == 'judge-report':
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['candidates'] = _split_state['task_store'].rank_candidates(_split_state['task'])
+            _split_state['judge_report'] = self._read_review_task_judge_report(project_id, _split_state['task_store'], _split_state['task'], _split_state['candidates'])
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict(), 'judge_report': _split_state['judge_report'], 'summary': _interfaces_api_runtime.judge_report_summary(_split_state['judge_report']), 'provider_summary': _interfaces_api_runtime.review_candidate_source_breakdown(_split_state['candidates'])})
+            return (True, None)
+        if action == 'judge-report-refresh':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            result = self._refresh_review_task_judge_report(project_id, _split_state['task_store'], _split_state['task'], _split_state['payload'])
+            self._send_json(result)
+            return (True, None)
+        if action == 'resolve':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            _split_state['task'] = _split_state['task_store'].update_task(_interfaces_api_runtime.mark_task_resolved(_split_state['task'], str(_split_state['payload'].get('note') or ''), now=_interfaces_api_runtime._utc_now()), event='review_task_resolved', payload={'note': _split_state['payload'].get('note') or ''}, now=_interfaces_api_runtime._utc_now())
+            self.project_store.append_event(project_id, 'review_task_resolved', {'task_id': _split_state['task'].task_id, 'candidate_id': _split_state['task'].selected_candidate_id, 'version_id': _split_state['task'].applied_version_id})
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict()})
+            return (True, None)
+        if action == 'needs-more-work':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['payload'] = self._optional_json_body()
+            _split_state['task'], follow_up = self._create_review_task_follow_up(project_id, _split_state['task_store'], _split_state['task'], _split_state['payload'])
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict(), 'follow_up_task': follow_up.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        if action == 'archive':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['task'] = _split_state['task_store'].update_task(_interfaces_api_runtime.mark_task_archived(_split_state['task']), event='review_task_archived', payload={}, now=_interfaces_api_runtime._utc_now())
+            self.project_store.append_event(project_id, 'review_task_archived', {'task_id': _split_state['task'].task_id})
+            self._send_json({'ok': True, 'task': _split_state['task'].to_dict()})
+            return (True, None)
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Review task route not found.')
+        return (False, None)
+
     def _handle_project_review_task_route(self, method: str, project_id: str, task_id: str, action: str) -> None:
+        _split_state = {}
         try:
-            self.project_store.get_project(project_id)
-            task_store = _interfaces_api_runtime.ReviewTaskStore(self.project_store.project_dir(project_id))
-            task = task_store.read_task(task_id)
-            if task.project_id != project_id:
-                raise FileNotFoundError(task_id)
-            if action == "detail":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                candidates = task_store.list_candidates(task.task_id)
-                decision_report = _interfaces_api_runtime._try_read_review_decision_report(task_store, task.task_id)
-                judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates)
-                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in candidates], "decision_report": decision_report, "judge_report": judge_report, "judge_summary": _interfaces_api_runtime.judge_report_summary(judge_report), "provider_summary": _interfaces_api_runtime.review_candidate_source_breakdown(candidates), "events": task_store.read_events(task.task_id)})
-                return
-            if action == "candidates":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                _document, parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
-                _interfaces_api_runtime.ensure_task_current(task, parent_plan)
-                strategies = payload.get("strategies") if isinstance(payload.get("strategies"), list) else None
-                generated = []
-                for candidate, candidate_plan, validator, summary in _interfaces_api_runtime.build_local_review_candidates(task, parent_plan, strategies=strategies):
-                    stored = task_store.create_candidate(
-                        task=task,
-                        candidate=candidate,
-                        candidate_plan=candidate_plan,
-                        validator=validator,
-                        summary=summary,
-                        render_midi_file=bool(payload.get("render_midi", True)),
-                        now=_interfaces_api_runtime._utc_now(),
-                    )
-                    generated.append(stored)
-                ranked = task_store.rank_candidates(task)
-                task = task_store.update_counts(task, now=_interfaces_api_runtime._utc_now())
-                decision_report = task_store.write_decision_report(task, _interfaces_api_runtime.build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_interfaces_api_runtime._utc_now()), now=_interfaces_api_runtime._utc_now())
-                self.project_store.append_event(project_id, "review_task_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated)})
-                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in ranked], "created": [candidate.to_dict() for candidate in generated], "decision_report": decision_report, "provider_summary": _interfaces_api_runtime.review_candidate_source_breakdown(ranked)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            if action == "provider-candidates":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                payload = self._expand_context_pack_payload(payload)
-                _document, parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
-                _interfaces_api_runtime.ensure_task_current(task, parent_plan)
-                template_id = str(payload.get("template_id") or "provider-review-candidates").strip()
-                template = self.prompt_template_store.get_template(template_id)
-                if not template.enabled:
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Prompt template is disabled.")
-                    return
-                candidate_count = int(payload.get("candidate_count") or 3)
-                config, _sources = _interfaces_api_runtime.load_provider_config()
-                asset_snapshot = _interfaces_api_runtime.asset_refs_snapshot(self.asset_store, payload.get("asset_refs"), captured_at=_interfaces_api_runtime._utc_now())
-                asset_prompt_refs = _interfaces_api_runtime.asset_prompt_summaries(self.asset_store, payload.get("asset_refs"))
-                reference_snapshot = _interfaces_api_runtime.reference_refs_snapshot(self.reference_store, payload.get("reference_refs"), captured_at=_interfaces_api_runtime._utc_now())
-                reference_prompt_refs = _interfaces_api_runtime.reference_prompt_summaries(self.reference_store, payload.get("reference_refs"))
-                local_context = task_store.list_candidates(task.task_id) if bool(payload.get("include_local_context", True)) else []
-                generated_specs, provider_snapshot, instruction = _interfaces_api_runtime.build_provider_review_candidates(
-                    task=task,
-                    parent_plan=parent_plan,
-                    template=template,
-                    config=config,
-                    candidate_count=candidate_count,
-                    local_candidates=local_context,
-                    asset_references=asset_prompt_refs,
-                    reference_references=reference_prompt_refs,
-                )
-                generated = []
-                for candidate, candidate_plan, validator, summary in generated_specs:
-                    stored = task_store.create_candidate(
-                        task=task,
-                        candidate=candidate,
-                        candidate_plan=candidate_plan,
-                        validator=validator,
-                        summary=summary,
-                        render_midi_file=bool(payload.get("render_midi", True)),
-                        now=_interfaces_api_runtime._utc_now(),
-                    )
-                    generated.append(stored)
-                ranked = task_store.rank_candidates(task)
-                task = task_store.update_counts(task, now=_interfaces_api_runtime._utc_now())
-                provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
-                usage_record = _interfaces_api_runtime._provider_usage_record(
-                    config_snapshot=provider_snapshot,
-                    operation="provider_review_candidates",
-                    template_id=template.template_id,
-                    started_at=_interfaces_api_runtime._utc_now(),
-                    status="completed",
-                    provider_usage=provider_usage,
-                    request_id=provider_snapshot.get("request_id"),
-                )
-                write_interface_document(task_store.task_dir(task.task_id) / "provider-usage.json", usage_record)
-                decision_report = task_store.write_decision_report(task, _interfaces_api_runtime.build_review_decision_report(task=task, candidates=ranked, parent_plan=parent_plan, now=_interfaces_api_runtime._utc_now(), notes=str(payload.get("decision_note") or "")), now=_interfaces_api_runtime._utc_now())
-                if asset_snapshot["asset_refs"]:
-                    self.asset_store.mark_used(asset_snapshot["asset_refs"], {"usage_type": "review_task_provider_candidates", "project_id": project_id, "review_task_id": task.task_id})
-                if reference_snapshot["reference_refs"]:
-                    self.reference_store.mark_used(reference_snapshot["reference_refs"], {"usage_type": "review_task_provider_candidates", "project_id": project_id, "review_task_id": task.task_id})
-                self.project_store.append_event(project_id, "review_task_provider_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated), "template_id": template.template_id})
-                self._send_json({"ok": True, "task": task.to_dict(), "candidates": [candidate.to_dict() for candidate in ranked], "created": [candidate.to_dict() for candidate in generated], "decision_report": decision_report, "provider_summary": _interfaces_api_runtime.review_candidate_source_breakdown(ranked), "provider_snapshot": provider_snapshot, "instruction": instruction}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            if action == "decision-report":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                candidates = task_store.rank_candidates(task)
-                decision_report = _interfaces_api_runtime._try_read_review_decision_report(task_store, task.task_id)
-                if not decision_report:
-                    _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
-                    judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates, parent_plan=parent_plan)
-                    decision_report = task_store.write_decision_report(task, _interfaces_api_runtime.build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_interfaces_api_runtime._utc_now(), judge_report=judge_report), now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "task": task.to_dict(), "decision_report": decision_report, "provider_summary": _interfaces_api_runtime.review_candidate_source_breakdown(candidates)})
-                return
-            if action == "decision-report-refresh":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
-                _interfaces_api_runtime.ensure_task_current(task, parent_plan)
-                candidates = task_store.rank_candidates(task)
-                judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates, parent_plan=parent_plan)
-                decision_report = task_store.write_decision_report(task, _interfaces_api_runtime.build_review_decision_report(task=task, candidates=candidates, parent_plan=parent_plan, now=_interfaces_api_runtime._utc_now(), notes=str(payload.get("note") or ""), judge_report=judge_report), now=_interfaces_api_runtime._utc_now())
-                self.project_store.append_event(project_id, "review_task_decision_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": decision_report.get("recommended_candidate_id")})
-                self._send_json({"ok": True, "task": task.to_dict(), "decision_report": decision_report, "provider_summary": _interfaces_api_runtime.review_candidate_source_breakdown(candidates)})
-                return
-            if action == "judge-report":
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                candidates = task_store.rank_candidates(task)
-                judge_report = self._read_review_task_judge_report(project_id, task_store, task, candidates)
-                self._send_json({"ok": True, "task": task.to_dict(), "judge_report": judge_report, "summary": _interfaces_api_runtime.judge_report_summary(judge_report), "provider_summary": _interfaces_api_runtime.review_candidate_source_breakdown(candidates)})
-                return
-            if action == "judge-report-refresh":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                result = self._refresh_review_task_judge_report(project_id, task_store, task, payload)
-                self._send_json(result)
-                return
-            if action == "resolve":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                task = task_store.update_task(_interfaces_api_runtime.mark_task_resolved(task, str(payload.get("note") or ""), now=_interfaces_api_runtime._utc_now()), event="review_task_resolved", payload={"note": payload.get("note") or ""}, now=_interfaces_api_runtime._utc_now())
-                self.project_store.append_event(project_id, "review_task_resolved", {"task_id": task.task_id, "candidate_id": task.selected_candidate_id, "version_id": task.applied_version_id})
-                self._send_json({"ok": True, "task": task.to_dict()})
-                return
-            if action == "needs-more-work":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                payload = self._optional_json_body()
-                task, follow_up = self._create_review_task_follow_up(project_id, task_store, task, payload)
-                self._send_json({"ok": True, "task": task.to_dict(), "follow_up_task": follow_up.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            if action == "archive":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                task = task_store.update_task(_interfaces_api_runtime.mark_task_archived(task), event="review_task_archived", payload={}, now=_interfaces_api_runtime._utc_now())
-                self.project_store.append_event(project_id, "review_task_archived", {"task_id": task.task_id})
-                self._send_json({"ok": True, "task": task.to_dict()})
-                return
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Review task route not found.")
+            _split_result = self._handle_project_review_task_route_part_01(method, project_id, task_id, action, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_project_review_task_route_part_02(method, project_id, task_id, action, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_project_review_task_route_part_03(method, project_id, task_id, action, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
         except FileNotFoundError:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Review task not found.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Review task not found.')
         except _interfaces_api_runtime.ReviewTaskStateError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
         except _interfaces_api_runtime.ProviderError as exc:
@@ -250,7 +238,7 @@ class CreationRoutesProjectReviewTask:
         parent_plan: SongPlan,
         review_edit: Any,
         result: Any,
-        payload: dict[str, Any],
+        payload: ImplementationDocument,
     ) -> _interfaces_api_runtime.JobState:
         primary_intent = _interfaces_api_runtime.EditIntent.from_dict(review_edit.intents[0])
         job = self.store.create_edit_job(
@@ -282,7 +270,7 @@ class CreationRoutesProjectReviewTask:
         self.store.start_job(job.job_id)
         return job
 
-    def _handle_provider_review_edit_preview(self, project_id: str, parent: Any, parent_job: JobState, parent_plan: SongPlan, review_edit: Any, payload: dict[str, Any]) -> None:
+    def _handle_provider_review_edit_preview(self, project_id: str, parent: Any, parent_job: JobState, parent_plan: SongPlan, review_edit: Any, payload: ImplementationDocument) -> None:
         template_id = str(payload.get("template_id") or "provider-review-edit-intent").strip()
         template = self.prompt_template_store.get_template(template_id)
         if not template.enabled:

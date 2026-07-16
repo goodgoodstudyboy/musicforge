@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 from song_agent.domains.studio.projectio import read_json
@@ -49,7 +51,7 @@ def accepted_evidence_public_summary_from_portfolio_dir(portfolio_dir: Path, *, 
     return sanitize_metadata(summary, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
 
-def _missing_public_summary() -> dict[str, Any]:
+def _missing_public_summary() -> ImplementationDocument:
     return {
         "status": "missing",
         "external_review_status": "missing",
@@ -111,7 +113,7 @@ def accepted_evidence_verification_summary_from_portfolio_dir(portfolio_dir: Pat
     )
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:

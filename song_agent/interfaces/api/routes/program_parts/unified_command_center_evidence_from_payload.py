@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class ProgramRoutesUnifiedCommandCenterEvidenceFromPayload:
-    def _unified_command_center_evidence_from_payload(self, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _unified_command_center_evidence_from_payload(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         evidence = dict(payload or {})
         for key, zip_key, report_key in (
             ("release", "release_zip", "release_verification_report"),

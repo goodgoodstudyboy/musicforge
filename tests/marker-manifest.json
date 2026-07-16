@@ -329,6 +329,7 @@
     "tests/test_v14_compatibility_retirement.py": "contract",
     "tests/test_v14_domain_migration.py": "unit",
     "tests/test_v14_migration_baseline.py": "unit",
+    "tests/test_v14_quality_ratchets.py": "contract",
     "tests/test_verification_kernel.py": "unit",
     "tests/test_webui.py": "integration"
   },

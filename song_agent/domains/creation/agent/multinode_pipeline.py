@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -73,7 +75,7 @@ def _run_multinode_pipeline(
     request: SongRequest,
     *,
     provider_config: ProviderConfig | None,
-    provider_snapshot: dict[str, Any] | None,
+    provider_snapshot: ImplementationDocument | None,
     node_store: NodeStore,
     control: ControlFn | None,
     client: Any | None,
@@ -612,10 +614,10 @@ def _run_schema_node(
     *,
     node_store: NodeStore,
     request: SongRequest,
-    input_summary: dict[str, Any],
+    input_summary: ImplementationDocument,
     provider_config: ProviderConfig | None,
-    provider_snapshot: dict[str, Any] | None,
-    provider_input: dict[str, Any],
+    provider_snapshot: ImplementationDocument | None,
+    provider_input: ImplementationDocument,
     client: Any | None,
     control: ControlFn | None,
     retrying: bool = False,
@@ -664,10 +666,10 @@ def _schema_node_value(
     retrying: bool,
     node_store: NodeStore,
     request: SongRequest,
-    input_summary: dict[str, Any],
+    input_summary: ImplementationDocument,
     provider_config: ProviderConfig | None,
-    provider_snapshot: dict[str, Any] | None,
-    provider_input: dict[str, Any],
+    provider_snapshot: ImplementationDocument | None,
+    provider_input: ImplementationDocument,
     client: Any | None,
     control: ControlFn | None,
 ) -> Any:
@@ -697,9 +699,9 @@ def _node_value(
     affected_nodes: set[str],
     retrying: bool,
     node_store: NodeStore,
-    input_summary: dict[str, Any],
-    output_summary: Callable[[Any], dict[str, Any]],
-    provider_snapshot: dict[str, Any],
+    input_summary: ImplementationDocument,
+    output_summary: Callable[[Any], ImplementationDocument],
+    provider_snapshot: ImplementationDocument,
     control: ControlFn | None,
     success_status: str = "completed",
 ) -> Any:
@@ -723,9 +725,9 @@ def _run_node(
     produce: Callable[[], Any],
     *,
     node_store: NodeStore,
-    input_summary: dict[str, Any],
-    output_summary: Callable[[Any], dict[str, Any]],
-    provider_snapshot: dict[str, Any],
+    input_summary: ImplementationDocument,
+    output_summary: Callable[[Any], ImplementationDocument],
+    provider_snapshot: ImplementationDocument,
     control: ControlFn | None,
     success_status: str = "completed",
     retrying: bool = False,
@@ -811,8 +813,8 @@ def _node_provider_snapshot(
     node_name: str,
     request: SongRequest,
     provider_config: ProviderConfig | None,
-    provider_snapshot: dict[str, Any] | None,
-) -> dict[str, Any]:
+    provider_snapshot: ImplementationDocument | None,
+) -> ImplementationDocument:
     if provider_config is not None and node_name in PROVIDER_BACKED_NODES:
         return provider_snapshot or provider_config.to_snapshot("provider", _utc_now())
     return {
@@ -822,7 +824,7 @@ def _node_provider_snapshot(
     }
 
 
-def _node_output_summary(output: Any) -> dict[str, Any]:
+def _node_output_summary(output: Any) -> ImplementationDocument:
     if isinstance(output, SongBrief):
         return {"title": output.title, "tempo_bpm": output.tempo_bpm, "key": output.key}
     if isinstance(output, SonicPalette):
@@ -851,7 +853,7 @@ def _node_output_summary(output: Any) -> dict[str, Any]:
     return {}
 
 
-def _song_plan_summary(plan: SongPlan) -> dict[str, Any]:
+def _song_plan_summary(plan: SongPlan) -> ImplementationDocument:
     return {
         "title": plan.title,
         "tempo_bpm": plan.tempo_bpm,

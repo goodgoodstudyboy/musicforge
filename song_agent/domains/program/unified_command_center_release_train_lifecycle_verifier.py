@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -169,7 +171,7 @@ def _external_train_state(
     train_archive_verification_report_path: Path | str | None,
     train_signoff_binding_path: Path | str | None,
     external_evidence_manifest_path: Path | str | None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     state: dict[str, Any] = {"checks": checks, "signoff_events": [], "reset_events": [], "history": [], "runtime": {}, "external_report": {}, "signoff_binding": {}, "external_evidence_manifest": {}}
     if not require:
@@ -221,7 +223,7 @@ def _external_change_control_state(
     train_signoff_binding_path: Path | str | None,
     external_evidence_manifest_path: Path | str | None,
     reset_proof_paths: list[Path | str],
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     state: dict[str, Any] = {"checks": checks, "runtime": {}, "external_report": {}, "configured": False}
     if not require:
@@ -265,7 +267,7 @@ def _external_change_control_state(
     return state
 
 
-def _reset_proof_state(paths: list[Path | str]) -> dict[str, Any]:
+def _reset_proof_state(paths: list[Path | str]) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     proofs = []
     for index, value in enumerate(paths):
@@ -279,16 +281,16 @@ def _reset_proof_state(paths: list[Path | str]) -> dict[str, Any]:
 
 
 def _semantic_checks(
-    report: dict[str, Any],
-    succession: dict[str, Any],
-    coverage: dict[str, Any],
-    archive_history: dict[str, Any],
-    readiness: dict[str, Any],
-    evidence_index: dict[str, Any],
-    external_train: dict[str, Any],
-    external_change: dict[str, Any],
-    reset_proofs: dict[str, Any],
-) -> list[dict[str, Any]]:
+    report: ImplementationDocument,
+    succession: ImplementationDocument,
+    coverage: ImplementationDocument,
+    archive_history: ImplementationDocument,
+    readiness: ImplementationDocument,
+    evidence_index: ImplementationDocument,
+    external_train: ImplementationDocument,
+    external_change: ImplementationDocument,
+    reset_proofs: ImplementationDocument,
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     signoffs = external_train.get("signoff_events", [])
     resets = external_train.get("reset_events", [])
@@ -356,16 +358,16 @@ def _semantic_checks(
 
 
 def _document_binding_checks(
-    manifest: dict[str, Any],
-    report: dict[str, Any],
-    succession: dict[str, Any],
-    coverage: dict[str, Any],
-    archive_history: dict[str, Any],
-    readiness: dict[str, Any],
-    gap_plan: dict[str, Any],
-    evidence_index: dict[str, Any],
-    ledger: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    report: ImplementationDocument,
+    succession: ImplementationDocument,
+    coverage: ImplementationDocument,
+    archive_history: ImplementationDocument,
+    readiness: ImplementationDocument,
+    gap_plan: ImplementationDocument,
+    evidence_index: ImplementationDocument,
+    ledger: list[ImplementationDocument],
+) -> list[ImplementationDocument]:
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     return [
         _check("ucc_train_lifecycle_report_hash_binding", source.get("report_hash") == report.get("integrity_hash"), "Manifest binds report."),
@@ -380,7 +382,7 @@ def _document_binding_checks(
     ]
 
 
-def _ledger_chain_checks(ledger: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _ledger_chain_checks(ledger: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks = []
     previous = ""
     for index, event in enumerate(ledger):
@@ -393,7 +395,7 @@ def _ledger_chain_checks(ledger: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     declared = {str(row.get("path") or "") for row in files}
@@ -412,7 +414,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     return checks
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     leaks: list[str] = []
     for name in names:
         if not name.lower().endswith((".json", ".jsonl", ".txt", ".md")):
@@ -425,7 +427,7 @@ def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, An
     return _check("ucc_train_lifecycle_redaction_scan", not leaks, "Lifecycle text files do not contain obvious secrets or local paths.", {"leaks": sorted(set(leaks))})
 
 
-def _train_history_from_zip(path: Path) -> list[dict[str, Any]]:
+def _train_history_from_zip(path: Path) -> list[ImplementationDocument]:
     try:
         with zipfile.ZipFile(path) as archive:
             text = archive.read("train-history.jsonl").decode("utf-8")
@@ -434,7 +436,7 @@ def _train_history_from_zip(path: Path) -> list[dict[str, Any]]:
     return _parse_jsonl(text)
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     all_checks = [*checks, *extra]
     blockers = [check["check_id"] for check in all_checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
     warnings = [check["check_id"] for check in all_checks if check.get("status") == "warning"]
@@ -455,23 +457,23 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, severity: str = "blocking") -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, severity: str = "blocking") -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "severity": severity, "message": message, "details": details or {}}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import threading
 from dataclasses import dataclass, field
@@ -512,11 +514,11 @@ class PlanningRuleGovernanceStore:
     def _write_version(self, version: PlanningRuleVersion) -> None:
         write_json(self.version_dir(version.version_id) / "version.json", version.to_dict())
 
-    def _write_active(self, active: dict[str, Any]) -> None:
+    def _write_active(self, active: ImplementationDocument) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         write_json(self.active_path(), active)
 
-    def _active_pointer(self, version: PlanningRuleVersion, *, activated_by: str, now: str, event_type: str = "promote") -> dict[str, Any]:
+    def _active_pointer(self, version: PlanningRuleVersion, *, activated_by: str, now: str, event_type: str = "promote") -> ImplementationDocument:
         return sanitize_metadata(
             {
                 "schema_version": PLANNING_RULE_ACTIVE_POINTER_SCHEMA_VERSION,
@@ -638,7 +640,7 @@ def fix_plan_rule_governance_source(store: PlanningRuleGovernanceStore | None = 
     )
 
 
-def _risk_for_recommendation(recommendation: str, simulation: Any) -> dict[str, Any]:
+def _risk_for_recommendation(recommendation: str, simulation: Any) -> ImplementationDocument:
     warnings = []
     summary = simulation.summary if isinstance(getattr(simulation, "summary", None), dict) else {}
     if int(summary.get("synthetic_penalty_applied_count") or 0) > 0:
@@ -650,7 +652,7 @@ def _risk_for_recommendation(recommendation: str, simulation: Any) -> dict[str, 
     return {"status": "passed" if not warnings else "warning", "warnings": sorted(set(warnings)), "requires_force": False}
 
 
-def _review_source_core(review: Any) -> dict[str, Any]:
+def _review_source_core(review: Any) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "review_id": review.review_id,
@@ -664,7 +666,7 @@ def _review_source_core(review: Any) -> dict[str, Any]:
     )
 
 
-def _scope(value: Any) -> dict[str, Any]:
+def _scope(value: Any) -> ImplementationDocument:
     raw = value if isinstance(value, dict) else {}
     scope_type = str(raw.get("type") or ("release" if raw.get("release_id") else "project" if raw.get("project_id") else "global"))
     if scope_type not in {"global", "release", "project"}:
@@ -672,7 +674,7 @@ def _scope(value: Any) -> dict[str, Any]:
     return sanitize_metadata({"type": scope_type, "release_id": _bounded(raw.get("release_id"), 120), "project_id": _bounded(raw.get("project_id"), 120)})
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {})
 
 
@@ -706,7 +708,7 @@ def _lock_for_root(root: Path) -> threading.RLock:
         return _LOCKS[key]
 
 
-def _append_event(path: Path, event: str, payload: dict[str, Any], now: str | None = None) -> None:
+def _append_event(path: Path, event: str, payload: ImplementationDocument, now: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     record = sanitize_metadata({"event": event, "created_at": now or now_iso(), **payload})
     with path.open("a", encoding="utf-8") as file:

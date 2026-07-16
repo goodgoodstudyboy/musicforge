@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -396,7 +398,7 @@ class _OperationsCollector:
             sanitize_metadata(package_summaries, blocked_keys=OPERATIONS_BLOCKED_KEYS),
         )
 
-    def _release_domain(self) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def _release_domain(self) -> tuple[ImplementationDocument, ImplementationDocument, ImplementationDocument, ImplementationDocument]:
         qa = self.store.release_store.read_qa(self.release_id, default={})
         signoff = self.store.release_store.read_signoff(self.release_id, default={})
         try:
@@ -439,7 +441,7 @@ class _OperationsCollector:
         _finalize_domain(domain)
         return domain, {"summary": summary, "qa_summary": qa_summary, "export_summary": export_summary, "signoff_summary": signoff_summary, "zip_summary": zip_summary}, verifier_summary, zip_summary
 
-    def _metadata_domain(self) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _metadata_domain(self) -> tuple[ImplementationDocument, ImplementationDocument]:
         metadata = read_release_metadata(self.store.release_store, self.release_id, default={})
         qa = read_release_metadata_qa(self.store.release_store, self.release_id, default={}) if metadata else {}
         try:
@@ -458,7 +460,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain, {"summary": summary, "qa_summary": qa_summary, "export_summary": export_summary}
 
-    def _audio_domain(self) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _audio_domain(self) -> tuple[ImplementationDocument, ImplementationDocument]:
         audio_qa = read_release_audio_qa(self.store.release_store, self.release_id, default={})
         audio_reviews = self.store.audio_review_store.read_summary(self.release_id, default={})
         mastering = self.store.mastering_store.get_summary(self.release_id)
@@ -486,7 +488,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain, summary
 
-    def _rights_domain(self) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _rights_domain(self) -> tuple[ImplementationDocument, ImplementationDocument]:
         try:
             report = self.store.rights_clearance_store.read_report(self.release_id, default={})
         except TypeError:
@@ -501,7 +503,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain, summary
 
-    def _format_domain(self) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _format_domain(self) -> tuple[ImplementationDocument, ImplementationDocument]:
         try:
             report = self.store.format_decision_store.active_report(self.release_id)
         except Exception:
@@ -520,7 +522,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain, summary
 
-    def _distribution_domain(self) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _distribution_domain(self) -> tuple[ImplementationDocument, list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         targets = self.store.distribution_store.list_targets(self.release_id)
         rows: list[dict[str, Any]] = []
         verifiers: list[dict[str, Any]] = []
@@ -566,7 +568,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain, rows, verifiers, packages
 
-    def _submission_domain(self) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _submission_domain(self) -> tuple[ImplementationDocument, list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         batches = self.store.submission_store.list_submissions(self.release_id)
         rows: list[dict[str, Any]] = []
         verifiers: list[dict[str, Any]] = []
@@ -612,7 +614,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain, rows, verifiers, packages
 
-    def _submission_evidence_domain(self) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _submission_evidence_domain(self) -> tuple[ImplementationDocument, list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         batches = self.store.submission_store.list_submissions(self.release_id)
         rows: list[dict[str, Any]] = []
         verifiers: list[dict[str, Any]] = []
@@ -657,7 +659,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain, rows, verifiers, packages
 
-    def _exports_domain(self, release_source: dict[str, Any], distribution_source: list[dict[str, Any]], submission_source: list[dict[str, Any]], evidence_source: list[dict[str, Any]]) -> dict[str, Any]:
+    def _exports_domain(self, release_source: ImplementationDocument, distribution_source: list[ImplementationDocument], submission_source: list[ImplementationDocument], evidence_source: list[ImplementationDocument]) -> ImplementationDocument:
         missing = []
         if not release_source.get("export_summary", {}).get("exists"):
             missing.append("release")
@@ -670,7 +672,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain
 
-    def _verifiers_domain(self, summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    def _verifiers_domain(self, summaries: list[ImplementationDocument]) -> ImplementationDocument:
         failed = [item for item in summaries if item.get("status") not in {"passed", "warning", "missing"}]
         domain = _domain("verifiers", "passed", summary={"verifier_count": len(summaries), "failed_count": len(failed)}, required=False)
         for item in failed:
@@ -678,7 +680,7 @@ class _OperationsCollector:
         _finalize_domain(domain, optional_missing_pass=True)
         return domain
 
-    def _optional_domain(self, domain_id: str, status: str, summary: dict[str, Any], *, required: bool) -> dict[str, Any]:
+    def _optional_domain(self, domain_id: str, status: str, summary: ImplementationDocument, *, required: bool) -> ImplementationDocument:
         domain = _domain(domain_id, status, summary=summary, required=required)
         _finalize_domain(domain, optional_missing_pass=True)
         return domain
@@ -718,11 +720,11 @@ def operations_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _domain(domain_id: str, status: str, *, summary: dict[str, Any], required: bool) -> dict[str, Any]:
+def _domain(domain_id: str, status: str, *, summary: ImplementationDocument, required: bool) -> ImplementationDocument:
     return {"status": status, "summary": summary, "required": required, "stale": False, "blocker_count": 0, "warning_count": 0, "blockers": [], "warnings": [], "next_actions": [], "source_hash": stable_hash(summary)}
 
 
-def _finalize_domain(domain: dict[str, Any], *, optional_missing_pass: bool = False) -> None:
+def _finalize_domain(domain: ImplementationDocument, *, optional_missing_pass: bool = False) -> None:
     blockers = domain.get("blockers") if isinstance(domain.get("blockers"), list) else []
     warnings = domain.get("warnings") if isinstance(domain.get("warnings"), list) else []
     domain["blocker_count"] = len(blockers)
@@ -738,23 +740,23 @@ def _finalize_domain(domain: dict[str, Any], *, optional_missing_pass: bool = Fa
     domain["source_hash"] = stable_hash(domain.get("summary", {}))
 
 
-def _add_blocker_action(domain: dict[str, Any], entity_id: str, check_id: str, message: str, action: dict[str, Any], *, stage: str) -> None:
+def _add_blocker_action(domain: ImplementationDocument, entity_id: str, check_id: str, message: str, action: ImplementationDocument, *, stage: str) -> None:
     blocker = _blocker(domain=action.get("domain") or "release", scope=action.get("scope") or action.get("domain") or "release", entity_id=entity_id, check_id=check_id, message=message, recommended_action=action.get("description") or action.get("label") or "", action_hint=action.get("action_type") or "", stage=stage)
     domain.setdefault("blockers", []).append(blocker)
     domain.setdefault("next_actions", []).append({**action, "entity_id": entity_id, "unblocks": [stage], "blocked_by": [check_id]})
 
 
-def _add_warning_action(domain: dict[str, Any], entity_id: str, check_id: str, message: str, action: dict[str, Any], *, stage: str) -> None:
+def _add_warning_action(domain: ImplementationDocument, entity_id: str, check_id: str, message: str, action: ImplementationDocument, *, stage: str) -> None:
     warning = {"domain": action.get("domain") or "release", "scope": action.get("scope") or action.get("domain") or "release", "entity_id": entity_id, "check_id": check_id, "severity": "warning", "message": message, "recommended_action": action.get("description") or action.get("label") or "", "action_hint": action.get("action_type") or "", "stage": stage}
     domain.setdefault("warnings", []).append(sanitize_metadata(warning, blocked_keys=OPERATIONS_BLOCKED_KEYS))
     domain.setdefault("next_actions", []).append({**action, "entity_id": entity_id, "unblocks": [stage], "blocked_by": [check_id]})
 
 
-def _blocker(*, domain: str, scope: str, entity_id: str, check_id: str, message: str, recommended_action: str, action_hint: str, stage: str) -> dict[str, Any]:
+def _blocker(*, domain: str, scope: str, entity_id: str, check_id: str, message: str, recommended_action: str, action_hint: str, stage: str) -> ImplementationDocument:
     return sanitize_metadata({"domain": domain, "scope": scope, "entity_id": entity_id, "check_id": check_id, "severity": "blocking", "message": message, "recommended_action": recommended_action, "action_hint": action_hint, "stage": stage}, blocked_keys=OPERATIONS_BLOCKED_KEYS)
 
 
-def _action_for_check(check_id: str) -> dict[str, Any]:
+def _action_for_check(check_id: str) -> ImplementationDocument:
     mapping = {
         "release_tracks_exist": ("release", "release.add_track", "Add Release Track", "Add at least one signed project to the release."),
         "release_qa_passed": ("release", "release.qa.refresh", "Refresh Release QA", "Refresh Release QA and fix blockers."),
@@ -802,7 +804,7 @@ def _action_priority(action_type: str) -> int:
         return 100
 
 
-def _stage_statuses(domains: dict[str, Any]) -> list[dict[str, Any]]:
+def _stage_statuses(domains: ImplementationDocument) -> list[ImplementationDocument]:
     blockers_by_stage: dict[str, list[dict[str, Any]]] = {}
     warnings_by_stage: dict[str, list[dict[str, Any]]] = {}
     for domain in domains.values():
@@ -829,7 +831,7 @@ def _stage_statuses(domains: dict[str, Any]) -> list[dict[str, Any]]:
     return statuses
 
 
-def _current_stage(stage_statuses: list[dict[str, Any]]) -> tuple[str, str | None]:
+def _current_stage(stage_statuses: list[ImplementationDocument]) -> tuple[str, str | None]:
     current = "draft"
     for item in stage_statuses:
         stage = str(item.get("stage") or "")
@@ -842,13 +844,13 @@ def _current_stage(stage_statuses: list[dict[str, Any]]) -> tuple[str, str | Non
     return current, None
 
 
-def _stage_progress(stage_statuses: list[dict[str, Any]]) -> dict[str, Any]:
+def _stage_progress(stage_statuses: list[ImplementationDocument]) -> ImplementationDocument:
     total = len(stage_statuses)
     completed = sum(1 for item in stage_statuses if item.get("status") in {"passed", "warning"})
     return {"completed": completed, "total": total, "percent": int(round((completed / total) * 100)) if total else 0}
 
 
-def _domain_items(domains: dict[str, Any], key: str) -> list[dict[str, Any]]:
+def _domain_items(domains: ImplementationDocument, key: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for domain_id, domain in domains.items():
         if not isinstance(domain, dict):
@@ -859,24 +861,24 @@ def _domain_items(domains: dict[str, Any], key: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _renumber(rows: list[dict[str, Any]], key: str, prefix: str) -> list[dict[str, Any]]:
+def _renumber(rows: list[ImplementationDocument], key: str, prefix: str) -> list[ImplementationDocument]:
     return [{**row, key: f"{prefix}-{index:06d}"} for index, row in enumerate(rows, start=1)]
 
 
-def _package_summary(path: Path, *, status: str) -> dict[str, Any]:
+def _package_summary(path: Path, *, status: str) -> ImplementationDocument:
     if not path or not path.exists() or not path.is_file() or path.is_symlink():
         return {"status": status, "exists": False}
     return {"status": status, "exists": True, "filename": path.name, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
-def _package_summary_count(package_summaries: dict[str, Any]) -> int:
+def _package_summary_count(package_summaries: ImplementationDocument) -> int:
     count = 1 if isinstance(package_summaries.get("release_zip"), dict) and package_summaries["release_zip"].get("exists") else 0
     for key in ("distribution_packages", "submission_packages", "submission_evidence_packages"):
         count += sum(1 for item in package_summaries.get(key, []) if isinstance(item, dict) and item.get("exists"))
     return count
 
 
-def _summary_status(value: dict[str, Any] | None) -> dict[str, Any]:
+def _summary_status(value: ImplementationDocument | None) -> ImplementationDocument:
     data = value if isinstance(value, dict) else {}
     if not data:
         return {"status": "missing"}
@@ -884,7 +886,7 @@ def _summary_status(value: dict[str, Any] | None) -> dict[str, Any]:
     return sanitize_metadata({**summary, "status": data.get("status") or summary.get("status") or "present", "source_hash": data.get("source_hash") or summary.get("source_hash"), "integrity_hash": data.get("integrity_hash") or summary.get("integrity_hash")}, blocked_keys=OPERATIONS_BLOCKED_KEYS)
 
 
-def _rights_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _rights_summary(report: ImplementationDocument) -> ImplementationDocument:
     if not report:
         return {"status": "missing"}
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
@@ -902,7 +904,7 @@ def _rights_summary(report: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _operations_signoff_summary_for_report(store: ReleaseOperationsStore, release_id: str, current_source_hash: str) -> dict[str, Any]:
+def _operations_signoff_summary_for_report(store: ReleaseOperationsStore, release_id: str, current_source_hash: str) -> ImplementationDocument:
     path = store.operations_dir(release_id) / "operations-signoff.json"
     if not path.exists():
         return {"status": "not_signed", "integrity_ok": False, "stale": False}
@@ -933,7 +935,7 @@ def _operations_signoff_summary_for_report(store: ReleaseOperationsStore, releas
     )
 
 
-def _apply_operations_signoff_stage(stage_statuses: list[dict[str, Any]], signoff_summary: dict[str, Any]) -> list[dict[str, Any]]:
+def _apply_operations_signoff_stage(stage_statuses: list[ImplementationDocument], signoff_summary: ImplementationDocument) -> list[ImplementationDocument]:
     rows = [dict(item) for item in stage_statuses]
     for item in rows:
         if item.get("stage") != "archived":
@@ -949,7 +951,7 @@ def _apply_operations_signoff_stage(stage_statuses: list[dict[str, Any]], signof
     return rows
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -958,7 +960,7 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     lines = [
         "MusicForge Release Operations Package",
@@ -986,11 +988,11 @@ def _next_report_id(root: Path, *, existing: str | None = None) -> str:
     raise ReleaseOperationsError("Unable to allocate operations report id.")
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     return write_json(path, sanitize_metadata(data, blocked_keys=OPERATIONS_BLOCKED_KEYS))
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 

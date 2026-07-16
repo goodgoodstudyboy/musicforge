@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -341,7 +343,7 @@ class _AnchorRegistryVerifier:
                 self.redaction_findings.extend(_blocked_key_findings(name, value))
         self._add_check("redaction", "ptcar_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned text entries.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if not name or info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name or 'entry'} is missing.")
@@ -354,7 +356,7 @@ class _AnchorRegistryVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = anchor_registry_summary(self.registry)
@@ -388,7 +390,7 @@ class _AnchorRegistryVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _report_source_from_registry(registry: dict[str, Any]) -> dict[str, Any]:
+def _report_source_from_registry(registry: ImplementationDocument) -> ImplementationDocument:
     current = _current_entry(registry)
     zip_fingerprint = current.get("zip_fingerprint") if current and isinstance(current.get("zip_fingerprint"), dict) else {}
     return {
@@ -402,11 +404,11 @@ def _report_source_from_registry(registry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _current_entry(registry: dict[str, Any]) -> dict[str, Any]:
+def _current_entry(registry: ImplementationDocument) -> ImplementationDocument:
     return _find_entry(registry, str(registry.get("current_entry_id") or "")) if registry.get("current_entry_id") else {}
 
 
-def _find_entry(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
+def _find_entry(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
     for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
         if isinstance(entry, dict) and entry.get("entry_id") == entry_id:
             return entry
@@ -446,7 +448,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         for match in pattern.finditer(text):
@@ -457,7 +459,7 @@ def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _blocked_key_findings(path: str, value: Any) -> list[dict[str, Any]]:
+def _blocked_key_findings(path: str, value: Any) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
 
     def walk(current: Any, trail: str) -> None:

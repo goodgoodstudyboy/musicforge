@@ -92,128 +92,88 @@ def _execute_public_trust_center_publication_monitor(argv: list[str]) -> None:
 def handle_public_trust_center_publication_monitor(argv: list[str]) -> None:
     _execute_public_trust_center_publication_monitor(argv)
 
-def _execute_trust_operations_hub(argv: list[str]) -> None:
+def _execute_trust_operations_hub_part_01(argv: list[str], _split_state):
     raw_args = ['trust-operations-hub', *argv]
     pass
     pass
     parser = build_trust_operations_hub_parser()
-    args = parser.parse_args(raw_args[1:])
-    store = TrustOperationsHubStore()
-    result: dict[str, Any] = {"ok": True}
-    hub_id = args.hub_id
-    if args.create or not hub_id:
-        if hub_id and store.hub_path(hub_id).exists():
-            hub = store.read_hub(hub_id)
+    _split_state['args'] = parser.parse_args(raw_args[1:])
+    _split_state['store'] = TrustOperationsHubStore()
+    _split_state['result']: dict[str, Any] = {'ok': True}
+    _split_state['hub_id'] = _split_state['args'].hub_id
+    if _split_state['args'].create or not _split_state['hub_id']:
+        if _split_state['hub_id'] and _split_state['store'].hub_path(_split_state['hub_id']).exists():
+            hub = _split_state['store'].read_hub(_split_state['hub_id'])
         else:
-            hub = store.create_hub({"hub_id": hub_id, "name": args.name})
-        hub_id = str(hub.get("hub_id") or hub_id or "")
-        result["hub"] = hub
-    if not hub_id:
-        hubs = store.list_hubs()
+            hub = _split_state['store'].create_hub({'hub_id': _split_state['hub_id'], 'name': _split_state['args'].name})
+        _split_state['hub_id'] = str(hub.get('hub_id') or _split_state['hub_id'] or '')
+        _split_state['result']['hub'] = hub
+    if not _split_state['hub_id']:
+        hubs = _split_state['store'].list_hubs()
         if not hubs:
-            hub = store.create_hub({"name": args.name})
+            hub = _split_state['store'].create_hub({'name': _split_state['args'].name})
             hubs = [hub]
-        hub_id = str(hubs[0].get("hub_id") or "")
-        result["hub"] = hubs[0]
-    if not hub_id:
-        raise ValueError("--hub-id is required.")
-    report_id = args.report_id
-    source_payload = {
-        "publication_channel_state_path": args.publication_channel_state,
-        "public_trust_center_verification_path": args.public_trust_center_verification,
-        "publication_monitoring_verification_path": args.publication_monitoring_verification,
-        "release_verification_paths": args.release_verification,
-        "distribution_verification_paths": args.distribution_verification,
-        "submission_verification_paths": args.submission_verification,
-        "submission_evidence_verification_paths": args.submission_evidence_verification,
-        "release_operations_verification_paths": args.release_operations_verification,
-    }
-    if args.refresh:
-        refreshed = store.refresh_report(hub_id, source_payload)
-        report_id = str((refreshed.get("hub_report") or {}).get("report_id") or report_id or "")
-        result.update(refreshed)
-    if not report_id:
-        current = read_json(store.current_report_path(hub_id)) if store.current_report_path(hub_id).exists() else {}
-        report_id = str(current.get("report_id") or "")
-    if args.create_change_request:
-        result["change_request"] = store.create_change_request(hub_id, {"reason": args.reason, "change_request_id": args.change_request_id})
-    if args.approve_change_request:
-        result["change_request"] = store.approve_change_request(hub_id, args.approve_change_request)
-    if args.reset_signoff:
-        if not args.change_request_id:
-            raise ValueError("--change-request-id is required for --reset-signoff.")
-        result["reset"] = store.reset_signoff(hub_id, args.change_request_id)
-    if args.export:
-        if not report_id:
-            raise ValueError("--report-id is required for --export unless --refresh was used.")
-        result["manifest"] = store.export_report(hub_id, report_id)
-    if args.zip:
-        if not report_id:
-            raise ValueError("--report-id is required for --zip unless --refresh was used.")
-        result["zip"] = store.build_zip(hub_id, report_id)
-    if args.verify:
-        if not report_id:
-            raise ValueError("--report-id is required for --verify unless --refresh was used.")
-        verification = store.verify_zip(
-            hub_id,
-            report_id,
-            {
-                "strict": args.strict,
-                "require_ready": args.require_ready,
-                "require_signed": args.require_signed,
-                "require_current": args.require_current,
-                "require_no_critical_blockers": args.require_no_critical_blockers,
-                "require_publication_monitoring_clean": args.require_publication_monitoring_clean,
-                "require_delivery_ready": args.require_delivery_ready,
-                "require_incident_closeout": args.require_incident_closeout,
-                "require_incident_regression_guards": args.require_incident_regression_guards,
-                "require_trust_controls": args.require_trust_controls,
-                "require_trust_control_signoff": args.require_trust_control_signoff,
-                "require_continuous_assurance": args.require_continuous_assurance,
-                "publication_channel_state_path": args.publication_channel_state,
-                "public_trust_center_verification_path": args.public_trust_center_verification,
-                "publication_monitoring_verification_path": args.publication_monitoring_verification,
-                "release_verification_paths": args.release_verification,
-                "distribution_verification_paths": args.distribution_verification,
-                "submission_verification_paths": args.submission_verification,
-                "submission_evidence_verification_paths": args.submission_evidence_verification,
-                "release_operations_verification_paths": args.release_operations_verification,
-                "hub_signoff_path": args.hub_signoff,
-                "hub_verification_report_path": args.hub_verification_report,
-                "incident_board_package_path": args.incident_board_package,
-                "incident_board_verification_report_path": args.incident_board_verification_report,
-                "incident_knowledge_package_path": args.incident_knowledge_package,
-                "incident_knowledge_verification_report_path": args.incident_knowledge_verification_report,
-                "trust_control_package_path": args.trust_control_package,
-                "trust_control_verification_report_path": args.trust_control_verification_report,
-                "trust_control_signoff_archive_path": args.trust_control_signoff_archive,
-                "trust_control_signoff_verification_report_path": args.trust_control_signoff_verification_report,
-                "continuous_assurance_archive_path": args.continuous_assurance_archive,
-                "continuous_assurance_verification_report_path": args.continuous_assurance_verification_report,
-                "require_assurance_watch_clear": args.require_assurance_watch_clear,
-                "assurance_watch_package_path": args.assurance_watch_package,
-                "assurance_watch_verification_report_path": args.assurance_watch_verification_report,
-                "require_assurance_watch_signoff": args.require_assurance_watch_signoff,
-                "assurance_watch_signoff_archive_path": args.assurance_watch_signoff_archive,
-                "assurance_watch_signoff_verification_report_path": args.assurance_watch_signoff_verification_report,
-            },
-        )
-        result["verification"] = verification
-        result["verification_summary"] = verification.get("summary", {})
-    if args.signoff:
-        if not report_id:
-            raise ValueError("--report-id is required for --signoff unless --refresh was used.")
-        result["signoff"] = store.signoff(hub_id, report_id, {"signed_by": args.signed_by, "reason": args.reason, "force": args.force, "override_reason": args.override_reason})
-    if args.report_out is not None:
-        write_interface_document(args.report_out, result)
-    if args.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        _split_state['hub_id'] = str(hubs[0].get('hub_id') or '')
+        _split_state['result']['hub'] = hubs[0]
+    if not _split_state['hub_id']:
+        raise ValueError('--hub-id is required.')
+    _split_state['report_id'] = _split_state['args'].report_id
+    source_payload = {'publication_channel_state_path': _split_state['args'].publication_channel_state, 'public_trust_center_verification_path': _split_state['args'].public_trust_center_verification, 'publication_monitoring_verification_path': _split_state['args'].publication_monitoring_verification, 'release_verification_paths': _split_state['args'].release_verification, 'distribution_verification_paths': _split_state['args'].distribution_verification, 'submission_verification_paths': _split_state['args'].submission_verification, 'submission_evidence_verification_paths': _split_state['args'].submission_evidence_verification, 'release_operations_verification_paths': _split_state['args'].release_operations_verification}
+    if _split_state['args'].refresh:
+        refreshed = _split_state['store'].refresh_report(_split_state['hub_id'], source_payload)
+        _split_state['report_id'] = str((refreshed.get('hub_report') or {}).get('report_id') or _split_state['report_id'] or '')
+        _split_state['result'].update(refreshed)
+    if not _split_state['report_id']:
+        current = read_json(_split_state['store'].current_report_path(_split_state['hub_id'])) if _split_state['store'].current_report_path(_split_state['hub_id']).exists() else {}
+        _split_state['report_id'] = str(current.get('report_id') or '')
+    if _split_state['args'].create_change_request:
+        _split_state['result']['change_request'] = _split_state['store'].create_change_request(_split_state['hub_id'], {'reason': _split_state['args'].reason, 'change_request_id': _split_state['args'].change_request_id})
+    if _split_state['args'].approve_change_request:
+        _split_state['result']['change_request'] = _split_state['store'].approve_change_request(_split_state['hub_id'], _split_state['args'].approve_change_request)
+    if _split_state['args'].reset_signoff:
+        if not _split_state['args'].change_request_id:
+            raise ValueError('--change-request-id is required for --reset-signoff.')
+        _split_state['result']['reset'] = _split_state['store'].reset_signoff(_split_state['hub_id'], _split_state['args'].change_request_id)
+    if _split_state['args'].export:
+        if not _split_state['report_id']:
+            raise ValueError('--report-id is required for --export unless --refresh was used.')
+        _split_state['result']['manifest'] = _split_state['store'].export_report(_split_state['hub_id'], _split_state['report_id'])
+    if _split_state['args'].zip:
+        if not _split_state['report_id']:
+            raise ValueError('--report-id is required for --zip unless --refresh was used.')
+        _split_state['result']['zip'] = _split_state['store'].build_zip(_split_state['hub_id'], _split_state['report_id'])
+    return (False, None)
+
+def _execute_trust_operations_hub_part_02(argv: list[str], _split_state):
+    if _split_state['args'].verify:
+        if not _split_state['report_id']:
+            raise ValueError('--report-id is required for --verify unless --refresh was used.')
+        verification = _split_state['store'].verify_zip(_split_state['hub_id'], _split_state['report_id'], {'strict': _split_state['args'].strict, 'require_ready': _split_state['args'].require_ready, 'require_signed': _split_state['args'].require_signed, 'require_current': _split_state['args'].require_current, 'require_no_critical_blockers': _split_state['args'].require_no_critical_blockers, 'require_publication_monitoring_clean': _split_state['args'].require_publication_monitoring_clean, 'require_delivery_ready': _split_state['args'].require_delivery_ready, 'require_incident_closeout': _split_state['args'].require_incident_closeout, 'require_incident_regression_guards': _split_state['args'].require_incident_regression_guards, 'require_trust_controls': _split_state['args'].require_trust_controls, 'require_trust_control_signoff': _split_state['args'].require_trust_control_signoff, 'require_continuous_assurance': _split_state['args'].require_continuous_assurance, 'publication_channel_state_path': _split_state['args'].publication_channel_state, 'public_trust_center_verification_path': _split_state['args'].public_trust_center_verification, 'publication_monitoring_verification_path': _split_state['args'].publication_monitoring_verification, 'release_verification_paths': _split_state['args'].release_verification, 'distribution_verification_paths': _split_state['args'].distribution_verification, 'submission_verification_paths': _split_state['args'].submission_verification, 'submission_evidence_verification_paths': _split_state['args'].submission_evidence_verification, 'release_operations_verification_paths': _split_state['args'].release_operations_verification, 'hub_signoff_path': _split_state['args'].hub_signoff, 'hub_verification_report_path': _split_state['args'].hub_verification_report, 'incident_board_package_path': _split_state['args'].incident_board_package, 'incident_board_verification_report_path': _split_state['args'].incident_board_verification_report, 'incident_knowledge_package_path': _split_state['args'].incident_knowledge_package, 'incident_knowledge_verification_report_path': _split_state['args'].incident_knowledge_verification_report, 'trust_control_package_path': _split_state['args'].trust_control_package, 'trust_control_verification_report_path': _split_state['args'].trust_control_verification_report, 'trust_control_signoff_archive_path': _split_state['args'].trust_control_signoff_archive, 'trust_control_signoff_verification_report_path': _split_state['args'].trust_control_signoff_verification_report, 'continuous_assurance_archive_path': _split_state['args'].continuous_assurance_archive, 'continuous_assurance_verification_report_path': _split_state['args'].continuous_assurance_verification_report, 'require_assurance_watch_clear': _split_state['args'].require_assurance_watch_clear, 'assurance_watch_package_path': _split_state['args'].assurance_watch_package, 'assurance_watch_verification_report_path': _split_state['args'].assurance_watch_verification_report, 'require_assurance_watch_signoff': _split_state['args'].require_assurance_watch_signoff, 'assurance_watch_signoff_archive_path': _split_state['args'].assurance_watch_signoff_archive, 'assurance_watch_signoff_verification_report_path': _split_state['args'].assurance_watch_signoff_verification_report})
+        _split_state['result']['verification'] = verification
+        _split_state['result']['verification_summary'] = verification.get('summary', {})
+    if _split_state['args'].signoff:
+        if not _split_state['report_id']:
+            raise ValueError('--report-id is required for --signoff unless --refresh was used.')
+        _split_state['result']['signoff'] = _split_state['store'].signoff(_split_state['hub_id'], _split_state['report_id'], {'signed_by': _split_state['args'].signed_by, 'reason': _split_state['args'].reason, 'force': _split_state['args'].force, 'override_reason': _split_state['args'].override_reason})
+    if _split_state['args'].report_out is not None:
+        write_interface_document(_split_state['args'].report_out, _split_state['result'])
+    if _split_state['args'].json:
+        print(json.dumps(_split_state['result'], ensure_ascii=False, indent=2))
+    elif 'verification' in _split_state['result']:
+        print_trust_operations_hub_verification_report(_split_state['result']['verification'])
     else:
-        if "verification" in result:
-            print_trust_operations_hub_verification_report(result["verification"])
-        else:
-            print(json.dumps(result.get("summary") or {"status": "ok", "hub_id": hub_id, "report_id": report_id}, ensure_ascii=False, indent=2))
+        print(json.dumps(_split_state['result'].get('summary') or {'status': 'ok', 'hub_id': _split_state['hub_id'], 'report_id': _split_state['report_id']}, ensure_ascii=False, indent=2))
     raise SystemExit(0)
+    return (False, None)
+
+def _execute_trust_operations_hub(argv: list[str]) -> None:
+    _split_state = {}
+    _split_result = _execute_trust_operations_hub_part_01(argv, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
+    _split_result = _execute_trust_operations_hub_part_02(argv, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
 
 def handle_trust_operations_hub(argv: list[str]) -> None:
     _execute_trust_operations_hub(argv)

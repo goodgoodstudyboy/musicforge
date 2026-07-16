@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import binascii
 import hashlib
@@ -649,7 +651,7 @@ def _optional_tempo(value: Any) -> int | None:
     return tempo
 
 
-def _reference_matches(reference: ReferenceItem, filters: dict[str, Any]) -> bool:
+def _reference_matches(reference: ReferenceItem, filters: ImplementationDocument) -> bool:
     q = str(filters.get("q") or "").strip().lower()
     if q and q not in f"{reference.title} {reference.description} {' '.join(reference.tags)}".lower():
         return False
@@ -683,12 +685,12 @@ def _default_reference_role(reference_type: str) -> str:
     }.get(reference_type, "reference")
 
 
-def _read_text_excerpt(reference: ReferenceItem, payload: dict[str, Any]) -> str:
+def _read_text_excerpt(reference: ReferenceItem, payload: ImplementationDocument) -> str:
     text = _bounded_text(payload.get("text"), "text", 2000)
     return text or reference.text_excerpt or reference.title
 
 
-def _midi_seed_content(reference: ReferenceItem, asset_type: str) -> dict[str, Any]:
+def _midi_seed_content(reference: ReferenceItem, asset_type: str) -> ImplementationDocument:
     if asset_type == "motif":
         return {
             "kind": "motif",
@@ -722,7 +724,7 @@ def _midi_seed_content(reference: ReferenceItem, asset_type: str) -> dict[str, A
     }
 
 
-def _append_reference_event(reference_dir: Path, event_type: str, payload: dict[str, Any], timestamp: str | None = None) -> None:
+def _append_reference_event(reference_dir: Path, event_type: str, payload: ImplementationDocument, timestamp: str | None = None) -> None:
     event = {"timestamp": timestamp or now_iso(), "type": event_type, "payload": payload}
     reference_dir.mkdir(parents=True, exist_ok=True)
     with (reference_dir / "events.jsonl").open("a", encoding="utf-8") as file:

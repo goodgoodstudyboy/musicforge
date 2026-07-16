@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -64,7 +66,7 @@ def transparency_summary(feed: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _build_events(portfolio_id: str, profile: str, public_state: dict[str, Any], source: dict[str, Any], *, now: str) -> list[dict[str, Any]]:
+def _build_events(portfolio_id: str, profile: str, public_state: ImplementationDocument, source: ImplementationDocument, *, now: str) -> list[ImplementationDocument]:
     registry = public_state.get("registry") if isinstance(public_state.get("registry"), dict) else {}
     attestation = public_state.get("public_attestation") if isinstance(public_state.get("public_attestation"), dict) else {}
     portal = public_state.get("portal") if isinstance(public_state.get("portal"), dict) else {}
@@ -118,13 +120,13 @@ def _build_events(portfolio_id: str, profile: str, public_state: dict[str, Any],
 def _build_notices(
     portfolio_id: str,
     profile: str,
-    public_state: dict[str, Any],
-    source: dict[str, Any],
-    events: list[dict[str, Any]],
-    previous_feed: dict[str, Any],
+    public_state: ImplementationDocument,
+    source: ImplementationDocument,
+    events: list[ImplementationDocument],
+    previous_feed: ImplementationDocument,
     *,
     now: str,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     registry = public_state.get("registry") if isinstance(public_state.get("registry"), dict) else {}
     portal = public_state.get("portal") if isinstance(public_state.get("portal"), dict) else {}
     accepted = public_state.get("accepted_evidence") if isinstance(public_state.get("accepted_evidence"), dict) else {}
@@ -167,7 +169,7 @@ def _build_notices(
     return notices
 
 
-def _accepted_evidence_current(source: dict[str, Any]) -> bool:
+def _accepted_evidence_current(source: ImplementationDocument) -> bool:
     return (
         source.get("accepted_evidence_status") == "current"
         and source.get("accepted_evidence_external_review_status") == "accepted"

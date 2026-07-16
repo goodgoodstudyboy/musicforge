@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -331,17 +333,17 @@ def command_center_signoff_verification_exit_code(report: dict[str, Any]) -> int
 
 
 def _internal_binding_checks(
-    manifest: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    state: dict[str, Any],
-    fingerprint: dict[str, Any],
-    verification: dict[str, Any],
-    evidence: dict[str, Any],
-    checklist: dict[str, Any],
-    latest_state_event: dict[str, Any] | None,
-    signoff_event: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    state: ImplementationDocument,
+    fingerprint: ImplementationDocument,
+    verification: ImplementationDocument,
+    evidence: ImplementationDocument,
+    checklist: ImplementationDocument,
+    latest_state_event: ImplementationDocument | None,
+    signoff_event: ImplementationDocument | None,
+) -> list[ImplementationDocument]:
     source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
     manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     reason_hash = stable_hash({"reason": signoff.get("reason")})
@@ -383,7 +385,7 @@ def _internal_binding_checks(
     return checks
 
 
-def _history_checks(history: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any] | None, dict[str, Any] | None]:
+def _history_checks(history: list[ImplementationDocument]) -> tuple[list[ImplementationDocument], ImplementationDocument | None, ImplementationDocument | None]:
     checks: list[dict[str, Any]] = []
     previous = ""
     latest_state: dict[str, Any] | None = None
@@ -407,7 +409,7 @@ def _history_checks(history: list[dict[str, Any]]) -> tuple[list[dict[str, Any]]
     return checks, latest_state, latest_signoff
 
 
-def _external_binding_checks(path_value: Path | str | None, packaged: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _external_binding_checks(path_value: Path | str | None, packaged: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not path_value:
         return [_check("urpcccs_external_signoff_binding_required", not require, "External signoff binding is provided.")]
     path = Path(path_value)
@@ -428,14 +430,14 @@ def _current_command_center_checks(
     zip_value: Path | str | None,
     report_value: Path | str | None,
     evidence_value: Path | str | None,
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    fingerprint: dict[str, Any],
-    verification_summary: dict[str, Any],
-    evidence_summary: dict[str, Any],
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    fingerprint: ImplementationDocument,
+    verification_summary: ImplementationDocument,
+    evidence_summary: ImplementationDocument,
     *,
     require: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not zip_value or not report_value or not evidence_value:
         return [_check("urpcccs_current_command_center_evidence_required", not require, "Current Command Center ZIP, verification report, and evidence manifest are provided.")]
@@ -500,8 +502,8 @@ def _external_archive_checks(
     command_center_zip_value: Path | str | None,
     command_center_report_value: Path | str | None,
     evidence_value: Path | str | None,
-    packaged_summary: dict[str, Any],
-) -> list[dict[str, Any]]:
+    packaged_summary: ImplementationDocument,
+) -> list[ImplementationDocument]:
     if not archive_zip_value or not report_value or not binding_value:
         return [_check("urpccch_external_archive_required", False, "External Archive ZIP, verification report, and signoff binding are required.")]
     archive_path, report_path = Path(archive_zip_value), Path(report_value)
@@ -548,11 +550,11 @@ _SOURCE_FIELDS = (
 )
 
 
-def _source_projection(value: dict[str, Any]) -> dict[str, Any]:
+def _source_projection(value: ImplementationDocument) -> ImplementationDocument:
     return {field: value.get(field) for field in _SOURCE_FIELDS}
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], required: set[str], prefix: str) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, required: set[str], prefix: str) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = required - {"manifest.json"}
@@ -568,19 +570,19 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], require
     return checks
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id=check_id)
 
 
-def _finish_archive(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish_archive(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     return _finish(checks, summary, COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE, *extra)
 
 
-def _finish_handoff(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish_handoff(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     return _finish(checks, summary, COMMAND_CENTER_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE, *extra)
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], package_type: str, *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, package_type: str, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     return build_verification_report(
         package_type=package_type,
@@ -590,11 +592,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], package_type:
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(value: str) -> list[dict[str, Any]]:
+def _parse_jsonl(value: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in value.splitlines() if line.strip()]
 
 
@@ -602,5 +604,5 @@ def _safe_check_key(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value.strip("/").replace("/", "_"))[:120] or "root"
 
 
-def _has_blockers(checks: list[dict[str, Any]]) -> bool:
+def _has_blockers(checks: list[ImplementationDocument]) -> bool:
     return any(row.get("status") == "failed" for row in checks)

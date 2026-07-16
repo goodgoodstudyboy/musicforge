@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import threading
@@ -739,13 +741,13 @@ class FormatDecisionStore:
         profiles = [str(row.get("profile_id") or "") for row in self.encoding_store.list_manifests(release_id, current=False) if isinstance(row, dict)]
         return sorted(profile for profile in profiles if profile)
 
-    def _read_acceptance_summary(self, release_id: str, profiles: list[str], *, now: str | None = None) -> dict[str, Any]:
+    def _read_acceptance_summary(self, release_id: str, profiles: list[str], *, now: str | None = None) -> ImplementationDocument:
         from song_agent.domains.creation.encoded_audio_acceptance import EncodedAudioAcceptanceStore
 
         store = EncodedAudioAcceptanceStore(self.release_store, project_store=self.project_store, audio_encoding_store=self.encoding_store)
         return store.build_summary(release_id, required_profiles=profiles, now=now)
 
-    def _review_by_id(self, release_id: str, review_id: str) -> dict[str, Any]:
+    def _review_by_id(self, release_id: str, review_id: str) -> ImplementationDocument:
         if not review_id:
             return {}
         path = self.release_store.release_dir(release_id) / "encoded-audio" / "acceptance" / "reviews" / f"{review_id}.json"
@@ -754,7 +756,7 @@ class FormatDecisionStore:
         value = read_json(path)
         return value if isinstance(value, dict) else {}
 
-    def _target_context(self, release_id: str) -> dict[str, Any]:
+    def _target_context(self, release_id: str) -> ImplementationDocument:
         targets = []
         for target in self.distribution_store.list_targets(release_id):
             template = self.distribution_store.resolve_target_template(target)
@@ -793,7 +795,7 @@ class FormatDecisionStore:
                 return session_id
             index += 1
 
-    def _append_event(self, release_id: str, session_id: str, event_type: str, payload: dict[str, Any], now: str | None = None) -> None:
+    def _append_event(self, release_id: str, session_id: str, event_type: str, payload: ImplementationDocument, now: str | None = None) -> None:
         path = self.session_dir(release_id, session_id) / "events.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         event = sanitize_metadata({"timestamp": now or now_iso(), "type": event_type, "payload": payload}, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
@@ -981,7 +983,7 @@ def _safe_text(value: Any, fallback: str, limit: int) -> str:
     return text or fallback
 
 
-def _decision_relevant_target_options(options: Any) -> dict[str, Any]:
+def _decision_relevant_target_options(options: Any) -> ImplementationDocument:
     data = options if isinstance(options, dict) else {}
     return {
         key: data.get(key)
@@ -990,7 +992,7 @@ def _decision_relevant_target_options(options: Any) -> dict[str, Any]:
     }
 
 
-def _target_profile_id(target: DistributionTarget | dict[str, Any]) -> str:
+def _target_profile_id(target: DistributionTarget | ImplementationDocument) -> str:
     if isinstance(target, DistributionTarget):
         return str(target.profile_id or "")
     if isinstance(target, dict):

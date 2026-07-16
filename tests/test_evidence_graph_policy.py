@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from song_agent import __version__
 from song_agent.capabilities.registry import CapabilityRegistry, CapabilitySpec, RuntimeVerificationSpec
 from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, write_ga_readiness_report
@@ -13,10 +15,13 @@ from song_agent.platform.contracts.policy import (
     NoBlockerRequirement,
     PolicyProfile,
     RuntimeVerificationRequirement,
+    QuorumRequirement,
 )
 from song_agent.platform.evidence_graph import build_evidence_graph
+from song_agent.platform.evidence_graph.model import EvidenceEdge, EvidenceGraph, EvidenceNode
+from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.evidence_graph.builder import write_evidence_graph_manifest
-from song_agent.platform.policy import evaluate_policy
+from song_agent.platform.policy import evaluate_policy, get_policy_profile, policy_profile_ids
 from song_agent.platform.verification.hashing import integrity_hash, sha256_file
 from song_agent.projectio import write_json
 from song_agent.interfaces.api.routes.delivery import DeliveryRoutes
@@ -254,6 +259,45 @@ def test_policy_hard_runtime_current_and_blocker_requirements_cannot_be_disabled
     assert gate.status == "failed"
     assert any(item.endswith(".current") for item in gate.blockers)
     assert any(item.endswith(".blockers") for item in gate.blockers)
+
+
+def test_policy_rejects_empty_graph_missing_evidence_quorum_and_dependency() -> None:
+    empty = evaluate_policy(PolicyProfile(policy_id="empty", description="empty"), EvidenceGraph((), ()))
+    node = EvidenceNode(
+        node_id="release:one:archive:1",
+        ref=EvidenceRef(component_type="release", component_id="one", evidence_type="archive"),
+        capability_id="test.release",
+        report_status="passed",
+        runtime_status="passed",
+        current=True,
+        warnings=("manual_review_recommended",),
+    )
+    graph = EvidenceGraph(
+        (node,),
+        (EvidenceEdge(source=node.node_id, target="release:missing:archive:1", relation="depends_on"),),
+    )
+    profile = PolicyProfile(
+        policy_id="strict",
+        description="strict",
+        evidence_requirements=(EvidenceRequirement("distribution", component_types=("distribution",)),),
+        quorum_requirements=(QuorumRequirement("two_releases", minimum_count=2, component_types=("release",)),),
+    )
+
+    failed = evaluate_policy(profile, graph)
+
+    assert empty.status == "failed"
+    assert "policy.graph.non_empty" in empty.blockers
+    assert "policy.evidence.distribution" in failed.blockers
+    assert "policy.quorum.two_releases" in failed.blockers
+    assert "policy.dependencies.ready" in failed.blockers
+    assert any("manual_review_recommended" in warning for warning in failed.warnings)
+
+
+def test_policy_profile_catalog_is_sorted_and_rejects_unknown_profile() -> None:
+    assert policy_profile_ids() == tuple(sorted(policy_profile_ids()))
+    assert get_policy_profile("ga.standard").policy_id == "ga.standard"
+    with pytest.raises(KeyError, match="Unknown policy profile"):
+        get_policy_profile("missing.profile")
 
 
 def test_ga_policy_report_and_verifier_recheck_current_external_package(tmp_path: Path, monkeypatch) -> None:

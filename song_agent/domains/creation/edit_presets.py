@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import threading
@@ -227,7 +229,7 @@ def resolve_target_defaults(preset: EditPreset, plan: SongPlan) -> dict[str, str
     return target
 
 
-def _resolve_section_name(defaults: dict[str, Any], plan: SongPlan) -> str | None:
+def _resolve_section_name(defaults: ImplementationDocument, plan: SongPlan) -> str | None:
     if defaults.get("section_name"):
         return str(defaults["section_name"])
     role = str(defaults.get("section_role") or "").lower().strip()
@@ -243,7 +245,7 @@ def _resolve_section_name(defaults: dict[str, Any], plan: SongPlan) -> str | Non
         return matches[-1] if index < 0 else matches[0]
 
 
-def _resolve_track_name(defaults: dict[str, Any], plan: SongPlan) -> str | None:
+def _resolve_track_name(defaults: ImplementationDocument, plan: SongPlan) -> str | None:
     if defaults.get("track_name"):
         return str(defaults["track_name"])
     role = str(defaults.get("track_role") or "").lower().strip()
@@ -279,7 +281,7 @@ def _optional_str(value: Any) -> str | None:
     return str(value).strip()
 
 
-def _mapping(value: Any, field_name: str) -> dict[str, Any]:
+def _mapping(value: Any, field_name: str) -> ImplementationDocument:
     if value is None:
         return {}
     if not isinstance(value, dict):

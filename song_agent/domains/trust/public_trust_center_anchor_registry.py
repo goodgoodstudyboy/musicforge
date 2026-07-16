@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -298,7 +300,7 @@ class PublicTrustCenterAnchorRegistryStore:
         summary["verification_status"] = verification.get("status") or "missing"
         return sanitize_metadata(summary, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
 
-    def _read_current_anchor(self, center_id: str) -> dict[str, Any]:
+    def _read_current_anchor(self, center_id: str) -> ImplementationDocument:
         anchor_path = self.trust_center_store.delivery_anchor_path(center_id)
         if not anchor_path.exists() or not anchor_path.is_file() or anchor_path.is_symlink():
             raise PublicTrustCenterAnchorRegistryStateError("Public Trust Center delivery anchor does not exist. Build the Trust Center ZIP first.")
@@ -311,7 +313,7 @@ class PublicTrustCenterAnchorRegistryStore:
             raise PublicTrustCenterAnchorRegistryStateError("Public Trust Center delivery anchor integrity failed.")
         return anchor
 
-    def _ensure_anchor_matches_current_ptc(self, center_id: str, anchor: dict[str, Any]) -> None:
+    def _ensure_anchor_matches_current_ptc(self, center_id: str, anchor: ImplementationDocument) -> None:
         zip_path = self.trust_center_store.zip_path(center_id)
         if not zip_path.exists():
             raise PublicTrustCenterAnchorRegistryStateError("Public Trust Center ZIP does not exist.")
@@ -328,7 +330,7 @@ class PublicTrustCenterAnchorRegistryStore:
         if failed:
             raise PublicTrustCenterAnchorRegistryStateError("Public Trust Center delivery anchor is not current: " + ", ".join(failed))
 
-    def _build_entry(self, registry: dict[str, Any], center_id: str, anchor: dict[str, Any], payload: dict[str, Any], *, status: str, now: str) -> dict[str, Any]:
+    def _build_entry(self, registry: ImplementationDocument, center_id: str, anchor: ImplementationDocument, payload: ImplementationDocument, *, status: str, now: str) -> ImplementationDocument:
         anchor_hash = str(anchor.get("anchor_hash") or "")
         sidecars = anchor.get("fingerprint_sidecars") if isinstance(anchor.get("fingerprint_sidecars"), list) else []
         zip_fingerprint = {"zip_sha256": anchor.get("zip_sha256"), "zip_size_bytes": anchor.get("zip_size_bytes"), "manifest_hash": anchor.get("manifest_hash"), "source_hash": anchor.get("source_hash")}
@@ -362,7 +364,7 @@ class PublicTrustCenterAnchorRegistryStore:
         entry["integrity_hash"] = anchor_entry_hash(entry)
         return entry
 
-    def _registry_or_empty(self, center_id: str, *, now: str) -> dict[str, Any]:
+    def _registry_or_empty(self, center_id: str, *, now: str) -> ImplementationDocument:
         registry = self.read_registry(center_id, default={})
         if registry:
             return registry
@@ -385,17 +387,17 @@ class PublicTrustCenterAnchorRegistryStore:
         registry["integrity_hash"] = anchor_registry_hash(registry)
         return registry
 
-    def _require_registry(self, center_id: str) -> dict[str, Any]:
+    def _require_registry(self, center_id: str) -> ImplementationDocument:
         registry = self.read_registry(center_id, default={})
         if not registry:
             raise PublicTrustCenterAnchorRegistryNotFoundError("Public Trust Center Anchor Registry does not exist.")
         return registry
 
-    def _write_registry(self, center_id: str, registry: dict[str, Any]) -> None:
+    def _write_registry(self, center_id: str, registry: ImplementationDocument) -> None:
         self.root_dir(center_id).mkdir(parents=True, exist_ok=True)
         _write_json(self.registry_path(center_id), registry)
 
-    def _finalize_registry(self, registry: dict[str, Any], *, now: str) -> None:
+    def _finalize_registry(self, registry: ImplementationDocument, *, now: str) -> None:
         entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
         registry["entry_count"] = len(entries)
         registry["published_count"] = sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "published")
@@ -405,7 +407,7 @@ class PublicTrustCenterAnchorRegistryStore:
         registry["updated_at"] = now
         registry["integrity_hash"] = anchor_registry_hash(registry)
 
-    def _append_event(self, registry: dict[str, Any], event_type: str, entry_id: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_event(self, registry: ImplementationDocument, event_type: str, entry_id: str, payload: ImplementationDocument, *, now: str) -> None:
         events = registry.setdefault("events", [])
         previous = events[-1].get("event_hash") if events and isinstance(events[-1], dict) else None
         clean_payload = sanitize_metadata(payload if isinstance(payload, dict) else {}, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
@@ -421,7 +423,7 @@ class PublicTrustCenterAnchorRegistryStore:
         event["event_hash"] = anchor_event_hash(event)
         events.append(event)
 
-    def _findings(self, center_id: str, registry: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, center_id: str, registry: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
@@ -464,7 +466,7 @@ class PublicTrustCenterAnchorRegistryStore:
         check("anchor_event_chain", _event_chain_ok(registry), "Anchor Registry event chain is valid.")
         return blockers, warnings, checks
 
-    def _ensure_exportable(self, center_id: str, registry: dict[str, Any], report: dict[str, Any]) -> None:
+    def _ensure_exportable(self, center_id: str, registry: ImplementationDocument, report: ImplementationDocument) -> None:
         if not anchor_registry_integrity_ok(registry):
             raise PublicTrustCenterAnchorRegistryStateError("Anchor Registry integrity failed.")
         if not anchor_registry_report_integrity_ok(report):
@@ -477,14 +479,14 @@ class PublicTrustCenterAnchorRegistryStore:
             detail = str((blockers[0] if blockers else {}).get("message") or "Anchor Registry Report is failed.")
             raise PublicTrustCenterAnchorRegistryStateError(f"Anchor Registry cannot be exported: {detail}")
 
-    def _reserve_entry_id(self, registry: dict[str, Any]) -> str:
+    def _reserve_entry_id(self, registry: ImplementationDocument) -> str:
         existing = {str(item.get("entry_id") or "") for item in registry.get("entries", []) if isinstance(item, dict)}
         index = len(existing) + 1
         while f"ptcar-entry-{index:06d}" in existing:
             index += 1
         return f"ptcar-entry-{index:06d}"
 
-    def _history_has_state_event(self, registry: dict[str, Any], state: dict[str, str], event_type: str) -> bool:
+    def _history_has_state_event(self, registry: ImplementationDocument, state: dict[str, str], event_type: str) -> bool:
         for event in registry.get("events", []) if isinstance(registry.get("events"), list) else []:
             if not isinstance(event, dict) or str(event.get("event_type") or "") != event_type:
                 continue
@@ -545,12 +547,12 @@ def build_chain_of_custody(registry: dict[str, Any], report: dict[str, Any], *, 
     return sanitize_metadata(data, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
 
 
-def _state_tuple(registry: dict[str, Any], report: dict[str, Any]) -> dict[str, str]:
+def _state_tuple(registry: ImplementationDocument, report: ImplementationDocument) -> dict[str, str]:
     current = _current_entry(registry)
     return {"registry_hash": str(registry.get("integrity_hash") or ""), "report_hash": str(report.get("integrity_hash") or ""), "current_entry_id": str(registry.get("current_entry_id") or ""), "current_entry_hash": str(current.get("integrity_hash") or "")}
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     row = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
     report = manifest.get("registry_report") if isinstance(manifest.get("registry_report"), dict) else {}
     return {"registry_hash": str(row.get("integrity_hash") or ""), "report_hash": str(report.get("integrity_hash") or ""), "current_entry_id": str(row.get("current_entry_id") or ""), "current_entry_hash": str(row.get("current_entry_hash") or "")}
@@ -562,14 +564,14 @@ def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
 
 
 
-def _find_entry_mut(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
+def _find_entry_mut(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
     entry = _find_entry(registry, entry_id)
     if not entry:
         raise PublicTrustCenterAnchorRegistryNotFoundError("Public Trust Center Anchor Registry entry not found.")
     return entry
 
 
-def _event_chain_ok(registry: dict[str, Any]) -> bool:
+def _event_chain_ok(registry: ImplementationDocument) -> bool:
     previous = None
     for event in registry.get("events", []) if isinstance(registry.get("events"), list) else []:
         if not isinstance(event, dict):
@@ -582,7 +584,7 @@ def _event_chain_ok(registry: dict[str, Any]) -> bool:
     return True
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -590,7 +592,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
     return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -600,7 +602,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -609,12 +611,12 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(payload, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS))
 
 
-def _write_readme(export_dir: Path, registry: dict[str, Any], report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, registry: ImplementationDocument, report: ImplementationDocument) -> None:
     text = (
         "MusicForge Public Trust Center Anchor Registry\n"
         "This package records public delivery anchors for a Public Trust Center ZIP.\n"
@@ -626,7 +628,7 @@ def _write_readme(export_dir: Path, registry: dict[str, Any], report: dict[str, 
     (export_dir / "README.txt").write_text(sanitize_sensitive_text(text), encoding="utf-8")
 
 
-def _reason(payload: dict[str, Any], *, default: str) -> str:
+def _reason(payload: ImplementationDocument, *, default: str) -> str:
     reason = sanitize_sensitive_text(str(payload.get("reason") or default).strip())
     if len(reason) < 4:
         raise PublicTrustCenterAnchorRegistryStateError("reason must be at least 4 characters.")

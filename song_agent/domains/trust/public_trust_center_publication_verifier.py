@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -493,7 +495,7 @@ class _PublicationVerifier:
         self.redaction_findings = findings
         self._add_check("redaction", "ptcpub_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in publication." if findings else "No sensitive values found in publication.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -506,7 +508,7 @@ class _PublicationVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return value if isinstance(value, dict) else {}
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
@@ -545,12 +547,12 @@ class _PublicationVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _failed_report(scope: str, check_id: str, message: str, *, now: str | None = None) -> dict[str, Any]:
+def _failed_report(scope: str, check_id: str, message: str, *, now: str | None = None) -> ImplementationDocument:
     check = {"scope": scope, "check_id": check_id, "status": "failed", "severity": "blocking", "message": message}
     return {"schema_version": PUBLICATION_VERIFICATION_SCHEMA_VERSION, "generated_at": now or datetime.now(timezone.utc).isoformat(), "status": "failed", "package_kind": "public_trust_center_publication", "checks": [check], "blockers": [check], "warnings": [], "summary": {"blocker_count": 1, "warning_count": 0}}
 
 
-def _expected_entries(source: dict[str, Any]) -> set[str]:
+def _expected_entries(source: ImplementationDocument) -> set[str]:
     entries = set(BASE_REQUIRED_ENTRIES)
     for item in source.get("packages", []) if isinstance(source.get("packages"), list) else []:
         if isinstance(item, dict) and item.get("path"):
@@ -561,7 +563,7 @@ def _expected_entries(source: dict[str, Any]) -> set[str]:
     return entries
 
 
-def _expected_package_index(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _expected_package_index(source: ImplementationDocument) -> list[ImplementationDocument]:
     verifications = {str(item.get("verification_key") or ""): item for item in source.get("verifications", []) if isinstance(item, dict)}
     rows: list[dict[str, Any]] = []
     for item in source.get("packages", []) if isinstance(source.get("packages"), list) else []:
@@ -609,7 +611,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _verification_hash(report: dict[str, Any]) -> str | None:
+def _verification_hash(report: ImplementationDocument) -> str | None:
     if not report:
         return None
     if report.get("package_kind") == "public_trust_center_acceptance_board":
@@ -617,7 +619,7 @@ def _verification_hash(report: dict[str, Any]) -> str | None:
     return stable_hash({key: value for key, value in report.items() if key != "generated_at"})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             return json.loads(archive.read(entry).decode("utf-8"))
@@ -625,7 +627,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _read_json_file(path: Path | None) -> dict[str, Any]:
+def _read_json_file(path: Path | None) -> ImplementationDocument:
     if path is None:
         return {}
     try:
@@ -642,7 +644,7 @@ def _counts(values: list[str]) -> dict[str, int]:
     return counts
 
 
-def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern in [*SENSITIVE_VALUE_PATTERNS, *LOCAL_PATH_VALUE_PATTERNS]:
         regex = pattern[0] if isinstance(pattern, tuple) else pattern
@@ -651,7 +653,7 @@ def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(name: str, value: Any) -> list[dict[str, Any]]:
+def _blocked_key_findings(name: str, value: Any) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, nested in value.items():

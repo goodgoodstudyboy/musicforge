@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from typing import Any
 
 from song_agent.platform.contracts.policy import GateResult, PolicyProfile
@@ -92,7 +94,7 @@ def evaluate_policy(profile: PolicyProfile, graph: EvidenceGraph) -> GateResult:
     )
 
 
-def _hard_node_checks(node: EvidenceNode, checks: list[dict[str, Any]], blockers: list[str]) -> None:
+def _hard_node_checks(node: EvidenceNode, checks: list[ImplementationDocument], blockers: list[str]) -> None:
     values = (
         ("report", node.report_status == "passed", "External verification report is passed."),
         ("runtime", node.runtime_status == "passed", "Current package runtime verification is passed."),
@@ -114,11 +116,11 @@ def _matches(node: EvidenceNode, component_types: tuple[str, ...], evidence_type
 
 
 def _add_check(
-    checks: list[dict[str, Any]],
+    checks: list[ImplementationDocument],
     check_id: str,
     passed: bool,
     message: str,
-    detail: dict[str, Any] | None = None,
+    detail: ImplementationDocument | None = None,
 ) -> None:
     checks.append(
         {

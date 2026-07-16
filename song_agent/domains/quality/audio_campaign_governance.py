@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import threading
 import zipfile
@@ -336,7 +338,7 @@ class AudioCampaignGovernanceStore:
         except (AudioCampaignNotFoundError, FileNotFoundError, AudioCampaignStateError, ValueError) as exc:
             return _gate_failed(required, str(exc), campaign_id=campaign_id)
 
-    def _source_state(self, campaign_id: str, *, ensure_zip: bool, ensure_verification: bool) -> dict[str, Any]:
+    def _source_state(self, campaign_id: str, *, ensure_zip: bool, ensure_verification: bool) -> ImplementationDocument:
         campaign = self.campaign_store.read_campaign(campaign_id)
         if campaign.get("status") != "signed":
             raise AudioCampaignGovernanceStateError("Audio Campaign must be signed.")
@@ -360,7 +362,7 @@ class AudioCampaignGovernanceStore:
             "campaign_zip_sha256": _sha256_path(zip_path) if zip_path.exists() else None,
         }
 
-    def _ensure_archive_mutable(self, campaign_id: str, source: dict[str, Any]) -> None:
+    def _ensure_archive_mutable(self, campaign_id: str, source: ImplementationDocument) -> None:
         signoff_hash = str(source.get("signoff", {}).get("integrity_hash") or "")
         if self._archive_built_for_signoff(campaign_id, signoff_hash):
             raise AudioCampaignGovernanceStateError("Audio Campaign Archive already exists for this signoff. Reset signoff before rebuilding archive.")
@@ -376,7 +378,7 @@ class AudioCampaignGovernanceStore:
                 built = False
         return built
 
-    def _read_change_request(self, campaign_id: str, change_request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, campaign_id: str, change_request_id: str) -> ImplementationDocument:
         change_request_id = _validate_change_request_id(change_request_id)
         path = self.change_request_dir(campaign_id) / f"{change_request_id}.json"
         if not path.exists():
@@ -393,7 +395,7 @@ class AudioCampaignGovernanceStore:
                 continue
         return f"acrq-{max_seen + 1:06d}"
 
-    def _read_reset_history(self, campaign_id: str) -> list[dict[str, Any]]:
+    def _read_reset_history(self, campaign_id: str) -> list[ImplementationDocument]:
         path = self.reset_history_path(campaign_id)
         if not path.exists():
             return []
@@ -414,7 +416,7 @@ class AudioCampaignGovernanceStore:
         return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-def _build_governance_report(campaign_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _build_governance_report(campaign_id: str, source: ImplementationDocument) -> ImplementationDocument:
     report = source.get("report") if isinstance(source.get("report"), dict) else {}
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     verification = source.get("verification") if isinstance(source.get("verification"), dict) else {}
@@ -467,15 +469,15 @@ def _build_governance_report(campaign_id: str, source: dict[str, Any]) -> dict[s
     return governance
 
 
-def _gate_failed(required: bool, message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(required: bool, message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed" if required else "missing", "hard_block": bool(required), "message": message, **extra}
 
 
-def _check(check_id: str, passed: bool) -> dict[str, Any]:
+def _check(check_id: str, passed: bool) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": check_id.replace("_", " ")}
 
 
-def _archive_readme(campaign: dict[str, Any], governance: dict[str, Any]) -> str:
+def _archive_readme(campaign: ImplementationDocument, governance: ImplementationDocument) -> str:
     return "\n".join(
         [
             "# MusicForge Audio Campaign Archive",
@@ -490,7 +492,7 @@ def _archive_readme(campaign: dict[str, Any], governance: dict[str, Any]) -> str
     )
 
 
-def _public_campaign(campaign: dict[str, Any]) -> dict[str, Any]:
+def _public_campaign(campaign: ImplementationDocument) -> ImplementationDocument:
     public = sanitize_metadata(campaign)
     for case in public.get("cases", []) if isinstance(public.get("cases"), list) else []:
         if not isinstance(case, dict):
@@ -500,7 +502,7 @@ def _public_campaign(campaign: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
-def _public_verification(verification: dict[str, Any]) -> dict[str, Any]:
+def _public_verification(verification: ImplementationDocument) -> ImplementationDocument:
     summary = verification.get("summary") if isinstance(verification.get("summary"), dict) else {}
     public = sanitize_metadata(
         {
@@ -525,11 +527,11 @@ def _public_verification(verification: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
-def _file_record(path: Path, root: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "sha256": _sha256_path(path), "size_bytes": path.stat().st_size}
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
@@ -556,11 +558,11 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 

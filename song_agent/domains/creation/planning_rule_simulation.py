@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import threading
 from dataclasses import dataclass, field
@@ -383,7 +385,7 @@ class PlanningRuleSimulationStore:
             return {"status": "missing"}
         return planning_simulation_summary(rows[0])
 
-    def _select_reviews(self, payload: dict[str, Any]) -> list[AcceptanceFixPlanReview]:
+    def _select_reviews(self, payload: ImplementationDocument) -> list[AcceptanceFixPlanReview]:
         scope = _scope(payload.get("scope"), payload)
         review_ids = [str(item) for item in payload.get("review_ids", []) if str(item).strip()] if isinstance(payload.get("review_ids"), list) else []
         if payload.get("review_id"):
@@ -424,7 +426,7 @@ class PlanningRuleSimulationStore:
             raise PlanningRuleSimulationStateError("Planning Rule Simulation requires at least one non-stale Outcome Review.")
         return selected
 
-    def _build_simulation(self, simulation_id: str, ruleset: PlanningRuleSet, reviews: list[AcceptanceFixPlanReview], payload: dict[str, Any], *, created_at: str, now: str) -> PlanningRuleSimulationReport:
+    def _build_simulation(self, simulation_id: str, ruleset: PlanningRuleSet, reviews: list[AcceptanceFixPlanReview], payload: ImplementationDocument, *, created_at: str, now: str) -> PlanningRuleSimulationReport:
         scope = _scope(payload.get("scope"), payload)
         review_results = [_simulate_review(review, ruleset) for review in reviews]
         effects = _rule_effects(review_results)
@@ -466,7 +468,7 @@ class PlanningRuleSimulationStore:
         warnings = sorted(set(report.warnings + ["source_changed"]))
         return PlanningRuleSimulationReport.from_dict({**report.to_dict(), "status": "stale", "summary": {**report.summary, "stale": True}, "warnings": warnings})
 
-    def _source_state(self, report_data: dict[str, Any]) -> dict[str, Any]:
+    def _source_state(self, report_data: ImplementationDocument) -> ImplementationDocument:
         source = report_data.get("source") if isinstance(report_data.get("source"), dict) else {}
         ruleset = self.read_ruleset(str(report_data.get("ruleset_id") or source.get("ruleset_id") or ""))
         if ruleset.status == "archived":
@@ -566,7 +568,7 @@ def write_planning_simulation_summary(path: Path, store: PlanningRuleSimulationS
     return summary
 
 
-def _ruleset_from_payload(ruleset_id: str, payload: dict[str, Any], *, now: str) -> PlanningRuleSet:
+def _ruleset_from_payload(ruleset_id: str, payload: ImplementationDocument, *, now: str) -> PlanningRuleSet:
     source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
     template_name = str(payload.get("template") or source.get("template") or "baseline")
     template = RULESET_TEMPLATES.get(template_name)
@@ -601,7 +603,7 @@ def _ruleset_from_payload(ruleset_id: str, payload: dict[str, Any], *, now: str)
     return PlanningRuleSet.from_dict(merged)
 
 
-def _simulate_review(review: AcceptanceFixPlanReview, ruleset: PlanningRuleSet) -> dict[str, Any]:
+def _simulate_review(review: AcceptanceFixPlanReview, ruleset: PlanningRuleSet) -> ImplementationDocument:
     summary = review.summary if isinstance(review.summary, dict) else {}
     item_results = [_simulate_item(item, ruleset, summary) for item in review.item_outcomes if isinstance(item, dict)]
     baseline_alignment = _alignment_score(item_results, key="baseline_planning_score")
@@ -640,7 +642,7 @@ def _simulate_review(review: AcceptanceFixPlanReview, ruleset: PlanningRuleSet) 
     )
 
 
-def _simulate_item(item: dict[str, Any], ruleset: PlanningRuleSet, review_summary: dict[str, Any]) -> dict[str, Any]:
+def _simulate_item(item: ImplementationDocument, ruleset: PlanningRuleSet, review_summary: ImplementationDocument) -> ImplementationDocument:
     baseline = max(0, min(100, _int(item.get("planning_score"), 0)))
     score = baseline
     effects: list[str] = []
@@ -713,12 +715,12 @@ def _simulate_item(item: dict[str, Any], ruleset: PlanningRuleSet, review_summar
     )
 
 
-def _rank_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _rank_items(items: list[ImplementationDocument]) -> list[ImplementationDocument]:
     ranked_ids = {str(item.get("planned_item_id") or ""): index for index, item in enumerate(sorted(items, key=lambda row: (-_int(row.get("simulated_planning_score"), 0), str(row.get("planned_item_id") or ""))), start=1)}
     return [{**item, "rank_after": ranked_ids.get(str(item.get("planned_item_id") or ""), item.get("rank_after"))} for item in items]
 
 
-def _rule_effects(review_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _rule_effects(review_results: list[ImplementationDocument]) -> list[ImplementationDocument]:
     buckets: dict[str, dict[str, Any]] = {}
     for review in review_results:
         for item in review.get("item_results", []):
@@ -748,7 +750,7 @@ def _rule_effects(review_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (-int(item.get("count") or 0), str(item.get("effect_id") or "")))
 
 
-def _simulation_summary(review_results: list[dict[str, Any]], effects: list[dict[str, Any]]) -> dict[str, Any]:
+def _simulation_summary(review_results: list[ImplementationDocument], effects: list[ImplementationDocument]) -> ImplementationDocument:
     item_results = [item for review in review_results for item in review.get("item_results", []) if isinstance(item, dict)]
     baseline_alignment = _mean([(review.get("baseline") or {}).get("ranking_alignment_score") for review in review_results])
     if baseline_alignment is None:
@@ -782,7 +784,7 @@ def _simulation_summary(review_results: list[dict[str, Any]], effects: list[dict
     )
 
 
-def _alignment_score(items: list[dict[str, Any]], *, key: str) -> int | None:
+def _alignment_score(items: list[ImplementationDocument], *, key: str) -> int | None:
     if not items:
         return None
     ranked = sorted(items, key=lambda item: (-_int(item.get(key), 0), str(item.get("planned_item_id") or "")))
@@ -793,11 +795,11 @@ def _alignment_score(items: list[dict[str, Any]], *, key: str) -> int | None:
     return max(0, min(100, round(100 - (distance / max_distance * 100))))
 
 
-def _high_score_unsupported_count(items: list[dict[str, Any]], *, key: str, threshold: int) -> int:
+def _high_score_unsupported_count(items: list[ImplementationDocument], *, key: str, threshold: int) -> int:
     return sum(1 for item in items if _int(item.get(key), 0) >= threshold and str(item.get("evidence_status") or "") in {"unsupported", "unknown", "not_executed"})
 
 
-def _low_score_supported_count(items: list[dict[str, Any]]) -> int:
+def _low_score_supported_count(items: list[ImplementationDocument]) -> int:
     return sum(1 for item in items if _int(item.get("simulated_planning_score"), 0) < 50 and str(item.get("evidence_status") or "") == "supported")
 
 
@@ -822,7 +824,7 @@ def _simulation_recommendation(review_count: int, item_count: int, alignment_del
     return "candidate_mixed"
 
 
-def _review_source_core(review: AcceptanceFixPlanReview) -> dict[str, Any]:
+def _review_source_core(review: AcceptanceFixPlanReview) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "review_id": review.review_id,
@@ -836,7 +838,7 @@ def _review_source_core(review: AcceptanceFixPlanReview) -> dict[str, Any]:
     )
 
 
-def _ruleset_core(ruleset: PlanningRuleSet) -> dict[str, Any]:
+def _ruleset_core(ruleset: PlanningRuleSet) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "schema_version": ruleset.to_dict().get("schema_version"),
@@ -851,7 +853,7 @@ def _ruleset_core(ruleset: PlanningRuleSet) -> dict[str, Any]:
     )
 
 
-def _source_core(source: dict[str, Any]) -> dict[str, Any]:
+def _source_core(source: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "engine_version": source.get("engine_version"),
@@ -865,7 +867,7 @@ def _source_core(source: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _simulation_options(payload: dict[str, Any]) -> dict[str, Any]:
+def _simulation_options(payload: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "include_warning_reviews": bool(payload.get("include_warning_reviews", True)),
@@ -874,7 +876,7 @@ def _simulation_options(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _target_summary(target: dict[str, Any]) -> dict[str, Any]:
+def _target_summary(target: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "song_id": _bounded(target.get("song_id"), 120),
@@ -886,7 +888,7 @@ def _target_summary(target: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _scope(value: Any, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+def _scope(value: Any, payload: ImplementationDocument | None = None) -> ImplementationDocument:
     payload = payload or {}
     source = value if isinstance(value, dict) else {}
     scope_type = str(source.get("type") or payload.get("scope_type") or ("release" if source.get("release_id") or payload.get("release_id") else "project" if source.get("project_id") or payload.get("project_id") else "global"))
@@ -969,7 +971,7 @@ def _validate_id(value: str, prefix: str) -> str:
     return value
 
 
-def _append_event(path: Path, event: str, payload: dict[str, Any], now: str | None = None) -> None:
+def _append_event(path: Path, event: str, payload: ImplementationDocument, now: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps({"event": event, "timestamp": now or now_iso(), "payload": sanitize_metadata(payload)}, ensure_ascii=False) + "\n")
@@ -983,7 +985,7 @@ def _lock_for_root(root: Path) -> threading.RLock:
         return _LOCKS[key]
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {})
 
 
@@ -1005,7 +1007,7 @@ def _mean(values: list[Any]) -> float | None:
     return round(sum(nums) / len(nums), 2)
 
 
-def _effect_count(effects: list[dict[str, Any]], effect_id: str) -> int:
+def _effect_count(effects: list[ImplementationDocument], effect_id: str) -> int:
     for effect in effects:
         if effect.get("effect_id") == effect_id:
             return _int(effect.get("count"), 0)

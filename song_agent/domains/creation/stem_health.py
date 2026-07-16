@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from pathlib import Path
 from typing import Any
@@ -232,7 +234,7 @@ def stem_health_allows_signoff(report: dict[str, Any], *, current_source_hash: s
     return str(report.get("status") or "") in {"passed", "warning"}
 
 
-def _file_state(path: Path) -> dict[str, Any]:
+def _file_state(path: Path) -> ImplementationDocument:
     if not path.exists() or not path.is_file() or path.is_symlink():
         return {"exists": False}
     return {"exists": True, "sha256": file_sha256(path), "size_bytes": path.stat().st_size}

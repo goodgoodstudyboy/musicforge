@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -284,7 +286,7 @@ class TrustOperationsAssuranceStore:
         _write_json(self.verification_report_path(run_id), report)
         return report
 
-    def _build_source(self, hub_id: str, source_paths: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    def _build_source(self, hub_id: str, source_paths: ImplementationDocument) -> tuple[ImplementationDocument, ImplementationDocument, ImplementationDocument, list[ImplementationDocument]]:
         external_rows: list[dict[str, Any]] = []
         evidence_rows: list[dict[str, Any]] = []
         for evidence_type, spec in CORE_EVIDENCE_SPECS.items():
@@ -352,7 +354,7 @@ class TrustOperationsAssuranceStore:
         }
         return source, external_summary, evidence_index, external_rows
 
-    def _build_checks(self, policy: dict[str, Any], rows: list[dict[str, Any]], external_summary: dict[str, Any], now: str) -> list[dict[str, Any]]:
+    def _build_checks(self, policy: ImplementationDocument, rows: list[ImplementationDocument], external_summary: ImplementationDocument, now: str) -> list[ImplementationDocument]:
         by_type = {str(row.get("evidence_type") or ""): row for row in rows if isinstance(row, dict) and str(row.get("component_id") or "") == str(row.get("evidence_type") or "")}
         checks: list[dict[str, Any]] = []
         for evidence_type, spec in CORE_EVIDENCE_SPECS.items():
@@ -370,7 +372,7 @@ class TrustOperationsAssuranceStore:
         checks.append(_check("toa_source_external_summary_integrity", "passed" if external_summary.get("integrity_hash") == assurance_hash(external_summary) else "failed", "blocking", "External verification summary integrity is valid."))
         return checks
 
-    def _delivery_checks(self, policy: dict[str, Any], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _delivery_checks(self, policy: ImplementationDocument, rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
         requirements = policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}
         require_delivery = bool(requirements.get("require_delivery_ready", False))
         checks: list[dict[str, Any]] = []
@@ -389,7 +391,7 @@ class TrustOperationsAssuranceStore:
                 checks.append(_check(check_id, status, "blocking", message, evidence_ref=f"{component_type}:{component_id}", details=_fingerprint_projection(row)))
         return checks
 
-    def _control_exception_checks(self, rows: list[Any], now: str) -> list[dict[str, Any]]:
+    def _control_exception_checks(self, rows: list[Any], now: str) -> list[ImplementationDocument]:
         signoff = next((row for row in rows if isinstance(row, dict) and row.get("evidence_type") == "control_signoff"), {})
         archive_path = signoff.get("_archive_path")
         checks: list[dict[str, Any]] = []
@@ -410,7 +412,7 @@ class TrustOperationsAssuranceStore:
         checks.append(_check("toa_control_exception_no_forbidden", "failed" if forbidden else "passed", "blocking", "No critical/high/required Control exceptions are approved." if not forbidden else "Forbidden Control exceptions: " + ", ".join(forbidden[:5])))
         return checks
 
-    def _incident_open_checks(self, rows: list[Any]) -> list[dict[str, Any]]:
+    def _incident_open_checks(self, rows: list[Any]) -> list[ImplementationDocument]:
         incident = next((row for row in rows if isinstance(row, dict) and row.get("evidence_type") == "incident"), {})
         archive_path = incident.get("_archive_path")
         open_blocking: list[str] = []
@@ -424,7 +426,7 @@ class TrustOperationsAssuranceStore:
                     open_blocking.append(str(row.get("incident_id") or "unknown"))
         return [_check("toa_incident_no_open_blocking", "failed" if open_blocking else "passed", "blocking", "No open blocking incidents." if not open_blocking else "Open blocking incidents: " + ", ".join(open_blocking[:5]))]
 
-    def _knowledge_guard_checks(self, rows: list[Any]) -> list[dict[str, Any]]:
+    def _knowledge_guard_checks(self, rows: list[Any]) -> list[ImplementationDocument]:
         knowledge = next((row for row in rows if isinstance(row, dict) and row.get("evidence_type") == "knowledge"), {})
         summary = knowledge.get("summary") if isinstance(knowledge.get("summary"), dict) else {}
         guards_ok = knowledge.get("status") == "passed" and int(summary.get("guards_passed_count") or 0) > 0 and int(summary.get("guard_failed_count") or 0) == 0
@@ -434,7 +436,7 @@ class TrustOperationsAssuranceStore:
             _check("toa_recurrence_not_open", "passed" if recurrence_ok else "failed", "blocking", "No open recurrence report." if recurrence_ok else "Open recurrence detected."),
         ]
 
-    def _report_from_run(self, run: dict[str, Any], policy: dict[str, Any], evidence_index: dict[str, Any], external_summary: dict[str, Any], now: str) -> dict[str, Any]:
+    def _report_from_run(self, run: ImplementationDocument, policy: ImplementationDocument, evidence_index: ImplementationDocument, external_summary: ImplementationDocument, now: str) -> ImplementationDocument:
         report = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_ASSURANCE_REPORT_PACKAGE_TYPE,
@@ -456,7 +458,7 @@ class TrustOperationsAssuranceStore:
         report["integrity_hash"] = assurance_hash(report)
         return report
 
-    def _ensure_run_current(self, run: dict[str, Any], payload: dict[str, Any]) -> None:
+    def _ensure_run_current(self, run: ImplementationDocument, payload: ImplementationDocument) -> None:
         if run.get("integrity_hash") != assurance_hash(run):
             raise TrustOperationsAssuranceStateError("Assurance run integrity failed.")
         stored = _read_json_default(self.source_paths_path(str(run.get("run_id") or "")), default={}).get("paths")
@@ -465,7 +467,7 @@ class TrustOperationsAssuranceStore:
         if stable_hash(current_source) != run.get("source_hash"):
             raise TrustOperationsAssuranceStateError("Assurance run source is stale. Refresh before export.")
 
-    def _history_events(self, run_id: str) -> list[dict[str, Any]]:
+    def _history_events(self, run_id: str) -> list[ImplementationDocument]:
         events: list[dict[str, Any]] = []
         for line in _read_text(self.history_path(run_id)).splitlines():
             try:
@@ -476,7 +478,7 @@ class TrustOperationsAssuranceStore:
                 events.append(_sanitize(item))
         return events
 
-    def _append_history(self, run_id: str, payload: dict[str, Any]) -> None:
+    def _append_history(self, run_id: str, payload: ImplementationDocument) -> None:
         _append_jsonl(self.history_path(run_id), payload)
 
 
@@ -486,7 +488,7 @@ class TrustOperationsAssuranceStore:
 
 
 
-def _default_policy(now: str | None = None) -> dict[str, Any]:
+def _default_policy(now: str | None = None) -> ImplementationDocument:
     now = now or _now()
     policy = {
         "schema_version": TRUST_OPERATIONS_ASSURANCE_SCHEMA_VERSION,
@@ -512,7 +514,7 @@ def _default_policy(now: str | None = None) -> dict[str, Any]:
     return policy
 
 
-def _external_row(evidence_type: str, archive_path: Path | None, report_path: Path | None, manifest_entry: str, *, component_id: str) -> dict[str, Any]:
+def _external_row(evidence_type: str, archive_path: Path | None, report_path: Path | None, manifest_entry: str, *, component_id: str) -> ImplementationDocument:
     report = _read_json_default(report_path, default={}) if report_path else {}
     manifest = _read_zip_json_optional(archive_path, manifest_entry) if archive_path and manifest_entry else {}
     zip_sha = _sha256(archive_path) if archive_path and archive_path.exists() else report.get("zip_sha256")
@@ -547,7 +549,7 @@ def _external_row(evidence_type: str, archive_path: Path | None, report_path: Pa
     return row
 
 
-def _evidence_row_from_external(row: dict[str, Any], *, required: bool) -> dict[str, Any]:
+def _evidence_row_from_external(row: ImplementationDocument, *, required: bool) -> ImplementationDocument:
     return {
         "evidence_id": f"{row.get('evidence_type')}:{row.get('component_id')}",
         "evidence_type": row.get("evidence_type"),
@@ -564,11 +566,11 @@ def _evidence_row_from_external(row: dict[str, Any], *, required: bool) -> dict[
     }
 
 
-def _public_row(row: dict[str, Any]) -> dict[str, Any]:
+def _public_row(row: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in row.items() if not str(key).startswith("_")}
 
 
-def _check(check_id: str, status: str, severity: str, message: str, *, evidence_ref: str | None = None, details: dict[str, Any] | None = None) -> dict[str, Any]:
+def _check(check_id: str, status: str, severity: str, message: str, *, evidence_ref: str | None = None, details: ImplementationDocument | None = None) -> ImplementationDocument:
     item: dict[str, Any] = {"check_id": check_id, "status": status, "severity": severity, "message": message}
     if evidence_ref:
         item["evidence_ref"] = evidence_ref
@@ -578,7 +580,7 @@ def _check(check_id: str, status: str, severity: str, message: str, *, evidence_
     return item
 
 
-def _checks_summary(checks: list[dict[str, Any]]) -> dict[str, Any]:
+def _checks_summary(checks: list[ImplementationDocument]) -> ImplementationDocument:
     blocking_failed = [check for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
     warnings = [check for check in checks if check.get("status") in {"failed", "warning"} and check.get("severity") != "blocking"]
     return {
@@ -590,11 +592,11 @@ def _checks_summary(checks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _fingerprint_projection(row: dict[str, Any]) -> dict[str, Any]:
+def _fingerprint_projection(row: ImplementationDocument) -> ImplementationDocument:
     return {key: row.get(key) for key in ("package_type", "status", "zip_sha256", "zip_size_bytes", "manifest_hash", "verification_report_hash", "source_hash")}
 
 
-def _source_paths(payload: dict[str, Any]) -> dict[str, Any]:
+def _source_paths(payload: ImplementationDocument) -> ImplementationDocument:
     paths: dict[str, Any] = {}
     for spec in CORE_EVIDENCE_SPECS.values():
         paths[spec["archive_key"]] = [str(path) for path in _paths(payload.get(spec["archive_key"]))]
@@ -606,7 +608,7 @@ def _source_paths(payload: dict[str, Any]) -> dict[str, Any]:
     return paths
 
 
-def _verifier_kwargs_from_source_paths(source_paths: dict[str, Any]) -> dict[str, Any]:
+def _verifier_kwargs_from_source_paths(source_paths: ImplementationDocument) -> ImplementationDocument:
     kwargs: dict[str, Any] = {}
     for spec in CORE_EVIDENCE_SPECS.values():
         kwargs[spec["archive_key"]] = _first_path(source_paths.get(spec["archive_key"]))
@@ -616,7 +618,7 @@ def _verifier_kwargs_from_source_paths(source_paths: dict[str, Any]) -> dict[str
     return kwargs
 
 
-def _delivery_component_id(spec: dict[str, Any], report: dict[str, Any], index: int) -> str:
+def _delivery_component_id(spec: ImplementationDocument, report: ImplementationDocument, index: int) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     for key in ("release_id", "target_id", "submission_id", "evidence_id", "operations_id", "package_id"):
         value = report.get(key) or summary.get(key)
@@ -644,14 +646,14 @@ def _first_path(value: Any) -> Path | None:
     return values[0] if values else None
 
 
-def _read_json_required(path: Path, message: str) -> dict[str, Any]:
+def _read_json_required(path: Path, message: str) -> ImplementationDocument:
     try:
         return read_json(path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise TrustOperationsAssuranceStateError(message) from exc
 
 
-def _read_json_default(path: Path | None, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path | None, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         if path is None or not path.exists():
             return dict(default)
@@ -660,7 +662,7 @@ def _read_json_default(path: Path | None, *, default: dict[str, Any]) -> dict[st
         return dict(default)
 
 
-def _read_zip_json_optional(zip_path: Path | None, entry: str) -> dict[str, Any]:
+def _read_zip_json_optional(zip_path: Path | None, entry: str) -> ImplementationDocument:
     if not zip_path:
         return {}
     try:
@@ -671,11 +673,11 @@ def _read_zip_json_optional(zip_path: Path | None, entry: str) -> dict[str, Any]
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
-def _write_internal_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_internal_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, payload)
 
 
@@ -683,7 +685,7 @@ def _write_readme(root: Path) -> None:
     (root / "README.txt").write_text("MusicForge Trust Operations Continuous Assurance Archive\n\nThis package contains local continuous assurance evidence and external verification bindings.\n", encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 
@@ -731,7 +733,7 @@ def _next_id(root: Path, prefix: str) -> str:
     return f"{prefix}-{(max(indexes) if indexes else 0) + 1:06d}"
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")

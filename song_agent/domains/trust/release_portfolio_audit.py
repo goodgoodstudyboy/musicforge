@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -339,7 +341,7 @@ class ReleasePortfolioAuditStore:
             self._append_event(portfolio_id, "archived", {}, now=portfolio["updated_at"])
             return portfolio
 
-    def _selected_release_ids(self, selection: dict[str, Any]) -> tuple[list[str], list[str]]:
+    def _selected_release_ids(self, selection: ImplementationDocument) -> tuple[list[str], list[str]]:
         release_ids = [str(item).strip() for item in selection.get("release_ids", []) if str(item).strip()]
         if not release_ids:
             release_ids = [item.release_id for item in self.release_store.list_releases(include_hidden=bool(selection.get("include_hidden")))]
@@ -359,7 +361,7 @@ class ReleasePortfolioAuditStore:
             unique.append(release_id)
         return unique, duplicates
 
-    def _build_release_snapshot(self, release_id: str, *, now: str) -> dict[str, Any]:
+    def _build_release_snapshot(self, release_id: str, *, now: str) -> ImplementationDocument:
         release = self.release_store.get_release(release_id)
         operations_report = self.operations_store.read_report(release_id, default={})
         audit_report = self.audit_store.read_report(release_id, default={})
@@ -430,7 +432,7 @@ class ReleasePortfolioAuditStore:
                 continue
         raise ReleasePortfolioAuditStateError("Unable to allocate a unique Portfolio Audit id.")
 
-    def _append_event(self, portfolio_id: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_event(self, portfolio_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.events_path(portfolio_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = _event_count(path)
@@ -499,7 +501,7 @@ def portfolio_audit_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _portfolio_findings(snapshots: list[dict[str, Any]], duplicates: list[str], selection: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _portfolio_findings(snapshots: list[ImplementationDocument], duplicates: list[str], selection: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     for release_id in duplicates:
@@ -536,7 +538,7 @@ def _portfolio_findings(snapshots: list[dict[str, Any]], duplicates: list[str], 
     return blockers, warnings
 
 
-def _build_risk_register(portfolio_id: str, snapshots: list[dict[str, Any]], *, source_hash: str, generated_at: str) -> dict[str, Any]:
+def _build_risk_register(portfolio_id: str, snapshots: list[ImplementationDocument], *, source_hash: str, generated_at: str) -> ImplementationDocument:
     risks: list[dict[str, Any]] = []
 
     def add(category: str, severity: str, title: str, release_ids: list[str], recommendation: str) -> None:
@@ -567,7 +569,7 @@ def _build_risk_register(portfolio_id: str, snapshots: list[dict[str, Any]], *, 
     return sanitize_metadata(report, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
 
 
-def _portfolio_risk_score(risks: list[dict[str, Any]], snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+def _portfolio_risk_score(risks: list[ImplementationDocument], snapshots: list[ImplementationDocument]) -> ImplementationDocument:
     points = {"critical": 25, "high": 15, "medium": 8, "low": 3}
     breakdown: list[dict[str, Any]] = []
     total = 0
@@ -586,7 +588,7 @@ def _portfolio_risk_score(risks: list[dict[str, Any]], snapshots: list[dict[str,
     return {"score": score, "status": status, "score_breakdown": breakdown}
 
 
-def _build_recommendations(snapshots: list[dict[str, Any]], risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_recommendations(snapshots: list[ImplementationDocument], risks: list[ImplementationDocument]) -> list[ImplementationDocument]:
     recommendations: list[dict[str, Any]] = []
 
     def add(category: str, severity: str, release_ids: list[str], reason: str, action: str) -> None:
@@ -602,7 +604,7 @@ def _build_recommendations(snapshots: list[dict[str, Any]], risks: list[dict[str
     return recommendations
 
 
-def _release_readiness_ranking(snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _release_readiness_ranking(snapshots: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows = []
     for snapshot in snapshots:
         blocker_count = 0
@@ -630,7 +632,7 @@ def _release_readiness_ranking(snapshots: list[dict[str, Any]]) -> list[dict[str
     return rows
 
 
-def _portfolio_summary(snapshots: list[dict[str, Any]], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]], score: dict[str, Any]) -> dict[str, Any]:
+def _portfolio_summary(snapshots: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument], score: ImplementationDocument) -> ImplementationDocument:
     return {
         "release_count": len(snapshots),
         "signed_count": sum(1 for item in snapshots if item.get("signoff_summary", {}).get("status") in {"signed", "force_signed"}),
@@ -652,7 +654,7 @@ def _portfolio_summary(snapshots: list[dict[str, Any]], blockers: list[dict[str,
     }
 
 
-def _build_trend_report(portfolio_id: str, snapshots: list[dict[str, Any]], *, source_hash: str, generated_at: str) -> dict[str, Any]:
+def _build_trend_report(portfolio_id: str, snapshots: list[ImplementationDocument], *, source_hash: str, generated_at: str) -> ImplementationDocument:
     ordered = sorted(snapshots, key=lambda item: str(item.get("release_updated_at") or item.get("selected_at") or ""))
     latest = ordered[-3:]
     release_count = len(latest)
@@ -685,7 +687,7 @@ def _build_trend_report(portfolio_id: str, snapshots: list[dict[str, Any]], *, s
     return sanitize_metadata(report, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
 
 
-def _trend_findings(snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _trend_findings(snapshots: list[ImplementationDocument]) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if sum(1 for item in snapshots if int(item.get("change_request_count") or 0) > 0) >= 2:
         findings.append({"finding_id": "trend-001", "category": "change_control", "severity": "medium", "message": "Multiple releases include Change Requests."})
@@ -694,7 +696,7 @@ def _trend_findings(snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return findings
 
 
-def _portfolio_gates(selection: dict[str, Any], snapshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _portfolio_gates(selection: ImplementationDocument, snapshots: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         {"gate_id": "require_reviewer_packs", "required": bool(selection.get("require_reviewer_packs")), "passed_count": sum(1 for item in snapshots if item.get("reviewer_pack_verification_status") == "passed"), "total_count": len(snapshots)},
         {"gate_id": "require_audit", "required": bool(selection.get("require_audit")), "passed_count": sum(1 for item in snapshots if item.get("audit_verification_status") == "passed"), "total_count": len(snapshots)},
@@ -702,12 +704,12 @@ def _portfolio_gates(selection: dict[str, Any], snapshots: list[dict[str, Any]])
     ]
 
 
-def _release_summary_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _release_summary_from_snapshot(snapshot: ImplementationDocument) -> ImplementationDocument:
     keys = ["release_id", "release_name", "status", "track_count", "operations_summary", "signoff_summary", "archive_summary", "audit_summary", "audit_verification_status", "reviewer_pack_summary", "reviewer_pack_verification_status", "runbook_summary", "change_request_summary", "change_request_count", "applied_change_request_count", "source_hash", "integrity_ok"]
     return _pick(snapshot, keys)
 
 
-def _snapshot_source(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _snapshot_source(snapshot: ImplementationDocument) -> ImplementationDocument:
     return _pick(
         snapshot,
         [
@@ -729,7 +731,7 @@ def _snapshot_source(snapshot: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _selection_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _selection_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
     data = payload if isinstance(payload, dict) else {}
     return {
         "release_ids": [str(item).strip() for item in data.get("release_ids", []) if str(item).strip()] if isinstance(data.get("release_ids"), list) else [],
@@ -742,7 +744,7 @@ def _selection_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _selection_patch(payload: dict[str, Any]) -> dict[str, Any]:
+def _selection_patch(payload: ImplementationDocument) -> ImplementationDocument:
     allowed = {"release_ids", "include_hidden", "include_archived", "require_reviewer_packs", "require_audit", "require_archive", "max_releases"}
     patch: dict[str, Any] = {}
     for key, value in payload.items():
@@ -757,7 +759,7 @@ def _selection_patch(payload: dict[str, Any]) -> dict[str, Any]:
     return patch
 
 
-def _pick(value: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+def _pick(value: ImplementationDocument, keys: list[str]) -> ImplementationDocument:
     return {key: value.get(key) for key in keys if key in value}
 
 
@@ -765,7 +767,7 @@ def _rate(value: int, total: int) -> float:
     return round(float(value) / float(total), 4) if total else 0.0
 
 
-def _portfolio_review_markdown(portfolio: dict[str, Any], report: dict[str, Any]) -> str:
+def _portfolio_review_markdown(portfolio: ImplementationDocument, report: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     lines = [
         "# MusicForge Release Portfolio Audit",
@@ -787,7 +789,7 @@ def _portfolio_review_markdown(portfolio: dict[str, Any], report: dict[str, Any]
     return "\n".join(lines) + "\n"
 
 
-def _portfolio_retrospective_markdown(report: dict[str, Any]) -> str:
+def _portfolio_retrospective_markdown(report: ImplementationDocument) -> str:
     lines = ["# MusicForge Release Portfolio Retrospective", "", "## Trend Windows"]
     for item in report.get("windows", []) if isinstance(report.get("windows"), list) else []:
         if isinstance(item, dict):
@@ -799,7 +801,7 @@ def _portfolio_retrospective_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _risk_register_markdown(report: dict[str, Any]) -> str:
+def _risk_register_markdown(report: ImplementationDocument) -> str:
     lines = ["# MusicForge Portfolio Risk Register", ""]
     risks = report.get("risks") if isinstance(report.get("risks"), list) else []
     for item in risks:
@@ -810,7 +812,7 @@ def _risk_register_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _write_portfolio_readme(export_dir: Path, portfolio: dict[str, Any], report: dict[str, Any]) -> None:
+def _write_portfolio_readme(export_dir: Path, portfolio: ImplementationDocument, report: ImplementationDocument) -> None:
     lines = [
         "MusicForge Release Portfolio Audit Package",
         "",
@@ -822,7 +824,7 @@ def _write_portfolio_readme(export_dir: Path, portfolio: dict[str, Any], report:
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -870,7 +872,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     try:
@@ -880,7 +882,7 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return default if default is not None else {}
     try:
@@ -890,11 +892,11 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     return write_json(path, sanitize_metadata(data, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS))
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
     from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS
@@ -920,9 +922,9 @@ def _safe_text(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": message}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": message}

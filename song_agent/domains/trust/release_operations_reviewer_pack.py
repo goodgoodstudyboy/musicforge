@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -248,7 +250,7 @@ class ReleaseOperationsReviewerPackStore:
         value = read_json(path)
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
-    def _reviewer_findings(self, release_id: str, audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def _reviewer_findings(self, release_id: str, audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument]) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         if not audit_report:
@@ -290,7 +292,7 @@ class ReleaseOperationsReviewerPackStore:
             blockers.append(_blocker("reviewer_report_redaction", "Reviewer source evidence contains sensitive values."))
         return blockers, warnings
 
-    def _current_stage(self, audit_report: dict[str, Any]) -> str:
+    def _current_stage(self, audit_report: ImplementationDocument) -> str:
         operations = audit_report.get("stage_timeline") if isinstance(audit_report.get("stage_timeline"), list) else []
         if operations:
             return str(operations[-1].get("event_type") or audit_report.get("status") or "unknown")
@@ -332,7 +334,7 @@ def reviewer_pack_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _evidence_index(audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]], archive_verification: dict[str, Any]) -> list[dict[str, Any]]:
+def _evidence_index(audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument], archive_verification: ImplementationDocument) -> list[ImplementationDocument]:
     items = [
         {"name": "Operations Audit Report", "type": "json", "status": audit_report.get("status") or "missing", "hash": audit_report.get("integrity_hash")},
         {"name": "Operations Audit Ledger", "type": "jsonl", "status": "passed" if ledger_entries and audit_ledger_integrity_ok(ledger_entries) else "failed", "hash": audit_report.get("ledger_hash")},
@@ -343,7 +345,7 @@ def _evidence_index(audit_report: dict[str, Any], ledger_entries: list[dict[str,
     return items
 
 
-def _reviewer_guide(report: dict[str, Any]) -> str:
+def _reviewer_guide(report: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     lines = [
         "# MusicForge Release Operations Reviewer Guide",
@@ -381,7 +383,7 @@ def _reviewer_guide(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _retrospective_markdown(report: dict[str, Any]) -> str:
+def _retrospective_markdown(report: ImplementationDocument) -> str:
     lines = ["# MusicForge Release Operations Retrospective", "", f"Status: {report.get('status')}", "", "## Timeline"]
     for item in report.get("timeline", [])[:40] if isinstance(report.get("timeline"), list) else []:
         if isinstance(item, dict):
@@ -411,7 +413,7 @@ def _evidence_index_markdown(items: Any) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
     lines = [
         "MusicForge Release Operations Reviewer Pack",
         "",
@@ -423,20 +425,20 @@ def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return {"status": report.get("status") or "missing", "summary": summary}
 
 
-def _count_events(entries: list[dict[str, Any]], domain: str) -> int:
+def _count_events(entries: list[ImplementationDocument], domain: str) -> int:
     return sum(1 for item in entries if item.get("domain") == domain)
 
 
-def _override_count(entries: list[dict[str, Any]]) -> int:
+def _override_count(entries: list[ImplementationDocument]) -> int:
     return sum(1 for item in entries if "override" in json.dumps(item, ensure_ascii=False).lower() or "force" in str(item.get("event_type") or "").lower())
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     try:
@@ -446,11 +448,11 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     return write_json(path, sanitize_metadata(data, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS))
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -498,7 +500,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
     from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS
@@ -509,9 +511,9 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": message}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": message}

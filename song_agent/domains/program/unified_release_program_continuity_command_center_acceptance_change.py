@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import zipfile
@@ -662,7 +664,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
     def read_lifecycle_events(self, program_id: str) -> list[dict[str, Any]]:
         return HistoryChain(self.lifecycle_event_log_path(program_id), sanitizer=sanitize_metadata).read()
 
-    def _current_acceptance_state(self, program_id: str) -> dict[str, Any]:
+    def _current_acceptance_state(self, program_id: str) -> ImplementationDocument:
         latest = self.acceptance_store.latest_signoff_state(program_id)
         if latest.get("status") != "signed":
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError("Command Center Receiver Acceptance Board must be currently signed.")
@@ -723,7 +725,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             }
         )
 
-    def _assert_request_current(self, program_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    def _assert_request_current(self, program_id: str, request: ImplementationDocument) -> ImplementationDocument:
         if not _integrity_ok(request):
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError("Command Center Receiver Acceptance Change Request integrity failed.")
         current = self._current_acceptance_state(program_id)
@@ -736,7 +738,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                 raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError(f"Command Center Receiver Acceptance Change Request source mismatch: {field}")
         return current
 
-    def _target_from_state(self, state: dict[str, Any]) -> dict[str, Any]:
+    def _target_from_state(self, state: ImplementationDocument) -> ImplementationDocument:
         return {
             "component_type": "unified_release_program_continuity_command_center_receiver_acceptance",
             "program_id": state.get("program_id"),
@@ -748,13 +750,13 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             "generation": state.get("generation"),
         }
 
-    def _existing_open_request(self, program_id: str, signoff_hash: str | None) -> dict[str, Any] | None:
+    def _existing_open_request(self, program_id: str, signoff_hash: str | None) -> ImplementationDocument | None:
         for request in self.list_change_requests(program_id):
             if request.get("status") in {"submitted", "draft", "approved"} and not request.get("applied_at") and (request.get("target") or {}).get("acceptance_signoff_hash") == signoff_hash:
                 return request
         return None
 
-    def _write_request_binding(self, program_id: str, request: dict[str, Any], approval: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
+    def _write_request_binding(self, program_id: str, request: ImplementationDocument, approval: ImplementationDocument | None, current: ImplementationDocument) -> ImplementationDocument:
         binding = _with_integrity(
             {
                 "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
@@ -774,7 +776,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
         write_json(self.request_binding_path(program_id, str(request.get("change_request_id") or "")), binding)
         return binding
 
-    def _write_generation(self, program_id: str, generation: int, status: str, proof: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _write_generation(self, program_id: str, generation: int, status: str, proof: ImplementationDocument | None = None) -> ImplementationDocument:
         existing = _read_optional_json(self.current_generation_path(program_id))
         if int(existing.get("generation") or -1) != generation:
             existing = {}
@@ -793,7 +795,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
         write_json(self.current_generation_path(program_id), doc)
         return doc
 
-    def _change_control_state(self, program_id: str) -> dict[str, Any]:
+    def _change_control_state(self, program_id: str) -> ImplementationDocument:
         existing = _read_optional_json(self.state_path(program_id))
         latest = self.acceptance_store.latest_signoff_state(program_id)
         current: dict[str, Any] = {}
@@ -823,7 +825,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
         )
         return doc
 
-    def _change_request_index(self, program_id: str) -> dict[str, Any]:
+    def _change_request_index(self, program_id: str) -> ImplementationDocument:
         rows = []
         for request in self.list_change_requests(program_id):
             request_id = str(request.get("change_request_id") or "")
@@ -844,7 +846,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             )
         return _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_continuity_command_center_acceptance_change_request_index", "program_id": program_id, "items": rows, "summary": {"request_count": len(rows), "approved_count": sum(1 for row in rows if row.get("status") in {"approved", "applied"}), "applied_count": sum(1 for row in rows if row.get("status") == "applied")}})
 
-    def _reset_proof_index(self, program_id: str) -> dict[str, Any]:
+    def _reset_proof_index(self, program_id: str) -> ImplementationDocument:
         rows = []
         for proof in self.list_reset_proofs(program_id):
             reset_id = str(proof.get("reset_id") or "")
@@ -863,7 +865,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             )
         return _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_continuity_command_center_acceptance_reset_proof_index", "program_id": program_id, "items": rows, "summary": {"reset_count": len(rows)}})
 
-    def _lifecycle_report(self, program_id: str, state: dict[str, Any], request_index: dict[str, Any], reset_index: dict[str, Any]) -> dict[str, Any]:
+    def _lifecycle_report(self, program_id: str, state: ImplementationDocument, request_index: ImplementationDocument, reset_index: ImplementationDocument) -> ImplementationDocument:
         existing = _read_optional_json(self.lifecycle_report_path(program_id))
         events = self.read_lifecycle_events(program_id)
         history_ok = _lifecycle_history_ok(events)
@@ -896,7 +898,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
             }
         )
 
-    def _archive_documents(self, program_id: str) -> dict[str, Any]:
+    def _archive_documents(self, program_id: str) -> ImplementationDocument:
         self._sync_acceptance_lifecycle_event(program_id)
         state = self._change_control_state(program_id)
         if state.get("status") != "passed" or state.get("latest_acceptance_status") != "signed":
@@ -942,7 +944,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
         generations = self._generation_summaries(program_id, state, resets)
         return {"state": state, "request_index": request_index, "reset_index": reset_index, "lifecycle": lifecycle, "events": events, "generation": generation, "requests": requests, "resets": resets, "generations": generations}
 
-    def _validate_archive_export(self, program_id: str, root: Path, docs: dict[str, Any]) -> None:
+    def _validate_archive_export(self, program_id: str, root: Path, docs: ImplementationDocument) -> None:
         expected: dict[str, Any] = {
             "state.json": docs["state"],
             "request-index.json": docs["request_index"],
@@ -1017,7 +1019,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                 "Receiver Acceptance Change Control export manifest no longer matches the frozen snapshot."
             )
 
-    def _generation_summaries(self, program_id: str, state: dict[str, Any], resets: dict[str, dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    def _generation_summaries(self, program_id: str, state: ImplementationDocument, resets: dict[str, ImplementationDocument]) -> dict[int, ImplementationDocument]:
         generation_number = int((_read_optional_json(self.current_generation_path(program_id)).get("generation") or 1))
         summaries: dict[int, dict[str, Any]] = {}
         for snapshot_dir in sorted(self.generations_dir(program_id).glob("gen-*/acceptance-snapshot")):
@@ -1080,7 +1082,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
         }
         return summaries
 
-    def _append_lifecycle_event(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_lifecycle_event(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return HistoryChain(self.lifecycle_event_log_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _sync_acceptance_lifecycle_event(self, program_id: str) -> None:
@@ -1124,7 +1126,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
         return f"cr-{max_seen + 1:06d}"
 
 
-def _package_manifest(package_type: str, program_id: str, files: list[dict[str, Any]], source: dict[str, Any]) -> dict[str, Any]:
+def _package_manifest(package_type: str, program_id: str, files: list[ImplementationDocument], source: ImplementationDocument) -> ImplementationDocument:
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
@@ -1140,7 +1142,7 @@ def _package_manifest(package_type: str, program_id: str, files: list[dict[str, 
     return manifest
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -1159,7 +1161,7 @@ def _reject_forbidden_payload(value: Any, label: str) -> None:
             _reject_forbidden_payload(child, label)
 
 
-def _lifecycle_history_ok(rows: list[dict[str, Any]]) -> bool:
+def _lifecycle_history_ok(rows: list[ImplementationDocument]) -> bool:
     previous = ""
     for row in rows:
         payload_hash = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})

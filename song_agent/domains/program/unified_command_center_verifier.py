@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -350,7 +352,7 @@ def unified_command_center_verification_exit_code(report: dict[str, Any]) -> int
     return 0 if report.get("status") == "passed" else 1
 
 
-def _runtime_zip_component(key: str, zip_path: Path | str, report_path: Path | str, verifier) -> dict[str, Any]:
+def _runtime_zip_component(key: str, zip_path: Path | str, report_path: Path | str, verifier) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     fingerprint = {"component_key": key, "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     zip_path = Path(zip_path)
@@ -408,7 +410,7 @@ def _runtime_zip_component(key: str, zip_path: Path | str, report_path: Path | s
     return _component_finish(key, fingerprint, checks, runtime_report=runtime_report, external_report=external_report)
 
 
-def _ga_component(report_path: Path | str, verification_report_path: Path | str | None) -> dict[str, Any]:
+def _ga_component(report_path: Path | str, verification_report_path: Path | str | None) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     fingerprint = {"component_key": "ga-readiness", "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     report_path = Path(report_path)
@@ -443,7 +445,7 @@ def _ga_component(report_path: Path | str, verification_report_path: Path | str 
     return _component_finish("ga-readiness", fingerprint, checks, runtime_report=runtime_report, external_report=external_report)
 
 
-def _verify_ga_readiness_report_core(report_path: Path) -> dict[str, Any]:
+def _verify_ga_readiness_report_core(report_path: Path) -> ImplementationDocument:
     try:
         report = read_json(report_path)
     except Exception as exc:
@@ -474,7 +476,7 @@ def _verify_ga_readiness_report_core(report_path: Path) -> dict[str, Any]:
     }
 
 
-def _release_check_component(report_path: Path | str | None) -> dict[str, Any]:
+def _release_check_component(report_path: Path | str | None) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     fingerprint = {"component_key": "release-check", "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     if not report_path:
@@ -492,7 +494,7 @@ def _release_check_component(report_path: Path | str | None) -> dict[str, Any]:
     return _component_finish("release-check", fingerprint, checks, runtime_report=report, external_report=report)
 
 
-def _generic_report_component(key: str, report_path: Path | str | None) -> dict[str, Any]:
+def _generic_report_component(key: str, report_path: Path | str | None) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     fingerprint = {"component_key": key, "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     if not report_path:
@@ -512,7 +514,7 @@ def _generic_report_component(key: str, report_path: Path | str | None) -> dict[
     return _component_finish(key, fingerprint, checks, runtime_report=report, external_report=report)
 
 
-def _component_finish(key: str, fingerprint: dict[str, Any], checks: list[dict[str, Any]], *, runtime_report: dict[str, Any] | None = None, external_report: dict[str, Any] | None = None) -> dict[str, Any]:
+def _component_finish(key: str, fingerprint: ImplementationDocument, checks: list[ImplementationDocument], *, runtime_report: ImplementationDocument | None = None, external_report: ImplementationDocument | None = None) -> ImplementationDocument:
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     public_fingerprint = _public_fingerprint(fingerprint)
     public_fingerprint["integrity_hash"] = _integrity_hash(public_fingerprint)
@@ -530,7 +532,7 @@ def _component_finish(key: str, fingerprint: dict[str, Any], checks: list[dict[s
     return result
 
 
-def _external_component_checks(key: str, fingerprint: dict[str, Any], *, external: dict[str, dict[str, Any]], audio_evidence: dict[str, Any], trust_evidence: dict[str, Any], public_trust_evidence: dict[str, Any], require_component: bool) -> list[dict[str, Any]]:
+def _external_component_checks(key: str, fingerprint: ImplementationDocument, *, external: dict[str, ImplementationDocument], audio_evidence: ImplementationDocument, trust_evidence: ImplementationDocument, public_trust_evidence: ImplementationDocument, require_component: bool) -> list[ImplementationDocument]:
     if key in {"distribution", "submission"}:
         return _external_multi_component_checks(key, fingerprint, external=external, require_component=require_component)
     ext = external.get(key, {})
@@ -566,7 +568,7 @@ def _external_component_checks(key: str, fingerprint: dict[str, Any], *, externa
     ]
 
 
-def _external_multi_component_checks(key: str, fingerprint: dict[str, Any], *, external: dict[str, dict[str, Any]], require_component: bool) -> list[dict[str, Any]]:
+def _external_multi_component_checks(key: str, fingerprint: ImplementationDocument, *, external: dict[str, ImplementationDocument], require_component: bool) -> list[ImplementationDocument]:
     ext = external.get(key, {})
     zip_paths = [Path(item) for item in ext.get("zips", []) if item]
     report_paths = [Path(item) for item in ext.get("verification_reports", []) if item]
@@ -607,7 +609,7 @@ def _external_multi_component_checks(key: str, fingerprint: dict[str, Any], *, e
     return checks
 
 
-def _document_binding_checks(manifest: dict[str, Any], source: dict[str, Any], report: dict[str, Any], graph: dict[str, Any], inventory: dict[str, Any], readiness: dict[str, Any], gap_plan: dict[str, Any], runbook: dict[str, Any], runbook_result: dict[str, Any], verification_index: dict[str, Any], fingerprints: dict[str, dict[str, Any]], *, require_ready: bool) -> list[dict[str, Any]]:
+def _document_binding_checks(manifest: ImplementationDocument, source: ImplementationDocument, report: ImplementationDocument, graph: ImplementationDocument, inventory: ImplementationDocument, readiness: ImplementationDocument, gap_plan: ImplementationDocument, runbook: ImplementationDocument, runbook_result: ImplementationDocument, verification_index: ImplementationDocument, fingerprints: dict[str, ImplementationDocument], *, require_ready: bool) -> list[ImplementationDocument]:
     source_hash = report.get("source_hash")
     doc_hashes = report.get("document_hashes") if isinstance(report.get("document_hashes"), dict) else {}
     checks = [
@@ -631,7 +633,7 @@ def _document_binding_checks(manifest: dict[str, Any], source: dict[str, Any], r
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective = names - {"manifest.json"}
@@ -656,7 +658,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check["check_id"] for check in checks if check.get("status") == "warning"]
@@ -676,11 +678,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _external_paths(**kwargs: Any) -> dict[str, dict[str, Any]]:
+def _external_paths(**kwargs: Any) -> dict[str, ImplementationDocument]:
     return {
         "audio-command-center": {"zip": kwargs.get("release_audio_command_center_zip_path"), "verification_report": kwargs.get("release_audio_command_center_verification_report_path")},
         "trust-operations-hub": {"zip": kwargs.get("trust_operations_hub_zip_path"), "verification_report": kwargs.get("trust_operations_hub_verification_report_path")},
@@ -695,7 +697,7 @@ def _external_paths(**kwargs: Any) -> dict[str, dict[str, Any]]:
     }
 
 
-def _public_report(report: dict[str, Any]) -> dict[str, Any]:
+def _public_report(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     public = {
         "package_type": report.get("package_type"),
@@ -710,21 +712,21 @@ def _public_report(report: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     data = json.loads(archive.read(name).decode("utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"{name} must contain a JSON object.")
     return data
 
 
-def _component_status(inventory: dict[str, Any], key: str) -> str:
+def _component_status(inventory: ImplementationDocument, key: str) -> str:
     for row in inventory.get("components", []):
         if isinstance(row, dict) and row.get("component_key") == key:
             return str(row.get("readiness") or row.get("status") or "")
     return ""
 
 
-def _component_required(inventory: dict[str, Any], key: str) -> bool:
+def _component_required(inventory: ImplementationDocument, key: str) -> bool:
     for row in inventory.get("components", []):
         if isinstance(row, dict) and row.get("component_key") == key:
             return bool(row.get("required"))
@@ -757,14 +759,14 @@ def _component_forced(
     )
 
 
-def _domain_requirement_check(readiness: dict[str, Any], domain: str, check_id: str) -> dict[str, Any]:
+def _domain_requirement_check(readiness: ImplementationDocument, domain: str, check_id: str) -> ImplementationDocument:
     for row in readiness.get("domains", []):
         if isinstance(row, dict) and row.get("domain") == domain:
             return _check(check_id, row.get("status") == "ready", f"{domain} readiness is ready.", {"status": row.get("status")})
     return _check(check_id, False, f"{domain} readiness row is missing.")
 
 
-def _readiness_from_checks(checks: list[dict[str, Any]]) -> str:
+def _readiness_from_checks(checks: list[ImplementationDocument]) -> str:
     failed = [str(check.get("check_id") or "") for check in checks if check.get("status") == "failed"]
     if any("required" in item or "exists" in item for item in failed):
         return "missing"
@@ -785,18 +787,18 @@ def _path_list(value: Any) -> list[Any]:
     return [value] if value else []
 
 
-def _report_integrity_hash(report: dict[str, Any]) -> str:
+def _report_integrity_hash(report: ImplementationDocument) -> str:
     return str(report.get("integrity_hash") or stable_hash(report))
 
 
-def _package_type_matches(key: str, report: dict[str, Any]) -> bool:
+def _package_type_matches(key: str, report: ImplementationDocument) -> bool:
     expected = EXPECTED_VERIFICATION_PACKAGE_TYPES.get(key)
     if not expected:
         return True
     return str(report.get("package_type") or "") in expected
 
 
-def _report_integrity_ok(report: dict[str, Any]) -> bool:
+def _report_integrity_ok(report: ImplementationDocument) -> bool:
     if not report:
         return False
     if report.get("integrity_hash"):
@@ -804,13 +806,13 @@ def _report_integrity_ok(report: dict[str, Any]) -> bool:
     return True
 
 
-def _report_zip_sha256(report: dict[str, Any]) -> str | None:
+def _report_zip_sha256(report: ImplementationDocument) -> str | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     input_doc = report.get("input") if isinstance(report.get("input"), dict) else {}
     return report.get("zip_sha256") or summary.get("zip_sha256") or input_doc.get("sha256")
 
 
-def _report_zip_size(report: dict[str, Any]) -> int | None:
+def _report_zip_size(report: ImplementationDocument) -> int | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     input_doc = report.get("input") if isinstance(report.get("input"), dict) else {}
     value = report.get("zip_size_bytes") or summary.get("zip_size_bytes") or input_doc.get("size_bytes")
@@ -820,12 +822,12 @@ def _report_zip_size(report: dict[str, Any]) -> int | None:
         return None
 
 
-def _report_manifest_hash(report: dict[str, Any]) -> str | None:
+def _report_manifest_hash(report: ImplementationDocument) -> str | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return report.get("manifest_hash") or summary.get("manifest_hash")
 
 
-def _manifest_binding_matches(report: dict[str, Any], runtime_manifest_hash: str | None) -> bool:
+def _manifest_binding_matches(report: ImplementationDocument, runtime_manifest_hash: str | None) -> bool:
     expected = _report_manifest_hash(report)
     if expected:
         return expected == runtime_manifest_hash
@@ -834,7 +836,7 @@ def _manifest_binding_matches(report: dict[str, Any], runtime_manifest_hash: str
     return True
 
 
-def _component_id_from_report(key: str, report: dict[str, Any], index: int) -> str:
+def _component_id_from_report(key: str, report: ImplementationDocument, index: int) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     prefix = {"distribution": "distribution", "submission": "submission"}.get(key, key)
     for field in ("release_id", "target_id", "submission_id", "package_id"):
@@ -848,20 +850,20 @@ def _safe_component_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.:-]+", "-", value.strip()).strip("-") or "unknown"
 
 
-def _fingerprint_items(fingerprint: dict[str, Any]) -> list[dict[str, Any]]:
+def _fingerprint_items(fingerprint: ImplementationDocument) -> list[ImplementationDocument]:
     items = fingerprint.get("items") if isinstance(fingerprint.get("items"), list) else []
     return sorted([_public_fingerprint(item) for item in items if isinstance(item, dict)], key=lambda item: str(item.get("component_id") or ""))
 
 
-def _public_fingerprint(value: dict[str, Any]) -> dict[str, Any]:
+def _public_fingerprint(value: ImplementationDocument) -> ImplementationDocument:
     return {key: val for key, val in value.items() if not str(key).startswith("_")}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -889,7 +891,7 @@ def _is_safe_entry(name: str) -> bool:
     return all(part and part not in {".", ".."} and ":" not in part for part in parts)
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     offenders: list[str] = []
     for name in names:
         if name.endswith("/"):

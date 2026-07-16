@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import html
 import hashlib
 import json
@@ -283,7 +285,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         summary["verification_status"] = verification.get("status") or "missing"
         return sanitize_metadata(summary, blocked_keys=PORTAL_BLOCKED_KEYS)
 
-    def _findings(self, source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
@@ -304,7 +306,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         check("redaction_scan", _redaction_summary(source).get("status") == "passed", "Portal source contains no sensitive values.")
         return blockers, warnings, checks
 
-    def _ensure_exportable(self, report: dict[str, Any], source: dict[str, Any]) -> None:
+    def _ensure_exportable(self, report: ImplementationDocument, source: ImplementationDocument) -> None:
         if not portal_report_integrity_ok(report):
             raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal Report integrity failed.")
         if report.get("status") == "failed":
@@ -312,7 +314,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         if report.get("source_hash") != stable_hash(source):
             raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal Report is stale. Refresh before export.")
 
-    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: ImplementationDocument, *, now: str) -> None:
         path = self.history_path(portfolio_id, profile)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -353,7 +355,7 @@ def portal_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == portal_manifest_hash(data)
 
 
-def _portal_summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _portal_summary_from_source(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "portfolio_id": source.get("portfolio_id"),
@@ -372,7 +374,7 @@ def _portal_summary_from_source(source: dict[str, Any], blockers: list[dict[str,
     )
 
 
-def _data_documents(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _data_documents(report: ImplementationDocument) -> dict[str, ImplementationDocument]:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return {
@@ -448,7 +450,7 @@ def _data_documents(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]], *, external_review: dict[str, Any] | None = None) -> dict[str, str]:
+def _html_pages(report: ImplementationDocument, data_docs: dict[str, ImplementationDocument], *, external_review: ImplementationDocument | None = None) -> dict[str, str]:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     external = external_review if isinstance(external_review, dict) else {}
@@ -517,7 +519,7 @@ def _html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]], *,
     return pages
 
 
-def _html_shell(page: str, title: str, body: str, report: dict[str, Any]) -> str:
+def _html_shell(page: str, title: str, body: str, report: ImplementationDocument) -> str:
     source_hash = html.escape(str(report.get("source_hash") or ""))
     return (
         "<!doctype html>\n"
@@ -543,12 +545,12 @@ def _kv(label: str, value: Any) -> str:
     return f"<p><strong>{html.escape(label)}:</strong> {html.escape(str(value if value is not None else 'missing'))}</p>"
 
 
-def _hash_table(rows: dict[str, Any]) -> str:
+def _hash_table(rows: ImplementationDocument) -> str:
     body = "".join(f"<tr><th>{html.escape(str(key))}</th><td><code>{html.escape(str(value or 'missing')[:16])}</code></td></tr>" for key, value in rows.items())
     return f"<table>{body}</table>"
 
 
-def _external_review_label(external: dict[str, Any]) -> str:
+def _external_review_label(external: ImplementationDocument) -> str:
     status = str(external.get("external_review_status") or external.get("status") or "missing")
     if status == "accepted":
         reviewer = str(external.get("reviewer_label") or "external reviewer")
@@ -559,7 +561,7 @@ def _external_review_label(external: dict[str, Any]) -> str:
     return status
 
 
-def _registry_manifest_row(source: dict[str, Any]) -> dict[str, Any]:
+def _registry_manifest_row(source: ImplementationDocument) -> ImplementationDocument:
     return {
         "zip_sha256": source.get("registry_zip_sha256"),
         "zip_size_bytes": source.get("registry_zip_size_bytes"),
@@ -571,7 +573,7 @@ def _registry_manifest_row(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _attestation_manifest_row(source: dict[str, Any]) -> dict[str, Any]:
+def _attestation_manifest_row(source: ImplementationDocument) -> ImplementationDocument:
     return {
         "certificate_id": source.get("current_certificate_id"),
         "zip_sha256": source.get("current_attestation_zip_sha256"),
@@ -582,24 +584,24 @@ def _attestation_manifest_row(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _state_triple(report: dict[str, Any]) -> dict[str, str]:
+def _state_triple(report: ImplementationDocument) -> dict[str, str]:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     return {"source_hash": str(report.get("source_hash") or ""), "current_entry_hash": str(source.get("registry_current_entry_hash") or ""), "registry_zip_sha256": str(source.get("registry_zip_sha256") or "")}
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     registry = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
     external = manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}
     external_verification = manifest.get("external_review_verification") if isinstance(manifest.get("external_review_verification"), dict) else {}
     return {"source_hash": str(manifest.get("source_hash") or ""), "current_entry_hash": str(registry.get("current_entry_hash") or ""), "registry_zip_sha256": str(registry.get("zip_sha256") or ""), "external_review_hash": stable_hash(external), "external_review_verification_hash": stable_hash(external_verification)}
 
 
-def _page_record(root: Path, path: str, source_hash: Any) -> dict[str, Any]:
+def _page_record(root: Path, path: str, source_hash: Any) -> ImplementationDocument:
     resolved = root / path
     return {"path": path, "content_hash": _sha256(resolved), "source_hash": source_hash}
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -607,7 +609,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
     return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -617,7 +619,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -626,7 +628,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(payload, blocked_keys=PORTAL_BLOCKED_KEYS))
 
@@ -648,7 +650,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleasePortfolioGovernanceAttestationPortalStateError("Resolved path escapes Attestation Portal directory.") from exc
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     matches = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -657,7 +659,7 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if matches else "passed", "matches": matches[:20]}
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     (export_dir / "README.txt").write_text(
         "\n".join(
@@ -676,7 +678,7 @@ def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
     )
 
 
-def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
+def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> ImplementationDocument:
     try:
         from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_read_model import accepted_evidence_public_summary_from_portfolio_dir
 
@@ -685,7 +687,7 @@ def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile
         return {"status": "missing", "external_review_status": "missing"}
 
 
-def _accepted_evidence_verification_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
+def _accepted_evidence_verification_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> ImplementationDocument:
     try:
         from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_read_model import accepted_evidence_verification_summary_from_portfolio_dir
 
@@ -700,7 +702,7 @@ def _accepted_evidence_verification_summary_for_portfolio_dir(portfolio_dir: Pat
         }
 
 
-def _find_entry(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
+def _find_entry(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
     for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
         if isinstance(entry, dict) and entry.get("entry_id") == entry_id:
             return entry
@@ -711,5 +713,5 @@ def _safe_profile(profile: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(profile or "public_summary"))[:80]
 
 
-def _verification_hash(report: dict[str, Any]) -> str:
+def _verification_hash(report: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key != "generated_at"})

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -102,7 +104,7 @@ class AudioCampaignRemediationStore:
             raise AudioCampaignRemediationNotFoundError(f"Audio Campaign remediation closeout not found: {release_id}.")
         return sanitize_metadata(read_json(self.closeout_path(release_id)))
 
-    def _current_source_state(self, release_id: str, *, refresh_campaign: bool = True) -> dict[str, Any]:
+    def _current_source_state(self, release_id: str, *, refresh_campaign: bool = True) -> ImplementationDocument:
         release = self.release_store.get_release(release_id)
         link = self.planner_store.read_link(release_id)
         campaign_id = str(link.get("campaign_id") or "")
@@ -194,7 +196,7 @@ class AudioCampaignRemediationStore:
             _append_event(self.events_path(release_id), "audio_campaign_remediation_plan_refreshed", {"release_id": release_id, "campaign_id": campaign_id, "status": status, "issue_count": len(issues)})
             return plan
 
-    def _assert_signed_current(self, release_id: str) -> dict[str, Any]:
+    def _assert_signed_current(self, release_id: str) -> ImplementationDocument:
         if not self.signoff_path(release_id).exists():
             raise AudioCampaignRemediationStateError("Audio Campaign remediation signoff is missing.")
         signoff = read_json(self.signoff_path(release_id))
@@ -516,13 +518,13 @@ class AudioCampaignRemediationStore:
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": str(exc)}
 
-    def _ensure_queue_current(self, release_id: str, queue: dict[str, Any]) -> None:
+    def _ensure_queue_current(self, release_id: str, queue: ImplementationDocument) -> None:
         plan = self.refresh_plan(release_id)
         if queue.get("plan_source_hash") != plan.get("source_hash"):
             raise AudioCampaignRemediationStateError("Audio Campaign remediation queue is stale. Refresh before running safe actions.")
 
 
-def _issues_from_campaign(campaign: dict[str, Any], report: dict[str, Any], case_index: dict[str, Any]) -> list[dict[str, Any]]:
+def _issues_from_campaign(campaign: ImplementationDocument, report: ImplementationDocument, case_index: ImplementationDocument) -> list[ImplementationDocument]:
     case_rows = {str(row.get("case_id")): row for row in case_index.get("cases", []) if isinstance(row, dict)}
     report_rows = {str(row.get("case_id")): row for row in report.get("cases", []) if isinstance(row, dict)}
     issues = []
@@ -561,7 +563,7 @@ def _issues_from_campaign(campaign: dict[str, Any], report: dict[str, Any], case
     return sorted(issues, key=lambda row: ({"critical": 0, "high": 1, "medium": 2, "low": 3}.get(str(row.get("severity") or ""), 9), str(row.get("case_id") or "")))
 
 
-def _issue_closeout(issue: dict[str, Any], fix_store: AudioFixSprintStore) -> dict[str, Any]:
+def _issue_closeout(issue: ImplementationDocument, fix_store: AudioFixSprintStore) -> ImplementationDocument:
     blockers: list[str] = []
     warnings: list[str] = []
     sprint_id = str(issue.get("fix_sprint_id") or "")
@@ -604,7 +606,7 @@ def _issue_closeout(issue: dict[str, Any], fix_store: AudioFixSprintStore) -> di
     }
 
 
-def _sprint_state(sprint: dict[str, Any], fix_store: AudioFixSprintStore, sprint_id: str) -> dict[str, Any]:
+def _sprint_state(sprint: ImplementationDocument, fix_store: AudioFixSprintStore, sprint_id: str) -> ImplementationDocument:
     selected = False
     manual_ab = False
     candidate_count = 0
@@ -652,7 +654,7 @@ def _sprint_state(sprint: dict[str, Any], fix_store: AudioFixSprintStore, sprint
     }
 
 
-def _action(index: int, issue: dict[str, Any], action_type: str, kind: str, status: str, *, sprint_id: str | None = None) -> dict[str, Any]:
+def _action(index: int, issue: ImplementationDocument, action_type: str, kind: str, status: str, *, sprint_id: str | None = None) -> ImplementationDocument:
     return {
         "action_id": f"racra-{index:06d}",
         "issue_id": issue.get("issue_id"),
@@ -665,7 +667,7 @@ def _action(index: int, issue: dict[str, Any], action_type: str, kind: str, stat
     }
 
 
-def _release_track_current_row(project_store: ProjectStore, track: Any) -> dict[str, Any]:
+def _release_track_current_row(project_store: ProjectStore, track: Any) -> ImplementationDocument:
     project_id = str(getattr(track, "project_id", "") or "")
     manifest_path = final_export_dir(project_store.project_dir(project_id)) / "manifest.json"
     current_hash = _sha256_path(manifest_path) if manifest_path.exists() else None
@@ -680,11 +682,11 @@ def _release_track_current_row(project_store: ProjectStore, track: Any) -> dict[
     }
 
 
-def _track_identity(track: Any) -> dict[str, Any]:
+def _track_identity(track: Any) -> ImplementationDocument:
     return {"track_id": getattr(track, "track_id", None), "project_id": getattr(track, "project_id", None), "version_id": getattr(track, "version_id", None), "final_export_hash": getattr(track, "final_export_hash", None)}
 
 
-def _issue_severity(review: dict[str, Any], markers: list[dict[str, Any]]) -> str:
+def _issue_severity(review: ImplementationDocument, markers: list[ImplementationDocument]) -> str:
     values = [str(marker.get("severity") or "") for marker in markers]
     if review.get("status") == "rejected":
         values.append("critical")
@@ -696,7 +698,7 @@ def _issue_severity(review: dict[str, Any], markers: list[dict[str, Any]]) -> st
     return "medium"
 
 
-def _issue_category(markers: list[dict[str, Any]]) -> str:
+def _issue_category(markers: list[ImplementationDocument]) -> str:
     for marker in markers:
         category = str(marker.get("category") or "").strip()
         if category:
@@ -704,11 +706,11 @@ def _issue_category(markers: list[dict[str, Any]]) -> str:
     return "other"
 
 
-def _marker_public(marker: dict[str, Any]) -> dict[str, Any]:
+def _marker_public(marker: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata({key: marker.get(key) for key in ("marker_id", "time_seconds", "category", "severity", "message", "source_hash")})
 
 
-def _plan_summary(issues: list[dict[str, Any]], blockers: list[dict[str, Any]]) -> dict[str, Any]:
+def _plan_summary(issues: list[ImplementationDocument], blockers: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "issue_count": len(issues),
         "critical_count": sum(1 for issue in issues if issue.get("severity") == "critical"),
@@ -718,7 +720,7 @@ def _plan_summary(issues: list[dict[str, Any]], blockers: list[dict[str, Any]]) 
     }
 
 
-def _queue_summary(actions: list[dict[str, Any]]) -> dict[str, Any]:
+def _queue_summary(actions: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "action_count": len(actions),
         "safe_count": sum(1 for action in actions if action.get("kind") == "safe"),
@@ -727,7 +729,7 @@ def _queue_summary(actions: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _linked_fix_sprints(plan: dict[str, Any], fix_store: AudioFixSprintStore) -> list[dict[str, Any]]:
+def _linked_fix_sprints(plan: ImplementationDocument, fix_store: AudioFixSprintStore) -> list[ImplementationDocument]:
     rows = []
     for sprint_id in sorted({str(issue.get("fix_sprint_id") or "") for issue in plan.get("issues", []) if issue.get("fix_sprint_id")}):
         try:
@@ -739,7 +741,7 @@ def _linked_fix_sprints(plan: dict[str, Any], fix_store: AudioFixSprintStore) ->
     return rows
 
 
-def _readme(plan: dict[str, Any], closeout: dict[str, Any]) -> str:
+def _readme(plan: ImplementationDocument, closeout: ImplementationDocument) -> str:
     return "\n".join(
         [
             "MusicForge Audio Campaign Remediation",
@@ -752,7 +754,7 @@ def _readme(plan: dict[str, Any], closeout: dict[str, Any]) -> str:
     )
 
 
-def _file_record(path: Path, root: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -773,11 +775,11 @@ def _bounded(value: Any, limit: int) -> str:
     return text[:limit]
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     event = sanitize_metadata({"event_type": event_type, "created_at": now_iso(), **payload})
     with path.open("a", encoding="utf-8") as handle:

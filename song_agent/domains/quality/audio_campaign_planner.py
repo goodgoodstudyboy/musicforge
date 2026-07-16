@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import threading
 from pathlib import Path
@@ -290,7 +292,7 @@ def _track_identity_key(track: Any) -> str:
     return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
 
 
-def _case_identity_key(case: dict[str, Any]) -> str:
+def _case_identity_key(case: ImplementationDocument) -> str:
     project_id = str(case.get("project_id") or "").strip()
     version_id = str(case.get("version_id") or "").strip()
     final_export_hash = str(case.get("final_export_hash") or "").strip()
@@ -299,7 +301,7 @@ def _case_identity_key(case: dict[str, Any]) -> str:
     return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
 
 
-def _track_plan_row(project_store: ProjectStore, track: Any, release_id: str) -> dict[str, Any]:
+def _track_plan_row(project_store: ProjectStore, track: Any, release_id: str) -> ImplementationDocument:
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     identity_key = _track_identity_key(track)
@@ -370,7 +372,7 @@ def _track_plan_row(project_store: ProjectStore, track: Any, release_id: str) ->
     )
 
 
-def _renderer_summary(manifest: dict[str, Any]) -> dict[str, Any]:
+def _renderer_summary(manifest: ImplementationDocument) -> ImplementationDocument:
     for key in ("audio_artifact", "audio", "renderer", "audio_health"):
         value = manifest.get(key) if isinstance(manifest, dict) else None
         if isinstance(value, dict):
@@ -383,12 +385,12 @@ def _renderer_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     return {"runner_kind": "real", "release_ready": True, "profile_id": "final-export"}
 
 
-def _renderer_release_ready(row: dict[str, Any]) -> bool:
+def _renderer_release_ready(row: ImplementationDocument) -> bool:
     renderer = row.get("renderer") if isinstance(row.get("renderer"), dict) else {}
     return renderer.get("runner_kind") == "real" and renderer.get("release_ready") is not False
 
 
-def _session_item_from_track(row: dict[str, Any], *, project_store: ProjectStore | None = None) -> dict[str, Any]:
+def _session_item_from_track(row: ImplementationDocument, *, project_store: ProjectStore | None = None) -> ImplementationDocument:
     source_abspaths = dict(row.get("source_abspaths") or {})
     if project_store is not None:
         project_id = str(row.get("project_id") or "")
@@ -421,7 +423,7 @@ def _session_item_from_track(row: dict[str, Any], *, project_store: ProjectStore
     }
 
 
-def _release_plan_source(release: ReleaseDocument, tracks: list[dict[str, Any]]) -> dict[str, Any]:
+def _release_plan_source(release: ReleaseDocument, tracks: list[ImplementationDocument]) -> ImplementationDocument:
     identities = [
         {
             "track_id": row.get("track_id"),
@@ -440,7 +442,7 @@ def _release_plan_source(release: ReleaseDocument, tracks: list[dict[str, Any]])
     }
 
 
-def _preflight_summary_from_tracks(tracks: list[dict[str, Any]], blockers: list[dict[str, Any]]) -> dict[str, Any]:
+def _preflight_summary_from_tracks(tracks: list[ImplementationDocument], blockers: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "track_count": len(tracks),
         "ready_track_count": sum(1 for row in tracks if not row.get("blockers")),
@@ -449,7 +451,7 @@ def _preflight_summary_from_tracks(tracks: list[dict[str, Any]], blockers: list[
     }
 
 
-def _coverage(track_rows: list[dict[str, Any]], cases: list[dict[str, Any]]) -> dict[str, Any]:
+def _coverage(track_rows: list[ImplementationDocument], cases: list[ImplementationDocument]) -> ImplementationDocument:
     case_keys = {_case_identity_key(case) for case in cases if _case_identity_key(case)}
     missing = []
     matched = 0
@@ -462,7 +464,7 @@ def _coverage(track_rows: list[dict[str, Any]], cases: list[dict[str, Any]]) -> 
     return {"status": "passed" if not missing and bool(track_rows) else "failed", "matched_track_count": matched, "track_count": len(track_rows), "case_count": len(cases), "missing_tracks": missing}
 
 
-def _duplicate_identity_keys(tracks: list[dict[str, Any]]) -> list[str]:
+def _duplicate_identity_keys(tracks: list[ImplementationDocument]) -> list[str]:
     seen: set[str] = set()
     duplicates: set[str] = set()
     for row in tracks:
@@ -475,11 +477,11 @@ def _duplicate_identity_keys(tracks: list[dict[str, Any]]) -> list[str]:
     return sorted(duplicates)
 
 
-def _check(check_id: str, passed: bool, message: str, **details: Any) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, **details: Any) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, **details}
 
 
-def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument) -> None:
     event = sanitize_metadata({"event_type": event_type, "created_at": now_iso(), "payload": payload})
     event["payload_hash"] = stable_hash(payload)
     event["event_hash"] = stable_hash(event)
@@ -488,7 +490,7 @@ def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     try:
         if path.exists():
             return read_json(path)
@@ -520,5 +522,5 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})

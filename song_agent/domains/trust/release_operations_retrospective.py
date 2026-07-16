@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from datetime import datetime
 from typing import Any
 
@@ -79,7 +81,7 @@ def retrospective_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _timeline(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _timeline(entries: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows = []
     for item in entries:
         event_type = str(item.get("event_type") or "")
@@ -100,7 +102,7 @@ def _timeline(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows[:500]
 
 
-def _stage_durations(timeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _stage_durations(timeline: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checkpoints = {
         "release_created": _first_time(timeline, {"release_document_current"}),
         "operations_report": _first_time(timeline, {"operations_report_refreshed"}),
@@ -134,7 +136,7 @@ def _stage_durations(timeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
-def _risk_hotspots(audit_report: dict[str, Any], entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _risk_hotspots(audit_report: ImplementationDocument, entries: list[ImplementationDocument]) -> list[ImplementationDocument]:
     hotspots: list[dict[str, Any]] = []
     if any(item.get("event_type") == "operations_change_request_applied" for item in entries):
         hotspots.append({"risk": "applied_change_request", "count": sum(1 for item in entries if item.get("event_type") == "operations_change_request_applied"), "severity": "warning"})
@@ -153,24 +155,24 @@ def _risk_hotspots(audit_report: dict[str, Any], entries: list[dict[str, Any]]) 
     return hotspots
 
 
-def _manual_action_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
+def _manual_action_summary(entries: list[ImplementationDocument]) -> ImplementationDocument:
     manual = [item for item in entries if item.get("risk") == "manual_required"]
     return {"count": len(manual), "event_types": sorted({str(item.get("event_type") or "") for item in manual})}
 
 
-def _verifier_outcomes(audit_report: dict[str, Any], entries: list[dict[str, Any]]) -> dict[str, Any]:
+def _verifier_outcomes(audit_report: ImplementationDocument, entries: list[ImplementationDocument]) -> ImplementationDocument:
     verifier_entries = [item for item in entries if str(item.get("event_type") or "").endswith("_verified") or str(item.get("event_type") or "").startswith("package_verifier_")]
     failed = [item for item in verifier_entries if (item.get("evidence_ref") or {}).get("integrity_ok") is False]
     return {"count": len(verifier_entries), "failed_count": len(failed), "audit_package_verifier_summary": audit_report.get("package_verifiers") if isinstance(audit_report.get("package_verifiers"), dict) else {}}
 
 
-def _change_request_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
+def _change_request_summary(entries: list[ImplementationDocument]) -> ImplementationDocument:
     change_entries = [item for item in entries if item.get("domain") == "operations_change_request"]
     applied = [item for item in change_entries if item.get("event_type") == "operations_change_request_applied"]
     return {"count": len(change_entries), "applied_count": len(applied), "event_types": sorted({str(item.get("event_type") or "") for item in change_entries})}
 
 
-def _recommendations(stage_durations: list[dict[str, Any]], hotspots: list[dict[str, Any]], manual_summary: dict[str, Any], change_summary: dict[str, Any], verifier_outcomes: dict[str, Any]) -> list[dict[str, Any]]:
+def _recommendations(stage_durations: list[ImplementationDocument], hotspots: list[ImplementationDocument], manual_summary: ImplementationDocument, change_summary: ImplementationDocument, verifier_outcomes: ImplementationDocument) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if any(item.get("duration_status") == "unknown" for item in stage_durations):
         rows.append({"recommendation": "Add or preserve event timestamps so Operations retrospective durations can be computed.", "category": "observability"})
@@ -185,7 +187,7 @@ def _recommendations(stage_durations: list[dict[str, Any]], hotspots: list[dict[
     return rows
 
 
-def _first_time(timeline: list[dict[str, Any]], event_types: set[str]) -> str | None:
+def _first_time(timeline: list[ImplementationDocument], event_types: set[str]) -> str | None:
     for item in timeline:
         if item.get("event_type") in event_types:
             return str(item.get("occurred_at") or "") or None

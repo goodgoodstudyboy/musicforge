@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -279,7 +281,7 @@ class ReleaseAudioCommandCenterStore:
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
-    def _ensure_docs(self, release_id: str, evidence: dict[str, Any]) -> dict[str, Any]:
+    def _ensure_docs(self, release_id: str, evidence: ImplementationDocument) -> ImplementationDocument:
         if not self.report_path(release_id).exists():
             return self._build_documents(release_id, evidence)
         return {
@@ -292,7 +294,7 @@ class ReleaseAudioCommandCenterStore:
             "runbook_results": read_json(self.runbook_results_path(release_id)) if self.runbook_results_path(release_id).exists() else _empty_runbook_results(release_id),
         }
 
-    def _write_docs(self, release_id: str, docs: dict[str, dict[str, Any]]) -> None:
+    def _write_docs(self, release_id: str, docs: dict[str, ImplementationDocument]) -> None:
         center_dir = self.center_dir(release_id)
         center_dir.mkdir(parents=True, exist_ok=True)
         write_json(self.command_center_path(release_id), docs["command_center"])
@@ -304,7 +306,7 @@ class ReleaseAudioCommandCenterStore:
         if not self.runbook_results_path(release_id).exists():
             write_json(self.runbook_results_path(release_id), docs["runbook_results"])
 
-    def _build_documents(self, release_id: str, evidence: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _build_documents(self, release_id: str, evidence: ImplementationDocument) -> dict[str, ImplementationDocument]:
         release = self.release_store.get_release(release_id)
         release_doc = release.to_dict()
         requirements = _requirements(evidence)
@@ -423,7 +425,7 @@ class ReleaseAudioCommandCenterStore:
             "runbook_results": runbook_results,
         }
 
-    def _build_manifest(self, release_id: str, export_dir: Path, docs: dict[str, Any]) -> dict[str, Any]:
+    def _build_manifest(self, release_id: str, export_dir: Path, docs: ImplementationDocument) -> ImplementationDocument:
         manifest = {
             "schema_version": RELEASE_AUDIO_COMMAND_CENTER_SCHEMA_VERSION,
             "package_type": RELEASE_AUDIO_COMMAND_CENTER_PACKAGE_TYPE,
@@ -470,12 +472,12 @@ def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
     return kwargs
 
 
-def _requirements(evidence: dict[str, Any]) -> dict[str, bool]:
+def _requirements(evidence: ImplementationDocument) -> dict[str, bool]:
     raw = evidence.get("requirements") if isinstance(evidence.get("requirements"), dict) else {}
     return {key: bool(raw.get(key, True)) for key in COMPONENT_KEYS}
 
 
-def _component_row(component: dict[str, str], evidence: dict[str, Any], *, verifier_kwargs: dict[str, Any]) -> dict[str, Any]:
+def _component_row(component: dict[str, str], evidence: ImplementationDocument, *, verifier_kwargs: ImplementationDocument) -> ImplementationDocument:
     key = component["key"]
     paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
     mapping = {
@@ -549,7 +551,7 @@ def _component_row(component: dict[str, str], evidence: dict[str, Any], *, verif
     )
 
 
-def _public_verification_summary(component_key: str, report: dict[str, Any]) -> dict[str, Any]:
+def _public_verification_summary(component_key: str, report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     public = {
         "component_key": component_key,
@@ -565,7 +567,7 @@ def _public_verification_summary(component_key: str, report: dict[str, Any]) -> 
     return sanitize_metadata(public)
 
 
-def _sync_report_document_hashes(docs: dict[str, Any]) -> None:
+def _sync_report_document_hashes(docs: ImplementationDocument) -> None:
     report = docs.get("report") if isinstance(docs.get("report"), dict) else {}
     report["document_hashes"] = {
         "command_center": docs.get("command_center", {}).get("integrity_hash"),
@@ -578,7 +580,7 @@ def _sync_report_document_hashes(docs: dict[str, Any]) -> None:
     report["integrity_hash"] = _integrity_hash(report)
 
 
-def _readiness_row(row: dict[str, Any]) -> dict[str, Any]:
+def _readiness_row(row: ImplementationDocument) -> ImplementationDocument:
     status = "ready" if row.get("status") == "ready" else str(row.get("readiness") or "blocked") if row.get("required") else "not_required"
     return {
         "component_key": row.get("component_key"),
@@ -594,7 +596,7 @@ def _readiness_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _gap_row(row: dict[str, Any]) -> dict[str, Any]:
+def _gap_row(row: ImplementationDocument) -> ImplementationDocument:
     priority = {
         "runtime_failed": 10,
         "stale": 20,
@@ -630,7 +632,7 @@ def _message_for_readiness(readiness: str, label: str) -> str:
     return f"{label} is blocked."
 
 
-def _recommended_action_for_readiness(row: dict[str, Any]) -> str:
+def _recommended_action_for_readiness(row: ImplementationDocument) -> str:
     readiness = str(row.get("readiness") or "")
     key = str(row.get("component_key") or "component")
     if readiness == "runtime_failed":
@@ -646,7 +648,7 @@ def _recommended_action_for_readiness(row: dict[str, Any]) -> str:
     return row.get("next_action") or f"refresh_or_verify_{key}"
 
 
-def _build_runbook(release_id: str, source_hash: str, gaps: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _build_runbook(release_id: str, source_hash: str, gaps: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     actions = [
         {"item_id": "acc-safe-001", "action_type": "refresh_command_center", "execution_mode": "safe_auto", "requires_manual": False},
         {"item_id": "acc-safe-002", "action_type": "export_command_center", "execution_mode": "safe_auto", "requires_manual": False},
@@ -680,7 +682,7 @@ def _build_runbook(release_id: str, source_hash: str, gaps: list[dict[str, Any]]
     return runbook
 
 
-def _empty_runbook_results(release_id: str, *, source_hash: str | None = None) -> dict[str, Any]:
+def _empty_runbook_results(release_id: str, *, source_hash: str | None = None) -> ImplementationDocument:
     doc = {
         "schema_version": RELEASE_AUDIO_COMMAND_CENTER_SCHEMA_VERSION,
         "package_type": "release_audio_command_center_runbook_results",
@@ -694,7 +696,7 @@ def _empty_runbook_results(release_id: str, *, source_hash: str | None = None) -
     return doc
 
 
-def _readme(report: dict[str, Any]) -> str:
+def _readme(report: ImplementationDocument) -> str:
     return "\n".join(
         [
             "MusicForge Release Audio Command Center",
@@ -709,11 +711,11 @@ def _readme(report: dict[str, Any]) -> str:
     )
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -729,5 +731,5 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return digest.hexdigest()
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}

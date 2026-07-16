@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -456,13 +458,13 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
 
     def _findings(
         self,
-        public_state: dict[str, Any],
-        source: dict[str, Any],
-        events: list[dict[str, Any]],
-        notices: list[dict[str, Any]],
+        public_state: ImplementationDocument,
+        source: ImplementationDocument,
+        events: list[ImplementationDocument],
+        notices: list[ImplementationDocument],
         *,
         require_accepted: bool,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    ) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
@@ -486,7 +488,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
         check("redaction_scan", _redaction_summary({"public_state": public_state, "source": source, "events": events, "notices": notices}).get("status") == "passed", "Transparency feed contains no sensitive values.")
         return blockers, warnings, checks
 
-    def _ensure_exportable(self, portfolio_id: str, feed: dict[str, Any], report: dict[str, Any], *, profile: str) -> None:
+    def _ensure_exportable(self, portfolio_id: str, feed: ImplementationDocument, report: ImplementationDocument, *, profile: str) -> None:
         if not transparency_feed_integrity_ok(feed):
             raise ReleasePortfolioGovernanceAttestationTransparencyStateError("Attestation Transparency Feed integrity failed.")
         if not transparency_report_integrity_ok(report):
@@ -514,7 +516,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
                 return True
         return False
 
-    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: ImplementationDocument, *, now: str) -> None:
         path = self.history_path(portfolio_id, profile)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -562,7 +564,7 @@ def transparency_notice_integrity_ok(notice: dict[str, Any] | None) -> bool:
 
 
 
-def _report_from_feed(feed: dict[str, Any], *, now: str) -> dict[str, Any]:
+def _report_from_feed(feed: ImplementationDocument, *, now: str) -> ImplementationDocument:
     source = {
         "feed_hash": feed.get("integrity_hash"),
         "feed_source_hash": feed.get("source_hash"),
@@ -590,7 +592,7 @@ def _report_from_feed(feed: dict[str, Any], *, now: str) -> dict[str, Any]:
     return sanitize_metadata(report, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
 
-def _feed_summary(public_state: dict[str, Any], events: list[dict[str, Any]], notices: list[dict[str, Any]], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _feed_summary(public_state: ImplementationDocument, events: list[ImplementationDocument], notices: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     registry = public_state.get("registry") if isinstance(public_state.get("registry"), dict) else {}
     accepted = public_state.get("accepted_evidence") if isinstance(public_state.get("accepted_evidence"), dict) else {}
     return sanitize_metadata(
@@ -614,7 +616,7 @@ def _feed_summary(public_state: dict[str, Any], events: list[dict[str, Any]], no
 
 
 
-def _data_documents(feed: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _data_documents(feed: ImplementationDocument) -> dict[str, ImplementationDocument]:
     state = feed.get("current_public_state") if isinstance(feed.get("current_public_state"), dict) else {}
     source = feed.get("source") if isinstance(feed.get("source"), dict) else {}
     registry = state.get("registry") if isinstance(state.get("registry"), dict) else {}
@@ -633,16 +635,16 @@ def _data_documents(feed: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return sanitize_metadata(docs, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
 
-def _state_tuple(feed: dict[str, Any]) -> dict[str, str]:
+def _state_tuple(feed: ImplementationDocument) -> dict[str, str]:
     return {"source_hash": str(feed.get("source_hash") or ""), "integrity_hash": str(feed.get("integrity_hash") or "")}
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     feed_row = manifest.get("feed") if isinstance(manifest.get("feed"), dict) else {}
     return {"source_hash": str(manifest.get("source_hash") or ""), "integrity_hash": str(feed_row.get("integrity_hash") or "")}
 
 
-def _event_chain_valid(events: list[dict[str, Any]]) -> bool:
+def _event_chain_valid(events: list[ImplementationDocument]) -> bool:
     previous = ""
     seen: set[str] = set()
     for event in events:
@@ -661,7 +663,7 @@ def _event_chain_valid(events: list[dict[str, Any]]) -> bool:
 
 
 
-def _readme(feed: dict[str, Any]) -> str:
+def _readme(feed: ImplementationDocument) -> str:
     summary = feed.get("summary") if isinstance(feed.get("summary"), dict) else {}
     return "\n".join(
         [
@@ -679,14 +681,14 @@ def _readme(feed: dict[str, Any]) -> str:
     )
 
 
-def _find_entry(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
+def _find_entry(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
     for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
         if isinstance(entry, dict) and entry.get("entry_id") == entry_id:
             return entry
     return {}
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -694,7 +696,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
     return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -704,7 +706,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -713,7 +715,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(payload, blocked_keys=TRANSPARENCY_BLOCKED_KEYS))
 
@@ -728,7 +730,7 @@ def _sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _verification_hash(report: dict[str, Any]) -> str:
+def _verification_hash(report: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key != "generated_at"})
 
 
@@ -739,7 +741,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleasePortfolioGovernanceAttestationTransparencyStateError("Resolved path escapes Attestation Transparency directory.") from exc
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     matches = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:

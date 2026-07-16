@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import math
 import re
@@ -486,7 +488,7 @@ def audition_summary(auditions: list[EditorAuditionManifest]) -> dict[str, Any]:
     )
 
 
-def _resolve_range(state: dict[str, Any], payload: dict[str, Any], changed_sections: list[str]) -> tuple[float, float, dict[str, Any]]:
+def _resolve_range(state: ImplementationDocument, payload: ImplementationDocument, changed_sections: list[str]) -> tuple[float, float, ImplementationDocument]:
     mode = str(payload.get("mode") or "full_song").strip()
     if mode not in AUDITION_RANGE_MODES:
         raise EditorAuditionError("range.mode must be full_song, section, changed_sections, or custom.")
@@ -522,7 +524,7 @@ def _resolve_range(state: dict[str, Any], payload: dict[str, Any], changed_secti
     return start, end, {"mode": mode, "start_beat": start, "end_beat": end}
 
 
-def _resolve_tracks(state: dict[str, Any], track_mode: str, track_ids: list[str]) -> tuple[list[int], list[str]]:
+def _resolve_tracks(state: ImplementationDocument, track_mode: str, track_ids: list[str]) -> tuple[list[int], list[str]]:
     if track_mode not in AUDITION_TRACK_MODES:
         raise EditorAuditionError("track_mode must be all, solo, or mute.")
     tracks = list(state.get("tracks", []))
@@ -549,7 +551,7 @@ def _resolve_tracks(state: dict[str, Any], track_mode: str, track_ids: list[str]
     return indexes, selected_ids
 
 
-def _clip_sections(plan: SongPlan, state: dict[str, Any], start_beat: float, end_beat: float) -> list[SongSection]:
+def _clip_sections(plan: SongPlan, state: ImplementationDocument, start_beat: float, end_beat: float) -> list[SongSection]:
     beats_per_bar = int(state["song"]["beats_per_bar"])
     sections: list[SongSection] = []
     next_start_bar = 1
@@ -606,7 +608,7 @@ def _track_ids(value: Any) -> list[str]:
     return ids
 
 
-def _artifact_status(value: Any, *, status_key: str) -> dict[str, Any]:
+def _artifact_status(value: Any, *, status_key: str) -> ImplementationDocument:
     data = value if isinstance(value, dict) else {}
     status = str(data.get("status") or status_key).strip()
     if status not in {"not_started", "running", "completed", "failed"}:
@@ -642,7 +644,7 @@ def _float(value: Any, name: str) -> float:
         raise EditorAuditionError(f"{name} must be a number.") from exc
 
 
-def _render_report(manifest: EditorAuditionManifest) -> dict[str, Any]:
+def _render_report(manifest: EditorAuditionManifest) -> ImplementationDocument:
     return {
         "status": manifest.status,
         "audition_id": manifest.audition_id,
@@ -667,7 +669,7 @@ def _lock_for_project(project_dir: Path) -> threading.RLock:
         return lock
 
 
-def _append_audition_event(audition_dir: Path, event_type: str, payload: dict[str, Any], now: str | None = None) -> None:
+def _append_audition_event(audition_dir: Path, event_type: str, payload: ImplementationDocument, now: str | None = None) -> None:
     event = {"timestamp": now or now_iso(), "event": event_type, **sanitize_metadata(payload)}
     path = audition_dir / "events.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -675,7 +677,7 @@ def _append_audition_event(audition_dir: Path, event_type: str, payload: dict[st
         file.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
-def _review_event_payload(manifest: EditorAuditionManifest) -> dict[str, Any]:
+def _review_event_payload(manifest: EditorAuditionManifest) -> ImplementationDocument:
     row = audition_review_row(manifest)
     review = row.get("review") if isinstance(row.get("review"), dict) else {}
     return {

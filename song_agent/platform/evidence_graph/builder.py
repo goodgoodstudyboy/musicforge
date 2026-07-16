@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from pathlib import Path
 from typing import Any
@@ -69,7 +71,7 @@ def build_evidence_graph(
     return _finalize_graph(manifest, nodes, graph_blockers)
 
 
-def _read_evidence_manifest(target: Path) -> dict[str, Any]:
+def _read_evidence_manifest(target: Path) -> ImplementationDocument:
     try:
         manifest = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -79,7 +81,7 @@ def _read_evidence_manifest(target: Path) -> dict[str, Any]:
     return manifest
 
 
-def _manifest_blockers(manifest: dict[str, Any]) -> list[str]:
+def _manifest_blockers(manifest: ImplementationDocument) -> list[str]:
     blockers: list[str] = []
     if manifest.get("package_type") != EVIDENCE_GRAPH_MANIFEST_PACKAGE_TYPE:
         blockers.append("evidence_manifest_package_type")
@@ -128,7 +130,7 @@ def _build_nodes(
     return nodes
 
 
-def _finalize_graph(manifest: dict[str, Any], nodes: list[EvidenceNode], blockers: list[str]) -> EvidenceGraph:
+def _finalize_graph(manifest: ImplementationDocument, nodes: list[EvidenceNode], blockers: list[str]) -> EvidenceGraph:
     edges = _build_edges(manifest, nodes, blockers)
     node_ids = {node.node_id for node in nodes}
     for node in nodes:
@@ -148,7 +150,7 @@ def _finalize_graph(manifest: dict[str, Any], nodes: list[EvidenceNode], blocker
 
 
 def _build_node(
-    row: dict[str, Any],
+    row: ImplementationDocument,
     *,
     root: Path,
     allowed_root: Path | None,
@@ -232,7 +234,7 @@ def _check_capability_metadata(capability: Any, blockers: list[str]) -> None:
         blockers.append("evidence_capability_metadata_incomplete")
 
 
-def _node_identity(row: dict[str, Any]) -> tuple[str, str, str, int, str, list[str]]:
+def _node_identity(row: ImplementationDocument) -> tuple[str, str, str, int, str, list[str]]:
     component_type = _text(row.get("component_type"))
     component_id = _text(row.get("component_id"))
     evidence_type = _text(row.get("evidence_type")) or "package"
@@ -248,17 +250,17 @@ def _node_identity(row: dict[str, Any]) -> tuple[str, str, str, int, str, list[s
     return component_type, component_id, evidence_type, generation, node_id, blockers
 
 
-def _claimed_identity(row: dict[str, Any]) -> tuple[str, str, str, int]:
+def _claimed_identity(row: ImplementationDocument) -> tuple[str, str, str, int]:
     component_type, component_id, evidence_type, generation, _node, _blockers = _node_identity(row)
     return component_type, component_id, evidence_type, generation
 
 
 def _manifest_identity(
-    row: dict[str, Any],
+    row: ImplementationDocument,
     *,
     canonical_component_type: str,
     package_type: str,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     generation = _positive_int(row.get("generation"), default=1)
     current_generation = _positive_int(row.get("current_generation"), default=generation)
     return {
@@ -273,9 +275,9 @@ def _manifest_identity(
 
 
 def _identity_blockers(
-    manifest: dict[str, Any],
-    runtime: dict[str, Any],
-    external: dict[str, Any],
+    manifest: ImplementationDocument,
+    runtime: ImplementationDocument,
+    external: ImplementationDocument,
 ) -> list[str]:
     blockers: list[str] = []
     required_fields = ("component_type", "component_id", "generation", "current_generation", "package_type", "source_hash")
@@ -295,7 +297,7 @@ def _identity_blockers(
     return blockers
 
 
-def _read_external_report(path: Path | None, package_type: str, blockers: list[str]) -> dict[str, Any]:
+def _read_external_report(path: Path | None, package_type: str, blockers: list[str]) -> ImplementationDocument:
     if path is None or not path.is_file():
         return {}
     try:
@@ -313,7 +315,7 @@ def _read_external_report(path: Path | None, package_type: str, blockers: list[s
     return report
 
 
-def _resolve_proofs(row: dict[str, Any], root: Path, allowed_root: Path | None, spec: Any, blockers: list[str]) -> dict[str, Path]:
+def _resolve_proofs(row: ImplementationDocument, root: Path, allowed_root: Path | None, spec: Any, blockers: list[str]) -> dict[str, Path]:
     proof_value = row.get("proofs")
     proofs: dict[str, Any] = proof_value if isinstance(proof_value, dict) else {}
     resolved: dict[str, Path] = {}
@@ -327,7 +329,7 @@ def _resolve_proofs(row: dict[str, Any], root: Path, allowed_root: Path | None, 
     return resolved
 
 
-def _run_runtime(package_path: Path | None, proofs: dict[str, Path], spec: Any, blockers: list[str]) -> dict[str, Any]:
+def _run_runtime(package_path: Path | None, proofs: dict[str, Path], spec: Any, blockers: list[str]) -> ImplementationDocument:
     runtime: dict[str, Any] = {}
     if package_path is not None and package_path.is_file() and not any(item.startswith("evidence_proof_missing:") for item in blockers):
         kwargs = dict(spec.defaults)
@@ -344,12 +346,12 @@ def _run_runtime(package_path: Path | None, proofs: dict[str, Path], spec: Any, 
 
 
 def _validate_bindings(
-    row: dict[str, Any],
+    row: ImplementationDocument,
     package_path: Path | None,
-    runtime: dict[str, Any],
-    report: dict[str, Any],
+    runtime: ImplementationDocument,
+    report: ImplementationDocument,
     blockers: list[str],
-) -> tuple[str | None, int, dict[str, Any], dict[str, Any]]:
+) -> tuple[str | None, int, ImplementationDocument, ImplementationDocument]:
     actual_hash = sha256_file(package_path) if package_path is not None and package_path.is_file() else None
     actual_size = package_path.stat().st_size if package_path is not None and package_path.is_file() else 0
     runtime_fp = _verification_fingerprint(runtime)
@@ -375,7 +377,7 @@ def _validate_bindings(
     return actual_hash, actual_size, runtime_fp, report_fp
 
 
-def _append_runtime_diagnostics(runtime: dict[str, Any], blockers: list[str], warnings: list[str]) -> None:
+def _append_runtime_diagnostics(runtime: ImplementationDocument, blockers: list[str], warnings: list[str]) -> None:
     blocker_value = runtime.get("blockers")
     runtime_blockers: list[Any] = blocker_value if isinstance(blocker_value, list) else []
     blockers.extend(f"runtime:{item}" for item in runtime_blockers if item)
@@ -406,7 +408,7 @@ def _failed_node(
     )
 
 
-def _build_edges(manifest: dict[str, Any], nodes: list[EvidenceNode], blockers: list[str]) -> list[EvidenceEdge]:
+def _build_edges(manifest: ImplementationDocument, nodes: list[EvidenceNode], blockers: list[str]) -> list[EvidenceEdge]:
     node_ids = {node.node_id for node in nodes}
     result: list[EvidenceEdge] = []
     edge_value = manifest.get("edges")
@@ -450,7 +452,7 @@ def _dependency_cycle(edges: tuple[EvidenceEdge, ...]) -> bool:
     return any(visit(node) for node in graph)
 
 
-def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
+def _verification_fingerprint(report: ImplementationDocument) -> ImplementationDocument:
     summary_value = report.get("summary")
     summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
     verification_value = summary.get("verification")
@@ -463,7 +465,7 @@ def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _public_runtime_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _public_runtime_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary_value = report.get("summary")
     summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
     allowed = {
@@ -483,7 +485,7 @@ def _public_runtime_summary(report: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in summary.items() if key in allowed and isinstance(value, (str, int, float, bool, type(None)))}
 
 
-def _lifecycle_status(report: dict[str, Any]) -> str:
+def _lifecycle_status(report: ImplementationDocument) -> str:
     summary_value = report.get("summary")
     summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
     for key in ("signoff_status", "lifecycle_status", "readiness", "status"):
@@ -493,7 +495,7 @@ def _lifecycle_status(report: dict[str, Any]) -> str:
     return "verified" if report.get("status") == "passed" else "failed"
 
 
-def _dependencies(row: dict[str, Any]) -> tuple[str, ...]:
+def _dependencies(row: ImplementationDocument) -> tuple[str, ...]:
     dependency_value = row.get("dependencies")
     values: list[Any] = dependency_value if isinstance(dependency_value, list) else []
     return tuple(sorted({_text(value) for value in values if _text(value)}))
@@ -503,7 +505,7 @@ def _node_id(component_type: str, component_id: str, evidence_type: str, generat
     return f"{component_type}:{component_id}:{evidence_type}:{generation}"
 
 
-def _path_from_row(root: Path, row: dict[str, Any], *keys: str, allowed_root: Path | None = None) -> Path | None:
+def _path_from_row(root: Path, row: ImplementationDocument, *keys: str, allowed_root: Path | None = None) -> Path | None:
     for key in keys:
         value = row.get(key)
         if value:

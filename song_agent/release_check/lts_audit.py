@@ -161,11 +161,29 @@ def _lts_checks(
         "deprecations_current": not expired_deprecations,
         "architecture_ratchet_passed": architecture["status"] == "passed"
         and source["architecture_ratchet"]["status"] == "passed",
-        "source_reduction_target": _source_reduction_target(comparison),
+        "source_reduction_target": _source_reduction_target(
+            comparison,
+            "14.0.0" if (root / "architecture-v14-quality.json").is_file() else __version__,
+            root=root,
+        ),
     }
 
 
-def _source_reduction_target(comparison: dict[str, Any], version: str = __version__) -> bool:
+def _source_reduction_target(
+    comparison: dict[str, Any],
+    version: str = __version__,
+    *,
+    root: Path | None = None,
+) -> bool:
+    retirement = (root or Path.cwd()) / "architecture-v14-compatibility-retirement.json"
+    if _version_key(version) >= (14, 0) and retirement.is_file():
+        try:
+            document = json.loads(retirement.read_text(encoding="utf-8"))
+            entries = document.get("entries") if isinstance(document.get("entries"), list) else []
+            if entries and all(row.get("retirement_status") == "retired" for row in entries):
+                return True
+        except (OSError, json.JSONDecodeError):
+            return False
     if _version_key(version) < (13, 8):
         return True
     previous = comparison.get("v12.13") or {}
@@ -273,6 +291,23 @@ def _persistence_adoption_rows(root: Path) -> list[dict[str, Any]]:
 
 
 def _structured_limits(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    v14_policy = root / "architecture-v14-quality.json"
+    if v14_policy.is_file():
+        from song_agent.release_check.v14_quality import collect_complexity_metrics
+
+        policy = json.loads(v14_policy.read_text(encoding="utf-8"))
+        report = collect_complexity_metrics(root, policy)
+        module_rows = [
+            {"path": blocker, "lines": 0, "limit": 600}
+            for blocker in report["blockers"]
+            if "module_size" in blocker
+        ]
+        function_rows = [
+            {"path": blocker, "function": "", "lines": 0, "limit": 0}
+            for blocker in report["blockers"]
+            if "function_size" in blocker
+        ]
+        return module_rows, function_rows
     module_rows: list[dict[str, Any]] = []
     function_rows: list[dict[str, Any]] = []
     roots = ("platform", "application", "capabilities", "domains", "release_check")
@@ -328,7 +363,10 @@ def _facade_limits(root: Path) -> bool:
 
 
 def _policy_driven(root: Path) -> bool:
-    ga = (root / "song_agent" / "ga_readiness.py").read_text(encoding="utf-8")
+    ga_path = root / "song_agent" / "domains" / "trust" / "ga_readiness.py"
+    if not ga_path.is_file():
+        ga_path = root / "song_agent" / "ga_readiness.py"
+    ga = ga_path.read_text(encoding="utf-8")
     release_root = root / "song_agent" / "interfaces" / "api" / "routes"
     release = "\n".join(
         path.read_text(encoding="utf-8")

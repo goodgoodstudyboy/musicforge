@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesExpandContextPackPayload:
-    def _expand_context_pack_payload(self, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _expand_context_pack_payload(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         pack_id = str(payload.get("context_pack_id") or "").strip()
         if not pack_id:
             return payload

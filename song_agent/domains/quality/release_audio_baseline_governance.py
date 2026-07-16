@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -305,7 +307,7 @@ class ReleaseAudioBaselineGovernanceStore:
         existing = [int(path.parent.name.removeprefix("rab-")) for path in (self.root / "baselines").glob("rab-*/baseline.json") if path.parent.name.removeprefix("rab-").isdigit()]
         return f"rab-{(max(existing) + 1) if existing else 1:06d}"
 
-    def _write_baseline(self, baseline: dict[str, Any]) -> None:
+    def _write_baseline(self, baseline: ImplementationDocument) -> None:
         baseline["integrity_hash"] = _integrity_hash(baseline)
         path = self.baseline_path(str(baseline["baseline_id"]))
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -321,20 +323,20 @@ class ReleaseAudioBaselineGovernanceStore:
         write_json(self.report_path(), report)
         write_json(self.active_path(), self._active_index())
 
-    def _registry_report(self, registry: dict[str, Any]) -> dict[str, Any]:
+    def _registry_report(self, registry: ImplementationDocument) -> ImplementationDocument:
         baselines = self.list_baselines()
         blockers = [item.get("baseline_id") for item in baselines if item.get("status") == "active" and not (item.get("approval") or {}).get("approved_by")]
         report = {"schema_version": RELEASE_AUDIO_BASELINE_SCHEMA_VERSION, "status": "failed" if blockers else "passed", "registry_hash": registry.get("integrity_hash"), "summary": {"baseline_count": len(baselines), "active_count": len([item for item in baselines if item.get("status") == "active"]), "blockers": blockers}}
         report["integrity_hash"] = _integrity_hash(report)
         return report
 
-    def _active_index(self) -> dict[str, Any]:
+    def _active_index(self) -> ImplementationDocument:
         baseline_hashes = {item.get("baseline_id"): item.get("integrity_hash") for item in self.list_baselines()}
         active = {"schema_version": RELEASE_AUDIO_BASELINE_SCHEMA_VERSION, "active": [item.get("baseline_id") for item in self.list_baselines() if item.get("status") == "active"], "baseline_hashes": baseline_hashes}
         active["integrity_hash"] = _integrity_hash(active)
         return active
 
-    def _append_event(self, baseline: dict[str, Any], event_type: str, payload: dict[str, Any]) -> None:
+    def _append_event(self, baseline: ImplementationDocument, event_type: str, payload: ImplementationDocument) -> None:
         history = baseline.get("approval_history") if isinstance(baseline.get("approval_history"), list) else []
         previous = history[-1].get("event_hash") if history else None
         event = sanitize_metadata({"schema_version": RELEASE_AUDIO_BASELINE_SCHEMA_VERSION, "event_id": f"rabevt-{len(history) + 1:06d}", "event_type": event_type, "created_at": now_iso(), "previous_event_hash": previous, "payload": payload})
@@ -343,7 +345,7 @@ class ReleaseAudioBaselineGovernanceStore:
         history.append(event)
         baseline["approval_history"] = history
 
-    def _active_baseline_for_release(self, release_id: str) -> dict[str, Any]:
+    def _active_baseline_for_release(self, release_id: str) -> ImplementationDocument:
         del release_id
         active = [baseline for baseline in self.list_baselines() if baseline.get("status") == "active"]
         if not active:
@@ -352,7 +354,7 @@ class ReleaseAudioBaselineGovernanceStore:
             raise ReleaseAudioBaselineGovernanceStateError("Multiple active baselines are available; select baseline_id explicitly.")
         return active[0]
 
-    def _current_binding_for_release(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_binding_for_release(self, release_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         release_dir = self.release_store.release_dir(release_id)
         timeline_path = payload.get("timeline") or payload.get("timeline_zip_path")
         timeline_report_path = payload.get("timeline_verification_report") or payload.get("timeline_verification_report_path")
@@ -378,7 +380,7 @@ class ReleaseAudioBaselineGovernanceStore:
         )
 
 
-def _scope_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _scope_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
     scope = payload.get("scope") if isinstance(payload.get("scope"), dict) else {}
     return sanitize_metadata(
         {
@@ -390,7 +392,7 @@ def _scope_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _tracks_from_binding(binding: dict[str, Any]) -> list[dict[str, Any]]:
+def _tracks_from_binding(binding: ImplementationDocument) -> list[ImplementationDocument]:
     facts = binding.get("facts")
     tracks = facts.get("tracks") if isinstance(facts, dict) else facts if isinstance(facts, list) else []
     output: list[dict[str, Any]] = []
@@ -410,7 +412,7 @@ def _tracks_from_binding(binding: dict[str, Any]) -> list[dict[str, Any]]:
     return output
 
 
-def _track_set_from_tracks(tracks: list[dict[str, Any]]) -> dict[str, Any]:
+def _track_set_from_tracks(tracks: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "track_count": len(tracks),
         "track_identity_set_hash": stable_hash([track.get("identity_key") for track in tracks]),
@@ -418,7 +420,7 @@ def _track_set_from_tracks(tracks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _track_set_compatibility_reasons(baseline_track_set: dict[str, Any], current_track_set: dict[str, Any]) -> list[str]:
+def _track_set_compatibility_reasons(baseline_track_set: ImplementationDocument, current_track_set: ImplementationDocument) -> list[str]:
     reasons: list[str] = []
     if int(baseline_track_set.get("track_count") or 0) != int(current_track_set.get("track_count") or 0):
         reasons.append("track_count_mismatch")
@@ -441,7 +443,7 @@ def _track_set_compatibility_reasons(baseline_track_set: dict[str, Any], current
     return sorted(set(reasons))
 
 
-def _evidence_summary(binding: dict[str, Any]) -> dict[str, Any]:
+def _evidence_summary(binding: ImplementationDocument) -> ImplementationDocument:
     return {
         "certification_zip_sha256": (binding.get("certification") or {}).get("zip_sha256"),
         "certification_manifest_hash": (binding.get("certification") or {}).get("manifest_hash"),
@@ -452,7 +454,7 @@ def _evidence_summary(binding: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _quality_summary(binding: dict[str, Any]) -> dict[str, Any]:
+def _quality_summary(binding: ImplementationDocument) -> ImplementationDocument:
     facts = binding.get("facts")
     tracks = facts.get("tracks") if isinstance(facts, dict) else facts if isinstance(facts, list) else []
     manual_reviews = sum(int(track.get("manual_review_count") or 0) for track in tracks if isinstance(track, dict))
@@ -472,7 +474,7 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _file_record(path: Path, root: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -488,7 +490,7 @@ def _sha256_path(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

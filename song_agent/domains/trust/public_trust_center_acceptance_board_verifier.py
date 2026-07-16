@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -522,7 +524,7 @@ class _AcceptanceBoardVerifier:
                 entries.add(f"evidence/{_safe_id(evidence_id)}-summary.json")
         return entries
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -535,7 +537,7 @@ class _AcceptanceBoardVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = {"center_id": self.report.get("center_id"), "readiness": self.report.get("readiness"), "status": self.report.get("status"), "accepted_count": (self.report.get("summary") if isinstance(self.report.get("summary"), dict) else {}).get("accepted_count"), "blocker_count": len(blockers), "warning_count": len(warnings)}
@@ -553,7 +555,7 @@ class _AcceptanceBoardVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _quorum_from_report(report: dict[str, Any]) -> dict[str, Any]:
+def _quorum_from_report(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     policy = report.get("policy") if isinstance(report.get("policy"), dict) else {}
     participants = report.get("participants") if isinstance(report.get("participants"), list) else []
@@ -562,7 +564,7 @@ def _quorum_from_report(report: dict[str, Any]) -> dict[str, Any]:
     return {"schema_version": 1, "source_hash": report.get("source_hash"), "policy_hash": policy.get("policy_hash"), "decision": {"readiness": report.get("readiness"), "quorum_status": summary.get("quorum_status"), "required_roles_status": summary.get("required_roles_status"), "conflict_status": summary.get("conflict_status")}, "counted_response_ids": counted, "required_roles": roles}
 
 
-def _find_row(rows: Any, key: str, value: str) -> dict[str, Any]:
+def _find_row(rows: Any, key: str, value: str) -> ImplementationDocument:
     for item in rows if isinstance(rows, list) else []:
         if isinstance(item, dict) and str(item.get(key) or "") == value:
             return item
@@ -597,7 +599,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -620,7 +622,7 @@ def _safe_id(value: str) -> str:
     return text or "item"
 
 
-def _redaction_findings(scope: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
         if pattern.search(text):

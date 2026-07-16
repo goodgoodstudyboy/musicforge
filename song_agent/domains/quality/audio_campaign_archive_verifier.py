@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -126,7 +128,7 @@ def audio_campaign_archive_verification_exit_code(report: dict[str, Any]) -> int
     return 0 if report.get("status") == "passed" else 1
 
 
-def _manifest_checks(zf: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], *, strict: bool) -> list[dict[str, Any]]:
+def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, strict: bool) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
@@ -154,7 +156,7 @@ def _manifest_checks(zf: zipfile.ZipFile, manifest: dict[str, Any], names: set[s
     return checks
 
 
-def _redaction_check(zf: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(zf: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     leaks: list[str] = []
     for name in names:
         if not name.lower().endswith((".json", ".md", ".txt", ".jsonl")):
@@ -165,7 +167,7 @@ def _redaction_check(zf: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
     return _check("audio_campaign_archive_redaction_scan", not leaks, "Archive text files do not contain obvious secrets or local paths.", {"leaks": leaks})
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check for check in checks if check.get("status") == "warning"]
@@ -182,11 +184,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _read_json_entry(zf: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(zf: zipfile.ZipFile, name: str) -> ImplementationDocument:
     with zf.open(name) as fp:
         data = json.loads(fp.read().decode("utf-8"))
     if not isinstance(data, dict):
@@ -205,15 +207,15 @@ def _is_safe_entry(name: str) -> bool:
     return True
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _payload_hash(payload: dict[str, Any]) -> str:
+def _payload_hash(payload: ImplementationDocument) -> str:
     return stable_hash(payload)
 
 

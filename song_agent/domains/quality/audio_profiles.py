@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -244,7 +246,7 @@ class AudioProfileStore:
                 return candidate
         raise AudioProfileError("Unable to allocate audio profile id.")
 
-    def _append_event(self, event_type: str, payload: dict[str, Any]) -> None:
+    def _append_event(self, event_type: str, payload: ImplementationDocument) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         with (self.root / "events.jsonl").open("a", encoding="utf-8") as file:
             file.write(json.dumps(sanitize_metadata({"timestamp": now_iso(), "type": event_type, "payload": payload}), ensure_ascii=False) + "\n")

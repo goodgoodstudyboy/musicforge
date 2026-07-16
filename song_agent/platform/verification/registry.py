@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import ast
 from dataclasses import dataclass
 from importlib import import_module
@@ -251,7 +253,7 @@ ACTIVE_VERIFIER_CAPABILITIES = (
 active_verifier_registry = VerifierCapabilityRegistry(ACTIVE_VERIFIER_CAPABILITIES)
 
 
-def _verifier_adoption_row(capability: VerifierCapability) -> dict[str, Any]:
+def _verifier_adoption_row(capability: VerifierCapability) -> ImplementationDocument:
     module = import_module(capability.module)
     source = Path(str(module.__file__)).read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(module.__file__))

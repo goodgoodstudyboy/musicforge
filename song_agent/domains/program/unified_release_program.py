@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import zipfile
@@ -481,7 +483,7 @@ class UnifiedReleaseProgramStore:
     def read_history(self, program_id: str) -> list[dict[str, Any]]:
         return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).read()
 
-    def _build_documents(self, program_id: str, inputs: dict[str, Any]) -> dict[str, Any]:
+    def _build_documents(self, program_id: str, inputs: ImplementationDocument) -> ImplementationDocument:
         program = self.read_program(program_id)
         items_doc = self._read_items(program_id)
         runtime_external_manifest = _external_manifest(program_id, items_doc, inputs)
@@ -511,7 +513,7 @@ class UnifiedReleaseProgramStore:
         report = _program_report(program_id, source["source_hash"], program, items_doc, external_manifest, dependency, readiness, risk, exceptions, gap, now)
         return {"program": program, "source": source, "items": _items_document(program_id, item_rows), "external_manifest": external_manifest, "dependency": dependency, "readiness": readiness, "risk": risk, "exceptions": exceptions, "gap_plan": gap, "report": report}
 
-    def _write_docs(self, program_id: str, docs: dict[str, Any]) -> None:
+    def _write_docs(self, program_id: str, docs: ImplementationDocument) -> None:
         for key, path in (
             ("items", self.items_path(program_id)),
             ("external_manifest", self.external_manifest_path(program_id)),
@@ -524,21 +526,21 @@ class UnifiedReleaseProgramStore:
         ):
             write_json(path, docs[key])
 
-    def _read_items(self, program_id: str) -> dict[str, Any]:
+    def _read_items(self, program_id: str) -> ImplementationDocument:
         if not self.items_path(program_id).exists():
             self._write_items(program_id, [])
         return read_json(self.items_path(program_id))
 
-    def _write_items(self, program_id: str, rows: list[dict[str, Any]]) -> None:
+    def _write_items(self, program_id: str, rows: list[ImplementationDocument]) -> None:
         doc = _items_document(program_id, rows)
         write_json(self.items_path(program_id), doc)
 
-    def _read_exceptions(self, program_id: str) -> dict[str, Any]:
+    def _read_exceptions(self, program_id: str) -> ImplementationDocument:
         if not self.exception_path(program_id).exists():
             self._write_exception_register(program_id, [])
         return read_json(self.exception_path(program_id))
 
-    def _write_exception_register(self, program_id: str, rows: list[dict[str, Any]]) -> None:
+    def _write_exception_register(self, program_id: str, rows: list[ImplementationDocument]) -> None:
         doc = sanitize_metadata(
             {
                 "schema_version": UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION,
@@ -551,7 +553,7 @@ class UnifiedReleaseProgramStore:
         doc["integrity_hash"] = _integrity_hash(doc)
         write_json(self.exception_path(program_id), doc)
 
-    def _docs_for_export(self, program_id: str) -> dict[str, Any]:
+    def _docs_for_export(self, program_id: str) -> ImplementationDocument:
         if self.report_path(program_id).exists():
             docs = {
                 "program": self.read_program(program_id),
@@ -593,7 +595,7 @@ class UnifiedReleaseProgramStore:
             docs["signoff_binding"] = binding
         return docs
 
-    def _read_signoff_binding(self, program_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _read_signoff_binding(self, program_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         path = self.signoff_binding_path(program_id)
         if not path.exists():
             raise UnifiedReleaseProgramStateError("Program signoff binding summary is missing.")
@@ -611,10 +613,10 @@ class UnifiedReleaseProgramStore:
         if manifest.get("source") != expected_source:
             raise UnifiedReleaseProgramStateError("Program export is stale. Rebuild export before ZIP.")
 
-    def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
-    def _signoff_binding_summary(self, program_id: str, signoff: dict[str, Any], event: dict[str, Any], docs: dict[str, Any]) -> dict[str, Any]:
+    def _signoff_binding_summary(self, program_id: str, signoff: ImplementationDocument, event: ImplementationDocument, docs: ImplementationDocument) -> ImplementationDocument:
         binding = sanitize_metadata(
             {
                 "schema_version": UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION,
@@ -673,7 +675,7 @@ def write_external_evidence_manifest(path: Path | str, *, program_id: str, items
     return manifest
 
 
-def _external_manifest(program_id: str, items_doc: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]:
+def _external_manifest(program_id: str, items_doc: ImplementationDocument, inputs: ImplementationDocument) -> ImplementationDocument:
     path = inputs.get("external_evidence_manifest") or inputs.get("external_evidence_manifest_path")
     if path:
         return read_json(Path(path))
@@ -694,7 +696,7 @@ def _external_manifest(program_id: str, items_doc: dict[str, Any], inputs: dict[
     return _external_manifest_from_rows(program_id, rows)
 
 
-def _external_manifest_from_rows(program_id: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _external_manifest_from_rows(program_id: str, rows: list[ImplementationDocument]) -> ImplementationDocument:
     normalized = []
     for row in rows:
         normalized_row = {
@@ -725,7 +727,7 @@ def _external_manifest_from_rows(program_id: str, rows: list[dict[str, Any]]) ->
     return manifest
 
 
-def _public_external_manifest(program_id: str, item_rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _public_external_manifest(program_id: str, item_rows: list[ImplementationDocument]) -> ImplementationDocument:
     normalized = []
     for row in item_rows:
         fingerprint = row.get("fingerprint") if isinstance(row.get("fingerprint"), dict) else {}
@@ -755,7 +757,7 @@ def _public_external_manifest(program_id: str, item_rows: list[dict[str, Any]]) 
     return manifest
 
 
-def _fingerprint_from_external_row(row: dict[str, Any]) -> dict[str, Any]:
+def _fingerprint_from_external_row(row: ImplementationDocument) -> ImplementationDocument:
     fingerprint: dict[str, Any] = {}
     zip_path = Path(str(row.get("handoff_zip") or ""))
     report_path = Path(str(row.get("handoff_verification_report") or ""))
@@ -777,7 +779,7 @@ def _fingerprint_from_external_row(row: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in fingerprint.items() if value not in (None, "")}
 
 
-def _item_rows(program: dict[str, Any], items_doc: dict[str, Any], external_manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def _item_rows(program: ImplementationDocument, items_doc: ImplementationDocument, external_manifest: ImplementationDocument) -> list[ImplementationDocument]:
     external_by_key = {_item_key(row): row for row in external_manifest.get("items", []) if isinstance(row, dict)}
     require_accepted = bool(program.get("policy", {}).get("require_external_handoff_acceptance"))
     rows = []
@@ -789,7 +791,7 @@ def _item_rows(program: dict[str, Any], items_doc: dict[str, Any], external_mani
     return rows
 
 
-def _runtime_handoff(item: dict[str, Any], external: dict[str, Any], *, require_accepted: bool) -> dict[str, Any]:
+def _runtime_handoff(item: ImplementationDocument, external: ImplementationDocument, *, require_accepted: bool) -> ImplementationDocument:
     result: dict[str, Any] = {"status": "missing", "blockers": [], "fingerprint": {}}
     zip_path = Path(str(external.get("handoff_zip") or external.get("handoff_zip_path") or ""))
     report_path = Path(str(external.get("handoff_verification_report") or external.get("handoff_verification_report_path") or ""))
@@ -839,7 +841,7 @@ def _runtime_handoff(item: dict[str, Any], external: dict[str, Any], *, require_
     return sanitize_metadata(result)
 
 
-def _items_document(program_id: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _items_document(program_id: str, rows: list[ImplementationDocument]) -> ImplementationDocument:
     doc = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION,
@@ -859,7 +861,7 @@ def _items_document(program_id: str, rows: list[dict[str, Any]]) -> dict[str, An
     return doc
 
 
-def _dependency_graph(program_id: str, source_hash: str, items: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _dependency_graph(program_id: str, source_hash: str, items: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     nodes = [{"item_id": row.get("item_id"), "type": row.get("type"), "lane": row.get("lane"), "wave": row.get("wave"), "status": row.get("status")} for row in items]
     edges = []
     item_ids = {str(row.get("item_id")) for row in items}
@@ -885,7 +887,7 @@ def _dependency_graph(program_id: str, source_hash: str, items: list[dict[str, A
     return doc
 
 
-def _readiness_matrix(program_id: str, source_hash: str, items: list[dict[str, Any]], dependency: dict[str, Any], program: dict[str, Any], created_at: str) -> dict[str, Any]:
+def _readiness_matrix(program_id: str, source_hash: str, items: list[ImplementationDocument], dependency: ImplementationDocument, program: ImplementationDocument, created_at: str) -> ImplementationDocument:
     rows = []
     critical_failed = 0
     warning_count = 0
@@ -936,7 +938,7 @@ def _readiness_matrix(program_id: str, source_hash: str, items: list[dict[str, A
     return doc
 
 
-def _risk_register(program_id: str, source_hash: str, readiness: dict[str, Any], dependency: dict[str, Any], items: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _risk_register(program_id: str, source_hash: str, readiness: ImplementationDocument, dependency: ImplementationDocument, items: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     risks = []
     for row in readiness.get("rows", []):
         if row.get("status") == "passed":
@@ -962,7 +964,7 @@ def _risk_register(program_id: str, source_hash: str, readiness: dict[str, Any],
     return doc
 
 
-def _gap_plan(program_id: str, source_hash: str, readiness: dict[str, Any], risk: dict[str, Any], created_at: str) -> dict[str, Any]:
+def _gap_plan(program_id: str, source_hash: str, readiness: ImplementationDocument, risk: ImplementationDocument, created_at: str) -> ImplementationDocument:
     actions = [{"action_id": f"gap-{index + 1:03d}", "source_check_id": row.get("check_id"), "status": "manual_required", "recommended_action": "Resolve Program blocker and refresh Program."} for index, row in enumerate(readiness.get("rows", [])) if row.get("status") in {"failed", "warning"}]
     doc = sanitize_metadata(
         {
@@ -979,7 +981,7 @@ def _gap_plan(program_id: str, source_hash: str, readiness: dict[str, Any], risk
     return doc
 
 
-def _program_report(program_id: str, source_hash: str, program: dict[str, Any], items: dict[str, Any], external_manifest: dict[str, Any], dependency: dict[str, Any], readiness: dict[str, Any], risk: dict[str, Any], exceptions: dict[str, Any], gap: dict[str, Any], created_at: str) -> dict[str, Any]:
+def _program_report(program_id: str, source_hash: str, program: ImplementationDocument, items: ImplementationDocument, external_manifest: ImplementationDocument, dependency: ImplementationDocument, readiness: ImplementationDocument, risk: ImplementationDocument, exceptions: ImplementationDocument, gap: ImplementationDocument, created_at: str) -> ImplementationDocument:
     status = "ready" if readiness.get("summary", {}).get("status") == "ready" else "blocked"
     doc = sanitize_metadata(
         {
@@ -1013,7 +1015,7 @@ def _program_report(program_id: str, source_hash: str, program: dict[str, Any], 
     return doc
 
 
-def _manifest_document(program_id: str, docs: dict[str, Any], files: list[dict[str, Any]], file_index: dict[str, Any]) -> dict[str, Any]:
+def _manifest_document(program_id: str, docs: ImplementationDocument, files: list[ImplementationDocument], file_index: ImplementationDocument) -> ImplementationDocument:
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION,
@@ -1030,7 +1032,7 @@ def _manifest_document(program_id: str, docs: dict[str, Any], files: list[dict[s
     return manifest
 
 
-def _manifest_source(docs: dict[str, Any]) -> dict[str, Any]:
+def _manifest_source(docs: ImplementationDocument) -> ImplementationDocument:
     source = {
         "program_report_hash": docs["report"].get("integrity_hash"),
         "train_items_hash": docs["items"].get("integrity_hash"),
@@ -1048,27 +1050,27 @@ def _manifest_source(docs: dict[str, Any]) -> dict[str, Any]:
     return source
 
 
-def _file_index(program_id: str, files: list[dict[str, Any]]) -> dict[str, Any]:
+def _file_index(program_id: str, files: list[ImplementationDocument]) -> ImplementationDocument:
     doc = {"schema_version": UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_file_index", "program_id": program_id, "files": [row for row in files if row.get("path") != "file-index.json"], "summary": {"file_count": len(files)}}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _recipient_guide(docs: dict[str, Any]) -> str:
+def _recipient_guide(docs: ImplementationDocument) -> str:
     return f"# Unified Release Program\n\nProgram: {docs['report'].get('program_id')}\nStatus: {docs['report'].get('status')}\n"
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if path.exists():
         return read_json(path)
     return {}
 
 
-def _source_inputs(payload: dict[str, Any]) -> dict[str, Any]:
+def _source_inputs(payload: ImplementationDocument) -> ImplementationDocument:
     return {
         key: _json_safe_input(value)
         for key, value in payload.items()
@@ -1076,7 +1078,7 @@ def _source_inputs(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _merge_inputs(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+def _merge_inputs(base: ImplementationDocument, incoming: ImplementationDocument) -> ImplementationDocument:
     merged = dict(base or {})
     merged.update({key: value for key, value in incoming.items() if value not in (None, "", [])})
     return merged
@@ -1092,7 +1094,7 @@ def _json_safe_input(value: Any) -> Any:
     return value
 
 
-def _policy(payload: Any) -> dict[str, Any]:
+def _policy(payload: Any) -> ImplementationDocument:
     data = dict(DEFAULT_POLICY)
     if isinstance(payload, dict):
         for key in data:
@@ -1111,11 +1113,11 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc.get("integrity_hash")) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
@@ -1139,25 +1141,25 @@ def _sha256_or_integrity(path: Path) -> str:
     return _sha256_path(path)
 
 
-def _verification_zip_sha256(report: dict[str, Any]) -> str | None:
+def _verification_zip_sha256(report: ImplementationDocument) -> str | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return report.get("zip_sha256") or summary.get("zip_sha256")
 
 
-def _verification_manifest_hash(report: dict[str, Any]) -> str | None:
+def _verification_manifest_hash(report: ImplementationDocument) -> str | None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return report.get("manifest_hash") or summary.get("manifest_hash")
 
 
-def _item_key(row: dict[str, Any]) -> str:
+def _item_key(row: ImplementationDocument) -> str:
     return "|".join(str(row.get(key) or "") for key in ("item_id", "train_id", "handoff_id"))
 
 
-def _history_text(rows: list[dict[str, Any]]) -> str:
+def _history_text(rows: list[ImplementationDocument]) -> str:
     return "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
@@ -1186,7 +1188,7 @@ def _has_cycle(from_nodes: list[str], to_nodes: list[str]) -> bool:
     return any(visit(node) for node in list(graph))
 
 
-def _topological_order(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[str]:
+def _topological_order(nodes: list[ImplementationDocument], edges: list[ImplementationDocument]) -> list[str]:
     remaining = {str(row.get("item_id")) for row in nodes}
     incoming = {node: 0 for node in remaining}
     outgoing: dict[str, list[str]] = {node: [] for node in remaining}

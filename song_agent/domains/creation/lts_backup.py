@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -37,7 +39,7 @@ class LTSBackupStore:
     def create_target_before_restore_backup(self, target: Path | str, *, mode: str = "workspace") -> dict[str, Any]:
         return self._create_backup_from_root(Path(target).resolve(), mode=mode, backup_kind="target-before-restore", source_label="restore-target")
 
-    def _create_backup_from_root(self, source_root: Path, *, mode: str = "workspace", backup_kind: str = "manual", source_label: str = ".") -> dict[str, Any]:
+    def _create_backup_from_root(self, source_root: Path, *, mode: str = "workspace", backup_kind: str = "manual", source_label: str = ".") -> ImplementationDocument:
         mode = str(mode or "workspace")
         if mode not in BACKUP_MODES:
             raise LTSBackupError(f"Unsupported maintenance backup mode: {mode}")
@@ -290,7 +292,7 @@ def _exclude_reason(rel: PurePosixPath, mode: str) -> str:
     return ""
 
 
-def _read_manifest_from_zip(zip_path: Path) -> dict[str, Any]:
+def _read_manifest_from_zip(zip_path: Path) -> ImplementationDocument:
     with zipfile.ZipFile(zip_path) as archive:
         return json.loads(archive.read("manifest.json").decode("utf-8"))
 
@@ -313,7 +315,7 @@ def _is_within(path: Path, root: Path) -> bool:
         return False
 
 
-def _json_bytes(payload: dict[str, Any]) -> bytes:
+def _json_bytes(payload: ImplementationDocument) -> bytes:
     return (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
@@ -321,15 +323,15 @@ def _text_bytes(value: str) -> bytes:
     return value.encode("utf-8")
 
 
-def _redaction_report_for_manifest(files: list[dict[str, Any]]) -> dict[str, Any]:
+def _redaction_report_for_manifest(files: list[ImplementationDocument]) -> ImplementationDocument:
     return {"schema_version": 1, "status": "passed", "finding_count": 0, "findings": [], "scanned_file_count": len(files)}
 
 
-def _git_summary(root: Path) -> dict[str, Any]:
+def _git_summary(root: Path) -> ImplementationDocument:
     return {"head": _git_head(root), "status": _git_status_state(root), "branch": _quick_git(root, ["status", "--short", "--branch"])}
 
 
-def _safe_ga_summary(root: Path) -> dict[str, Any]:
+def _safe_ga_summary(root: Path) -> ImplementationDocument:
     path = root / "runs" / "ga-readiness" / "ga-readiness-report.json"
     if not path.exists():
         return {"status": "missing"}

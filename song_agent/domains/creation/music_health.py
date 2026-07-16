@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import math
 import wave
 from pathlib import Path
@@ -177,14 +179,14 @@ def music_health_allows_review(report: dict[str, Any] | None) -> bool:
     return data.get("status") in {"passed", "warning"} and int(summary.get("blocking_failed", 0) or 0) == 0
 
 
-def _check(check_id: str, passed: bool, severity: str, message: str) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, severity: str, message: str) -> ImplementationDocument:
     status = "passed" if passed else "warning" if severity in {"warning", "info"} else "failed"
     if severity == "info":
         status = "skipped" if not passed else "passed"
     return {"check_id": check_id, "status": status, "severity": severity, "message": message}
 
 
-def _check_message(check: dict[str, Any]) -> dict[str, Any]:
+def _check_message(check: ImplementationDocument) -> ImplementationDocument:
     return {"check_id": check.get("check_id"), "message": check.get("message"), "severity": check.get("severity")}
 
 
@@ -319,7 +321,7 @@ def _density_peak_exists(notes: list[NoteEvent], total_beats: float) -> bool:
     return bool(buckets) and max(buckets) >= max(8, min(buckets) * 1.2)
 
 
-def _section_summary(plan: SongPlan) -> list[dict[str, Any]]:
+def _section_summary(plan: SongPlan) -> list[ImplementationDocument]:
     beats = _beats_per_bar(plan.meter)
     notes = _all_notes(plan)
     rows = []
@@ -337,7 +339,7 @@ def _section_summary(plan: SongPlan) -> list[dict[str, Any]]:
     return rows
 
 
-def _track_summary(plan: SongPlan) -> list[dict[str, Any]]:
+def _track_summary(plan: SongPlan) -> list[ImplementationDocument]:
     rows = []
     for track in plan.tracks:
         pitches = [note.pitch for note in track.notes]
@@ -354,7 +356,7 @@ def _track_summary(plan: SongPlan) -> list[dict[str, Any]]:
     return rows
 
 
-def _quality_overall(plan: SongPlan, quality_report: dict[str, Any] | None) -> int | None:
+def _quality_overall(plan: SongPlan, quality_report: ImplementationDocument | None) -> int | None:
     if plan.quality and plan.quality.scores:
         return plan.quality.scores.overall
     if isinstance(quality_report, dict):
@@ -382,7 +384,7 @@ def _wav_duration_reasonable(path: Path, total_beats: float, tempo_bpm: int) -> 
     return 0.5 <= seconds / expected <= 1.8
 
 
-def _safe_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+def _safe_summary(report: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(report, dict):
         return {}
     summary = report.get("summary")

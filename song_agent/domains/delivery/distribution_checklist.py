@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from pathlib import Path
 from typing import Any
@@ -256,7 +258,7 @@ def _safe_note(value: Any) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:500]
 
 
-def _stale_summary(summary: dict[str, Any] | None, reason: str) -> dict[str, Any]:
+def _stale_summary(summary: ImplementationDocument | None, reason: str) -> ImplementationDocument:
     data = dict(summary or {})
     if data:
         data["stale"] = True
@@ -265,7 +267,7 @@ def _stale_summary(summary: dict[str, Any] | None, reason: str) -> dict[str, Any
     return sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _check(check_id: str, failed: bool, severity: str, message: str, count: int | None = None) -> dict[str, Any]:
+def _check(check_id: str, failed: bool, severity: str, message: str, count: int | None = None) -> ImplementationDocument:
     item = {
         "scope": "distribution_checklist",
         "check_id": check_id,

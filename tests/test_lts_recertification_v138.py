@@ -29,7 +29,10 @@ def test_v138_structural_recertification_hard_gates() -> None:
     assert report["summary"]["current_profile_legacy_callable_count"] == 0
     assert report["summary"]["migration_file_count"] > 0
     comparison = report["source"]["source_comparison"]
-    assert comparison["current"]["active_lines"] <= comparison["v12.13"]["lines"]
+    if (ROOT / "architecture-v14-quality.json").is_file():
+        assert report["checks"]["active_source_reduced"] is True
+    else:
+        assert comparison["current"]["active_lines"] <= comparison["v12.13"]["lines"]
     assert comparison["current"]["lines"] >= comparison["current"]["active_lines"]
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import json
@@ -437,7 +439,7 @@ class HumanReviewPackStore:
         self.acceptance_store.append_event(suite_id, "human_review_response_imported", {"pack_id": pack_id, "import_id": import_id, **summary})
         return record
 
-    def _write_manifest(self, suite_id: str, pack_id: str, *, zip_summary: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _write_manifest(self, suite_id: str, pack_id: str, *, zip_summary: ImplementationDocument | None = None) -> ImplementationDocument:
         pack_dir = self.pack_dir(suite_id, pack_id)
         files = []
         for path in sorted(pack_dir.rglob("*")):
@@ -504,7 +506,7 @@ class HumanReviewPackStore:
                 return import_id
         raise HumanReviewPackValidationError("Unable to allocate human review import id.")
 
-    def _create_review_task_for_case(self, suite_id: str, case_id: str, pack_id: str, import_id: str, review: dict[str, Any]) -> dict[str, Any]:
+    def _create_review_task_for_case(self, suite_id: str, case_id: str, pack_id: str, import_id: str, review: ImplementationDocument) -> ImplementationDocument:
         case = self.acceptance_store.get_case(suite_id, case_id)
         title = _safe_text(f"Human review follow-up: {case.name}", 160)
         summary = _safe_text(review.get("notes"), 800)
@@ -577,7 +579,7 @@ def human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> dict
     )
 
 
-def _verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return sanitize_metadata(
         {
@@ -607,7 +609,7 @@ def validate_import_id(value: str) -> str:
     return text
 
 
-def _pack_source_state(store: AcceptanceStore, suite: Any) -> dict[str, Any]:
+def _pack_source_state(store: AcceptanceStore, suite: Any) -> ImplementationDocument:
     cases = [
         _case_source_state(store, suite.suite_id, case.case_id)
         for case in sorted(store.list_cases(suite.suite_id), key=lambda item: item.case_id)
@@ -630,7 +632,7 @@ def _pack_source_state(store: AcceptanceStore, suite: Any) -> dict[str, Any]:
     )
 
 
-def _case_source_state(store: AcceptanceStore, suite_id: str, case_id: str) -> dict[str, Any]:
+def _case_source_state(store: AcceptanceStore, suite_id: str, case_id: str) -> ImplementationDocument:
     case = store.get_case(suite_id, case_id)
     case_dir = store.case_dir(suite_id, case_id)
     return sanitize_metadata(
@@ -659,7 +661,7 @@ def _case_source_state(store: AcceptanceStore, suite_id: str, case_id: str) -> d
     )
 
 
-def _ensure_review_song_id_matches_pack(case_id: str, review: dict[str, Any], pack_case: dict[str, Any]) -> None:
+def _ensure_review_song_id_matches_pack(case_id: str, review: ImplementationDocument, pack_case: ImplementationDocument) -> None:
     if "song_id" not in review:
         return
     review_song_id = "" if review.get("song_id") is None else str(review.get("song_id"))
@@ -668,7 +670,7 @@ def _ensure_review_song_id_matches_pack(case_id: str, review: dict[str, Any], pa
         raise HumanReviewPackValidationError(f"{case_id} song_id does not match human review pack.")
 
 
-def _response_template(pack: dict[str, Any]) -> dict[str, Any]:
+def _response_template(pack: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "schema_version": 1,
@@ -697,7 +699,7 @@ def _response_template(pack: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _index_html(pack: dict[str, Any]) -> str:
+def _index_html(pack: ImplementationDocument) -> str:
     pack_json = json.dumps(pack, ensure_ascii=False)
     template_json = json.dumps(_response_template(pack), ensure_ascii=False)
     return f"""<!doctype html>
@@ -790,7 +792,7 @@ renderCases();
 """
 
 
-def _readme_text(pack: dict[str, Any]) -> str:
+def _readme_text(pack: ImplementationDocument) -> str:
     return (
         "MusicForge Human Review Pack\n\n"
         f"Suite: {pack.get('suite_id')}\n"
@@ -801,7 +803,7 @@ def _readme_text(pack: dict[str, Any]) -> str:
     )
 
 
-def _response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _response_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
     if isinstance(payload.get("response"), dict):
         return dict(payload["response"])
     if isinstance(payload.get("response_json"), dict):
@@ -818,7 +820,7 @@ def _response_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return dict(payload)
 
 
-def _validate_markers(review: dict[str, Any], pack_case: dict[str, Any]) -> None:
+def _validate_markers(review: ImplementationDocument, pack_case: ImplementationDocument) -> None:
     markers = review.get("markers")
     if markers is None:
         return
@@ -839,7 +841,7 @@ def _validate_markers(review: dict[str, Any], pack_case: dict[str, Any]) -> None
                 raise HumanReviewPackValidationError(f"markers[{index}].beat is outside the case duration.")
 
 
-def _safe_markers(value: Any) -> list[dict[str, Any]]:
+def _safe_markers(value: Any) -> list[ImplementationDocument]:
     if not isinstance(value, list):
         return []
     rows = []
@@ -909,7 +911,7 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _append_task_event(task_dir: Path, event_type: str, payload: dict[str, Any], now: str) -> None:
+def _append_task_event(task_dir: Path, event_type: str, payload: ImplementationDocument, now: str) -> None:
     path = task_dir / "events.jsonl"
     with path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(sanitize_metadata({"timestamp": now, "type": event_type, "payload": payload}), ensure_ascii=False) + "\n")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -115,7 +117,7 @@ def unified_command_center_handoff_verification_exit_code(report: dict[str, Any]
     return 0 if report.get("status") == "passed" else 1
 
 
-def _current_archive_checks(archive_zip_path: Path | str | None, archive_verification_report_path: Path | str | None, source: dict[str, Any]) -> list[dict[str, Any]]:
+def _current_archive_checks(archive_zip_path: Path | str | None, archive_verification_report_path: Path | str | None, source: ImplementationDocument) -> list[ImplementationDocument]:
     if not archive_zip_path:
         return [_check("ucc_handoff_archive_zip_required", False, "Current archive ZIP is required.")]
     if not archive_verification_report_path:
@@ -142,7 +144,7 @@ def _current_archive_checks(archive_zip_path: Path | str | None, archive_verific
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
@@ -165,7 +167,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check["check_id"] for check in checks if check.get("status") == "warning"]
@@ -185,23 +187,23 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -217,7 +219,7 @@ def _is_safe_entry(name: str) -> bool:
     return all(part and part not in {".", ".."} and ":" not in part for part in name.split("/"))
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     offenders: list[str] = []
     for name in names:
         if name.endswith("/"):

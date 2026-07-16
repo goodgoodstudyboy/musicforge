@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -953,7 +955,7 @@ def review_candidate_source_breakdown(candidates: list[ReviewCandidate]) -> dict
     )
 
 
-def _decision_rank_entry(candidate: ReviewCandidate, rank: int) -> dict[str, Any]:
+def _decision_rank_entry(candidate: ReviewCandidate, rank: int) -> ImplementationDocument:
     scores = candidate.scores if isinstance(candidate.scores, dict) else {}
     return sanitize_metadata(
         {
@@ -974,7 +976,7 @@ def _decision_rank_entry(candidate: ReviewCandidate, rank: int) -> dict[str, Any
     )
 
 
-def _recommendation_reason(candidate: ReviewCandidate | None, *, judge_summary: dict[str, Any] | None = None) -> str:
+def _recommendation_reason(candidate: ReviewCandidate | None, *, judge_summary: ImplementationDocument | None = None) -> str:
     if candidate is None:
         return "No ready candidate is available."
     score = int(candidate.scores.get("combined") or 0)
@@ -1000,7 +1002,7 @@ def _decision_risk_flags(task: ReviewTask, candidates: list[ReviewCandidate], re
     return sorted(set(flags))
 
 
-def _judge_summary_for_decision(report: dict[str, Any] | None) -> dict[str, Any]:
+def _judge_summary_for_decision(report: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(report, dict) or not report:
         return {}
     scores = report.get("candidate_scores") if isinstance(report.get("candidate_scores"), list) else []
@@ -1023,7 +1025,7 @@ def _judge_summary_for_decision(report: dict[str, Any] | None) -> dict[str, Any]
     )
 
 
-def _provider_patch_summary(patch: dict[str, Any]) -> dict[str, Any]:
+def _provider_patch_summary(patch: ImplementationDocument) -> ImplementationDocument:
     operations = patch.get("operations") if isinstance(patch.get("operations"), list) else []
     return sanitize_metadata(
         {
@@ -1305,7 +1307,7 @@ def _strategy(value: Any) -> str:
     return strategy
 
 
-def _candidate_source(task: ReviewTask) -> dict[str, Any]:
+def _candidate_source(task: ReviewTask) -> ImplementationDocument:
     return {
         "review_task_id": task.task_id,
         "audition_id": task.audition_id,
@@ -1314,7 +1316,7 @@ def _candidate_source(task: ReviewTask) -> dict[str, Any]:
     }
 
 
-def _provider_candidate_source(task: ReviewTask, provider_snapshot: dict[str, Any], template_id: str, candidate_index: int) -> dict[str, Any]:
+def _provider_candidate_source(task: ReviewTask, provider_snapshot: ImplementationDocument, template_id: str, candidate_index: int) -> ImplementationDocument:
     usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
     return sanitize_metadata(
         {
@@ -1339,7 +1341,7 @@ def _provider_candidate_source(task: ReviewTask, provider_snapshot: dict[str, An
     )
 
 
-def _provider_snapshot_for_candidate(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _provider_snapshot_for_candidate(snapshot: ImplementationDocument) -> ImplementationDocument:
     data = sanitize_metadata(dict(snapshot or {}))
     data.pop("api_key", None)
     data.pop("api_key_set", None)
@@ -1358,11 +1360,11 @@ def _candidate_artifacts(task_id: str, candidate_id: str) -> dict[str, str]:
     }
 
 
-def _validator(status: str, errors: list[str] | None = None, warnings: list[str] | None = None) -> dict[str, Any]:
+def _validator(status: str, errors: list[str] | None = None, warnings: list[str] | None = None) -> ImplementationDocument:
     return {"status": status, "errors": errors or [], "warnings": warnings or [], "checked_at": now_iso()}
 
 
-def _usage_int(usage: dict[str, Any], field_name: str) -> int:
+def _usage_int(usage: ImplementationDocument, field_name: str) -> int:
     try:
         return max(0, int((usage or {}).get(field_name) or 0))
     except (TypeError, ValueError):
@@ -1421,20 +1423,20 @@ def _candidate_warnings(task: ReviewTask, strategy: str) -> list[str]:
     return []
 
 
-def _task_title(snapshot: dict[str, Any], target: dict[str, Any]) -> str:
+def _task_title(snapshot: ImplementationDocument, target: ImplementationDocument) -> str:
     section = target.get("section_name") or "song"
     track = target.get("track_name") or "arrangement"
     return sanitize_sensitive_text(f"Review task: {section} {track}")[:160]
 
 
-def _task_summary(snapshot: dict[str, Any], target: dict[str, Any]) -> str:
+def _task_summary(snapshot: ImplementationDocument, target: ImplementationDocument) -> str:
     status = snapshot.get("status") or "review"
     notes = snapshot.get("notes_excerpt") or ""
     target_text = " ".join(str(item) for item in (target.get("section_name"), target.get("track_name")) if item)
     return sanitize_sensitive_text(f"{status}: {target_text}. {notes}")[:800]
 
 
-def _priority(snapshot: dict[str, Any]) -> int:
+def _priority(snapshot: ImplementationDocument) -> int:
     rating = int(snapshot.get("rating") or 0)
     status = str(snapshot.get("status") or "")
     score = 50 + (5 - rating) * 6 if rating else 58
@@ -1447,7 +1449,7 @@ def _priority(snapshot: dict[str, Any]) -> int:
     return _clamp(score, 0, 100)
 
 
-def _primary_marker(markers: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _primary_marker(markers: list[ImplementationDocument]) -> ImplementationDocument | None:
     for kind in ("fix", "issue", "drop"):
         for marker in markers:
             if str(marker.get("kind") or "") == kind:
@@ -1462,7 +1464,7 @@ def _primary_marker(markers: list[dict[str, Any]]) -> dict[str, Any] | None:
     return markers[0] if markers else None
 
 
-def _section_from_range_or_marker(plan: SongPlan, range_data: dict[str, Any], global_beat: float | None) -> SongSection:
+def _section_from_range_or_marker(plan: SongPlan, range_data: ImplementationDocument, global_beat: float | None) -> SongSection:
     if global_beat is not None:
         section = _section_for_beat(plan, global_beat)
         if section is not None:
@@ -1491,7 +1493,7 @@ def _target_track(parent_plan: SongPlan, audition: EditorAuditionManifest, text:
     return _track_by_role(parent_plan, role) if role else None
 
 
-def _review_text(review: dict[str, Any], audition: EditorAuditionManifest) -> str:
+def _review_text(review: ImplementationDocument, audition: EditorAuditionManifest) -> str:
     parts = [
         str(review.get("notes") or ""),
         " ".join(str(tag) for tag in review.get("tags", [])),
@@ -1570,7 +1572,7 @@ def _section_end(section: SongSection) -> float:
     return _section_start(section) + float(section.bars * 4)
 
 
-def _range_start(range_data: dict[str, Any]) -> float:
+def _range_start(range_data: ImplementationDocument) -> float:
     return _float_or_none(range_data.get("start_beat")) or 0.0
 
 
@@ -1582,7 +1584,7 @@ def _intent(
     strength: int,
     instruction: str,
     preserve: list[str],
-    payload: dict[str, Any],
+    payload: ImplementationDocument,
 ) -> EditIntent:
     target: dict[str, Any] = {}
     if section_name:
@@ -1629,7 +1631,7 @@ def _lock_for_project(project_dir: Path) -> threading.RLock:
         return _STORE_LOCKS[key]
 
 
-def _append_event(root: Path, event_type: str, payload: dict[str, Any], now: str) -> None:
+def _append_event(root: Path, event_type: str, payload: ImplementationDocument, now: str) -> None:
     event_path = root / "events.jsonl"
     event_path.parent.mkdir(parents=True, exist_ok=True)
     with event_path.open("a", encoding="utf-8") as file:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -8,6 +10,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -127,7 +130,7 @@ class ReleaseAudioQualityObservatoryStore:
             config["integrity_hash"] = _integrity_hash(config)
             path.parent.mkdir(parents=True, exist_ok=True)
             write_json(path, config)
-            self._append_history_event(observatory_id, "observatory_created", {"config_hash": config["integrity_hash"]})
+            self._record_history_event(observatory_id, "observatory_created", {"config_hash": config["integrity_hash"]})
             return config
 
     def read_config(self, observatory_id: str) -> dict[str, Any]:
@@ -143,7 +146,7 @@ class ReleaseAudioQualityObservatoryStore:
             release_entries = self._release_entries(config, payload)
             docs = build_observatory_documents(config, release_entries)
             self._write_documents(observatory_id, docs)
-            self._append_history_event(observatory_id, "observatory_refreshed", {"source_hash": docs["summary"].get("source_hash"), "summary_hash": docs["summary"].get("integrity_hash")})
+            self._record_history_event(observatory_id, "observatory_refreshed", {"source_hash": docs["summary"].get("source_hash"), "summary_hash": docs["summary"].get("integrity_hash")})
             return docs["summary"]
 
     def read_summary(self, observatory_id: str) -> dict[str, Any]:
@@ -263,7 +266,7 @@ class ReleaseAudioQualityObservatoryStore:
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": sanitize_sensitive_text(str(exc))}
 
-    def _current_documents(self, observatory_id: str, config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _current_documents(self, observatory_id: str, config: ImplementationDocument) -> dict[str, ImplementationDocument]:
         paths = {
             "config": self.config_path(observatory_id),
             "source_index": self.source_index_path(observatory_id),
@@ -283,7 +286,7 @@ class ReleaseAudioQualityObservatoryStore:
         self._write_documents(observatory_id, docs)
         return docs
 
-    def _write_documents(self, observatory_id: str, docs: dict[str, dict[str, Any]]) -> None:
+    def _write_documents(self, observatory_id: str, docs: dict[str, ImplementationDocument]) -> None:
         root = self.observatory_dir(observatory_id)
         root.mkdir(parents=True, exist_ok=True)
         write_json(self.config_path(observatory_id), docs["config"])
@@ -297,7 +300,7 @@ class ReleaseAudioQualityObservatoryStore:
         write_json(self.recommendation_report_path(observatory_id), docs["recommendation_report"])
         write_json(self.summary_path(observatory_id), docs["summary"])
 
-    def _release_entries(self, config: dict[str, Any], payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _release_entries(self, config: ImplementationDocument, payload: ImplementationDocument) -> list[ImplementationDocument]:
         explicit = payload.get("releases") if isinstance(payload.get("releases"), list) else None
         if explicit is not None:
             return [_build_release_entry_from_payload(row, release_store=self.release_store) for row in explicit if isinstance(row, dict)]
@@ -328,25 +331,18 @@ class ReleaseAudioQualityObservatoryStore:
             return None
         return sorted(rows, reverse=True)[0][1]
 
-    def _append_history_event(self, observatory_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-        rows = _read_jsonl(self.history_path(observatory_id)) if self.history_path(observatory_id).exists() else []
-        previous = rows[-1].get("event_hash") if rows else None
-        event = sanitize_metadata(
+    def _record_history_event(self, observatory_id: str, event_type: str, payload: ImplementationDocument) -> ImplementationDocument:
+        chain = HistoryChain(self.history_path(observatory_id), sanitizer=sanitize_metadata, hash_mode="payload")
+        rows = chain.read()
+        return chain.append(
             {
                 "schema_version": RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION,
                 "event_id": f"aqoevt-{len(rows) + 1:06d}",
                 "event_type": event_type,
                 "created_at": now_iso(),
-                "previous_event_hash": previous,
                 "payload": payload,
             }
         )
-        event["payload_hash"] = stable_hash(event["payload"])
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        self.history_path(observatory_id).parent.mkdir(parents=True, exist_ok=True)
-        with self.history_path(observatory_id).open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
 
 
 
@@ -355,7 +351,7 @@ class ReleaseAudioQualityObservatoryStore:
 
 
 
-def _build_release_entry_from_payload(row: dict[str, Any], *, release_store: ReleaseStore) -> dict[str, Any]:
+def _build_release_entry_from_payload(row: ImplementationDocument, *, release_store: ReleaseStore) -> ImplementationDocument:
     release_id = str(row.get("release_id") or "")
     release_doc = row.get("release") if isinstance(row.get("release"), dict) else {}
     if release_id and not release_doc:
@@ -409,7 +405,7 @@ def _build_release_entry_from_payload(row: dict[str, Any], *, release_store: Rel
 
 
 
-def _explicit_paths(row: dict[str, Any]) -> dict[str, Path | None]:
+def _explicit_paths(row: ImplementationDocument) -> dict[str, Path | None]:
     mapping = {
         "certification_zip": ("certification", "certification_zip", "certification_zip_path", "release_audio_certification"),
         "certification_verification_report": ("certification_verification_report", "certification_verification_report_path", "release_audio_certification_verification_report"),
@@ -434,7 +430,7 @@ def _explicit_paths(row: dict[str, Any]) -> dict[str, Path | None]:
 
 
 
-def _default_window(overrides: dict[str, Any]) -> dict[str, Any]:
+def _default_window(overrides: ImplementationDocument) -> ImplementationDocument:
     window = {"max_release_count": 12, "include_hidden": False}
     window.update({key: overrides[key] for key in window if key in overrides})
     return window
@@ -443,7 +439,7 @@ def _default_window(overrides: dict[str, Any]) -> dict[str, Any]:
 
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {})
 
 
@@ -472,7 +468,7 @@ def _validate_observatory_id(value: str) -> str:
 
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if not path.exists():
         return rows
@@ -485,11 +481,11 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _file_record(path: Path, root: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _readme(summary: dict[str, Any], risks: dict[str, Any]) -> str:
+def _readme(summary: ImplementationDocument, risks: ImplementationDocument) -> str:
     data = summary.get("summary") if isinstance(summary.get("summary"), dict) else {}
     risk_summary = risks.get("summary") if isinstance(risks.get("summary"), dict) else {}
     return "\n".join(

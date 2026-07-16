@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -308,7 +310,7 @@ class ReleasePortfolioGovernanceAttestationStore:
         summary["verification_status"] = verification.get("status") or "missing"
         return sanitize_metadata(summary, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
-    def _findings(self, source: dict[str, Any], payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, source: ImplementationDocument, payload: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
@@ -347,7 +349,7 @@ class ReleasePortfolioGovernanceAttestationStore:
             check("redaction_scan", True, "No sensitive values found in Public Attestation source.")
         return blockers, warnings, checks
 
-    def _ensure_exportable(self, portfolio_id: str, profile: str, report: dict[str, Any], certificate: dict[str, Any], source: dict[str, Any], payload: dict[str, Any]) -> None:
+    def _ensure_exportable(self, portfolio_id: str, profile: str, report: ImplementationDocument, certificate: ImplementationDocument, source: ImplementationDocument, payload: ImplementationDocument) -> None:
         if not report:
             raise ReleasePortfolioGovernanceAttestationStateError("Public Attestation Report does not exist. Refresh before export.")
         if not attestation_report_integrity_ok(report):
@@ -383,7 +385,7 @@ class ReleasePortfolioGovernanceAttestationStore:
             return str(existing.get("report_id"))
         return "pga-000001"
 
-    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.history_path(portfolio_id, profile)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -456,7 +458,7 @@ def attestation_summary(report: dict[str, Any] | None) -> dict[str, Any]:
 
 
 
-def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary_from_source(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "portfolio_id": source.get("portfolio_id"),
@@ -477,7 +479,7 @@ def _summary_from_source(source: dict[str, Any], blockers: list[dict[str, Any]],
     )
 
 
-def _evidence_vault_manifest_row(source: dict[str, Any]) -> dict[str, Any]:
+def _evidence_vault_manifest_row(source: ImplementationDocument) -> ImplementationDocument:
     return {
         "zip_sha256": source.get("evidence_vault_zip_sha256"),
         "zip_size_bytes": source.get("evidence_vault_zip_size_bytes"),
@@ -488,7 +490,7 @@ def _evidence_vault_manifest_row(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _immutability_triple(source: dict[str, Any]) -> dict[str, str]:
+def _immutability_triple(source: ImplementationDocument) -> dict[str, str]:
     return {
         "evidence_vault_zip_sha256": str(source.get("evidence_vault_zip_sha256") or ""),
         "final_board_signoff_hash": str(source.get("final_board_signoff_hash") or ""),
@@ -496,7 +498,7 @@ def _immutability_triple(source: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _manifest_triple(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_triple(manifest: ImplementationDocument) -> dict[str, str]:
     evidence = manifest.get("evidence_vault") if isinstance(manifest.get("evidence_vault"), dict) else {}
     final_board = manifest.get("final_board") if isinstance(manifest.get("final_board"), dict) else {}
     return {
@@ -506,7 +508,7 @@ def _manifest_triple(manifest: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _certificate_markdown(certificate: dict[str, Any]) -> str:
+def _certificate_markdown(certificate: ImplementationDocument) -> str:
     final_board = certificate.get("final_board") if isinstance(certificate.get("final_board"), dict) else {}
     vault = certificate.get("evidence_vault") if isinstance(certificate.get("evidence_vault"), dict) else {}
     coverage = certificate.get("coverage") if isinstance(certificate.get("coverage"), dict) else {}
@@ -530,7 +532,7 @@ def _certificate_markdown(certificate: dict[str, Any]) -> str:
     )
 
 
-def _certificate_html(certificate: dict[str, Any]) -> str:
+def _certificate_html(certificate: ImplementationDocument) -> str:
     text = _certificate_markdown(certificate)
     escaped = (
         text.replace("&", "&amp;")
@@ -540,7 +542,7 @@ def _certificate_html(certificate: dict[str, Any]) -> str:
     return f"<!doctype html><html><head><meta charset=\"utf-8\"><title>MusicForge Public Attestation</title></head><body><pre>{escaped}</pre></body></html>"
 
 
-def _write_readme(export_dir: Path, certificate: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, certificate: ImplementationDocument) -> None:
     (export_dir / "README.txt").write_text(
         "\n".join(
             [
@@ -557,7 +559,7 @@ def _write_readme(export_dir: Path, certificate: dict[str, Any]) -> None:
     )
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -569,7 +571,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
     return rows
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     if not zip_path.exists():
         return {}
     try:
@@ -579,7 +581,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -589,7 +591,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, payload)
 
@@ -611,7 +613,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleasePortfolioGovernanceAttestationStateError("Resolved path escapes Public Attestation directory.") from exc
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     matches = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -620,11 +622,11 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if matches else "passed", "matches": matches[:20]}
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": message}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": message}
 
 

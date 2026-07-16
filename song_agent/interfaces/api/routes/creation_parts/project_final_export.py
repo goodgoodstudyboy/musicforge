@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -198,13 +200,13 @@ class CreationRoutesProjectFinalExport:
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Delivery signoff route not found.")
 
-    def _renderer_profile_from_payload(self, payload: dict[str, Any] | None) -> _interfaces_api_runtime.Any | None:
+    def _renderer_profile_from_payload(self, payload: ImplementationDocument | None) -> _interfaces_api_runtime.Any | None:
         profile_id = str((payload or {}).get("profile_id") or "").strip()
         if not profile_id:
             return None
         return self.audio_profile_store.get_profile(profile_id)
 
-    def _renderer_config_from_payload(self, payload: dict[str, Any] | None) -> _interfaces_api_runtime.Any | None:
+    def _renderer_config_from_payload(self, payload: ImplementationDocument | None) -> _interfaces_api_runtime.Any | None:
         profile = self._renderer_profile_from_payload(payload)
         if profile is None:
             return None

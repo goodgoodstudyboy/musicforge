@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -411,7 +413,7 @@ class ReleasePortfolioGovernanceStore:
             self._append_event(queue_id, "archived", {}, now=queue["updated_at"])
             return queue
 
-    def _execute_safe_item(self, queue: dict[str, Any], item: dict[str, Any], *, now: str) -> dict[str, Any]:
+    def _execute_safe_item(self, queue: ImplementationDocument, item: ImplementationDocument, *, now: str) -> ImplementationDocument:
         action_type = str(item.get("action_type") or "")
         release_id = str(item.get("release_id") or "")
         queue_id = str(queue.get("queue_id") or "")
@@ -486,7 +488,7 @@ class ReleasePortfolioGovernanceStore:
         result["integrity_hash"] = item_result_integrity_hash(result)
         return sanitize_metadata(result, blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS)
 
-    def _current_source(self, portfolio_id: str) -> dict[str, Any]:
+    def _current_source(self, portfolio_id: str) -> ImplementationDocument:
         report = self.portfolio_store.read_report(portfolio_id, default={})
         trend = self.portfolio_store.read_trend_report(portfolio_id, default={})
         risks = self.portfolio_store.read_risk_register(portfolio_id, default={})
@@ -512,7 +514,7 @@ class ReleasePortfolioGovernanceStore:
             blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS,
         )
 
-    def _is_stale(self, queue: dict[str, Any], plan: dict[str, Any]) -> bool:
+    def _is_stale(self, queue: ImplementationDocument, plan: ImplementationDocument) -> bool:
         if queue.get("status") == "stale":
             return True
         if not queue_integrity_ok(queue):
@@ -533,7 +535,7 @@ class ReleasePortfolioGovernanceStore:
         if isinstance(signoff, dict) and signoff.get("status") in {"signed", "force_signed"}:
             raise ReleasePortfolioGovernanceStateError("Signed Portfolio Governance Queue is immutable. Reset signoff before mutating queue evidence.")
 
-    def _ensure_queue_current_for_export(self, queue: dict[str, Any], plan: dict[str, Any], execution: dict[str, Any], *, now: str) -> None:
+    def _ensure_queue_current_for_export(self, queue: ImplementationDocument, plan: ImplementationDocument, execution: ImplementationDocument, *, now: str) -> None:
         if queue.get("status") == "stale":
             self._mark_stale_and_raise(queue, now=now)
         if str(plan.get("integrity_hash") or "") != str(queue.get("action_plan_hash") or ""):
@@ -554,14 +556,14 @@ class ReleasePortfolioGovernanceStore:
             return
         self._mark_stale_and_raise(queue, now=now)
 
-    def _mark_stale_and_raise(self, queue: dict[str, Any], *, now: str) -> None:
+    def _mark_stale_and_raise(self, queue: ImplementationDocument, *, now: str) -> None:
         queue["status"] = "stale"
         queue["updated_at"] = now
         queue["integrity_hash"] = queue_integrity_hash(queue)
         _write_json(self.queue_path(str(queue.get("queue_id") or "")), queue)
         raise ReleasePortfolioGovernanceStateError(PORTFOLIO_GOVERNANCE_STALE_MESSAGE)
 
-    def _find_open_queue(self, portfolio_id: str, source_hash: str) -> dict[str, Any] | None:
+    def _find_open_queue(self, portfolio_id: str, source_hash: str) -> ImplementationDocument | None:
         for queue in self.list_queues(portfolio_id=portfolio_id, include_archived=True):
             if queue.get("status") in OPEN_QUEUE_STATUSES and queue.get("source_hash") == source_hash:
                 return queue
@@ -579,7 +581,7 @@ class ReleasePortfolioGovernanceStore:
                 continue
         raise ReleasePortfolioGovernanceStateError("Unable to allocate a unique Governance Queue id.")
 
-    def _append_event(self, queue_id: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_event(self, queue_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.events_path(queue_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = _event_count(path)
@@ -653,7 +655,7 @@ def queue_summary(queue: dict[str, Any] | None, execution: dict[str, Any] | None
     )
 
 
-def _build_action_plan(queue_id: str, source: dict[str, Any], report: dict[str, Any], trend: dict[str, Any], risks: dict[str, Any], payload: dict[str, Any], *, generated_at: str) -> dict[str, Any]:
+def _build_action_plan(queue_id: str, source: ImplementationDocument, report: ImplementationDocument, trend: ImplementationDocument, risks: ImplementationDocument, payload: ImplementationDocument, *, generated_at: str) -> ImplementationDocument:
     items: list[dict[str, Any]] = []
     risks_by_category = _ids_by_category(risks.get("risks", []) if isinstance(risks.get("risks"), list) else [])
     recs_by_category = _ids_by_category(report.get("recommendations", []) if isinstance(report.get("recommendations"), list) else [], key_name="recommendation_id")
@@ -701,21 +703,21 @@ def _build_action_plan(queue_id: str, source: dict[str, Any], report: dict[str, 
     return sanitize_metadata(plan, blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS)
 
 
-def _add_item(items: list[dict[str, Any]], action: str, release_id: str, category: str, severity: str, reason: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> None:
+def _add_item(items: list[ImplementationDocument], action: str, release_id: str, category: str, severity: str, reason: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> None:
     items.append(_base_item(action, release_id, category, severity, reason, "safe", risks, recs))
 
 
-def _add_manual(items: list[dict[str, Any]], action: str, release_id: str, category: str, severity: str, reason: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> None:
+def _add_manual(items: list[ImplementationDocument], action: str, release_id: str, category: str, severity: str, reason: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> None:
     item = _base_item(action, release_id, category, severity, reason, "manual_required", risks, recs)
     item["manual_instruction"] = _manual_instruction(action, category)
     items.append(item)
 
 
-def _add_blocked(items: list[dict[str, Any]], action: str, release_id: str, category: str, severity: str, reason: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> None:
+def _add_blocked(items: list[ImplementationDocument], action: str, release_id: str, category: str, severity: str, reason: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> None:
     items.append(_base_item(action, release_id, category, severity, reason, "blocked", risks, recs))
 
 
-def _base_item(action: str, release_id: str, category: str, severity: str, reason: str, safety: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> dict[str, Any]:
+def _base_item(action: str, release_id: str, category: str, severity: str, reason: str, safety: str, risks: dict[str, list[str]], recs: dict[str, list[str]]) -> ImplementationDocument:
     return {
         "item_id": "",
         "action_type": action,
@@ -758,7 +760,7 @@ def _manual_instruction(action: str, category: str) -> str:
     return instructions.get(action, f"Review {category} manually before taking action.")
 
 
-def _dedupe_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _dedupe_items(items: list[ImplementationDocument]) -> list[ImplementationDocument]:
     seen: set[tuple[str, str, str]] = set()
     result: list[dict[str, Any]] = []
     for item in items:
@@ -782,7 +784,7 @@ def _ids_by_category(items: list[Any], *, key_name: str = "risk_id") -> dict[str
     return result
 
 
-def _manual_action_list(queue_id: str, plan: dict[str, Any], *, generated_at: str) -> dict[str, Any]:
+def _manual_action_list(queue_id: str, plan: ImplementationDocument, *, generated_at: str) -> ImplementationDocument:
     rows: list[dict[str, Any]] = []
     for item in plan.get("items", []) if isinstance(plan.get("items"), list) else []:
         if not isinstance(item, dict) or item.get("safety") != "manual_required":
@@ -804,7 +806,7 @@ def _manual_action_list(queue_id: str, plan: dict[str, Any], *, generated_at: st
     return sanitize_metadata(report, blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS)
 
 
-def _execution_report(queue_id: str, *, source_hash: str, plan: dict[str, Any], generated_at: str, item_results: list[dict[str, Any]], post_conditions: dict[str, Any]) -> dict[str, Any]:
+def _execution_report(queue_id: str, *, source_hash: str, plan: ImplementationDocument, generated_at: str, item_results: list[ImplementationDocument], post_conditions: ImplementationDocument) -> ImplementationDocument:
     items = plan.get("items") if isinstance(plan.get("items"), list) else []
     summary = {
         "total_items": len(items),
@@ -847,7 +849,7 @@ def _execution_report(queue_id: str, *, source_hash: str, plan: dict[str, Any], 
     return sanitize_metadata(report, blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS)
 
 
-def _queue_execution_summary(execution: dict[str, Any]) -> dict[str, Any]:
+def _queue_execution_summary(execution: ImplementationDocument) -> ImplementationDocument:
     summary = execution.get("summary") if isinstance(execution.get("summary"), dict) else {}
     post = execution.get("post_conditions") if isinstance(execution.get("post_conditions"), dict) else {}
     return {
@@ -864,12 +866,12 @@ def _queue_execution_summary(execution: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _queue_status_from_plan(plan: dict[str, Any]) -> str:
+def _queue_status_from_plan(plan: ImplementationDocument) -> str:
     items = plan.get("items") if isinstance(plan.get("items"), list) else []
     return "planned" if items else "safe_completed"
 
 
-def _risk_recommendation_map(plan: dict[str, Any]) -> dict[str, Any]:
+def _risk_recommendation_map(plan: ImplementationDocument) -> ImplementationDocument:
     return {
         "queue_id": plan.get("queue_id"),
         "items": [
@@ -886,7 +888,7 @@ def _risk_recommendation_map(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _governance_actions_markdown(queue: dict[str, Any], plan: dict[str, Any], execution: dict[str, Any]) -> str:
+def _governance_actions_markdown(queue: ImplementationDocument, plan: ImplementationDocument, execution: ImplementationDocument) -> str:
     lines = [
         "# MusicForge Portfolio Governance Queue",
         "",
@@ -903,7 +905,7 @@ def _governance_actions_markdown(queue: dict[str, Any], plan: dict[str, Any], ex
     return "\n".join(lines) + "\n"
 
 
-def _manual_actions_markdown(manual: dict[str, Any]) -> str:
+def _manual_actions_markdown(manual: ImplementationDocument) -> str:
     lines = ["# Manual Governance Actions", ""]
     items = manual.get("items") if isinstance(manual.get("items"), list) else []
     if not items:
@@ -914,7 +916,7 @@ def _manual_actions_markdown(manual: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _write_readme(export_dir: Path, queue: dict[str, Any], execution: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, queue: ImplementationDocument, execution: ImplementationDocument) -> None:
     text = "\n".join(
         [
             "MusicForge Release Portfolio Governance Queue",
@@ -931,7 +933,7 @@ def _write_readme(export_dir: Path, queue: dict[str, Any], execution: dict[str, 
     (export_dir / "README.txt").write_text(text, encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = path.relative_to(root).as_posix()
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -974,14 +976,14 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return default if default is not None else {}
     value = read_json(path)
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, value: dict[str, Any]) -> Path:
+def _write_json(path: Path, value: ImplementationDocument) -> Path:
     return write_json(path, sanitize_metadata(value, blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS))
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -86,5 +88,5 @@ class JobState:
         )
 
 
-def _dict_or_empty(value: Any) -> dict[str, Any]:
+def _dict_or_empty(value: Any) -> ImplementationDocument:
     return value if isinstance(value, dict) else {}

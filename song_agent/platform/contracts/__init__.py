@@ -1,5 +1,6 @@
 """Versioned contracts shared across MusicForge domains."""
 
+from song_agent.platform.contracts.documents import JsonDocument, JsonPrimitive, JsonValue
 from song_agent.platform.contracts.errors import DomainError
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.contracts.evidence_manifest import ExternalEvidenceManifest
@@ -20,6 +21,9 @@ __all__ = [
     "EvidenceRef",
     "ExternalEvidenceManifest",
     "GenerationRef",
+    "JsonDocument",
+    "JsonPrimitive",
+    "JsonValue",
     "PackageSpec",
     "CurrentGenerationRequirement",
     "EvidenceRequirement",

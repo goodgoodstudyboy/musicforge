@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import tempfile
@@ -204,7 +206,7 @@ def unified_release_program_continuity_verification_exit_code(report: dict[str, 
     return 0 if report.get("status") == "passed" else 1
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     file_paths = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
@@ -230,7 +232,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _history_checks(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _history_checks(events: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     previous = ""
     signoff_events = 0
@@ -249,18 +251,18 @@ def _history_checks(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _binding_checks(
-    manifest: dict[str, Any],
-    policy: dict[str, Any],
-    plan: dict[str, Any],
-    drill: dict[str, Any],
-    readiness: dict[str, Any],
-    runbook: dict[str, Any],
-    report: dict[str, Any],
-    evidence_manifest: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    history: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    policy: ImplementationDocument,
+    plan: ImplementationDocument,
+    drill: ImplementationDocument,
+    readiness: ImplementationDocument,
+    runbook: ImplementationDocument,
+    report: ImplementationDocument,
+    evidence_manifest: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    history: list[ImplementationDocument],
+) -> list[ImplementationDocument]:
     latest = next((row for row in reversed(history) if row.get("event_type") == "continuity_signoff_created"), {})
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     pairs = {
@@ -299,7 +301,7 @@ def _binding_checks(
     return checks
 
 
-def _external_signoff_binding_checks(path: Path | str | None, binding: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _external_signoff_binding_checks(path: Path | str | None, binding: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not path:
         return [_check("urpc_external_signoff_binding_required", not require, "External continuity signoff binding is present when required.")]
     binding_path = Path(path)
@@ -314,16 +316,16 @@ def _external_signoff_binding_checks(path: Path | str | None, binding: dict[str,
 
 
 def _external_vault_operations_checks(
-    manifest: dict[str, Any],
-    evidence_manifest: dict[str, Any],
-    binding: dict[str, Any],
+    manifest: ImplementationDocument,
+    evidence_manifest: ImplementationDocument,
+    binding: ImplementationDocument,
     archive_path: Path | str | None,
     verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
     *,
     require: bool,
     deep: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not archive_path:
         checks.append(_check("urpc_vault_operations_archive_required", not require, "External Vault Operations archive is present when required."))
@@ -377,14 +379,14 @@ def _external_vault_operations_checks(
     return checks
 
 
-def _evidence_row(evidence_manifest: dict[str, Any]) -> dict[str, Any]:
+def _evidence_row(evidence_manifest: ImplementationDocument) -> ImplementationDocument:
     for row in evidence_manifest.get("evidence", []) or []:
         if isinstance(row, dict) and row.get("evidence_type") == "vault_operations_archive":
             return row
     return {}
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, first_check: ImplementationDocument | None = None) -> ImplementationDocument:
     if first_check is not None:
         checks.insert(0, first_check)
     return build_verification_report(
@@ -395,19 +397,19 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: 
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urpc_redaction_scan")
 
 
-def _has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
+def _has_blocking_failures(checks: list[ImplementationDocument]) -> bool:
     return any(check.get("status") == "failed" and check.get("severity") == "blocking" for check in checks)
 
 

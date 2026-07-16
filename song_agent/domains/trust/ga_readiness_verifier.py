@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import hashlib
@@ -43,657 +45,126 @@ GA_READINESS_VERIFICATION_PACKAGE_TYPE = "musicforge_ga_readiness_verification_r
 _SENSITIVE_RE = re.compile(r"(sk-[A-Za-z0-9_-]{12,}|github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9_]{20,}|githubkey\.txt)", re.IGNORECASE)
 
 
-def verify_ga_readiness_report(
-    report_path: Path | str,
-    *,
-    strict: bool = False,
-    policy: str | None = None,
-    evidence_manifest_path: Path | str | None = None,
-    require_ready: bool = False,
-    require_manual_acceptance: bool = False,
-    require_audio_campaign: bool = False,
-    require_audio_campaign_remediation: bool = False,
-    require_release_audio_certification: bool = False,
-    require_release_audio_timeline: bool = False,
-    require_release_audio_regression_guard: bool = False,
-    require_release_audio_baseline_governance: bool = False,
-    require_release_audio_regression_response: bool = False,
-    require_release_audio_quality_observatory: bool = False,
-    require_release_audio_quality_action_queue: bool = False,
-    require_final_readiness: bool = False,
-    manual_acceptance_report_path: Path | str | None = None,
-    audio_campaign_archive_path: Path | str | None = None,
-    audio_campaign_archive_verification_report_path: Path | str | None = None,
-    audio_campaign_remediation_path: Path | str | None = None,
-    audio_campaign_remediation_verification_report_path: Path | str | None = None,
-    release_audio_certification_path: Path | str | None = None,
-    release_audio_certification_verification_report_path: Path | str | None = None,
-    release_audio_timeline_path: Path | str | None = None,
-    release_audio_timeline_verification_report_path: Path | str | None = None,
-    release_audio_regression_path: Path | str | None = None,
-    release_audio_regression_verification_report_path: Path | str | None = None,
-    release_audio_regression_baseline_timeline_path: Path | str | None = None,
-    release_audio_regression_baseline_timeline_verification_report_path: Path | str | None = None,
-    release_audio_regression_baseline_certification_path: Path | str | None = None,
-    release_audio_regression_baseline_certification_verification_report_path: Path | str | None = None,
-    release_audio_regression_current_timeline_path: Path | str | None = None,
-    release_audio_regression_current_timeline_verification_report_path: Path | str | None = None,
-    release_audio_regression_current_certification_path: Path | str | None = None,
-    release_audio_regression_current_certification_verification_report_path: Path | str | None = None,
-    release_audio_baseline_registry_path: Path | str | None = None,
-    release_audio_baseline_registry_verification_report_path: Path | str | None = None,
-    release_audio_regression_response_path: Path | str | None = None,
-    release_audio_regression_response_verification_report_path: Path | str | None = None,
-    release_audio_quality_observatory_path: Path | str | None = None,
-    release_audio_quality_observatory_verification_report_path: Path | str | None = None,
-    release_audio_quality_observatory_evidence_root: Path | str | None = None,
-    release_audio_quality_action_queue_path: Path | str | None = None,
-    release_audio_quality_action_queue_verification_report_path: Path | str | None = None,
-    require_release_audio_quality_action_queue_signoff: bool = False,
-    release_audio_quality_action_queue_signoff_archive_path: Path | str | None = None,
-    release_audio_quality_action_queue_signoff_verification_report_path: Path | str | None = None,
-    require_release_audio_command_center: bool = False,
-    release_audio_command_center_path: Path | str | None = None,
-    release_audio_command_center_verification_report_path: Path | str | None = None,
-    require_unified_command_center: bool = False,
-    unified_command_center_path: Path | str | None = None,
-    unified_command_center_verification_report_path: Path | str | None = None,
-    require_unified_command_center_archive: bool = False,
-    unified_command_center_archive_path: Path | str | None = None,
-    unified_command_center_archive_verification_report_path: Path | str | None = None,
-    require_unified_command_center_handoff: bool = False,
-    unified_command_center_handoff_path: Path | str | None = None,
-    unified_command_center_handoff_verification_report_path: Path | str | None = None,
-    require_unified_command_center_continuous_review: bool = False,
-    unified_command_center_continuous_review_path: Path | str | None = None,
-    unified_command_center_continuous_review_verification_report_path: Path | str | None = None,
-    require_unified_command_center_drift_response: bool = False,
-    unified_command_center_drift_response_path: Path | str | None = None,
-    unified_command_center_drift_response_verification_report_path: Path | str | None = None,
-    unified_command_center_drift_source_review_path: Path | str | None = None,
-    unified_command_center_drift_source_review_verification_report_path: Path | str | None = None,
-    unified_command_center_drift_recheck_review_path: Path | str | None = None,
-    unified_command_center_drift_recheck_review_verification_report_path: Path | str | None = None,
-    unified_command_center_drift_change_request_binding_report_path: Path | str | None = None,
-    require_unified_command_center_evidence_review: bool = False,
-    unified_command_center_evidence_review_path: Path | str | None = None,
-    unified_command_center_evidence_review_verification_report_path: Path | str | None = None,
-    require_unified_command_center_evidence_review_accepted: bool = False,
-    unified_command_center_evidence_review_acceptance_path: Path | str | None = None,
-    unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None = None,
-    unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None = None,
-    require_unified_command_center_reviewer_decision_board: bool = False,
-    unified_command_center_reviewer_decision_board_path: Path | str | None = None,
-    unified_command_center_reviewer_decision_board_verification_report_path: Path | str | None = None,
-    require_unified_command_center_reviewer_decision_board_signed: bool = True,
-    require_unified_command_center_reviewer_decision_board_quorum: bool = True,
-    unified_command_center_reviewer_decision_board_evidence_review_path: Path | str | None = None,
-    unified_command_center_reviewer_decision_board_evidence_review_verification_report_path: Path | str | None = None,
-    unified_command_center_reviewer_decision_board_accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
-    unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
-    unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
-    require_unified_release_program_handoff: bool = False,
-    unified_release_program_handoff_path: Path | str | None = None,
-    unified_release_program_handoff_verification_report_path: Path | str | None = None,
-    unified_release_program_handoff_external_evidence_manifest_path: Path | str | None = None,
-    unified_release_program_handoff_signoff_binding_path: Path | str | None = None,
-    require_unified_release_program_vault: bool = False,
-    unified_release_program_vault_path: Path | str | None = None,
-    unified_release_program_vault_verification_report_path: Path | str | None = None,
-    unified_release_program_vault_anchor_path: Path | str | None = None,
-    require_unified_release_program_vault_operations: bool = False,
-    unified_release_program_vault_operations_path: Path | str | None = None,
-    unified_release_program_vault_operations_verification_report_path: Path | str | None = None,
-    unified_release_program_vault_operations_signoff_binding_path: Path | str | None = None,
-    require_unified_release_program_continuity: bool = False,
-    unified_release_program_continuity_path: Path | str | None = None,
-    unified_release_program_continuity_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_signoff_binding_path: Path | str | None = None,
-    require_unified_release_program_continuity_kit: bool = False,
-    unified_release_program_continuity_kit_path: Path | str | None = None,
-    unified_release_program_continuity_kit_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_kit_receiver_receipt_path: Path | str | None = None,
-    require_unified_release_program_continuity_acceptance: bool = False,
-    unified_release_program_continuity_acceptance_path: Path | str | None = None,
-    unified_release_program_continuity_acceptance_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_acceptance_signoff_binding_path: Path | str | None = None,
-    require_unified_release_program_continuity_command_center: bool = False,
-    unified_release_program_continuity_command_center_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None = None,
-    require_unified_release_program_continuity_command_center_signoff: bool = False,
-    unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None = None,
-    require_unified_release_program_continuity_command_center_acceptance: bool = False,
-    unified_release_program_continuity_command_center_acceptance_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_signoff_binding_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_review_pack_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None = None,
-    require_unified_release_program_continuity_command_center_acceptance_change_control: bool = False,
-    unified_release_program_continuity_command_center_acceptance_change_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_change_verification_report_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_acceptance_previous_root: Path | str | None = None,
-    unified_release_program_continuity_command_center_final_handoff_path: Path | str | None = None,
-    unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None = None,
-    unified_command_center_signoff_binding_path: Path | str | None = None,
-    unified_release_path: Path | str | None = None,
-    unified_release_verification_report_path: Path | str | None = None,
-    unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
-    unified_distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
-    unified_submission_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
-    unified_submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None = None,
-    unified_release_operations_path: Path | str | None = None,
-    unified_release_operations_verification_report_path: Path | str | None = None,
-    unified_trust_operations_hub_path: Path | str | None = None,
-    unified_trust_operations_hub_verification_report_path: Path | str | None = None,
-    unified_public_trust_center_path: Path | str | None = None,
-    unified_public_trust_center_verification_report_path: Path | str | None = None,
-    unified_maintenance_backup_path: Path | str | None = None,
-    unified_maintenance_backup_verification_report_path: Path | str | None = None,
-    require_no_critical_audio_quality_risk: bool = False,
-    final_handoff_package_path: Path | str | None = None,
-    final_handoff_verification_report_path: Path | str | None = None,
-    release_check_latest_report_path: Path | str | None = None,
-    release_check_ga_report_path: Path | str | None = None,
-) -> dict[str, Any]:
-    verification_inputs = locals().copy()
-    target = Path(report_path)
-    checks: list[dict[str, Any]] = []
+def _verify_ga_readiness_report_part_01(report_path: Path | str, strict: bool, policy: str | None, evidence_manifest_path: Path | str | None, require_ready: bool, require_manual_acceptance: bool, require_audio_campaign: bool, require_audio_campaign_remediation: bool, require_release_audio_certification: bool, require_release_audio_timeline: bool, require_release_audio_regression_guard: bool, require_release_audio_baseline_governance: bool, require_release_audio_regression_response: bool, require_release_audio_quality_observatory: bool, require_release_audio_quality_action_queue: bool, require_final_readiness: bool, manual_acceptance_report_path: Path | str | None, audio_campaign_archive_path: Path | str | None, audio_campaign_archive_verification_report_path: Path | str | None, audio_campaign_remediation_path: Path | str | None, audio_campaign_remediation_verification_report_path: Path | str | None, release_audio_certification_path: Path | str | None, release_audio_certification_verification_report_path: Path | str | None, release_audio_timeline_path: Path | str | None, release_audio_timeline_verification_report_path: Path | str | None, release_audio_regression_path: Path | str | None, release_audio_regression_verification_report_path: Path | str | None, release_audio_regression_baseline_timeline_path: Path | str | None, release_audio_regression_baseline_timeline_verification_report_path: Path | str | None, release_audio_regression_baseline_certification_path: Path | str | None, release_audio_regression_baseline_certification_verification_report_path: Path | str | None, release_audio_regression_current_timeline_path: Path | str | None, release_audio_regression_current_timeline_verification_report_path: Path | str | None, release_audio_regression_current_certification_path: Path | str | None, release_audio_regression_current_certification_verification_report_path: Path | str | None, release_audio_baseline_registry_path: Path | str | None, release_audio_baseline_registry_verification_report_path: Path | str | None, release_audio_regression_response_path: Path | str | None, release_audio_regression_response_verification_report_path: Path | str | None, release_audio_quality_observatory_path: Path | str | None, release_audio_quality_observatory_verification_report_path: Path | str | None, release_audio_quality_observatory_evidence_root: Path | str | None, release_audio_quality_action_queue_path: Path | str | None, release_audio_quality_action_queue_verification_report_path: Path | str | None, require_release_audio_quality_action_queue_signoff: bool, release_audio_quality_action_queue_signoff_archive_path: Path | str | None, release_audio_quality_action_queue_signoff_verification_report_path: Path | str | None, require_release_audio_command_center: bool, release_audio_command_center_path: Path | str | None, release_audio_command_center_verification_report_path: Path | str | None, require_unified_command_center: bool, unified_command_center_path: Path | str | None, unified_command_center_verification_report_path: Path | str | None, require_unified_command_center_archive: bool, unified_command_center_archive_path: Path | str | None, unified_command_center_archive_verification_report_path: Path | str | None, require_unified_command_center_handoff: bool, unified_command_center_handoff_path: Path | str | None, unified_command_center_handoff_verification_report_path: Path | str | None, require_unified_command_center_continuous_review: bool, unified_command_center_continuous_review_path: Path | str | None, unified_command_center_continuous_review_verification_report_path: Path | str | None, require_unified_command_center_drift_response: bool, unified_command_center_drift_response_path: Path | str | None, unified_command_center_drift_response_verification_report_path: Path | str | None, unified_command_center_drift_source_review_path: Path | str | None, unified_command_center_drift_source_review_verification_report_path: Path | str | None, unified_command_center_drift_recheck_review_path: Path | str | None, unified_command_center_drift_recheck_review_verification_report_path: Path | str | None, unified_command_center_drift_change_request_binding_report_path: Path | str | None, require_unified_command_center_evidence_review: bool, unified_command_center_evidence_review_path: Path | str | None, unified_command_center_evidence_review_verification_report_path: Path | str | None, require_unified_command_center_evidence_review_accepted: bool, unified_command_center_evidence_review_acceptance_path: Path | str | None, unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None, unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None, require_unified_command_center_reviewer_decision_board: bool, unified_command_center_reviewer_decision_board_path: Path | str | None, unified_command_center_reviewer_decision_board_verification_report_path: Path | str | None, require_unified_command_center_reviewer_decision_board_signed: bool, require_unified_command_center_reviewer_decision_board_quorum: bool, unified_command_center_reviewer_decision_board_evidence_review_path: Path | str | None, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path: Path | str | None, unified_command_center_reviewer_decision_board_accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, require_unified_release_program_handoff: bool, unified_release_program_handoff_path: Path | str | None, unified_release_program_handoff_verification_report_path: Path | str | None, unified_release_program_handoff_external_evidence_manifest_path: Path | str | None, unified_release_program_handoff_signoff_binding_path: Path | str | None, require_unified_release_program_vault: bool, unified_release_program_vault_path: Path | str | None, unified_release_program_vault_verification_report_path: Path | str | None, unified_release_program_vault_anchor_path: Path | str | None, require_unified_release_program_vault_operations: bool, unified_release_program_vault_operations_path: Path | str | None, unified_release_program_vault_operations_verification_report_path: Path | str | None, unified_release_program_vault_operations_signoff_binding_path: Path | str | None, require_unified_release_program_continuity: bool, unified_release_program_continuity_path: Path | str | None, unified_release_program_continuity_verification_report_path: Path | str | None, unified_release_program_continuity_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_kit: bool, unified_release_program_continuity_kit_path: Path | str | None, unified_release_program_continuity_kit_verification_report_path: Path | str | None, unified_release_program_continuity_kit_receiver_receipt_path: Path | str | None, require_unified_release_program_continuity_acceptance: bool, unified_release_program_continuity_acceptance_path: Path | str | None, unified_release_program_continuity_acceptance_verification_report_path: Path | str | None, unified_release_program_continuity_acceptance_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_command_center: bool, unified_release_program_continuity_command_center_path: Path | str | None, unified_release_program_continuity_command_center_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None, require_unified_release_program_continuity_command_center_signoff: bool, unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None, unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_command_center_acceptance: bool, unified_release_program_continuity_command_center_acceptance_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_signoff_binding_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_review_pack_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None, unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None, require_unified_release_program_continuity_command_center_acceptance_change_control: bool, unified_release_program_continuity_command_center_acceptance_change_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_change_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_previous_root: Path | str | None, unified_release_program_continuity_command_center_final_handoff_path: Path | str | None, unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None, unified_command_center_signoff_binding_path: Path | str | None, unified_release_path: Path | str | None, unified_release_verification_report_path: Path | str | None, unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_submission_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_release_operations_path: Path | str | None, unified_release_operations_verification_report_path: Path | str | None, unified_trust_operations_hub_path: Path | str | None, unified_trust_operations_hub_verification_report_path: Path | str | None, unified_public_trust_center_path: Path | str | None, unified_public_trust_center_verification_report_path: Path | str | None, unified_maintenance_backup_path: Path | str | None, unified_maintenance_backup_verification_report_path: Path | str | None, require_no_critical_audio_quality_risk: bool, final_handoff_package_path: Path | str | None, final_handoff_verification_report_path: Path | str | None, release_check_latest_report_path: Path | str | None, release_check_ga_report_path: Path | str | None, _split_state):
+    _split_state['verification_inputs'] = locals().copy()
+    _split_state['target'] = Path(report_path)
+    _split_state['checks']: list[dict[str, Any]] = []
     try:
-        report = read_json(target)
+        _split_state['report'] = read_json(_split_state['target'])
     except Exception as exc:
-        report = {}
-        _add_check(checks, "ga_readiness_report_readable", "failed", "blocking", f"GA readiness report could not be read: {exc}")
+        _split_state['report'] = {}
+        _add_check(_split_state['checks'], 'ga_readiness_report_readable', 'failed', 'blocking', f'GA readiness report could not be read: {exc}')
+    return (False, None)
 
-    if report:
-        _add_check(
-            checks,
-            "ga_readiness_package_type",
-            "passed" if report.get("package_type") == GA_READINESS_PACKAGE_TYPE else "failed",
-            "blocking",
-            "GA readiness report package type is valid." if report.get("package_type") == GA_READINESS_PACKAGE_TYPE else "GA readiness report package type is invalid.",
-        )
-        _add_check(
-            checks,
-            "ga_readiness_schema_version",
-            "passed" if report.get("schema_version") == GA_READINESS_SCHEMA_VERSION else "failed",
-            "blocking",
-            "GA readiness report schema version is supported." if report.get("schema_version") == GA_READINESS_SCHEMA_VERSION else "GA readiness report schema version is unsupported.",
-        )
-        _add_check(
-            checks,
-            "ga_readiness_integrity",
-            "passed" if ga_readiness_integrity_ok(report) else "failed",
-            "blocking",
-            "GA readiness report integrity hash matches." if ga_readiness_integrity_ok(report) else "GA readiness report integrity hash mismatch.",
-        )
-        status = str(report.get("status") or "unknown")
-        allowed_statuses = {"ready", "warning"} if not strict else {"ready"}
-        status_severity = "blocking" if status == "blocked" or strict or require_ready else "warning"
-        _add_check(
-            checks,
-            "ga_readiness_status_allowed",
-            "passed" if status in allowed_statuses else "failed",
-            status_severity,
-            f"GA readiness status is {status}.",
-            {"status": status, "allowed": sorted(allowed_statuses)},
-        )
+def _verify_ga_readiness_report_part_02(report_path: Path | str, strict: bool, policy: str | None, evidence_manifest_path: Path | str | None, require_ready: bool, require_manual_acceptance: bool, require_audio_campaign: bool, require_audio_campaign_remediation: bool, require_release_audio_certification: bool, require_release_audio_timeline: bool, require_release_audio_regression_guard: bool, require_release_audio_baseline_governance: bool, require_release_audio_regression_response: bool, require_release_audio_quality_observatory: bool, require_release_audio_quality_action_queue: bool, require_final_readiness: bool, manual_acceptance_report_path: Path | str | None, audio_campaign_archive_path: Path | str | None, audio_campaign_archive_verification_report_path: Path | str | None, audio_campaign_remediation_path: Path | str | None, audio_campaign_remediation_verification_report_path: Path | str | None, release_audio_certification_path: Path | str | None, release_audio_certification_verification_report_path: Path | str | None, release_audio_timeline_path: Path | str | None, release_audio_timeline_verification_report_path: Path | str | None, release_audio_regression_path: Path | str | None, release_audio_regression_verification_report_path: Path | str | None, release_audio_regression_baseline_timeline_path: Path | str | None, release_audio_regression_baseline_timeline_verification_report_path: Path | str | None, release_audio_regression_baseline_certification_path: Path | str | None, release_audio_regression_baseline_certification_verification_report_path: Path | str | None, release_audio_regression_current_timeline_path: Path | str | None, release_audio_regression_current_timeline_verification_report_path: Path | str | None, release_audio_regression_current_certification_path: Path | str | None, release_audio_regression_current_certification_verification_report_path: Path | str | None, release_audio_baseline_registry_path: Path | str | None, release_audio_baseline_registry_verification_report_path: Path | str | None, release_audio_regression_response_path: Path | str | None, release_audio_regression_response_verification_report_path: Path | str | None, release_audio_quality_observatory_path: Path | str | None, release_audio_quality_observatory_verification_report_path: Path | str | None, release_audio_quality_observatory_evidence_root: Path | str | None, release_audio_quality_action_queue_path: Path | str | None, release_audio_quality_action_queue_verification_report_path: Path | str | None, require_release_audio_quality_action_queue_signoff: bool, release_audio_quality_action_queue_signoff_archive_path: Path | str | None, release_audio_quality_action_queue_signoff_verification_report_path: Path | str | None, require_release_audio_command_center: bool, release_audio_command_center_path: Path | str | None, release_audio_command_center_verification_report_path: Path | str | None, require_unified_command_center: bool, unified_command_center_path: Path | str | None, unified_command_center_verification_report_path: Path | str | None, require_unified_command_center_archive: bool, unified_command_center_archive_path: Path | str | None, unified_command_center_archive_verification_report_path: Path | str | None, require_unified_command_center_handoff: bool, unified_command_center_handoff_path: Path | str | None, unified_command_center_handoff_verification_report_path: Path | str | None, require_unified_command_center_continuous_review: bool, unified_command_center_continuous_review_path: Path | str | None, unified_command_center_continuous_review_verification_report_path: Path | str | None, require_unified_command_center_drift_response: bool, unified_command_center_drift_response_path: Path | str | None, unified_command_center_drift_response_verification_report_path: Path | str | None, unified_command_center_drift_source_review_path: Path | str | None, unified_command_center_drift_source_review_verification_report_path: Path | str | None, unified_command_center_drift_recheck_review_path: Path | str | None, unified_command_center_drift_recheck_review_verification_report_path: Path | str | None, unified_command_center_drift_change_request_binding_report_path: Path | str | None, require_unified_command_center_evidence_review: bool, unified_command_center_evidence_review_path: Path | str | None, unified_command_center_evidence_review_verification_report_path: Path | str | None, require_unified_command_center_evidence_review_accepted: bool, unified_command_center_evidence_review_acceptance_path: Path | str | None, unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None, unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None, require_unified_command_center_reviewer_decision_board: bool, unified_command_center_reviewer_decision_board_path: Path | str | None, unified_command_center_reviewer_decision_board_verification_report_path: Path | str | None, require_unified_command_center_reviewer_decision_board_signed: bool, require_unified_command_center_reviewer_decision_board_quorum: bool, unified_command_center_reviewer_decision_board_evidence_review_path: Path | str | None, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path: Path | str | None, unified_command_center_reviewer_decision_board_accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, require_unified_release_program_handoff: bool, unified_release_program_handoff_path: Path | str | None, unified_release_program_handoff_verification_report_path: Path | str | None, unified_release_program_handoff_external_evidence_manifest_path: Path | str | None, unified_release_program_handoff_signoff_binding_path: Path | str | None, require_unified_release_program_vault: bool, unified_release_program_vault_path: Path | str | None, unified_release_program_vault_verification_report_path: Path | str | None, unified_release_program_vault_anchor_path: Path | str | None, require_unified_release_program_vault_operations: bool, unified_release_program_vault_operations_path: Path | str | None, unified_release_program_vault_operations_verification_report_path: Path | str | None, unified_release_program_vault_operations_signoff_binding_path: Path | str | None, require_unified_release_program_continuity: bool, unified_release_program_continuity_path: Path | str | None, unified_release_program_continuity_verification_report_path: Path | str | None, unified_release_program_continuity_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_kit: bool, unified_release_program_continuity_kit_path: Path | str | None, unified_release_program_continuity_kit_verification_report_path: Path | str | None, unified_release_program_continuity_kit_receiver_receipt_path: Path | str | None, require_unified_release_program_continuity_acceptance: bool, unified_release_program_continuity_acceptance_path: Path | str | None, unified_release_program_continuity_acceptance_verification_report_path: Path | str | None, unified_release_program_continuity_acceptance_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_command_center: bool, unified_release_program_continuity_command_center_path: Path | str | None, unified_release_program_continuity_command_center_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None, require_unified_release_program_continuity_command_center_signoff: bool, unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None, unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_command_center_acceptance: bool, unified_release_program_continuity_command_center_acceptance_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_signoff_binding_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_review_pack_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None, unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None, require_unified_release_program_continuity_command_center_acceptance_change_control: bool, unified_release_program_continuity_command_center_acceptance_change_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_change_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_previous_root: Path | str | None, unified_release_program_continuity_command_center_final_handoff_path: Path | str | None, unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None, unified_command_center_signoff_binding_path: Path | str | None, unified_release_path: Path | str | None, unified_release_verification_report_path: Path | str | None, unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_submission_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_release_operations_path: Path | str | None, unified_release_operations_verification_report_path: Path | str | None, unified_trust_operations_hub_path: Path | str | None, unified_trust_operations_hub_verification_report_path: Path | str | None, unified_public_trust_center_path: Path | str | None, unified_public_trust_center_verification_report_path: Path | str | None, unified_maintenance_backup_path: Path | str | None, unified_maintenance_backup_verification_report_path: Path | str | None, require_no_critical_audio_quality_risk: bool, final_handoff_package_path: Path | str | None, final_handoff_verification_report_path: Path | str | None, release_check_latest_report_path: Path | str | None, release_check_ga_report_path: Path | str | None, _split_state):
+    if _split_state['report']:
+        _add_check(_split_state['checks'], 'ga_readiness_package_type', 'passed' if _split_state['report'].get('package_type') == GA_READINESS_PACKAGE_TYPE else 'failed', 'blocking', 'GA readiness report package type is valid.' if _split_state['report'].get('package_type') == GA_READINESS_PACKAGE_TYPE else 'GA readiness report package type is invalid.')
+        _add_check(_split_state['checks'], 'ga_readiness_schema_version', 'passed' if _split_state['report'].get('schema_version') == GA_READINESS_SCHEMA_VERSION else 'failed', 'blocking', 'GA readiness report schema version is supported.' if _split_state['report'].get('schema_version') == GA_READINESS_SCHEMA_VERSION else 'GA readiness report schema version is unsupported.')
+        _add_check(_split_state['checks'], 'ga_readiness_integrity', 'passed' if ga_readiness_integrity_ok(_split_state['report']) else 'failed', 'blocking', 'GA readiness report integrity hash matches.' if ga_readiness_integrity_ok(_split_state['report']) else 'GA readiness report integrity hash mismatch.')
+        status = str(_split_state['report'].get('status') or 'unknown')
+        allowed_statuses = {'ready', 'warning'} if not strict else {'ready'}
+        status_severity = 'blocking' if status == 'blocked' or strict or require_ready else 'warning'
+        _add_check(_split_state['checks'], 'ga_readiness_status_allowed', 'passed' if status in allowed_statuses else 'failed', status_severity, f'GA readiness status is {status}.', {'status': status, 'allowed': sorted(allowed_statuses)})
         if require_ready:
-            _add_check(
-                checks,
-                "ga_readiness_require_ready",
-                "passed" if status == "ready" else "failed",
-                "blocking",
-                "GA readiness is ready." if status == "ready" else "GA readiness is not ready.",
-            )
-        _add_check(
-            checks,
-            "ga_readiness_redaction",
-            "passed" if not _SENSITIVE_RE.search(json.dumps(report, ensure_ascii=False)) else "failed",
-            "blocking",
-            "GA readiness report contains no obvious token strings." if not _SENSITIVE_RE.search(json.dumps(report, ensure_ascii=False)) else "GA readiness report contains a token-like string.",
-        )
-        checks_by_id = {str(item.get("check_id")): item for item in report.get("checks", []) if isinstance(item, dict)}
-        _verify_evidence_policy(
-            checks,
-            report,
-            checks_by_id.get("ga.evidence_policy", {}),
-            policy=policy,
-            evidence_manifest_path=evidence_manifest_path,
-        )
+            _add_check(_split_state['checks'], 'ga_readiness_require_ready', 'passed' if status == 'ready' else 'failed', 'blocking', 'GA readiness is ready.' if status == 'ready' else 'GA readiness is not ready.')
+        _add_check(_split_state['checks'], 'ga_readiness_redaction', 'passed' if not _SENSITIVE_RE.search(json.dumps(_split_state['report'], ensure_ascii=False)) else 'failed', 'blocking', 'GA readiness report contains no obvious token strings.' if not _SENSITIVE_RE.search(json.dumps(_split_state['report'], ensure_ascii=False)) else 'GA readiness report contains a token-like string.')
+        checks_by_id = {str(item.get('check_id')): item for item in _split_state['report'].get('checks', []) if isinstance(item, dict)}
+        _verify_evidence_policy(_split_state['checks'], _split_state['report'], checks_by_id.get('ga.evidence_policy', {}), policy=policy, evidence_manifest_path=evidence_manifest_path)
         if require_manual_acceptance:
-            _verify_manual_acceptance_evidence(checks, checks_by_id.get("ga.acceptance_manual", {}), manual_acceptance_report_path)
+            _verify_manual_acceptance_evidence(_split_state['checks'], checks_by_id.get('ga.acceptance_manual', {}), manual_acceptance_report_path)
         if require_audio_campaign:
-            _verify_audio_campaign_evidence(
-                checks,
-                checks_by_id.get("ga.audio_campaign", {}),
-                audio_campaign_archive_path,
-                audio_campaign_archive_verification_report_path,
-            )
+            _verify_audio_campaign_evidence(_split_state['checks'], checks_by_id.get('ga.audio_campaign', {}), audio_campaign_archive_path, audio_campaign_archive_verification_report_path)
         if require_audio_campaign_remediation:
-            _verify_audio_campaign_remediation_evidence(
-                checks,
-                checks_by_id.get("ga.audio_campaign_remediation", {}),
-                audio_campaign_remediation_path,
-                audio_campaign_remediation_verification_report_path,
-            )
+            _verify_audio_campaign_remediation_evidence(_split_state['checks'], checks_by_id.get('ga.audio_campaign_remediation', {}), audio_campaign_remediation_path, audio_campaign_remediation_verification_report_path)
         if require_release_audio_certification:
-            _verify_release_audio_certification_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_certification", {}),
-                release_audio_certification_path,
-                release_audio_certification_verification_report_path,
-            )
+            _verify_release_audio_certification_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_certification', {}), release_audio_certification_path, release_audio_certification_verification_report_path)
         if require_release_audio_timeline:
-            _verify_release_audio_timeline_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_timeline", {}),
-                release_audio_timeline_path,
-                release_audio_timeline_verification_report_path,
-                release_audio_certification_path,
-                release_audio_certification_verification_report_path,
-            )
+            _verify_release_audio_timeline_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_timeline', {}), release_audio_timeline_path, release_audio_timeline_verification_report_path, release_audio_certification_path, release_audio_certification_verification_report_path)
         if require_release_audio_regression_guard:
-            _verify_release_audio_regression_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_regression_guard", {}),
-                release_audio_regression_path,
-                release_audio_regression_verification_report_path,
-                release_audio_regression_baseline_timeline_path,
-                release_audio_regression_baseline_timeline_verification_report_path,
-                release_audio_regression_baseline_certification_path,
-                release_audio_regression_baseline_certification_verification_report_path,
-                release_audio_regression_current_timeline_path or release_audio_timeline_path,
-                release_audio_regression_current_timeline_verification_report_path or release_audio_timeline_verification_report_path,
-                release_audio_regression_current_certification_path or release_audio_certification_path,
-                release_audio_regression_current_certification_verification_report_path or release_audio_certification_verification_report_path,
-            )
+            _verify_release_audio_regression_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_regression_guard', {}), release_audio_regression_path, release_audio_regression_verification_report_path, release_audio_regression_baseline_timeline_path, release_audio_regression_baseline_timeline_verification_report_path, release_audio_regression_baseline_certification_path, release_audio_regression_baseline_certification_verification_report_path, release_audio_regression_current_timeline_path or release_audio_timeline_path, release_audio_regression_current_timeline_verification_report_path or release_audio_timeline_verification_report_path, release_audio_regression_current_certification_path or release_audio_certification_path, release_audio_regression_current_certification_verification_report_path or release_audio_certification_verification_report_path)
         if require_release_audio_baseline_governance:
-            _verify_release_audio_baseline_governance_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_baseline_governance", {}),
-                release_audio_baseline_registry_path,
-                release_audio_baseline_registry_verification_report_path,
-            )
+            _verify_release_audio_baseline_governance_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_baseline_governance', {}), release_audio_baseline_registry_path, release_audio_baseline_registry_verification_report_path)
         if require_release_audio_regression_response:
-            _verify_release_audio_regression_response_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_regression_response", {}),
-                release_audio_regression_response_path,
-                release_audio_regression_response_verification_report_path,
-                release_audio_regression_path,
-                release_audio_regression_verification_report_path,
-                release_audio_regression_baseline_timeline_path,
-                release_audio_regression_baseline_timeline_verification_report_path,
-                release_audio_regression_baseline_certification_path,
-                release_audio_regression_baseline_certification_verification_report_path,
-                release_audio_regression_current_timeline_path or release_audio_timeline_path,
-                release_audio_regression_current_timeline_verification_report_path or release_audio_timeline_verification_report_path,
-                release_audio_regression_current_certification_path or release_audio_certification_path,
-                release_audio_regression_current_certification_verification_report_path or release_audio_certification_verification_report_path,
-            )
+            _verify_release_audio_regression_response_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_regression_response', {}), release_audio_regression_response_path, release_audio_regression_response_verification_report_path, release_audio_regression_path, release_audio_regression_verification_report_path, release_audio_regression_baseline_timeline_path, release_audio_regression_baseline_timeline_verification_report_path, release_audio_regression_baseline_certification_path, release_audio_regression_baseline_certification_verification_report_path, release_audio_regression_current_timeline_path or release_audio_timeline_path, release_audio_regression_current_timeline_verification_report_path or release_audio_timeline_verification_report_path, release_audio_regression_current_certification_path or release_audio_certification_path, release_audio_regression_current_certification_verification_report_path or release_audio_certification_verification_report_path)
         if require_release_audio_quality_observatory:
-            _verify_release_audio_quality_observatory_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_quality_observatory", {}),
-                release_audio_quality_observatory_path,
-                release_audio_quality_observatory_verification_report_path,
-                release_audio_quality_observatory_evidence_root,
-                require_no_critical_audio_quality_risk=require_no_critical_audio_quality_risk or require_release_audio_quality_observatory,
-            )
+            _verify_release_audio_quality_observatory_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_quality_observatory', {}), release_audio_quality_observatory_path, release_audio_quality_observatory_verification_report_path, release_audio_quality_observatory_evidence_root, require_no_critical_audio_quality_risk=require_no_critical_audio_quality_risk or require_release_audio_quality_observatory)
         if require_release_audio_quality_action_queue:
-            _verify_release_audio_quality_action_queue_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_quality_action_queue", {}),
-                release_audio_quality_action_queue_path,
-                release_audio_quality_action_queue_verification_report_path,
-                release_audio_quality_observatory_path,
-                release_audio_quality_observatory_verification_report_path,
-                release_audio_quality_observatory_evidence_root,
-            )
+            _verify_release_audio_quality_action_queue_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_quality_action_queue', {}), release_audio_quality_action_queue_path, release_audio_quality_action_queue_verification_report_path, release_audio_quality_observatory_path, release_audio_quality_observatory_verification_report_path, release_audio_quality_observatory_evidence_root)
         if require_release_audio_quality_action_queue_signoff:
-            _verify_release_audio_quality_action_queue_signoff_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_quality_action_queue_signoff", {}),
-                release_audio_quality_action_queue_signoff_archive_path,
-                release_audio_quality_action_queue_signoff_verification_report_path,
-                release_audio_quality_action_queue_path,
-                release_audio_quality_action_queue_verification_report_path,
-                release_audio_quality_observatory_path,
-                release_audio_quality_observatory_verification_report_path,
-                release_audio_quality_observatory_evidence_root,
-            )
+            _verify_release_audio_quality_action_queue_signoff_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_quality_action_queue_signoff', {}), release_audio_quality_action_queue_signoff_archive_path, release_audio_quality_action_queue_signoff_verification_report_path, release_audio_quality_action_queue_path, release_audio_quality_action_queue_verification_report_path, release_audio_quality_observatory_path, release_audio_quality_observatory_verification_report_path, release_audio_quality_observatory_evidence_root)
         if require_release_audio_command_center:
-            _verify_release_audio_command_center_evidence(
-                checks,
-                checks_by_id.get("ga.release_audio_command_center", {}),
-                release_audio_command_center_path,
-                release_audio_command_center_verification_report_path,
-                release_audio_certification_path,
-                release_audio_certification_verification_report_path,
-                release_audio_timeline_path,
-                release_audio_timeline_verification_report_path,
-                release_audio_regression_path,
-                release_audio_regression_verification_report_path,
-                release_audio_baseline_registry_path,
-                release_audio_baseline_registry_verification_report_path,
-                release_audio_regression_response_path,
-                release_audio_regression_response_verification_report_path,
-                release_audio_quality_observatory_path,
-                release_audio_quality_observatory_verification_report_path,
-                release_audio_quality_action_queue_path,
-                release_audio_quality_action_queue_verification_report_path,
-                release_audio_quality_action_queue_signoff_archive_path,
-                release_audio_quality_action_queue_signoff_verification_report_path,
-                release_audio_quality_observatory_evidence_root,
-            )
+            _verify_release_audio_command_center_evidence(_split_state['checks'], checks_by_id.get('ga.release_audio_command_center', {}), release_audio_command_center_path, release_audio_command_center_verification_report_path, release_audio_certification_path, release_audio_certification_verification_report_path, release_audio_timeline_path, release_audio_timeline_verification_report_path, release_audio_regression_path, release_audio_regression_verification_report_path, release_audio_baseline_registry_path, release_audio_baseline_registry_verification_report_path, release_audio_regression_response_path, release_audio_regression_response_verification_report_path, release_audio_quality_observatory_path, release_audio_quality_observatory_verification_report_path, release_audio_quality_action_queue_path, release_audio_quality_action_queue_verification_report_path, release_audio_quality_action_queue_signoff_archive_path, release_audio_quality_action_queue_signoff_verification_report_path, release_audio_quality_observatory_evidence_root)
         if require_unified_command_center:
-            _verify_unified_command_center_evidence(
-                checks,
-                checks_by_id.get("ga.unified_command_center", {}),
-                unified_command_center_path,
-                unified_command_center_verification_report_path,
-                unified_release_path,
-                unified_release_verification_report_path,
-                release_audio_command_center_path,
-                release_audio_command_center_verification_report_path,
-                unified_distribution_paths,
-                unified_distribution_verification_report_paths,
-                unified_submission_paths,
-                unified_submission_verification_report_paths,
-                unified_release_operations_path,
-                unified_release_operations_verification_report_path,
-                unified_trust_operations_hub_path,
-                unified_trust_operations_hub_verification_report_path,
-                unified_public_trust_center_path,
-                unified_public_trust_center_verification_report_path,
-                unified_maintenance_backup_path,
-                unified_maintenance_backup_verification_report_path,
-            )
+            _verify_unified_command_center_evidence(_split_state['checks'], checks_by_id.get('ga.unified_command_center', {}), unified_command_center_path, unified_command_center_verification_report_path, unified_release_path, unified_release_verification_report_path, release_audio_command_center_path, release_audio_command_center_verification_report_path, unified_distribution_paths, unified_distribution_verification_report_paths, unified_submission_paths, unified_submission_verification_report_paths, unified_release_operations_path, unified_release_operations_verification_report_path, unified_trust_operations_hub_path, unified_trust_operations_hub_verification_report_path, unified_public_trust_center_path, unified_public_trust_center_verification_report_path, unified_maintenance_backup_path, unified_maintenance_backup_verification_report_path)
         if require_unified_command_center_archive:
-            _verify_unified_command_center_archive_evidence(
-                checks,
-                checks_by_id.get("ga.unified_command_center_archive", {}),
-                unified_command_center_archive_path,
-                unified_command_center_archive_verification_report_path,
-                unified_command_center_path,
-                unified_command_center_verification_report_path,
-            )
+            _verify_unified_command_center_archive_evidence(_split_state['checks'], checks_by_id.get('ga.unified_command_center_archive', {}), unified_command_center_archive_path, unified_command_center_archive_verification_report_path, unified_command_center_path, unified_command_center_verification_report_path)
         if require_unified_command_center_handoff:
-            _verify_unified_command_center_handoff_evidence(
-                checks,
-                checks_by_id.get("ga.unified_command_center_handoff", {}),
-                unified_command_center_handoff_path,
-                unified_command_center_handoff_verification_report_path,
-                unified_command_center_archive_path,
-                unified_command_center_archive_verification_report_path,
-            )
+            _verify_unified_command_center_handoff_evidence(_split_state['checks'], checks_by_id.get('ga.unified_command_center_handoff', {}), unified_command_center_handoff_path, unified_command_center_handoff_verification_report_path, unified_command_center_archive_path, unified_command_center_archive_verification_report_path)
         if require_unified_command_center_continuous_review:
-            _verify_unified_command_center_continuous_review_evidence(
-                checks,
-                checks_by_id.get("ga.unified_command_center_continuous_review", {}),
-                unified_command_center_continuous_review_path,
-                unified_command_center_continuous_review_verification_report_path,
-                unified_command_center_archive_path,
-                unified_command_center_archive_verification_report_path,
-                unified_command_center_handoff_path,
-                unified_command_center_handoff_verification_report_path,
-                unified_command_center_path,
-                unified_command_center_verification_report_path,
-            )
+            _verify_unified_command_center_continuous_review_evidence(_split_state['checks'], checks_by_id.get('ga.unified_command_center_continuous_review', {}), unified_command_center_continuous_review_path, unified_command_center_continuous_review_verification_report_path, unified_command_center_archive_path, unified_command_center_archive_verification_report_path, unified_command_center_handoff_path, unified_command_center_handoff_verification_report_path, unified_command_center_path, unified_command_center_verification_report_path)
         if require_unified_command_center_drift_response:
-            _verify_unified_command_center_drift_response_evidence(
-                checks,
-                checks_by_id.get("ga.unified_command_center_drift_response", {}),
-                unified_command_center_drift_response_path,
-                unified_command_center_drift_response_verification_report_path,
-                unified_command_center_drift_source_review_path,
-                unified_command_center_drift_source_review_verification_report_path,
-                unified_command_center_drift_recheck_review_path,
-                unified_command_center_drift_recheck_review_verification_report_path,
-                unified_command_center_drift_change_request_binding_report_path,
-                unified_command_center_signoff_binding_path,
-                unified_command_center_archive_path,
-                unified_command_center_archive_verification_report_path,
-                unified_command_center_handoff_path,
-                unified_command_center_handoff_verification_report_path,
-                unified_command_center_path,
-                unified_command_center_verification_report_path,
-            )
+            _verify_unified_command_center_drift_response_evidence(_split_state['checks'], checks_by_id.get('ga.unified_command_center_drift_response', {}), unified_command_center_drift_response_path, unified_command_center_drift_response_verification_report_path, unified_command_center_drift_source_review_path, unified_command_center_drift_source_review_verification_report_path, unified_command_center_drift_recheck_review_path, unified_command_center_drift_recheck_review_verification_report_path, unified_command_center_drift_change_request_binding_report_path, unified_command_center_signoff_binding_path, unified_command_center_archive_path, unified_command_center_archive_verification_report_path, unified_command_center_handoff_path, unified_command_center_handoff_verification_report_path, unified_command_center_path, unified_command_center_verification_report_path)
         if require_unified_command_center_evidence_review:
-            _verify_unified_command_center_evidence_review_evidence(
-                checks,
-                checks_by_id.get("ga.unified_command_center_evidence_review", {}),
-                unified_command_center_evidence_review_path,
-                unified_command_center_evidence_review_verification_report_path,
-                require_unified_command_center_evidence_review_accepted,
-                unified_command_center_evidence_review_acceptance_path,
-                unified_command_center_evidence_review_acceptance_verification_report_path,
-                unified_command_center_evidence_review_acceptance_response_verification_report_path,
-                unified_command_center_path,
-                unified_command_center_verification_report_path,
-                unified_command_center_archive_path,
-                unified_command_center_archive_verification_report_path,
-                unified_command_center_handoff_path,
-                unified_command_center_handoff_verification_report_path,
-                unified_command_center_continuous_review_path,
-                unified_command_center_continuous_review_verification_report_path,
-                unified_command_center_drift_response_path,
-                unified_command_center_drift_response_verification_report_path,
-                unified_command_center_drift_source_review_path,
-                unified_command_center_drift_source_review_verification_report_path,
-                unified_command_center_drift_recheck_review_path,
-                unified_command_center_drift_recheck_review_verification_report_path,
-                unified_command_center_drift_change_request_binding_report_path,
-                unified_command_center_signoff_binding_path,
-                release_check_latest_report_path or release_check_ga_report_path,
-            )
+            _verify_unified_command_center_evidence_review_evidence(_split_state['checks'], checks_by_id.get('ga.unified_command_center_evidence_review', {}), unified_command_center_evidence_review_path, unified_command_center_evidence_review_verification_report_path, require_unified_command_center_evidence_review_accepted, unified_command_center_evidence_review_acceptance_path, unified_command_center_evidence_review_acceptance_verification_report_path, unified_command_center_evidence_review_acceptance_response_verification_report_path, unified_command_center_path, unified_command_center_verification_report_path, unified_command_center_archive_path, unified_command_center_archive_verification_report_path, unified_command_center_handoff_path, unified_command_center_handoff_verification_report_path, unified_command_center_continuous_review_path, unified_command_center_continuous_review_verification_report_path, unified_command_center_drift_response_path, unified_command_center_drift_response_verification_report_path, unified_command_center_drift_source_review_path, unified_command_center_drift_source_review_verification_report_path, unified_command_center_drift_recheck_review_path, unified_command_center_drift_recheck_review_verification_report_path, unified_command_center_drift_change_request_binding_report_path, unified_command_center_signoff_binding_path, release_check_latest_report_path or release_check_ga_report_path)
         if require_unified_command_center_reviewer_decision_board:
-            _verify_unified_command_center_reviewer_decision_board_evidence(
-                checks,
-                checks_by_id.get("ga.unified_command_center_reviewer_decision_board", {}),
-                unified_command_center_reviewer_decision_board_path,
-                unified_command_center_reviewer_decision_board_verification_report_path,
-                require_unified_command_center_reviewer_decision_board_signed,
-                require_unified_command_center_reviewer_decision_board_quorum,
-                unified_command_center_reviewer_decision_board_evidence_review_path or unified_command_center_evidence_review_path,
-                unified_command_center_reviewer_decision_board_evidence_review_verification_report_path or unified_command_center_evidence_review_verification_report_path,
-                unified_command_center_reviewer_decision_board_accepted_evidence_paths,
-                unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths,
-                unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths,
-            )
+            _verify_unified_command_center_reviewer_decision_board_evidence(_split_state['checks'], checks_by_id.get('ga.unified_command_center_reviewer_decision_board', {}), unified_command_center_reviewer_decision_board_path, unified_command_center_reviewer_decision_board_verification_report_path, require_unified_command_center_reviewer_decision_board_signed, require_unified_command_center_reviewer_decision_board_quorum, unified_command_center_reviewer_decision_board_evidence_review_path or unified_command_center_evidence_review_path, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path or unified_command_center_evidence_review_verification_report_path, unified_command_center_reviewer_decision_board_accepted_evidence_paths, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths)
         if require_unified_release_program_handoff:
-            _verify_unified_release_program_handoff_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_handoff", {}),
-                unified_release_program_handoff_path,
-                unified_release_program_handoff_verification_report_path,
-                unified_release_program_handoff_external_evidence_manifest_path,
-                unified_release_program_handoff_signoff_binding_path,
-            )
+            _verify_unified_release_program_handoff_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_handoff', {}), unified_release_program_handoff_path, unified_release_program_handoff_verification_report_path, unified_release_program_handoff_external_evidence_manifest_path, unified_release_program_handoff_signoff_binding_path)
         if require_unified_release_program_vault:
-            _verify_unified_release_program_vault_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_vault", {}),
-                unified_release_program_vault_path,
-                unified_release_program_vault_verification_report_path,
-                unified_release_program_vault_anchor_path,
-            )
+            _verify_unified_release_program_vault_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_vault', {}), unified_release_program_vault_path, unified_release_program_vault_verification_report_path, unified_release_program_vault_anchor_path)
         if require_unified_release_program_vault_operations:
-            _verify_unified_release_program_vault_operations_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_vault_operations", {}),
-                unified_release_program_vault_operations_path,
-                unified_release_program_vault_operations_verification_report_path,
-                unified_release_program_vault_operations_signoff_binding_path,
-            )
+            _verify_unified_release_program_vault_operations_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_vault_operations', {}), unified_release_program_vault_operations_path, unified_release_program_vault_operations_verification_report_path, unified_release_program_vault_operations_signoff_binding_path)
         if require_unified_release_program_continuity:
-            _verify_unified_release_program_continuity_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_continuity", {}),
-                unified_release_program_continuity_path,
-                unified_release_program_continuity_verification_report_path,
-                unified_release_program_continuity_signoff_binding_path,
-                unified_release_program_vault_operations_path,
-                unified_release_program_vault_operations_verification_report_path,
-                unified_release_program_vault_operations_signoff_binding_path,
-            )
+            _verify_unified_release_program_continuity_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_continuity', {}), unified_release_program_continuity_path, unified_release_program_continuity_verification_report_path, unified_release_program_continuity_signoff_binding_path, unified_release_program_vault_operations_path, unified_release_program_vault_operations_verification_report_path, unified_release_program_vault_operations_signoff_binding_path)
         if require_unified_release_program_continuity_kit:
-            _verify_unified_release_program_continuity_kit_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_continuity_kit", {}),
-                unified_release_program_continuity_kit_path,
-                unified_release_program_continuity_kit_verification_report_path,
-                unified_release_program_continuity_kit_receiver_receipt_path,
-            )
+            _verify_unified_release_program_continuity_kit_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_continuity_kit', {}), unified_release_program_continuity_kit_path, unified_release_program_continuity_kit_verification_report_path, unified_release_program_continuity_kit_receiver_receipt_path)
         if require_unified_release_program_continuity_acceptance:
-            _verify_unified_release_program_continuity_acceptance_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_continuity_acceptance", {}),
-                unified_release_program_continuity_acceptance_path,
-                unified_release_program_continuity_acceptance_verification_report_path,
-                unified_release_program_continuity_acceptance_signoff_binding_path,
-                unified_release_program_continuity_kit_path,
-                unified_release_program_continuity_kit_verification_report_path,
-            )
+            _verify_unified_release_program_continuity_acceptance_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_continuity_acceptance', {}), unified_release_program_continuity_acceptance_path, unified_release_program_continuity_acceptance_verification_report_path, unified_release_program_continuity_acceptance_signoff_binding_path, unified_release_program_continuity_kit_path, unified_release_program_continuity_kit_verification_report_path)
         if require_unified_release_program_continuity_command_center:
-            _verify_unified_release_program_continuity_command_center_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_continuity_command_center", {}),
-                unified_release_program_continuity_command_center_path,
-                unified_release_program_continuity_command_center_verification_report_path,
-                unified_release_program_continuity_command_center_external_evidence_manifest_path,
-            )
+            _verify_unified_release_program_continuity_command_center_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_continuity_command_center', {}), unified_release_program_continuity_command_center_path, unified_release_program_continuity_command_center_verification_report_path, unified_release_program_continuity_command_center_external_evidence_manifest_path)
         if require_unified_release_program_continuity_command_center_signoff:
-            _verify_unified_release_program_continuity_command_center_signoff_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_continuity_command_center_signoff", {}),
-                unified_release_program_continuity_command_center_signoff_archive_path,
-                unified_release_program_continuity_command_center_signoff_verification_report_path,
-                unified_release_program_continuity_command_center_signoff_binding_path,
-                unified_release_program_continuity_command_center_path,
-                unified_release_program_continuity_command_center_verification_report_path,
-                unified_release_program_continuity_command_center_external_evidence_manifest_path,
-            )
-        if (
-            require_unified_release_program_continuity_command_center_acceptance
-            or require_unified_release_program_continuity_command_center_acceptance_change_control
-        ):
-            _verify_unified_release_program_continuity_command_center_acceptance_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_continuity_command_center_acceptance", {}),
-                unified_release_program_continuity_command_center_acceptance_path,
-                unified_release_program_continuity_command_center_acceptance_verification_report_path,
-                unified_release_program_continuity_command_center_acceptance_signoff_binding_path,
-                unified_release_program_continuity_command_center_acceptance_review_pack_path,
-                unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path,
-                unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir,
-                unified_release_program_continuity_command_center_acceptance_response_proof_dir,
-                unified_release_program_continuity_command_center_signoff_archive_path,
-                unified_release_program_continuity_command_center_signoff_verification_report_path,
-                unified_release_program_continuity_command_center_final_handoff_path,
-                unified_release_program_continuity_command_center_final_handoff_verification_report_path,
-                unified_release_program_continuity_command_center_signoff_binding_path,
-                unified_release_program_continuity_command_center_path,
-                unified_release_program_continuity_command_center_verification_report_path,
-                unified_release_program_continuity_command_center_external_evidence_manifest_path,
-            )
+            _verify_unified_release_program_continuity_command_center_signoff_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_continuity_command_center_signoff', {}), unified_release_program_continuity_command_center_signoff_archive_path, unified_release_program_continuity_command_center_signoff_verification_report_path, unified_release_program_continuity_command_center_signoff_binding_path, unified_release_program_continuity_command_center_path, unified_release_program_continuity_command_center_verification_report_path, unified_release_program_continuity_command_center_external_evidence_manifest_path)
+        if require_unified_release_program_continuity_command_center_acceptance or require_unified_release_program_continuity_command_center_acceptance_change_control:
+            _verify_unified_release_program_continuity_command_center_acceptance_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_continuity_command_center_acceptance', {}), unified_release_program_continuity_command_center_acceptance_path, unified_release_program_continuity_command_center_acceptance_verification_report_path, unified_release_program_continuity_command_center_acceptance_signoff_binding_path, unified_release_program_continuity_command_center_acceptance_review_pack_path, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir, unified_release_program_continuity_command_center_acceptance_response_proof_dir, unified_release_program_continuity_command_center_signoff_archive_path, unified_release_program_continuity_command_center_signoff_verification_report_path, unified_release_program_continuity_command_center_final_handoff_path, unified_release_program_continuity_command_center_final_handoff_verification_report_path, unified_release_program_continuity_command_center_signoff_binding_path, unified_release_program_continuity_command_center_path, unified_release_program_continuity_command_center_verification_report_path, unified_release_program_continuity_command_center_external_evidence_manifest_path)
         if require_unified_release_program_continuity_command_center_acceptance_change_control:
-            _verify_unified_release_program_continuity_command_center_acceptance_change_evidence(
-                checks,
-                checks_by_id.get("ga.unified_release_program_continuity_command_center_acceptance_change_control", {}),
-                unified_release_program_continuity_command_center_acceptance_change_path,
-                unified_release_program_continuity_command_center_acceptance_change_verification_report_path,
-                unified_release_program_continuity_command_center_acceptance_path,
-                unified_release_program_continuity_command_center_acceptance_verification_report_path,
-                unified_release_program_continuity_command_center_acceptance_signoff_binding_path,
-                unified_release_program_continuity_command_center_acceptance_previous_root,
-            )
+            _verify_unified_release_program_continuity_command_center_acceptance_change_evidence(_split_state['checks'], checks_by_id.get('ga.unified_release_program_continuity_command_center_acceptance_change_control', {}), unified_release_program_continuity_command_center_acceptance_change_path, unified_release_program_continuity_command_center_acceptance_change_verification_report_path, unified_release_program_continuity_command_center_acceptance_path, unified_release_program_continuity_command_center_acceptance_verification_report_path, unified_release_program_continuity_command_center_acceptance_signoff_binding_path, unified_release_program_continuity_command_center_acceptance_previous_root)
         if require_final_readiness:
-            _verify_final_readiness_evidence(
-                checks,
-                checks_by_id.get("ga.trust_final_readiness", {}),
-                final_handoff_package_path,
-                final_handoff_verification_report_path,
-            )
+            _verify_final_readiness_evidence(_split_state['checks'], checks_by_id.get('ga.trust_final_readiness', {}), final_handoff_package_path, final_handoff_verification_report_path)
+    return (False, None)
 
-    legacy_summary = report.get("legacy_require_summary") if isinstance(report.get("legacy_require_summary"), dict) else {}
-    if legacy_summary.get("status") == "converted":
-        require_payload = normalized_legacy_require_payload({
-            key: value for key, value in verification_inputs.items() if key.startswith("require_")
-        })
-        policy_id = canonical_ga_policy_id(str(legacy_summary.get("policy_id") or "") or None, require_payload)
-        reported_enabled = {
-            str(key) for key in legacy_summary.get("enabled", []) if isinstance(key, str)
-        }
-        verifier_requirements = {
-            key
-            for key, value in require_payload.items()
-            if key != "require_ready" and bool(value)
-        }
-        comparable_report_requirements = {
-            key for key in reported_enabled if key in verification_inputs
-        }
-        summary_matches = (
-            comparable_report_requirements.issubset(verifier_requirements)
-            and legacy_summary.get("policy_id") == policy_id
-        )
-        checks.append(
-            _check_result(
-                "ga_readiness_legacy_require_binding",
-                summary_matches,
-                "Legacy require flags match the GA Policy compatibility projection.",
-            )
-        )
-        policy_gate = evaluate_check_policy(policy_id, "ga-readiness-verifier", checks)
-        checks.append(
-            _check_result(
-                "ga_readiness_legacy_policy_status",
-                policy_gate.get("status") == "passed",
-                "Legacy verifier facts pass through the Policy Engine.",
-                {"policy_id": policy_id, "blockers": policy_gate.get("blockers", [])},
-            )
-        )
-        platform_check_ids = {
-            "ga_readiness_report_readable",
-            "ga_readiness_package_type",
-            "ga_readiness_schema_version",
-            "ga_readiness_integrity",
-            "ga_readiness_redaction",
-            "ga_readiness_status_allowed",
-            "ga_readiness_require_ready",
-            "ga_readiness_legacy_require_binding",
-            "ga_readiness_legacy_policy_status",
-        }
-        blockers = [
-            check
-            for check in checks
-            if check.get("check_id") in platform_check_ids
-            and check.get("status") == "failed"
-            and check.get("severity") == "blocking"
-        ]
+def _verify_ga_readiness_report_part_03(report_path: Path | str, strict: bool, policy: str | None, evidence_manifest_path: Path | str | None, require_ready: bool, require_manual_acceptance: bool, require_audio_campaign: bool, require_audio_campaign_remediation: bool, require_release_audio_certification: bool, require_release_audio_timeline: bool, require_release_audio_regression_guard: bool, require_release_audio_baseline_governance: bool, require_release_audio_regression_response: bool, require_release_audio_quality_observatory: bool, require_release_audio_quality_action_queue: bool, require_final_readiness: bool, manual_acceptance_report_path: Path | str | None, audio_campaign_archive_path: Path | str | None, audio_campaign_archive_verification_report_path: Path | str | None, audio_campaign_remediation_path: Path | str | None, audio_campaign_remediation_verification_report_path: Path | str | None, release_audio_certification_path: Path | str | None, release_audio_certification_verification_report_path: Path | str | None, release_audio_timeline_path: Path | str | None, release_audio_timeline_verification_report_path: Path | str | None, release_audio_regression_path: Path | str | None, release_audio_regression_verification_report_path: Path | str | None, release_audio_regression_baseline_timeline_path: Path | str | None, release_audio_regression_baseline_timeline_verification_report_path: Path | str | None, release_audio_regression_baseline_certification_path: Path | str | None, release_audio_regression_baseline_certification_verification_report_path: Path | str | None, release_audio_regression_current_timeline_path: Path | str | None, release_audio_regression_current_timeline_verification_report_path: Path | str | None, release_audio_regression_current_certification_path: Path | str | None, release_audio_regression_current_certification_verification_report_path: Path | str | None, release_audio_baseline_registry_path: Path | str | None, release_audio_baseline_registry_verification_report_path: Path | str | None, release_audio_regression_response_path: Path | str | None, release_audio_regression_response_verification_report_path: Path | str | None, release_audio_quality_observatory_path: Path | str | None, release_audio_quality_observatory_verification_report_path: Path | str | None, release_audio_quality_observatory_evidence_root: Path | str | None, release_audio_quality_action_queue_path: Path | str | None, release_audio_quality_action_queue_verification_report_path: Path | str | None, require_release_audio_quality_action_queue_signoff: bool, release_audio_quality_action_queue_signoff_archive_path: Path | str | None, release_audio_quality_action_queue_signoff_verification_report_path: Path | str | None, require_release_audio_command_center: bool, release_audio_command_center_path: Path | str | None, release_audio_command_center_verification_report_path: Path | str | None, require_unified_command_center: bool, unified_command_center_path: Path | str | None, unified_command_center_verification_report_path: Path | str | None, require_unified_command_center_archive: bool, unified_command_center_archive_path: Path | str | None, unified_command_center_archive_verification_report_path: Path | str | None, require_unified_command_center_handoff: bool, unified_command_center_handoff_path: Path | str | None, unified_command_center_handoff_verification_report_path: Path | str | None, require_unified_command_center_continuous_review: bool, unified_command_center_continuous_review_path: Path | str | None, unified_command_center_continuous_review_verification_report_path: Path | str | None, require_unified_command_center_drift_response: bool, unified_command_center_drift_response_path: Path | str | None, unified_command_center_drift_response_verification_report_path: Path | str | None, unified_command_center_drift_source_review_path: Path | str | None, unified_command_center_drift_source_review_verification_report_path: Path | str | None, unified_command_center_drift_recheck_review_path: Path | str | None, unified_command_center_drift_recheck_review_verification_report_path: Path | str | None, unified_command_center_drift_change_request_binding_report_path: Path | str | None, require_unified_command_center_evidence_review: bool, unified_command_center_evidence_review_path: Path | str | None, unified_command_center_evidence_review_verification_report_path: Path | str | None, require_unified_command_center_evidence_review_accepted: bool, unified_command_center_evidence_review_acceptance_path: Path | str | None, unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None, unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None, require_unified_command_center_reviewer_decision_board: bool, unified_command_center_reviewer_decision_board_path: Path | str | None, unified_command_center_reviewer_decision_board_verification_report_path: Path | str | None, require_unified_command_center_reviewer_decision_board_signed: bool, require_unified_command_center_reviewer_decision_board_quorum: bool, unified_command_center_reviewer_decision_board_evidence_review_path: Path | str | None, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path: Path | str | None, unified_command_center_reviewer_decision_board_accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, require_unified_release_program_handoff: bool, unified_release_program_handoff_path: Path | str | None, unified_release_program_handoff_verification_report_path: Path | str | None, unified_release_program_handoff_external_evidence_manifest_path: Path | str | None, unified_release_program_handoff_signoff_binding_path: Path | str | None, require_unified_release_program_vault: bool, unified_release_program_vault_path: Path | str | None, unified_release_program_vault_verification_report_path: Path | str | None, unified_release_program_vault_anchor_path: Path | str | None, require_unified_release_program_vault_operations: bool, unified_release_program_vault_operations_path: Path | str | None, unified_release_program_vault_operations_verification_report_path: Path | str | None, unified_release_program_vault_operations_signoff_binding_path: Path | str | None, require_unified_release_program_continuity: bool, unified_release_program_continuity_path: Path | str | None, unified_release_program_continuity_verification_report_path: Path | str | None, unified_release_program_continuity_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_kit: bool, unified_release_program_continuity_kit_path: Path | str | None, unified_release_program_continuity_kit_verification_report_path: Path | str | None, unified_release_program_continuity_kit_receiver_receipt_path: Path | str | None, require_unified_release_program_continuity_acceptance: bool, unified_release_program_continuity_acceptance_path: Path | str | None, unified_release_program_continuity_acceptance_verification_report_path: Path | str | None, unified_release_program_continuity_acceptance_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_command_center: bool, unified_release_program_continuity_command_center_path: Path | str | None, unified_release_program_continuity_command_center_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None, require_unified_release_program_continuity_command_center_signoff: bool, unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None, unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None, require_unified_release_program_continuity_command_center_acceptance: bool, unified_release_program_continuity_command_center_acceptance_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_signoff_binding_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_review_pack_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None, unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None, require_unified_release_program_continuity_command_center_acceptance_change_control: bool, unified_release_program_continuity_command_center_acceptance_change_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_change_verification_report_path: Path | str | None, unified_release_program_continuity_command_center_acceptance_previous_root: Path | str | None, unified_release_program_continuity_command_center_final_handoff_path: Path | str | None, unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None, unified_command_center_signoff_binding_path: Path | str | None, unified_release_path: Path | str | None, unified_release_verification_report_path: Path | str | None, unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_submission_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None, unified_release_operations_path: Path | str | None, unified_release_operations_verification_report_path: Path | str | None, unified_trust_operations_hub_path: Path | str | None, unified_trust_operations_hub_verification_report_path: Path | str | None, unified_public_trust_center_path: Path | str | None, unified_public_trust_center_verification_report_path: Path | str | None, unified_maintenance_backup_path: Path | str | None, unified_maintenance_backup_verification_report_path: Path | str | None, require_no_critical_audio_quality_risk: bool, final_handoff_package_path: Path | str | None, final_handoff_verification_report_path: Path | str | None, release_check_latest_report_path: Path | str | None, release_check_ga_report_path: Path | str | None, _split_state):
+    legacy_summary = _split_state['report'].get('legacy_require_summary') if isinstance(_split_state['report'].get('legacy_require_summary'), dict) else {}
+    if legacy_summary.get('status') == 'converted':
+        require_payload = normalized_legacy_require_payload({key: value for key, value in _split_state['verification_inputs'].items() if key.startswith('require_')})
+        policy_id = canonical_ga_policy_id(str(legacy_summary.get('policy_id') or '') or None, require_payload)
+        reported_enabled = {str(key) for key in legacy_summary.get('enabled', []) if isinstance(key, str)}
+        verifier_requirements = {key for key, value in require_payload.items() if key != 'require_ready' and bool(value)}
+        comparable_report_requirements = {key for key in reported_enabled if key in _split_state['verification_inputs']}
+        summary_matches = comparable_report_requirements.issubset(verifier_requirements) and legacy_summary.get('policy_id') == policy_id
+        _split_state['checks'].append(_check_result('ga_readiness_legacy_require_binding', summary_matches, 'Legacy require flags match the GA Policy compatibility projection.'))
+        policy_gate = evaluate_check_policy(policy_id, 'ga-readiness-verifier', _split_state['checks'])
+        _split_state['checks'].append(_check_result('ga_readiness_legacy_policy_status', policy_gate.get('status') == 'passed', 'Legacy verifier facts pass through the Policy Engine.', {'policy_id': policy_id, 'blockers': policy_gate.get('blockers', [])}))
+        platform_check_ids = {'ga_readiness_report_readable', 'ga_readiness_package_type', 'ga_readiness_schema_version', 'ga_readiness_integrity', 'ga_readiness_redaction', 'ga_readiness_status_allowed', 'ga_readiness_require_ready', 'ga_readiness_legacy_require_binding', 'ga_readiness_legacy_policy_status'}
+        blockers = [check for check in _split_state['checks'] if check.get('check_id') in platform_check_ids and check.get('status') == 'failed' and (check.get('severity') == 'blocking')]
     else:
-        blockers = [check for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
-    warnings = [check for check in checks if check.get("status") == "warning" or check.get("severity") == "warning"]
-    verification = {
-        "package_type": GA_READINESS_VERIFICATION_PACKAGE_TYPE,
-        "schema_version": 1,
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "status": "failed" if blockers else "warning" if warnings else "passed",
-        "summary": {
-            "source_path": str(target.name),
-            "ga_status": report.get("status") if isinstance(report, dict) else "missing",
-            "blocker_count": len(blockers),
-            "warning_count": len(warnings),
-        },
-        "checks": checks,
-    }
-    verification["integrity_hash"] = stable_hash({key: value for key, value in verification.items() if key != "integrity_hash"})
-    return verification
+        blockers = [check for check in _split_state['checks'] if check.get('status') == 'failed' and check.get('severity') == 'blocking']
+    warnings = [check for check in _split_state['checks'] if check.get('status') == 'warning' or check.get('severity') == 'warning']
+    verification = {'package_type': GA_READINESS_VERIFICATION_PACKAGE_TYPE, 'schema_version': 1, 'generated_at': datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z'), 'status': 'failed' if blockers else 'warning' if warnings else 'passed', 'summary': {'source_path': str(_split_state['target'].name), 'ga_status': _split_state['report'].get('status') if isinstance(_split_state['report'], dict) else 'missing', 'blocker_count': len(blockers), 'warning_count': len(warnings)}, 'checks': _split_state['checks']}
+    verification['integrity_hash'] = stable_hash({key: value for key, value in verification.items() if key != 'integrity_hash'})
+    return (True, verification)
+    return (False, None)
+
+def verify_ga_readiness_report(report_path: Path | str, *, strict: bool=False, policy: str | None=None, evidence_manifest_path: Path | str | None=None, require_ready: bool=False, require_manual_acceptance: bool=False, require_audio_campaign: bool=False, require_audio_campaign_remediation: bool=False, require_release_audio_certification: bool=False, require_release_audio_timeline: bool=False, require_release_audio_regression_guard: bool=False, require_release_audio_baseline_governance: bool=False, require_release_audio_regression_response: bool=False, require_release_audio_quality_observatory: bool=False, require_release_audio_quality_action_queue: bool=False, require_final_readiness: bool=False, manual_acceptance_report_path: Path | str | None=None, audio_campaign_archive_path: Path | str | None=None, audio_campaign_archive_verification_report_path: Path | str | None=None, audio_campaign_remediation_path: Path | str | None=None, audio_campaign_remediation_verification_report_path: Path | str | None=None, release_audio_certification_path: Path | str | None=None, release_audio_certification_verification_report_path: Path | str | None=None, release_audio_timeline_path: Path | str | None=None, release_audio_timeline_verification_report_path: Path | str | None=None, release_audio_regression_path: Path | str | None=None, release_audio_regression_verification_report_path: Path | str | None=None, release_audio_regression_baseline_timeline_path: Path | str | None=None, release_audio_regression_baseline_timeline_verification_report_path: Path | str | None=None, release_audio_regression_baseline_certification_path: Path | str | None=None, release_audio_regression_baseline_certification_verification_report_path: Path | str | None=None, release_audio_regression_current_timeline_path: Path | str | None=None, release_audio_regression_current_timeline_verification_report_path: Path | str | None=None, release_audio_regression_current_certification_path: Path | str | None=None, release_audio_regression_current_certification_verification_report_path: Path | str | None=None, release_audio_baseline_registry_path: Path | str | None=None, release_audio_baseline_registry_verification_report_path: Path | str | None=None, release_audio_regression_response_path: Path | str | None=None, release_audio_regression_response_verification_report_path: Path | str | None=None, release_audio_quality_observatory_path: Path | str | None=None, release_audio_quality_observatory_verification_report_path: Path | str | None=None, release_audio_quality_observatory_evidence_root: Path | str | None=None, release_audio_quality_action_queue_path: Path | str | None=None, release_audio_quality_action_queue_verification_report_path: Path | str | None=None, require_release_audio_quality_action_queue_signoff: bool=False, release_audio_quality_action_queue_signoff_archive_path: Path | str | None=None, release_audio_quality_action_queue_signoff_verification_report_path: Path | str | None=None, require_release_audio_command_center: bool=False, release_audio_command_center_path: Path | str | None=None, release_audio_command_center_verification_report_path: Path | str | None=None, require_unified_command_center: bool=False, unified_command_center_path: Path | str | None=None, unified_command_center_verification_report_path: Path | str | None=None, require_unified_command_center_archive: bool=False, unified_command_center_archive_path: Path | str | None=None, unified_command_center_archive_verification_report_path: Path | str | None=None, require_unified_command_center_handoff: bool=False, unified_command_center_handoff_path: Path | str | None=None, unified_command_center_handoff_verification_report_path: Path | str | None=None, require_unified_command_center_continuous_review: bool=False, unified_command_center_continuous_review_path: Path | str | None=None, unified_command_center_continuous_review_verification_report_path: Path | str | None=None, require_unified_command_center_drift_response: bool=False, unified_command_center_drift_response_path: Path | str | None=None, unified_command_center_drift_response_verification_report_path: Path | str | None=None, unified_command_center_drift_source_review_path: Path | str | None=None, unified_command_center_drift_source_review_verification_report_path: Path | str | None=None, unified_command_center_drift_recheck_review_path: Path | str | None=None, unified_command_center_drift_recheck_review_verification_report_path: Path | str | None=None, unified_command_center_drift_change_request_binding_report_path: Path | str | None=None, require_unified_command_center_evidence_review: bool=False, unified_command_center_evidence_review_path: Path | str | None=None, unified_command_center_evidence_review_verification_report_path: Path | str | None=None, require_unified_command_center_evidence_review_accepted: bool=False, unified_command_center_evidence_review_acceptance_path: Path | str | None=None, unified_command_center_evidence_review_acceptance_verification_report_path: Path | str | None=None, unified_command_center_evidence_review_acceptance_response_verification_report_path: Path | str | None=None, require_unified_command_center_reviewer_decision_board: bool=False, unified_command_center_reviewer_decision_board_path: Path | str | None=None, unified_command_center_reviewer_decision_board_verification_report_path: Path | str | None=None, require_unified_command_center_reviewer_decision_board_signed: bool=True, require_unified_command_center_reviewer_decision_board_quorum: bool=True, unified_command_center_reviewer_decision_board_evidence_review_path: Path | str | None=None, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path: Path | str | None=None, unified_command_center_reviewer_decision_board_accepted_evidence_paths: list[Path | str] | tuple[Path | str, ...] | None=None, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None=None, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None=None, require_unified_release_program_handoff: bool=False, unified_release_program_handoff_path: Path | str | None=None, unified_release_program_handoff_verification_report_path: Path | str | None=None, unified_release_program_handoff_external_evidence_manifest_path: Path | str | None=None, unified_release_program_handoff_signoff_binding_path: Path | str | None=None, require_unified_release_program_vault: bool=False, unified_release_program_vault_path: Path | str | None=None, unified_release_program_vault_verification_report_path: Path | str | None=None, unified_release_program_vault_anchor_path: Path | str | None=None, require_unified_release_program_vault_operations: bool=False, unified_release_program_vault_operations_path: Path | str | None=None, unified_release_program_vault_operations_verification_report_path: Path | str | None=None, unified_release_program_vault_operations_signoff_binding_path: Path | str | None=None, require_unified_release_program_continuity: bool=False, unified_release_program_continuity_path: Path | str | None=None, unified_release_program_continuity_verification_report_path: Path | str | None=None, unified_release_program_continuity_signoff_binding_path: Path | str | None=None, require_unified_release_program_continuity_kit: bool=False, unified_release_program_continuity_kit_path: Path | str | None=None, unified_release_program_continuity_kit_verification_report_path: Path | str | None=None, unified_release_program_continuity_kit_receiver_receipt_path: Path | str | None=None, require_unified_release_program_continuity_acceptance: bool=False, unified_release_program_continuity_acceptance_path: Path | str | None=None, unified_release_program_continuity_acceptance_verification_report_path: Path | str | None=None, unified_release_program_continuity_acceptance_signoff_binding_path: Path | str | None=None, require_unified_release_program_continuity_command_center: bool=False, unified_release_program_continuity_command_center_path: Path | str | None=None, unified_release_program_continuity_command_center_verification_report_path: Path | str | None=None, unified_release_program_continuity_command_center_external_evidence_manifest_path: Path | str | None=None, require_unified_release_program_continuity_command_center_signoff: bool=False, unified_release_program_continuity_command_center_signoff_archive_path: Path | str | None=None, unified_release_program_continuity_command_center_signoff_verification_report_path: Path | str | None=None, unified_release_program_continuity_command_center_signoff_binding_path: Path | str | None=None, require_unified_release_program_continuity_command_center_acceptance: bool=False, unified_release_program_continuity_command_center_acceptance_path: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_verification_report_path: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_signoff_binding_path: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_review_pack_path: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_response_proof_dir: Path | str | None=None, require_unified_release_program_continuity_command_center_acceptance_change_control: bool=False, unified_release_program_continuity_command_center_acceptance_change_path: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_change_verification_report_path: Path | str | None=None, unified_release_program_continuity_command_center_acceptance_previous_root: Path | str | None=None, unified_release_program_continuity_command_center_final_handoff_path: Path | str | None=None, unified_release_program_continuity_command_center_final_handoff_verification_report_path: Path | str | None=None, unified_command_center_signoff_binding_path: Path | str | None=None, unified_release_path: Path | str | None=None, unified_release_verification_report_path: Path | str | None=None, unified_distribution_paths: list[Path | str] | tuple[Path | str, ...] | None=None, unified_distribution_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None=None, unified_submission_paths: list[Path | str] | tuple[Path | str, ...] | None=None, unified_submission_verification_report_paths: list[Path | str] | tuple[Path | str, ...] | None=None, unified_release_operations_path: Path | str | None=None, unified_release_operations_verification_report_path: Path | str | None=None, unified_trust_operations_hub_path: Path | str | None=None, unified_trust_operations_hub_verification_report_path: Path | str | None=None, unified_public_trust_center_path: Path | str | None=None, unified_public_trust_center_verification_report_path: Path | str | None=None, unified_maintenance_backup_path: Path | str | None=None, unified_maintenance_backup_verification_report_path: Path | str | None=None, require_no_critical_audio_quality_risk: bool=False, final_handoff_package_path: Path | str | None=None, final_handoff_verification_report_path: Path | str | None=None, release_check_latest_report_path: Path | str | None=None, release_check_ga_report_path: Path | str | None=None) -> dict[str, Any]:
+    _split_state = {}
+    _split_result = _verify_ga_readiness_report_part_01(report_path, strict, policy, evidence_manifest_path, require_ready, require_manual_acceptance, require_audio_campaign, require_audio_campaign_remediation, require_release_audio_certification, require_release_audio_timeline, require_release_audio_regression_guard, require_release_audio_baseline_governance, require_release_audio_regression_response, require_release_audio_quality_observatory, require_release_audio_quality_action_queue, require_final_readiness, manual_acceptance_report_path, audio_campaign_archive_path, audio_campaign_archive_verification_report_path, audio_campaign_remediation_path, audio_campaign_remediation_verification_report_path, release_audio_certification_path, release_audio_certification_verification_report_path, release_audio_timeline_path, release_audio_timeline_verification_report_path, release_audio_regression_path, release_audio_regression_verification_report_path, release_audio_regression_baseline_timeline_path, release_audio_regression_baseline_timeline_verification_report_path, release_audio_regression_baseline_certification_path, release_audio_regression_baseline_certification_verification_report_path, release_audio_regression_current_timeline_path, release_audio_regression_current_timeline_verification_report_path, release_audio_regression_current_certification_path, release_audio_regression_current_certification_verification_report_path, release_audio_baseline_registry_path, release_audio_baseline_registry_verification_report_path, release_audio_regression_response_path, release_audio_regression_response_verification_report_path, release_audio_quality_observatory_path, release_audio_quality_observatory_verification_report_path, release_audio_quality_observatory_evidence_root, release_audio_quality_action_queue_path, release_audio_quality_action_queue_verification_report_path, require_release_audio_quality_action_queue_signoff, release_audio_quality_action_queue_signoff_archive_path, release_audio_quality_action_queue_signoff_verification_report_path, require_release_audio_command_center, release_audio_command_center_path, release_audio_command_center_verification_report_path, require_unified_command_center, unified_command_center_path, unified_command_center_verification_report_path, require_unified_command_center_archive, unified_command_center_archive_path, unified_command_center_archive_verification_report_path, require_unified_command_center_handoff, unified_command_center_handoff_path, unified_command_center_handoff_verification_report_path, require_unified_command_center_continuous_review, unified_command_center_continuous_review_path, unified_command_center_continuous_review_verification_report_path, require_unified_command_center_drift_response, unified_command_center_drift_response_path, unified_command_center_drift_response_verification_report_path, unified_command_center_drift_source_review_path, unified_command_center_drift_source_review_verification_report_path, unified_command_center_drift_recheck_review_path, unified_command_center_drift_recheck_review_verification_report_path, unified_command_center_drift_change_request_binding_report_path, require_unified_command_center_evidence_review, unified_command_center_evidence_review_path, unified_command_center_evidence_review_verification_report_path, require_unified_command_center_evidence_review_accepted, unified_command_center_evidence_review_acceptance_path, unified_command_center_evidence_review_acceptance_verification_report_path, unified_command_center_evidence_review_acceptance_response_verification_report_path, require_unified_command_center_reviewer_decision_board, unified_command_center_reviewer_decision_board_path, unified_command_center_reviewer_decision_board_verification_report_path, require_unified_command_center_reviewer_decision_board_signed, require_unified_command_center_reviewer_decision_board_quorum, unified_command_center_reviewer_decision_board_evidence_review_path, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path, unified_command_center_reviewer_decision_board_accepted_evidence_paths, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths, require_unified_release_program_handoff, unified_release_program_handoff_path, unified_release_program_handoff_verification_report_path, unified_release_program_handoff_external_evidence_manifest_path, unified_release_program_handoff_signoff_binding_path, require_unified_release_program_vault, unified_release_program_vault_path, unified_release_program_vault_verification_report_path, unified_release_program_vault_anchor_path, require_unified_release_program_vault_operations, unified_release_program_vault_operations_path, unified_release_program_vault_operations_verification_report_path, unified_release_program_vault_operations_signoff_binding_path, require_unified_release_program_continuity, unified_release_program_continuity_path, unified_release_program_continuity_verification_report_path, unified_release_program_continuity_signoff_binding_path, require_unified_release_program_continuity_kit, unified_release_program_continuity_kit_path, unified_release_program_continuity_kit_verification_report_path, unified_release_program_continuity_kit_receiver_receipt_path, require_unified_release_program_continuity_acceptance, unified_release_program_continuity_acceptance_path, unified_release_program_continuity_acceptance_verification_report_path, unified_release_program_continuity_acceptance_signoff_binding_path, require_unified_release_program_continuity_command_center, unified_release_program_continuity_command_center_path, unified_release_program_continuity_command_center_verification_report_path, unified_release_program_continuity_command_center_external_evidence_manifest_path, require_unified_release_program_continuity_command_center_signoff, unified_release_program_continuity_command_center_signoff_archive_path, unified_release_program_continuity_command_center_signoff_verification_report_path, unified_release_program_continuity_command_center_signoff_binding_path, require_unified_release_program_continuity_command_center_acceptance, unified_release_program_continuity_command_center_acceptance_path, unified_release_program_continuity_command_center_acceptance_verification_report_path, unified_release_program_continuity_command_center_acceptance_signoff_binding_path, unified_release_program_continuity_command_center_acceptance_review_pack_path, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir, unified_release_program_continuity_command_center_acceptance_response_proof_dir, require_unified_release_program_continuity_command_center_acceptance_change_control, unified_release_program_continuity_command_center_acceptance_change_path, unified_release_program_continuity_command_center_acceptance_change_verification_report_path, unified_release_program_continuity_command_center_acceptance_previous_root, unified_release_program_continuity_command_center_final_handoff_path, unified_release_program_continuity_command_center_final_handoff_verification_report_path, unified_command_center_signoff_binding_path, unified_release_path, unified_release_verification_report_path, unified_distribution_paths, unified_distribution_verification_report_paths, unified_submission_paths, unified_submission_verification_report_paths, unified_release_operations_path, unified_release_operations_verification_report_path, unified_trust_operations_hub_path, unified_trust_operations_hub_verification_report_path, unified_public_trust_center_path, unified_public_trust_center_verification_report_path, unified_maintenance_backup_path, unified_maintenance_backup_verification_report_path, require_no_critical_audio_quality_risk, final_handoff_package_path, final_handoff_verification_report_path, release_check_latest_report_path, release_check_ga_report_path, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
+    _split_result = _verify_ga_readiness_report_part_02(report_path, strict, policy, evidence_manifest_path, require_ready, require_manual_acceptance, require_audio_campaign, require_audio_campaign_remediation, require_release_audio_certification, require_release_audio_timeline, require_release_audio_regression_guard, require_release_audio_baseline_governance, require_release_audio_regression_response, require_release_audio_quality_observatory, require_release_audio_quality_action_queue, require_final_readiness, manual_acceptance_report_path, audio_campaign_archive_path, audio_campaign_archive_verification_report_path, audio_campaign_remediation_path, audio_campaign_remediation_verification_report_path, release_audio_certification_path, release_audio_certification_verification_report_path, release_audio_timeline_path, release_audio_timeline_verification_report_path, release_audio_regression_path, release_audio_regression_verification_report_path, release_audio_regression_baseline_timeline_path, release_audio_regression_baseline_timeline_verification_report_path, release_audio_regression_baseline_certification_path, release_audio_regression_baseline_certification_verification_report_path, release_audio_regression_current_timeline_path, release_audio_regression_current_timeline_verification_report_path, release_audio_regression_current_certification_path, release_audio_regression_current_certification_verification_report_path, release_audio_baseline_registry_path, release_audio_baseline_registry_verification_report_path, release_audio_regression_response_path, release_audio_regression_response_verification_report_path, release_audio_quality_observatory_path, release_audio_quality_observatory_verification_report_path, release_audio_quality_observatory_evidence_root, release_audio_quality_action_queue_path, release_audio_quality_action_queue_verification_report_path, require_release_audio_quality_action_queue_signoff, release_audio_quality_action_queue_signoff_archive_path, release_audio_quality_action_queue_signoff_verification_report_path, require_release_audio_command_center, release_audio_command_center_path, release_audio_command_center_verification_report_path, require_unified_command_center, unified_command_center_path, unified_command_center_verification_report_path, require_unified_command_center_archive, unified_command_center_archive_path, unified_command_center_archive_verification_report_path, require_unified_command_center_handoff, unified_command_center_handoff_path, unified_command_center_handoff_verification_report_path, require_unified_command_center_continuous_review, unified_command_center_continuous_review_path, unified_command_center_continuous_review_verification_report_path, require_unified_command_center_drift_response, unified_command_center_drift_response_path, unified_command_center_drift_response_verification_report_path, unified_command_center_drift_source_review_path, unified_command_center_drift_source_review_verification_report_path, unified_command_center_drift_recheck_review_path, unified_command_center_drift_recheck_review_verification_report_path, unified_command_center_drift_change_request_binding_report_path, require_unified_command_center_evidence_review, unified_command_center_evidence_review_path, unified_command_center_evidence_review_verification_report_path, require_unified_command_center_evidence_review_accepted, unified_command_center_evidence_review_acceptance_path, unified_command_center_evidence_review_acceptance_verification_report_path, unified_command_center_evidence_review_acceptance_response_verification_report_path, require_unified_command_center_reviewer_decision_board, unified_command_center_reviewer_decision_board_path, unified_command_center_reviewer_decision_board_verification_report_path, require_unified_command_center_reviewer_decision_board_signed, require_unified_command_center_reviewer_decision_board_quorum, unified_command_center_reviewer_decision_board_evidence_review_path, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path, unified_command_center_reviewer_decision_board_accepted_evidence_paths, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths, require_unified_release_program_handoff, unified_release_program_handoff_path, unified_release_program_handoff_verification_report_path, unified_release_program_handoff_external_evidence_manifest_path, unified_release_program_handoff_signoff_binding_path, require_unified_release_program_vault, unified_release_program_vault_path, unified_release_program_vault_verification_report_path, unified_release_program_vault_anchor_path, require_unified_release_program_vault_operations, unified_release_program_vault_operations_path, unified_release_program_vault_operations_verification_report_path, unified_release_program_vault_operations_signoff_binding_path, require_unified_release_program_continuity, unified_release_program_continuity_path, unified_release_program_continuity_verification_report_path, unified_release_program_continuity_signoff_binding_path, require_unified_release_program_continuity_kit, unified_release_program_continuity_kit_path, unified_release_program_continuity_kit_verification_report_path, unified_release_program_continuity_kit_receiver_receipt_path, require_unified_release_program_continuity_acceptance, unified_release_program_continuity_acceptance_path, unified_release_program_continuity_acceptance_verification_report_path, unified_release_program_continuity_acceptance_signoff_binding_path, require_unified_release_program_continuity_command_center, unified_release_program_continuity_command_center_path, unified_release_program_continuity_command_center_verification_report_path, unified_release_program_continuity_command_center_external_evidence_manifest_path, require_unified_release_program_continuity_command_center_signoff, unified_release_program_continuity_command_center_signoff_archive_path, unified_release_program_continuity_command_center_signoff_verification_report_path, unified_release_program_continuity_command_center_signoff_binding_path, require_unified_release_program_continuity_command_center_acceptance, unified_release_program_continuity_command_center_acceptance_path, unified_release_program_continuity_command_center_acceptance_verification_report_path, unified_release_program_continuity_command_center_acceptance_signoff_binding_path, unified_release_program_continuity_command_center_acceptance_review_pack_path, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir, unified_release_program_continuity_command_center_acceptance_response_proof_dir, require_unified_release_program_continuity_command_center_acceptance_change_control, unified_release_program_continuity_command_center_acceptance_change_path, unified_release_program_continuity_command_center_acceptance_change_verification_report_path, unified_release_program_continuity_command_center_acceptance_previous_root, unified_release_program_continuity_command_center_final_handoff_path, unified_release_program_continuity_command_center_final_handoff_verification_report_path, unified_command_center_signoff_binding_path, unified_release_path, unified_release_verification_report_path, unified_distribution_paths, unified_distribution_verification_report_paths, unified_submission_paths, unified_submission_verification_report_paths, unified_release_operations_path, unified_release_operations_verification_report_path, unified_trust_operations_hub_path, unified_trust_operations_hub_verification_report_path, unified_public_trust_center_path, unified_public_trust_center_verification_report_path, unified_maintenance_backup_path, unified_maintenance_backup_verification_report_path, require_no_critical_audio_quality_risk, final_handoff_package_path, final_handoff_verification_report_path, release_check_latest_report_path, release_check_ga_report_path, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
+    _split_result = _verify_ga_readiness_report_part_03(report_path, strict, policy, evidence_manifest_path, require_ready, require_manual_acceptance, require_audio_campaign, require_audio_campaign_remediation, require_release_audio_certification, require_release_audio_timeline, require_release_audio_regression_guard, require_release_audio_baseline_governance, require_release_audio_regression_response, require_release_audio_quality_observatory, require_release_audio_quality_action_queue, require_final_readiness, manual_acceptance_report_path, audio_campaign_archive_path, audio_campaign_archive_verification_report_path, audio_campaign_remediation_path, audio_campaign_remediation_verification_report_path, release_audio_certification_path, release_audio_certification_verification_report_path, release_audio_timeline_path, release_audio_timeline_verification_report_path, release_audio_regression_path, release_audio_regression_verification_report_path, release_audio_regression_baseline_timeline_path, release_audio_regression_baseline_timeline_verification_report_path, release_audio_regression_baseline_certification_path, release_audio_regression_baseline_certification_verification_report_path, release_audio_regression_current_timeline_path, release_audio_regression_current_timeline_verification_report_path, release_audio_regression_current_certification_path, release_audio_regression_current_certification_verification_report_path, release_audio_baseline_registry_path, release_audio_baseline_registry_verification_report_path, release_audio_regression_response_path, release_audio_regression_response_verification_report_path, release_audio_quality_observatory_path, release_audio_quality_observatory_verification_report_path, release_audio_quality_observatory_evidence_root, release_audio_quality_action_queue_path, release_audio_quality_action_queue_verification_report_path, require_release_audio_quality_action_queue_signoff, release_audio_quality_action_queue_signoff_archive_path, release_audio_quality_action_queue_signoff_verification_report_path, require_release_audio_command_center, release_audio_command_center_path, release_audio_command_center_verification_report_path, require_unified_command_center, unified_command_center_path, unified_command_center_verification_report_path, require_unified_command_center_archive, unified_command_center_archive_path, unified_command_center_archive_verification_report_path, require_unified_command_center_handoff, unified_command_center_handoff_path, unified_command_center_handoff_verification_report_path, require_unified_command_center_continuous_review, unified_command_center_continuous_review_path, unified_command_center_continuous_review_verification_report_path, require_unified_command_center_drift_response, unified_command_center_drift_response_path, unified_command_center_drift_response_verification_report_path, unified_command_center_drift_source_review_path, unified_command_center_drift_source_review_verification_report_path, unified_command_center_drift_recheck_review_path, unified_command_center_drift_recheck_review_verification_report_path, unified_command_center_drift_change_request_binding_report_path, require_unified_command_center_evidence_review, unified_command_center_evidence_review_path, unified_command_center_evidence_review_verification_report_path, require_unified_command_center_evidence_review_accepted, unified_command_center_evidence_review_acceptance_path, unified_command_center_evidence_review_acceptance_verification_report_path, unified_command_center_evidence_review_acceptance_response_verification_report_path, require_unified_command_center_reviewer_decision_board, unified_command_center_reviewer_decision_board_path, unified_command_center_reviewer_decision_board_verification_report_path, require_unified_command_center_reviewer_decision_board_signed, require_unified_command_center_reviewer_decision_board_quorum, unified_command_center_reviewer_decision_board_evidence_review_path, unified_command_center_reviewer_decision_board_evidence_review_verification_report_path, unified_command_center_reviewer_decision_board_accepted_evidence_paths, unified_command_center_reviewer_decision_board_accepted_evidence_verification_report_paths, unified_command_center_reviewer_decision_board_accepted_evidence_response_verification_report_paths, require_unified_release_program_handoff, unified_release_program_handoff_path, unified_release_program_handoff_verification_report_path, unified_release_program_handoff_external_evidence_manifest_path, unified_release_program_handoff_signoff_binding_path, require_unified_release_program_vault, unified_release_program_vault_path, unified_release_program_vault_verification_report_path, unified_release_program_vault_anchor_path, require_unified_release_program_vault_operations, unified_release_program_vault_operations_path, unified_release_program_vault_operations_verification_report_path, unified_release_program_vault_operations_signoff_binding_path, require_unified_release_program_continuity, unified_release_program_continuity_path, unified_release_program_continuity_verification_report_path, unified_release_program_continuity_signoff_binding_path, require_unified_release_program_continuity_kit, unified_release_program_continuity_kit_path, unified_release_program_continuity_kit_verification_report_path, unified_release_program_continuity_kit_receiver_receipt_path, require_unified_release_program_continuity_acceptance, unified_release_program_continuity_acceptance_path, unified_release_program_continuity_acceptance_verification_report_path, unified_release_program_continuity_acceptance_signoff_binding_path, require_unified_release_program_continuity_command_center, unified_release_program_continuity_command_center_path, unified_release_program_continuity_command_center_verification_report_path, unified_release_program_continuity_command_center_external_evidence_manifest_path, require_unified_release_program_continuity_command_center_signoff, unified_release_program_continuity_command_center_signoff_archive_path, unified_release_program_continuity_command_center_signoff_verification_report_path, unified_release_program_continuity_command_center_signoff_binding_path, require_unified_release_program_continuity_command_center_acceptance, unified_release_program_continuity_command_center_acceptance_path, unified_release_program_continuity_command_center_acceptance_verification_report_path, unified_release_program_continuity_command_center_acceptance_signoff_binding_path, unified_release_program_continuity_command_center_acceptance_review_pack_path, unified_release_program_continuity_command_center_acceptance_review_pack_verification_report_path, unified_release_program_continuity_command_center_acceptance_accepted_evidence_dir, unified_release_program_continuity_command_center_acceptance_response_proof_dir, require_unified_release_program_continuity_command_center_acceptance_change_control, unified_release_program_continuity_command_center_acceptance_change_path, unified_release_program_continuity_command_center_acceptance_change_verification_report_path, unified_release_program_continuity_command_center_acceptance_previous_root, unified_release_program_continuity_command_center_final_handoff_path, unified_release_program_continuity_command_center_final_handoff_verification_report_path, unified_command_center_signoff_binding_path, unified_release_path, unified_release_verification_report_path, unified_distribution_paths, unified_distribution_verification_report_paths, unified_submission_paths, unified_submission_verification_report_paths, unified_release_operations_path, unified_release_operations_verification_report_path, unified_trust_operations_hub_path, unified_trust_operations_hub_verification_report_path, unified_public_trust_center_path, unified_public_trust_center_verification_report_path, unified_maintenance_backup_path, unified_maintenance_backup_verification_report_path, require_no_critical_audio_quality_risk, final_handoff_package_path, final_handoff_verification_report_path, release_check_latest_report_path, release_check_ga_report_path, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
 
 
 def write_ga_readiness_verification_report(report: dict[str, Any], path: Path | str) -> Path:
@@ -703,9 +174,9 @@ def write_ga_readiness_verification_report(report: dict[str, Any], path: Path | 
 
 
 def _verify_evidence_policy(
-    checks: list[dict[str, Any]],
-    report: dict[str, Any],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    report: ImplementationDocument,
+    ga_check: ImplementationDocument,
     *,
     policy: str | None,
     evidence_manifest_path: Path | str | None,
@@ -784,7 +255,7 @@ def _verify_evidence_policy(
         )
 
 
-def _check_result(check_id: str, passed: bool, message: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:
+def _check_result(check_id: str, passed: bool, message: str, detail: ImplementationDocument | None = None) -> ImplementationDocument:
     return {
         "check_id": check_id,
         "status": "passed" if passed else "failed",
@@ -794,7 +265,7 @@ def _check_result(check_id: str, passed: bool, message: str, detail: dict[str, A
     }
 
 
-def _verify_manual_acceptance_evidence(checks: list[dict[str, Any]], ga_check: dict[str, Any], report_path: Path | str | None) -> None:
+def _verify_manual_acceptance_evidence(checks: list[ImplementationDocument], ga_check: ImplementationDocument, report_path: Path | str | None) -> None:
     if not report_path:
         _add_check(
             checks,
@@ -884,8 +355,8 @@ def _verify_manual_acceptance_evidence(checks: list[dict[str, Any]], ga_check: d
 
 
 def _verify_final_readiness_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     package_path: Path | str | None,
     verification_report_path: Path | str | None,
 ) -> None:
@@ -962,8 +433,8 @@ def _verify_final_readiness_evidence(
 
 
 def _verify_audio_campaign_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     verification_report_path: Path | str | None,
 ) -> None:
@@ -1045,8 +516,8 @@ def _verify_audio_campaign_evidence(
 
 
 def _verify_audio_campaign_remediation_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     remediation_path: Path | str | None,
     verification_report_path: Path | str | None,
 ) -> None:
@@ -1117,8 +588,8 @@ def _verify_audio_campaign_remediation_evidence(
 
 
 def _verify_release_audio_certification_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     certification_path: Path | str | None,
     verification_report_path: Path | str | None,
 ) -> None:
@@ -1199,8 +670,8 @@ def _verify_release_audio_certification_evidence(
 
 
 def _verify_release_audio_timeline_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     timeline_path: Path | str | None,
     verification_report_path: Path | str | None,
     certification_path: Path | str | None,
@@ -1285,8 +756,8 @@ def _verify_release_audio_timeline_evidence(
 
 
 def _verify_release_audio_regression_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     regression_path: Path | str | None,
     verification_report_path: Path | str | None,
     baseline_timeline_path: Path | str | None,
@@ -1382,8 +853,8 @@ def _verify_release_audio_regression_evidence(
 
 
 def _verify_release_audio_baseline_governance_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     registry_path: Path | str | None,
     verification_report_path: Path | str | None,
 ) -> None:
@@ -1418,8 +889,8 @@ def _verify_release_audio_baseline_governance_evidence(
 
 
 def _verify_release_audio_regression_response_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     response_path: Path | str | None,
     verification_report_path: Path | str | None,
     regression_path: Path | str | None = None,
@@ -1494,8 +965,8 @@ def _verify_release_audio_regression_response_evidence(
 
 
 def _verify_release_audio_quality_observatory_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     observatory_path: Path | str | None,
     verification_report_path: Path | str | None,
     evidence_root: Path | str | None,
@@ -1542,8 +1013,8 @@ def _verify_release_audio_quality_observatory_evidence(
 
 
 def _verify_release_audio_quality_action_queue_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     queue_path: Path | str | None,
     verification_report_path: Path | str | None,
     observatory_path: Path | str | None,
@@ -1592,8 +1063,8 @@ def _verify_release_audio_quality_action_queue_evidence(
 
 
 def _verify_release_audio_quality_action_queue_signoff_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     archive_verification_report_path: Path | str | None,
     queue_path: Path | str | None,
@@ -1647,8 +1118,8 @@ def _verify_release_audio_quality_action_queue_signoff_evidence(
 
 
 def _verify_release_audio_command_center_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     command_center_path: Path | str | None,
     command_center_verification_report_path: Path | str | None,
     certification_path: Path | str | None,
@@ -1721,8 +1192,8 @@ def _verify_release_audio_command_center_evidence(
 
 
 def _verify_unified_command_center_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     command_center_path: Path | str | None,
     command_center_verification_report_path: Path | str | None,
     release_path: Path | str | None,
@@ -1795,8 +1266,8 @@ def _verify_unified_command_center_evidence(
 
 
 def _verify_unified_command_center_archive_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     archive_verification_report_path: Path | str | None,
     command_center_path: Path | str | None,
@@ -1836,8 +1307,8 @@ def _verify_unified_command_center_archive_evidence(
 
 
 def _verify_unified_command_center_handoff_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     handoff_path: Path | str | None,
     handoff_verification_report_path: Path | str | None,
     archive_path: Path | str | None,
@@ -1876,8 +1347,8 @@ def _verify_unified_command_center_handoff_evidence(
 
 
 def _verify_unified_command_center_continuous_review_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     review_path: Path | str | None,
     review_verification_report_path: Path | str | None,
     archive_path: Path | str | None,
@@ -1926,8 +1397,8 @@ def _verify_unified_command_center_continuous_review_evidence(
 
 
 def _verify_unified_command_center_drift_response_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     response_path: Path | str | None,
     response_verification_report_path: Path | str | None,
     source_review_path: Path | str | None,
@@ -1991,8 +1462,8 @@ def _verify_unified_command_center_drift_response_evidence(
 
 
 def _verify_unified_command_center_evidence_review_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     review_path: Path | str | None,
     review_verification_report_path: Path | str | None,
     require_accepted: bool,
@@ -2099,8 +1570,8 @@ def _verify_unified_command_center_evidence_review_evidence(
 
 
 def _verify_unified_command_center_reviewer_decision_board_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     board_path: Path | str | None,
     board_verification_report_path: Path | str | None,
     require_signed: bool,
@@ -2148,8 +1619,8 @@ def _verify_unified_command_center_reviewer_decision_board_evidence(
 
 
 def _verify_unified_release_program_handoff_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     handoff_path: Path | str | None,
     handoff_verification_report_path: Path | str | None,
     external_evidence_manifest_path: Path | str | None,
@@ -2190,8 +1661,8 @@ def _verify_unified_release_program_handoff_evidence(
 
 
 def _verify_unified_release_program_vault_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     vault_path: Path | str | None,
     vault_verification_report_path: Path | str | None,
     vault_anchor_path: Path | str | None,
@@ -2232,8 +1703,8 @@ def _verify_unified_release_program_vault_evidence(
 
 
 def _verify_unified_release_program_vault_operations_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     archive_verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
@@ -2275,8 +1746,8 @@ def _verify_unified_release_program_vault_operations_evidence(
 
 
 def _verify_unified_release_program_continuity_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     archive_verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
@@ -2327,8 +1798,8 @@ def _verify_unified_release_program_continuity_evidence(
 
 
 def _verify_unified_release_program_continuity_kit_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     kit_path: Path | str | None,
     kit_verification_report_path: Path | str | None,
     receiver_receipt_path: Path | str | None,
@@ -2367,8 +1838,8 @@ def _verify_unified_release_program_continuity_kit_evidence(
 
 
 def _verify_unified_release_program_continuity_acceptance_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     archive_verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
@@ -2420,8 +1891,8 @@ def _verify_unified_release_program_continuity_acceptance_evidence(
 
 
 def _verify_unified_release_program_continuity_command_center_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     command_center_path: Path | str | None,
     verification_report_path: Path | str | None,
     external_evidence_manifest_path: Path | str | None,
@@ -2465,8 +1936,8 @@ def _verify_unified_release_program_continuity_command_center_evidence(
 
 
 def _verify_unified_release_program_continuity_command_center_signoff_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
@@ -2509,8 +1980,8 @@ def _verify_unified_release_program_continuity_command_center_signoff_evidence(
 
 
 def _verify_unified_release_program_continuity_command_center_acceptance_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     verification_report_path: Path | str | None,
     acceptance_signoff_binding_path: Path | str | None,
@@ -2594,8 +2065,8 @@ def _verify_unified_release_program_continuity_command_center_acceptance_evidenc
 
 
 def _verify_unified_release_program_continuity_command_center_acceptance_change_evidence(
-    checks: list[dict[str, Any]],
-    ga_check: dict[str, Any],
+    checks: list[ImplementationDocument],
+    ga_check: ImplementationDocument,
     archive_path: Path | str | None,
     verification_report_path: Path | str | None,
     acceptance_archive_path: Path | str | None,
@@ -2658,12 +2129,12 @@ def _verify_unified_release_program_continuity_command_center_acceptance_change_
 
 
 def _verify_external_package_binding(
-    checks: list[dict[str, Any]],
+    checks: list[ImplementationDocument],
     prefix: str,
-    ga_check: dict[str, Any],
+    ga_check: ImplementationDocument,
     zip_path: Path,
-    verification_report: dict[str, Any],
-    runtime_report: dict[str, Any],
+    verification_report: ImplementationDocument,
+    runtime_report: ImplementationDocument,
     expected_package_type: str,
 ) -> None:
     integrity_ok = verification_report.get("integrity_hash") == release_stable_hash({key: value for key, value in verification_report.items() if key != "integrity_hash"})
@@ -2693,7 +2164,7 @@ def _verify_external_package_binding(
     _add_check(checks, f"{prefix}_ga_binding", "passed" if binding_ok else "failed", "blocking", "GA readiness check matches external verification.")
 
 
-def _read_final_handoff_manifest(zip_path: Path) -> dict[str, Any]:
+def _read_final_handoff_manifest(zip_path: Path) -> ImplementationDocument:
     if not zip_path.exists():
         return {}
     try:
@@ -2704,7 +2175,7 @@ def _read_final_handoff_manifest(zip_path: Path) -> dict[str, Any]:
         return {}
 
 
-def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
+def _verification_fingerprint(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return {
         "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256"),
@@ -2713,7 +2184,7 @@ def _verification_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _verify_acceptance_report_from_store(report_path: Path, suite_id: str, report: dict[str, Any]) -> dict[str, Any] | None:
+def _verify_acceptance_report_from_store(report_path: Path, suite_id: str, report: ImplementationDocument) -> ImplementationDocument | None:
     if not suite_id:
         return None
     try:
@@ -2743,5 +2214,5 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def _add_check(checks: list[dict[str, Any]], check_id: str, status: str, severity: str, message: str, detail: dict[str, Any] | None = None) -> None:
+def _add_check(checks: list[ImplementationDocument], check_id: str, status: str, severity: str, message: str, detail: ImplementationDocument | None = None) -> None:
     checks.append({"check_id": check_id, "status": status, "severity": severity, "message": message, "detail": detail or {}})

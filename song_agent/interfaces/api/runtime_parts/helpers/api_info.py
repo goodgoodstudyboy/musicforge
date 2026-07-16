@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, AuthConfig, Path, __version__, datetime, json, os, timezone, webbrowser
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import SprintActionItem, read_json, sanitize_metadata
@@ -75,7 +77,7 @@ def _artifact_kind(path: Path) -> str:
         return "audio"
     return "file"
 
-def _artifact_dict(path: Path) -> dict[str, Any]:
+def _artifact_dict(path: Path) -> ImplementationDocument:
     return {
         "name": path.name,
         "path": str(path),
@@ -99,7 +101,7 @@ def open_folder(path: Path) -> None:
         return
     webbrowser.open(path.resolve().as_uri())
 
-def _build_summary(plan_path: Path, midi_path: Path) -> dict[str, Any]:
+def _build_summary(plan_path: Path, midi_path: Path) -> ImplementationDocument:
     plan = read_json(plan_path)
     tracks = plan.get("tracks", [])
     sections = plan.get("sections", [])
@@ -117,7 +119,7 @@ def _build_summary(plan_path: Path, midi_path: Path) -> dict[str, Any]:
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def _build_validator_report(plan_path: Path, midi_path: Path) -> dict[str, Any]:
+def _build_validator_report(plan_path: Path, midi_path: Path) -> ImplementationDocument:
     plan = read_json(plan_path)
     return {
         "status": "passed",
@@ -134,7 +136,7 @@ def _build_validator_report(plan_path: Path, midi_path: Path) -> dict[str, Any]:
         "checked_at": _utc_now(),
     }
 
-def _usage_int(usage: dict[str, Any], field_name: str) -> int:
+def _usage_int(usage: ImplementationDocument, field_name: str) -> int:
     value = usage.get(field_name)
     if value is None:
         return 0
@@ -145,14 +147,14 @@ def _usage_int(usage: dict[str, Any], field_name: str) -> int:
 
 def _provider_usage_record(
     *,
-    config_snapshot: dict[str, Any],
+    config_snapshot: ImplementationDocument,
     operation: str,
     template_id: str,
     started_at: str,
     status: str,
-    provider_usage: dict[str, Any] | None = None,
+    provider_usage: ImplementationDocument | None = None,
     request_id: Any = None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     provider_usage = provider_usage or {}
     prompt_tokens = _usage_int(provider_usage, "prompt_tokens")
     completion_tokens = _usage_int(provider_usage, "completion_tokens")
@@ -173,13 +175,13 @@ def _provider_usage_record(
         "status": status,
     }
 
-def _try_read_review_decision_report(task_store: ReviewTaskStore, task_id: str) -> dict[str, Any]:
+def _try_read_review_decision_report(task_store: ReviewTaskStore, task_id: str) -> ImplementationDocument:
     try:
         return task_store.read_decision_report(task_id)
     except (FileNotFoundError, OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
 
-def _review_sprints_list_summary(sprints: list[dict[str, Any]]) -> dict[str, Any]:
+def _review_sprints_list_summary(sprints: list[ImplementationDocument]) -> ImplementationDocument:
     statuses: dict[str, int] = {}
     total_conflicts = 0
     blocking_conflicts = 0
@@ -220,7 +222,7 @@ def _select_action_queue_items(queue: SprintActionQueue, selected_ids: list[str]
             items.append(item)
     return sorted(items, key=_action_queue_run_sort_key)
 
-def _audio_report(audio_path: Path) -> dict[str, Any]:
+def _audio_report(audio_path: Path) -> ImplementationDocument:
     return {
         "exists": audio_path.exists(),
         "path": str(audio_path),
@@ -264,7 +266,7 @@ def _manifest_response(
     manifest: StemManifest,
     *,
     status: str | None = None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     return {
         "job_id": job_id,
         "status": status or _stem_manifest_status(manifest),

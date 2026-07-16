@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from typing import Any
 
 from song_agent.platform.verification.redaction import sanitize_metadata
@@ -58,7 +60,7 @@ def build_acceptance_diff(left_report: dict[str, Any], right_report: dict[str, A
     )
 
 
-def _cases_by_song(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _cases_by_song(report: ImplementationDocument) -> dict[str, ImplementationDocument]:
     rows = {}
     for case in report.get("cases", []) if isinstance(report.get("cases"), list) else []:
         if not isinstance(case, dict):
@@ -69,7 +71,7 @@ def _cases_by_song(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return rows
 
 
-def _row_status(left: dict[str, Any], right: dict[str, Any]) -> str:
+def _row_status(left: ImplementationDocument, right: ImplementationDocument) -> str:
     if not left:
         return "missing_left"
     if not right:

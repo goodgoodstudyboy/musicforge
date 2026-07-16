@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -476,7 +478,7 @@ class ReleaseOperationsSignoffStore:
                 pass
         return f"ocr-{(max(existing) if existing else 0) + 1:06d}"
 
-    def _append_history(self, release_id: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_history(self, release_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.history_path(release_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = 0
@@ -486,7 +488,7 @@ class ReleaseOperationsSignoffStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
-    def _append_change_event(self, release_id: str, event_type: str, item: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_change_event(self, release_id: str, event_type: str, item: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.change_request_events_path(release_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = 0
@@ -550,12 +552,12 @@ def operations_archive_manifest_integrity_ok(manifest: dict[str, Any] | None) ->
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == operations_archive_manifest_hash(data)
 
 
-def _latest_runbook(runbook_store: ReleaseOperationsRunbookStore, release_id: str) -> dict[str, Any]:
+def _latest_runbook(runbook_store: ReleaseOperationsRunbookStore, release_id: str) -> ImplementationDocument:
     rows = runbook_store.list_runbooks(release_id, include_archived=True)
     return rows[0] if rows else {}
 
 
-def _runbook_gate(runbook: dict[str, Any], current_report: dict[str, Any]) -> dict[str, Any]:
+def _runbook_gate(runbook: ImplementationDocument, current_report: ImplementationDocument) -> ImplementationDocument:
     if not runbook:
         return {"status": "warning", "message": "No Release Operations Runbook exists.", "runbook_id": None}
     summary = runbook_summary(runbook)
@@ -577,11 +579,11 @@ def _runbook_gate(runbook: dict[str, Any], current_report: dict[str, Any]) -> di
     return sanitize_metadata({**summary, "status": status, "stale": stale, "integrity_ok": integrity_ok, "failed_safe_count": failed_safe_count, "pending_safe_count": pending_safe_count, "message": message}, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
 
-def _verifier_summary_from_report(report: dict[str, Any]) -> dict[str, Any]:
+def _verifier_summary_from_report(report: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(report.get("verifier_summaries") if isinstance(report.get("verifier_summaries"), dict) else {}, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
 
-def _failed_verifier_summaries(value: Any) -> list[dict[str, Any]]:
+def _failed_verifier_summaries(value: Any) -> list[ImplementationDocument]:
     failed: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():
@@ -599,7 +601,7 @@ def _failed_verifier_summaries(value: Any) -> list[dict[str, Any]]:
     return failed
 
 
-def _missing_submission_evidence(report: dict[str, Any]) -> bool:
+def _missing_submission_evidence(report: ImplementationDocument) -> bool:
     domain = report.get("domains", {}).get("submission_evidence") if isinstance(report.get("domains"), dict) else {}
     if not isinstance(domain, dict) or not domain.get("required"):
         return False
@@ -607,12 +609,12 @@ def _missing_submission_evidence(report: dict[str, Any]) -> bool:
     return int(summary.get("accepted_count") or 0) <= 0 or domain.get("status") not in {"passed", "warning"}
 
 
-def _package_ledger_complete(ledger: dict[str, Any]) -> bool:
+def _package_ledger_complete(ledger: ImplementationDocument) -> bool:
     summary = ledger.get("summary") if isinstance(ledger.get("summary"), dict) else {}
     return bool(summary.get("release_zip_exists")) and int(summary.get("missing_count") or 0) == 0
 
 
-def _missing_package_count(packages: dict[str, Any]) -> int:
+def _missing_package_count(packages: ImplementationDocument) -> int:
     missing = 0
     release_zip = packages.get("release_zip") if isinstance(packages.get("release_zip"), dict) else {}
     if not release_zip.get("exists"):
@@ -634,24 +636,24 @@ def _change_request_impact(scope: list[str]) -> dict[str, bool]:
     }
 
 
-def _report_reference(report: dict[str, Any]) -> dict[str, Any]:
+def _report_reference(report: ImplementationDocument) -> ImplementationDocument:
     return {"report_id": report.get("report_id"), "status": report.get("status"), "current_stage": report.get("current_stage"), "source_hash": report.get("source_hash"), "integrity_hash": report.get("integrity_hash"), "blocker_count": report.get("summary", {}).get("blocker_count") if isinstance(report.get("summary"), dict) else None, "warning_count": report.get("summary", {}).get("warning_count") if isinstance(report.get("summary"), dict) else None}
 
 
-def _maybe_block(blockers: list[dict[str, Any]], check_id: str, condition: bool, message: str) -> None:
+def _maybe_block(blockers: list[ImplementationDocument], check_id: str, condition: bool, message: str) -> None:
     if condition:
         blockers.append(_blocker(check_id, message))
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": message}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": message}
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
     from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS
@@ -662,7 +664,7 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
 
 
-def _write_archive_readme(export_dir: Path, signoff: dict[str, Any], report: dict[str, Any]) -> None:
+def _write_archive_readme(export_dir: Path, signoff: ImplementationDocument, report: ImplementationDocument) -> None:
     lines = [
         "MusicForge Release Operations Archive",
         "",
@@ -676,11 +678,11 @@ def _write_archive_readme(export_dir: Path, signoff: dict[str, Any], report: dic
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     return write_json(path, sanitize_metadata(data, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS))
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 

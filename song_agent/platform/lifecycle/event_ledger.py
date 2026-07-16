@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from song_agent.platform.verification.hashing import sha256_file, stable_hash
 from song_agent.platform.verification.sanitization import sanitize_metadata
@@ -12,6 +14,7 @@ from song_agent.platform.verification.sanitization import sanitize_metadata
 
 Sanitizer = Callable[[Any], Any]
 HistoryAdapter = Callable[[tuple[dict[str, Any], ...]], list[dict[str, Any]]]
+HistoryHashMode = Literal["event", "payload"]
 
 
 @dataclass(frozen=True)
@@ -51,9 +54,16 @@ class HistoryMigrationReport:
 
 
 class HistoryChain:
-    def __init__(self, path: Path | str, *, sanitizer: Sanitizer = sanitize_metadata) -> None:
+    def __init__(
+        self,
+        path: Path | str,
+        *,
+        sanitizer: Sanitizer = sanitize_metadata,
+        hash_mode: HistoryHashMode = "event",
+    ) -> None:
         self.path = Path(path)
         self.sanitizer = sanitizer
+        self.hash_mode = hash_mode
 
     def read(self) -> list[dict[str, Any]]:
         if not self.path.is_file():
@@ -73,16 +83,17 @@ class HistoryChain:
             rows = self.read()
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
             return HistoryValidation(False, (), None, "history_unreadable")
-        previous = ""
+        previous: str | None = None if self.hash_mode == "payload" else ""
         for index, row in enumerate(rows):
-            payload_hash = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})
+            payload_hash = self._payload_hash(row)
             normalized = {**row, "payload_hash": payload_hash}
             event_hash = stable_hash({key: value for key, value in normalized.items() if key != "event_hash"})
             if row.get("payload_hash") != payload_hash:
                 return HistoryValidation(False, tuple(rows), index, "history_payload_hash")
             if row.get("event_hash") != event_hash:
                 return HistoryValidation(False, tuple(rows), index, "history_event_hash")
-            if str(row.get("previous_event_hash") or "") != previous:
+            actual_previous = row.get("previous_event_hash") if self.hash_mode == "payload" else str(row.get("previous_event_hash") or "")
+            if actual_previous != previous:
                 return HistoryValidation(False, tuple(rows), index, "history_chain")
             previous = str(row.get("event_hash") or "")
         return HistoryValidation(True, tuple(rows))
@@ -91,8 +102,12 @@ class HistoryChain:
         validation = self.validate()
         if not validation.valid:
             raise ValueError(f"Cannot append to invalid history: {validation.error_code}")
-        previous = str((validation.latest or {}).get("event_hash") or "")
-        event = self.build_event(payload, previous_event_hash=previous, sanitizer=self.sanitizer)
+        previous = (
+            (validation.latest or {}).get("event_hash")
+            if self.hash_mode == "payload"
+            else str((validation.latest or {}).get("event_hash") or "")
+        )
+        event = self._build_current_event(payload, previous_event_hash=previous)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
@@ -104,6 +119,18 @@ class HistoryChain:
         event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
         return event
+
+    def _build_current_event(self, payload: ImplementationDocument, *, previous_event_hash: str | None) -> ImplementationDocument:
+        event = self.sanitizer({**payload, "previous_event_hash": previous_event_hash})
+        event["payload_hash"] = self._payload_hash(event)
+        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
+        return event
+
+    def _payload_hash(self, event: ImplementationDocument) -> str:
+        if self.hash_mode == "payload":
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            return stable_hash(payload)
+        return stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
 
     def through(self, event_hash: str) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -148,7 +175,7 @@ class HistoryChain:
             shutil.copy2(self.path, target)
         else:
             migrated = adapter(validation.rows)
-            target_chain = HistoryChain(target, sanitizer=self.sanitizer)
+            target_chain = HistoryChain(target, sanitizer=self.sanitizer, hash_mode=self.hash_mode)
             try:
                 for payload in migrated:
                     target_chain.append(

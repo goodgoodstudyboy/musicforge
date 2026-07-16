@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -294,7 +296,7 @@ def unified_command_center_evidence_review_acceptance_verification_exit_code(rep
     return 0 if report.get("status") == "passed" else 1
 
 
-def _runtime_replay_checks(source: dict[str, Any], replay_result: dict[str, Any], **paths: Any) -> list[dict[str, Any]]:
+def _runtime_replay_checks(source: ImplementationDocument, replay_result: ImplementationDocument, **paths: Any) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     source_map = source.get("source") if isinstance(source.get("source"), dict) else {}
     step_reports: dict[str, dict[str, Any]] = {}
@@ -369,14 +371,14 @@ def _runtime_replay_checks(source: dict[str, Any], replay_result: dict[str, Any]
     return checks
 
 
-def _external_presence_checks(source: dict[str, Any], *paths: Path | str | None) -> list[dict[str, Any]]:
+def _external_presence_checks(source: ImplementationDocument, *paths: Path | str | None) -> list[ImplementationDocument]:
     if source.get("status") == "not_applicable":
         return []
     missing = [index for index, path in enumerate(paths) if path is None]
     return [_check("ucc_review_external_evidence_present", not missing, "Strict review verification received external evidence paths.", {"missing_indexes": missing})]
 
 
-def _external_report_checks(check_id: str, zip_path: Path, report_path: Path, runtime: dict[str, Any], package_type: str, source_map: dict[str, Any], prefix: str) -> list[dict[str, Any]]:
+def _external_report_checks(check_id: str, zip_path: Path, report_path: Path, runtime: ImplementationDocument, package_type: str, source_map: ImplementationDocument, prefix: str) -> list[ImplementationDocument]:
     external = _read_json_file(report_path)
     actual_sha = _sha256_path(zip_path)
     manifest_hash = _zip_manifest_hash(zip_path)
@@ -390,7 +392,7 @@ def _external_report_checks(check_id: str, zip_path: Path, report_path: Path, ru
     ]
 
 
-def _cr_proof_checks(path: Path | str | None, source_map: dict[str, Any]) -> list[dict[str, Any]]:
+def _cr_proof_checks(path: Path | str | None, source_map: ImplementationDocument) -> list[ImplementationDocument]:
     if not path:
         return [_check("ucc_review_cr_proof_external_binding", False, "External CR proof report is required.")]
     path = Path(path)
@@ -404,7 +406,7 @@ def _cr_proof_checks(path: Path | str | None, source_map: dict[str, Any]) -> lis
     ]
 
 
-def _ga_release_check_external_checks(source_map: dict[str, Any], ga_path: Path | str | None, release_check_path: Path | str | None) -> list[dict[str, Any]]:
+def _ga_release_check_external_checks(source_map: ImplementationDocument, ga_path: Path | str | None, release_check_path: Path | str | None) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if source_map.get("ga_report_hash"):
         if not ga_path:
@@ -421,7 +423,7 @@ def _ga_release_check_external_checks(source_map: dict[str, Any], ga_path: Path 
     return checks
 
 
-def _acceptance_external_checks(report: dict[str, Any], response_summary: dict[str, Any], binding_summary: dict[str, Any], review_pack_path: Path | str | None, review_pack_verification_report_path: Path | str | None, response_verification_report_path: Path | str | None) -> list[dict[str, Any]]:
+def _acceptance_external_checks(report: ImplementationDocument, response_summary: ImplementationDocument, binding_summary: ImplementationDocument, review_pack_path: Path | str | None, review_pack_verification_report_path: Path | str | None, response_verification_report_path: Path | str | None) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not review_pack_path:
         checks.append(_check("ucc_review_acceptance_review_pack_required", False, "Review Pack ZIP is required."))
@@ -447,7 +449,7 @@ def _acceptance_external_checks(report: dict[str, Any], response_summary: dict[s
     return checks
 
 
-def _summary_binding_checks(source: dict[str, Any], evidence_index: dict[str, Any], proof_index: dict[str, Any], summaries: dict[str, dict[str, Any]], proofs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _summary_binding_checks(source: ImplementationDocument, evidence_index: ImplementationDocument, proof_index: ImplementationDocument, summaries: dict[str, ImplementationDocument], proofs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     source_map = source.get("source") if isinstance(source.get("source"), dict) else {}
     evidence_items = [row for row in evidence_index.get("items", []) if isinstance(row, dict)]
@@ -464,7 +466,7 @@ def _summary_binding_checks(source: dict[str, Any], evidence_index: dict[str, An
     return checks
 
 
-def _replay_runtime_match_checks(replay_result: dict[str, Any], step_reports: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _replay_runtime_match_checks(replay_result: ImplementationDocument, step_reports: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     by_step = {str(row.get("step_id")): row for row in replay_result.get("steps", []) if isinstance(row, dict)}
     for step_id, runtime in step_reports.items():
@@ -477,18 +479,18 @@ def _replay_runtime_match_checks(replay_result: dict[str, Any], step_reports: di
     return checks
 
 
-def _replay_steps_match(plan: dict[str, Any], result: dict[str, Any]) -> bool:
+def _replay_steps_match(plan: ImplementationDocument, result: ImplementationDocument) -> bool:
     planned = [str(row.get("step_id")) for row in plan.get("steps", []) if isinstance(row, dict)]
     actual = [str(row.get("step_id")) for row in result.get("steps", []) if isinstance(row, dict)]
     return planned == actual
 
 
-def _required_replay_failures(plan: dict[str, Any], result: dict[str, Any]) -> list[str]:
+def _required_replay_failures(plan: ImplementationDocument, result: ImplementationDocument) -> list[str]:
     required = {str(row.get("step_id")) for row in plan.get("steps", []) if isinstance(row, dict) and row.get("required")}
     return [str(row.get("step_id")) for row in result.get("steps", []) if isinstance(row, dict) and row.get("step_id") in required and row.get("status") != "passed"]
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], required: set[str], prefix: str) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], required: set[str], prefix: str) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = required - {"manifest.json"}
@@ -511,7 +513,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     hits: list[str] = []
     for name in names:
         try:
@@ -526,12 +528,12 @@ def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, An
 
 
 def _finish(
-    checks: list[dict[str, Any]],
-    summary: dict[str, Any],
-    extra: dict[str, Any] | None = None,
+    checks: list[ImplementationDocument],
+    summary: ImplementationDocument,
+    extra: ImplementationDocument | None = None,
     *,
     package_type: str = UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_VERIFICATION_PACKAGE_TYPE,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     if extra is not None:
         checks.append(extra)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
@@ -553,7 +555,7 @@ def _finish(
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, detail: dict[str, Any] | None = None, *, severity: str = "blocking") -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, detail: ImplementationDocument | None = None, *, severity: str = "blocking") -> ImplementationDocument:
     return {
         "check_id": check_id,
         "status": "passed" if passed else "failed",
@@ -563,23 +565,23 @@ def _check(check_id: str, passed: bool, message: str, detail: dict[str, Any] | N
     }
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _read_json_file(path: Path | str) -> dict[str, Any]:
+def _read_json_file(path: Path | str) -> ImplementationDocument:
     return read_json(Path(path))
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_or_stable(payload: dict[str, Any]) -> str:
+def _integrity_or_stable(payload: ImplementationDocument) -> str:
     return str(payload.get("integrity_hash") or stable_hash(payload))
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -164,7 +166,7 @@ def _node_order(node_name: str) -> tuple[int, str]:
         return len(PIPELINE_NODE_ORDER), node_name
 
 
-def _dict_or_empty(value: Any) -> dict[str, Any]:
+def _dict_or_empty(value: Any) -> ImplementationDocument:
     return value if isinstance(value, dict) else {}
 
 

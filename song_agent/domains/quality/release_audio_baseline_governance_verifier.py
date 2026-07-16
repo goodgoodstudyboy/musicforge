@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -147,7 +149,7 @@ def build_baseline_source_binding(
     return binding
 
 
-def _read_baselines(archive: zipfile.ZipFile, names: list[str]) -> list[dict[str, Any]]:
+def _read_baselines(archive: zipfile.ZipFile, names: list[str]) -> list[ImplementationDocument]:
     baselines: list[dict[str, Any]] = []
     for name in sorted(names):
         if name.startswith("baselines/") and name.endswith("/baseline.json"):
@@ -155,7 +157,7 @@ def _read_baselines(archive: zipfile.ZipFile, names: list[str]) -> list[dict[str
     return baselines
 
 
-def _baseline_checks(baselines: list[dict[str, Any]], evidence: dict[str, dict[str, Any]], *, require_active: bool) -> list[dict[str, Any]]:
+def _baseline_checks(baselines: list[ImplementationDocument], evidence: dict[str, ImplementationDocument], *, require_active: bool) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     active_baselines = [baseline for baseline in baselines if baseline.get("status") == "active"]
     if require_active:
@@ -182,7 +184,7 @@ def _baseline_checks(baselines: list[dict[str, Any]], evidence: dict[str, dict[s
     return checks
 
 
-def _document_binding_checks(manifest: dict[str, Any], registry: dict[str, Any], report: dict[str, Any], active: dict[str, Any], baselines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _document_binding_checks(manifest: ImplementationDocument, registry: ImplementationDocument, report: ImplementationDocument, active: ImplementationDocument, baselines: list[ImplementationDocument]) -> list[ImplementationDocument]:
     baseline_hashes = {baseline.get("baseline_id"): baseline.get("integrity_hash") for baseline in baselines}
     return [
         _check("audio_baseline_registry_manifest_registry_binding", manifest.get("registry_hash") == registry.get("integrity_hash"), "Manifest binds registry."),
@@ -193,7 +195,7 @@ def _document_binding_checks(manifest: dict[str, Any], registry: dict[str, Any],
     ]
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], *, strict: bool) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, strict: bool) -> list[ImplementationDocument]:
     del archive
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     manifest_paths = {item.get("path") for item in files if isinstance(item, dict)}
@@ -207,7 +209,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     return checks
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
     status = "failed" if blockers else "passed"
@@ -226,7 +228,7 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {
         "check_id": check_id,
         "status": "passed" if passed else "failed",
@@ -236,7 +238,7 @@ def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | 
     }
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     with archive.open(name) as handle:
         data = json.loads(handle.read().decode("utf-8"))
     if not isinstance(data, dict):
@@ -258,7 +260,7 @@ def _is_safe_entry(name: str) -> bool:
     return True
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     hits: list[str] = []
     for name in names:
         data = archive.read(name)
@@ -269,7 +271,7 @@ def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, An
     return _check("audio_baseline_registry_redaction", not hits, "No secrets or local paths are present.", {"hits": sorted(set(hits))})
 
 
-def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
+def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous = None
     for event in history:
         if event.get("previous_event_hash") != previous:
@@ -282,11 +284,11 @@ def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
     return True
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

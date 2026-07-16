@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -349,24 +351,24 @@ class AudioFixSprintStore:
                 continue
         return f"{prefix}-{max_seen + 1:06d}"
 
-    def _read_raw_sprint(self, sprint_id: str) -> dict[str, Any]:
+    def _read_raw_sprint(self, sprint_id: str) -> ImplementationDocument:
         path = self.sprint_dir(sprint_id) / "sprint.json"
         if not path.exists():
             raise AudioFixSprintNotFoundError(f"Audio Fix Sprint not found: {sprint_id}.")
         return read_json(path)
 
-    def _write_sprint(self, sprint: dict[str, Any]) -> None:
+    def _write_sprint(self, sprint: ImplementationDocument) -> None:
         path = self.sprint_dir(str(sprint.get("fix_sprint_id"))) / "sprint.json"
         write_json(path, sprint)
 
-    def _touch_sprint(self, sprint: dict[str, Any]) -> None:
+    def _touch_sprint(self, sprint: ImplementationDocument) -> None:
         sprint["updated_at"] = now_iso()
         sprint["summary"] = _sprint_summary(sprint.get("items", []), str(sprint.get("status") or "open"))
         sprint["integrity_hash"] = _integrity_hash(sprint)
         self._write_sprint(sprint)
         self._write_issue_index(sprint)
 
-    def _write_issue_index(self, sprint: dict[str, Any]) -> dict[str, Any]:
+    def _write_issue_index(self, sprint: ImplementationDocument) -> ImplementationDocument:
         items = sorted([_issue_index_row(item) for item in sprint.get("items", [])], key=lambda row: (-int(row.get("priority") or 0), str(row.get("fix_item_id") or "")))
         index = {
             "schema_version": AUDIO_FIX_SCHEMA_VERSION,
@@ -399,7 +401,7 @@ class AudioFixSprintStore:
                     keys.add(key)
         return keys
 
-    def _refresh_stale_flags(self, sprint: dict[str, Any]) -> dict[str, Any]:
+    def _refresh_stale_flags(self, sprint: ImplementationDocument) -> ImplementationDocument:
         stale = False
         reasons: list[str] = []
         current_hashes = []
@@ -426,7 +428,7 @@ class AudioFixSprintStore:
         sprint["stale_reasons"] = sorted(set(reasons))
         return sprint
 
-    def _require_open_current(self, sprint_id: str) -> dict[str, Any]:
+    def _require_open_current(self, sprint_id: str) -> ImplementationDocument:
         sprint = self._refresh_stale_flags(self._read_raw_sprint(sprint_id))
         if sprint.get("status") not in {"open", "in_progress"}:
             raise AudioFixSprintStateError("Audio Fix Sprint is not open.")
@@ -434,7 +436,7 @@ class AudioFixSprintStore:
             raise AudioFixSprintStateError("Audio Fix Sprint source is stale. Refresh before continuing.")
         return sprint
 
-    def _generate_candidate(self, sprint: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
+    def _generate_candidate(self, sprint: ImplementationDocument, item: ImplementationDocument) -> ImplementationDocument:
         sprint_id = str(sprint.get("fix_sprint_id"))
         item_id = str(item.get("fix_item_id"))
         next_index = len(item.get("candidates") or []) + 1
@@ -508,7 +510,7 @@ class AudioFixSprintStore:
         write_json(candidate_dir / "candidate.json", candidate)
         return candidate
 
-    def _read_recheck_session(self, sprint_id: str, *, missing_ok: bool = False) -> dict[str, Any] | None:
+    def _read_recheck_session(self, sprint_id: str, *, missing_ok: bool = False) -> ImplementationDocument | None:
         path = self.sprint_dir(sprint_id) / "recheck" / "listening-session-ref.json"
         if not path.exists():
             if missing_ok:
@@ -517,7 +519,7 @@ class AudioFixSprintStore:
         return read_json(path)
 
 
-def _collect_fix_items(sessions: list[dict[str, Any]], *, include_test_audio: bool, existing_keys: set[str]) -> list[dict[str, Any]]:
+def _collect_fix_items(sessions: list[ImplementationDocument], *, include_test_audio: bool, existing_keys: set[str]) -> list[ImplementationDocument]:
     collected: list[dict[str, Any]] = []
     categories: dict[str, int] = {}
     counter = 0
@@ -587,7 +589,7 @@ def _collect_fix_items(sessions: list[dict[str, Any]], *, include_test_audio: bo
     return sorted(collected, key=lambda row: (-int(row.get("priority") or 0), str(row.get("fix_item_id") or "")))
 
 
-def _priority(item: dict[str, Any], *, repeated_category: bool) -> int:
+def _priority(item: ImplementationDocument, *, repeated_category: bool) -> int:
     score = {"critical": 50, "high": 35, "medium": 20, "low": 10}.get(str(item.get("severity") or ""), 10)
     score += {"rejected": 40, "needs_fix": 25}.get(str(item.get("review_status") or ""), 0)
     if repeated_category:
@@ -605,7 +607,7 @@ def _recommended_actions(category: str) -> list[str]:
     return ["review_task", "audio_revision", "mix_patch"]
 
 
-def _session_ids_from_payload(payload: dict[str, Any]) -> list[str]:
+def _session_ids_from_payload(payload: ImplementationDocument) -> list[str]:
     raw = payload.get("session_ids") or payload.get("from_sessions") or payload.get("from_session") or payload.get("session_id")
     if isinstance(raw, list):
         session_ids = [str(item).strip() for item in raw if str(item).strip()]
@@ -617,7 +619,7 @@ def _session_ids_from_payload(payload: dict[str, Any]) -> list[str]:
     return session_ids
 
 
-def _session_source_hash(session: dict[str, Any]) -> str:
+def _session_source_hash(session: ImplementationDocument) -> str:
     items = []
     for item in session.get("items", []):
         if not isinstance(item, dict):
@@ -645,7 +647,7 @@ def _session_source_hash(session: dict[str, Any]) -> str:
     return stable_hash({"session_id": session.get("session_id"), "source": session.get("source"), "items": items})
 
 
-def _selected_item_ids(payload: dict[str, Any], items: list[dict[str, Any]]) -> set[str]:
+def _selected_item_ids(payload: ImplementationDocument, items: list[ImplementationDocument]) -> set[str]:
     raw = payload.get("fix_item_ids") or payload.get("item_ids")
     if not raw:
         raw = [item.get("fix_item_id") for item in items]
@@ -657,7 +659,7 @@ def _selected_item_ids(payload: dict[str, Any], items: list[dict[str, Any]]) -> 
     return selected
 
 
-def _build_draft(sprint: dict[str, Any], item: dict[str, Any], draft_type: str) -> dict[str, Any]:
+def _build_draft(sprint: ImplementationDocument, item: ImplementationDocument, draft_type: str) -> ImplementationDocument:
     prefix = {"review_task": "alfsrt", "audio_revision": "alfsar", "mix_patch": "alfsmp"}[draft_type]
     draft = {
         "schema_version": AUDIO_FIX_SCHEMA_VERSION,
@@ -682,7 +684,7 @@ def _build_draft(sprint: dict[str, Any], item: dict[str, Any], draft_type: str) 
     return draft
 
 
-def _candidate_review(payload: dict[str, Any]) -> dict[str, Any]:
+def _candidate_review(payload: ImplementationDocument) -> ImplementationDocument:
     if bool(payload.get("playback_confirmed")) is not True:
         raise AudioFixSprintValidationError("Candidate A/B review requires playback_confirmed=true.")
     review_mode = str(payload.get("review_mode") or "manual")
@@ -712,7 +714,7 @@ def _candidate_review(payload: dict[str, Any]) -> dict[str, Any]:
     return review
 
 
-def _manual_review(payload: dict[str, Any]) -> dict[str, Any]:
+def _manual_review(payload: ImplementationDocument) -> ImplementationDocument:
     result = str(payload.get("result") or payload.get("status") or "").strip()
     if result not in {"accepted", "needs_fix", "rejected"}:
         raise AudioFixSprintValidationError("result must be accepted, needs_fix, or rejected.")
@@ -723,7 +725,7 @@ def _manual_review(payload: dict[str, Any]) -> dict[str, Any]:
     return review
 
 
-def _find_item_candidate(sprint: dict[str, Any], item_id: str, candidate_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def _find_item_candidate(sprint: ImplementationDocument, item_id: str, candidate_id: str) -> tuple[ImplementationDocument, ImplementationDocument]:
     item_id = _validate_id(item_id, "afi")
     candidate_id = _validate_id(candidate_id, "afc")
     item = next((row for row in sprint.get("items", []) if row.get("fix_item_id") == item_id), None)
@@ -735,11 +737,11 @@ def _find_item_candidate(sprint: dict[str, Any], item_id: str, candidate_id: str
     return item, candidate
 
 
-def _candidate_by_id(item: dict[str, Any], candidate_id: str) -> dict[str, Any]:
+def _candidate_by_id(item: ImplementationDocument, candidate_id: str) -> ImplementationDocument:
     return next((row for row in item.get("candidates", []) if row.get("candidate_id") == candidate_id), {})
 
 
-def _candidate_is_stale(candidate: dict[str, Any], sprint_dir: Path) -> bool:
+def _candidate_is_stale(candidate: ImplementationDocument, sprint_dir: Path) -> bool:
     artifacts = candidate.get("artifacts") if isinstance(candidate.get("artifacts"), dict) else {}
     hashes = candidate.get("artifact_hashes") if isinstance(candidate.get("artifact_hashes"), dict) else {}
     midi_rel = artifacts.get("midi")
@@ -751,7 +753,7 @@ def _candidate_is_stale(candidate: dict[str, Any], sprint_dir: Path) -> bool:
     return False
 
 
-def _candidate_selected_stale(item: dict[str, Any], sprint_dir: Path) -> bool:
+def _candidate_selected_stale(item: ImplementationDocument, sprint_dir: Path) -> bool:
     candidate_id = item.get("selected_candidate_id")
     if not candidate_id:
         return False
@@ -759,7 +761,7 @@ def _candidate_selected_stale(item: dict[str, Any], sprint_dir: Path) -> bool:
     return bool(candidate and _candidate_is_stale(candidate, sprint_dir))
 
 
-def _closeout_blockers(sprint: dict[str, Any], recheck: dict[str, Any] | None, sprint_dir: Path) -> tuple[list[str], list[str]]:
+def _closeout_blockers(sprint: ImplementationDocument, recheck: ImplementationDocument | None, sprint_dir: Path) -> tuple[list[str], list[str]]:
     blockers: list[str] = []
     warnings: list[str] = []
     if sprint.get("stale"):
@@ -786,7 +788,7 @@ def _closeout_blockers(sprint: dict[str, Any], recheck: dict[str, Any] | None, s
     return sorted(set(blockers)), warnings
 
 
-def _closeout_summary(sprint: dict[str, Any], recheck: dict[str, Any] | None, status: str) -> dict[str, Any]:
+def _closeout_summary(sprint: ImplementationDocument, recheck: ImplementationDocument | None, status: str) -> ImplementationDocument:
     items = sprint.get("items", [])
     recheck_summary = _recheck_summary((recheck or {}).get("items", []), str((recheck or {}).get("status") or "missing")) if recheck else {"item_count": 0, "manual_review_count": 0, "test_fake_count": 0, "release_ready_audio_count": 0, "accepted_count": 0, "needs_fix_count": 0, "rejected_count": 0}
     return {
@@ -801,7 +803,7 @@ def _closeout_summary(sprint: dict[str, Any], recheck: dict[str, Any] | None, st
     }
 
 
-def _recheck_status(items: list[dict[str, Any]]) -> str:
+def _recheck_status(items: list[ImplementationDocument]) -> str:
     summary = _recheck_summary(items, "needs_review")
     if summary["stale_count"]:
         return "stale"
@@ -814,7 +816,7 @@ def _recheck_status(items: list[dict[str, Any]]) -> str:
     return "passed"
 
 
-def _recheck_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]:
+def _recheck_summary(items: list[ImplementationDocument], status: str) -> ImplementationDocument:
     reviews = [item.get("review") for item in items if isinstance(item.get("review"), dict) and item.get("review")]
     return {
         "status": status,
@@ -829,7 +831,7 @@ def _recheck_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]
     }
 
 
-def _sprint_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]:
+def _sprint_summary(items: list[ImplementationDocument], status: str) -> ImplementationDocument:
     return {
         "status": status,
         "issue_count": len(items),
@@ -842,21 +844,21 @@ def _sprint_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]:
     }
 
 
-def _sprint_warnings(items: list[dict[str, Any]]) -> list[str]:
+def _sprint_warnings(items: list[ImplementationDocument]) -> list[str]:
     warnings = []
     if any(item.get("renderer", {}).get("runner_kind") == "test_fake" for item in items):
         warnings.append("test_fake_audio_not_release_ready")
     return warnings
 
 
-def _issue_index_row(item: dict[str, Any]) -> dict[str, Any]:
+def _issue_index_row(item: ImplementationDocument) -> ImplementationDocument:
     reasons = [str(item.get("severity") or "medium"), str(item.get("review_status") or "marker")]
     if item.get("renderer", {}).get("runner_kind") == "test_fake":
         reasons.append("test_fake_source")
     return {"fix_item_id": item.get("fix_item_id"), "priority": item.get("priority"), "category": item.get("category"), "severity": item.get("severity"), "status": item.get("status"), "reason": reasons}
 
 
-def _top_category(items: list[dict[str, Any]]) -> str | None:
+def _top_category(items: list[ImplementationDocument]) -> str | None:
     counts: dict[str, int] = {}
     for item in items:
         category = str(item.get("category") or "")
@@ -864,25 +866,25 @@ def _top_category(items: list[dict[str, Any]]) -> str | None:
     return max(counts.items(), key=lambda row: row[1])[0] if counts else None
 
 
-def _public_sprint(sprint: dict[str, Any]) -> dict[str, Any]:
+def _public_sprint(sprint: ImplementationDocument) -> ImplementationDocument:
     public = {key: value for key, value in sprint.items() if key != "items"}
     public["items"] = [_public_item(item) for item in sprint.get("items", [])]
     return public
 
 
-def _public_item(item: dict[str, Any]) -> dict[str, Any]:
+def _public_item(item: ImplementationDocument) -> ImplementationDocument:
     return dict(item)
 
 
-def _fix_item_source(item: dict[str, Any]) -> dict[str, Any]:
+def _fix_item_source(item: ImplementationDocument) -> ImplementationDocument:
     return {"source_marker": item.get("source_marker"), "artifact_hashes": item.get("artifact_hashes"), "renderer": item.get("renderer"), "selected_candidate_id": item.get("selected_candidate_id")}
 
 
-def _review_core(review: dict[str, Any]) -> dict[str, Any]:
+def _review_core(review: ImplementationDocument) -> ImplementationDocument:
     return {key: review.get(key) for key in ("status", "preferred", "rating", "rating_delta", "review_mode", "playback_confirmed", "reviewer")}
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -914,7 +916,7 @@ def _validate_id(value: str, prefix: str) -> str:
     return text
 
 
-def _append_event(path: Path, event: str, payload: dict[str, Any]) -> None:
+def _append_event(path: Path, event: str, payload: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     row = {"created_at": now_iso(), "event": event, "payload": payload}
     row["event_hash"] = stable_hash(row)

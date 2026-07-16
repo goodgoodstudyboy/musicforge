@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.interfaces.cli.bindings import BINDINGS as CLI_BINDINGS
 
 from . import dependencies as _commands_maintenance_parts_dependencies; Any, CommandSpec, LTSMaintenanceStore, MAINTENANCE_PROFILES, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, generate_request, json, load_provider_config, maintenance_backup_verification_exit_code, os, print_maintenance_backup_verification_report, provider_configured, read_json, sys, test_provider_config, verify_maintenance_backup_zip, write_interface_document, write_json, write_maintenance_backup_verification_report = (_commands_maintenance_parts_dependencies.Any, _commands_maintenance_parts_dependencies.CommandSpec, _commands_maintenance_parts_dependencies.LTSMaintenanceStore, _commands_maintenance_parts_dependencies.MAINTENANCE_PROFILES, _commands_maintenance_parts_dependencies.Path, _commands_maintenance_parts_dependencies.ProviderConfig, _commands_maintenance_parts_dependencies.ProviderError, _commands_maintenance_parts_dependencies.SongRequest, _commands_maintenance_parts_dependencies.argparse, _commands_maintenance_parts_dependencies.build_auth_config, _commands_maintenance_parts_dependencies.generate_request, _commands_maintenance_parts_dependencies.json, _commands_maintenance_parts_dependencies.load_provider_config, _commands_maintenance_parts_dependencies.maintenance_backup_verification_exit_code, _commands_maintenance_parts_dependencies.os, _commands_maintenance_parts_dependencies.print_maintenance_backup_verification_report, _commands_maintenance_parts_dependencies.provider_configured, _commands_maintenance_parts_dependencies.read_json, _commands_maintenance_parts_dependencies.sys, _commands_maintenance_parts_dependencies.test_provider_config, _commands_maintenance_parts_dependencies.verify_maintenance_backup_zip, _commands_maintenance_parts_dependencies.write_interface_document, _commands_maintenance_parts_dependencies.write_json, _commands_maintenance_parts_dependencies.write_maintenance_backup_verification_report)
@@ -175,7 +177,7 @@ def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-entry-count", type=int, default=20000)
     return parser
 
-def _run_maintenance_command(args: argparse.Namespace) -> dict[str, Any]:
+def _run_maintenance_command(args: argparse.Namespace) -> ImplementationDocument:
     pass
 
     store = LTSMaintenanceStore()
@@ -225,7 +227,7 @@ def _run_maintenance_command(args: argparse.Namespace) -> dict[str, Any]:
             return {"status": "passed", "report": read_json(path)}
     raise ValueError("Unsupported maintenance command.")
 
-def _print_maintenance_result(result: dict[str, Any], *, json_output: bool) -> None:
+def _print_maintenance_result(result: ImplementationDocument, *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return

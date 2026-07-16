@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -258,7 +260,7 @@ class _AcceptedEvidenceVerifier:
             self._add_exact_check("data", f"accepted_evidence_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get("source_hash"), self.report_doc.get("source_hash"), f"{name} source_hash")
         self._verify_data_bindings(source, public)
 
-    def _verify_data_bindings(self, source: dict[str, Any], public: dict[str, Any]) -> None:
+    def _verify_data_bindings(self, source: ImplementationDocument, public: ImplementationDocument) -> None:
         response = self.data_docs.get("response-verification-summary.json", {})
         pack = self.data_docs.get("review-pack-source-summary.json", {})
         portal = self.data_docs.get("portal-binding-summary.json", {})
@@ -340,7 +342,7 @@ class _AcceptedEvidenceVerifier:
                 self.redaction_findings.extend(_blocked_key_findings(name, value))
         self._add_check("redaction", "accepted_evidence_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned entries.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if not name or info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name or 'entry'} is missing.")
@@ -353,7 +355,7 @@ class _AcceptedEvidenceVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = accepted_evidence_summary(self.report_doc)
@@ -418,7 +420,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         for match in pattern.finditer(text):
@@ -429,7 +431,7 @@ def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _blocked_key_findings(path: str, value: Any) -> list[dict[str, Any]]:
+def _blocked_key_findings(path: str, value: Any) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
 
     def walk(current: Any, trail: str) -> None:

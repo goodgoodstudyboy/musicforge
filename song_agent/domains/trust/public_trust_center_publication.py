@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -367,13 +369,13 @@ class PublicTrustCenterPublicationStore:
             raise PublicTrustCenterPublicationNotFoundError("Current Public Trust Center publication is missing.")
         return publication_id
 
-    def _read_report(self, center_id: str, channel_id: str, publication_id: str) -> dict[str, Any]:
+    def _read_report(self, center_id: str, channel_id: str, publication_id: str) -> ImplementationDocument:
         report = _read_json_default(self.report_path(center_id, channel_id, publication_id), default={})
         if not report:
             raise PublicTrustCenterPublicationNotFoundError("Public Trust Center publication report is missing.")
         return report
 
-    def _build_source(self, center_id: str, channel: dict[str, Any]) -> dict[str, Any]:
+    def _build_source(self, center_id: str, channel: ImplementationDocument) -> ImplementationDocument:
         package_rows = self._package_rows(center_id)
         verification_rows = self._verification_rows(center_id)
         accepted_rows = self._accepted_evidence_rows(center_id)
@@ -432,7 +434,7 @@ class PublicTrustCenterPublicationStore:
         transparency_verification = verify_public_trust_center_anchor_transparency_package(self.anchor_transparency_store.zip_path(center_id), strict=True, checkpoint_path=self.anchor_transparency_store.current_checkpoint_path(center_id), anchor_registry_path=self.anchor_registry_store.zip_path(center_id), require_current_checkpoint=True, require_published_anchor=True, require_not_revoked=True)
         write_public_trust_center_anchor_transparency_verification_report(transparency_verification, self.anchor_transparency_store.verification_report_path(center_id))
 
-    def _package_rows(self, center_id: str) -> list[dict[str, Any]]:
+    def _package_rows(self, center_id: str) -> list[ImplementationDocument]:
         rows = [
             _package_row("public_trust_center", "packages/public-trust-center.zip", self.trust_center_store.zip_path(center_id), self.trust_center_store.verification_report_path(center_id)),
             _package_row("distribution_kit", "packages/public-trust-center-distribution-kit.zip", self.distribution_kit_store.zip_path(center_id), self.distribution_kit_store.verification_report_path(center_id)),
@@ -444,7 +446,7 @@ class PublicTrustCenterPublicationStore:
         rows.extend(_accepted_package_rows(center_id, self.acceptance_store))
         return rows
 
-    def _verification_rows(self, center_id: str) -> list[dict[str, Any]]:
+    def _verification_rows(self, center_id: str) -> list[ImplementationDocument]:
         rows = [
             _verification_row("public_trust_center", "verification-reports/public-trust-center-verification-report.json", self.trust_center_store.verification_report_path(center_id)),
             _verification_row("distribution_kit", "verification-reports/distribution-kit-verification-report.json", self.distribution_kit_store.verification_report_path(center_id)),
@@ -456,7 +458,7 @@ class PublicTrustCenterPublicationStore:
         rows.extend(_accepted_verification_rows(center_id, self.acceptance_store))
         return rows
 
-    def _accepted_evidence_rows(self, center_id: str) -> list[dict[str, Any]]:
+    def _accepted_evidence_rows(self, center_id: str) -> list[ImplementationDocument]:
         rows: list[dict[str, Any]] = []
         root = self.acceptance_store.accepted_evidence_root(center_id)
         if not root.exists():
@@ -469,7 +471,7 @@ class PublicTrustCenterPublicationStore:
             rows.append({"evidence_id": evidence_id, "response_id": evidence.get("response_id"), "zip_sha256": _sha256(evidence_zip), "manifest_hash": _read_zip_json(evidence_zip, "evidence-manifest.json").get("integrity_hash"), "verification_status": verification.get("status"), "verification_hash": _verification_hash(verification)})
         return rows
 
-    def _copy_source_files(self, center_id: str, report: dict[str, Any], export_dir: Path) -> list[str]:
+    def _copy_source_files(self, center_id: str, report: ImplementationDocument, export_dir: Path) -> list[str]:
         copied: list[str] = []
         for item in report.get("source", {}).get("packages", []):
             if not isinstance(item, dict):
@@ -493,7 +495,7 @@ class PublicTrustCenterPublicationStore:
         copied.append("anchors/public-trust-center.delivery-anchor.json")
         return copied
 
-    def _package_index(self, report: dict[str, Any]) -> dict[str, Any]:
+    def _package_index(self, report: ImplementationDocument) -> ImplementationDocument:
         rows = []
         verification_by_key = {str(item.get("verification_key") or ""): item for item in report.get("source", {}).get("verifications", []) if isinstance(item, dict)}
         for item in report.get("source", {}).get("packages", []):
@@ -505,12 +507,12 @@ class PublicTrustCenterPublicationStore:
         data["integrity_hash"] = sidecar_hash(data)
         return data
 
-    def _verification_index(self, report: dict[str, Any]) -> dict[str, Any]:
+    def _verification_index(self, report: ImplementationDocument) -> ImplementationDocument:
         data = {"schema_version": PUBLICATION_SCHEMA_VERSION, "publication_id": report.get("publication_id"), "source_hash": report.get("source_hash"), "items": report.get("source", {}).get("verifications", [])}
         data["integrity_hash"] = sidecar_hash(data)
         return data
 
-    def _mirror_policy(self, report: dict[str, Any]) -> dict[str, Any]:
+    def _mirror_policy(self, report: ImplementationDocument) -> ImplementationDocument:
         source = report.get("source") if isinstance(report.get("source"), dict) else {}
         allowed = _expected_entries(source)
         data = {
@@ -525,7 +527,7 @@ class PublicTrustCenterPublicationStore:
         data["integrity_hash"] = sidecar_hash(data)
         return data
 
-    def _findings(self, channel: dict[str, Any], source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, channel: ImplementationDocument, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         checks: list[dict[str, Any]] = []
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
@@ -548,7 +550,7 @@ class PublicTrustCenterPublicationStore:
             check("ptcpub_accepted_evidence_present", bool(source.get("accepted_evidence")), "Accepted Evidence is included.")
         return checks, blockers, warnings
 
-    def _ensure_exportable(self, center_id: str, channel_id: str, publication_id: str, report: dict[str, Any]) -> None:
+    def _ensure_exportable(self, center_id: str, channel_id: str, publication_id: str, report: ImplementationDocument) -> None:
         if report.get("status") in {"revoked", "superseded"}:
             raise PublicTrustCenterPublicationStateError("Public Trust Center publication is not exportable after revoke/supersede.")
         if not publication_report_integrity_ok(report):
@@ -560,7 +562,7 @@ class PublicTrustCenterPublicationStore:
         if report.get("status") == "failed":
             raise PublicTrustCenterPublicationStateError("Public Trust Center publication report is failed.")
 
-    def _append_event(self, center_id: str, channel_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_event(self, center_id: str, channel_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         path = self.events_path(center_id, channel_id)
         events = _read_jsonl(path)
         previous = events[-1].get("event_hash") if events else None
@@ -572,7 +574,7 @@ class PublicTrustCenterPublicationStore:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
         self._write_channel_state(center_id, channel_id, now=now)
 
-    def _write_channel_state(self, center_id: str, channel_id: str, *, now: str) -> dict[str, Any]:
+    def _write_channel_state(self, center_id: str, channel_id: str, *, now: str) -> ImplementationDocument:
         events = _read_jsonl(self.events_path(center_id, channel_id))
         event_state = _publication_lifecycle_from_events(events)
         current = _read_json_default(self.current_publication_path(center_id, channel_id), default={})
@@ -606,7 +608,7 @@ class PublicTrustCenterPublicationStore:
         _write_json(self.channel_state_path(center_id, channel_id), state)
         return state
 
-    def _history_has_state_event(self, center_id: str, channel_id: str, report: dict[str, Any], event_type: str) -> bool:
+    def _history_has_state_event(self, center_id: str, channel_id: str, report: ImplementationDocument, event_type: str) -> bool:
         for event in _read_jsonl(self.events_path(center_id, channel_id)):
             if event.get("event_type") != event_type:
                 continue
@@ -636,7 +638,7 @@ def publication_report_integrity_ok(report: dict[str, Any]) -> bool:
 
 
 
-def _publication_lifecycle_from_events(events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _publication_lifecycle_from_events(events: list[ImplementationDocument]) -> dict[str, ImplementationDocument]:
     rows: dict[str, dict[str, Any]] = {}
     for event in events:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -662,7 +664,7 @@ def _publication_lifecycle_from_events(events: list[dict[str, Any]]) -> dict[str
     return rows
 
 
-def _publication_state_row(publication_id: str, report: dict[str, Any], derived: dict[str, Any], current: dict[str, Any], snapshot_root: Path | None) -> dict[str, Any]:
+def _publication_state_row(publication_id: str, report: ImplementationDocument, derived: ImplementationDocument, current: ImplementationDocument, snapshot_root: Path | None) -> ImplementationDocument:
     snapshot = report.get("status") if report else None
     status = str(derived.get("status_from_events") or snapshot or "missing")
     if snapshot in {"revoked", "superseded"}:
@@ -726,18 +728,18 @@ def _default_policy(channel_type: str) -> dict[str, bool]:
     }
 
 
-def _package_row(key: str, path: str, zip_path: Path, verification_path: Path | None = None) -> dict[str, Any]:
+def _package_row(key: str, path: str, zip_path: Path, verification_path: Path | None = None) -> ImplementationDocument:
     manifest_hash = _manifest_hash_for_package(key, zip_path)
     verification = _read_json_default(verification_path or Path(), default={})
     return {"package_key": key, "path": path, "required": True, "sha256": _sha256(zip_path), "size_bytes": os.stat(_fs_path(zip_path)).st_size if zip_path.exists() else None, "manifest_hash": manifest_hash, "verification_report_hash": _verification_hash(verification), "status": verification.get("status")}
 
 
-def _verification_row(key: str, path: str, verification_path: Path) -> dict[str, Any]:
+def _verification_row(key: str, path: str, verification_path: Path) -> ImplementationDocument:
     verification = _read_json_default(verification_path, default={})
     return {"verification_key": key, "path": path, "status": verification.get("status"), "zip_sha256": verification.get("zip_sha256"), "manifest_hash": verification.get("manifest_hash"), "report_hash": _verification_hash(verification)}
 
 
-def _accepted_package_rows(center_id: str, acceptance_store: PublicTrustCenterDistributionKitAcceptanceStore) -> list[dict[str, Any]]:
+def _accepted_package_rows(center_id: str, acceptance_store: PublicTrustCenterDistributionKitAcceptanceStore) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     root = acceptance_store.accepted_evidence_root(center_id)
     if not root.exists():
@@ -751,7 +753,7 @@ def _accepted_package_rows(center_id: str, acceptance_store: PublicTrustCenterDi
     return rows
 
 
-def _accepted_verification_rows(center_id: str, acceptance_store: PublicTrustCenterDistributionKitAcceptanceStore) -> list[dict[str, Any]]:
+def _accepted_verification_rows(center_id: str, acceptance_store: PublicTrustCenterDistributionKitAcceptanceStore) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     root = acceptance_store.accepted_evidence_root(center_id)
     if not root.exists():
@@ -819,7 +821,7 @@ def _manifest_hash_for_package(key: str, zip_path: Path) -> Any:
     return _read_zip_json(zip_path, entry).get("integrity_hash") if entry else None
 
 
-def _expected_entries(source: dict[str, Any]) -> set[str]:
+def _expected_entries(source: ImplementationDocument) -> set[str]:
     entries = {
         "README.txt",
         "publication-manifest.json",
@@ -845,14 +847,14 @@ def _expected_entries(source: dict[str, Any]) -> set[str]:
     return entries
 
 
-def _checksum_json(export_dir: Path) -> dict[str, Any]:
+def _checksum_json(export_dir: Path) -> ImplementationDocument:
     rows = [_file_record(export_dir, path) for path in _walk_files(export_dir) if path.relative_to(export_dir).as_posix() not in {"checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt", "publication-manifest.json"}]
     data = {"schema_version": PUBLICATION_SCHEMA_VERSION, "files": rows}
     data["integrity_hash"] = sidecar_hash(data)
     return data
 
 
-def _write_sha256sums(export_dir: Path, checksum_json: dict[str, Any]) -> None:
+def _write_sha256sums(export_dir: Path, checksum_json: ImplementationDocument) -> None:
     lines = [f"{item.get('sha256')}  {item.get('path')}" for item in checksum_json.get("files", []) if isinstance(item, dict)]
     (export_dir / "checksum" / "SHA256SUMS.txt").write_text(sanitize_sensitive_text("\n".join(lines) + "\n"), encoding="utf-8")
 
@@ -870,7 +872,7 @@ def _write_readme(export_dir: Path) -> None:
     (export_dir / "README.txt").write_text(sanitize_sensitive_text(text), encoding="utf-8")
 
 
-def _write_html_pages(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_html_pages(export_dir: Path, report: ImplementationDocument) -> None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     body = (
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>MusicForge Public Trust Center Publication</title>"
@@ -886,7 +888,7 @@ def _write_html_pages(export_dir: Path, report: dict[str, Any]) -> None:
         (export_dir / "site" / name).write_text(sanitize_sensitive_text(body), encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 
@@ -936,11 +938,11 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise PublicTrustCenterPublicationStateError("Resolved path escapes Public Trust Center publication root.")
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -950,7 +952,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -966,7 +968,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _read_zip_json(zip_path: Path, entry: str | None) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str | None) -> ImplementationDocument:
     if not zip_path.exists() or not entry:
         return {}
     try:
@@ -986,7 +988,7 @@ def _sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _verification_hash(report: dict[str, Any]) -> str | None:
+def _verification_hash(report: ImplementationDocument) -> str | None:
     if not report:
         return None
     if report.get("package_kind") == "public_trust_center_acceptance_board":

@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -295,7 +297,7 @@ class _AcceptedEvidenceVerifier:
             self.redaction_findings.extend(_redaction_findings(name, text))
         self._add_check("redaction", "ptcdkae_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive issue(s)." if self.redaction_findings else "No sensitive values found in accepted evidence.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -308,7 +310,7 @@ class _AcceptedEvidenceVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = {"center_id": self.evidence.get("center_id"), "evidence_id": self.evidence.get("evidence_id"), "response_id": self.evidence.get("response_id"), "status": self.evidence.get("status"), "result": self.evidence.get("result"), "blocker_count": len(blockers), "warning_count": len(warnings)}
@@ -354,7 +356,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -372,7 +374,7 @@ def _fs_path(path: Path) -> str:
     return "\\\\?\\" + text
 
 
-def _redaction_findings(scope: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
         if pattern.search(text):

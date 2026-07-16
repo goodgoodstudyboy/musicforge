@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -159,20 +161,20 @@ def unified_command_center_reviewer_decision_board_verification_exit_code(report
 
 
 def _document_binding_checks(
-    manifest: dict[str, Any],
-    source: dict[str, Any],
-    roster: dict[str, Any],
-    response_index: dict[str, Any],
-    accepted_index: dict[str, Any],
-    finding_ledger: dict[str, Any],
-    conflict_report: dict[str, Any],
-    quorum_report: dict[str, Any],
-    decision_matrix: dict[str, Any],
-    decision_report: dict[str, Any],
-    checklist: dict[str, Any],
-    signoff: dict[str, Any],
-    signoff_binding: dict[str, Any],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    source: ImplementationDocument,
+    roster: ImplementationDocument,
+    response_index: ImplementationDocument,
+    accepted_index: ImplementationDocument,
+    finding_ledger: ImplementationDocument,
+    conflict_report: ImplementationDocument,
+    quorum_report: ImplementationDocument,
+    decision_matrix: ImplementationDocument,
+    decision_report: ImplementationDocument,
+    checklist: ImplementationDocument,
+    signoff: ImplementationDocument,
+    signoff_binding: ImplementationDocument,
+) -> list[ImplementationDocument]:
     manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     source_hash = source.get("source_hash")
     docs = [
@@ -200,14 +202,14 @@ def _document_binding_checks(
 
 
 def _external_binding_checks(
-    source: dict[str, Any],
-    accepted_index: dict[str, Any],
+    source: ImplementationDocument,
+    accepted_index: ImplementationDocument,
     evidence_review_path: Path | str | None,
     evidence_review_verification_report_path: Path | str | None,
     accepted_evidence_paths: list[Path | str | None] | tuple[Path | str | None, ...],
     accepted_evidence_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
     accepted_evidence_response_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not evidence_review_path or not evidence_review_verification_report_path:
         checks.append(_check("ucc_decision_board_evidence_review_external_binding", False, "Evidence Review ZIP and verification report are required."))
@@ -263,7 +265,7 @@ def _external_acceptance_items(
     accepted_evidence_paths: list[Path | str | None] | tuple[Path | str | None, ...],
     accepted_evidence_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
     accepted_evidence_response_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     count = max(len(accepted_evidence_paths), len(accepted_evidence_verification_report_paths), len(accepted_evidence_response_verification_report_paths))
     for index in range(count):
@@ -302,7 +304,7 @@ def _path_at(values: list[Path | str | None] | tuple[Path | str | None, ...], in
     return Path(values[index])
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
@@ -325,7 +327,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _history_chain_check(lines: list[str], signoff: dict[str, Any]) -> dict[str, Any]:
+def _history_chain_check(lines: list[str], signoff: ImplementationDocument) -> ImplementationDocument:
     previous = None
     found = False
     for line in lines:
@@ -342,7 +344,7 @@ def _history_chain_check(lines: list[str], signoff: dict[str, Any]) -> dict[str,
     return _check("ucc_decision_board_history_chain", found, "Decision Board history contains the current signed event.")
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     hits = []
     for name in names:
         try:
@@ -356,7 +358,7 @@ def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, An
     return _check("ucc_decision_board_redaction_scan", not hits, "No sensitive strings appear in the package.", {"entries": sorted(set(hits))})
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, extra: ImplementationDocument | None = None) -> ImplementationDocument:
     if extra is not None:
         checks.append(extra)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
@@ -378,28 +380,28 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], extra: dict[s
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, detail: dict[str, Any] | None = None, *, severity: str = "blocking") -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, detail: ImplementationDocument | None = None, *, severity: str = "blocking") -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "severity": severity, "message": message, "detail": detail or {}}
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _read_json_file(path: Path | str) -> dict[str, Any]:
+def _read_json_file(path: Path | str) -> ImplementationDocument:
     return read_json(Path(path))
 
 
-def _read_zip_json(path: Path, rel: str) -> dict[str, Any]:
+def _read_zip_json(path: Path, rel: str) -> ImplementationDocument:
     with zipfile.ZipFile(path) as archive:
         return json.loads(archive.read(rel).decode("utf-8"))
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 

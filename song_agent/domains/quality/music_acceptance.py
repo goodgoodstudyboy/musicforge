@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import shutil
@@ -915,14 +917,14 @@ def acceptance_source_state(store: AcceptanceStore, suite: AcceptanceSuite) -> d
     )
 
 
-def _report_integrity_core(report: dict[str, Any]) -> dict[str, Any]:
+def _report_integrity_core(report: ImplementationDocument) -> ImplementationDocument:
     data = dict(report)
     data.pop("verification", None)
     data.pop("generated_at", None)
     return sanitize_metadata(data)
 
 
-def _report_verification(stored_source_hash: str, current_source_hash: str, stored_content_hash: str, current_content_hash: str) -> dict[str, Any]:
+def _report_verification(stored_source_hash: str, current_source_hash: str, stored_content_hash: str, current_content_hash: str) -> ImplementationDocument:
     source_ok = bool(stored_source_hash) and stored_source_hash == current_source_hash
     content_ok = bool(stored_content_hash) and stored_content_hash == current_content_hash
     return sanitize_metadata(
@@ -1043,7 +1045,7 @@ def default_acceptance_song_cases(count: int) -> list[dict[str, Any]]:
     return rows
 
 
-def _request_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _request_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
     request = payload.get("request")
     if isinstance(request, dict):
         return sanitize_metadata(dict(request))
@@ -1060,7 +1062,7 @@ def _request_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _request_summary(request: dict[str, Any]) -> dict[str, Any]:
+def _request_summary(request: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "title": request.get("title"),
@@ -1071,17 +1073,17 @@ def _request_summary(request: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _default_request(name: str) -> dict[str, Any]:
+def _default_request(name: str) -> ImplementationDocument:
     return {"title": name or "Acceptance Song", "language": "English", "style": "pop", "theme": "acceptance test", "duration_seconds": 90}
 
 
-def _quality_payload(plan: SongPlan) -> dict[str, Any]:
+def _quality_payload(plan: SongPlan) -> ImplementationDocument:
     if plan.quality and plan.quality.scores:
         return {"status": "passed", "overall": plan.quality.scores.overall, "summary": {"overall": plan.quality.scores.overall}}
     return {"status": "passed", "overall": 80, "summary": {"overall": 80}}
 
 
-def _case_artifacts(case_id: str, *, audio_exists: bool, audio_status: str) -> dict[str, Any]:
+def _case_artifacts(case_id: str, *, audio_exists: bool, audio_status: str) -> ImplementationDocument:
     base = f"cases/{case_id}"
     artifacts = {"song_plan": f"{base}/song-plan.json", "midi": f"{base}/song.mid", "audio_status": audio_status}
     if audio_exists:
@@ -1089,7 +1091,7 @@ def _case_artifacts(case_id: str, *, audio_exists: bool, audio_status: str) -> d
     return artifacts
 
 
-def _review_payload(case_id: str, payload: dict[str, Any], *, min_rating: int) -> dict[str, Any]:
+def _review_payload(case_id: str, payload: ImplementationDocument, *, min_rating: int) -> ImplementationDocument:
     status = str(payload.get("status") or "accepted")
     if status not in {"accepted", "needs_fix", "rejected", "waived"}:
         raise AcceptanceValidationError("review status must be accepted, needs_fix, rejected, or waived.")
@@ -1153,7 +1155,7 @@ def _review_payload(case_id: str, payload: dict[str, Any], *, min_rating: int) -
     return sanitize_metadata(review)
 
 
-def _case_status_from_review(review: dict[str, Any]) -> str:
+def _case_status_from_review(review: ImplementationDocument) -> str:
     status = str(review.get("status") or "")
     return {"accepted": "accepted", "waived": "waived", "rejected": "rejected", "needs_fix": "rejected"}.get(status, "rejected")
 
@@ -1163,7 +1165,7 @@ def _suite_requires_audio(suite: AcceptanceSuite) -> bool:
     return suite.profile_id == "audio_required" or str(profile.get("profile_id") or "") == "audio_required" or str(profile.get("render_audio") or "") in {"always", "require"}
 
 
-def _request_duration_seconds(request: dict[str, Any]) -> float | None:
+def _request_duration_seconds(request: ImplementationDocument) -> float | None:
     try:
         value = float((request or {}).get("duration_seconds") or 0)
     except (TypeError, ValueError):
@@ -1171,7 +1173,7 @@ def _request_duration_seconds(request: dict[str, Any]) -> float | None:
     return value if value > 0 else None
 
 
-def _audio_evidence_status(review: dict[str, Any], health: dict[str, Any]) -> str:
+def _audio_evidence_status(review: ImplementationDocument, health: ImplementationDocument) -> str:
     if not review:
         return "missing"
     if str(review.get("audio_mode") or "").lower() != "wav":
@@ -1185,7 +1187,7 @@ def _audio_evidence_status(review: dict[str, Any], health: dict[str, Any]) -> st
     return "current"
 
 
-def _profile_from_payload(payload: dict[str, Any]) -> AcceptanceProfile:
+def _profile_from_payload(payload: ImplementationDocument) -> AcceptanceProfile:
     if isinstance(payload.get("profile"), dict) and payload["profile"].get("profile_id"):
         return get_acceptance_profile(str(payload["profile"].get("profile_id")))
     profile_id = str(payload.get("profile_id") or "").strip()
@@ -1196,7 +1198,7 @@ def _profile_from_payload(payload: dict[str, Any]) -> AcceptanceProfile:
     return get_acceptance_profile("developer_manual" if mode in legacy_modes else mode)
 
 
-def _expectation_blockers(case: AcceptanceCase, health_summary: dict[str, Any]) -> list[str]:
+def _expectation_blockers(case: AcceptanceCase, health_summary: ImplementationDocument) -> list[str]:
     expectations = case.expectations if isinstance(case.expectations, dict) else {}
     blockers: list[str] = []
     minimums = (
@@ -1213,7 +1215,7 @@ def _expectation_blockers(case: AcceptanceCase, health_summary: dict[str, Any]) 
     return blockers
 
 
-def _songbook_coverage(case_rows: list[dict[str, Any]], suite: AcceptanceSuite) -> dict[str, Any]:
+def _songbook_coverage(case_rows: list[ImplementationDocument], suite: AcceptanceSuite) -> ImplementationDocument:
     if not suite.release_ready_profile:
         return {
             "expected_case_count": 0,
@@ -1253,7 +1255,7 @@ def _songbook_coverage(case_rows: list[dict[str, Any]], suite: AcceptanceSuite) 
     )
 
 
-def _songbook_coverage_blockers(coverage: dict[str, Any], suite: AcceptanceSuite) -> list[str]:
+def _songbook_coverage_blockers(coverage: ImplementationDocument, suite: AcceptanceSuite) -> list[str]:
     if not suite.release_ready_profile or coverage.get("songbook_coverage_status") == "complete":
         return []
     blockers = ["release-ready profile requires complete regression songbook coverage"]
@@ -1290,7 +1292,7 @@ def _acceptance_status(
     return "passed"
 
 
-def _renderer_snapshot(config: Any, sources: dict[str, str]) -> dict[str, Any]:
+def _renderer_snapshot(config: Any, sources: dict[str, str]) -> ImplementationDocument:
     public = config.to_public_dict(sources)
     return sanitize_metadata(
         {
@@ -1303,7 +1305,7 @@ def _renderer_snapshot(config: Any, sources: dict[str, str]) -> dict[str, Any]:
     )
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     try:
@@ -1313,7 +1315,7 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _report_markdown(report: dict[str, Any]) -> str:
+def _report_markdown(report: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     lines = [
         "# Music Acceptance Report",
@@ -1334,7 +1336,7 @@ def _report_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _redaction_findings(payload: Any) -> list[dict[str, Any]]:
+def _redaction_findings(payload: Any) -> list[ImplementationDocument]:
     raw = json.dumps(payload, ensure_ascii=False)
     patterns = ("sk-", "api_key", "access_token", "Authorization:", "Bearer ", "C:\\Users", "\\\\", "/Users/", "/home/")
     findings = []
@@ -1344,7 +1346,7 @@ def _redaction_findings(payload: Any) -> list[dict[str, Any]]:
     return findings
 
 
-def _human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> dict[str, Any]:
+def _human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> ImplementationDocument:
     try:
         suite_dir = store.suite_dir(suite_id)
         packs = [
@@ -1387,7 +1389,7 @@ def _optional_text(value: Any, limit: int) -> str | None:
     return text or None
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(dict(value)) if isinstance(value, dict) else {}
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import tempfile
@@ -237,7 +239,7 @@ def unified_release_program_continuity_distribution_verification_exit_code(repor
     return 0 if report.get("status") == "passed" else 1
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     file_paths = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
@@ -263,7 +265,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _package_index_checks(archive: zipfile.ZipFile, package_index: dict[str, Any]) -> list[dict[str, Any]]:
+def _package_index_checks(archive: zipfile.ZipFile, package_index: ImplementationDocument) -> list[ImplementationDocument]:
     rows = package_index.get("packages") if isinstance(package_index.get("packages"), list) else []
     expected = {
         key: {
@@ -290,7 +292,7 @@ def _package_index_checks(archive: zipfile.ZipFile, package_index: dict[str, Any
     return checks
 
 
-def _verification_index_checks(verification_index: dict[str, Any], verification_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _verification_index_checks(verification_index: ImplementationDocument, verification_docs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows = verification_index.get("verifications") if isinstance(verification_index.get("verifications"), list) else []
     row_by_type = {str(row.get("component_type") or ""): row for row in rows if isinstance(row, dict)}
     checks = [_check("urpcdk_verification_index_components", set(row_by_type) == set(PACKAGE_COMPONENTS), "Verification index lists exactly the fixed verification components.", {"components": sorted(row_by_type)})]
@@ -307,12 +309,12 @@ def _verification_index_checks(verification_index: dict[str, Any], verification_
 
 
 def _source_binding_checks(
-    source_binding: dict[str, Any],
-    package_index: dict[str, Any],
-    verification_index: dict[str, Any],
-    verification_docs: dict[str, dict[str, Any]],
-    binding_docs: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
+    source_binding: ImplementationDocument,
+    package_index: ImplementationDocument,
+    verification_index: ImplementationDocument,
+    verification_docs: dict[str, ImplementationDocument],
+    binding_docs: dict[str, ImplementationDocument],
+) -> list[ImplementationDocument]:
     checks = [
         _check("urpcdk_source_binding_status", source_binding.get("status") == "passed", "Source binding status passed."),
         _check("urpcdk_source_package_index_hash", source_binding.get("package_index_hash") == package_index.get("integrity_hash"), "Source binding matches package index."),
@@ -328,7 +330,7 @@ def _source_binding_checks(
     return checks
 
 
-def _deep_checks(archive: zipfile.ZipFile, verification_docs: dict[str, dict[str, Any]], binding_docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _deep_checks(archive: zipfile.ZipFile, verification_docs: dict[str, ImplementationDocument], binding_docs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="mf-urpcdk-") as temp:
         root = Path(temp).resolve()
@@ -380,7 +382,7 @@ def _deep_checks(archive: zipfile.ZipFile, verification_docs: dict[str, dict[str
     return checks
 
 
-def _receiver_receipt_checks(receiver_receipt_path: Path | str | None, kit_path: Path, manifest: dict[str, Any], kit_verification_report_path: Path | str | None) -> list[dict[str, Any]]:
+def _receiver_receipt_checks(receiver_receipt_path: Path | str | None, kit_path: Path, manifest: ImplementationDocument, kit_verification_report_path: Path | str | None) -> list[ImplementationDocument]:
     if receiver_receipt_path is None:
         return [_check("urpcdk_receiver_receipt_required", False, "Receiver receipt is required.")]
     if kit_verification_report_path is None:
@@ -413,7 +415,7 @@ def _receiver_receipt_checks(receiver_receipt_path: Path | str | None, kit_path:
     return checks
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, first_check: ImplementationDocument | None = None) -> ImplementationDocument:
     if first_check is not None:
         checks.insert(0, first_check)
     return build_verification_report(
@@ -424,15 +426,15 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: 
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urpcdk_redaction_scan")
 
 
-def _has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
+def _has_blocking_failures(checks: list[ImplementationDocument]) -> bool:
     return any(check.get("status") == "failed" and check.get("severity") == "blocking" for check in checks)
 
 

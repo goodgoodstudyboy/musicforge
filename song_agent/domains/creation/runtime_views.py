@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from pathlib import Path
 from typing import Any
 
@@ -183,7 +185,7 @@ def build_runtime_views(plan_path: Path, validator_path: Path | None = None) -> 
     }
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
+def _as_dict(value: Any) -> ImplementationDocument:
     if hasattr(value, "to_dict"):
         value = value.to_dict()
     if not isinstance(value, dict):
@@ -233,7 +235,7 @@ def _normalize_check(check: Any, fallback_status: str) -> dict[str, str]:
     return {"name": str(check), "status": fallback_status}
 
 
-def _audio_view(value: Any) -> dict[str, Any]:
+def _audio_view(value: Any) -> ImplementationDocument:
     audio = value if isinstance(value, dict) else {}
     return {
         "exists": bool(audio.get("exists", False)),
@@ -242,7 +244,7 @@ def _audio_view(value: Any) -> dict[str, Any]:
     }
 
 
-def _quality_view_from_plan(plan: Any) -> dict[str, Any]:
+def _quality_view_from_plan(plan: Any) -> ImplementationDocument:
     plan_data = _as_dict(plan)
     song_plan = SongPlan.from_dict(plan_data)
     analyzed = analyze_song_quality(song_plan)
@@ -265,7 +267,7 @@ def _quality_view_from_plan(plan: Any) -> dict[str, Any]:
     }
 
 
-def _quality_score(plan_data: dict[str, Any]) -> int | None:
+def _quality_score(plan_data: ImplementationDocument) -> int | None:
     quality = plan_data.get("quality")
     if isinstance(quality, dict):
         scores = quality.get("scores")
@@ -278,7 +280,7 @@ def _quality_score(plan_data: dict[str, Any]) -> int | None:
     return analyzed.scores.overall if analyzed.scores else None
 
 
-def _section_intents_by_name(plan_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _section_intents_by_name(plan_data: ImplementationDocument) -> dict[str, ImplementationDocument]:
     quality = plan_data.get("quality")
     result: dict[str, dict[str, Any]] = {}
     if not isinstance(quality, dict):
@@ -296,7 +298,7 @@ def _section_intents_by_name(plan_data: dict[str, Any]) -> dict[str, dict[str, A
     return result
 
 
-def _as_dict_or_empty(value: Any) -> dict[str, Any]:
+def _as_dict_or_empty(value: Any) -> ImplementationDocument:
     return value if isinstance(value, dict) else {}
 
 

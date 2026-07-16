@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -496,7 +498,7 @@ class DistributionStore:
                 return target_id
         raise DistributionValidationError("Unable to allocate a unique distribution target id.")
 
-    def _template_from_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _template_from_payload(self, payload: ImplementationDocument) -> ImplementationDocument:
         raw = str(payload.get("template_pack_id") or "").strip()
         if not raw:
             return {}
@@ -612,7 +614,7 @@ def remove_distribution_dir(store: DistributionStore, release_id: str) -> None:
         shutil.rmtree(path)
 
 
-def _stale_summary(summary: dict[str, Any] | None, reason: str) -> dict[str, Any]:
+def _stale_summary(summary: ImplementationDocument | None, reason: str) -> ImplementationDocument:
     data = dict(summary or {})
     if data:
         data["stale"] = True
@@ -621,7 +623,7 @@ def _stale_summary(summary: dict[str, Any] | None, reason: str) -> dict[str, Any
     return sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
@@ -652,7 +654,7 @@ def _optional_text(value: Any, limit: int) -> str | None:
     return text or None
 
 
-def _merge_target_options(profile: dict[str, Any], rules: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+def _merge_target_options(profile: ImplementationDocument, rules: ImplementationDocument, overrides: ImplementationDocument | None = None) -> ImplementationDocument:
     base = merge_profile_options(profile, rules)
     overrides = overrides if isinstance(overrides, dict) else {}
     allowed = set(base) | {"artwork_id", "submission_note"}

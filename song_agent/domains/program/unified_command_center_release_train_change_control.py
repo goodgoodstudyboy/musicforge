@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -384,7 +386,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
         if self.train_store.latest_signoff_state(train_id).get("status") != "signed":
             raise UnifiedCommandCenterReleaseTrainChangeControlStateError("Release Train must be currently signed.")
 
-    def _current_train_binding(self, train_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_train_binding(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         self._require_signed_train(train_id)
         signoff = read_json(self.train_store.signoff_path(train_id))
         binding = read_json(self.train_store.signoff_binding_path(train_id))
@@ -421,7 +423,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             }
         )
 
-    def _assert_binding_current(self, train_id: str, request: dict[str, Any], payload: dict[str, Any]) -> None:
+    def _assert_binding_current(self, train_id: str, request: ImplementationDocument, payload: ImplementationDocument) -> None:
         current = self._current_train_binding(train_id, payload)
         expected = request.get("current_train_binding") or {}
         keys = ("signoff_hash", "signoff_binding_hash", "archive_zip_sha256", "archive_manifest_hash", "verification_report_hash", "external_evidence_manifest_hash", "source_hash")
@@ -448,7 +450,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             if path.exists():
                 shutil.copy2(path, target / rel)
 
-    def _build_documents(self, train_id: str) -> dict[str, Any]:
+    def _build_documents(self, train_id: str) -> ImplementationDocument:
         requests = self.list_requests(train_id)
         source = sanitize_metadata(
             {
@@ -476,20 +478,20 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
         report["integrity_hash"] = _integrity_hash(report)
         return {"source": source, "report": report, "index": index, "summaries": summaries, "archive_history": archive_history, "history_text": self._combined_history_text(train_id)}
 
-    def _current_train_summary(self, train_id: str) -> dict[str, Any]:
+    def _current_train_summary(self, train_id: str) -> ImplementationDocument:
         archive_zip = self.train_store.zip_path(train_id)
         manifest = read_json(self.train_store.archive_manifest_path(train_id)) if self.train_store.archive_manifest_path(train_id).exists() else {}
         verification = read_json(self.train_store.verification_report_path(train_id)) if self.train_store.verification_report_path(train_id).exists() else {}
         return {"signoff_state": self.train_store.latest_signoff_state(train_id), "archive_zip_sha256": _sha256_path(archive_zip), "archive_manifest_hash": manifest.get("integrity_hash"), "verification_report_hash": _integrity_hash(verification) if verification else None, "verification_status": verification.get("status")}
 
-    def _request_summary(self, train_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    def _request_summary(self, train_id: str, request: ImplementationDocument) -> ImplementationDocument:
         request_id = str(request.get("change_request_id") or "")
         approval = read_json(self.approval_path(train_id, request_id)) if self.approval_path(train_id, request_id).exists() else {}
         reset_proof = read_json(self.reset_proof_path(train_id, request_id)) if self.reset_proof_path(train_id, request_id).exists() else {}
         binding_report = read_json(self.binding_report_path(train_id, request_id)) if self.binding_report_path(train_id, request_id).exists() else {}
         return sanitize_metadata({"change_request_id": request_id, "status": request.get("status"), "reason": request.get("reason"), "change_type": request.get("change_type"), "change_set_hash": request.get("change_set_hash"), "request_hash": request.get("integrity_hash"), "approval_hash": approval.get("integrity_hash") or request.get("approval_hash"), "reset_proof_hash": reset_proof.get("integrity_hash") or request.get("reset_proof_hash"), "binding_report_hash": binding_report.get("integrity_hash") or request.get("binding_report_hash"), "reset_event_hash": request.get("reset_event_hash"), "previous_signoff_hash": (request.get("current_train_binding") or {}).get("signoff_hash")})
 
-    def _archive_history_items(self, train_id: str) -> list[dict[str, Any]]:
+    def _archive_history_items(self, train_id: str) -> list[ImplementationDocument]:
         items = []
         base = self.train_store.archive_history_dir(train_id)
         if not base.exists():
@@ -514,12 +516,12 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
                 rows.extend(line for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
         return "\n".join(rows) + ("\n" if rows else "")
 
-    def _impact_report(self, train_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    def _impact_report(self, train_id: str, request: ImplementationDocument) -> ImplementationDocument:
         report = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_change_impact_report", "train_id": train_id, "change_request_id": request.get("change_request_id"), "status": "requires_approval", "source_hash": (request.get("current_train_binding") or {}).get("source_hash"), "summary": {"change_type": request.get("change_type"), "change_count": len(request.get("change_set") or []), "previous_signoff_hash": (request.get("current_train_binding") or {}).get("signoff_hash")}})
         report["integrity_hash"] = _integrity_hash(report)
         return report
 
-    def _append_request_history(self, train_id: str, request_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_request_history(self, train_id: str, request_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         path = self.request_history_path(train_id, request_id)
         history = []
         if path.exists():
@@ -545,13 +547,13 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
         return f"tcr-{max_seen + 1:06d}"
 
 
-def _manifest_document(train_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _manifest_document(train_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     manifest = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_SCHEMA_VERSION, "package_type": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_PACKAGE_TYPE, "train_id": train_id, "created_at": now_iso(), "source_hash": docs["report"].get("source_hash"), "source": {"report_hash": docs["report"].get("integrity_hash"), "index_hash": docs["index"].get("integrity_hash"), "summaries_hash": docs["summaries"].get("integrity_hash"), "archive_history_hash": docs["archive_history"].get("integrity_hash")}, "summary": docs["report"].get("summary", {}), "files": sorted(files, key=lambda row: row.get("path") or ""), "zip": {}})
     manifest["integrity_hash"] = _integrity_hash(manifest)
     return manifest
 
 
-def _change_set(value: Any) -> list[dict[str, Any]]:
+def _change_set(value: Any) -> list[ImplementationDocument]:
     if isinstance(value, list):
         rows = value
     else:
@@ -575,19 +577,19 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

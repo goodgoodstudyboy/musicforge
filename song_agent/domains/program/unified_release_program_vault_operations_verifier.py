@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import tempfile
@@ -200,7 +202,7 @@ def unified_release_program_vault_operations_verification_exit_code(report: dict
     return 0 if report.get("status") == "passed" else 1
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     file_paths = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
@@ -233,7 +235,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _history_checks(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _history_checks(events: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     previous = ""
     signoff_events = 0
@@ -256,19 +258,19 @@ def _history_checks(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _binding_checks(
-    manifest: dict[str, Any],
-    report: dict[str, Any],
-    registry: dict[str, Any],
-    policy: dict[str, Any],
-    review: dict[str, Any],
-    rotation: dict[str, Any],
-    transfer: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    history: list[dict[str, Any]],
-    anchor: dict[str, Any],
-    vault_verification: dict[str, Any],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    report: ImplementationDocument,
+    registry: ImplementationDocument,
+    policy: ImplementationDocument,
+    review: ImplementationDocument,
+    rotation: ImplementationDocument,
+    transfer: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    history: list[ImplementationDocument],
+    anchor: ImplementationDocument,
+    vault_verification: ImplementationDocument,
+) -> list[ImplementationDocument]:
     latest_signoff_event = next((row for row in reversed(history) if row.get("event_type") == "vault_operations_signoff_created"), {})
     current = _current_generation(registry)
     vault = current.get("vault") if isinstance(current.get("vault"), dict) else {}
@@ -316,7 +318,7 @@ def _binding_checks(
     return checks
 
 
-def _external_binding_checks(path: Path | str | None, binding: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _external_binding_checks(path: Path | str | None, binding: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not path:
         return [_check("urpvo_external_signoff_binding_required", not require, "External signoff binding is present when required.")]
     binding_path = Path(path)
@@ -334,7 +336,7 @@ def _external_binding_checks(path: Path | str | None, binding: dict[str, Any], *
     return checks
 
 
-def _current_vault_checks(archive: zipfile.ZipFile, registry: dict[str, Any], binding: dict[str, Any], anchor: dict[str, Any], vault_verification: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _current_vault_checks(archive: zipfile.ZipFile, registry: ImplementationDocument, binding: ImplementationDocument, anchor: ImplementationDocument, vault_verification: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     data = archive.read("packages/current-vault.zip")
     current = _current_generation(registry)
     vault = current.get("vault") if isinstance(current.get("vault"), dict) else {}
@@ -350,7 +352,7 @@ def _current_vault_checks(archive: zipfile.ZipFile, registry: dict[str, Any], bi
     return checks
 
 
-def _deep_vault_checks(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
+def _deep_vault_checks(archive: zipfile.ZipFile) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="mf-urpvo-deep-") as temp:
         root = Path(temp)
@@ -377,7 +379,7 @@ def _deep_vault_checks(archive: zipfile.ZipFile) -> list[dict[str, Any]]:
     return checks
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, first_check: ImplementationDocument | None = None) -> ImplementationDocument:
     if first_check is not None:
         checks.insert(0, first_check)
     return build_verification_report(
@@ -388,28 +390,28 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: 
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _current_generation(registry: dict[str, Any]) -> dict[str, Any]:
+def _current_generation(registry: ImplementationDocument) -> ImplementationDocument:
     current_id = str(registry.get("current_generation_id") or "")
     return next((row for row in registry.get("generations", []) if isinstance(row, dict) and row.get("generation_id") == current_id), {})
 
 
-def _entry_sha256_for_current_vault_hash(vault: dict[str, Any]) -> str | None:
+def _entry_sha256_for_current_vault_hash(vault: ImplementationDocument) -> str | None:
     return vault.get("vault_zip_sha256")
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urpvo_redaction_scan")
 
 
-def _has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
+def _has_blocking_failures(checks: list[ImplementationDocument]) -> bool:
     return any(check.get("status") == "failed" and check.get("severity") == "blocking" for check in checks)
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import zipfile
 from pathlib import Path
@@ -192,7 +194,7 @@ def _external_program_state(
     program_verification_report_path: Path | str | None,
     program_signoff_binding_path: Path | str | None,
     external_evidence_manifest_path: Path | str | None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     state: dict[str, Any] = {"checks": checks, "runtime": {}, "external_report": {}, "binding": {}, "external_manifest": {}, "history": []}
     if not require:
@@ -249,20 +251,20 @@ def _external_program_state(
 
 
 def _semantic_checks(
-    program: dict[str, Any],
-    program_verification: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    external_manifest: dict[str, Any],
-    review: dict[str, Any],
-    lifecycle: dict[str, Any],
-    evidence: dict[str, Any],
-    external: dict[str, Any],
+    program: ImplementationDocument,
+    program_verification: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    external_manifest: ImplementationDocument,
+    review: ImplementationDocument,
+    lifecycle: ImplementationDocument,
+    evidence: ImplementationDocument,
+    external: ImplementationDocument,
     *,
     require_signed_program: bool,
     require_continuous_review_clear: bool,
     require_lifecycle_audit: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     runtime = external.get("runtime") or {}
     external_report = external.get("external_report") or {}
@@ -305,17 +307,17 @@ def _semantic_checks(
 
 
 def _document_binding_checks(
-    manifest: dict[str, Any],
-    program: dict[str, Any],
-    program_verification: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    external_manifest: dict[str, Any],
-    change_control: dict[str, Any],
-    review: dict[str, Any],
-    lifecycle: dict[str, Any],
-    evidence: dict[str, Any],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    program: ImplementationDocument,
+    program_verification: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    external_manifest: ImplementationDocument,
+    change_control: ImplementationDocument,
+    review: ImplementationDocument,
+    lifecycle: ImplementationDocument,
+    evidence: ImplementationDocument,
+) -> list[ImplementationDocument]:
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     return [
         _check("urp_ops_manifest_program_hash", source.get("program_summary_hash") == program.get("integrity_hash"), "Manifest binds Program summary."),
@@ -330,7 +332,7 @@ def _document_binding_checks(
     ]
 
 
-def _history_checks(program_history: list[dict[str, Any]], change_history: list[dict[str, Any]], lifecycle: dict[str, Any]) -> list[dict[str, Any]]:
+def _history_checks(program_history: list[ImplementationDocument], change_history: list[ImplementationDocument], lifecycle: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     checks.extend(_hash_chain_checks("urp_ops_program_history", program_history))
     checks.extend(_hash_chain_checks("urp_ops_change_history", change_history))
@@ -345,7 +347,7 @@ def _history_checks(program_history: list[dict[str, Any]], change_history: list[
     return checks
 
 
-def _hash_chain_checks(prefix: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _hash_chain_checks(prefix: str, rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     previous = ""
     for index, event in enumerate(rows):
@@ -358,7 +360,7 @@ def _hash_chain_checks(prefix: str, rows: list[dict[str, Any]]) -> list[dict[str
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
     files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     declared = {str(row.get("path") or "") for row in files}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
@@ -376,7 +378,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     return checks
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     return build_verification_report(
         package_type=UNIFIED_RELEASE_PROGRAM_OPERATIONS_VERIFICATION_PACKAGE_TYPE,
         checks=[*checks, *extra],
@@ -385,19 +387,19 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urp_ops_redaction_scan")
 
 
-def _program_history_from_zip(path: Path) -> list[dict[str, Any]]:
+def _program_history_from_zip(path: Path) -> list[ImplementationDocument]:
     try:
         with zipfile.ZipFile(path) as archive:
             return _parse_jsonl(archive.read("program-history.jsonl").decode("utf-8"))

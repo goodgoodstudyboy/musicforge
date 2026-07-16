@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import tempfile
@@ -564,7 +566,7 @@ def verification_exit_code(report: dict[str, Any]) -> int:
 
 
 def _current_v1210_checks(
-    source: dict[str, Any],
+    source: ImplementationDocument,
     archive_path: Path,
     handoff_path: Path,
     archive_report_path: Path | str | None,
@@ -573,7 +575,7 @@ def _current_v1210_checks(
     command_center_path: Path | str | None,
     command_center_report_path: Path | str | None,
     command_center_evidence_path: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     paths = [archive_report_path, handoff_report_path, binding_path, command_center_path, command_center_report_path, command_center_evidence_path]
     if not all(paths) or not all(Path(path).is_file() for path in paths if path):
@@ -630,14 +632,14 @@ def _current_v1210_checks(
 
 
 def _archive_external_checks(
-    report: dict[str, Any],
-    matrix: dict[str, Any],
-    quorum: dict[str, Any],
-    findings: dict[str, Any],
-    accepted_index: dict[str, Any],
-    response_index: dict[str, Any],
-    handoff_summary: dict[str, Any],
-    archive_summary: dict[str, Any],
+    report: ImplementationDocument,
+    matrix: ImplementationDocument,
+    quorum: ImplementationDocument,
+    findings: ImplementationDocument,
+    accepted_index: ImplementationDocument,
+    response_index: ImplementationDocument,
+    handoff_summary: ImplementationDocument,
+    archive_summary: ImplementationDocument,
     review_pack_path: Path | str | None,
     review_pack_report_path: Path | str | None,
     accepted_dir_value: Path | str | None,
@@ -650,7 +652,7 @@ def _archive_external_checks(
     command_center_path: Path | str | None,
     command_center_report_path: Path | str | None,
     command_center_evidence_path: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     review_pack = Path(review_pack_path) if review_pack_path else Path()
     review_report_path = Path(review_pack_report_path) if review_pack_report_path else Path()
@@ -782,14 +784,14 @@ def _archive_external_checks(
 
 
 def _source_package_summary_checks(
-    handoff_summary: dict[str, Any],
-    archive_summary: dict[str, Any],
+    handoff_summary: ImplementationDocument,
+    archive_summary: ImplementationDocument,
     archive_path_value: Path | str | None,
     archive_report_value: Path | str | None,
     handoff_path_value: Path | str | None,
     handoff_report_value: Path | str | None,
     binding_path_value: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     values = (archive_path_value, archive_report_value, handoff_path_value, handoff_report_value, binding_path_value)
     if not all(values) or not all(Path(value).is_file() for value in values if value):
         return [_check("urpccca_source_packages_required", False, "Current source packages and reports exist.")]
@@ -810,23 +812,23 @@ def _source_package_summary_checks(
 
 
 def _archive_internal_checks(
-    manifest: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    state: dict[str, Any],
-    policy: dict[str, Any],
-    report: dict[str, Any],
-    matrix: dict[str, Any],
-    quorum: dict[str, Any],
-    findings: dict[str, Any],
-    accepted_index: dict[str, Any],
-    response_index: dict[str, Any],
-    handoff_summary: dict[str, Any],
-    archive_summary: dict[str, Any],
-    history: list[dict[str, Any]],
+    manifest: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    state: ImplementationDocument,
+    policy: ImplementationDocument,
+    report: ImplementationDocument,
+    matrix: ImplementationDocument,
+    quorum: ImplementationDocument,
+    findings: ImplementationDocument,
+    accepted_index: ImplementationDocument,
+    response_index: ImplementationDocument,
+    handoff_summary: ImplementationDocument,
+    archive_summary: ImplementationDocument,
+    history: list[ImplementationDocument],
     *,
     require_signed: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     event = next((row for row in reversed(history) if row.get("event_type") == "receiver_acceptance_signoff_created"), {})
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     docs = {
@@ -871,7 +873,7 @@ def _archive_internal_checks(
     return checks
 
 
-def _package_index_matches(index: dict[str, Any], archive: zipfile.ZipFile, source: dict[str, Any]) -> bool:
+def _package_index_matches(index: ImplementationDocument, archive: zipfile.ZipFile, source: ImplementationDocument) -> bool:
     rows = index.get("packages") if isinstance(index.get("packages"), list) else []
     expected = [
         {
@@ -901,7 +903,7 @@ def _package_index_matches(index: dict[str, Any], archive: zipfile.ZipFile, sour
     )
 
 
-def _participant_from_binding(evidence_id: str, response_id: str, binding: dict[str, Any], index_row: dict[str, Any]) -> dict[str, Any]:
+def _participant_from_binding(evidence_id: str, response_id: str, binding: ImplementationDocument, index_row: ImplementationDocument) -> ImplementationDocument:
     return {
         "evidence_id": evidence_id,
         "response_id": response_id,
@@ -916,11 +918,11 @@ def _participant_from_binding(evidence_id: str, response_id: str, binding: dict[
     }
 
 
-def _matrix_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _matrix_rows(participants: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return sorted(participants, key=lambda row: (str(row.get("role") or ""), str(row.get("response_id") or "")))
 
 
-def _findings_rows(responses: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _findings_rows(responses: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for response_id, bundle in sorted(responses.items()):
         for index, finding in enumerate(bundle["response"].get("findings") or [], start=1):
@@ -939,7 +941,7 @@ def _findings_rows(responses: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
     return rows
 
 
-def _quorum_result(policy: dict[str, Any], participants: list[dict[str, Any]], responses: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _quorum_result(policy: ImplementationDocument, participants: list[ImplementationDocument], responses: dict[str, ImplementationDocument]) -> ImplementationDocument:
     accepted = [row for row in participants if row.get("decision") == "accepted"]
     roles = {str(row.get("role") or "") for row in accepted}
     organizations = {str(row.get("organization") or "") for row in accepted}
@@ -970,7 +972,7 @@ def _quorum_result(policy: dict[str, Any], participants: list[dict[str, Any]], r
     }
 
 
-def _response_public_projection(response: dict[str, Any]) -> dict[str, Any]:
+def _response_public_projection(response: ImplementationDocument) -> ImplementationDocument:
     return {
         "schema_version": SCHEMA_VERSION,
         "package_type": f"{RESPONSE_PACKAGE_TYPE}_public_projection",
@@ -985,25 +987,25 @@ def _response_public_projection(response: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _reviewer_identity(response: dict[str, Any]) -> dict[str, Any]:
+def _reviewer_identity(response: ImplementationDocument) -> ImplementationDocument:
     return {"reviewer": response.get("reviewer"), "organization": response.get("organization"), "role": response.get("role")}
 
 
-def _source_projection(source: dict[str, Any]) -> dict[str, Any]:
+def _source_projection(source: ImplementationDocument) -> ImplementationDocument:
     return {field: source.get(field) for field in SOURCE_FIELDS}
 
 
-def _response_payload_hash(response: dict[str, Any]) -> str:
+def _response_payload_hash(response: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in response.items() if key not in {"payload_hash", "integrity_hash"}})
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     output = dict(doc)
     output["integrity_hash"] = _integrity_hash(output)
     return output
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], required: set[str], prefix: str) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, required: set[str], prefix: str) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = required - {"manifest.json"}
@@ -1022,7 +1024,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], require
     return checks
 
 
-def _history_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _history_checks(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     if not rows:
         return [_check("urpccca_history_required", False, "Signoff history exists.")]
     checks: list[dict[str, Any]] = []
@@ -1041,19 +1043,19 @@ def _history_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return checks
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id=check_id)
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(value: str) -> list[dict[str, Any]]:
+def _parse_jsonl(value: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in value.splitlines() if line.strip()]
 
 
-def _json_bytes(value: dict[str, Any]) -> bytes:
+def _json_bytes(value: ImplementationDocument) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
@@ -1061,15 +1063,15 @@ def _safe_key(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", str(value)).strip("_").lower() or "item"
 
 
-def _prefix_checks(checks: list[dict[str, Any]], prefix: str) -> list[dict[str, Any]]:
+def _prefix_checks(checks: list[ImplementationDocument], prefix: str) -> list[ImplementationDocument]:
     return [{**row, "check_id": f"{prefix}_{row.get('check_id')}"} for row in checks]
 
 
-def _has_blockers(checks: list[dict[str, Any]]) -> bool:
+def _has_blockers(checks: list[ImplementationDocument]) -> bool:
     return any(row.get("status") == "failed" and row.get("severity") == "blocking" for row in checks)
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], package_type: str, *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, package_type: str, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     return build_verification_report(
         package_type=package_type,

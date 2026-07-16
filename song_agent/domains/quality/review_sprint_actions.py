@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -418,7 +420,7 @@ def default_item_status(action: str, safety: str) -> str:
     return "pending"
 
 
-def _queue_item_from_recommendation(action: dict[str, Any], queue_action: str, report_hash: str, report_created_at: str | None, sprint: ReviewSprint) -> SprintActionItem:
+def _queue_item_from_recommendation(action: ImplementationDocument, queue_action: str, report_hash: str, report_created_at: str | None, sprint: ReviewSprint) -> SprintActionItem:
     safety = action_safety(queue_action)
     recommendation = _recommendation_snapshot(action, report_hash, report_created_at)
     return SprintActionItem.from_dict(
@@ -438,7 +440,7 @@ def _queue_item_from_recommendation(action: dict[str, Any], queue_action: str, r
     )
 
 
-def _context_pack_queue_item(action: dict[str, Any], report_hash: str, report_created_at: str | None, preview: dict[str, Any]) -> SprintActionItem:
+def _context_pack_queue_item(action: ImplementationDocument, report_hash: str, report_created_at: str | None, preview: ImplementationDocument) -> SprintActionItem:
     recommendation = _recommendation_snapshot(action, report_hash, report_created_at)
     return SprintActionItem.from_dict(
         {
@@ -463,7 +465,7 @@ def _context_pack_queue_item(action: dict[str, Any], report_hash: str, report_cr
     )
 
 
-def _recommendation_snapshot(action: dict[str, Any], report_hash: str, report_created_at: str | None) -> dict[str, Any]:
+def _recommendation_snapshot(action: ImplementationDocument, report_hash: str, report_created_at: str | None) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "report_created_at": report_created_at,
@@ -476,7 +478,7 @@ def _recommendation_snapshot(action: dict[str, Any], report_hash: str, report_cr
     )
 
 
-def _input_for_action(queue_action: str, action: dict[str, Any], sprint: ReviewSprint | None = None) -> dict[str, Any]:
+def _input_for_action(queue_action: str, action: ImplementationDocument, sprint: ReviewSprint | None = None) -> ImplementationDocument:
     if queue_action == "generate_local_candidates":
         strategies = (sprint.settings or {}).get("local_candidate_strategies") if sprint is not None else None
         if not isinstance(strategies, list) or not strategies:
@@ -496,7 +498,7 @@ def _input_for_action(queue_action: str, action: dict[str, Any], sprint: ReviewS
     return {}
 
 
-def _manual_result(queue_action: str, action: dict[str, Any]) -> dict[str, Any]:
+def _manual_result(queue_action: str, action: ImplementationDocument) -> ImplementationDocument:
     if queue_action == "manual_apply_candidate":
         return {"message": "Apply must be performed from the ReviewTask candidate apply endpoint.", "candidate_id": _input_for_action(queue_action, action).get("candidate_id")}
     if queue_action == "manual_resolve_task":
@@ -510,12 +512,12 @@ def _manual_result(queue_action: str, action: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _recommendation_actions(report: dict[str, Any]) -> list[dict[str, Any]]:
+def _recommendation_actions(report: ImplementationDocument) -> list[ImplementationDocument]:
     actions = [item for item in report.get("recommended_actions", []) if isinstance(item, dict)] if isinstance(report, dict) else []
     return sorted(actions, key=lambda item: (int(item.get("rank") or 9999), int(item.get("sprint_order") or 9999), str(item.get("task_id") or "")))
 
 
-def _queue_settings(data: dict[str, Any]) -> dict[str, Any]:
+def _queue_settings(data: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "stop_on_failure": bool(data.get("stop_on_failure", False)),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -292,12 +294,12 @@ def verify_release_audio_command_center_component(
 
 def _external_component_checks(
     key: str,
-    fingerprint: dict[str, Any],
-    verification_summary: dict[str, Any],
+    fingerprint: ImplementationDocument,
+    verification_summary: ImplementationDocument,
     *,
     external_paths: dict[str, tuple[Path | str | None, Path | str | None]],
     evidence_root: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     zip_value, report_value = external_paths[key]
     if not zip_value or not report_value:
         return [_check(f"release_audio_command_center_{key}_external_required", False, f"{key} external ZIP and verification report are required.")]
@@ -351,7 +353,7 @@ def _external_component_checks(
     ]
 
 
-def _runtime_verify(key: str, zip_path: Path, *, external_paths: dict[str, tuple[Path | str | None, Path | str | None]], evidence_root: Path | str | None) -> dict[str, Any]:
+def _runtime_verify(key: str, zip_path: Path, *, external_paths: dict[str, tuple[Path | str | None, Path | str | None]], evidence_root: Path | str | None) -> ImplementationDocument:
     cert_zip, cert_report = external_paths["certification"]
     timeline_zip, timeline_report = external_paths["timeline"]
     regression_zip, regression_report = external_paths["regression"]
@@ -411,12 +413,12 @@ def _component_external_paths(
 
 def _component_finish(
     key: str,
-    fingerprint: dict[str, Any],
-    checks: list[dict[str, Any]],
+    fingerprint: ImplementationDocument,
+    checks: list[ImplementationDocument],
     *,
-    runtime: dict[str, Any] | None = None,
-    external_report: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+    runtime: ImplementationDocument | None = None,
+    external_report: ImplementationDocument | None = None,
+) -> ImplementationDocument:
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     runtime = runtime if isinstance(runtime, dict) else {}
     external_report = external_report if isinstance(external_report, dict) else {}
@@ -436,7 +438,7 @@ def _component_finish(
     return result
 
 
-def _public_runtime_report(report: dict[str, Any]) -> dict[str, Any]:
+def _public_runtime_report(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     public_summary = {key: value for key, value in summary.items() if key not in {"zip_path"}}
     public = {
@@ -452,7 +454,7 @@ def _public_runtime_report(report: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
-def _component_readiness_from_checks(checks: list[dict[str, Any]]) -> str:
+def _component_readiness_from_checks(checks: list[ImplementationDocument]) -> str:
     failed_ids = [str(check.get("check_id") or "") for check in checks if check.get("status") == "failed"]
     if any(check_id.endswith("_external_required") or check_id.endswith("_zip_exists") or check_id.endswith("_verification_report_exists") for check_id in failed_ids):
         return "missing"
@@ -466,19 +468,19 @@ def _component_readiness_from_checks(checks: list[dict[str, Any]]) -> str:
 
 
 def _document_binding_checks(
-    manifest: dict[str, Any],
-    command_center: dict[str, Any],
-    report: dict[str, Any],
-    inventory: dict[str, Any],
-    readiness: dict[str, Any],
-    gap_plan: dict[str, Any],
-    runbook: dict[str, Any],
-    runbook_results: dict[str, Any],
-    fingerprints: dict[str, dict[str, Any]],
-    verification_summaries: dict[str, dict[str, Any]],
+    manifest: ImplementationDocument,
+    command_center: ImplementationDocument,
+    report: ImplementationDocument,
+    inventory: ImplementationDocument,
+    readiness: ImplementationDocument,
+    gap_plan: ImplementationDocument,
+    runbook: ImplementationDocument,
+    runbook_results: ImplementationDocument,
+    fingerprints: dict[str, ImplementationDocument],
+    verification_summaries: dict[str, ImplementationDocument],
     *,
     require_ready: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     component_by_key = {str(row.get("component_key")): row for row in inventory.get("components", []) if isinstance(row, dict)}
     source_hash = report.get("source_hash")
     doc_hashes = report.get("document_hashes") if isinstance(report.get("document_hashes"), dict) else {}
@@ -503,7 +505,7 @@ def _document_binding_checks(
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
@@ -528,7 +530,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check["check_id"] for check in checks if check.get("status") == "warning"]
@@ -549,25 +551,25 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _component_required(inventory: dict[str, Any], key: str) -> bool:
+def _component_required(inventory: ImplementationDocument, key: str) -> bool:
     for row in inventory.get("components", []):
         if isinstance(row, dict) and row.get("component_key") == key:
             return bool(row.get("required"))
     return False
 
 
-def _component_status(inventory: dict[str, Any], key: str) -> str:
+def _component_status(inventory: ImplementationDocument, key: str) -> str:
     for row in inventory.get("components", []):
         if isinstance(row, dict) and row.get("component_key") == key:
             return str(row.get("status") or "")
     return ""
 
 
-def _public_verification_summary(component_key: str, report: dict[str, Any]) -> dict[str, Any]:
+def _public_verification_summary(component_key: str, report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     public = {
         "component_key": component_key,
@@ -583,18 +585,18 @@ def _public_verification_summary(component_key: str, report: dict[str, Any]) -> 
     return public
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     data = json.loads(archive.read(name).decode("utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"{name} must contain a JSON object.")
     return data
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -622,7 +624,7 @@ def _is_safe_entry(name: str) -> bool:
     return all(part and part not in {".", ".."} and ":" not in part for part in parts)
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     offenders: list[str] = []
     for name in names:
         if name.endswith("/"):

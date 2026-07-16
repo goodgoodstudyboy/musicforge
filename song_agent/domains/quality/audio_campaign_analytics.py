@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +119,7 @@ def build_audio_campaign_analytics(campaign: dict[str, Any], report: dict[str, A
     return analytics
 
 
-def _recommendations(issue_counts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _recommendations(issue_counts: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows = []
     for item in sorted(issue_counts.values(), key=lambda row: -int(row.get("count") or 0))[:5]:
         rows.append({"priority": "medium", "message": f"Review recurring audio issue: {item.get('category')}.", "category": item.get("category")})
@@ -136,5 +138,5 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})

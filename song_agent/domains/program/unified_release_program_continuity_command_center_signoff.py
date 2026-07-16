@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import os
 import shutil
@@ -720,7 +722,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
                 "Command Center reset state does not match the latest history event."
             )
 
-    def _current_command_center_context(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_command_center_context(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         zip_path = Path(payload.get("command_center_zip") or payload.get("command_center_zip_path") or self.command_store.zip_path(program_id))
         report_path = Path(payload.get("command_center_verification_report") or payload.get("command_center_verification_report_path") or self.command_store.verification_report_path(program_id))
         evidence_path = Path(payload.get("command_center_external_evidence_manifest") or payload.get("external_evidence_manifest") or payload.get("evidence_manifest") or self.command_store.local_evidence_manifest_path(program_id))
@@ -754,7 +756,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
         }
         return {"zip_path": zip_path, "verification_path": report_path, "evidence_path": evidence_path, "external_verification": external, "evidence": evidence, "runtime": runtime, "report": report, "current_state": current_state, "source": source}
 
-    def _signed_context(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _signed_context(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         latest = self.latest_signoff_state(program_id)
         if latest.get("status") != "signed":
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Continuity Command Center signoff is not current signed evidence.")
@@ -774,7 +776,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Current Command Center evidence is stale relative to signoff.")
         return {**current, "signoff": signoff, "binding": binding, "state": state, "policy": read_json(self.policy_path(program_id))}
 
-    def _archive_documents(self, program_id: str, context: dict[str, Any], event: dict[str, Any]) -> dict[str, dict[str, Any] | str]:
+    def _archive_documents(self, program_id: str, context: ImplementationDocument, event: ImplementationDocument) -> dict[str, ImplementationDocument | str]:
         source = context["signoff"].get("source") or {}
         fingerprint = _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_fingerprint_summary", "program_id": program_id, **source})
         verification = _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_verification_summary", "program_id": program_id, "status": context["external_verification"].get("status"), "runtime_status": context["runtime"].get("status"), "zip_sha256": source.get("command_center_zip_sha256"), "manifest_hash": source.get("command_center_manifest_hash"), "verification_report_hash": source.get("command_center_verification_report_hash")})
@@ -797,7 +799,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
         manifest = _with_manifest_integrity({"schema_version": COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION, "package_type": COMMAND_CENTER_SIGNOFF_ARCHIVE_PACKAGE_TYPE, "program_id": program_id, "created_at": event.get("created_at"), "source": {"signoff_hash": context["signoff"].get("integrity_hash"), "signoff_binding_hash": context["binding"].get("integrity_hash"), "command_center_zip_sha256": source.get("command_center_zip_sha256"), "command_center_manifest_hash": source.get("command_center_manifest_hash"), "command_center_verification_report_hash": source.get("command_center_verification_report_hash"), "external_evidence_manifest_hash": source.get("external_evidence_manifest_hash")}, "files": files, "zip": {"entries": sorted(ARCHIVE_REQUIRED_ENTRIES)}})
         return {"manifest.json": manifest, **docs}
 
-    def _handoff_context(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _handoff_context(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         signed = self._signed_context(program_id, payload)
         if not self.archive_zip_path(program_id).exists() or not self.archive_verification_report_path(program_id).exists():
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Verified Command Center Signoff Archive is required for Final Handoff.")
@@ -807,7 +809,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Command Center Signoff Archive verification is missing, stale, or failed.")
         return {**signed, "archive_external": external, "archive_runtime": runtime}
 
-    def _handoff_documents(self, program_id: str, context: dict[str, Any], event: dict[str, Any]) -> dict[str, dict[str, Any] | str]:
+    def _handoff_documents(self, program_id: str, context: ImplementationDocument, event: ImplementationDocument) -> dict[str, ImplementationDocument | str]:
         archive_summary = _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_archive_verification_summary", "program_id": program_id, "status": context["archive_external"].get("status"), "zip_sha256": context["archive_runtime"].get("zip_sha256"), "manifest_hash": context["archive_runtime"].get("manifest_hash"), "verification_report_hash": context["archive_external"].get("integrity_hash")})
         handoff = _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_final_handoff_summary", "program_id": program_id, "status": "ready", "created_at": event.get("created_at"), "signed_by": context["signoff"].get("signed_by"), "signed_at": context["signoff"].get("signed_at"), "signoff_hash": context["signoff"].get("integrity_hash"), "signoff_binding_hash": context["binding"].get("integrity_hash"), "archive_zip_sha256": archive_summary.get("zip_sha256"), "archive_manifest_hash": archive_summary.get("manifest_hash"), "archive_verification_report_hash": archive_summary.get("verification_report_hash")})
         receiver = _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_receiver_checklist", "program_id": program_id, "status": "ready", "items": [{"item_id": "verify-archive", "status": "required"}, {"item_id": "verify-signoff-binding", "status": "required"}]})
@@ -815,7 +817,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
         manifest = _with_manifest_integrity({"schema_version": 1, "package_type": COMMAND_CENTER_FINAL_HANDOFF_PACKAGE_TYPE, "program_id": program_id, "created_at": event.get("created_at"), "source": {"final_handoff_summary_hash": handoff.get("integrity_hash"), "archive_verification_summary_hash": archive_summary.get("integrity_hash"), "signoff_binding_hash": context["binding"].get("integrity_hash")}, "files": [_memory_file_record(path, value) for path, value in docs.items()], "zip": {"entries": sorted(HANDOFF_REQUIRED_ENTRIES)}})
         return {"manifest.json": manifest, **docs}
 
-    def _verify_archive_runtime(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _verify_archive_runtime(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return verify_unified_release_program_continuity_command_center_signoff_package(
             payload.get("archive_zip") or payload.get("archive_zip_path") or self.archive_zip_path(program_id),
             strict=True,
@@ -826,7 +828,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             command_center_external_evidence_manifest_path=payload.get("command_center_external_evidence_manifest") or payload.get("external_evidence_manifest") or self.command_store.local_evidence_manifest_path(program_id),
         )
 
-    def _verify_handoff_runtime(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _verify_handoff_runtime(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return verify_unified_release_program_continuity_command_center_final_handoff_package(
             payload.get("handoff_zip") or payload.get("handoff_zip_path") or self.final_handoff_zip_path(program_id),
             strict=True,
@@ -839,41 +841,41 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             command_center_external_evidence_manifest_path=payload.get("command_center_external_evidence_manifest") or payload.get("external_evidence_manifest") or self.command_store.local_evidence_manifest_path(program_id),
         )
 
-    def _signoff_binding(self, signoff: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    def _signoff_binding(self, signoff: ImplementationDocument, event: ImplementationDocument) -> ImplementationDocument:
         source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
         return _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_signoff_binding", "program_id": signoff.get("program_id"), "created_at": now_iso(), "signoff_hash": signoff.get("integrity_hash"), "signoff_payload_hash": signoff.get("payload_hash"), "signed_by": signoff.get("signed_by"), "role": signoff.get("role"), "reason_hash": stable_hash({"reason": signoff.get("reason")}), "signed_at": signoff.get("signed_at"), "history_event_hash": event.get("event_hash"), **source})
 
-    def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _validate_history(self, program_id: str) -> None:
         if not HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).validate().valid:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Command Center signoff history hash chain is invalid.")
 
-    def _find_history_event(self, program_id: str, event_type: str, signoff_hash: Any) -> dict[str, Any] | None:
+    def _find_history_event(self, program_id: str, event_type: str, signoff_hash: Any) -> ImplementationDocument | None:
         return next((row for row in reversed(self.read_history(program_id)) if row.get("event_type") == event_type and row.get("signoff_hash") == signoff_hash), None)
 
-    def _archive_export_event(self, program_id: str) -> dict[str, Any]:
+    def _archive_export_event(self, program_id: str) -> ImplementationDocument:
         latest = self.latest_signoff_state(program_id)
         event = self._find_history_event(program_id, "command_center_signoff_archive_exported", latest.get("signoff_hash"))
         if not event:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Archive export history event is missing.")
         return event
 
-    def _history_through(self, program_id: str, event_hash: str) -> list[dict[str, Any]]:
+    def _history_through(self, program_id: str, event_hash: str) -> list[ImplementationDocument]:
         try:
             return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).through(event_hash)
         except ValueError as exc:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Frozen archive history event is missing.") from exc
 
-    def _assert_request_current(self, program_id: str, request: dict[str, Any]) -> None:
+    def _assert_request_current(self, program_id: str, request: ImplementationDocument) -> None:
         context = self._signed_context(program_id, {})
         source = context["signoff"].get("source") or {}
         expected = {"signoff_hash": context["signoff"].get("integrity_hash"), "signoff_binding_hash": context["binding"].get("integrity_hash"), "command_center_zip_sha256": source.get("command_center_zip_sha256"), "command_center_manifest_hash": source.get("command_center_manifest_hash"), "command_center_verification_report_hash": source.get("command_center_verification_report_hash"), "external_evidence_manifest_hash": source.get("external_evidence_manifest_hash")}
         if request.get("target") != expected:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Change Request does not bind current signed Command Center evidence.")
 
-    def _read_change_request(self, program_id: str, request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, program_id: str, request_id: str) -> ImplementationDocument:
         path = self.change_request_path(program_id, request_id)
         if not path.exists():
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffNotFoundError(f"Change Request not found: {request_id}")
@@ -888,7 +890,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
                 continue
         return f"uccscr-{max_seen + 1:06d}"
 
-    def _write_export_dir(self, root: Path, docs: dict[str, dict[str, Any] | str]) -> None:
+    def _write_export_dir(self, root: Path, docs: dict[str, ImplementationDocument | str]) -> None:
         if root.exists():
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Immutable export directory already exists.")
         root.mkdir(parents=True, exist_ok=False)
@@ -899,7 +901,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             else:
                 write_json(path, value)
 
-    def _validate_export_dir(self, root: Path, docs: dict[str, dict[str, Any] | str], required: set[str]) -> None:
+    def _validate_export_dir(self, root: Path, docs: dict[str, ImplementationDocument | str], required: set[str]) -> None:
         actual = {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
         if actual != required:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Immutable export directory file set changed.")
@@ -938,11 +940,11 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             path.unlink(missing_ok=True)
 
 
-def _check(check_id: str, passed: bool, message: str) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message}
 
 
-def _archive_readme(program_id: str, signoff: dict[str, Any]) -> str:
+def _archive_readme(program_id: str, signoff: ImplementationDocument) -> str:
     return f"MusicForge Continuity Command Center Signoff Archive\n\nProgram: {program_id}\nSigned by: {signoff.get('signed_by')}\nSigned at: {signoff.get('signed_at')}\n"
 
 
@@ -964,19 +966,19 @@ def re_sub(pattern: str, replacement: str, value: str) -> str:
     return re.sub(pattern, replacement, value)
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     return SignoffService.seal(sanitize_metadata(doc), payload_hash=False)
 
 
-def _with_manifest_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_manifest_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     output = sanitize_metadata(doc, blocked_keys=DEFAULT_BLOCKED_METADATA_KEYS - {"path"})
     output["integrity_hash"] = _integrity_hash(output)
     return output
@@ -994,13 +996,13 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return digest.hexdigest()
 
 
-def _serialize_value(value: dict[str, Any] | str) -> bytes:
+def _serialize_value(value: ImplementationDocument | str) -> bytes:
     if isinstance(value, str):
         return value.replace("\n", os.linesep).encode("utf-8")
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").replace("\n", os.linesep).encode("utf-8")
 
 
-def _memory_file_record(path: str, value: dict[str, Any] | str) -> dict[str, Any]:
+def _memory_file_record(path: str, value: ImplementationDocument | str) -> ImplementationDocument:
     data = _serialize_value(value)
     return {"path": path, "size_bytes": len(data), "sha256": _sha256_bytes(data)}
 
@@ -1016,13 +1018,13 @@ def _build_zip(root: Path, zip_path: Path) -> None:
     ArchiveBuilder.build_directory_zip(root, zip_path)
 
 
-def _zip_result(program_id: str, zip_path: Path, manifest_hash: Any) -> dict[str, Any]:
+def _zip_result(program_id: str, zip_path: Path, manifest_hash: Any) -> ImplementationDocument:
     return {"status": "passed", "program_id": program_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": manifest_hash}
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     return read_json(path) if path.exists() else {}
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}

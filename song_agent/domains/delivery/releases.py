@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import shutil
@@ -649,7 +651,7 @@ def stable_hash(value: Any) -> str:
     return _stable_hash(value)
 
 
-def _project_snapshot(document: ProjectDocument, version: ProjectVersion, plan: dict[str, Any]) -> dict[str, Any]:
+def _project_snapshot(document: ProjectDocument, version: ProjectVersion, plan: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "name": document.state.name,
@@ -667,7 +669,7 @@ def _project_snapshot(document: ProjectDocument, version: ProjectVersion, plan: 
     )
 
 
-def _export_snapshot(project_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+def _export_snapshot(project_dir: Path, manifest: ImplementationDocument) -> ImplementationDocument:
     zip_path = final_export_zip_path(project_dir)
     return sanitize_metadata(
         {
@@ -682,7 +684,7 @@ def _export_snapshot(project_dir: Path, manifest: dict[str, Any]) -> dict[str, A
     )
 
 
-def _qa_snapshot(qa: dict[str, Any]) -> dict[str, Any]:
+def _qa_snapshot(qa: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "status": qa.get("status"),
@@ -695,7 +697,7 @@ def _qa_snapshot(qa: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _signoff_snapshot(signoff: dict[str, Any]) -> dict[str, Any]:
+def _signoff_snapshot(signoff: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "status": signoff.get("status"),
@@ -709,7 +711,7 @@ def _signoff_snapshot(signoff: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _track_title(document: ProjectDocument, version: ProjectVersion, manifest: dict[str, Any], plan: dict[str, Any]) -> str:
+def _track_title(document: ProjectDocument, version: ProjectVersion, manifest: ImplementationDocument, plan: ImplementationDocument) -> str:
     for value in (manifest.get("version_name"), plan.get("title"), version.name, document.state.name):
         text = _bounded_text(value, 120)
         if text:
@@ -717,7 +719,7 @@ def _track_title(document: ProjectDocument, version: ProjectVersion, manifest: d
     return "Untitled Track"
 
 
-def _duration_beats(plan: dict[str, Any]) -> float | None:
+def _duration_beats(plan: ImplementationDocument) -> float | None:
     sections = plan.get("sections") if isinstance(plan.get("sections"), list) else []
     try:
         return max((float(section.get("start_beat", 0) or 0) + float(section.get("length_bars", 0) or 0) * 4 for section in sections if isinstance(section, dict)), default=None)
@@ -732,7 +734,7 @@ def _find_version(document: ProjectDocument, version_id: str) -> ProjectVersion:
     raise ReleaseConflictError("Project version does not exist.")
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     try:
@@ -777,7 +779,7 @@ def _next_track_id(tracks: list[ReleaseTrack]) -> str:
     raise ReleaseConflictError("Unable to allocate a unique track id.")
 
 
-def _stale_summary(summary: dict[str, Any]) -> dict[str, Any]:
+def _stale_summary(summary: ImplementationDocument) -> ImplementationDocument:
     data = _safe_dict(summary)
     if not data:
         return {}
@@ -787,7 +789,7 @@ def _stale_summary(summary: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     if not isinstance(value, dict):
         return {}
     return sanitize_metadata(value, blocked_keys=BLOCKED_RELEASE_KEYS)

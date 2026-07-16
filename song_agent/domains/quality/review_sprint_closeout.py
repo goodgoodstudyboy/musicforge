@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 from typing import Any
@@ -236,11 +238,11 @@ def _closeout_sources(
     task_store: ReviewTaskStore,
     sprint_store: ReviewSprintStore,
     queue_store: ReviewSprintActionQueueStore,
-    metrics_report: dict[str, Any],
-    judge_summary: dict[str, Any],
-    recommendation_report: dict[str, Any],
-    conflict_report: dict[str, Any],
-) -> dict[str, Any]:
+    metrics_report: ImplementationDocument,
+    judge_summary: ImplementationDocument,
+    recommendation_report: ImplementationDocument,
+    conflict_report: ImplementationDocument,
+) -> ImplementationDocument:
     tasks: list[ReviewTask] = []
     missing_task_ids: list[str] = []
     candidates_by_task: dict[str, list[ReviewCandidate]] = {}
@@ -277,16 +279,16 @@ def _closeout_sources(
 
 def _build_checks(
     *,
-    task_summary: dict[str, Any],
-    candidate_summary: dict[str, Any],
-    queue_summary: dict[str, Any],
-    judge_summary: dict[str, Any],
-    metrics_summary: dict[str, Any],
-    conflict_report: dict[str, Any],
-    recommendation_report: dict[str, Any],
-    recommended_final_version: dict[str, Any],
+    task_summary: ImplementationDocument,
+    candidate_summary: ImplementationDocument,
+    queue_summary: ImplementationDocument,
+    judge_summary: ImplementationDocument,
+    metrics_summary: ImplementationDocument,
+    conflict_report: ImplementationDocument,
+    recommendation_report: ImplementationDocument,
+    recommended_final_version: ImplementationDocument,
     project_document: Any,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks = [
         _check("task_data", int(task_summary.get("task_count") or 0) <= 0, "blocking", "Sprint has no included ReviewTasks.", int(task_summary.get("task_count") or 0)),
         _check("open_tasks", int(task_summary.get("open_task_count") or 0) > 0, "blocking", "ReviewTasks are still open, candidate-ready, or need more work.", int(task_summary.get("open_task_count") or 0)),
@@ -309,7 +311,7 @@ def _build_checks(
     return checks
 
 
-def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> dict[str, Any]:
+def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "check_id": check_id,
@@ -321,13 +323,13 @@ def _check(check_id: str, failed: bool, severity: str, message: str, count: int 
     )
 
 
-def _check_message(check: dict[str, Any]) -> str:
+def _check_message(check: ImplementationDocument) -> str:
     count = check.get("count")
     suffix = f" ({count})" if count not in {None, "", 0} else ""
     return sanitize_sensitive_text(f"{check.get('check_id')}: {check.get('message')}{suffix}")[:240]
 
 
-def _closeout_status(task_summary: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> str:
+def _closeout_status(task_summary: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> str:
     if int(task_summary.get("task_count") or 0) <= 0:
         return "not_ready"
     if blockers:
@@ -337,7 +339,7 @@ def _closeout_status(task_summary: dict[str, Any], blockers: list[dict[str, Any]
     return "passed"
 
 
-def _closeout_readiness(status: str, task_summary: dict[str, Any], checks: list[dict[str, Any]], metrics_summary: dict[str, Any]) -> str:
+def _closeout_readiness(status: str, task_summary: ImplementationDocument, checks: list[ImplementationDocument], metrics_summary: ImplementationDocument) -> str:
     if status == "not_ready":
         return "no_data"
     if any(check.get("check_id") in {"stale_tasks", "stale_recommendations", "stale_judge_reports"} and check.get("status") == "failed" for check in checks):
@@ -353,7 +355,7 @@ def _closeout_readiness(status: str, task_summary: dict[str, Any], checks: list[
     return "ready_to_close"
 
 
-def _task_summary(tasks: list[ReviewTask], missing_task_ids: list[str]) -> dict[str, Any]:
+def _task_summary(tasks: list[ReviewTask], missing_task_ids: list[str]) -> ImplementationDocument:
     counts = {status: 0 for status in ("open", "candidate_ready", "applied", "resolved", "needs_more_work", "stale", "archived")}
     applied_versions = []
     ready_candidate_tasks = 0
@@ -382,7 +384,7 @@ def _task_summary(tasks: list[ReviewTask], missing_task_ids: list[str]) -> dict[
     )
 
 
-def _candidate_summary(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]]) -> dict[str, Any]:
+def _candidate_summary(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]]) -> ImplementationDocument:
     candidates = [candidate for task in tasks for candidate in candidates_by_task.get(task.task_id, [])]
     selected_ids = {task.selected_candidate_id for task in tasks if task.selected_candidate_id}
     selected_or_applied = [candidate for candidate in candidates if candidate.status == "applied" or candidate.candidate_id in selected_ids]
@@ -399,7 +401,7 @@ def _candidate_summary(tasks: list[ReviewTask], candidates_by_task: dict[str, li
     )
 
 
-def _queue_summary(queues: list[SprintActionQueue]) -> dict[str, Any]:
+def _queue_summary(queues: list[SprintActionQueue]) -> ImplementationDocument:
     active_queues = [queue for queue in queues if queue.status != "archived"]
     items = [item for queue in active_queues for item in queue.items]
     pending_executable = [item for item in items if item.safety in EXECUTABLE_ACTION_SAFETY and item.status in {"pending", "running"}]
@@ -417,7 +419,7 @@ def _queue_summary(queues: list[SprintActionQueue]) -> dict[str, Any]:
     )
 
 
-def _metrics_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _metrics_summary(report: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(report, dict) or not report:
         return {"readiness": "no_data", "completion_rate": None, "quality_delta": None, "provider_tokens": 0}
     risk = report.get("risk_readiness") if isinstance(report.get("risk_readiness"), dict) else {}
@@ -438,7 +440,7 @@ def _metrics_summary(report: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _judge_summary(summary: dict[str, Any], metrics_report: dict[str, Any]) -> dict[str, Any]:
+def _judge_summary(summary: ImplementationDocument, metrics_report: ImplementationDocument) -> ImplementationDocument:
     metrics = metrics_report.get("judge_metrics") if isinstance(metrics_report.get("judge_metrics"), dict) else {}
     return sanitize_metadata(
         {
@@ -452,7 +454,7 @@ def _judge_summary(summary: dict[str, Any], metrics_report: dict[str, Any]) -> d
     )
 
 
-def _recommended_final_version(tasks: list[ReviewTask], project_document: Any) -> dict[str, Any]:
+def _recommended_final_version(tasks: list[ReviewTask], project_document: Any) -> ImplementationDocument:
     applied_ids = {task.applied_version_id for task in tasks if task.applied_version_id}
     version_ids = [getattr(version, "version_id", "") for version in getattr(project_document, "versions", [])]
     latest_applied = None
@@ -487,7 +489,7 @@ def _included_task_ids(sprint: ReviewSprint) -> list[str]:
     return [str(ref.get("task_id")) for ref in refs if ref.get("included", True) and str(ref.get("task_id") or "").strip()]
 
 
-def _sprint_source_summary(sprint: ReviewSprint) -> dict[str, Any]:
+def _sprint_source_summary(sprint: ReviewSprint) -> ImplementationDocument:
     return {
         "sprint_id": sprint.sprint_id,
         "project_id": sprint.project_id,
@@ -500,7 +502,7 @@ def _sprint_source_summary(sprint: ReviewSprint) -> dict[str, Any]:
     }
 
 
-def _task_source_summary(task: ReviewTask, candidates: list[ReviewCandidate]) -> dict[str, Any]:
+def _task_source_summary(task: ReviewTask, candidates: list[ReviewCandidate]) -> ImplementationDocument:
     return {
         "task_id": task.task_id,
         "status": task.status,
@@ -524,7 +526,7 @@ def _task_source_summary(task: ReviewTask, candidates: list[ReviewCandidate]) ->
     }
 
 
-def _queue_source_summary(queue: SprintActionQueue) -> dict[str, Any]:
+def _queue_source_summary(queue: SprintActionQueue) -> ImplementationDocument:
     return {
         "queue_id": queue.queue_id,
         "status": queue.status,
@@ -543,7 +545,7 @@ def _queue_source_summary(queue: SprintActionQueue) -> dict[str, Any]:
     }
 
 
-def _conflict_source_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _conflict_source_summary(report: ImplementationDocument) -> ImplementationDocument:
     return {
         "schema_version": report.get("schema_version"),
         "sprint_id": report.get("sprint_id"),
@@ -561,7 +563,7 @@ def _conflict_source_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _recommendation_source_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _recommendation_source_summary(report: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(report, dict):
         return {}
     return {
@@ -575,7 +577,7 @@ def _recommendation_source_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _metrics_source_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _metrics_source_summary(report: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(report, dict):
         return {}
     return {
@@ -592,7 +594,7 @@ def _metrics_source_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _judge_source_summary(summary: dict[str, Any]) -> dict[str, Any]:
+def _judge_source_summary(summary: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(summary, dict):
         return {}
     return {
@@ -608,7 +610,7 @@ def _judge_source_summary(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _project_source_summary(project_document: Any) -> dict[str, Any]:
+def _project_source_summary(project_document: Any) -> ImplementationDocument:
     state = getattr(project_document, "state", None)
     return {
         "selected_version_id": getattr(state, "selected_version_id", None),
@@ -626,7 +628,7 @@ def _project_source_summary(project_document: Any) -> dict[str, Any]:
     }
 
 
-def _source_hash(source: dict[str, Any]) -> str:
+def _source_hash(source: ImplementationDocument) -> str:
     source_summary = {
         **{key: value for key, value in source.items() if key not in {"tasks", "candidates_by_task", "queues"}},
         "tasks": [_task_source_summary(task, source.get("candidates_by_task", {}).get(task.task_id, [])) for task in source.get("tasks", [])],
@@ -642,16 +644,16 @@ def _stable_hash(value: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _blocking_conflict_count(report: dict[str, Any]) -> int:
+def _blocking_conflict_count(report: ImplementationDocument) -> int:
     conflicts = report.get("conflicts") if isinstance(report, dict) else []
     return len([item for item in conflicts if isinstance(item, dict) and item.get("severity") == "blocking"])
 
 
-def _report_stale(report: dict[str, Any]) -> bool:
+def _report_stale(report: ImplementationDocument) -> bool:
     return bool(isinstance(report, dict) and (report.get("stale") or report.get("status") == "stale"))
 
 
-def _quality_not_improved(metrics_summary: dict[str, Any]) -> bool:
+def _quality_not_improved(metrics_summary: ImplementationDocument) -> bool:
     if metrics_summary.get("quality_delta") is None:
         return False
     try:
@@ -660,7 +662,7 @@ def _quality_not_improved(metrics_summary: dict[str, Any]) -> bool:
         return False
 
 
-def _has_applied_or_selected_version(task_summary: dict[str, Any], project_document: Any, recommended_final_version: dict[str, Any]) -> bool:
+def _has_applied_or_selected_version(task_summary: ImplementationDocument, project_document: Any, recommended_final_version: ImplementationDocument) -> bool:
     if task_summary.get("applied_version_ids"):
         return True
     if recommended_final_version.get("version_id"):

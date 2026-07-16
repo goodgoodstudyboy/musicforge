@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -161,7 +163,7 @@ class _DistributionKitVerifier:
         max_uncompressed_size_mb: int,
         max_entry_count: int,
         now: str | None,
-        acceptance_board_signoff_verifier: Callable[..., dict[str, Any]] | None,
+        acceptance_board_signoff_verifier: Callable[..., ImplementationDocument] | None,
     ) -> None:
         self.zip_path = zip_path
         self.strict = strict
@@ -429,7 +431,7 @@ class _DistributionKitVerifier:
         self._add_exact_check("requirements", "ptcdk_acceptance_board_signoff_status", summary.get("signoff_status"), "signed", "Acceptance Board signoff status")
         self._add_exact_check("requirements", "ptcdk_acceptance_board_signoff_ready", summary.get("board_readiness"), "ready", "Acceptance Board readiness")
 
-    def _compare_deep_reports(self, scope: str, actual: dict[str, Any], copied: dict[str, Any], prefix: str) -> None:
+    def _compare_deep_reports(self, scope: str, actual: ImplementationDocument, copied: ImplementationDocument, prefix: str) -> None:
         self._add_exact_check(scope, f"{prefix}_status", actual.get("status"), copied.get("status"), f"{scope} copied verification status")
         self._add_exact_check(scope, f"{prefix}_zip_sha256", actual.get("zip_sha256"), copied.get("zip_sha256"), f"{scope} copied verification ZIP sha256")
         self._add_exact_check(scope, f"{prefix}_manifest_hash", actual.get("manifest_hash"), copied.get("manifest_hash"), f"{scope} copied verification manifest hash")
@@ -460,7 +462,7 @@ class _DistributionKitVerifier:
         self.redaction_findings = findings
         self._add_check("redaction", "ptcdk_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Distribution Kit." if findings else "No sensitive values found in Distribution Kit.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -473,7 +475,7 @@ class _DistributionKitVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return value if isinstance(value, dict) else {}
 
-    def _read_json_file(self, path: Path | None) -> dict[str, Any]:
+    def _read_json_file(self, path: Path | None) -> ImplementationDocument:
         if path is None or not path.exists():
             return {}
         try:
@@ -482,7 +484,7 @@ class _DistributionKitVerifier:
             return {}
         return value if isinstance(value, dict) else {}
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
@@ -530,7 +532,7 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _verification_hash(report: dict[str, Any]) -> str | None:
+def _verification_hash(report: ImplementationDocument) -> str | None:
     if not report:
         return None
     return stable_hash({key: value for key, value in report.items() if key != "generated_at"})
@@ -551,7 +553,7 @@ def _counts(values: list[str]) -> dict[str, int]:
     return counts
 
 
-def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern in SENSITIVE_VALUE_PATTERNS + LOCAL_PATH_VALUE_PATTERNS:
         compiled = pattern[0] if isinstance(pattern, tuple) and pattern else pattern
@@ -561,7 +563,7 @@ def _redaction_findings(name: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[dict[str, Any]]:
+def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():

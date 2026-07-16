@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -100,7 +102,7 @@ class PersistenceRecovery:
             "program_recovered": program_recovered,
         }
 
-    def _record_committed(self, intent: dict[str, Any], generation: Path, pointer_hash: str) -> None:
+    def _record_committed(self, intent: ImplementationDocument, generation: Path, pointer_hash: str) -> None:
         with self.database.transaction() as connection:
             connection.execute(
                 """
@@ -121,7 +123,7 @@ class PersistenceRecovery:
             )
 
 
-def _tree_hash(rows: list[dict[str, Any]]) -> str:
+def _tree_hash(rows: list[ImplementationDocument]) -> str:
     from song_agent.platform.persistence.file_artifacts import stable_tree_hash
 
     return stable_tree_hash(rows)

@@ -114,7 +114,7 @@ def test_render_stems_writes_manifest_and_downloads_midi(tmp_path, monkeypatch):
 
 def test_render_stem_audio_writes_wavs_without_marking_job_failed(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.stems.render_audio", fake_render_audio)
+    monkeypatch.setattr("song_agent.domains.creation.stems.render_audio", fake_render_audio)
     server = start_test_server()
     try:
         configure_renderer(tmp_path, server)
@@ -187,7 +187,7 @@ def test_stem_file_download_rejects_stale_manifest_when_song_plan_changes(tmp_pa
 
 def test_stem_audio_rejects_stale_manifest_until_rerendered(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.stems.render_audio", fake_render_audio)
+    monkeypatch.setattr("song_agent.domains.creation.stems.render_audio", fake_render_audio)
     server = start_test_server()
     try:
         configure_renderer(tmp_path, server)

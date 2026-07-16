@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import urllib.error
@@ -199,7 +201,7 @@ class OpenAICompatibleClient:
         messages: list[dict[str, str]],
         *,
         max_tokens: int,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         url = _join_url(config.base_url, "chat/completions")
         payload: dict[str, Any] = {
             "model": config.model,
@@ -246,7 +248,7 @@ class OpenAICompatibleClient:
         return data
 
 
-def _extract_content(response: dict[str, Any]) -> str:
+def _extract_content(response: ImplementationDocument) -> str:
     choices = response.get("choices")
     if not isinstance(choices, list) or not choices:
         raise ProviderResponseError("Provider response is missing choices.")
@@ -262,11 +264,11 @@ def _extract_content(response: dict[str, Any]) -> str:
     return content
 
 
-def _usage_dict(value: Any) -> dict[str, Any]:
+def _usage_dict(value: Any) -> ImplementationDocument:
     return dict(value) if isinstance(value, dict) else {}
 
 
-def _request_id(response: dict[str, Any]) -> str | None:
+def _request_id(response: ImplementationDocument) -> str | None:
     for key in ("id", "request_id"):
         value = response.get(key)
         if value is not None and str(value).strip():

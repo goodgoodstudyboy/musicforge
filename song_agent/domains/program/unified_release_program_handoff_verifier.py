@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -361,7 +363,7 @@ def _verify_simple_fixed_package(
     max_zip_size_mb: int,
     max_uncompressed_size_mb: int,
     max_entry_count: int,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     zip_path = Path(zip_path)
     checks: list[dict[str, Any]] = []
     summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
@@ -418,7 +420,7 @@ def _verify_simple_fixed_package(
     return _finish(checks, summary, verification_package_type)
 
 
-def _external_handoff_state(path: Path | str | None, archive_manifest: dict[str, Any], *, require: bool) -> dict[str, Any]:
+def _external_handoff_state(path: Path | str | None, archive_manifest: ImplementationDocument, *, require: bool) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     state: dict[str, Any] = {"checks": checks, "program": {}, "operations": {}, "accepted": []}
     if not path:
@@ -450,7 +452,7 @@ def _external_handoff_state(path: Path | str | None, archive_manifest: dict[str,
     return state
 
 
-def _external_program_checks(row: dict[str, Any] | None, *, require: bool, state: dict[str, Any]) -> list[dict[str, Any]]:
+def _external_program_checks(row: ImplementationDocument | None, *, require: bool, state: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not row:
         if require:
@@ -488,7 +490,7 @@ def _external_program_checks(row: dict[str, Any] | None, *, require: bool, state
     return checks
 
 
-def _external_operations_checks(row: dict[str, Any] | None, program_row: dict[str, Any] | None, *, require: bool, state: dict[str, Any]) -> list[dict[str, Any]]:
+def _external_operations_checks(row: ImplementationDocument | None, program_row: ImplementationDocument | None, *, require: bool, state: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not row:
         if require:
@@ -537,7 +539,7 @@ def _external_operations_checks(row: dict[str, Any] | None, program_row: dict[st
     return checks
 
 
-def _external_accepted_evidence_checks(row: dict[str, Any], *, state: dict[str, Any], index: int, require: bool) -> list[dict[str, Any]]:
+def _external_accepted_evidence_checks(row: ImplementationDocument, *, state: ImplementationDocument, index: int, require: bool) -> list[ImplementationDocument]:
     prefix = f"urph_external_accepted_{index:03d}"
     zip_path = Path(str(row.get("accepted_evidence_zip") or row.get("zip_path") or ""))
     report_path = Path(str(row.get("accepted_evidence_verification_report") or row.get("verification_report_path") or ""))
@@ -581,24 +583,24 @@ def _external_accepted_evidence_checks(row: dict[str, Any], *, state: dict[str, 
     return checks
 
 
-def _path_checks(prefix: str, paths: dict[str, Path]) -> list[dict[str, Any]]:
+def _path_checks(prefix: str, paths: dict[str, Path]) -> list[ImplementationDocument]:
     return [_check(f"{prefix}_{key}_exists", path.exists() and path.is_file(), f"{key} exists.", {"path": str(path)}) for key, path in paths.items()]
 
 
 def _handoff_semantic_checks(
-    report: dict[str, Any],
-    inventory: dict[str, Any],
-    decision: dict[str, Any],
-    accepted_index: dict[str, Any],
-    program_summary: dict[str, Any],
-    operations_summary: dict[str, Any],
-    accepted_summary: dict[str, Any],
-    external: dict[str, Any],
+    report: ImplementationDocument,
+    inventory: ImplementationDocument,
+    decision: ImplementationDocument,
+    accepted_index: ImplementationDocument,
+    program_summary: ImplementationDocument,
+    operations_summary: ImplementationDocument,
+    accepted_summary: ImplementationDocument,
+    external: ImplementationDocument,
     *,
     require_current: bool,
     require_accepted: bool,
     require_signed: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     program = external.get("program") or {}
     operations = external.get("operations") or {}
@@ -650,14 +652,14 @@ def _handoff_semantic_checks(
 
 
 def _accepted_evidence_semantic_checks(
-    public_response: dict[str, Any],
-    response_summary: dict[str, Any],
-    response_binding: dict[str, Any],
-    report: dict[str, Any],
-    evidence_binding: dict[str, Any],
+    public_response: ImplementationDocument,
+    response_summary: ImplementationDocument,
+    response_binding: ImplementationDocument,
+    report: ImplementationDocument,
+    evidence_binding: ImplementationDocument,
     *,
     require_accepted: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     reviewer = report.get("reviewer") if isinstance(report.get("reviewer"), dict) else {}
     return [
         _check("urpae_public_role_binding", public_response.get("reviewer_role") == reviewer.get("role") == response_binding.get("reviewer_role"), "Reviewer role is derived from original response binding."),
@@ -673,13 +675,13 @@ def _accepted_evidence_semantic_checks(
 def _external_response_binding_checks(
     response_verification_report_path: Path | str | None,
     response_binding_summary_path: Path | str | None,
-    response_summary: dict[str, Any],
-    response_binding: dict[str, Any],
-    public_response: dict[str, Any],
-    report: dict[str, Any],
+    response_summary: ImplementationDocument,
+    response_binding: ImplementationDocument,
+    public_response: ImplementationDocument,
+    report: ImplementationDocument,
     *,
     require: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if not response_verification_report_path or not response_binding_summary_path:
         if require:
             return [_check("urpae_external_response_proof_required", False, "External response verification and binding proof are required.")]
@@ -706,21 +708,21 @@ def _external_response_binding_checks(
 
 
 def _handoff_document_binding_checks(
-    manifest: dict[str, Any],
-    report: dict[str, Any],
-    inventory: dict[str, Any],
-    decision: dict[str, Any],
-    conflicts: dict[str, Any],
-    accepted_index: dict[str, Any],
-    readiness: dict[str, Any],
-    gap: dict[str, Any],
-    external_manifest: dict[str, Any],
-    signoff: dict[str, Any],
-    binding: dict[str, Any],
-    program_summary: dict[str, Any],
-    operations_summary: dict[str, Any],
-    accepted_summary: dict[str, Any],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    report: ImplementationDocument,
+    inventory: ImplementationDocument,
+    decision: ImplementationDocument,
+    conflicts: ImplementationDocument,
+    accepted_index: ImplementationDocument,
+    readiness: ImplementationDocument,
+    gap: ImplementationDocument,
+    external_manifest: ImplementationDocument,
+    signoff: ImplementationDocument,
+    binding: ImplementationDocument,
+    program_summary: ImplementationDocument,
+    operations_summary: ImplementationDocument,
+    accepted_summary: ImplementationDocument,
+) -> list[ImplementationDocument]:
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     docs = {
         "handoff_report_hash": report,
@@ -740,7 +742,7 @@ def _handoff_document_binding_checks(
     return [_check(f"urph_manifest_{key}", source.get(key) == doc.get("integrity_hash"), f"Manifest binds {key}.") for key, doc in docs.items()]
 
 
-def _handoff_signoff_binding_checks(binding: dict[str, Any], signoff: dict[str, Any], history: list[dict[str, Any]], report: dict[str, Any], decision: dict[str, Any], accepted_index: dict[str, Any], external_manifest: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _handoff_signoff_binding_checks(binding: ImplementationDocument, signoff: ImplementationDocument, history: list[ImplementationDocument], report: ImplementationDocument, decision: ImplementationDocument, accepted_index: ImplementationDocument, external_manifest: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not binding:
         return [_check("urph_signoff_binding_required", not require, "Handoff signoff binding is present when required.")]
     signoff_event = next((row for row in reversed(history) if row.get("event_type") == "unified_release_program_handoff_signoff_created"), {})
@@ -757,7 +759,7 @@ def _handoff_signoff_binding_checks(binding: dict[str, Any], signoff: dict[str, 
     ]
 
 
-def _public_external_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+def _public_external_manifest(manifest: ImplementationDocument) -> ImplementationDocument:
     public_items = []
     allowed_exact = {
         "evidence_id",
@@ -798,7 +800,7 @@ def _public_external_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     return public
 
 
-def _external_handoff_binding_checks(path: Path | str | None, binding: dict[str, Any], signoff: dict[str, Any], history: list[dict[str, Any]], report: dict[str, Any], decision: dict[str, Any], accepted_index: dict[str, Any], external_manifest: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _external_handoff_binding_checks(path: Path | str | None, binding: ImplementationDocument, signoff: ImplementationDocument, history: list[ImplementationDocument], report: ImplementationDocument, decision: ImplementationDocument, accepted_index: ImplementationDocument, external_manifest: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not path:
         if require:
             return [_check("urph_external_signoff_binding_required", False, "External Handoff signoff binding proof is required.")]
@@ -821,7 +823,7 @@ def _external_handoff_binding_checks(path: Path | str | None, binding: dict[str,
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str], expected_entries: set[str], prefix: str) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str], expected_entries: set[str], prefix: str) -> list[ImplementationDocument]:
     files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     file_paths = {str(row.get("path")) for row in files}
     expected_files = expected_entries - {"manifest.json"}
@@ -839,7 +841,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _history_checks(prefix: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _history_checks(prefix: str, rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     previous = ""
     for index, event in enumerate(rows):
@@ -852,7 +854,7 @@ def _history_checks(prefix: str, rows: list[dict[str, Any]]) -> list[dict[str, A
     return checks
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], package_type: str, first_check: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, package_type: str, first_check: ImplementationDocument | None = None) -> ImplementationDocument:
     if first_check is not None:
         checks.insert(0, first_check)
     return build_verification_report(
@@ -863,15 +865,15 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], package_type:
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id=check_id)
 
 

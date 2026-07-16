@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -93,7 +95,7 @@ def _invalid_passed_evidence_bindings(rows: list[Any]) -> list[str]:
     return invalid
 
 
-def _evidence_binding_valid(evidence: dict[str, Any]) -> bool:
+def _evidence_binding_valid(evidence: ImplementationDocument) -> bool:
     expected_package = EVIDENCE_PACKAGE_TYPES.get(str(evidence.get("component_type") or ""))
     if expected_package and evidence.get("package_type") != expected_package:
         return False
@@ -115,7 +117,7 @@ def _evidence_binding_valid(evidence: dict[str, Any]) -> bool:
     return bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
 
 
-def _missing_components_from_hub_verification(report: dict[str, Any]) -> set[str]:
+def _missing_components_from_hub_verification(report: ImplementationDocument) -> set[str]:
     missing: set[str] = set()
     for item in report.get("blockers", []) if isinstance(report.get("blockers"), list) else []:
         if not isinstance(item, dict):
@@ -388,7 +390,7 @@ class _IncidentVerifier:
         self.redaction_findings = findings
         self._add_check("security", "tohi_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Incident package." if findings else "No sensitive values found in Incident package.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         summary = {
@@ -420,7 +422,7 @@ class _IncidentVerifier:
             blocked_keys=VERIFIER_BLOCKED_KEYS,
         )
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         try:
             raw = archive.read(name)
             value = json.loads(raw.decode("utf-8"))
@@ -433,7 +435,7 @@ class _IncidentVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parsed.")
         return value
 
-    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[dict[str, Any]]:
+    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         try:
             raw = archive.read(name)
         except (KeyError, OSError) as exc:
@@ -463,7 +465,7 @@ class _IncidentVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _board_summary(incidents: list[Any]) -> dict[str, Any]:
+def _board_summary(incidents: list[Any]) -> ImplementationDocument:
     rows = [item for item in incidents if isinstance(item, dict)]
     open_rows = [item for item in rows if item.get("status") in {"open", "triaged", "in_progress", "waiting_verification", "verified"}]
     return {
@@ -478,7 +480,7 @@ def _board_summary(incidents: list[Any]) -> dict[str, Any]:
     }
 
 
-def _rebuild_status_from_events(events: list[dict[str, Any]]) -> dict[str, str]:
+def _rebuild_status_from_events(events: list[ImplementationDocument]) -> dict[str, str]:
     statuses: dict[str, str] = {}
     for event in events:
         incident_id = str(event.get("incident_id") or "")
@@ -501,7 +503,7 @@ def _rebuild_status_from_events(events: list[dict[str, Any]]) -> dict[str, str]:
     return statuses
 
 
-def _event_chain_ok(events: list[dict[str, Any]]) -> bool:
+def _event_chain_ok(events: list[ImplementationDocument]) -> bool:
     by_incident: dict[str, list[dict[str, Any]]] = {}
     for event in events:
         by_incident.setdefault(str(event.get("incident_id") or ""), []).append(event)
@@ -517,7 +519,7 @@ def _event_chain_ok(events: list[dict[str, Any]]) -> bool:
     return True
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     try:
         with open(_fs_path(path), "r", encoding="utf-8") as handle:
             value = json.load(handle)

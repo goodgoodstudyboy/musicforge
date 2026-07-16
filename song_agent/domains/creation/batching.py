@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import csv
 import json
 import shutil
@@ -469,7 +471,7 @@ class BatchStore:
         raise RuntimeError("Unable to allocate a unique batch directory.")
 
     @staticmethod
-    def _export_item(item: BatchItem) -> dict[str, Any]:
+    def _export_item(item: BatchItem) -> ImplementationDocument:
         output_dir = item.output_dir
         song_plan = str(Path(output_dir) / "data" / "song-plan.json") if output_dir else None
         midi = str(Path(output_dir) / "renders" / "song.mid") if output_dir else None

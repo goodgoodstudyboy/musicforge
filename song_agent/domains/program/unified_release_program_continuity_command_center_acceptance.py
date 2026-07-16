@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import io
@@ -796,7 +798,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         if self.history_path(program_id).exists():
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history already exists; re-sign is not allowed.")
 
-    def _mark_reset_board_refreshed(self, program_id: str, docs: dict[str, Any]) -> None:
+    def _mark_reset_board_refreshed(self, program_id: str, docs: ImplementationDocument) -> None:
         if self.latest_signoff_state(program_id).get("status") != "reset_pending":
             return
         state = read_json(self.state_path(program_id))
@@ -816,7 +818,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         state["integrity_hash"] = _integrity_hash(state)
         write_json(self.state_path(program_id), state)
 
-    def _current_v1210_context(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_v1210_context(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         archive_path = Path(payload.get("command_center_signoff_archive") or payload.get("signoff_archive") or self.signoff_store.archive_zip_path(program_id))
         archive_report_path = Path(payload.get("command_center_signoff_archive_verification_report") or payload.get("signoff_archive_verification_report") or self.signoff_store.archive_verification_report_path(program_id))
         handoff_path = Path(payload.get("command_center_final_handoff") or payload.get("final_handoff") or self.signoff_store.final_handoff_zip_path(program_id))
@@ -900,7 +902,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             "source": source,
         }
 
-    def _review_pack_documents(self, program_id: str, context: dict[str, Any]) -> dict[str, dict[str, Any] | str | bytes]:
+    def _review_pack_documents(self, program_id: str, context: ImplementationDocument) -> dict[str, ImplementationDocument | str | bytes]:
         source = context["source"]
         source_hash = stable_hash(source)
         report = _with_integrity(
@@ -970,7 +972,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         )
         return {"manifest.json": docs.pop("manifest.json"), **docs}
 
-    def _verify_review_pack_runtime(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _verify_review_pack_runtime(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         context = self._current_v1210_context(program_id, payload)
         return verify_review_pack(
             payload.get("review_pack") or self.review_pack_zip_path(program_id),
@@ -984,7 +986,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             command_center_external_evidence_manifest_path=context["evidence_path"],
         )
 
-    def _current_review_source(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _current_review_source(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         review_pack = Path(payload.get("review_pack") or self.review_pack_zip_path(program_id))
         report_path = Path(payload.get("review_pack_verification_report") or self.review_pack_verification_report_path(program_id))
         if not review_pack.is_file() or not report_path.is_file():
@@ -1013,7 +1015,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             **review_source,
         }
 
-    def _response_bundle(self, program_id: str, response_id: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def _response_bundle(self, program_id: str, response_id: str) -> tuple[ImplementationDocument, ImplementationDocument, ImplementationDocument]:
         paths = (
             self.response_path(program_id, response_id),
             self.response_verification_path(program_id, response_id),
@@ -1023,7 +1025,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceNotFoundError(f"Receiver response proof not found: {response_id}")
         return tuple(read_json(path) for path in paths)  # type: ignore[return-value]
 
-    def _response_bundles(self, program_id: str) -> dict[str, dict[str, Any]]:
+    def _response_bundles(self, program_id: str) -> dict[str, ImplementationDocument]:
         bundles: dict[str, dict[str, Any]] = {}
         if not self.responses_dir(program_id).exists():
             return bundles
@@ -1035,7 +1037,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                 bundles[root.name] = {"error": "response_proof_unreadable"}
         return bundles
 
-    def _verify_accepted_evidence_runtime(self, program_id: str, evidence_id: str, response_id: str) -> dict[str, Any]:
+    def _verify_accepted_evidence_runtime(self, program_id: str, evidence_id: str, response_id: str) -> ImplementationDocument:
         return verify_accepted_evidence(
             self.accepted_evidence_zip_path(program_id, evidence_id),
             strict=True,
@@ -1045,7 +1047,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             response_binding_summary_path=self.response_binding_path(program_id, response_id),
         )
 
-    def _build_board_documents(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _build_board_documents(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         stored_report = _read_optional_json(self.board_report_path(program_id))
         policy = _policy(payload.get("policy") if "policy" in payload else stored_report.get("policy"))
         conflicts: list[dict[str, Any]] = []
@@ -1207,7 +1209,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         )
         return {"report": report, "matrix": matrix, "quorum": quorum, "findings": findings, "accepted_index": accepted_index, "response_index": response_index, "external_manifest": external_manifest}
 
-    def _write_board_documents(self, program_id: str, docs: dict[str, Any]) -> None:
+    def _write_board_documents(self, program_id: str, docs: ImplementationDocument) -> None:
         self.board_dir(program_id).mkdir(parents=True, exist_ok=True)
         for path, key in (
             (self.board_report_path(program_id), "report"),
@@ -1223,10 +1225,10 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
     def _signed_context(
         self,
         program_id: str,
-        payload: dict[str, Any],
+        payload: ImplementationDocument,
         *,
         allow_reset_pending: bool = False,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         latest = self.latest_signoff_state(program_id)
         if latest.get("status") == "reset_pending" and allow_reset_pending:
             event = next(
@@ -1278,7 +1280,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Signoff does not bind frozen Receiver Acceptance board documents.")
         return {**stored, "signoff": signoff, "binding": binding, "state": state, "policy": policy, "event": event}
 
-    def _archive_documents(self, program_id: str, context: dict[str, Any], event: dict[str, Any]) -> dict[str, dict[str, Any] | str]:
+    def _archive_documents(self, program_id: str, context: ImplementationDocument, event: ImplementationDocument) -> dict[str, ImplementationDocument | str]:
         source = context["report"].get("source") or {}
         handoff_summary = _with_integrity(
             {
@@ -1335,7 +1337,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         manifest = _manifest(ARCHIVE_PACKAGE_TYPE, program_id, docs, source_hashes, ARCHIVE_ENTRIES)
         return {"manifest.json": manifest, **docs}
 
-    def _verify_archive_runtime(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _verify_archive_runtime(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         context = self._current_v1210_context(program_id, payload)
         return verify_unified_release_program_continuity_command_center_acceptance_package(
             payload.get("archive_zip") or self.archive_zip_path(program_id),
@@ -1356,7 +1358,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             command_center_evidence_manifest_path=context["evidence_path"],
         )
 
-    def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _validate_history(self, program_id: str) -> None:
@@ -1366,17 +1368,17 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
         if not validation.valid:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Acceptance history hash chain is invalid.")
 
-    def _find_history_event(self, program_id: str, event_type: str) -> dict[str, Any] | None:
+    def _find_history_event(self, program_id: str, event_type: str) -> ImplementationDocument | None:
         signoff_hash = self.latest_signoff_state(program_id).get("signoff_hash")
         return next((row for row in reversed(self.read_history(program_id)) if row.get("event_type") == event_type and row.get("signoff_hash") == signoff_hash), None)
 
-    def _history_through(self, program_id: str, event_hash: str) -> list[dict[str, Any]]:
+    def _history_through(self, program_id: str, event_hash: str) -> list[ImplementationDocument]:
         try:
             return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).through(event_hash)
         except ValueError as exc:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Frozen Receiver Acceptance history event is missing.") from exc
 
-    def _write_export_dir(self, root: Path, docs: dict[str, dict[str, Any] | str]) -> None:
+    def _write_export_dir(self, root: Path, docs: dict[str, ImplementationDocument | str]) -> None:
         if root.exists():
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Immutable Receiver Acceptance export already exists.")
         root.mkdir(parents=True, exist_ok=False)
@@ -1387,7 +1389,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             else:
                 write_json(path, value)
 
-    def _validate_export_dir(self, root: Path, docs: dict[str, dict[str, Any] | str]) -> None:
+    def _validate_export_dir(self, root: Path, docs: dict[str, ImplementationDocument | str]) -> None:
         actual = {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()}
         if actual != ARCHIVE_ENTRIES:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Immutable Receiver Acceptance export file set changed.")
@@ -1397,7 +1399,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                 raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(f"Immutable Receiver Acceptance export changed: {rel}")
 
 
-def _response_payload_documents(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+def _response_payload_documents(payload: ImplementationDocument) -> tuple[ImplementationDocument, ImplementationDocument, ImplementationDocument]:
     _reject_forbidden(payload, "Receiver response import")
     if payload.get("response_zip_base64"):
         try:
@@ -1426,7 +1428,7 @@ def _response_payload_documents(payload: dict[str, Any]) -> tuple[dict[str, Any]
     return dict(response), dict(verification), dict(binding)
 
 
-def _policy(value: Any) -> dict[str, Any]:
+def _policy(value: Any) -> ImplementationDocument:
     incoming = value if isinstance(value, dict) else {}
     return {
         "min_accepted_count": max(1, int(incoming.get("min_accepted_count") or DEFAULT_POLICY["min_accepted_count"])),
@@ -1438,7 +1440,7 @@ def _policy(value: Any) -> dict[str, Any]:
     }
 
 
-def _quorum_summary(policy: dict[str, Any], participants: list[dict[str, Any]], conflicts: list[dict[str, Any]]) -> dict[str, Any]:
+def _quorum_summary(policy: ImplementationDocument, participants: list[ImplementationDocument], conflicts: list[ImplementationDocument]) -> ImplementationDocument:
     accepted = [row for row in participants if row.get("decision") == "accepted"]
     roles = {str(row.get("role") or "") for row in accepted}
     organizations = {str(row.get("organization") or "") for row in accepted}
@@ -1455,7 +1457,7 @@ def _quorum_summary(policy: dict[str, Any], participants: list[dict[str, Any]], 
     return {"status": "blocked" if blockers else "ready_for_signoff", "accepted_count": len(accepted), "organization_count": len(organizations), "required_roles": sorted(policy.get("required_roles") or []), "missing_roles": missing_roles, "blockers": blockers}
 
 
-def _findings_rows(responses: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _findings_rows(responses: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for response_id, bundle in sorted(responses.items()):
         for index, finding in enumerate(bundle["response"].get("findings") or [], start=1):
@@ -1465,11 +1467,11 @@ def _findings_rows(responses: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
     return rows
 
 
-def _response_public_projection(response: dict[str, Any]) -> dict[str, Any]:
+def _response_public_projection(response: ImplementationDocument) -> ImplementationDocument:
     return {"schema_version": SCHEMA_VERSION, "package_type": f"{RESPONSE_PACKAGE_TYPE}_public_projection", "program_id": response.get("program_id"), "response_id": response.get("response_id"), "reviewer": response.get("reviewer"), "organization": response.get("organization"), "role": response.get("role"), "decision": response.get("decision"), "findings": response.get("findings") or [], "created_at": response.get("created_at")}
 
 
-def _manifest(package_type: str, program_id: str, docs: dict[str, Any], source: dict[str, Any], required: set[str]) -> dict[str, Any]:
+def _manifest(package_type: str, program_id: str, docs: ImplementationDocument, source: ImplementationDocument, required: set[str]) -> ImplementationDocument:
     files = []
     for rel in sorted(required - {"manifest.json"}):
         data = _serialize(docs[rel])
@@ -1477,7 +1479,7 @@ def _manifest(package_type: str, program_id: str, docs: dict[str, Any], source: 
     return _with_integrity({"schema_version": SCHEMA_VERSION, "package_type": package_type, "program_id": program_id, "source": source, "files": files, "zip": {"entries": sorted(required)}})
 
 
-def _build_zip_from_values(path: Path, docs: dict[str, Any]) -> None:
+def _build_zip_from_values(path: Path, docs: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     ArchiveBuilder.build_payload_zip(path, {rel: _serialize(value) for rel, value in docs.items()})
 
@@ -1495,15 +1497,15 @@ def _serialize(value: Any) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").replace("\n", os.linesep).encode("utf-8")
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     return SignoffService.seal(doc, payload_hash=False)
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
@@ -1515,15 +1517,15 @@ def _sha256_path(path: Path | str) -> str:
     return digest.hexdigest()
 
 
-def _zip_result(path: Path, report: dict[str, Any]) -> dict[str, Any]:
+def _zip_result(path: Path, report: ImplementationDocument) -> ImplementationDocument:
     return {"status": "passed", "zip_path": str(path), "zip_sha256": _sha256_path(path), "zip_size_bytes": path.stat().st_size, "manifest_hash": report.get("manifest_hash")}
 
 
-def _history_text(rows: list[dict[str, Any]]) -> str:
+def _history_text(rows: list[ImplementationDocument]) -> str:
     return "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.is_file():
         return {}
     try:
@@ -1544,7 +1546,7 @@ def _reject_forbidden(value: Any, label: str) -> None:
             _reject_forbidden(child, label)
 
 
-def _reject_sensitive_mutation(value: dict[str, Any], label: str) -> None:
+def _reject_sensitive_mutation(value: ImplementationDocument, label: str) -> None:
     if sanitize_metadata(value) != value:
         raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(f"{label} contains sensitive or local-path content.")
 
@@ -1559,5 +1561,5 @@ def _safe_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.:-]+", "-", str(value)).strip("-")
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}

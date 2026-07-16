@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import os
 import threading
@@ -511,7 +513,7 @@ class AudioReviewEvidenceStore:
             "artifact": artifact,
         }
 
-    def _build_review(self, release_id: str, review_id: str, payload: dict[str, Any], *, now: str, created_at: str | None = None) -> dict[str, Any]:
+    def _build_review(self, release_id: str, review_id: str, payload: ImplementationDocument, *, now: str, created_at: str | None = None) -> ImplementationDocument:
         track_id = str(payload.get("track_id") or "").strip()
         if not track_id:
             raise AudioReviewEvidenceError("track_id is required.")
@@ -559,7 +561,7 @@ class AudioReviewEvidenceStore:
         review["stale_reasons"] = []
         return sanitize_metadata(review, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
-    def _normalize_markers(self, value: Any, *, context: dict[str, Any]) -> list[dict[str, Any]]:
+    def _normalize_markers(self, value: Any, *, context: ImplementationDocument) -> list[ImplementationDocument]:
         markers = value if isinstance(value, list) else []
         result: list[dict[str, Any]] = []
         duration = float((context.get("audio_evidence") or {}).get("duration_seconds") or 0.0)
@@ -592,7 +594,7 @@ class AudioReviewEvidenceStore:
             )
         return result
 
-    def _write_review_with_markers(self, release_id: str, review: dict[str, Any], markers: list[dict[str, Any]], *, now: str) -> dict[str, Any]:
+    def _write_review_with_markers(self, release_id: str, review: ImplementationDocument, markers: list[ImplementationDocument], *, now: str) -> ImplementationDocument:
         updated = {key: value for key, value in review.items() if key not in {"integrity_hash", "stale", "stale_reasons", "current", "current_source_hash"}}
         updated["markers"] = markers
         updated["updated_at"] = now
@@ -617,7 +619,7 @@ class AudioReviewEvidenceStore:
         if document.status == "signed" or self.release_store.read_signoff(release_id, default={}):
             raise AudioReviewEvidenceStateError("Signed releases cannot change audio reviews. Reset signoff first.")
 
-    def _append_event(self, release_id: str, event_type: str, payload: dict[str, Any], now: str) -> None:
+    def _append_event(self, release_id: str, event_type: str, payload: ImplementationDocument, now: str) -> None:
         root = self.reviews_dir(release_id)
         root.mkdir(parents=True, exist_ok=True)
         event = sanitize_metadata({"timestamp": now, "type": event_type, "payload": payload}, blocked_keys=BLOCKED_RELEASE_KEYS)
@@ -831,7 +833,7 @@ def release_audio_review_gate(release_store: ReleaseStore, project_store: Projec
     return {**public, "status": "passed", "message": "Per-track audio review gate passed."}
 
 
-def _current_audio_qa_track(release_store: ReleaseStore, project_store: ProjectStore, release: Any, release_id: str, track_id: str) -> dict[str, Any]:
+def _current_audio_qa_track(release_store: ReleaseStore, project_store: ProjectStore, release: Any, release_id: str, track_id: str) -> ImplementationDocument:
     try:
         report = read_release_audio_qa(release_store, release_id, default={})
         current_hash = release_audio_source_hash(release, project_store=project_store, release_store=release_store)
@@ -845,7 +847,7 @@ def _current_audio_qa_track(release_store: ReleaseStore, project_store: ProjectS
     return {}
 
 
-def _song_plan_identity(song_plan: dict[str, Any]) -> dict[str, Any]:
+def _song_plan_identity(song_plan: ImplementationDocument) -> ImplementationDocument:
     return {
         "payload_hash": stable_hash(song_plan if isinstance(song_plan, dict) else {}),
         "tempo_bpm": _tempo(song_plan),
@@ -854,7 +856,7 @@ def _song_plan_identity(song_plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _tempo(song_plan: dict[str, Any]) -> float:
+def _tempo(song_plan: ImplementationDocument) -> float:
     if not isinstance(song_plan, dict):
         return 0.0
     for key in ("tempo_bpm", "bpm", "tempo"):
@@ -872,7 +874,7 @@ def _tempo(song_plan: dict[str, Any]) -> float:
         return 0.0
 
 
-def _section_ranges(song_plan: dict[str, Any]) -> list[dict[str, Any]]:
+def _section_ranges(song_plan: ImplementationDocument) -> list[ImplementationDocument]:
     sections = song_plan.get("sections") if isinstance(song_plan, dict) and isinstance(song_plan.get("sections"), list) else []
     result: list[dict[str, Any]] = []
     cursor = 0.0
@@ -902,7 +904,7 @@ def _float(value: Any) -> float:
         return 0.0
 
 
-def _artifact_stale_reasons(artifact: dict[str, Any], *, wav_path: Path, midi_path: Path, song_plan_path: Path, project_store: ProjectStore) -> list[str]:
+def _artifact_stale_reasons(artifact: ImplementationDocument, *, wav_path: Path, midi_path: Path, song_plan_path: Path, project_store: ProjectStore) -> list[str]:
     renderer = artifact.get("renderer") if isinstance(artifact.get("renderer"), dict) else {}
     profile_id = str(renderer.get("profile_id") or "")
     profile = None
@@ -924,7 +926,7 @@ def _sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _payload_redaction_findings(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def _payload_redaction_findings(payload: ImplementationDocument) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
 
     def walk(value: Any, field: str) -> None:
@@ -943,7 +945,7 @@ def _payload_redaction_findings(payload: dict[str, Any]) -> list[dict[str, Any]]
     return sanitize_metadata(findings, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
 
-def _review_redaction_findings(review: dict[str, Any]) -> list[dict[str, Any]]:
+def _review_redaction_findings(review: ImplementationDocument) -> list[ImplementationDocument]:
     findings = list(review.get("redaction_findings") or []) if isinstance(review.get("redaction_findings"), list) else []
     for field in ("reviewer", "notes", "tags", "markers", "imported_from"):
         value = review.get(field)
@@ -954,7 +956,7 @@ def _review_redaction_findings(review: dict[str, Any]) -> list[dict[str, Any]]:
     return sanitize_metadata(findings, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
 
-def _markers_from_human_review(review: dict[str, Any]) -> list[dict[str, Any]]:
+def _markers_from_human_review(review: ImplementationDocument) -> list[ImplementationDocument]:
     source = review.get("markers") if isinstance(review.get("markers"), list) else []
     result: list[dict[str, Any]] = []
     for item in source:
@@ -989,13 +991,13 @@ def _matching_open_marker_task(project_dir: Path, release_id: str, review_id: st
     return None
 
 
-def _marker_task_title(marker: dict[str, Any], review: dict[str, Any]) -> str:
+def _marker_task_title(marker: ImplementationDocument, review: ImplementationDocument) -> str:
     mapped = marker.get("mapped") if isinstance(marker.get("mapped"), dict) else {}
     section = mapped.get("section_role") or mapped.get("section_id") or f"{marker.get('time_seconds')}s"
     return f"Fix audio review marker: {marker.get('category') or 'issue'} at {section}"
 
 
-def _marker_task_instruction(marker: dict[str, Any]) -> str:
+def _marker_task_instruction(marker: ImplementationDocument) -> str:
     category = str(marker.get("category") or "other")
     message = str(marker.get("message") or "").strip()
     mapped = marker.get("mapped") if isinstance(marker.get("mapped"), dict) else {}
@@ -1039,7 +1041,7 @@ def _validate_marker_id(value: str) -> str:
     return text
 
 
-def _append_task_event(task_dir: Path, event: str, payload: dict[str, Any], now: str) -> None:
+def _append_task_event(task_dir: Path, event: str, payload: ImplementationDocument, now: str) -> None:
     path = task_dir / "events.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     data = sanitize_metadata({"timestamp": now, "event": event, "payload": payload})

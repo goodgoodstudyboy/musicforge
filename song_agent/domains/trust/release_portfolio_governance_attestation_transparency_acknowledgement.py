@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import json
@@ -544,7 +546,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
             return []
         return [_read_json_default(path, default={}) for path in sorted(root.glob("att-trans-ack-cr-*.json"))]
 
-    def _pack_findings(self, source: dict[str, Any], *, require_verified: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _pack_findings(self, source: ImplementationDocument, *, require_verified: bool) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         checks: list[dict[str, Any]] = []
         checks.append(_check("transparency_zip_exists", bool(source.get("transparency_zip_sha256")), "Transparency ZIP exists."))
         checks.append(_check("transparency_verification_passed", source.get("transparency_verification_status") == "passed", "Transparency verification is passed."))
@@ -554,7 +556,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
         warnings = [item for item in checks if item["status"] == "failed" and item not in blockers]
         return blockers, warnings, checks
 
-    def _ensure_evidence_exportable(self, portfolio_id: str, evidence: dict[str, Any], *, profile: str) -> None:
+    def _ensure_evidence_exportable(self, portfolio_id: str, evidence: ImplementationDocument, *, profile: str) -> None:
         if not evidence:
             raise ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStateError("Acknowledgement Evidence is missing.")
         if self.evidence_is_stale(portfolio_id, evidence, profile=profile):
@@ -568,7 +570,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
                 return str(item.get("response_id") or "")
         return ""
 
-    def _find_change_request(self, portfolio_id: str, response_id: str, *, profile: str) -> dict[str, Any]:
+    def _find_change_request(self, portfolio_id: str, response_id: str, *, profile: str) -> ImplementationDocument:
         for item in self.list_change_requests(portfolio_id, profile=profile):
             if item.get("response_id") == response_id:
                 return sanitize_metadata(item, blocked_keys=ACK_BLOCKED_KEYS)
@@ -590,7 +592,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
                 return True
         return False
 
-    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: ImplementationDocument, *, now: str) -> None:
         path = self.pack_history_path(portfolio_id, profile)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -690,15 +692,15 @@ def redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings)}
 
 
-def _pack_id(portfolio_id: str, profile: str, source: dict[str, Any]) -> str:
+def _pack_id(portfolio_id: str, profile: str, source: ImplementationDocument) -> str:
     return "att-trans-ack-pack-" + stable_hash({"portfolio_id": portfolio_id, "profile": profile, "source": source})[:12]
 
 
-def _evidence_id(portfolio_id: str, profile: str, source: dict[str, Any]) -> str:
+def _evidence_id(portfolio_id: str, profile: str, source: ImplementationDocument) -> str:
     return "att-trans-ack-" + stable_hash({"portfolio_id": portfolio_id, "profile": profile, "source": source})[:12]
 
 
-def _pack_data_documents(pack: dict[str, Any], feed: dict[str, Any]) -> dict[str, Any]:
+def _pack_data_documents(pack: ImplementationDocument, feed: ImplementationDocument) -> ImplementationDocument:
     source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
     events = feed.get("events") if isinstance(feed.get("events"), list) else []
     notices = feed.get("notices") if isinstance(feed.get("notices"), list) else []
@@ -715,7 +717,7 @@ def _pack_data_documents(pack: dict[str, Any], feed: dict[str, Any]) -> dict[str
     )
 
 
-def _evidence_data_documents(evidence: dict[str, Any]) -> dict[str, Any]:
+def _evidence_data_documents(evidence: ImplementationDocument) -> ImplementationDocument:
     source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
     public = evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}
     return {
@@ -750,11 +752,11 @@ def _evidence_data_documents(evidence: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _response_schema(pack: dict[str, Any]) -> dict[str, Any]:
+def _response_schema(pack: ImplementationDocument) -> ImplementationDocument:
     return {"package_type": ACK_RESPONSE_PACKAGE_TYPE, "required": pack.get("response_requirements", {}).get("required_fields", []), "allowed_status": sorted(ACK_ALLOWED_RESPONSE_STATUSES)}
 
 
-def _evidence_public_summary(response: dict[str, Any]) -> dict[str, Any]:
+def _evidence_public_summary(response: ImplementationDocument) -> ImplementationDocument:
     payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
     reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
     return {
@@ -766,7 +768,7 @@ def _evidence_public_summary(response: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _response_payload_from_bytes(raw: bytes) -> dict[str, Any]:
+def _response_payload_from_bytes(raw: bytes) -> ImplementationDocument:
     try:
         if raw[:4] == b"PK\x03\x04":
             import io
@@ -789,7 +791,7 @@ def _response_payload_from_bytes(raw: bytes) -> dict[str, Any]:
     return sanitize_metadata(value, blocked_keys=ACK_BLOCKED_KEYS)
 
 
-def _require_response_source_binding(response: dict[str, Any]) -> None:
+def _require_response_source_binding(response: ImplementationDocument) -> None:
     required = ["review_pack_id", "review_pack_source_hash", "transparency_zip_sha256", "transparency_manifest_hash", "transparency_feed_source_hash"]
     missing = [key for key in required if not response.get(key)]
     if missing:
@@ -800,7 +802,7 @@ def _require_response_source_binding(response: dict[str, Any]) -> None:
         raise ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStateError("Acknowledgement response review_status is invalid.")
 
 
-def _response_stale(response: dict[str, Any], pack: dict[str, Any]) -> bool:
+def _response_stale(response: ImplementationDocument, pack: ImplementationDocument) -> bool:
     source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
     return not (
         response.get("review_pack_id") == pack.get("pack_id")
@@ -811,7 +813,7 @@ def _response_stale(response: dict[str, Any], pack: dict[str, Any]) -> bool:
     )
 
 
-def _change_request_actions(response: dict[str, Any]) -> list[dict[str, Any]]:
+def _change_request_actions(response: ImplementationDocument) -> list[ImplementationDocument]:
     concerns = response.get("concerns") if isinstance(response.get("concerns"), list) else []
     actions: list[dict[str, Any]] = []
     for concern in concerns:
@@ -820,7 +822,7 @@ def _change_request_actions(response: dict[str, Any]) -> list[dict[str, Any]]:
     return actions or [{"action_type": "review_transparency_acknowledgement_response", "severity": "warning"}]
 
 
-def _payload_bytes(payload: dict[str, Any], *, max_size: int) -> bytes:
+def _payload_bytes(payload: ImplementationDocument, *, max_size: int) -> bytes:
     if payload.get("content_base64"):
         try:
             raw = base64.b64decode(str(payload.get("content_base64")), validate=True)
@@ -840,23 +842,23 @@ def _payload_bytes(payload: dict[str, Any], *, max_size: int) -> bytes:
     return raw
 
 
-def _pack_readme(pack: dict[str, Any]) -> str:
+def _pack_readme(pack: ImplementationDocument) -> str:
     return "\n".join(["MusicForge Transparency Acknowledgement Pack", "", f"Portfolio ID: {pack.get('portfolio_id')}", f"Pack ID: {pack.get('pack_id')}", f"Status: {pack.get('status')}", ""])
 
 
-def _evidence_readme(evidence: dict[str, Any]) -> str:
+def _evidence_readme(evidence: ImplementationDocument) -> str:
     return "\n".join(["MusicForge Transparency Acknowledgement Evidence", "", f"Portfolio ID: {evidence.get('portfolio_id')}", f"Acknowledgement ID: {evidence.get('acknowledgement_id')}", f"Status: {evidence.get('status')}", ""])
 
 
-def _check(check_id: str, ok: bool, message: str) -> dict[str, Any]:
+def _check(check_id: str, ok: bool, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if ok else "failed", "severity": "blocking", "message": message if ok else message.replace(" is ", " is not ")}
 
 
-def _state_tuple(doc: dict[str, Any]) -> dict[str, str]:
+def _state_tuple(doc: ImplementationDocument) -> dict[str, str]:
     return {"source_hash": str(doc.get("source_hash") or ""), "integrity_hash": str(doc.get("integrity_hash") or "")}
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -866,11 +868,11 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=ACK_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, sanitize_metadata(payload, blocked_keys=ACK_BLOCKED_KEYS))
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = path.relative_to(root).as_posix()
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -933,7 +935,7 @@ def _next_id(root: Path, prefix: str) -> str:
     return f"{prefix}-{max_seen + 1:06d}"
 
 
-def _redaction_findings(scope: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     sanitized = sanitize_sensitive_text(text)
     if sanitized != text:

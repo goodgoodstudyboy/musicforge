@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies as core_dependencies
 import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, HTTPStatus, JobState, Path, build_edit_metadata, json, threading, validate_edit_intent
@@ -109,110 +111,73 @@ class JobStoreLoadExistingJobs:
             self.start_job(job_id)
         return job
 
-    def create_edit_job(
-        self,
-        *,
-        project_id: str,
-        parent_version_id: str,
-        parent_job: JobState,
-        parent_plan: SongPlan,
-        intent: EditIntent,
-        preset: dict[str, Any] | None = None,
-        name: str = "",
-        start_immediately: bool = True,
-        provider_patch: dict[str, Any] | None = None,
-        provider_usage: dict[str, Any] | None = None,
-        provider_snapshot: dict[str, Any] | None = None,
-        template_id: str | None = None,
-        preview_id: str | None = None,
-        candidate_group_id: str | None = None,
-        candidate_id: str | None = None,
-        candidate: dict[str, Any] | None = None,
-        asset_refs: list[dict[str, Any]] | None = None,
-        reference_refs: list[dict[str, Any]] | None = None,
-        context_pack: dict[str, Any] | None = None,
-    ) -> JobState:
+    def _create_edit_job_part_01(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: ImplementationDocument | None, name: str, start_immediately: bool, provider_patch: ImplementationDocument | None, provider_usage: ImplementationDocument | None, provider_snapshot: ImplementationDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: ImplementationDocument | None, asset_refs: list[ImplementationDocument] | None, reference_refs: list[ImplementationDocument] | None, context_pack: ImplementationDocument | None, _split_state):
         validate_edit_intent(parent_plan, intent)
-        if intent.provider_mode == "provider" and provider_patch is None:
-            raise NotImplementedError("Provider-backed edit is not implemented in v1.1.0.")
+        if intent.provider_mode == 'provider' and provider_patch is None:
+            raise NotImplementedError('Provider-backed edit is not implemented in v1.1.0.')
+        return (False, None)
+
+    def _create_edit_job_part_02(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: ImplementationDocument | None, name: str, start_immediately: bool, provider_patch: ImplementationDocument | None, provider_usage: ImplementationDocument | None, provider_snapshot: ImplementationDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: ImplementationDocument | None, asset_refs: list[ImplementationDocument] | None, reference_refs: list[ImplementationDocument] | None, context_pack: ImplementationDocument | None, _split_state):
         with self.lock:
-            title = _clean_title(name) or f"{parent_plan.title} {intent.edit_type}"
+            title = _clean_title(name) or f'{parent_plan.title} {intent.edit_type}'
             run_dir = self._reserve_run_dir(title)
-            job_id = run_dir.name
+            _split_state['job_id'] = run_dir.name
             now = _utc_now()
-            metadata = build_edit_metadata(
-                project_id=project_id,
-                parent_version_id=parent_version_id,
-                parent_job_id=parent_job.job_id,
-                intent=intent,
-                created_at=now,
-            )
-            metadata["preset"] = preset
+            metadata = build_edit_metadata(project_id=project_id, parent_version_id=parent_version_id, parent_job_id=parent_job.job_id, intent=intent, created_at=now)
+            metadata['preset'] = preset
             if provider_patch is not None:
-                metadata["provider_patch"] = provider_patch
-                metadata["provider"] = provider_snapshot or {}
-                metadata["provider_usage"] = provider_usage or {}
-                metadata["template_id"] = template_id
-                metadata["preview_id"] = preview_id
+                metadata['provider_patch'] = provider_patch
+                metadata['provider'] = provider_snapshot or {}
+                metadata['provider_usage'] = provider_usage or {}
+                metadata['template_id'] = template_id
+                metadata['preview_id'] = preview_id
                 if candidate_group_id:
-                    metadata["candidate_group_id"] = candidate_group_id
+                    metadata['candidate_group_id'] = candidate_group_id
                 if candidate_id:
-                    metadata["candidate_id"] = candidate_id
+                    metadata['candidate_id'] = candidate_id
                 if candidate:
-                    metadata["candidate"] = _candidate_source_summary(candidate)
+                    metadata['candidate'] = _candidate_source_summary(candidate)
             if asset_refs:
-                metadata["asset_refs"] = list(asset_refs)
+                metadata['asset_refs'] = list(asset_refs)
             if reference_refs:
-                metadata["reference_refs"] = list(reference_refs)
+                metadata['reference_refs'] = list(reference_refs)
             if context_pack:
-                metadata["context_pack"] = dict(context_pack)
-            job = JobState(
-                job_id=job_id,
-                title=title,
-                output_dir=str(run_dir),
-                status="queued",
-                created_at=now,
-                updated_at=now,
-                step="queued",
-                message="Queued for local deterministic edit.",
-                input_payload={
-                    **parent_job.input_payload,
-                    "edit_type": intent.edit_type,
-                    "parent_job_id": parent_job.job_id,
-                    "parent_version_id": parent_version_id,
-                    "project_id": project_id,
-                    **({"asset_refs": list(asset_refs)} if asset_refs else {}),
-                    **({"reference_refs": list(reference_refs)} if reference_refs else {}),
-                    **({"context_pack": dict(context_pack)} if context_pack else {}),
-                },
-                provider_snapshot=provider_snapshot or {"mode": "local", "summary": "Local deterministic edit engine"},
-                heartbeat_at=now,
-                generation_mode=intent.provider_mode,
-                pipeline_mode=parent_job.pipeline_mode,
-                job_type="edit",
-                edit_metadata=metadata,
-            )
+                metadata['context_pack'] = dict(context_pack)
+            _split_state['job'] = JobState(job_id=_split_state['job_id'], title=title, output_dir=str(run_dir), status='queued', created_at=now, updated_at=now, step='queued', message='Queued for local deterministic edit.', input_payload={**parent_job.input_payload, 'edit_type': intent.edit_type, 'parent_job_id': parent_job.job_id, 'parent_version_id': parent_version_id, 'project_id': project_id, **({'asset_refs': list(asset_refs)} if asset_refs else {}), **({'reference_refs': list(reference_refs)} if reference_refs else {}), **({'context_pack': dict(context_pack)} if context_pack else {})}, provider_snapshot=provider_snapshot or {'mode': 'local', 'summary': 'Local deterministic edit engine'}, heartbeat_at=now, generation_mode=intent.provider_mode, pipeline_mode=parent_job.pipeline_mode, job_type='edit', edit_metadata=metadata)
             if preset:
-                job.input_payload["preset_id"] = preset.get("preset_id")
+                _split_state['job'].input_payload['preset_id'] = preset.get('preset_id')
             if provider_patch is not None:
-                job.input_payload["provider_patch"] = {
-                    "summary": provider_patch.get("summary"),
-                    "operation_count": len(provider_patch.get("operations", [])),
-                }
-                job.input_payload["template_id"] = template_id
-                job.input_payload["preview_id"] = preview_id
+                _split_state['job'].input_payload['provider_patch'] = {'summary': provider_patch.get('summary'), 'operation_count': len(provider_patch.get('operations', []))}
+                _split_state['job'].input_payload['template_id'] = template_id
+                _split_state['job'].input_payload['preview_id'] = preview_id
                 if candidate_group_id:
-                    job.input_payload["candidate_group_id"] = candidate_group_id
+                    _split_state['job'].input_payload['candidate_group_id'] = candidate_group_id
                 if candidate_id:
-                    job.input_payload["candidate_id"] = candidate_id
+                    _split_state['job'].input_payload['candidate_id'] = candidate_id
                 if candidate:
-                    job.input_payload["candidate"] = _candidate_source_summary(candidate)
-            self.jobs[job_id] = job
-            self._write_job(job)
-            write_json(ProjectPaths.create(run_dir).data / "edit-metadata.json", metadata)
+                    _split_state['job'].input_payload['candidate'] = _candidate_source_summary(candidate)
+            self.jobs[_split_state['job_id']] = _split_state['job']
+            self._write_job(_split_state['job'])
+            write_json(ProjectPaths.create(run_dir).data / 'edit-metadata.json', metadata)
+        return (False, None)
+
+    def _create_edit_job_part_03(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: ImplementationDocument | None, name: str, start_immediately: bool, provider_patch: ImplementationDocument | None, provider_usage: ImplementationDocument | None, provider_snapshot: ImplementationDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: ImplementationDocument | None, asset_refs: list[ImplementationDocument] | None, reference_refs: list[ImplementationDocument] | None, context_pack: ImplementationDocument | None, _split_state):
         if start_immediately:
-            self.start_job(job_id)
-        return job
+            self.start_job(_split_state['job_id'])
+        return (True, _split_state['job'])
+        return (False, None)
+
+    def create_edit_job(self, *, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: dict[str, Any] | None=None, name: str='', start_immediately: bool=True, provider_patch: dict[str, Any] | None=None, provider_usage: dict[str, Any] | None=None, provider_snapshot: dict[str, Any] | None=None, template_id: str | None=None, preview_id: str | None=None, candidate_group_id: str | None=None, candidate_id: str | None=None, candidate: dict[str, Any] | None=None, asset_refs: list[dict[str, Any]] | None=None, reference_refs: list[dict[str, Any]] | None=None, context_pack: dict[str, Any] | None=None) -> JobState:
+        _split_state = {}
+        _split_result = self._create_edit_job_part_01(project_id, parent_version_id, parent_job, parent_plan, intent, preset, name, start_immediately, provider_patch, provider_usage, provider_snapshot, template_id, preview_id, candidate_group_id, candidate_id, candidate, asset_refs, reference_refs, context_pack, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self._create_edit_job_part_02(project_id, parent_version_id, parent_job, parent_plan, intent, preset, name, start_immediately, provider_patch, provider_usage, provider_snapshot, template_id, preview_id, candidate_group_id, candidate_id, candidate, asset_refs, reference_refs, context_pack, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self._create_edit_job_part_03(project_id, parent_version_id, parent_job, parent_plan, intent, preset, name, start_immediately, provider_patch, provider_usage, provider_snapshot, template_id, preview_id, candidate_group_id, candidate_id, candidate, asset_refs, reference_refs, context_pack, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
 
     def start_job(self, job_id: str) -> bool:
         job = self.get_job(job_id)

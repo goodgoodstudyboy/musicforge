@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import os
 import threading
@@ -8,7 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 
 class WorkspaceLockError(RuntimeError):
@@ -153,7 +155,7 @@ class WorkspaceLock:
         return True
 
 
-def _read_lock(path: Path) -> dict[str, Any]:
+def _read_lock(path: Path) -> ImplementationDocument:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):

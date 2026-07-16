@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -342,7 +344,7 @@ def release_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _copy_track_files(source_dir: Path, target_dir: Path, track_dir_name: str, *, mastered_wav: Path | None = None) -> list[dict[str, Any]]:
+def _copy_track_files(source_dir: Path, target_dir: Path, track_dir_name: str, *, mastered_wav: Path | None = None) -> list[ImplementationDocument]:
     if not source_dir.exists() or not source_dir.is_dir() or source_dir.is_symlink():
         raise ReleaseExportError("Project Final Export directory is missing.")
     records: list[dict[str, Any]] = []
@@ -397,7 +399,7 @@ def _copy_release_export_file(source: Path, target: Path) -> None:
     shutil.copy2(source, target)
 
 
-def _write_release_export_json(path: Path, data: dict[str, Any]) -> None:
+def _write_release_export_json(path: Path, data: ImplementationDocument) -> None:
     tmp_path = path.with_name(f".tmp-{os.getpid()}-{threading.get_ident()}")
     tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tmp_path.replace(path)
@@ -431,7 +433,7 @@ def _track_dir_name(disc_number: int, track_number: int, title: str, used: set[s
     return candidate
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {
         "path": rel,
@@ -440,7 +442,7 @@ def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
     }
 
 
-def _write_readme(export_dir: Path, release: ReleaseDocument, tracklist: list[dict[str, Any]], qa: dict[str, Any], signoff: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, release: ReleaseDocument, tracklist: list[ImplementationDocument], qa: ImplementationDocument, signoff: ImplementationDocument) -> None:
     lines = [
         f"MusicForge Release Export: {sanitize_sensitive_text(release.name)}",
         "",
@@ -457,7 +459,7 @@ def _write_readme(export_dir: Path, release: ReleaseDocument, tracklist: list[di
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _release_export_summary(release: ReleaseDocument) -> dict[str, Any]:
+def _release_export_summary(release: ReleaseDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "release_id": release.release_id,
@@ -472,7 +474,7 @@ def _release_export_summary(release: ReleaseDocument) -> dict[str, Any]:
     )
 
 
-def _release_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
+def _release_signoff_export_summary(signoff: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "status": signoff.get("status") or "not_signed",
@@ -487,7 +489,7 @@ def _release_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _release_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[str, Any]:
+def _release_signoff_sidecar_record(signoff_public: ImplementationDocument) -> ImplementationDocument:
     return {
         "path": "release-signoff.json",
         "payload_hash": stable_hash(_release_signoff_hash_payload(signoff_public)),
@@ -495,11 +497,11 @@ def _release_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[str,
     }
 
 
-def _release_signoff_hash_payload(signoff_public: dict[str, Any]) -> dict[str, Any]:
+def _release_signoff_hash_payload(signoff_public: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in signoff_public.items() if key not in SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
 
 
-def _release_acceptance_analytics_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_acceptance_analytics_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         analytics_store = AcceptanceAnalyticsStore(release_store=release_store, project_store=release_store.project_store)
         report = analytics_store.refresh(AnalyticsScope.from_values(scope_type="release", release_id=release_id))
@@ -510,7 +512,7 @@ def _release_acceptance_analytics_summary(release_store: ReleaseStore, release_i
     return write_acceptance_analytics_summary(export_dir / "acceptance-analytics-summary.json", report)
 
 
-def _release_acceptance_fix_sprint_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_acceptance_fix_sprint_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         store = AcceptanceFixSprintStore(project_store=release_store.project_store)
         return write_acceptance_fix_sprints_summary(export_dir / "acceptance-fix-sprints-summary.json", store, release_id=release_id)
@@ -520,7 +522,7 @@ def _release_acceptance_fix_sprint_summary(release_store: ReleaseStore, release_
         return summary
 
 
-def _release_acceptance_fix_plan_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_acceptance_fix_plan_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         store = AcceptanceFixPlanningStore(project_store=release_store.project_store)
         return write_acceptance_fix_plan_summary(export_dir / "acceptance-fix-plan-summary.json", store, release_id=release_id)
@@ -530,7 +532,7 @@ def _release_acceptance_fix_plan_summary(release_store: ReleaseStore, release_id
         return summary
 
 
-def _release_acceptance_fix_plan_review_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_acceptance_fix_plan_review_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         store = AcceptanceFixPlanReviewStore(project_store=release_store.project_store)
         return write_acceptance_fix_plan_review_summary(export_dir / "acceptance-fix-plan-review-summary.json", store, release_id=release_id)
@@ -540,7 +542,7 @@ def _release_acceptance_fix_plan_review_summary(release_store: ReleaseStore, rel
         return summary
 
 
-def _release_acceptance_kb_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_acceptance_kb_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         store = AcceptanceKnowledgeBaseStore(project_store=release_store.project_store)
         return write_acceptance_kb_summary(export_dir / "acceptance-kb-summary.json", store, release_id=release_id)
@@ -550,7 +552,7 @@ def _release_acceptance_kb_summary(release_store: ReleaseStore, release_id: str,
         return summary
 
 
-def _release_planning_rule_simulation_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_planning_rule_simulation_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         store = PlanningRuleSimulationStore(project_store=release_store.project_store)
         return write_planning_simulation_summary(export_dir / "planning-rule-simulation-summary.json", store, release_id=release_id)
@@ -560,7 +562,7 @@ def _release_planning_rule_simulation_summary(release_store: ReleaseStore, relea
         return summary
 
 
-def _release_planning_rule_governance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_planning_rule_governance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         store = PlanningRuleGovernanceStore(project_store=release_store.project_store)
         return write_planning_rule_governance_summary(export_dir / "planning-rule-governance-summary.json", store)
@@ -570,7 +572,7 @@ def _release_planning_rule_governance_summary(release_store: ReleaseStore, relea
         return summary
 
 
-def _release_planning_rule_impact_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_planning_rule_impact_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         store = PlanningRuleImpactStore(project_store=release_store.project_store)
         return write_planning_rule_impact_summary(export_dir / "planning-rule-impact-summary.json", store, release_id=release_id)
@@ -580,14 +582,14 @@ def _release_planning_rule_impact_summary(release_store: ReleaseStore, release_i
         return summary
 
 
-def _release_audio_qa_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_audio_qa_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     report = read_release_audio_qa(release_store, release_id, default={})
     summary = release_audio_summary(report)
     write_json(export_dir / "audio-summary.json", summary)
     return summary
 
 
-def _release_audio_reviews_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_audio_reviews_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         return export_audio_reviews(release_store, release_id, export_dir, project_store=release_store.project_store)
     except Exception:
@@ -598,7 +600,7 @@ def _release_audio_reviews_summary(release_store: ReleaseStore, release_id: str,
         return summary
 
 
-def _release_audio_revisions_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_audio_revisions_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         return export_audio_revisions(release_store, release_id, export_dir, project_store=release_store.project_store)
     except Exception:
@@ -609,7 +611,7 @@ def _release_audio_revisions_summary(release_store: ReleaseStore, release_id: st
         return summary
 
 
-def _release_mastering_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_mastering_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         return export_mastering(release_store, release_id, export_dir, project_store=release_store.project_store)
     except Exception:
@@ -620,7 +622,7 @@ def _release_mastering_summary(release_store: ReleaseStore, release_id: str, exp
         return summary
 
 
-def _release_encoded_audio_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_encoded_audio_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         return export_encoded_audio_summary(release_store, release_id, export_dir)
     except Exception:
@@ -629,7 +631,7 @@ def _release_encoded_audio_summary(release_store: ReleaseStore, release_id: str,
         return summary
 
 
-def _release_encoded_audio_acceptance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_encoded_audio_acceptance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         return export_encoded_audio_acceptance(release_store, release_id, export_dir, project_store=release_store.project_store)
     except Exception:
@@ -638,7 +640,7 @@ def _release_encoded_audio_acceptance_summary(release_store: ReleaseStore, relea
         return summary
 
 
-def _release_format_decision_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_format_decision_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         return FormatDecisionStore(release_store, project_store=release_store.project_store).export_release(release_id, export_dir)
     except Exception:
@@ -649,7 +651,7 @@ def _release_format_decision_summary(release_store: ReleaseStore, release_id: st
         return summary
 
 
-def _release_rights_clearance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> dict[str, Any]:
+def _release_rights_clearance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
     try:
         return RightsClearanceStore(release_store).export_release(release_id, export_dir)
     except Exception:

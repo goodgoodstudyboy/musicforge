@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import threading
 import zipfile
@@ -345,7 +347,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
                 return candidate
             index += 1
 
-    def _local_paths(self, center_id: str, board_id: str, payload: dict[str, Any], *, include_default_policy: bool = False) -> dict[str, Any]:
+    def _local_paths(self, center_id: str, board_id: str, payload: ImplementationDocument, *, include_default_policy: bool = False) -> ImplementationDocument:
         review_id = str(payload.get("review_id") or "")
         if not review_id:
             reviews = self.evidence_review_store.list_reviews(center_id)
@@ -382,7 +384,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             paths["policy"] = _policy({})
         return paths
 
-    def _merged_local_paths(self, center_id: str, board_id: str | None, payload: dict[str, Any]) -> dict[str, Any]:
+    def _merged_local_paths(self, center_id: str, board_id: str | None, payload: ImplementationDocument) -> ImplementationDocument:
         base: dict[str, Any] = {}
         if board_id and self.local_paths_path(center_id, board_id).exists():
             base = read_json(self.local_paths_path(center_id, board_id))
@@ -397,13 +399,13 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             base["policy"] = _policy({**(base.get("policy") if isinstance(base.get("policy"), dict) else {}), **explicit_policy})
         return base
 
-    def _stored_local_paths(self, center_id: str, board_id: str) -> dict[str, Any]:
+    def _stored_local_paths(self, center_id: str, board_id: str) -> ImplementationDocument:
         path = self.local_paths_path(center_id, board_id)
         if not path.exists():
             raise UnifiedCommandCenterReviewerDecisionBoardNotFoundError(f"Unified Command Center Reviewer Decision Board not found: {board_id}.")
         return read_json(path)
 
-    def _build_documents(self, center_id: str, board_id: str, paths: dict[str, Any]) -> dict[str, Any]:
+    def _build_documents(self, center_id: str, board_id: str, paths: ImplementationDocument) -> ImplementationDocument:
         source = _source_document(center_id, board_id, paths)
         accepted_items = self._accepted_evidence_items(paths)
         response_rows = _response_rows(paths, accepted_items)
@@ -429,7 +431,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             "manual_checklist": checklist,
         }
 
-    def _accepted_evidence_items(self, paths: dict[str, Any]) -> list[dict[str, Any]]:
+    def _accepted_evidence_items(self, paths: ImplementationDocument) -> list[ImplementationDocument]:
         items: list[dict[str, Any]] = []
         review_zip = paths.get("review_zip")
         review_report = paths.get("review_verification_report")
@@ -440,7 +442,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             items.append(item)
         return items
 
-    def _write_docs(self, center_id: str, board_id: str, docs: dict[str, Any]) -> None:
+    def _write_docs(self, center_id: str, board_id: str, docs: ImplementationDocument) -> None:
         write_json(self.source_path(center_id, board_id), docs["source"])
         write_json(self.roster_path(center_id, board_id), docs["reviewer_roster"])
         write_json(self.response_index_path(center_id, board_id), docs["response_index"])
@@ -452,7 +454,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
         write_json(self.decision_report_path(center_id, board_id), docs["decision_report"])
         write_json(self.checklist_path(center_id, board_id), docs["manual_checklist"])
 
-    def _signed_docs_for_export(self, center_id: str, board_id: str) -> dict[str, Any]:
+    def _signed_docs_for_export(self, center_id: str, board_id: str) -> ImplementationDocument:
         docs = self.get_board(center_id, board_id)
         signoff = docs["decision_signoff"]
         if not signoff:
@@ -487,7 +489,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
         if self.signoff_path(center_id, board_id).exists():
             raise UnifiedCommandCenterReviewerDecisionBoardStateError("Reviewer Decision Board is signed.")
 
-    def _append_history(self, center_id: str, board_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, center_id: str, board_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         path = self.history_path(center_id, board_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         previous = None
@@ -503,7 +505,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
         return event
 
 
-def _accepted_evidence_item(row: dict[str, Any], review_zip: Any, review_report: Any) -> dict[str, Any]:
+def _accepted_evidence_item(row: ImplementationDocument, review_zip: Any, review_report: Any) -> ImplementationDocument:
     zip_path = _path_or_none(row.get("zip_path"))
     verification_report_path = _path_or_none(row.get("verification_report_path"))
     response_report_path = _path_or_none(row.get("response_verification_report_path"))
@@ -579,7 +581,7 @@ def _accepted_evidence_item(row: dict[str, Any], review_zip: Any, review_report:
     return item
 
 
-def _source_document(center_id: str, board_id: str, paths: dict[str, Any]) -> dict[str, Any]:
+def _source_document(center_id: str, board_id: str, paths: ImplementationDocument) -> ImplementationDocument:
     review_zip = _path_or_none(paths.get("review_zip"))
     review_verification_report = _path_or_none(paths.get("review_verification_report"))
     review_verification = read_json(review_verification_report) if review_verification_report and review_verification_report.exists() else {}
@@ -610,7 +612,7 @@ def _source_document(center_id: str, board_id: str, paths: dict[str, Any]) -> di
     return source
 
 
-def _response_rows(paths: dict[str, Any], accepted_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _response_rows(paths: ImplementationDocument, accepted_items: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for item in accepted_items:
         rows.append(
@@ -651,7 +653,7 @@ def _response_rows(paths: dict[str, Any], accepted_items: list[dict[str, Any]]) 
     return rows
 
 
-def _roster_document(center_id: str, board_id: str, source: dict[str, Any], accepted_items: list[dict[str, Any]], responses: list[dict[str, Any]]) -> dict[str, Any]:
+def _roster_document(center_id: str, board_id: str, source: ImplementationDocument, accepted_items: list[ImplementationDocument], responses: list[ImplementationDocument]) -> ImplementationDocument:
     reviewers: dict[str, dict[str, Any]] = {}
     for row in responses:
         reviewer = row.get("reviewer") if isinstance(row.get("reviewer"), dict) else {}
@@ -669,7 +671,7 @@ def _roster_document(center_id: str, board_id: str, source: dict[str, Any], acce
     return doc
 
 
-def _response_index_document(center_id: str, board_id: str, source: dict[str, Any], responses: list[dict[str, Any]]) -> dict[str, Any]:
+def _response_index_document(center_id: str, board_id: str, source: ImplementationDocument, responses: list[ImplementationDocument]) -> ImplementationDocument:
     items = []
     for row in responses:
         entry = dict(row)
@@ -680,13 +682,13 @@ def _response_index_document(center_id: str, board_id: str, source: dict[str, An
     return doc
 
 
-def _accepted_index_document(center_id: str, board_id: str, source: dict[str, Any], accepted_items: list[dict[str, Any]]) -> dict[str, Any]:
+def _accepted_index_document(center_id: str, board_id: str, source: ImplementationDocument, accepted_items: list[ImplementationDocument]) -> ImplementationDocument:
     doc = {"package_type": "musicforge_unified_command_center_reviewer_decision_board_accepted_evidence_index", "center_id": center_id, "board_id": board_id, "source_hash": source.get("source_hash"), "items": accepted_items, "summary": {"accepted_evidence_count": len(accepted_items), "passed_count": len([row for row in accepted_items if row.get("status") == "passed"]), "failed_count": len([row for row in accepted_items if row.get("status") != "passed"])}}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _finding_ledger_document(center_id: str, board_id: str, source: dict[str, Any], responses: list[dict[str, Any]], extra_findings: list[Any]) -> dict[str, Any]:
+def _finding_ledger_document(center_id: str, board_id: str, source: ImplementationDocument, responses: list[ImplementationDocument], extra_findings: list[Any]) -> ImplementationDocument:
     findings: list[dict[str, Any]] = []
     index = 1
     for row in responses:
@@ -703,7 +705,7 @@ def _finding_ledger_document(center_id: str, board_id: str, source: dict[str, An
     return doc
 
 
-def _finding_row(index: int, response: dict[str, Any], finding: dict[str, Any]) -> dict[str, Any]:
+def _finding_row(index: int, response: ImplementationDocument, finding: ImplementationDocument) -> ImplementationDocument:
     row = sanitize_metadata(
         {
             "finding_id": _bounded(finding.get("finding_id") or f"finding-{index:03d}", 80),
@@ -719,7 +721,7 @@ def _finding_row(index: int, response: dict[str, Any], finding: dict[str, Any]) 
     return row
 
 
-def _conflict_report_document(center_id: str, board_id: str, source: dict[str, Any], responses: list[dict[str, Any]], findings: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+def _conflict_report_document(center_id: str, board_id: str, source: ImplementationDocument, responses: list[ImplementationDocument], findings: ImplementationDocument, policy: ImplementationDocument) -> ImplementationDocument:
     required_roles = set(policy.get("required_roles") or [])
     rejected_required = [row for row in responses if row.get("result") == "rejected" and row.get("role") in required_roles]
     rejected_any = [row for row in responses if row.get("result") == "rejected"]
@@ -739,7 +741,7 @@ def _conflict_report_document(center_id: str, board_id: str, source: dict[str, A
     return doc
 
 
-def _quorum_report_document(center_id: str, board_id: str, source: dict[str, Any], accepted_items: list[dict[str, Any]], responses: list[dict[str, Any]]) -> dict[str, Any]:
+def _quorum_report_document(center_id: str, board_id: str, source: ImplementationDocument, accepted_items: list[ImplementationDocument], responses: list[ImplementationDocument]) -> ImplementationDocument:
     policy = source.get("policy", {})
     passed = [row for row in accepted_items if row.get("status") == "passed" and row.get("result") == "accepted"]
     roles = {str(row.get("role") or "") for row in passed}
@@ -762,7 +764,7 @@ def _quorum_report_document(center_id: str, board_id: str, source: dict[str, Any
     return doc
 
 
-def _decision_matrix_document(center_id: str, board_id: str, source: dict[str, Any], roster: dict[str, Any], response_index: dict[str, Any], quorum: dict[str, Any], conflicts: dict[str, Any]) -> dict[str, Any]:
+def _decision_matrix_document(center_id: str, board_id: str, source: ImplementationDocument, roster: ImplementationDocument, response_index: ImplementationDocument, quorum: ImplementationDocument, conflicts: ImplementationDocument) -> ImplementationDocument:
     roles = sorted(set((source.get("policy", {}).get("required_roles") or []) + [row.get("role") for row in roster.get("reviewers", []) if row.get("role")]))
     rows = []
     responses = response_index.get("responses", [])
@@ -778,7 +780,7 @@ def _decision_matrix_document(center_id: str, board_id: str, source: dict[str, A
     return doc
 
 
-def _decision_report_document(center_id: str, board_id: str, source: dict[str, Any], quorum: dict[str, Any], conflicts: dict[str, Any], matrix: dict[str, Any]) -> dict[str, Any]:
+def _decision_report_document(center_id: str, board_id: str, source: ImplementationDocument, quorum: ImplementationDocument, conflicts: ImplementationDocument, matrix: ImplementationDocument) -> ImplementationDocument:
     blockers = []
     if quorum.get("status") != "passed":
         blockers.extend([f"quorum:{item}" for item in quorum.get("blockers", [])])
@@ -790,13 +792,13 @@ def _decision_report_document(center_id: str, board_id: str, source: dict[str, A
     return doc
 
 
-def _checklist_document(center_id: str, board_id: str, source: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+def _checklist_document(center_id: str, board_id: str, source: ImplementationDocument, decision: ImplementationDocument) -> ImplementationDocument:
     doc = {"package_type": "musicforge_unified_command_center_reviewer_decision_board_manual_checklist", "center_id": center_id, "board_id": board_id, "source_hash": source.get("source_hash"), "items": [{"item_id": "manual-001", "label": "Decision Board chair confirms reviewer quorum and open findings.", "required": True, "status": "passed" if decision.get("status") == "ready_for_signoff" else "blocked"}]}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _manifest_document(center_id: str, board_id: str, docs: dict[str, Any], export_dir: Path) -> dict[str, Any]:
+def _manifest_document(center_id: str, board_id: str, docs: ImplementationDocument, export_dir: Path) -> ImplementationDocument:
     files = []
     for rel in sorted(REQUIRED_ENTRIES - {"manifest.json"}):
         path = export_dir / rel
@@ -829,7 +831,7 @@ def _manifest_document(center_id: str, board_id: str, docs: dict[str, Any], expo
     return manifest
 
 
-def _reviewer_guide(docs: dict[str, Any]) -> str:
+def _reviewer_guide(docs: ImplementationDocument) -> str:
     source = docs.get("source", {})
     decision = docs.get("decision_report", {})
     return sanitize_sensitive_text(
@@ -845,7 +847,7 @@ def _reviewer_guide(docs: dict[str, Any]) -> str:
     )
 
 
-def _signoff_binding_summary(center_id: str, board_id: str, signoff: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+def _signoff_binding_summary(center_id: str, board_id: str, signoff: ImplementationDocument, event: ImplementationDocument) -> ImplementationDocument:
     doc = {
         "package_type": "musicforge_unified_command_center_reviewer_decision_board_signoff_binding_summary",
         "center_id": center_id,
@@ -865,7 +867,7 @@ def _signoff_binding_summary(center_id: str, board_id: str, signoff: dict[str, A
     return doc
 
 
-def _policy(value: dict[str, Any]) -> dict[str, Any]:
+def _policy(value: ImplementationDocument) -> ImplementationDocument:
     policy = dict(DEFAULT_POLICY)
     for key in DEFAULT_POLICY:
         if key in value:
@@ -878,7 +880,7 @@ def _policy(value: dict[str, Any]) -> dict[str, Any]:
     return policy
 
 
-def _history_state(path: Path) -> dict[str, Any]:
+def _history_state(path: Path) -> ImplementationDocument:
     signed = False
     latest_signoff_hash = None
     if not path.exists():
@@ -915,15 +917,15 @@ def _history_chain_ok(path: Path, signoff_hash: str | None) -> bool:
     return found
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     return read_json(path) if path.exists() else {}
 
 
-def _read_zip_json(path: Path | None, rel: str) -> dict[str, Any]:
+def _read_zip_json(path: Path | None, rel: str) -> ImplementationDocument:
     if not path or not path.exists():
         return {}
     try:
@@ -933,11 +935,11 @@ def _read_zip_json(path: Path | None, rel: str) -> dict[str, Any]:
         return {}
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 

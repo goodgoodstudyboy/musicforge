@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -217,7 +219,7 @@ class QualityRoutesReleaseFormatDecisions:
                 profile = None
         return _interfaces_api_runtime.audio_artifact_stale_reasons_for_profile(manifest, wav_path=wav_path, midi_path=midi_path, song_plan_path=plan_path, profile=profile)
 
-    def _release_mastering_export_gate(self, export_manifest: dict[str, Any], mastering_gate: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_mastering_export_gate(self, export_manifest: ImplementationDocument, mastering_gate: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_mastering = export_manifest.get("mastering") if isinstance(export_manifest.get("mastering"), dict) else {}
         required_fields = ("analysis_hash", "plan_hash", "selected_candidate_id", "selected_candidate_hash")
         missing_fields = [field for field in required_fields if not manifest_mastering.get(field)]
@@ -241,7 +243,7 @@ class QualityRoutesReleaseFormatDecisions:
             "manifest_status": manifest_status or "missing",
         }
 
-    def _release_encoded_audio_export_gate(self, export_manifest: dict[str, Any], encoded_gate: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_encoded_audio_export_gate(self, export_manifest: ImplementationDocument, encoded_gate: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_encoded = export_manifest.get("encoded_audio") if isinstance(export_manifest.get("encoded_audio"), dict) else {}
         manifest_profiles = manifest_encoded.get("profiles") if isinstance(manifest_encoded.get("profiles"), list) else []
         by_profile = {str(row.get("profile_id") or ""): row for row in manifest_profiles if isinstance(row, dict)}

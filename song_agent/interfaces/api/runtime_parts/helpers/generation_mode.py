@@ -1,30 +1,32 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, datetime, hashlib, re, read_release_export_manifest, threading, timezone
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import SongRequest
 
 from song_agent.interfaces.api.runtime_parts.core import VARIATION_REQUEST_FIELDS
 
-def _generation_mode(payload: dict[str, Any]) -> str:
+def _generation_mode(payload: ImplementationDocument) -> str:
     mode = str(payload.get("generation_mode", "local") or "local")
     if mode not in {"local", "provider"}:
         raise ValueError("generation_mode must be either local or provider.")
     return mode
 
-def _pipeline_mode(payload: dict[str, Any]) -> str:
+def _pipeline_mode(payload: ImplementationDocument) -> str:
     mode = str(payload.get("pipeline_mode", "single") or "single")
     if mode not in {"single", "multinode"}:
         raise ValueError("pipeline_mode must be either single or multinode.")
     return mode
 
 def _variation_request_payload(
-    parent_request: dict[str, Any],
-    request_patch: dict[str, Any],
+    parent_request: ImplementationDocument,
+    request_patch: ImplementationDocument,
     *,
     generation_mode: Any = None,
     pipeline_mode: Any = None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     unknown = sorted(set(request_patch) - VARIATION_REQUEST_FIELDS)
     if unknown:
         raise ValueError(f"request_patch contains unsupported fields: {', '.join(unknown)}.")
@@ -98,7 +100,7 @@ def _content_disposition_filename(filename: str) -> str:
     utf8_name = "".join(char for char in str(filename) if ord(char) >= 32 and char not in {'"', "\r", "\n"})
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{_rfc5987_quote(utf8_name)}"
 
-def _dict_or_empty(value: Any) -> dict[str, Any]:
+def _dict_or_empty(value: Any) -> ImplementationDocument:
     return value if isinstance(value, dict) else {}
 
 def _server_file_sha256(path: Path) -> str | None:
@@ -110,7 +112,7 @@ def _server_file_sha256(path: Path) -> str | None:
             digest.update(chunk)
     return digest.hexdigest()
 
-def _safe_read_release_export_manifest(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:
+def _safe_read_release_export_manifest(release_store: ReleaseStore, release_id: str) -> ImplementationDocument:
     try:
         return read_release_export_manifest(release_store, release_id)
     except FileNotFoundError:

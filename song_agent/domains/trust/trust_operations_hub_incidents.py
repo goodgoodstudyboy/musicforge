@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import hashlib
 import json
@@ -585,7 +587,7 @@ class TrustOperationsIncidentStore:
         current = _read_json_default(self.hub_store.current_report_path(hub_id), default={})
         return str(current.get("report_id") or "")
 
-    def _source_summary(self, hub_id: str, report_id: str, docs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    def _source_summary(self, hub_id: str, report_id: str, docs: dict[str, ImplementationDocument]) -> ImplementationDocument:
         export_manifest = _read_json_default(self.hub_store.export_dir(hub_id, report_id) / "trust-operations-hub-manifest.json", default={})
         zip_path = self.hub_store.zip_path(hub_id, report_id)
         verification = _read_json_default(self.hub_store.verification_report_path(hub_id, report_id), default={})
@@ -607,7 +609,7 @@ class TrustOperationsIncidentStore:
         source["source_hash"] = stable_hash(source)
         return source
 
-    def _incident_candidates(self, hub_id: str, report_id: str, source: dict[str, Any], docs: dict[str, dict[str, Any]], now: str) -> list[dict[str, Any]]:
+    def _incident_candidates(self, hub_id: str, report_id: str, source: ImplementationDocument, docs: dict[str, ImplementationDocument], now: str) -> list[ImplementationDocument]:
         del now
         rows: list[dict[str, Any]] = []
         for source_type, register_key in (("trust_operations_hub", "blocker_register"), ("trust_operations_hub_delivery", "delivery_blocker_register")):
@@ -672,26 +674,26 @@ class TrustOperationsIncidentStore:
             )
         return rows
 
-    def _write_incident(self, hub_id: str, incident: dict[str, Any], *, event_type: str, now: str) -> None:
+    def _write_incident(self, hub_id: str, incident: ImplementationDocument, *, event_type: str, now: str) -> None:
         incident["integrity_hash"] = incident_hash(incident)
         _write_json(self.incident_path(hub_id, str(incident["incident_id"])), incident)
         self._append_incident_event(hub_id, str(incident["incident_id"]), event_type, {"status": incident.get("status"), "incident_hash": incident["integrity_hash"]}, now=now)
 
-    def _append_incident_event(self, hub_id: str, incident_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_incident_event(self, hub_id: str, incident_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         rows = _read_jsonl(self.incident_events_path(hub_id, incident_id))
         event = {"incident_id": incident_id, "event_id": f"{incident_id}-event-{len(rows) + 1:06d}", "event_type": event_type, "created_at": now, "payload": _sanitize(payload), "previous_event_hash": rows[-1].get("event_hash") if rows else None}
         event["payload_hash"] = stable_hash(event["payload"])
         event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
         _append_jsonl(self.incident_events_path(hub_id, incident_id), event)
 
-    def _append_board_event(self, hub_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_board_event(self, hub_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         rows = _read_jsonl(self.board_events_path(hub_id))
         event = {"event_id": f"tohi-board-event-{len(rows) + 1:06d}", "event_type": event_type, "created_at": now, "payload": _sanitize(payload), "previous_event_hash": rows[-1].get("event_hash") if rows else None}
         event["payload_hash"] = stable_hash(event["payload"])
         event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
         _append_jsonl(self.board_events_path(hub_id), event)
 
-    def _mutable_incident(self, hub_id: str, incident_id: str) -> dict[str, Any]:
+    def _mutable_incident(self, hub_id: str, incident_id: str) -> ImplementationDocument:
         incident = self.read_incident(hub_id, incident_id)
         if incident.get("status") in {"closed", "archived"}:
             raise TrustOperationsIncidentStateError("Closed or archived incidents are read-only.")
@@ -699,10 +701,10 @@ class TrustOperationsIncidentStore:
             raise TrustOperationsIncidentStateError("Trust Operations Incident integrity failed.")
         return incident
 
-    def _read_evidence_index(self, hub_id: str, incident_id: str) -> dict[str, Any]:
+    def _read_evidence_index(self, hub_id: str, incident_id: str) -> ImplementationDocument:
         return _read_json_default(self.evidence_index_path(hub_id, incident_id), default={"schema_version": TRUST_OPERATIONS_INCIDENT_SCHEMA_VERSION, "incident_id": incident_id, "evidence": [], "summary": _evidence_summary({"evidence": []})})
 
-    def _write_evidence_index(self, hub_id: str, incident_id: str) -> dict[str, Any]:
+    def _write_evidence_index(self, hub_id: str, incident_id: str) -> ImplementationDocument:
         rows = []
         for path in sorted(self.evidence_dir(hub_id, incident_id).glob("ev-*.json")):
             rows.append(_read_json(path))
@@ -711,7 +713,7 @@ class TrustOperationsIncidentStore:
         _write_json(self.evidence_index_path(hub_id, incident_id), index)
         return index
 
-    def _bind_evidence_to_hub(self, hub_id: str, incident: dict[str, Any], report: dict[str, Any], component_type: str, component_id: str) -> dict[str, Any]:
+    def _bind_evidence_to_hub(self, hub_id: str, incident: ImplementationDocument, report: ImplementationDocument, component_type: str, component_id: str) -> ImplementationDocument:
         report_id = str(incident.get("detected_from", {}).get("hub_report_id") or "")
         if not report_id:
             return _failed_binding(component_type, component_id, "hub_report_id_missing")
@@ -742,7 +744,7 @@ class TrustOperationsIncidentStore:
             return best_binding
         return _failed_binding(component_type, component_id, "component_id_not_expected")
 
-    def _incident_source_current(self, hub_id: str, incident: dict[str, Any]) -> bool:
+    def _incident_source_current(self, hub_id: str, incident: ImplementationDocument) -> bool:
         report_id = str(incident.get("detected_from", {}).get("hub_report_id") or "")
         if not report_id:
             return False
@@ -754,7 +756,7 @@ class TrustOperationsIncidentStore:
         source = self._source_summary(hub_id, report_id, docs)
         return source.get("hub_report_hash") == incident.get("detected_from", {}).get("hub_report_hash")
 
-    def _current_source_for_closeout(self, hub_id: str, incident: dict[str, Any]) -> dict[str, Any]:
+    def _current_source_for_closeout(self, hub_id: str, incident: ImplementationDocument) -> ImplementationDocument:
         report_id = str(incident.get("detected_from", {}).get("hub_report_id") or "")
         docs = self.hub_store._read_report_docs(hub_id, report_id)
         return self._source_summary(hub_id, report_id, docs)
@@ -767,19 +769,19 @@ class TrustOperationsIncidentStore:
         board["integrity_hash"] = incident_hash(board)
         _write_json(self.board_path(hub_id), board)
 
-    def _export_events(self, hub_id: str) -> list[dict[str, Any]]:
+    def _export_events(self, hub_id: str) -> list[ImplementationDocument]:
         rows: list[dict[str, Any]] = []
         for incident in self.list_incidents(hub_id, include_archived=True):
             rows.extend(_read_jsonl(self.incident_events_path(hub_id, str(incident.get("incident_id") or ""))))
         return sorted(rows, key=lambda item: str(item.get("event_id") or ""))
 
-    def _all_docs(self, hub_id: str, filename: str) -> list[dict[str, Any]]:
+    def _all_docs(self, hub_id: str, filename: str) -> list[ImplementationDocument]:
         rows = []
         for path in sorted(self.incidents_dir(hub_id).glob(f"*/{filename}")):
             rows.append(_read_json(path))
         return rows
 
-    def _aggregate_evidence(self, hub_id: str) -> dict[str, Any]:
+    def _aggregate_evidence(self, hub_id: str) -> ImplementationDocument:
         rows = []
         for path in sorted(self.incidents_dir(hub_id).glob("*/evidence/evidence-index.json")):
             index = _read_json(path)
@@ -788,7 +790,7 @@ class TrustOperationsIncidentStore:
         index["integrity_hash"] = incident_hash(index)
         return index
 
-    def _closeout_summary(self, hub_id: str) -> dict[str, Any]:
+    def _closeout_summary(self, hub_id: str) -> ImplementationDocument:
         closeouts = []
         for path in sorted(self.incidents_dir(hub_id).glob("*/closeout-report.json")):
             closeouts.append(_read_json(path))
@@ -796,7 +798,7 @@ class TrustOperationsIncidentStore:
         data["integrity_hash"] = incident_hash(data)
         return data
 
-    def _board_report(self, board: dict[str, Any], incidents: list[dict[str, Any]], source: dict[str, Any], events: list[dict[str, Any]], evidence_index: dict[str, Any], closeout_summary: dict[str, Any], now: str) -> dict[str, Any]:
+    def _board_report(self, board: ImplementationDocument, incidents: list[ImplementationDocument], source: ImplementationDocument, events: list[ImplementationDocument], evidence_index: ImplementationDocument, closeout_summary: ImplementationDocument, now: str) -> ImplementationDocument:
         summary = _board_summary(incidents)
         report = {
             "schema_version": TRUST_OPERATIONS_INCIDENT_SCHEMA_VERSION,
@@ -824,7 +826,7 @@ class TrustOperationsIncidentStore:
 
 
 
-def _default_plan_steps(incident: dict[str, Any]) -> list[dict[str, Any]]:
+def _default_plan_steps(incident: ImplementationDocument) -> list[ImplementationDocument]:
     component_type = str(incident.get("detected_from", {}).get("component_type") or "")
     action = {
         "release_verification": "verify_release_package",
@@ -839,7 +841,7 @@ def _default_plan_steps(incident: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _board_summary(incidents: list[dict[str, Any]]) -> dict[str, Any]:
+def _board_summary(incidents: list[ImplementationDocument]) -> ImplementationDocument:
     open_rows = [item for item in incidents if item.get("status") in BLOCKING_STATUSES]
     blocking_open = [item for item in open_rows if item.get("blocking")]
     critical = [item for item in open_rows if item.get("severity") == "critical"]
@@ -857,7 +859,7 @@ def _board_summary(incidents: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _evidence_summary(index: dict[str, Any]) -> dict[str, int]:
+def _evidence_summary(index: ImplementationDocument) -> dict[str, int]:
     rows = index.get("evidence") if isinstance(index.get("evidence"), list) else []
     return {
         "evidence_count": len(rows),
@@ -867,7 +869,7 @@ def _evidence_summary(index: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def _expected_evidence_rows_for_component(docs: dict[str, dict[str, Any]], component_type: str) -> list[dict[str, Any]]:
+def _expected_evidence_rows_for_component(docs: dict[str, ImplementationDocument], component_type: str) -> list[ImplementationDocument]:
     delivery_types = {str(spec.get("component_type") or "") for spec in DELIVERY_VERIFICATION_COMPONENTS}
     if component_type in delivery_types:
         source = docs.get("delivery_evidence_index") if isinstance(docs.get("delivery_evidence_index"), dict) else {}
@@ -876,7 +878,7 @@ def _expected_evidence_rows_for_component(docs: dict[str, dict[str, Any]], compo
     return [row for row in source.get("evidence", []) if isinstance(row, dict) and row.get("component_type") == component_type]
 
 
-def _binding_for_expected_row(expected: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
+def _binding_for_expected_row(expected: ImplementationDocument, report: ImplementationDocument) -> ImplementationDocument:
     expected_component_id = str(expected.get("component_id") or expected.get("evidence_id") or expected.get("component_type") or "")
     expected_component_type = str(expected.get("component_type") or "")
     report_hash = verification_hash(report)
@@ -910,11 +912,11 @@ def _binding_for_expected_row(expected: dict[str, Any], report: dict[str, Any]) 
     }
 
 
-def _binding_check(name: str, actual: Any, expected: Any) -> dict[str, Any]:
+def _binding_check(name: str, actual: Any, expected: Any) -> ImplementationDocument:
     return {"name": name, "status": "passed" if actual == expected else "failed", "actual": actual, "expected": expected}
 
 
-def _failed_binding(component_type: str, component_id: str, reason: str) -> dict[str, Any]:
+def _failed_binding(component_type: str, component_id: str, reason: str) -> ImplementationDocument:
     return {
         "binding_status": "failed",
         "binding_checks": [{"name": reason, "status": "failed", "actual": component_id, "expected": component_type}],
@@ -927,7 +929,7 @@ def _is_generic_component_id(component_id: str) -> bool:
     return component_id.endswith(":coverage") or component_id.endswith(":verification") or component_id.endswith(":missing")
 
 
-def _evidence_binding_valid(evidence: dict[str, Any]) -> bool:
+def _evidence_binding_valid(evidence: ImplementationDocument) -> bool:
     if evidence.get("status") != "passed":
         return False
     if evidence.get("binding_status") != "passed":
@@ -948,7 +950,7 @@ def _evidence_binding_valid(evidence: dict[str, Any]) -> bool:
     return bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
 
 
-def _valid_passed_evidence_for_incident(index: dict[str, Any], incident: dict[str, Any]) -> list[dict[str, Any]]:
+def _valid_passed_evidence_for_incident(index: ImplementationDocument, incident: ImplementationDocument) -> list[ImplementationDocument]:
     detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
     incident_component_type = str(detected.get("component_type") or "")
     incident_component_id = str(detected.get("component_id") or "")
@@ -1039,28 +1041,28 @@ def _write_readme(export_dir: Path) -> None:
     )
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json(path: Path) -> ImplementationDocument:
     return read_json(path)
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         return read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default)
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -1076,7 +1078,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

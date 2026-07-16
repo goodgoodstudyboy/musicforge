@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import re
 from pathlib import Path
 from typing import Any
@@ -52,7 +54,7 @@ def current_fix_plan_state(plan_id: str, *, analytics_store: Any) -> dict[str, A
     return {"plan": plan, "stale": bool(reasons), "reasons": sorted(set(reasons))}
 
 
-def _entry_plan_summary(entry: dict[str, Any]) -> dict[str, Any]:
+def _entry_plan_summary(entry: ImplementationDocument) -> ImplementationDocument:
     target = entry.get("target") if isinstance(entry.get("target"), dict) else {}
     outcome = entry.get("outcome") if isinstance(entry.get("outcome"), dict) else {}
     fix = entry.get("fix") if isinstance(entry.get("fix"), dict) else {}
@@ -74,7 +76,7 @@ def _entry_plan_summary(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _read_optional(path: Path) -> dict[str, Any]:
+def _read_optional(path: Path) -> ImplementationDocument:
     try:
         value = read_json(path)
     except (OSError, TypeError, ValueError):

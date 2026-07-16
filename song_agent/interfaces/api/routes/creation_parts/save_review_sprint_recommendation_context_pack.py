@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesSaveReviewSprintRecommendationContextPack:
-    def _save_review_sprint_recommendation_context_pack(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, task_id: str, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _save_review_sprint_recommendation_context_pack(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, task_id: str, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         if task_id not in self._review_sprint_ordered_task_ids(sprint):
             raise FileNotFoundError(task_id)
         task = task_store.read_task(task_id)
@@ -48,7 +50,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
         self.project_store.append_event(project_id, "review_sprint_recommendation_context_pack_saved", {"sprint_id": sprint.sprint_id, "task_id": task_id, "pack_id": pack.pack_id})
         return {"ok": True, "context_pack": _interfaces_api_runtime.context_pack_public_dict(pack), "recommendation": action}
 
-    def _ensure_recommendation_context_refs_current(self, asset_refs: list[dict[str, Any]], reference_refs: list[dict[str, Any]]) -> None:
+    def _ensure_recommendation_context_refs_current(self, asset_refs: list[ImplementationDocument], reference_refs: list[ImplementationDocument]) -> None:
         for ref in asset_refs:
             asset = self.asset_store.read_asset(str(ref.get("asset_id") or ""))
             if asset.hidden or str(ref.get("source_hash") or "") != _interfaces_api_runtime.asset_source_hash(asset):
@@ -58,7 +60,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
             if reference.hidden or str(ref.get("source_hash") or "") != reference.sha256:
                 raise _interfaces_api_runtime.ReviewSprintStateError("Recommendation context reference is stale. Refresh recommendations before saving.")
 
-    def _generate_review_sprint_provider_candidates(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _generate_review_sprint_provider_candidates(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         if sprint.status not in {"open", "in_progress", "blocked"}:
             raise _interfaces_api_runtime.ReviewSprintStateError(f"Cannot generate provider candidates for a {sprint.status} review sprint.")
         sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
@@ -166,7 +168,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
         result = self._save_review_sprint_recommendation_context_pack(project_id, sprint_store, task_store, sprint, str(item.task_id), {"name": item.input.get("name") or ""})
         return {"status": "created", "context_pack_id": result["context_pack"]["pack_id"], "asset_count": len(result["context_pack"].get("asset_refs") or []), "reference_count": len(result["context_pack"].get("reference_refs") or [])}
 
-    def _generate_review_task_provider_candidates_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _generate_review_task_provider_candidates_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         payload = self._expand_context_pack_payload(payload)
         candidates = task_store.list_candidates(task.task_id)
         if bool(payload.get("skip_existing_provider", True)) and any((candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider")) and candidate.status in {"ready", "applied"} for candidate in candidates):

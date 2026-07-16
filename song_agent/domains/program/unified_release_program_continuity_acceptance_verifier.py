@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -221,7 +223,7 @@ def unified_release_program_continuity_acceptance_verification_exit_code(report:
     return 0 if report.get("status") == "passed" else 1
 
 
-def _response_bundle(archive: zipfile.ZipFile, response_id: str) -> dict[str, Any]:
+def _response_bundle(archive: zipfile.ZipFile, response_id: str) -> ImplementationDocument:
     return {
         "response": _read_json_entry(archive, f"responses/{response_id}.json"),
         "verification": _read_json_entry(archive, f"responses/{response_id}-verification-report.json"),
@@ -229,7 +231,7 @@ def _response_bundle(archive: zipfile.ZipFile, response_id: str) -> dict[str, An
     }
 
 
-def _evidence_bundle(archive: zipfile.ZipFile, evidence_id: str) -> dict[str, Any]:
+def _evidence_bundle(archive: zipfile.ZipFile, evidence_id: str) -> ImplementationDocument:
     prefix = f"accepted-evidence/{evidence_id}"
     return {
         "accepted": _read_json_entry(archive, f"{prefix}/accepted-evidence.json"),
@@ -240,7 +242,7 @@ def _evidence_bundle(archive: zipfile.ZipFile, evidence_id: str) -> dict[str, An
     }
 
 
-def _response_checks(responses: dict[str, dict[str, Any]], source: dict[str, Any]) -> list[dict[str, Any]]:
+def _response_checks(responses: dict[str, ImplementationDocument], source: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     for response_id, bundle in sorted(responses.items()):
         response = bundle["response"]
@@ -266,7 +268,7 @@ def _response_checks(responses: dict[str, dict[str, Any]], source: dict[str, Any
     return checks
 
 
-def _participants_from_evidence(evidences: dict[str, dict[str, Any]], responses: dict[str, dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _participants_from_evidence(evidences: dict[str, ImplementationDocument], responses: dict[str, ImplementationDocument]) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
     participants: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
     for evidence_id, bundle in sorted(evidences.items()):
@@ -311,7 +313,7 @@ def _participants_from_evidence(evidences: dict[str, dict[str, Any]], responses:
     return participants, conflicts
 
 
-def _matrix_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _matrix_rows(participants: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         {
             "response_id": row.get("response_id"),
@@ -328,7 +330,7 @@ def _matrix_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def _negative_response_conflicts(responses: dict[str, dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
+def _negative_response_conflicts(responses: dict[str, ImplementationDocument], policy: ImplementationDocument) -> list[ImplementationDocument]:
     conflicts: list[dict[str, Any]] = []
     for response_id, bundle in responses.items():
         binding = bundle["binding"]
@@ -340,7 +342,7 @@ def _negative_response_conflicts(responses: dict[str, dict[str, Any]], policy: d
     return conflicts
 
 
-def _decision_readiness(policy: dict[str, Any], participants: list[dict[str, Any]], conflicts: list[dict[str, Any]]) -> dict[str, Any]:
+def _decision_readiness(policy: ImplementationDocument, participants: list[ImplementationDocument], conflicts: list[ImplementationDocument]) -> ImplementationDocument:
     accepted = [row for row in participants if row.get("decision") == "accepted"]
     roles = {row.get("role") for row in accepted}
     orgs = {row.get("organization") for row in accepted}
@@ -360,7 +362,7 @@ def _decision_readiness(policy: dict[str, Any], participants: list[dict[str, Any
     return {"status": "blocked" if blockers else "ready_for_signoff", "accepted_count": len(accepted), "organization_count": len(orgs), "missing_roles": missing_roles, "blockers": blockers}
 
 
-def _board_semantic_checks(report: dict[str, Any], receiver_index: dict[str, Any], accepted_index: dict[str, Any], participants: list[dict[str, Any]], readiness: dict[str, Any], *, require_quorum: bool) -> list[dict[str, Any]]:
+def _board_semantic_checks(report: ImplementationDocument, receiver_index: ImplementationDocument, accepted_index: ImplementationDocument, participants: list[ImplementationDocument], readiness: ImplementationDocument, *, require_quorum: bool) -> list[ImplementationDocument]:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return [
         _check("urpca_report_accepted_count", int(summary.get("accepted_count") or -1) == int(readiness.get("accepted_count") or 0), "Report accepted count matches rebuilt participants."),
@@ -371,7 +373,7 @@ def _board_semantic_checks(report: dict[str, Any], receiver_index: dict[str, Any
     ]
 
 
-def _document_binding_checks(manifest: dict[str, Any], report: dict[str, Any], matrix: dict[str, Any], receiver_index: dict[str, Any], accepted_index: dict[str, Any], external_manifest: dict[str, Any], source: dict[str, Any], signoff: dict[str, Any], binding: dict[str, Any]) -> list[dict[str, Any]]:
+def _document_binding_checks(manifest: ImplementationDocument, report: ImplementationDocument, matrix: ImplementationDocument, receiver_index: ImplementationDocument, accepted_index: ImplementationDocument, external_manifest: ImplementationDocument, source: ImplementationDocument, signoff: ImplementationDocument, binding: ImplementationDocument) -> list[ImplementationDocument]:
     docs = {
         "board_report_hash": report,
         "decision_matrix_hash": matrix,
@@ -386,7 +388,7 @@ def _document_binding_checks(manifest: dict[str, Any], report: dict[str, Any], m
     return [_check(f"urpca_manifest_{key}", source_doc.get(key) == doc.get("integrity_hash"), f"Manifest binds {key}.") for key, doc in docs.items()]
 
 
-def _signoff_binding_checks(binding: dict[str, Any], signoff: dict[str, Any], history: list[dict[str, Any]], report: dict[str, Any], matrix: dict[str, Any], receiver_index: dict[str, Any], accepted_index: dict[str, Any], source: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _signoff_binding_checks(binding: ImplementationDocument, signoff: ImplementationDocument, history: list[ImplementationDocument], report: ImplementationDocument, matrix: ImplementationDocument, receiver_index: ImplementationDocument, accepted_index: ImplementationDocument, source: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not binding:
         return [_check("urpca_signoff_binding_required", not require, "Signoff binding exists when required.")]
     event = next((row for row in reversed(history) if row.get("event_type") == "continuity_acceptance_signoff_created"), {})
@@ -404,7 +406,7 @@ def _signoff_binding_checks(binding: dict[str, Any], signoff: dict[str, Any], hi
     ]
 
 
-def _external_signoff_binding_checks(path: Path | str | None, binding: dict[str, Any], signoff: dict[str, Any], history: list[dict[str, Any]], report: dict[str, Any], matrix: dict[str, Any], receiver_index: dict[str, Any], accepted_index: dict[str, Any], source: dict[str, Any], *, require: bool) -> list[dict[str, Any]]:
+def _external_signoff_binding_checks(path: Path | str | None, binding: ImplementationDocument, signoff: ImplementationDocument, history: list[ImplementationDocument], report: ImplementationDocument, matrix: ImplementationDocument, receiver_index: ImplementationDocument, accepted_index: ImplementationDocument, source: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     if not path:
         if require:
             return [_check("urpca_external_signoff_binding_required", False, "External signoff binding proof is required.")]
@@ -421,7 +423,7 @@ def _external_signoff_binding_checks(path: Path | str | None, binding: dict[str,
     return checks
 
 
-def _current_kit_checks(source: dict[str, Any], kit_path: Path | str | None, verification_report_path: Path | str | None, *, require: bool) -> list[dict[str, Any]]:
+def _current_kit_checks(source: ImplementationDocument, kit_path: Path | str | None, verification_report_path: Path | str | None, *, require: bool) -> list[ImplementationDocument]:
     if not require:
         return []
     if not kit_path:
@@ -452,7 +454,7 @@ def _current_kit_checks(source: dict[str, Any], kit_path: Path | str | None, ver
     return checks
 
 
-def _history_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _history_checks(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     previous = ""
     for index, row in enumerate(rows, start=1):
@@ -469,7 +471,7 @@ def _history_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str], expected_entries: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str], expected_entries: set[str]) -> list[ImplementationDocument]:
     files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     file_paths = {str(row.get("path") or "") for row in files}
     expected_files = expected_entries - {"manifest.json"}
@@ -490,15 +492,15 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urpca_redaction_scan")
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, first_check: ImplementationDocument | None = None) -> ImplementationDocument:
     if first_check is not None:
         checks.insert(0, first_check)
     return build_verification_report(
@@ -509,7 +511,7 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], first_check: 
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
@@ -517,5 +519,5 @@ def _safe_check_key(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value.strip("/").replace("/", "_"))[:120] or "root"
 
 
-def _has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
+def _has_blocking_failures(checks: list[ImplementationDocument]) -> bool:
     return any(row.get("status") == "failed" and row.get("severity") == "blocking" for row in checks)

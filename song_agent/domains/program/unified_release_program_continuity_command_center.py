@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 from pathlib import Path
 from typing import Any
@@ -304,7 +306,7 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
-    def _read_docs(self, program_id: str) -> dict[str, Any]:
+    def _read_docs(self, program_id: str) -> ImplementationDocument:
         return {
             "report": read_json(self.report_path(program_id)),
             "inventory": read_json(self.inventory_path(program_id)),
@@ -316,7 +318,7 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
             "local_evidence_manifest": read_json(self.local_evidence_manifest_path(program_id)),
         }
 
-    def _runtime_contexts(self, program_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _runtime_contexts(self, program_id: str, payload: ImplementationDocument) -> list[ImplementationDocument]:
         components = self._component_specs(program_id)
         generation = _read_optional_json(self.change_store.current_generation_path(program_id))
         acceptance_state = self.acceptance_store.latest_signoff_state(program_id)
@@ -338,7 +340,7 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
             contexts.append(self._component_context(program_id, spec, payload, generation, acceptance_state, runtime_rows))
         return contexts
 
-    def _component_specs(self, program_id: str) -> list[dict[str, Any]]:
+    def _component_specs(self, program_id: str) -> list[ImplementationDocument]:
         return [
             {
                 "component_type": "evidence_vault",
@@ -385,12 +387,12 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
     def _component_context(
         self,
         program_id: str,
-        spec: dict[str, Any],
-        payload: dict[str, Any],
-        generation: dict[str, Any],
-        acceptance_state: dict[str, Any],
-        runtime_rows: dict[str, dict[str, Any]],
-    ) -> dict[str, Any]:
+        spec: ImplementationDocument,
+        payload: ImplementationDocument,
+        generation: ImplementationDocument,
+        acceptance_state: ImplementationDocument,
+        runtime_rows: dict[str, ImplementationDocument],
+    ) -> ImplementationDocument:
         del payload
         component_type = spec["component_type"]
         package_path = Path(spec["package_path"])
@@ -474,7 +476,7 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
         local_row.update(runtime_rows[f"{component_type}::{spec['component_id']}"])
         return {"row": row, "local_row": local_row, "runtime": runtime, "external": external}
 
-    def _build_documents(self, program_id: str, contexts: list[dict[str, Any]]) -> dict[str, Any]:
+    def _build_documents(self, program_id: str, contexts: list[ImplementationDocument]) -> ImplementationDocument:
         inventory_rows = [ctx["row"] for ctx in contexts]
         runtime_rows = [
             {
@@ -601,7 +603,7 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
         }
 
 
-def _runtime_fingerprint(runtime: dict[str, Any]) -> dict[str, Any]:
+def _runtime_fingerprint(runtime: ImplementationDocument) -> ImplementationDocument:
     verification = runtime.get("verification") if isinstance(runtime.get("verification"), dict) else {}
     summary = runtime.get("summary") if isinstance(runtime.get("summary"), dict) else {}
     verification_summary = verification.get("summary") if isinstance(verification.get("summary"), dict) else {}
@@ -612,7 +614,7 @@ def _runtime_fingerprint(runtime: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _runtime_blockers(runtime: dict[str, Any]) -> list[str]:
+def _runtime_blockers(runtime: ImplementationDocument) -> list[str]:
     verification = runtime.get("verification") if isinstance(runtime.get("verification"), dict) else {}
     values = runtime.get("blockers") or verification.get("blockers") or []
     if values:
@@ -640,7 +642,7 @@ def _evidence_status(blockers: list[str]) -> str:
     return "ready"
 
 
-def _gap_actions(readiness_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _gap_actions(readiness_rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     actions = []
     for row in readiness_rows:
         if row.get("status") != "ready":
@@ -648,7 +650,7 @@ def _gap_actions(readiness_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return actions
 
 
-def _safe_actions(readiness_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _safe_actions(readiness_rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     actions = [
         {"action_id": "uccc-refresh", "action_type": "continuity_command_center.refresh", "mode": "safe"},
         {"action_id": "uccc-export", "action_type": "continuity_command_center.export", "mode": "safe"},
@@ -661,5 +663,5 @@ def _safe_actions(readiness_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return actions
 
 
-def _sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_payload(payload: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(payload)

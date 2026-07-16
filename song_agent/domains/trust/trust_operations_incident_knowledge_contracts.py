@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.domains.delivery.releases import stable_hash
 
 
@@ -54,7 +56,7 @@ def knowledge_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
 
 
-def _classify_incident(incident: dict[str, Any]) -> dict[str, str]:
+def _classify_incident(incident: ImplementationDocument) -> dict[str, str]:
     detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
     check_id = str(detected.get("check_id") or incident.get("category") or "").lower()
     category = str(incident.get("category") or "").lower()

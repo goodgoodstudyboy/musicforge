@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -359,7 +361,7 @@ class UnifiedCommandCenterSignoffStore:
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
-    def _source_state(self, center_id: str, *, require_ready: bool) -> dict[str, Any]:
+    def _source_state(self, center_id: str, *, require_ready: bool) -> ImplementationDocument:
         center = self.center_store.read_center(center_id)
         signoff = read_json(self.signoff_path(center_id)) if self.signoff_path(center_id).exists() else {}
         if signoff.get("status") != "signed" and self.center_store.latest_signoff_state(center_id).get("status") == "signed":
@@ -408,7 +410,7 @@ class UnifiedCommandCenterSignoffStore:
                 built = False
         return built
 
-    def _append_history(self, center_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, center_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         history = self.center_store.read_signoff_history(center_id)
         previous = str(history[-1].get("event_hash") or "") if history else ""
         event = sanitize_metadata({**payload, "previous_event_hash": previous})
@@ -430,13 +432,13 @@ class UnifiedCommandCenterSignoffStore:
                 continue
         return f"ucccr-{max_seen + 1:06d}"
 
-    def _read_change_request(self, center_id: str, change_request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, center_id: str, change_request_id: str) -> ImplementationDocument:
         path = self.change_request_dir(center_id) / f"{_safe_id(change_request_id)}.json"
         if not path.exists():
             raise UnifiedCommandCenterSignoffNotFoundError(f"Unified Command Center Change Request not found: {change_request_id}.")
         return read_json(path)
 
-    def _change_request_index(self, center_id: str) -> dict[str, Any]:
+    def _change_request_index(self, center_id: str) -> ImplementationDocument:
         rows = []
         for path in sorted(self.change_request_dir(center_id).glob("ucccr-*.json")):
             try:
@@ -447,7 +449,7 @@ class UnifiedCommandCenterSignoffStore:
         doc["integrity_hash"] = _integrity_hash(doc)
         return doc
 
-    def _read_signoff_binding(self, center_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _read_signoff_binding(self, center_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         path = self.signoff_binding_path(center_id)
         if not path.exists():
             raise UnifiedCommandCenterSignoffStateError("Unified Command Center signoff binding summary is missing.")
@@ -458,7 +460,7 @@ class UnifiedCommandCenterSignoffStore:
             raise UnifiedCommandCenterSignoffStateError("Unified Command Center signoff binding does not match current signoff.")
         return binding
 
-    def _signoff_binding_summary(self, center_id: str, signoff: dict[str, Any], signoff_event: dict[str, Any]) -> dict[str, Any]:
+    def _signoff_binding_summary(self, center_id: str, signoff: ImplementationDocument, signoff_event: ImplementationDocument) -> ImplementationDocument:
         binding = sanitize_metadata(
             {
                 "schema_version": UNIFIED_COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION,
@@ -491,7 +493,7 @@ class UnifiedCommandCenterSignoffStore:
         return binding
 
 
-def _archive_readme(source: dict[str, Any]) -> str:
+def _archive_readme(source: ImplementationDocument) -> str:
     signoff = source.get("signoff", {})
     return "\n".join(
         [
@@ -517,19 +519,19 @@ def _safe_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.:-]+", "-", str(value)).strip("-")
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

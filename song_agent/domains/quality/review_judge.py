@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 from typing import Any
@@ -348,7 +350,7 @@ def _ready_candidates(candidates: list[ReviewCandidate]) -> list[ReviewCandidate
     return [candidate for candidate in candidates if candidate.status in {"ready", "applied"}]
 
 
-def _candidate_prompt_summary(candidate: ReviewCandidate) -> dict[str, Any]:
+def _candidate_prompt_summary(candidate: ReviewCandidate) -> ImplementationDocument:
     scores = candidate.scores if isinstance(candidate.scores, dict) else {}
     validator = candidate.validator if isinstance(candidate.validator, dict) else {}
     patch = candidate.patch if isinstance(candidate.patch, dict) else {}
@@ -383,7 +385,7 @@ def _candidate_prompt_summary(candidate: ReviewCandidate) -> dict[str, Any]:
     )
 
 
-def _parent_song_summary(parent_plan: SongPlan) -> dict[str, Any]:
+def _parent_song_summary(parent_plan: SongPlan) -> ImplementationDocument:
     plan = parent_plan.to_dict()
     quality = plan.get("quality") if isinstance(plan.get("quality"), dict) else {}
     return sanitize_metadata(
@@ -412,7 +414,7 @@ def _parent_song_summary(parent_plan: SongPlan) -> dict[str, Any]:
     )
 
 
-def _decision_prompt_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+def _decision_prompt_summary(report: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(report, dict):
         return {}
     return sanitize_metadata(
@@ -434,7 +436,7 @@ def _decision_prompt_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _marker_summary(markers: list[Any]) -> list[dict[str, Any]]:
+def _marker_summary(markers: list[Any]) -> list[ImplementationDocument]:
     result = []
     for marker in markers[:20]:
         if not isinstance(marker, dict):
@@ -443,7 +445,7 @@ def _marker_summary(markers: list[Any]) -> list[dict[str, Any]]:
     return sanitize_metadata(result)
 
 
-def _target_summary(target: dict[str, Any]) -> dict[str, Any]:
+def _target_summary(target: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(target, dict):
         return {}
     return sanitize_metadata(
@@ -456,7 +458,7 @@ def _target_summary(target: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _candidate_scores(value: Any, ready_ids: list[str]) -> list[dict[str, Any]]:
+def _candidate_scores(value: Any, ready_ids: list[str]) -> list[ImplementationDocument]:
     if not isinstance(value, list) or not value:
         raise ReviewJudgeError("candidate_scores must be a non-empty list.")
     scores = []
@@ -478,7 +480,7 @@ def _candidate_scores(value: Any, ready_ids: list[str]) -> list[dict[str, Any]]:
     return scores
 
 
-def _comparison_summary(value: Any, ready_ids: list[str], recommended_id: str) -> dict[str, Any]:
+def _comparison_summary(value: Any, ready_ids: list[str], recommended_id: str) -> ImplementationDocument:
     value = value if isinstance(value, dict) else {}
     best_id = value.get("best_candidate_id") or recommended_id
     return sanitize_metadata(
@@ -525,7 +527,7 @@ def _text_list(value: Any, *, max_items: int, max_length: int) -> list[str]:
     return [sanitize_sensitive_text(str(item))[:max_length] for item in value[:max_items] if str(item).strip()]
 
 
-def _risk_flags(scores: list[dict[str, Any]]) -> list[str]:
+def _risk_flags(scores: list[ImplementationDocument]) -> list[str]:
     flags: list[str] = []
     if any(int(score.get("risk") or 0) >= 70 for score in scores):
         flags.append("high_risk_candidate_present")
@@ -534,7 +536,7 @@ def _risk_flags(scores: list[dict[str, Any]]) -> list[str]:
     return flags
 
 
-def _usage_summary(usage: dict[str, Any]) -> dict[str, int]:
+def _usage_summary(usage: ImplementationDocument) -> dict[str, int]:
     return {
         "prompt_tokens": _usage_int(usage, "prompt_tokens"),
         "completion_tokens": _usage_int(usage, "completion_tokens"),
@@ -542,14 +544,14 @@ def _usage_summary(usage: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def _usage_int(usage: dict[str, Any], field_name: str) -> int:
+def _usage_int(usage: ImplementationDocument, field_name: str) -> int:
     try:
         return max(0, int((usage or {}).get(field_name) or 0))
     except (TypeError, ValueError):
         return 0
 
 
-def _provider_response_parts(response: Any) -> tuple[dict[str, Any], dict[str, Any], str | None]:
+def _provider_response_parts(response: Any) -> tuple[ImplementationDocument, ImplementationDocument, str | None]:
     if isinstance(response, ProviderEditResponse):
         return response.data, dict(response.usage or {}), response.request_id
     if isinstance(response, dict) and "data" in response and isinstance(response.get("data"), dict):
@@ -573,7 +575,7 @@ def _client_for_config(config: ProviderConfig) -> Any:
     raise ProviderConfigError(f"Unsupported provider wire_api: {config.wire_api}.")
 
 
-def _top_score(scores: list[Any], candidate_id: str) -> dict[str, Any]:
+def _top_score(scores: list[Any], candidate_id: str) -> ImplementationDocument:
     clean = [score for score in scores if isinstance(score, dict)]
     for score in clean:
         if score.get("candidate_id") == candidate_id:
@@ -581,7 +583,7 @@ def _top_score(scores: list[Any], candidate_id: str) -> dict[str, Any]:
     return sorted(clean, key=lambda item: -int(item.get("overall") or 0))[0] if clean else {}
 
 
-def _changed_values(intents: list[dict[str, Any]], field_name: str) -> list[str]:
+def _changed_values(intents: list[ImplementationDocument], field_name: str) -> list[str]:
     values: list[str] = []
     for intent in intents[:20]:
         if not isinstance(intent, dict):

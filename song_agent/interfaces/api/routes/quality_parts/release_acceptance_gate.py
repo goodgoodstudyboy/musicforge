@@ -1,161 +1,165 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesReleaseAcceptanceGate:
-    def _release_acceptance_gate(self, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
-        suite_id = str(payload.get("acceptance_suite_id") or "").strip()
-        analytics_evidence = self._release_acceptance_analytics_gate(payload)
-        fix_sprint_evidence = self._release_acceptance_fix_sprint_gate(payload)
-        fix_plan_evidence = self._release_acceptance_fix_plan_gate(payload)
-        fix_plan_review_evidence = self._release_acceptance_fix_plan_review_gate(payload)
-        kb_evidence = self._release_acceptance_kb_gate(payload)
-        planning_simulation_evidence = self._release_planning_rule_simulation_gate(payload)
-        planning_governance_evidence = self._release_planning_rule_governance_gate(payload)
-        planning_impact_evidence = self._release_planning_rule_impact_gate(payload)
-        if not suite_id:
-            if not analytics_evidence:
-                gate = {}
-                if fix_plan_evidence:
-                    gate["acceptance_fix_plan"] = fix_plan_evidence
-                    if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                        gate["status"] = "failed"
-                        gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
-                if fix_plan_review_evidence:
-                    gate["acceptance_fix_plan_review"] = fix_plan_review_evidence
-                    if fix_plan_review_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                        gate["status"] = "failed"
-                        gate["message"] = str(fix_plan_review_evidence.get("message") or "Acceptance Fix Plan Outcome Review gate failed.")
-                if fix_sprint_evidence:
-                    gate["acceptance_fix_sprint"] = fix_sprint_evidence
-                if kb_evidence:
-                    gate["acceptance_kb"] = kb_evidence
-                if planning_simulation_evidence:
-                    gate["planning_rule_simulation"] = planning_simulation_evidence
-                    if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                        gate["status"] = "failed"
-                        gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
-                if planning_governance_evidence:
-                    gate["planning_rule_governance"] = planning_governance_evidence
-                    if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                        gate["status"] = "failed"
-                        gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
-                if planning_impact_evidence:
-                    gate["planning_rule_impact"] = planning_impact_evidence
-                    if planning_impact_evidence.get("status") == "failed":
-                        gate["status"] = "failed"
-                        gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
-                return gate
-            gate = {"acceptance_analytics": analytics_evidence}
-            if fix_plan_evidence:
-                gate["acceptance_fix_plan"] = fix_plan_evidence
-                if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                    gate["status"] = "failed"
-                    gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
-            if fix_plan_review_evidence:
-                gate["acceptance_fix_plan_review"] = fix_plan_review_evidence
-                if fix_plan_review_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                    gate["status"] = "failed"
-                    gate["message"] = str(fix_plan_review_evidence.get("message") or "Acceptance Fix Plan Outcome Review gate failed.")
-            if fix_sprint_evidence:
-                gate["acceptance_fix_sprint"] = fix_sprint_evidence
-                if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                    gate["status"] = "failed"
-                    gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
-            if kb_evidence:
-                gate["acceptance_kb"] = kb_evidence
-            if planning_simulation_evidence:
-                gate["planning_rule_simulation"] = planning_simulation_evidence
-                if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                    gate["status"] = "failed"
-                    gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
-            if planning_governance_evidence:
-                gate["planning_rule_governance"] = planning_governance_evidence
-                if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                    gate["status"] = "failed"
-                    gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
-            if planning_impact_evidence:
-                gate["planning_rule_impact"] = planning_impact_evidence
-                if planning_impact_evidence.get("status") == "failed":
-                    gate["status"] = "failed"
-                    gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
-            if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
-                gate["status"] = "failed"
-                gate["message"] = "Acceptance analytics readiness is blocked."
-            return gate
-        report = self.acceptance_store.read_report(suite_id)
-        summary = _interfaces_api_runtime.acceptance_report_summary(report)
-        acceptance_status = str(summary.get("acceptance_status") or "")
-        release_ready = bool(summary.get("release_ready", False))
-        coverage_status = str(summary.get("songbook_coverage_status") or "not_applicable")
-        human_review_pack = summary.get("human_review_pack") if isinstance(summary.get("human_review_pack"), dict) else {}
-        require_release_ready = bool(payload.get("require_acceptance_release_ready", False)) or str(summary.get("profile_id") or "") in {"release_candidate", "audio_required"}
-        if require_release_ready:
-            ok = report.get("status") == "passed" and release_ready and acceptance_status == "release_ready_passed" and coverage_status in {"complete", "not_applicable"}
-            message = "Acceptance suite is not manual release-ready."
-        else:
-            ok = report.get("status") == "passed" and int(summary.get("manual_accepted_count", 0) or 0) > 0 and acceptance_status in {"manual_passed", "release_ready_passed", "passed"}
-            message = "Acceptance suite is not manually accepted."
-        gate = {
-            "status": "passed" if ok else "failed",
-            "suite_id": suite_id,
-            "profile_id": summary.get("profile_id"),
-            "acceptance_status": acceptance_status,
-            "release_ready": release_ready,
-            "songbook_coverage_status": coverage_status,
-            "expected_case_count": summary.get("expected_case_count", 0),
-            "missing_song_ids": summary.get("missing_song_ids", []),
-            "duplicate_song_ids": summary.get("duplicate_song_ids", []),
-            "manual_accepted_count": summary.get("manual_accepted_count", 0),
-            "synthetic_accepted_count": summary.get("synthetic_accepted_count", 0),
-            "manual_audio_accepted_count": summary.get("manual_audio_accepted_count", 0),
-            "audio_passed_count": summary.get("audio_passed_count", 0),
-            "require_acceptance_release_ready": require_release_ready,
-            "human_review_pack": human_review_pack,
-            "message": message,
-        }
-        if analytics_evidence:
-            gate["acceptance_analytics"] = analytics_evidence
-            if analytics_evidence.get("readiness_status") == "blocked" and not bool(payload.get("force", False)):
-                gate["status"] = "failed"
-                gate["message"] = "Acceptance analytics readiness is blocked."
-        if fix_plan_evidence:
-            gate["acceptance_fix_plan"] = fix_plan_evidence
-            if fix_plan_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                gate["status"] = "failed"
-                gate["message"] = str(fix_plan_evidence.get("message") or "Acceptance Fix Plan gate failed.")
-        if fix_plan_review_evidence:
-            gate["acceptance_fix_plan_review"] = fix_plan_review_evidence
-            if fix_plan_review_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                gate["status"] = "failed"
-                gate["message"] = str(fix_plan_review_evidence.get("message") or "Acceptance Fix Plan Outcome Review gate failed.")
-        if fix_sprint_evidence:
-            gate["acceptance_fix_sprint"] = fix_sprint_evidence
-            if fix_sprint_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                gate["status"] = "failed"
-                gate["message"] = str(fix_sprint_evidence.get("message") or "Acceptance Fix Sprint gate failed.")
-        if kb_evidence:
-            gate["acceptance_kb"] = kb_evidence
-        if planning_simulation_evidence:
-            gate["planning_rule_simulation"] = planning_simulation_evidence
-            if planning_simulation_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                gate["status"] = "failed"
-                gate["message"] = str(planning_simulation_evidence.get("message") or "Planning Rule Simulation gate failed.")
-        if planning_governance_evidence:
-            gate["planning_rule_governance"] = planning_governance_evidence
-            if planning_governance_evidence.get("status") == "failed" and not bool(payload.get("force", False)):
-                gate["status"] = "failed"
-                gate["message"] = str(planning_governance_evidence.get("message") or "Planning Rule Governance gate failed.")
-        if planning_impact_evidence:
-            gate["planning_rule_impact"] = planning_impact_evidence
-            if planning_impact_evidence.get("status") == "failed":
-                gate["status"] = "failed"
-                gate["message"] = str(planning_impact_evidence.get("message") or "Planning Rule Impact gate failed.")
-        return gate
+    def _release_acceptance_gate_part_01(self, payload: ImplementationDocument, _split_state):
+        _split_state['suite_id'] = str(payload.get('acceptance_suite_id') or '').strip()
+        _split_state['analytics_evidence'] = self._release_acceptance_analytics_gate(payload)
+        _split_state['fix_sprint_evidence'] = self._release_acceptance_fix_sprint_gate(payload)
+        _split_state['fix_plan_evidence'] = self._release_acceptance_fix_plan_gate(payload)
+        _split_state['fix_plan_review_evidence'] = self._release_acceptance_fix_plan_review_gate(payload)
+        _split_state['kb_evidence'] = self._release_acceptance_kb_gate(payload)
+        _split_state['planning_simulation_evidence'] = self._release_planning_rule_simulation_gate(payload)
+        _split_state['planning_governance_evidence'] = self._release_planning_rule_governance_gate(payload)
+        _split_state['planning_impact_evidence'] = self._release_planning_rule_impact_gate(payload)
+        return (False, None)
 
-    def _release_audio_campaign_gate(self, release_id: str, payload: dict[str, Any], *, required: bool) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_acceptance_gate_part_02(self, payload: ImplementationDocument, _split_state):
+        if not _split_state['suite_id']:
+            if not _split_state['analytics_evidence']:
+                _split_state['gate'] = {}
+                if _split_state['fix_plan_evidence']:
+                    _split_state['gate']['acceptance_fix_plan'] = _split_state['fix_plan_evidence']
+                    if _split_state['fix_plan_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                        _split_state['gate']['status'] = 'failed'
+                        _split_state['gate']['message'] = str(_split_state['fix_plan_evidence'].get('message') or 'Acceptance Fix Plan gate failed.')
+                if _split_state['fix_plan_review_evidence']:
+                    _split_state['gate']['acceptance_fix_plan_review'] = _split_state['fix_plan_review_evidence']
+                    if _split_state['fix_plan_review_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                        _split_state['gate']['status'] = 'failed'
+                        _split_state['gate']['message'] = str(_split_state['fix_plan_review_evidence'].get('message') or 'Acceptance Fix Plan Outcome Review gate failed.')
+                if _split_state['fix_sprint_evidence']:
+                    _split_state['gate']['acceptance_fix_sprint'] = _split_state['fix_sprint_evidence']
+                if _split_state['kb_evidence']:
+                    _split_state['gate']['acceptance_kb'] = _split_state['kb_evidence']
+                if _split_state['planning_simulation_evidence']:
+                    _split_state['gate']['planning_rule_simulation'] = _split_state['planning_simulation_evidence']
+                    if _split_state['planning_simulation_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                        _split_state['gate']['status'] = 'failed'
+                        _split_state['gate']['message'] = str(_split_state['planning_simulation_evidence'].get('message') or 'Planning Rule Simulation gate failed.')
+                if _split_state['planning_governance_evidence']:
+                    _split_state['gate']['planning_rule_governance'] = _split_state['planning_governance_evidence']
+                    if _split_state['planning_governance_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                        _split_state['gate']['status'] = 'failed'
+                        _split_state['gate']['message'] = str(_split_state['planning_governance_evidence'].get('message') or 'Planning Rule Governance gate failed.')
+                if _split_state['planning_impact_evidence']:
+                    _split_state['gate']['planning_rule_impact'] = _split_state['planning_impact_evidence']
+                    if _split_state['planning_impact_evidence'].get('status') == 'failed':
+                        _split_state['gate']['status'] = 'failed'
+                        _split_state['gate']['message'] = str(_split_state['planning_impact_evidence'].get('message') or 'Planning Rule Impact gate failed.')
+                return (True, _split_state['gate'])
+            _split_state['gate'] = {'acceptance_analytics': _split_state['analytics_evidence']}
+            if _split_state['fix_plan_evidence']:
+                _split_state['gate']['acceptance_fix_plan'] = _split_state['fix_plan_evidence']
+                if _split_state['fix_plan_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                    _split_state['gate']['status'] = 'failed'
+                    _split_state['gate']['message'] = str(_split_state['fix_plan_evidence'].get('message') or 'Acceptance Fix Plan gate failed.')
+            if _split_state['fix_plan_review_evidence']:
+                _split_state['gate']['acceptance_fix_plan_review'] = _split_state['fix_plan_review_evidence']
+                if _split_state['fix_plan_review_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                    _split_state['gate']['status'] = 'failed'
+                    _split_state['gate']['message'] = str(_split_state['fix_plan_review_evidence'].get('message') or 'Acceptance Fix Plan Outcome Review gate failed.')
+            if _split_state['fix_sprint_evidence']:
+                _split_state['gate']['acceptance_fix_sprint'] = _split_state['fix_sprint_evidence']
+                if _split_state['fix_sprint_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                    _split_state['gate']['status'] = 'failed'
+                    _split_state['gate']['message'] = str(_split_state['fix_sprint_evidence'].get('message') or 'Acceptance Fix Sprint gate failed.')
+            if _split_state['kb_evidence']:
+                _split_state['gate']['acceptance_kb'] = _split_state['kb_evidence']
+            if _split_state['planning_simulation_evidence']:
+                _split_state['gate']['planning_rule_simulation'] = _split_state['planning_simulation_evidence']
+                if _split_state['planning_simulation_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                    _split_state['gate']['status'] = 'failed'
+                    _split_state['gate']['message'] = str(_split_state['planning_simulation_evidence'].get('message') or 'Planning Rule Simulation gate failed.')
+            if _split_state['planning_governance_evidence']:
+                _split_state['gate']['planning_rule_governance'] = _split_state['planning_governance_evidence']
+                if _split_state['planning_governance_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                    _split_state['gate']['status'] = 'failed'
+                    _split_state['gate']['message'] = str(_split_state['planning_governance_evidence'].get('message') or 'Planning Rule Governance gate failed.')
+            if _split_state['planning_impact_evidence']:
+                _split_state['gate']['planning_rule_impact'] = _split_state['planning_impact_evidence']
+                if _split_state['planning_impact_evidence'].get('status') == 'failed':
+                    _split_state['gate']['status'] = 'failed'
+                    _split_state['gate']['message'] = str(_split_state['planning_impact_evidence'].get('message') or 'Planning Rule Impact gate failed.')
+            if _split_state['analytics_evidence'].get('readiness_status') == 'blocked' and (not bool(payload.get('force', False))):
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = 'Acceptance analytics readiness is blocked.'
+            return (True, _split_state['gate'])
+        return (False, None)
+
+    def _release_acceptance_gate_part_03(self, payload: ImplementationDocument, _split_state):
+        report = self.acceptance_store.read_report(_split_state['suite_id'])
+        summary = _interfaces_api_runtime.acceptance_report_summary(report)
+        acceptance_status = str(summary.get('acceptance_status') or '')
+        release_ready = bool(summary.get('release_ready', False))
+        coverage_status = str(summary.get('songbook_coverage_status') or 'not_applicable')
+        human_review_pack = summary.get('human_review_pack') if isinstance(summary.get('human_review_pack'), dict) else {}
+        require_release_ready = bool(payload.get('require_acceptance_release_ready', False)) or str(summary.get('profile_id') or '') in {'release_candidate', 'audio_required'}
+        if require_release_ready:
+            ok = report.get('status') == 'passed' and release_ready and (acceptance_status == 'release_ready_passed') and (coverage_status in {'complete', 'not_applicable'})
+            message = 'Acceptance suite is not manual release-ready.'
+        else:
+            ok = report.get('status') == 'passed' and int(summary.get('manual_accepted_count', 0) or 0) > 0 and (acceptance_status in {'manual_passed', 'release_ready_passed', 'passed'})
+            message = 'Acceptance suite is not manually accepted.'
+        _split_state['gate'] = {'status': 'passed' if ok else 'failed', 'suite_id': _split_state['suite_id'], 'profile_id': summary.get('profile_id'), 'acceptance_status': acceptance_status, 'release_ready': release_ready, 'songbook_coverage_status': coverage_status, 'expected_case_count': summary.get('expected_case_count', 0), 'missing_song_ids': summary.get('missing_song_ids', []), 'duplicate_song_ids': summary.get('duplicate_song_ids', []), 'manual_accepted_count': summary.get('manual_accepted_count', 0), 'synthetic_accepted_count': summary.get('synthetic_accepted_count', 0), 'manual_audio_accepted_count': summary.get('manual_audio_accepted_count', 0), 'audio_passed_count': summary.get('audio_passed_count', 0), 'require_acceptance_release_ready': require_release_ready, 'human_review_pack': human_review_pack, 'message': message}
+        if _split_state['analytics_evidence']:
+            _split_state['gate']['acceptance_analytics'] = _split_state['analytics_evidence']
+            if _split_state['analytics_evidence'].get('readiness_status') == 'blocked' and (not bool(payload.get('force', False))):
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = 'Acceptance analytics readiness is blocked.'
+        if _split_state['fix_plan_evidence']:
+            _split_state['gate']['acceptance_fix_plan'] = _split_state['fix_plan_evidence']
+            if _split_state['fix_plan_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = str(_split_state['fix_plan_evidence'].get('message') or 'Acceptance Fix Plan gate failed.')
+        if _split_state['fix_plan_review_evidence']:
+            _split_state['gate']['acceptance_fix_plan_review'] = _split_state['fix_plan_review_evidence']
+            if _split_state['fix_plan_review_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = str(_split_state['fix_plan_review_evidence'].get('message') or 'Acceptance Fix Plan Outcome Review gate failed.')
+        if _split_state['fix_sprint_evidence']:
+            _split_state['gate']['acceptance_fix_sprint'] = _split_state['fix_sprint_evidence']
+            if _split_state['fix_sprint_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = str(_split_state['fix_sprint_evidence'].get('message') or 'Acceptance Fix Sprint gate failed.')
+        if _split_state['kb_evidence']:
+            _split_state['gate']['acceptance_kb'] = _split_state['kb_evidence']
+        if _split_state['planning_simulation_evidence']:
+            _split_state['gate']['planning_rule_simulation'] = _split_state['planning_simulation_evidence']
+            if _split_state['planning_simulation_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = str(_split_state['planning_simulation_evidence'].get('message') or 'Planning Rule Simulation gate failed.')
+        if _split_state['planning_governance_evidence']:
+            _split_state['gate']['planning_rule_governance'] = _split_state['planning_governance_evidence']
+            if _split_state['planning_governance_evidence'].get('status') == 'failed' and (not bool(payload.get('force', False))):
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = str(_split_state['planning_governance_evidence'].get('message') or 'Planning Rule Governance gate failed.')
+        if _split_state['planning_impact_evidence']:
+            _split_state['gate']['planning_rule_impact'] = _split_state['planning_impact_evidence']
+            if _split_state['planning_impact_evidence'].get('status') == 'failed':
+                _split_state['gate']['status'] = 'failed'
+                _split_state['gate']['message'] = str(_split_state['planning_impact_evidence'].get('message') or 'Planning Rule Impact gate failed.')
+        return (True, _split_state['gate'])
+        return (False, None)
+
+    def _release_acceptance_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+        _split_state = {}
+        _split_result = self._release_acceptance_gate_part_01(payload, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self._release_acceptance_gate_part_02(payload, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+        _split_result = self._release_acceptance_gate_part_03(payload, _split_state)
+        if _split_result[0]:
+            return _split_result[1]
+
+    def _release_audio_campaign_gate(self, release_id: str, payload: ImplementationDocument, *, required: bool) -> dict[str, _interfaces_api_runtime.Any]:
         campaign_id = str(payload.get("audio_campaign_id") or payload.get("campaign_id") or "").strip()
         if not campaign_id:
             return {"status": "failed" if required else "missing", "hard_block": bool(required), "message": "Audio Campaign id is required.", "release_id": release_id}
@@ -236,7 +240,7 @@ class QualityRoutesReleaseAcceptanceGate:
                 stale.append(row)
         return {"status": "passed" if not stale else "failed", "track_count": len(rows), "current_track_count": len(rows) - len(stale), "stale_tracks": stale, "tracks": rows}
 
-    def _release_audio_gate(self, release_id: str, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_audio_gate(self, release_id: str, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         require_health = bool(payload.get("require_audio_health", False))
         require_human = bool(payload.get("require_human_audio_review", False))
         require_per_track_review = bool(payload.get("require_per_track_audio_review", False))
@@ -306,7 +310,7 @@ class QualityRoutesReleaseAcceptanceGate:
                     return {**evidence, "status": "failed", "hard_block": True, "message": "Human WAV listening review evidence is missing."}
         return {**evidence, "status": "passed", "message": "Release audio gate passed."}
 
-    def _release_acceptance_analytics_gate(self, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_acceptance_analytics_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         report_id = str(payload.get("acceptance_analytics_report_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         try:

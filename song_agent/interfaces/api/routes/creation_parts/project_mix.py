@@ -5,143 +5,156 @@ from song_agent.application.interface_persistence import persist_interface_job, 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesProjectMix:
-    def _handle_project_mix_route(self, method: str, project_id: str, version_id: str, action: str, resource_id: str | None = None) -> None:
-        mix_store = _interfaces_api_runtime.MixRenderStore(self.project_store, self.store)
-        control_store = _interfaces_api_runtime.MixControlStore(self.project_store.project_dir(project_id))
-        try:
-            if action == "mix-state":
-                document = self.project_store.sync_project(project_id, self.store.get_job)
-                version = next((item for item in document.versions if item.version_id == version_id), None)
-                if version is None:
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Version not found.")
-                    return
-                run_dir = _interfaces_api_runtime.Path(version.output_dir)
-                plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(run_dir / "data" / "song-plan.json"))
-                if method == "GET":
-                    state = control_store.get_or_create_state(project_id=project_id, version_id=version.version_id, plan=plan, midi_path=run_dir / "renders" / "song.mid", now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": True, "project_id": project_id, "version_id": version.version_id, "mix_state": state.to_dict(), "summary": {"mix_state_hash": _interfaces_api_runtime.mix_state_hash(state)}})
-                    return
-                if method == "POST":
-                    current = control_store.get_or_create_state(project_id=project_id, version_id=version.version_id, plan=plan, midi_path=run_dir / "renders" / "song.mid", now=_interfaces_api_runtime._utc_now())
-                    state = control_store.write_state(type(current).from_dict({**self._read_json_body(), "project_id": project_id, "version_id": version.version_id, "updated_at": _interfaces_api_runtime._utc_now()}))
-                    self.project_store.append_event(project_id, "mix_state_saved", {"version_id": version.version_id, "mix_state_hash": _interfaces_api_runtime.mix_state_hash(state)})
-                    self._send_json({"ok": True, "project_id": project_id, "version_id": version.version_id, "mix_state": state.to_dict()})
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
-            if action == "mix-state-reset":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                document = self.project_store.sync_project(project_id, self.store.get_job)
-                version = next((item for item in document.versions if item.version_id == version_id), None)
-                if version is None:
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Version not found.")
-                    return
-                run_dir = _interfaces_api_runtime.Path(version.output_dir)
-                plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(run_dir / "data" / "song-plan.json"))
-                state = control_store.reset_state(project_id=project_id, version_id=version.version_id, plan=plan, midi_path=run_dir / "renders" / "song.mid", now=_interfaces_api_runtime._utc_now())
-                self.project_store.append_event(project_id, "mix_state_reset", {"version_id": version.version_id})
-                self._send_json({"ok": True, "project_id": project_id, "version_id": version.version_id, "mix_state": state.to_dict()})
-                return
-            if action == "mix-preview-create":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                preview, patch, _preview_dir = mix_store.create_preview(project_id=project_id, version_id=version_id, payload=self._read_json_body(), now=_interfaces_api_runtime._utc_now())
-                self.project_store.append_event(project_id, "mix_preview_created", {"version_id": version_id, "preview_id": preview.preview_id, "patch_id": patch.patch_id})
-                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview": preview.to_dict(), "patch": patch.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            if action == "mix-preview-detail" and resource_id:
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                preview = mix_store.read_preview(project_id, version_id, resource_id)
-                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview": preview.to_dict(), "integrity_ok": _interfaces_api_runtime.mix_preview_integrity_ok(preview)})
-                return
-            if action == "mix-preview-midi" and resource_id:
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                preview = mix_store.read_preview(project_id, version_id, resource_id)
-                if not _interfaces_api_runtime.mix_preview_integrity_ok(preview):
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Mix preview integrity failed.")
-                    return
-                self._send_file(mix_store.preview_dir(project_id, version_id, resource_id) / "song.mid", "audio/midi", filename=f"{project_id}-{resource_id}.mid")
-                return
-            if action == "mix-preview-audio" and resource_id:
-                if method != "GET":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                preview = mix_store.read_preview(project_id, version_id, resource_id)
-                if not _interfaces_api_runtime.mix_preview_integrity_ok(preview):
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Mix preview integrity failed.")
-                    return
-                audio_path = mix_store.preview_dir(project_id, version_id, resource_id) / "song.wav"
-                if not audio_path.exists():
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Mix preview audio is not available.")
-                    return
-                self._send_file(audio_path, "audio/wav", filename=f"{project_id}-{resource_id}.wav")
-                return
-            if action == "mix-preview-render-audio" and resource_id:
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                preview = mix_store.render_preview_audio(project_id=project_id, version_id=version_id, preview_id=resource_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview": preview.to_dict()})
-                return
-            if action == "mix-preview-apply" and resource_id:
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                document, version, job = mix_store.apply_preview(project_id=project_id, version_id=version_id, preview_id=resource_id, payload=self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                self._send_json({"ok": True, **document, "version": version.to_dict(), "job": job.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
-                return
-            if action == "mix-preview-delete" and resource_id:
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
-                preview = mix_store.read_preview(project_id, version_id, resource_id)
-                if preview.applied_version_id:
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Applied mix previews cannot be deleted.")
-                    return
-                preview_dir = mix_store.preview_dir(project_id, version_id, resource_id)
-                if preview_dir.exists():
-                    _interfaces_api_runtime.shutil.rmtree(preview_dir)
-                self.project_store.append_event(project_id, "mix_preview_deleted", {"version_id": version_id, "preview_id": resource_id})
-                self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "preview_id": resource_id, "deleted": True})
-                return
-            if action == "mix-stems-render":
-                if method != "POST":
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                    return
+    def _handle_project_mix_route_part_01(self, method: str, project_id: str, version_id: str, action: str, resource_id: str | None, _split_state):
+        if action == 'mix-state':
+            _split_state['document'] = self.project_store.sync_project(project_id, self.store.get_job)
+            _split_state['version'] = next((_split_state['item'] for _split_state['item'] in _split_state['document'].versions if _split_state['item'].version_id == version_id), None)
+            if _split_state['version'] is None:
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Version not found.')
+                return (True, None)
+            run_dir = _interfaces_api_runtime.Path(_split_state['version'].output_dir)
+            plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(run_dir / 'data' / 'song-plan.json'))
+            if method == 'GET':
+                state = _split_state['control_store'].get_or_create_state(project_id=project_id, version_id=_split_state['version'].version_id, plan=plan, midi_path=run_dir / 'renders' / 'song.mid', now=_interfaces_api_runtime._utc_now())
+                self._send_json({'ok': True, 'project_id': project_id, 'version_id': _split_state['version'].version_id, 'mix_state': state.to_dict(), 'summary': {'mix_state_hash': _interfaces_api_runtime.mix_state_hash(state)}})
+                return (True, None)
+            if method == 'POST':
+                current = _split_state['control_store'].get_or_create_state(project_id=project_id, version_id=_split_state['version'].version_id, plan=plan, midi_path=run_dir / 'renders' / 'song.mid', now=_interfaces_api_runtime._utc_now())
+                state = _split_state['control_store'].write_state(type(current).from_dict({**self._read_json_body(), 'project_id': project_id, 'version_id': _split_state['version'].version_id, 'updated_at': _interfaces_api_runtime._utc_now()}))
+                self.project_store.append_event(project_id, 'mix_state_saved', {'version_id': _split_state['version'].version_id, 'mix_state_hash': _interfaces_api_runtime.mix_state_hash(state)})
+                self._send_json({'ok': True, 'project_id': project_id, 'version_id': _split_state['version'].version_id, 'mix_state': state.to_dict()})
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        if action == 'mix-state-reset':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['document'] = self.project_store.sync_project(project_id, self.store.get_job)
+            _split_state['version'] = next((_split_state['item'] for _split_state['item'] in _split_state['document'].versions if _split_state['item'].version_id == version_id), None)
+            if _split_state['version'] is None:
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Version not found.')
+                return (True, None)
+            run_dir = _interfaces_api_runtime.Path(_split_state['version'].output_dir)
+            plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(run_dir / 'data' / 'song-plan.json'))
+            state = _split_state['control_store'].reset_state(project_id=project_id, version_id=_split_state['version'].version_id, plan=plan, midi_path=run_dir / 'renders' / 'song.mid', now=_interfaces_api_runtime._utc_now())
+            self.project_store.append_event(project_id, 'mix_state_reset', {'version_id': _split_state['version'].version_id})
+            self._send_json({'ok': True, 'project_id': project_id, 'version_id': _split_state['version'].version_id, 'mix_state': state.to_dict()})
+            return (True, None)
+        if action == 'mix-preview-create':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['preview'], patch, _preview_dir = _split_state['mix_store'].create_preview(project_id=project_id, version_id=version_id, payload=self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+            self.project_store.append_event(project_id, 'mix_preview_created', {'version_id': version_id, 'preview_id': _split_state['preview'].preview_id, 'patch_id': patch.patch_id})
+            self._send_json({'ok': True, 'project_id': project_id, 'version_id': version_id, 'preview': _split_state['preview'].to_dict(), 'patch': patch.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        if action == 'mix-preview-detail' and resource_id:
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['preview'] = _split_state['mix_store'].read_preview(project_id, version_id, resource_id)
+            self._send_json({'ok': True, 'project_id': project_id, 'version_id': version_id, 'preview': _split_state['preview'].to_dict(), 'integrity_ok': _interfaces_api_runtime.mix_preview_integrity_ok(_split_state['preview'])})
+            return (True, None)
+        if action == 'mix-preview-midi' and resource_id:
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['preview'] = _split_state['mix_store'].read_preview(project_id, version_id, resource_id)
+            if not _interfaces_api_runtime.mix_preview_integrity_ok(_split_state['preview']):
+                self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Mix preview integrity failed.')
+                return (True, None)
+            self._send_file(_split_state['mix_store'].preview_dir(project_id, version_id, resource_id) / 'song.mid', 'audio/midi', filename=f'{project_id}-{resource_id}.mid')
+            return (True, None)
+        return (False, None)
+
+    def _handle_project_mix_route_part_02(self, method: str, project_id: str, version_id: str, action: str, resource_id: str | None, _split_state):
+        if action == 'mix-preview-audio' and resource_id:
+            if method != 'GET':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['preview'] = _split_state['mix_store'].read_preview(project_id, version_id, resource_id)
+            if not _interfaces_api_runtime.mix_preview_integrity_ok(_split_state['preview']):
+                self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Mix preview integrity failed.')
+                return (True, None)
+            audio_path = _split_state['mix_store'].preview_dir(project_id, version_id, resource_id) / 'song.wav'
+            if not audio_path.exists():
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Mix preview audio is not available.')
+                return (True, None)
+            self._send_file(audio_path, 'audio/wav', filename=f'{project_id}-{resource_id}.wav')
+            return (True, None)
+        if action == 'mix-preview-render-audio' and resource_id:
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['preview'] = _split_state['mix_store'].render_preview_audio(project_id=project_id, version_id=version_id, preview_id=resource_id, now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, 'project_id': project_id, 'version_id': version_id, 'preview': _split_state['preview'].to_dict()})
+            return (True, None)
+        if action == 'mix-preview-apply' and resource_id:
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['document'], _split_state['version'], job = _split_state['mix_store'].apply_preview(project_id=project_id, version_id=version_id, preview_id=resource_id, payload=self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+            self._send_json({'ok': True, **_split_state['document'], 'version': _split_state['version'].to_dict(), 'job': job.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            return (True, None)
+        if action == 'mix-preview-delete' and resource_id:
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            _split_state['preview'] = _split_state['mix_store'].read_preview(project_id, version_id, resource_id)
+            if _split_state['preview'].applied_version_id:
+                self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, 'Applied mix previews cannot be deleted.')
+                return (True, None)
+            preview_dir = _split_state['mix_store'].preview_dir(project_id, version_id, resource_id)
+            if preview_dir.exists():
+                _interfaces_api_runtime.shutil.rmtree(preview_dir)
+            self.project_store.append_event(project_id, 'mix_preview_deleted', {'version_id': version_id, 'preview_id': resource_id})
+            self._send_json({'ok': True, 'project_id': project_id, 'version_id': version_id, 'preview_id': resource_id, 'deleted': True})
+            return (True, None)
+        if action == 'mix-stems-render':
+            if method != 'POST':
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+                return (True, None)
+            payload = self._optional_json_body()
+            result = _split_state['mix_store'].render_stems(project_id=project_id, version_id=version_id, require_wav=bool(payload.get('require_wav', False)), render_wav=bool(payload.get('render_audio', False)), force=bool(payload.get('force', False)), now=_interfaces_api_runtime._utc_now())
+            self.project_store.append_event(project_id, 'mix_stems_rendered', {'version_id': version_id, 'status': result['summary'].get('status')})
+            self._send_json(result)
+            return (True, None)
+        if action == 'mix-stems-health':
+            _split_state['document'] = self.project_store.sync_project(project_id, self.store.get_job)
+            _split_state['version'] = next((_split_state['item'] for _split_state['item'] in _split_state['document'].versions if _split_state['item'].version_id == version_id), None)
+            if _split_state['version'] is None:
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Version not found.')
+                return (True, None)
+            if method == 'GET':
+                report = _interfaces_api_runtime.read_stem_health_report(_interfaces_api_runtime.Path(_split_state['version'].output_dir))
+                self._send_json({'ok': True, 'project_id': project_id, 'version_id': version_id, 'stem_health': report, 'summary': _interfaces_api_runtime.stem_health_summary(report)})
+                return (True, None)
+            if method == 'POST':
                 payload = self._optional_json_body()
-                result = mix_store.render_stems(project_id=project_id, version_id=version_id, require_wav=bool(payload.get("require_wav", False)), render_wav=bool(payload.get("render_audio", False)), force=bool(payload.get("force", False)), now=_interfaces_api_runtime._utc_now())
-                self.project_store.append_event(project_id, "mix_stems_rendered", {"version_id": version_id, "status": result["summary"].get("status")})
+                result = _split_state['mix_store'].render_stems(project_id=project_id, version_id=version_id, require_wav=bool(payload.get('require_wav', False)), render_wav=bool(payload.get('render_audio', False)), force=bool(payload.get('force', False)), now=_interfaces_api_runtime._utc_now())
                 self._send_json(result)
-                return
-            if action == "mix-stems-health":
-                document = self.project_store.sync_project(project_id, self.store.get_job)
-                version = next((item for item in document.versions if item.version_id == version_id), None)
-                if version is None:
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Version not found.")
-                    return
-                if method == "GET":
-                    report = _interfaces_api_runtime.read_stem_health_report(_interfaces_api_runtime.Path(version.output_dir))
-                    self._send_json({"ok": True, "project_id": project_id, "version_id": version_id, "stem_health": report, "summary": _interfaces_api_runtime.stem_health_summary(report)})
-                    return
-                if method == "POST":
-                    payload = self._optional_json_body()
-                    result = mix_store.render_stems(project_id=project_id, version_id=version_id, require_wav=bool(payload.get("require_wav", False)), render_wav=bool(payload.get("render_audio", False)), force=bool(payload.get("force", False)), now=_interfaces_api_runtime._utc_now())
-                    self._send_json(result)
-                    return
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
-                return
+                return (True, None)
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            return (True, None)
+        return (False, None)
+
+    def _handle_project_mix_route(self, method: str, project_id: str, version_id: str, action: str, resource_id: str | None=None) -> None:
+        _split_state = {}
+        _split_state['mix_store'] = _interfaces_api_runtime.MixRenderStore(self.project_store, self.store)
+        _split_state['control_store'] = _interfaces_api_runtime.MixControlStore(self.project_store.project_dir(project_id))
+        try:
+            _split_result = self._handle_project_mix_route_part_01(method, project_id, version_id, action, resource_id, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
+            _split_result = self._handle_project_mix_route_part_02(method, project_id, version_id, action, resource_id, _split_state)
+            if _split_result[0]:
+                return _split_result[1]
         except StopIteration:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Version not found.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Version not found.')
             return
         except FileNotFoundError as exc:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc) or "Mix resource not found.")
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc) or 'Mix resource not found.')
             return
         except _interfaces_api_runtime.MixControlStateError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
@@ -149,7 +162,7 @@ class CreationRoutesProjectMix:
         except (_interfaces_api_runtime.MixControlError, ValueError) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
             return
-        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Mix route not found.")
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Mix route not found.')
 
     def _handle_project_editor_preview_root(self, method: str, project_id: str, action: str) -> None:
         store = _interfaces_api_runtime.EditorPreviewStore(self.project_store.project_dir(project_id))

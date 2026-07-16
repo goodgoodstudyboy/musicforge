@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -341,7 +343,7 @@ class _PortfolioGovernanceArchiveVerifier:
                     self.redaction_findings.extend(_blocked_key_findings(name, value))
         self._add_check("redaction", "portfolio_governance_archive_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", f"Found {len(self.redaction_findings)} sensitive redaction issue(s)." if self.redaction_findings else "No sensitive values found in scanned text entries.")
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} is missing.")
@@ -354,7 +356,7 @@ class _PortfolioGovernanceArchiveVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
         return value if isinstance(value, dict) else {}
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
         report = {
@@ -421,7 +423,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
         if pattern.search(text):
@@ -432,7 +434,7 @@ def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(path: str, value: Any) -> list[dict[str, Any]]:
+def _blocked_key_findings(path: str, value: Any) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
 
     def walk(node: Any, dotted: str) -> None:

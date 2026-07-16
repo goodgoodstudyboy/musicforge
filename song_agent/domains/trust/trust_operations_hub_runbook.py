@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -218,7 +220,7 @@ class TrustOperationsHubRunbookStore:
             _write_zip(zip_path, export_dir)
             return {"zip_path": str(zip_path), "filename": zip_path.name, "sha256": _sha256(zip_path), "size_bytes": os.stat(_fs_path(zip_path)).st_size, "manifest_hash": manifest["integrity_hash"], "runbook_id": runbook_id}
 
-    def _assert_runbook_current(self, hub_id: str, runbook: dict[str, Any]) -> None:
+    def _assert_runbook_current(self, hub_id: str, runbook: ImplementationDocument) -> None:
         if runbook.get("integrity_hash") != runbook_hash(runbook):
             raise TrustOperationsHubRunbookStateError("Trust Operations Hub Runbook integrity failed.")
         report_id = str(runbook.get("report_id") or "")
@@ -229,7 +231,7 @@ class TrustOperationsHubRunbookStore:
             raise TrustOperationsHubRunbookStateError("Trust Operations Hub Runbook source is stale. Refresh Hub report and create a new runbook.")
         self.hub_store._assert_external_sources_current(docs, self.hub_store._read_source_paths(hub_id, report_id))
 
-    def _write_event(self, hub_id: str, runbook_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _write_event(self, hub_id: str, runbook_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         events = _read_jsonl(self.events_path(hub_id, runbook_id))
         events.append(_event(event_type, payload, previous=events[-1] if events else None, now=now))
         _write_jsonl(self.events_path(hub_id, runbook_id), events)
@@ -238,7 +240,7 @@ class TrustOperationsHubRunbookStore:
 
 
 
-def _safe_actions(hub_id: str, report_id: str) -> list[dict[str, Any]]:
+def _safe_actions(hub_id: str, report_id: str) -> list[ImplementationDocument]:
     return [
         {"action_id": "hub-safe-001", "action_type": "hub.export", "status": "pending", "allowed_automation": True, "component_id": hub_id, "report_id": report_id},
         {"action_id": "hub-safe-002", "action_type": "hub.zip", "status": "pending", "allowed_automation": True, "component_id": hub_id, "report_id": report_id},
@@ -246,7 +248,7 @@ def _safe_actions(hub_id: str, report_id: str) -> list[dict[str, Any]]:
     ]
 
 
-def _manual_actions(docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _manual_actions(docs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     actions: list[dict[str, Any]] = []
     for key in ("manual_action_queue", "delivery_manual_action_queue"):
         for action in docs[key].get("actions", []) if isinstance(docs[key].get("actions"), list) else []:
@@ -256,7 +258,7 @@ def _manual_actions(docs: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     return actions
 
 
-def _source_from_docs(docs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _source_from_docs(docs: dict[str, ImplementationDocument]) -> ImplementationDocument:
     return {
         "hub_report_hash": docs["hub_report"].get("integrity_hash"),
         "readiness_matrix_hash": docs["readiness_matrix"].get("integrity_hash"),
@@ -270,7 +272,7 @@ def _source_from_docs(docs: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _action_summary(actions: list[dict[str, Any]]) -> dict[str, int]:
+def _action_summary(actions: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "action_count": len(actions),
         "safe_action_count": sum(1 for action in actions if action.get("action_type") in SAFE_ACTIONS and action.get("allowed_automation") is True),
@@ -278,7 +280,7 @@ def _action_summary(actions: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _result_summary(results: list[dict[str, Any]]) -> dict[str, int]:
+def _result_summary(results: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "result_count": len(results),
         "completed_count": sum(1 for item in results if item.get("status") == "completed"),
@@ -287,7 +289,7 @@ def _result_summary(results: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _empty_result(hub_id: str, report_id: str, runbook_id: str, runbook_hash_value: str, now: str) -> dict[str, Any]:
+def _empty_result(hub_id: str, report_id: str, runbook_id: str, runbook_hash_value: str, now: str) -> ImplementationDocument:
     result = {
         "schema_version": TRUST_OPERATIONS_RUNBOOK_SCHEMA_VERSION,
         "package_type": TRUST_OPERATIONS_RUNBOOK_RESULT_PACKAGE_TYPE,
@@ -304,7 +306,7 @@ def _empty_result(hub_id: str, report_id: str, runbook_id: str, runbook_hash_val
     return result
 
 
-def _event(event_type: str, payload: dict[str, Any], *, previous: dict[str, Any] | None, now: str) -> dict[str, Any]:
+def _event(event_type: str, payload: ImplementationDocument, *, previous: ImplementationDocument | None, now: str) -> ImplementationDocument:
     event = {"event_type": event_type, "created_at": now, "payload": sanitize_metadata(payload, blocked_keys=TRUST_OPERATIONS_RUNBOOK_BLOCKED_KEYS), "previous_event_hash": previous.get("event_hash") if previous else None}
     event["event_hash"] = stable_hash(event)
     return event
@@ -325,7 +327,7 @@ def _safe_id(value: str) -> str:
     return cleaned[:100] or "item"
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -341,23 +343,23 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+def _write_jsonl(path: Path, rows: list[ImplementationDocument]) -> None:
     _mkdir(path.parent)
     path.write_text("\n".join(json.dumps(_sanitize(row), ensure_ascii=False, sort_keys=True) for row in rows) + ("\n" if rows else ""), encoding="utf-8")
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
-def _checksum_json(export_dir: Path) -> dict[str, Any]:
+def _checksum_json(export_dir: Path) -> ImplementationDocument:
     rows = [_file_record(export_dir, path) for path in _walk_files(export_dir) if path.relative_to(export_dir).as_posix() not in {"checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt", "trust-operations-hub-runbook-manifest.json"}]
     data = {"schema_version": TRUST_OPERATIONS_RUNBOOK_SCHEMA_VERSION, "files": rows}
     data["integrity_hash"] = runbook_hash(data)
     return data
 
 
-def _write_sha256sums(export_dir: Path, checksum_json: dict[str, Any]) -> None:
+def _write_sha256sums(export_dir: Path, checksum_json: ImplementationDocument) -> None:
     lines = [f"{item.get('sha256')}  {item.get('path')}" for item in checksum_json.get("files", []) if isinstance(item, dict)]
     (export_dir / "checksum" / "SHA256SUMS.txt").write_text(sanitize_sensitive_text("\n".join(lines) + "\n"), encoding="utf-8")
 
@@ -366,7 +368,7 @@ def _write_readme(export_dir: Path) -> None:
     (export_dir / "README.txt").write_text("MusicForge Trust Operations Hub Runbook\n\nThis package contains safe operations runbook actions and execution evidence.\n", encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import threading
@@ -511,7 +513,7 @@ class AcceptanceFixSprintStore:
             raise AcceptanceFixSprintStateError("Fix Sprint source analytics is stale. Refresh analytics and create a new Fix Sprint.")
         return sprint
 
-    def _create_or_bind_review_task(self, sprint: AcceptanceFixSprint, item: AcceptanceFixItem, *, now: str) -> tuple[dict[str, Any], AcceptanceFixItem]:
+    def _create_or_bind_review_task(self, sprint: AcceptanceFixSprint, item: AcceptanceFixItem, *, now: str) -> tuple[ImplementationDocument, AcceptanceFixItem]:
         project_id = str(item.target.get("project_id") or "").strip()
         if not project_id:
             raise AcceptanceFixSprintStateError(f"Fix item {item.item_id} cannot create ReviewTask without project_id.")
@@ -583,7 +585,7 @@ class AcceptanceFixSprintStore:
         status = "stale" if stale else sprint.status
         return AcceptanceFixSprint.from_dict({**sprint.to_dict(), "status": status, "counts": _counts(items, self.project_store)})
 
-    def _update_item(self, fix_sprint_id: str, item_id: str, patch: dict[str, Any], *, now: str | None = None) -> AcceptanceFixItem:
+    def _update_item(self, fix_sprint_id: str, item_id: str, patch: ImplementationDocument, *, now: str | None = None) -> AcceptanceFixItem:
         now = now or now_iso()
         items = self.read_items(fix_sprint_id)
         updated = None
@@ -752,7 +754,7 @@ def write_acceptance_fix_sprints_summary(path: Path, store: AcceptanceFixSprintS
     return summary
 
 
-def _selected_recommendations(report: dict[str, Any], recommendation_ids: Any, *, max_items: int) -> list[dict[str, Any]]:
+def _selected_recommendations(report: ImplementationDocument, recommendation_ids: Any, *, max_items: int) -> list[ImplementationDocument]:
     rows = [item for item in report.get("recommendations", []) if isinstance(item, dict)]
     selected_ids = [str(item) for item in recommendation_ids if str(item).strip()] if isinstance(recommendation_ids, list) else []
     if selected_ids:
@@ -771,7 +773,7 @@ def _selected_recommendations(report: dict[str, Any], recommendation_ids: Any, *
     return deduped[:max_items]
 
 
-def _item_from_recommendation(index: int, recommendation: dict[str, Any], *, report_id: str, source_hash: str, now: str) -> AcceptanceFixItem:
+def _item_from_recommendation(index: int, recommendation: ImplementationDocument, *, report_id: str, source_hash: str, now: str) -> AcceptanceFixItem:
     target = _safe_dict(recommendation.get("target"))
     evidence = _safe_dict(recommendation.get("evidence"))
     issue_types = [str(item) for item in evidence.get("issue_types", []) if str(item).strip()] if isinstance(evidence.get("issue_types"), list) else []
@@ -794,7 +796,7 @@ def _item_from_recommendation(index: int, recommendation: dict[str, Any], *, rep
     )
 
 
-def _counts(items: list[AcceptanceFixItem], project_store: ProjectStore | None = None) -> dict[str, Any]:
+def _counts(items: list[AcceptanceFixItem], project_store: ProjectStore | None = None) -> ImplementationDocument:
     linked = len([item for item in items if item.review_task_id])
     completed = 0
     if project_store:
@@ -840,7 +842,7 @@ def _issue_types_from_blob(blob: str) -> list[str]:
     return found
 
 
-def _request_for_recheck(report: dict[str, Any], song_id: str) -> dict[str, Any]:
+def _request_for_recheck(report: ImplementationDocument, song_id: str) -> ImplementationDocument:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     for suite_row in source.get("suites", []) if isinstance(source.get("suites"), list) else []:
         for case_row in suite_row.get("cases", []) if isinstance(suite_row.get("cases"), list) else []:
@@ -855,7 +857,7 @@ def _source_report_id(sprint: AcceptanceFixSprint) -> str:
     return str(sprint.source.get("report_id") or sprint.source.get("analytics_report_id") or "")
 
 
-def _song_deltas(source_report: dict[str, Any], recheck_report: dict[str, Any]) -> list[dict[str, Any]]:
+def _song_deltas(source_report: ImplementationDocument, recheck_report: ImplementationDocument) -> list[ImplementationDocument]:
     before = {str(item.get("song_id") or ""): item for item in source_report.get("songbook_heatmap", []) if isinstance(item, dict)}
     after = {str(item.get("song_id") or ""): item for item in recheck_report.get("songbook_heatmap", []) if isinstance(item, dict)}
     rows = []
@@ -868,7 +870,7 @@ def _song_deltas(source_report: dict[str, Any], recheck_report: dict[str, Any]) 
     return rows[:50]
 
 
-def _issue_deltas(source_report: dict[str, Any], recheck_report: dict[str, Any]) -> list[dict[str, Any]]:
+def _issue_deltas(source_report: ImplementationDocument, recheck_report: ImplementationDocument) -> list[ImplementationDocument]:
     before = {str(item.get("issue_type") or ""): int(item.get("count") or 0) for item in source_report.get("issue_taxonomy", []) if isinstance(item, dict)}
     after = {str(item.get("issue_type") or ""): int(item.get("count") or 0) for item in recheck_report.get("issue_taxonomy", []) if isinstance(item, dict)}
     return [{"issue_type": key, "before_count": before.get(key, 0), "after_count": after.get(key, 0), "count_delta": after.get(key, 0) - before.get(key, 0)} for key in sorted(set(before) | set(after))][:50]
@@ -889,7 +891,7 @@ def _review_task_close_rate(items: list[AcceptanceFixItem], project_store: Proje
     return round(closed / len(linked), 4)
 
 
-def _accepted_count(report: dict[str, Any], *, mode: str) -> int:
+def _accepted_count(report: ImplementationDocument, *, mode: str) -> int:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     key = f"{mode}_accepted_count"
     if key in summary:
@@ -897,7 +899,7 @@ def _accepted_count(report: dict[str, Any], *, mode: str) -> int:
     return sum(1 for row in report.get("cases", []) if isinstance(row, dict) and row.get("review_mode") == mode and row.get("review_status") == "accepted")
 
 
-def _review_count(report: dict[str, Any], *, mode: str) -> int:
+def _review_count(report: ImplementationDocument, *, mode: str) -> int:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     key = f"{mode}_review_count"
     if key in summary:
@@ -905,11 +907,11 @@ def _review_count(report: dict[str, Any], *, mode: str) -> int:
     return sum(1 for row in report.get("cases", []) if isinstance(row, dict) and row.get("review_mode") == mode and row.get("review_status") in {"accepted", "needs_fix", "rejected", "waived"})
 
 
-def _close_check(check_id: str, passed: bool, severity: str, message: str, details: list[str]) -> dict[str, Any]:
+def _close_check(check_id: str, passed: bool, severity: str, message: str, details: list[str]) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "severity": severity, "message": message if passed else f"{message} Problems: {', '.join(details[:5])}", "details": details}
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {})
 
 
@@ -948,7 +950,7 @@ def _lock_for_root(root: Path) -> threading.RLock:
         return _LOCKS[key]
 
 
-def _append_event(path: Path, event: str, payload: dict[str, Any] | None = None, now: str | None = None) -> None:
+def _append_event(path: Path, event: str, payload: ImplementationDocument | None = None, now: str | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     record = sanitize_metadata({"timestamp": now or now_iso(), "event": event, **(payload or {})})
     with path.open("a", encoding="utf-8") as file:

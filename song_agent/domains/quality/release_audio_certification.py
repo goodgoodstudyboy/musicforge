@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -272,13 +274,13 @@ class ReleaseAudioCertificationStore:
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": sanitize_sensitive_text(str(exc))}
 
-    def _write_documents(self, release_id: str, docs: dict[str, dict[str, Any]]) -> None:
+    def _write_documents(self, release_id: str, docs: dict[str, ImplementationDocument]) -> None:
         write_json(self.report_path(release_id), docs["report"])
         write_json(self.matrix_path(release_id), docs["matrix"])
         write_json(self.evidence_index_path(release_id), docs["evidence"])
         write_json(self.blocker_register_path(release_id), docs["blockers"])
 
-    def _assert_signed_current(self, release_id: str) -> dict[str, Any]:
+    def _assert_signed_current(self, release_id: str) -> ImplementationDocument:
         if not self.signoff_path(release_id).exists():
             raise ReleaseAudioCertificationStateError("Release Audio Certification signoff is missing.")
         signoff = read_json(self.signoff_path(release_id))
@@ -305,7 +307,7 @@ class ReleaseAudioCertificationStore:
             raise ReleaseAudioCertificationStateError("Release Audio Certification documents are stale. Refresh and re-sign before using certification evidence.")
         return {"signoff": signoff, "report": report, "matrix": matrix, "evidence": evidence, "blockers": blockers}
 
-    def _build_documents(self, release_id: str) -> dict[str, dict[str, Any]]:
+    def _build_documents(self, release_id: str) -> dict[str, ImplementationDocument]:
         release = self.release_store.get_release(release_id)
         track_rows = [_track_row(self.project_store, track, release_id) for track in release.tracks]
         link = self.planner_store.read_link(release_id, default={})
@@ -427,7 +429,7 @@ class ReleaseAudioCertificationStore:
         return {"report": report, "matrix": track_matrix, "evidence": evidence, "blockers": blocker_register}
 
 
-def _track_row(project_store: ProjectStore, track: Any, release_id: str) -> dict[str, Any]:
+def _track_row(project_store: ProjectStore, track: Any, release_id: str) -> ImplementationDocument:
     project_id = str(getattr(track, "project_id", "") or "")
     project_dir = project_store.project_dir(project_id)
     export_dir = final_export_dir(project_dir)
@@ -468,7 +470,7 @@ def _track_row(project_store: ProjectStore, track: Any, release_id: str) -> dict
     )
 
 
-def _build_track_matrix(release_id: str, campaign_id: str, track_rows: list[dict[str, Any]], campaign: dict[str, Any], campaign_report: dict[str, Any], case_index: dict[str, Any]) -> dict[str, Any]:
+def _build_track_matrix(release_id: str, campaign_id: str, track_rows: list[ImplementationDocument], campaign: ImplementationDocument, campaign_report: ImplementationDocument, case_index: ImplementationDocument) -> ImplementationDocument:
     case_by_key = {_case_identity_key(case): case for case in case_index.get("cases", []) if isinstance(case, dict) and _case_identity_key(case)}
     campaign_cases = campaign.get("cases") if isinstance(campaign.get("cases"), list) else []
     campaign_by_key = {_case_identity_key(case): case for case in campaign_cases if isinstance(case, dict) and _case_identity_key(case)}
@@ -531,7 +533,7 @@ def _build_track_matrix(release_id: str, campaign_id: str, track_rows: list[dict
     return matrix
 
 
-def _build_evidence_index(release_id: str, campaign_id: str, source: dict[str, Any], rows: list[dict[str, Any]], remediation_needed: bool, remediation_gate: dict[str, Any], governance_gate: dict[str, Any]) -> dict[str, Any]:
+def _build_evidence_index(release_id: str, campaign_id: str, source: ImplementationDocument, rows: list[ImplementationDocument], remediation_needed: bool, remediation_gate: ImplementationDocument, governance_gate: ImplementationDocument) -> ImplementationDocument:
     summary = {
         "evidence_count": len(rows),
         "campaign_id": campaign_id or None,
@@ -543,13 +545,13 @@ def _build_evidence_index(release_id: str, campaign_id: str, source: dict[str, A
     return evidence
 
 
-def _build_blocker_register(release_id: str, campaign_id: str, source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_blocker_register(release_id: str, campaign_id: str, source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     register = sanitize_metadata({"schema_version": RELEASE_AUDIO_CERTIFICATION_SCHEMA_VERSION, "release_id": release_id, "campaign_id": campaign_id or None, "generated_at": now_iso(), "source_hash": source.get("source_hash"), "status": "passed" if not blockers else "failed", "summary": {"blocker_count": len(blockers), "warning_count": len(warnings)}, "blockers": blockers, "warnings": warnings})
     register["integrity_hash"] = _integrity_hash(register)
     return register
 
 
-def _checks_from_matrix_and_evidence(matrix: dict[str, Any], evidence: dict[str, Any], blockers: dict[str, Any]) -> list[dict[str, Any]]:
+def _checks_from_matrix_and_evidence(matrix: ImplementationDocument, evidence: ImplementationDocument, blockers: ImplementationDocument) -> list[ImplementationDocument]:
     summary = matrix.get("summary") if isinstance(matrix.get("summary"), dict) else {}
     track_count = int(summary.get("track_count") or 0)
     evidence_summary = evidence.get("summary") if isinstance(evidence.get("summary"), dict) else {}
@@ -567,7 +569,7 @@ def _checks_from_matrix_and_evidence(matrix: dict[str, Any], evidence: dict[str,
     ]
 
 
-def _coverage(track_rows: list[dict[str, Any]], cases: list[dict[str, Any]]) -> dict[str, Any]:
+def _coverage(track_rows: list[ImplementationDocument], cases: list[ImplementationDocument]) -> ImplementationDocument:
     case_keys = {_case_identity_key(case) for case in cases if _case_identity_key(case)}
     missing = []
     matched = 0
@@ -580,7 +582,7 @@ def _coverage(track_rows: list[dict[str, Any]], cases: list[dict[str, Any]]) -> 
     return {"status": "passed" if not missing and bool(track_rows) else "failed", "matched_track_count": matched, "track_count": len(track_rows), "case_count": len(cases), "missing_tracks": missing}
 
 
-def _remediation_needed(matrix: dict[str, Any], campaign_report: dict[str, Any]) -> bool:
+def _remediation_needed(matrix: ImplementationDocument, campaign_report: ImplementationDocument) -> bool:
     summary = campaign_report.get("summary") if isinstance(campaign_report.get("summary"), dict) else {}
     return any(
         int(summary.get(key) or 0) > 0
@@ -588,14 +590,14 @@ def _remediation_needed(matrix: dict[str, Any], campaign_report: dict[str, Any])
     ) or matrix.get("status") != "passed"
 
 
-def _track_blockers(track_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _track_blockers(track_rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for row in track_rows:
         rows.extend([dict(item) for item in row.get("blockers", []) if isinstance(item, dict)])
     return rows
 
 
-def _track_source(row: dict[str, Any]) -> dict[str, Any]:
+def _track_source(row: ImplementationDocument) -> ImplementationDocument:
     return {
         "track_id": row.get("track_id"),
         "project_id": row.get("project_id"),
@@ -607,15 +609,15 @@ def _track_source(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _evidence(evidence_id: str, kind: str, component_id: str, status: Any, integrity_hash: Any, details: dict[str, Any] | None = None) -> dict[str, Any]:
+def _evidence(evidence_id: str, kind: str, component_id: str, status: Any, integrity_hash: Any, details: ImplementationDocument | None = None) -> ImplementationDocument:
     return sanitize_metadata({"evidence_id": evidence_id, "kind": kind, "component_id": component_id, "status": status, "integrity_hash": integrity_hash, "details": details or {}})
 
 
-def _blocker(check_id: str, message: str, **details: Any) -> dict[str, Any]:
+def _blocker(check_id: str, message: str, **details: Any) -> ImplementationDocument:
     return sanitize_metadata({"check_id": check_id, "message": message, **details})
 
 
-def _check(check_id: str, passed: bool, message: str) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message}
 
 
@@ -625,11 +627,11 @@ def _identity_key(project_id: str, version_id: str, final_export_hash: str) -> s
     return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
 
 
-def _case_identity_key(case: dict[str, Any]) -> str:
+def _case_identity_key(case: ImplementationDocument) -> str:
     return _identity_key(str(case.get("project_id") or ""), str(case.get("version_id") or ""), str(case.get("final_export_hash") or ""))
 
 
-def _renderer_summary(manifest: dict[str, Any]) -> dict[str, Any]:
+def _renderer_summary(manifest: ImplementationDocument) -> ImplementationDocument:
     for key in ("audio_artifact", "audio", "renderer", "audio_health"):
         value = manifest.get(key) if isinstance(manifest, dict) else None
         if isinstance(value, dict):
@@ -642,11 +644,11 @@ def _renderer_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     return {"runner_kind": "real", "release_ready": True, "profile_id": "final-export"}
 
 
-def _renderer_release_ready(renderer: dict[str, Any]) -> bool:
+def _renderer_release_ready(renderer: ImplementationDocument) -> bool:
     return renderer.get("runner_kind") == "real" and renderer.get("release_ready") is not False
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     try:
         if path.exists():
             return read_json(path)
@@ -655,7 +657,7 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return {}
 
 
-def _readme(report: dict[str, Any], matrix: dict[str, Any], evidence: dict[str, Any]) -> str:
+def _readme(report: ImplementationDocument, matrix: ImplementationDocument, evidence: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return "\n".join(
         [
@@ -675,7 +677,7 @@ def _readme(report: dict[str, Any], matrix: dict[str, Any], evidence: dict[str, 
     )
 
 
-def _file_record(path: Path, root: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -695,11 +697,11 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
@@ -715,7 +717,7 @@ def _strip_semantic_volatile(value: Any) -> Any:
     return value
 
 
-def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     event = sanitize_metadata({"event_type": event_type, "created_at": now_iso(), **payload})
     with path.open("a", encoding="utf-8") as handle:

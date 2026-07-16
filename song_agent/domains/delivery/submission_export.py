@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import csv
 import hashlib
 import io
@@ -267,7 +269,7 @@ def submission_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]
     )
 
 
-def _submission_report_payload(submission: SubmissionBatch, qa_report: dict[str, Any], now: str) -> dict[str, Any]:
+def _submission_report_payload(submission: SubmissionBatch, qa_report: ImplementationDocument, now: str) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "schema_version": 1,
@@ -280,7 +282,7 @@ def _submission_report_payload(submission: SubmissionBatch, qa_report: dict[str,
     )
 
 
-def _write_readme(export_dir: Path, submission: SubmissionBatch, qa_report: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+def _write_readme(export_dir: Path, submission: SubmissionBatch, qa_report: ImplementationDocument, rows: list[ImplementationDocument]) -> None:
     lines = [
         f"MusicForge Submission Package: {sanitize_sensitive_text(submission.name)}",
         "",
@@ -296,7 +298,7 @@ def _write_readme(export_dir: Path, submission: SubmissionBatch, qa_report: dict
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_rights_clearance_sidecars(store: SubmissionStore, release_id: str, export_dir: Path, records: list[dict[str, Any]]) -> dict[str, Any]:
+def _write_rights_clearance_sidecars(store: SubmissionStore, release_id: str, export_dir: Path, records: list[ImplementationDocument]) -> ImplementationDocument:
     try:
         summary = RightsClearanceStore(store.release_store).export_package_summary(release_id, export_dir)
     except Exception:
@@ -307,7 +309,7 @@ def _write_rights_clearance_sidecars(store: SubmissionStore, release_id: str, ex
     return sanitize_metadata(summary, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def _write_targets_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+def _write_targets_csv(path: Path, rows: list[ImplementationDocument]) -> None:
     headers = ["item_id", "target_id", "target_name", "profile_id", "package_id", "status", "zip_sha256", "verify_status", "external_reference"]
     buffer = io.StringIO(newline="")
     writer = csv.DictWriter(buffer, fieldnames=headers)
@@ -324,11 +326,11 @@ def _escape_csv_cell(cell: str) -> str:
     return text
 
 
-def _events_jsonl(events: list[dict[str, Any]]) -> str:
+def _events_jsonl(events: list[ImplementationDocument]) -> str:
     return "".join(json.dumps(sanitize_metadata(event, blocked_keys=DISTRIBUTION_BLOCKED_KEYS), ensure_ascii=False) + "\n" for event in events)
 
 
-def _submission_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any]:
+def _submission_signoff_export_summary(signoff: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "status": signoff.get("status") or "not_signed",
@@ -342,7 +344,7 @@ def _submission_signoff_export_summary(signoff: dict[str, Any]) -> dict[str, Any
     )
 
 
-def _submission_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[str, Any]:
+def _submission_signoff_sidecar_record(signoff_public: ImplementationDocument) -> ImplementationDocument:
     return {
         "path": "submission-signoff.json",
         "payload_hash": stable_hash(_submission_signoff_hash_payload(signoff_public)),
@@ -350,11 +352,11 @@ def _submission_signoff_sidecar_record(signoff_public: dict[str, Any]) -> dict[s
     }
 
 
-def _submission_signoff_hash_payload(signoff_public: dict[str, Any]) -> dict[str, Any]:
+def _submission_signoff_hash_payload(signoff_public: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in signoff_public.items() if key not in SUBMISSION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.parent / f".tmp-{os.getpid()}-{threading.get_ident()}.json"
     tmp_path.write_text(json.dumps(sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -362,7 +364,7 @@ def _write_json(path: Path, data: dict[str, Any]) -> Path:
     return path
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_file(path)}
 

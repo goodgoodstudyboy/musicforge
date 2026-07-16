@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import csv
 import hashlib
 import io
@@ -548,7 +550,7 @@ def mark_release_export_stale_for_metadata(release_store: ReleaseStore, release_
         release_store.update_export_summary(release_id, summary)
 
 
-def _metadata_from_release(release: ReleaseDocument, project_store: ProjectStore, *, now: str) -> dict[str, Any]:
+def _metadata_from_release(release: ReleaseDocument, project_store: ProjectStore, *, now: str) -> ImplementationDocument:
     tracks = []
     for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
         plan = _track_plan(project_store, track.project_id)
@@ -584,7 +586,7 @@ def _metadata_from_release(release: ReleaseDocument, project_store: ProjectStore
     return document.to_dict()
 
 
-def _merge_missing_metadata(existing: dict[str, Any], inferred: dict[str, Any]) -> dict[str, Any]:
+def _merge_missing_metadata(existing: ImplementationDocument, inferred: ImplementationDocument) -> ImplementationDocument:
     merged = json.loads(json.dumps(existing, ensure_ascii=False))
     release_existing = merged.setdefault("release", {})
     release_inferred = inferred.get("release") if isinstance(inferred.get("release"), dict) else {}
@@ -606,7 +608,7 @@ def _merge_missing_metadata(existing: dict[str, Any], inferred: dict[str, Any]) 
     return ReleaseMetadataDocument.from_dict(merged).to_dict()
 
 
-def _source_summary(release: ReleaseDocument, project_store: ProjectStore) -> dict[str, Any]:
+def _source_summary(release: ReleaseDocument, project_store: ProjectStore) -> ImplementationDocument:
     tracks: list[dict[str, Any]] = []
     for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
         plan = _track_plan(project_store, track.project_id)
@@ -635,7 +637,7 @@ def _source_summary(release: ReleaseDocument, project_store: ProjectStore) -> di
     )
 
 
-def _track_plan(project_store: ProjectStore, project_id: str) -> dict[str, Any]:
+def _track_plan(project_store: ProjectStore, project_id: str) -> ImplementationDocument:
     try:
         path = final_export_dir(project_store.project_dir(project_id)) / "song-plan.json"
         value = read_json(path)
@@ -644,7 +646,7 @@ def _track_plan(project_store: ProjectStore, project_id: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _extract_lyrics(plan: dict[str, Any]) -> str | None:
+def _extract_lyrics(plan: ImplementationDocument) -> str | None:
     for key in ("lyrics", "lyric", "vocal_lyrics"):
         value = plan.get(key)
         if isinstance(value, str) and value.strip():
@@ -661,7 +663,7 @@ def _extract_lyrics(plan: dict[str, Any]) -> str | None:
     return _optional_text("\n\n".join(lines), 120_000) if lines else None
 
 
-def _duration_beats(plan: dict[str, Any]) -> float | None:
+def _duration_beats(plan: ImplementationDocument) -> float | None:
     sections = plan.get("sections") if isinstance(plan.get("sections"), list) else []
     values: list[float] = []
     for section in sections:
@@ -674,7 +676,7 @@ def _duration_beats(plan: dict[str, Any]) -> float | None:
     return max(values) if values else None
 
 
-def _write_platform_csv(path: Path, metadata: dict[str, Any]) -> None:
+def _write_platform_csv(path: Path, metadata: ImplementationDocument) -> None:
     release = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
     rows = []
     for track in metadata.get("tracks", []) if isinstance(metadata.get("tracks"), list) else []:
@@ -703,7 +705,7 @@ def _write_platform_csv(path: Path, metadata: dict[str, Any]) -> None:
     _write_csv(path, PLATFORM_CSV_FIELDS, rows)
 
 
-def _write_credits_csv(path: Path, metadata: dict[str, Any]) -> None:
+def _write_credits_csv(path: Path, metadata: ImplementationDocument) -> None:
     rows = []
     for track in metadata.get("tracks", []) if isinstance(metadata.get("tracks"), list) else []:
         if not isinstance(track, dict):
@@ -726,7 +728,7 @@ def _write_credits_csv(path: Path, metadata: dict[str, Any]) -> None:
     _write_csv(path, CREDITS_CSV_FIELDS, rows)
 
 
-def _write_csv(path: Path, fields: list[str], rows: list[dict[str, Any]]) -> None:
+def _write_csv(path: Path, fields: list[str], rows: list[ImplementationDocument]) -> None:
     buffer = io.StringIO(newline="")
     writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
@@ -735,7 +737,7 @@ def _write_csv(path: Path, fields: list[str], rows: list[dict[str, Any]]) -> Non
     _write_text(path, buffer.getvalue())
 
 
-def _write_lyrics(lyrics_dir: Path, metadata: dict[str, Any]) -> list[str]:
+def _write_lyrics(lyrics_dir: Path, metadata: ImplementationDocument) -> list[str]:
     if lyrics_dir.exists():
         for file in sorted(lyrics_dir.rglob("*"), reverse=True):
             if file.is_file():
@@ -768,7 +770,7 @@ def _write_text(path: Path, text: str) -> None:
     tmp_path.replace(path)
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     resolved = path.resolve()
     _ensure_within(export_dir.resolve(), resolved)
     rel = _validate_relative_path(resolved.relative_to(export_dir.resolve()).as_posix())
@@ -804,7 +806,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleaseMetadataError("Refusing to operate outside release metadata boundaries.") from exc
 
 
-def _qa_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _qa_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return sanitize_metadata(
         {

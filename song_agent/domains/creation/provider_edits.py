@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import hashlib
 import re
@@ -558,7 +560,7 @@ def _client_for_config(config: ProviderConfig) -> Any:
     raise ProviderConfigError(f"Unsupported provider wire_api: {config.wire_api}.")
 
 
-def _provider_edit_response_parts(response: Any) -> tuple[dict[str, Any], dict[str, Any], str | None]:
+def _provider_edit_response_parts(response: Any) -> tuple[ImplementationDocument, ImplementationDocument, str | None]:
     if isinstance(response, ProviderEditResponse):
         return response.data, dict(response.usage or {}), response.request_id
     if isinstance(response, dict) and "data" in response and isinstance(response.get("data"), dict):
@@ -659,7 +661,7 @@ def _candidate_count(value: Any) -> int:
     return count
 
 
-def _merge_usage(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+def _merge_usage(left: ImplementationDocument, right: ImplementationDocument) -> ImplementationDocument:
     result = dict(left)
     for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
         result[key] = int(result.get(key) or 0) + int(right.get(key) or 0)

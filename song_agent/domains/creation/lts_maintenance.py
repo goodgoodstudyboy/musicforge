@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import os
 import subprocess
@@ -216,7 +218,7 @@ class LTSMaintenanceStore:
         latest = rows[-1]
         return {"check_id": latest.get("check_id"), "profile": latest.get("profile"), "status": latest.get("status"), "finished_at": latest.get("finished_at")}
 
-    def _profile_checks(self, profile: str) -> list[dict[str, Any]]:
+    def _profile_checks(self, profile: str) -> list[ImplementationDocument]:
         status = self.status()
         checks = [
             _check("maintenance.status", "passed" if status.get("status") != "blocked" else "failed", "blocking", "Maintenance status has no blockers.", {"status": status.get("status")}),
@@ -237,13 +239,13 @@ class LTSMaintenanceStore:
             checks.append(_check("maintenance.git_diff_check", "passed" if not diff else "failed", "blocking", "git diff --check has no errors." if not diff else diff))
         return checks
 
-    def _read_migration_state(self) -> dict[str, Any]:
+    def _read_migration_state(self) -> ImplementationDocument:
         path = self.migrations_dir / "migration-state.json"
         if not path.exists():
             return {"package_type": MIGRATION_STATE_PACKAGE_TYPE, "schema_version": 1, "app_version": __version__, "applied": []}
         return read_json(path)
 
-    def _append_migration_event(self, event: dict[str, Any]) -> None:
+    def _append_migration_event(self, event: ImplementationDocument) -> None:
         self.migrations_dir.mkdir(parents=True, exist_ok=True)
         with (self.migrations_dir / "events.jsonl").open("a", encoding="utf-8") as file:
             file.write(json.dumps({"timestamp": _now(), **event}, ensure_ascii=False, sort_keys=True) + "\n")
@@ -259,15 +261,15 @@ def maintenance_report_integrity_ok(report: dict[str, Any]) -> bool:
     return bool(expected) and expected == stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
 
 
-def _check(check_id: str, status: str, severity: str, message: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:
+def _check(check_id: str, status: str, severity: str, message: str, detail: ImplementationDocument | None = None) -> ImplementationDocument:
     return {"check_id": check_id, "status": status, "severity": severity, "message": message, "detail": detail or {}}
 
 
-def _add_check(checks: list[dict[str, Any]], check_id: str, status: str, severity: str, message: str, detail: dict[str, Any] | None = None) -> None:
+def _add_check(checks: list[ImplementationDocument], check_id: str, status: str, severity: str, message: str, detail: ImplementationDocument | None = None) -> None:
     checks.append(_check(check_id, status, severity, message, detail))
 
 
-def _git_summary(root: Path) -> dict[str, Any]:
+def _git_summary(root: Path) -> ImplementationDocument:
     status = _quick_git(root, ["status", "--short", "--branch"])
     lines = [line for line in status.splitlines() if line.strip()]
     branch = lines[0] if lines else ""
@@ -275,7 +277,7 @@ def _git_summary(root: Path) -> dict[str, Any]:
     return {"state": "dirty" if dirty else "clean" if status else "unknown", "branch": branch, "head": _quick_git(root, ["rev-parse", "HEAD"]), "dirty": dirty}
 
 
-def _config_summary(root: Path) -> dict[str, dict[str, Any]]:
+def _config_summary(root: Path) -> dict[str, ImplementationDocument]:
     config_paths = {
         "provider": ".musicforge/provider.json",
         "renderer": ".musicforge/renderer.json",
@@ -290,7 +292,7 @@ def _config_summary(root: Path) -> dict[str, dict[str, Any]]:
     return result
 
 
-def _latest_ga_summary(root: Path) -> dict[str, Any]:
+def _latest_ga_summary(root: Path) -> ImplementationDocument:
     path = root / "runs" / "ga-readiness" / "ga-readiness-report.json"
     if not path.exists():
         return {"status": "missing"}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -224,7 +226,7 @@ def unified_release_program_continuity_command_center_verification_exit_code(rep
     return 0 if report.get("status") == "passed" else 1
 
 
-def _external_evidence_checks(public_manifest: dict[str, Any], runtime_index: dict[str, Any], evidence_manifest_path: Path | str | None, *, require: bool) -> list[dict[str, Any]]:
+def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_index: ImplementationDocument, evidence_manifest_path: Path | str | None, *, require: bool) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     if not evidence_manifest_path or not Path(evidence_manifest_path).exists():
         checks.append(_check("urpccc_external_manifest_required", not require, "External evidence manifest is provided for runtime verification."))
@@ -398,14 +400,14 @@ def runtime_verify_continuity_command_center_component(component_type: str, row:
     return {"status": "failed", "blockers": ["unknown_component_type"], "manifest_hash": None, "zip_sha256": None}
 
 
-def _first_component(rows: dict[str, dict[str, Any]], component_type: str) -> dict[str, Any]:
+def _first_component(rows: dict[str, ImplementationDocument], component_type: str) -> ImplementationDocument:
     for row in rows.values():
         if row.get("component_type") == component_type:
             return row
     return {}
 
 
-def _acceptance_history_state(path: Path) -> dict[str, Any]:
+def _acceptance_history_state(path: Path) -> ImplementationDocument:
     try:
         rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     except (OSError, json.JSONDecodeError):
@@ -425,7 +427,7 @@ def _acceptance_history_state(path: Path) -> dict[str, Any]:
     return state
 
 
-def _document_binding_checks(manifest: dict[str, Any], report: dict[str, Any], inventory: dict[str, Any], readiness: dict[str, Any], runtime_index: dict[str, Any], gap_plan: dict[str, Any], runbook: dict[str, Any], external_manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def _document_binding_checks(manifest: ImplementationDocument, report: ImplementationDocument, inventory: ImplementationDocument, readiness: ImplementationDocument, runtime_index: ImplementationDocument, gap_plan: ImplementationDocument, runbook: ImplementationDocument, external_manifest: ImplementationDocument) -> list[ImplementationDocument]:
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     return [
         _check("urpccc_report_inventory_hash", report.get("evidence_inventory_hash") == inventory.get("integrity_hash"), "Report binds evidence inventory."),
@@ -445,7 +447,7 @@ def _document_binding_checks(manifest: dict[str, Any], report: dict[str, Any], i
     ]
 
 
-def _index_binding_checks(inventory: dict[str, Any], readiness: dict[str, Any], runtime_index: dict[str, Any], external_manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def _index_binding_checks(inventory: ImplementationDocument, readiness: ImplementationDocument, runtime_index: ImplementationDocument, external_manifest: ImplementationDocument) -> list[ImplementationDocument]:
     inventory_items = {_item_key(row): row for row in inventory.get("items") or []}
     readiness_items = {_item_key(row): row for row in readiness.get("rows") or []}
     runtime_items = {_item_key(row): row for row in runtime_index.get("items") or []}
@@ -474,7 +476,7 @@ def _index_binding_checks(inventory: dict[str, Any], readiness: dict[str, Any], 
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     paths = {str(row.get("path") or "") for row in files}
     expected = name_set - {"manifest.json"}
@@ -490,11 +492,11 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urpccc_redaction")
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     return build_verification_report(
         package_type=UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
@@ -504,11 +506,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     )
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _item_key(row: dict[str, Any]) -> str:
+def _item_key(row: ImplementationDocument) -> str:
     return f"{row.get('component_type')}::{row.get('component_id')}::{row.get('generation')}"
 
 
@@ -516,5 +518,5 @@ def _safe_check_key(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value.strip("/").replace("/", "_"))[:120] or "root"
 
 
-def _has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
+def _has_blocking_failures(checks: list[ImplementationDocument]) -> bool:
     return any(row.get("status") == "failed" and row.get("severity") == "blocking" for row in checks)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.domains.delivery.releases import stable_hash
 
 
@@ -68,7 +70,7 @@ def control_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key not in {"integrity_hash", "generated_at", "zip"}})
 
 
-def _evaluate_control(control: dict[str, Any], source: dict[str, Any], *, required: bool) -> dict[str, Any]:
+def _evaluate_control(control: ImplementationDocument, source: ImplementationDocument, *, required: bool) -> ImplementationDocument:
     method = str(control.get("evaluation", {}).get("method") or "")
     status = _expected_control_status(method, control, source)
     severity = str(control.get("severity") or "medium")
@@ -87,7 +89,7 @@ def _evaluate_control(control: dict[str, Any], source: dict[str, Any], *, requir
     return result
 
 
-def _expected_control_status(method: str, control: dict[str, Any], source: dict[str, Any]) -> str:
+def _expected_control_status(method: str, control: ImplementationDocument, source: ImplementationDocument) -> str:
     hub_bound = bool(source.get("hub_verification_report_hash") and source.get("hub_zip_sha256") and source.get("hub_manifest_hash"))
     hub_passed = source.get("hub_verification_status") == "passed"
     incident_passed = source.get("incident_verification_status") == "passed"
@@ -122,7 +124,7 @@ def _expected_control_status(method: str, control: dict[str, Any], source: dict[
     return "failed"
 
 
-def _catalog_summary(controls: list[dict[str, Any]]) -> dict[str, int]:
+def _catalog_summary(controls: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "control_count": len(controls),
         "baseline_count": sum(1 for item in controls if item.get("source", {}).get("source_type") == "baseline"),
@@ -132,7 +134,7 @@ def _catalog_summary(controls: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _results_summary(results: list[dict[str, Any]]) -> dict[str, int]:
+def _results_summary(results: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "result_count": len(results),
         "passed_count": sum(1 for item in results if item.get("status") == "passed"),
@@ -141,7 +143,7 @@ def _results_summary(results: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _blockers_from_results(results: list[dict[str, Any]], required: dict[str, bool]) -> list[dict[str, Any]]:
+def _blockers_from_results(results: list[ImplementationDocument], required: dict[str, bool]) -> list[ImplementationDocument]:
     blockers = []
     for index, result in enumerate(results, start=1):
         control_id = str(result.get("control_id") or "")
@@ -160,7 +162,7 @@ def _blockers_from_results(results: list[dict[str, Any]], required: dict[str, bo
     return blockers
 
 
-def _blocker_summary(blockers: list[dict[str, Any]]) -> dict[str, int]:
+def _blocker_summary(blockers: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "blocker_count": len(blockers),
         "critical_count": sum(1 for item in blockers if item.get("severity") == "critical"),
@@ -168,7 +170,7 @@ def _blocker_summary(blockers: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _manual_actions_from_blockers(blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _manual_actions_from_blockers(blockers: list[ImplementationDocument]) -> list[ImplementationDocument]:
     actions = []
     for blocker in blockers:
         actions.append(

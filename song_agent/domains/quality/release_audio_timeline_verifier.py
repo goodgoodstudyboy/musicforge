@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -153,15 +155,15 @@ def release_audio_timeline_verification_exit_code(report: dict[str, Any]) -> int
 
 
 def _document_binding_checks(
-    manifest: dict[str, Any],
-    report: dict[str, Any],
-    track_index: dict[str, Any],
-    events: list[dict[str, Any]],
-    trend: dict[str, Any],
-    taxonomy: dict[str, Any],
-    risks: dict[str, Any],
-    bindings: dict[str, Any],
-) -> list[dict[str, Any]]:
+    manifest: ImplementationDocument,
+    report: ImplementationDocument,
+    track_index: ImplementationDocument,
+    events: list[ImplementationDocument],
+    trend: ImplementationDocument,
+    taxonomy: ImplementationDocument,
+    risks: ImplementationDocument,
+    bindings: ImplementationDocument,
+) -> list[ImplementationDocument]:
     ledger_hash = _event_ledger_hash(events)
     same_source = manifest.get("source_hash") == report.get("source_hash") == track_index.get("source_hash") == trend.get("source_hash") == taxonomy.get("source_hash") == risks.get("source_hash") == bindings.get("source_hash")
     return [
@@ -177,7 +179,7 @@ def _document_binding_checks(
     ]
 
 
-def _event_chain_checks(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _event_chain_checks(events: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     ids = [str(event.get("event_id") or "") for event in events]
     checks.append(_check("release_audio_timeline_events_present", bool(events), "Timeline event ledger is present."))
@@ -206,7 +208,7 @@ def _event_chain_checks(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return checks
 
 
-def _derived_document_checks(report: dict[str, Any], track_index: dict[str, Any], events: list[dict[str, Any]], trend: dict[str, Any], taxonomy: dict[str, Any], risks: dict[str, Any]) -> list[dict[str, Any]]:
+def _derived_document_checks(report: ImplementationDocument, track_index: ImplementationDocument, events: list[ImplementationDocument], trend: ImplementationDocument, taxonomy: ImplementationDocument, risks: ImplementationDocument) -> list[ImplementationDocument]:
     derived = _derive_from_events(report.get("release_id"), report.get("timeline_id"), events, source_hash=report.get("source_hash"))
     return [
         _check("release_audio_timeline_track_index_semantics", _semantic_hash(track_index.get("tracks")) == _semantic_hash(derived["track_index"].get("tracks")) and _semantic_hash(track_index.get("summary")) == _semantic_hash(derived["track_index"].get("summary")), "Track timeline index matches event ledger."),
@@ -217,13 +219,13 @@ def _derived_document_checks(report: dict[str, Any], track_index: dict[str, Any]
 
 
 def _certification_binding_checks(
-    bindings: dict[str, Any],
-    report: dict[str, Any],
+    bindings: ImplementationDocument,
+    report: ImplementationDocument,
     *,
     require_current_certification: bool,
     certification_zip_path: Path | str | None,
     certification_report_path: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if not require_current_certification:
         return []
     checks: list[dict[str, Any]] = []
@@ -280,18 +282,18 @@ def _certification_binding_checks(
 
 
 def _signoff_checks(
-    signoff: dict[str, Any] | None,
-    manifest: dict[str, Any],
-    report: dict[str, Any],
-    track_index: dict[str, Any],
-    events: list[dict[str, Any]],
-    trend: dict[str, Any],
-    taxonomy: dict[str, Any],
-    risks: dict[str, Any],
-    bindings: dict[str, Any],
+    signoff: ImplementationDocument | None,
+    manifest: ImplementationDocument,
+    report: ImplementationDocument,
+    track_index: ImplementationDocument,
+    events: list[ImplementationDocument],
+    trend: ImplementationDocument,
+    taxonomy: ImplementationDocument,
+    risks: ImplementationDocument,
+    bindings: ImplementationDocument,
     *,
     require_signed: bool,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if signoff is None:
         return [_check("release_audio_timeline_signoff_present", not require_signed, "Timeline signoff is present when required.")]
     ledger_hash = _event_ledger_hash(events)
@@ -310,7 +312,7 @@ def _signoff_checks(
     ]
 
 
-def _manifest_checks(zf: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], *, expected_entries: set[str], strict: bool) -> list[dict[str, Any]]:
+def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
@@ -339,7 +341,7 @@ def _manifest_checks(zf: zipfile.ZipFile, manifest: dict[str, Any], names: set[s
     ]
 
 
-def _derive_from_events(release_id: Any, timeline_id: Any, events: list[dict[str, Any]], *, source_hash: Any) -> dict[str, Any]:
+def _derive_from_events(release_id: Any, timeline_id: Any, events: list[ImplementationDocument], *, source_hash: Any) -> ImplementationDocument:
     track_events = [event for event in events if event.get("event_type") == "track_certification_summary"]
     tracks: list[dict[str, Any]] = []
     issues: dict[str, dict[str, Any]] = {}
@@ -463,19 +465,19 @@ def _derive_from_events(release_id: Any, timeline_id: Any, events: list[dict[str
     return {"track_index": track_index, "taxonomy": taxonomy, "risks": risk_doc, "trend": trend}
 
 
-def _event_ledger_hash(events: list[dict[str, Any]]) -> str:
+def _event_ledger_hash(events: list[ImplementationDocument]) -> str:
     return stable_hash(events)
 
 
-def _event_hash(event: dict[str, Any]) -> str:
+def _event_hash(event: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in event.items() if key != "event_hash"})
 
 
-def _manifest_hash(payload: dict[str, Any]) -> str:
+def _manifest_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _manifest_hash(payload)
 
 
@@ -493,7 +495,7 @@ def _strip_volatile(value: Any) -> Any:
     return value
 
 
-def _redaction_check(zf: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(zf: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     leaks: list[str] = []
     for name in names:
         if not name.lower().endswith((".json", ".md", ".txt", ".jsonl")):
@@ -504,7 +506,7 @@ def _redaction_check(zf: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
     return _check("release_audio_timeline_redaction_scan", not leaks, "Package text files do not contain obvious secrets or local paths.", {"leaks": leaks})
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check for check in checks if check.get("status") == "warning"]
@@ -524,11 +526,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _read_json_entry(zf: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(zf: zipfile.ZipFile, name: str) -> ImplementationDocument:
     with zf.open(name) as fp:
         data = json.loads(fp.read().decode("utf-8"))
     if not isinstance(data, dict):
@@ -536,7 +538,7 @@ def _read_json_entry(zf: zipfile.ZipFile, name: str) -> dict[str, Any]:
     return data
 
 
-def _read_jsonl_entry(zf: zipfile.ZipFile, name: str) -> list[dict[str, Any]]:
+def _read_jsonl_entry(zf: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     with zf.open(name) as fp:
         for raw in fp.read().decode("utf-8").splitlines():

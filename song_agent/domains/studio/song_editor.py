@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import re
@@ -464,301 +466,333 @@ def build_editor_state(plan: SongPlan) -> dict[str, Any]:
     }
 
 
-def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | EditorPatch) -> EditorPatchResult:
-    patch = patch_data if isinstance(patch_data, EditorPatch) else EditorPatch.from_dict(patch_data)
+def _apply_editor_patch_part_01(parent_plan: SongPlan, patch_data: ImplementationDocument | EditorPatch, _split_state):
+    _split_state['patch'] = patch_data if isinstance(patch_data, EditorPatch) else EditorPatch.from_dict(patch_data)
     current_hash = song_plan_hash(parent_plan)
-    if patch.base_plan_hash != current_hash:
-        raise EditorPatchStaleError("Editor patch is stale because the base song-plan hash changed.")
+    if _split_state['patch'].base_plan_hash != current_hash:
+        raise EditorPatchStaleError('Editor patch is stale because the base song-plan hash changed.')
     state = build_editor_state(parent_plan)
-    base_section_names_by_id: dict[str, str | None] = {section["section_id"]: str(section["name"]) for section in state["sections"]}
-    base_track_names_by_id: dict[str, str | None] = {track["track_id"]: str(track["name"]) for track in state["tracks"]}
-    base_note_keys_by_track_id = _base_note_keys_by_track_id(state)
-    sections = list(parent_plan.sections)
-    tracks = list(parent_plan.tracks)
-    summary_counts: dict[str, int] = {}
-    changed_sections: set[str] = set()
-    changed_tracks: set[str] = set()
-    warnings: list[str] = []
-    added_notes = 0
-    total_beats = _total_bars(parent_plan) * _beats_per_bar(parent_plan)
-    for operation in patch.operations:
-        op = str(operation.get("op") or "")
-        summary_counts[op] = summary_counts.get(op, 0) + 1
-        if op == "set_section_chords":
-            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
-            chords = _chords(operation.get("chords"))
-            section = sections[section_index]
-            sections[section_index] = SongSection(section.name, section.start_bar, section.bars, chords, section.lyrics)
-            changed_sections.add(section.name)
-        elif op == "set_section_lyrics":
-            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
-            lyrics = _clean_lyrics(operation.get("lyrics"))
-            section = sections[section_index]
-            sections[section_index] = SongSection(section.name, section.start_bar, section.bars, section.chords, lyrics)
-            changed_sections.add(section.name)
-        elif op == "set_track_instrument":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            instrument = _bounded_text(operation.get("instrument"), MAX_INSTRUMENT_LENGTH)
-            if not instrument:
-                raise EditorPatchError("instrument must not be empty.")
-            track = tracks[track_index]
-            tracks[track_index] = TrackPlan(track.name, instrument, track.notes)
-            changed_tracks.add(track.name)
-        elif op == "add_section":
-            beats_per_bar = _beats_per_bar(parent_plan)
-            section = _section_from_operation(operation, sections)
-            after_index = _optional_after_section_index(operation, sections, base_section_names_by_id)
-            insert_index = len(sections) if after_index is None else after_index + 1
-            insert_start = _section_start_beat_at_index(sections, insert_index, beats_per_bar)
-            delta = section.bars * beats_per_bar
-            sections.insert(insert_index, section)
-            _assert_total_bars(sections)
-            sections = normalize_sections(sections)
-            tracks = shift_notes_after_beat(tracks, insert_start, delta)
-            _shift_note_keys_after_beat(base_note_keys_by_track_id, insert_start, delta)
-            total_beats = _total_bars_from_sections(sections) * beats_per_bar
-            changed_sections.add(section.name)
-            warnings.append(f"Section {section.name} was added without notes.")
-        elif op == "duplicate_section":
-            beats_per_bar = _beats_per_bar(parent_plan)
-            source_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
-            source = sections[source_index]
-            new_name = _unique_section_name(operation.get("name"), sections)
-            after_index = _optional_after_section_index(operation, sections, base_section_names_by_id)
-            insert_index = len(sections) if after_index is None else after_index + 1
-            source_start = _section_start_beat(source, beats_per_bar)
-            source_end = source_start + source.bars * beats_per_bar
-            insert_start = _section_start_beat_at_index(sections, insert_index, beats_per_bar)
-            delta = source.bars * beats_per_bar
-            new_section = SongSection(new_name, 1, source.bars, list(source.chords), source.lyrics)
-            tracks = shift_notes_after_beat(tracks, insert_start, delta)
-            _shift_note_keys_after_beat(base_note_keys_by_track_id, insert_start, delta)
-            if bool(operation.get("copy_notes", True)):
-                shifted_source_start = source_start + (delta if insert_start <= source_start else 0)
-                shifted_source_end = source_end + (delta if insert_start <= source_start else 0)
-                tracks = copy_notes_in_range(tracks, shifted_source_start, shifted_source_end, insert_start)
-            sections.insert(insert_index, new_section)
-            _assert_total_bars(sections)
-            sections = normalize_sections(sections)
-            total_beats = _total_bars_from_sections(sections) * beats_per_bar
-            changed_sections.update({source.name, new_name})
-            for track in tracks:
-                if any(insert_start <= note.start_beat < insert_start + delta for note in track.notes):
-                    changed_tracks.add(track.name)
-        elif op == "delete_section":
-            beats_per_bar = _beats_per_bar(parent_plan)
-            if len(sections) <= 1:
-                raise EditorPatchError("Cannot delete the last section.")
-            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
-            section = sections[section_index]
-            policy = _choice(operation.get("note_policy") or "delete", "note_policy", {"delete", "shift_left", "keep_absolute"})
-            start = _section_start_beat(section, beats_per_bar)
-            end = start + section.bars * beats_per_bar
-            delta = -(section.bars * beats_per_bar)
-            if policy in {"delete", "shift_left"}:
-                tracks = delete_notes_in_range(tracks, start, end)
-                _delete_note_keys_in_range(base_note_keys_by_track_id, start, end)
-                tracks = shift_notes_after_beat(tracks, end, delta)
-                _shift_note_keys_after_beat(base_note_keys_by_track_id, end, delta)
-            sections.pop(section_index)
-            base_section_names_by_id[str(operation.get("section_id") or "")] = None
-            sections = normalize_sections(sections)
-            total_beats = _total_bars_from_sections(sections) * beats_per_bar
-            if policy == "keep_absolute":
-                tracks = trim_notes_to_total_beats(tracks, total_beats, warnings)
-                _trim_note_keys_to_total_beats(base_note_keys_by_track_id, total_beats)
-            changed_sections.add(section.name)
-            changed_tracks.update(track.name for track in tracks)
-        elif op == "resize_section":
-            beats_per_bar = _beats_per_bar(parent_plan)
-            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
-            section = sections[section_index]
-            new_bars = _int_range(operation.get("bars"), "bars", 1, MAX_SECTION_BARS)
-            policy = _choice(operation.get("note_policy") or "shift_tail", "note_policy", {"shift_tail", "crop"})
-            old_bars = section.bars
-            if new_bars == old_bars:
-                changed_sections.add(section.name)
-            else:
-                old_end = _section_start_beat(section, beats_per_bar) + old_bars * beats_per_bar
-                new_end = _section_start_beat(section, beats_per_bar) + new_bars * beats_per_bar
-                delta = (new_bars - old_bars) * beats_per_bar
-                if delta < 0 and policy == "crop":
-                    tracks = delete_notes_in_range(tracks, new_end, old_end)
-                    _delete_note_keys_in_range(base_note_keys_by_track_id, new_end, old_end)
-                tracks = shift_notes_after_beat(tracks, old_end, delta)
-                _shift_note_keys_after_beat(base_note_keys_by_track_id, old_end, delta)
-                sections[section_index] = SongSection(section.name, section.start_bar, new_bars, list(section.chords), section.lyrics)
-                _assert_total_bars(sections)
-                sections = normalize_sections(sections)
-                total_beats = _total_bars_from_sections(sections) * beats_per_bar
-                tracks = trim_notes_to_total_beats(tracks, total_beats, warnings)
-                _trim_note_keys_to_total_beats(base_note_keys_by_track_id, total_beats)
-                changed_sections.add(section.name)
-                changed_tracks.update(track.name for track in tracks)
-        elif op == "move_section":
-            beats_per_bar = _beats_per_bar(parent_plan)
-            section_index = _section_index_for_plan(operation, sections, base_section_names_by_id)
-            after_index = _optional_after_section_index(operation, sections, base_section_names_by_id, allow_self=False)
-            section = sections[section_index]
-            before_names = [item.name for item in sections]
-            old_spans_by_name = {item.name: _section_span(item, beats_per_bar) for item in sections}
-            moved = sections.pop(section_index)
-            if after_index is None:
-                insert_index = 0
-            else:
-                insert_index = after_index + 1
-                if after_index > section_index:
-                    insert_index -= 1
-            sections.insert(insert_index, moved)
-            if [item.name for item in sections] == before_names:
-                changed_sections.add(section.name)
-            else:
-                sections = normalize_sections(sections)
-                new_spans_by_name = {item.name: _section_span(item, beats_per_bar) for item in sections}
-                move_names = set(before_names) if bool(operation.get("move_notes", True)) else (set(before_names) - {section.name})
-                tracks = remap_notes_by_section(tracks, old_spans_by_name, new_spans_by_name, move_names=move_names)
-                _remap_note_keys_by_section(base_note_keys_by_track_id, old_spans_by_name, new_spans_by_name, move_names=move_names)
-                total_beats = _total_bars_from_sections(sections) * beats_per_bar
-                changed_sections.add(section.name)
-                changed_tracks.update(track.name for track in tracks)
-        elif op == "add_track":
-            if len(tracks) >= MAX_EDITOR_TRACKS:
-                raise EditorPatchError(f"editor supports at most {MAX_EDITOR_TRACKS} tracks.")
-            name = _unique_track_name(operation.get("name"), tracks)
-            instrument = _bounded_text(operation.get("instrument"), MAX_INSTRUMENT_LENGTH)
-            if not instrument:
-                raise EditorPatchError("instrument must not be empty.")
-            tracks.append(TrackPlan(name, instrument, []))
-            changed_tracks.add(name)
-            warnings.append(f"Track {name} was added without notes.")
-        elif op == "duplicate_track":
-            if len(tracks) >= MAX_EDITOR_TRACKS:
-                raise EditorPatchError(f"editor supports at most {MAX_EDITOR_TRACKS} tracks.")
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            source = tracks[track_index]
-            name = _unique_track_name(operation.get("name"), tracks)
-            instrument = _bounded_text(operation.get("instrument") or source.instrument, MAX_INSTRUMENT_LENGTH)
-            transpose = _int_range(operation.get("transpose", 0), "transpose", -24, 24)
-            notes = [
-                NoteEvent(_clamp(note.pitch + transpose, 0, 127), note.start_beat, note.duration_beats, note.velocity)
-                for note in source.notes
-            ]
-            tracks.append(TrackPlan(name, instrument, _sorted_notes(notes)))
-            changed_tracks.update({source.name, name})
-        elif op == "delete_track":
-            if len(tracks) <= 1:
-                raise EditorPatchError("Cannot delete the last track.")
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            track = tracks[track_index]
-            remaining = [item for index, item in enumerate(tracks) if index != track_index]
-            if track.notes and not any(item.notes for item in remaining) and not bool(operation.get("allow_empty_song")):
-                raise EditorPatchError("Cannot delete the last track with notes unless allow_empty_song is true.")
-            if track.notes and not any(item.notes for item in remaining):
-                warnings.append("All notes were removed by deleting the last non-empty track.")
-            if _missing_required_track_roles(remaining) and not bool(operation.get("allow_empty_song")):
-                raise EditorPatchError("Cannot delete required track roles unless allow_empty_song is true.")
-            tracks = remaining
-            base_track_names_by_id[str(operation.get("track_id") or "")] = None
-            changed_tracks.add(track.name)
-        elif op == "rename_track":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            track = tracks[track_index]
-            name = _unique_track_name(operation.get("name"), [item for index, item in enumerate(tracks) if index != track_index])
-            tracks[track_index] = TrackPlan(name, track.instrument, track.notes)
-            base_track_names_by_id[str(operation.get("track_id") or "")] = name
-            changed_tracks.update({track.name, name})
-        elif op == "add_note":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            if added_notes >= MAX_ADDED_NOTES_PER_PATCH:
-                raise EditorPatchError(f"editor patch can add at most {MAX_ADDED_NOTES_PER_PATCH} notes.")
-            note = _note(operation.get("note"), total_beats)
-            track = tracks[track_index]
-            tracks[track_index] = TrackPlan(track.name, track.instrument, _sorted_notes([*track.notes, note]))
-            changed_tracks.add(track.name)
-            added_notes += 1
-        elif op == "update_note":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            track = tracks[track_index]
-            note_keys_by_id = base_note_keys_by_track_id.get(str(operation.get("track_id") or ""), {})
-            notes, updated_note = _update_note(track, note_keys_by_id, operation, total_beats)
-            note_keys_by_id[str(operation.get("note_id") or "")] = _note_key(updated_note)
-            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
-            changed_tracks.add(track.name)
-        elif op == "delete_notes":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            track = tracks[track_index]
-            selected = set(_note_ids(operation.get("note_ids")))
-            note_keys_by_id = base_note_keys_by_track_id.get(str(operation.get("track_id") or ""), {})
-            notes, deleted_note_ids = _delete_selected_notes(track, note_keys_by_id, selected)
-            for note_id in deleted_note_ids:
-                note_keys_by_id[note_id] = None
-            if not notes:
-                warnings.append(f"Track {track.name} has no notes after editor patch.")
-            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
-            changed_tracks.add(track.name)
-        elif op == "move_notes":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            delta = _float_range(operation.get("delta_beats"), "delta_beats", -64.0, 64.0)
-            track = tracks[track_index]
-            ids = set(_note_ids(operation.get("note_ids")))
-            note_keys_by_id = base_note_keys_by_track_id.get(str(operation.get("track_id") or ""), {})
-            notes, updated_keys = _map_selected_notes(track, note_keys_by_id=note_keys_by_id, ids=ids, total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, _round_beat(note.start_beat + delta), note.duration_beats, note.velocity))
-            note_keys_by_id.update(updated_keys)
-            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
-            changed_tracks.add(track.name)
-        elif op == "transpose_notes":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            semitones = _int_range(operation.get("semitones"), "semitones", -24, 24)
-            track = tracks[track_index]
-            selector = _note_selector(operation, track)
-            note_keys_by_id = base_note_keys_by_track_id.get(str(operation.get("track_id") or ""), {})
-            notes, updated_keys = _map_selected_notes(track, note_keys_by_id=note_keys_by_id, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(_clamp(note.pitch + semitones, 0, 127), note.start_beat, note.duration_beats, note.velocity))
-            note_keys_by_id.update(updated_keys)
-            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
-            changed_tracks.add(track.name)
-        elif op == "quantize_notes":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            grid = float(operation.get("grid"))
-            if grid not in QUANTIZE_GRIDS:
-                raise EditorPatchError("grid must be one of 0.125, 0.25, 0.5, 1.0.")
-            track = tracks[track_index]
-            selector = _note_selector(operation, track)
-            note_keys_by_id = base_note_keys_by_track_id.get(str(operation.get("track_id") or ""), {})
-            notes, updated_keys = _map_selected_notes(track, note_keys_by_id=note_keys_by_id, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, _round_beat(round(note.start_beat / grid) * grid), note.duration_beats, note.velocity))
-            note_keys_by_id.update(updated_keys)
-            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
-            changed_tracks.add(track.name)
-        elif op == "scale_velocity":
-            track_index = _track_index_for_plan(operation, tracks, base_track_names_by_id)
-            factor = _float_range(operation.get("factor"), "factor", 0.25, 2.0)
-            track = tracks[track_index]
-            selector = _note_selector(operation, track)
-            note_keys_by_id = base_note_keys_by_track_id.get(str(operation.get("track_id") or ""), {})
-            notes, updated_keys = _map_selected_notes(track, note_keys_by_id=note_keys_by_id, ids=selector.get("ids"), beat_range=selector.get("range"), total_beats=total_beats, mapper=lambda note: NoteEvent(note.pitch, note.start_beat, note.duration_beats, _clamp(round(note.velocity * factor), 1, 127)))
-            note_keys_by_id.update(updated_keys)
-            tracks[track_index] = TrackPlan(track.name, track.instrument, notes)
-            changed_tracks.add(track.name)
-    _validate_note_limits(tracks)
-    edited = SongPlan(
-        title=parent_plan.title,
-        key=parent_plan.key,
-        tempo_bpm=parent_plan.tempo_bpm,
-        meter=parent_plan.meter,
-        sections=sections,
-        tracks=[TrackPlan(track.name, track.instrument, _sorted_notes(track.notes)) for track in tracks],
-        quality=parent_plan.quality,
-    )
+    _split_state['base_section_names_by_id']: dict[str, str | None] = {_split_state['section']['section_id']: str(_split_state['section']['name']) for _split_state['section'] in state['sections']}
+    _split_state['base_track_names_by_id']: dict[str, str | None] = {_split_state['track']['track_id']: str(_split_state['track']['name']) for _split_state['track'] in state['tracks']}
+    _split_state['base_note_keys_by_track_id'] = _base_note_keys_by_track_id(state)
+    _split_state['sections'] = list(parent_plan.sections)
+    _split_state['tracks'] = list(parent_plan.tracks)
+    _split_state['summary_counts']: dict[str, int] = {}
+    _split_state['changed_sections']: set[str] = set()
+    _split_state['changed_tracks']: set[str] = set()
+    _split_state['warnings']: list[str] = []
+    _split_state['added_notes'] = 0
+    _split_state['total_beats'] = _total_bars(parent_plan) * _beats_per_bar(parent_plan)
+    return (False, None)
+
+def _apply_editor_patch_operations_01(parent_plan, operation, op, _split_state) -> bool:
+    if op == 'set_section_chords':
+        section_index = _section_index_for_plan(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        chords = _chords(operation.get('chords'))
+        _split_state['section'] = _split_state['sections'][section_index]
+        _split_state['sections'][section_index] = SongSection(_split_state['section'].name, _split_state['section'].start_bar, _split_state['section'].bars, chords, _split_state['section'].lyrics)
+        _split_state['changed_sections'].add(_split_state['section'].name)
+        return True
+    elif op == 'set_section_lyrics':
+        section_index = _section_index_for_plan(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        lyrics = _clean_lyrics(operation.get('lyrics'))
+        _split_state['section'] = _split_state['sections'][section_index]
+        _split_state['sections'][section_index] = SongSection(_split_state['section'].name, _split_state['section'].start_bar, _split_state['section'].bars, _split_state['section'].chords, lyrics)
+        _split_state['changed_sections'].add(_split_state['section'].name)
+        return True
+    elif op == 'set_track_instrument':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        instrument = _bounded_text(operation.get('instrument'), MAX_INSTRUMENT_LENGTH)
+        if not instrument:
+            raise EditorPatchError('instrument must not be empty.')
+        _split_state['track'] = _split_state['tracks'][track_index]
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, instrument, _split_state['track'].notes)
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'add_section':
+        beats_per_bar = _beats_per_bar(parent_plan)
+        _split_state['section'] = _section_from_operation(operation, _split_state['sections'])
+        after_index = _optional_after_section_index(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        insert_index = len(_split_state['sections']) if after_index is None else after_index + 1
+        insert_start = _section_start_beat_at_index(_split_state['sections'], insert_index, beats_per_bar)
+        delta = _split_state['section'].bars * beats_per_bar
+        _split_state['sections'].insert(insert_index, _split_state['section'])
+        _assert_total_bars(_split_state['sections'])
+        _split_state['sections'] = normalize_sections(_split_state['sections'])
+        _split_state['tracks'] = shift_notes_after_beat(_split_state['tracks'], insert_start, delta)
+        _shift_note_keys_after_beat(_split_state['base_note_keys_by_track_id'], insert_start, delta)
+        _split_state['total_beats'] = _total_bars_from_sections(_split_state['sections']) * beats_per_bar
+        _split_state['changed_sections'].add(_split_state['section'].name)
+        _split_state['warnings'].append(f"Section {_split_state['section'].name} was added without notes.")
+        return True
+    elif op == 'duplicate_section':
+        beats_per_bar = _beats_per_bar(parent_plan)
+        source_index = _section_index_for_plan(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        source = _split_state['sections'][source_index]
+        new_name = _unique_section_name(operation.get('name'), _split_state['sections'])
+        after_index = _optional_after_section_index(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        insert_index = len(_split_state['sections']) if after_index is None else after_index + 1
+        source_start = _section_start_beat(source, beats_per_bar)
+        source_end = source_start + source.bars * beats_per_bar
+        insert_start = _section_start_beat_at_index(_split_state['sections'], insert_index, beats_per_bar)
+        delta = source.bars * beats_per_bar
+        new_section = SongSection(new_name, 1, source.bars, list(source.chords), source.lyrics)
+        _split_state['tracks'] = shift_notes_after_beat(_split_state['tracks'], insert_start, delta)
+        _shift_note_keys_after_beat(_split_state['base_note_keys_by_track_id'], insert_start, delta)
+        if bool(operation.get('copy_notes', True)):
+            shifted_source_start = source_start + (delta if insert_start <= source_start else 0)
+            shifted_source_end = source_end + (delta if insert_start <= source_start else 0)
+            _split_state['tracks'] = copy_notes_in_range(_split_state['tracks'], shifted_source_start, shifted_source_end, insert_start)
+        _split_state['sections'].insert(insert_index, new_section)
+        _assert_total_bars(_split_state['sections'])
+        _split_state['sections'] = normalize_sections(_split_state['sections'])
+        _split_state['total_beats'] = _total_bars_from_sections(_split_state['sections']) * beats_per_bar
+        _split_state['changed_sections'].update({source.name, new_name})
+        for _split_state['track'] in _split_state['tracks']:
+            if any((insert_start <= note.start_beat < insert_start + delta for note in _split_state['track'].notes)):
+                _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'delete_section':
+        beats_per_bar = _beats_per_bar(parent_plan)
+        if len(_split_state['sections']) <= 1:
+            raise EditorPatchError('Cannot delete the last section.')
+        section_index = _section_index_for_plan(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        _split_state['section'] = _split_state['sections'][section_index]
+        policy = _choice(operation.get('note_policy') or 'delete', 'note_policy', {'delete', 'shift_left', 'keep_absolute'})
+        start = _section_start_beat(_split_state['section'], beats_per_bar)
+        end = start + _split_state['section'].bars * beats_per_bar
+        delta = -(_split_state['section'].bars * beats_per_bar)
+        if policy in {'delete', 'shift_left'}:
+            _split_state['tracks'] = delete_notes_in_range(_split_state['tracks'], start, end)
+            _delete_note_keys_in_range(_split_state['base_note_keys_by_track_id'], start, end)
+            _split_state['tracks'] = shift_notes_after_beat(_split_state['tracks'], end, delta)
+            _shift_note_keys_after_beat(_split_state['base_note_keys_by_track_id'], end, delta)
+        _split_state['sections'].pop(section_index)
+        _split_state['base_section_names_by_id'][str(operation.get('section_id') or '')] = None
+        _split_state['sections'] = normalize_sections(_split_state['sections'])
+        _split_state['total_beats'] = _total_bars_from_sections(_split_state['sections']) * beats_per_bar
+        if policy == 'keep_absolute':
+            _split_state['tracks'] = trim_notes_to_total_beats(_split_state['tracks'], _split_state['total_beats'], _split_state['warnings'])
+            _trim_note_keys_to_total_beats(_split_state['base_note_keys_by_track_id'], _split_state['total_beats'])
+        _split_state['changed_sections'].add(_split_state['section'].name)
+        _split_state['changed_tracks'].update((_split_state['track'].name for _split_state['track'] in _split_state['tracks']))
+        return True
+    elif op == 'resize_section':
+        beats_per_bar = _beats_per_bar(parent_plan)
+        section_index = _section_index_for_plan(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        _split_state['section'] = _split_state['sections'][section_index]
+        new_bars = _int_range(operation.get('bars'), 'bars', 1, MAX_SECTION_BARS)
+        policy = _choice(operation.get('note_policy') or 'shift_tail', 'note_policy', {'shift_tail', 'crop'})
+        old_bars = _split_state['section'].bars
+        if new_bars == old_bars:
+            _split_state['changed_sections'].add(_split_state['section'].name)
+        else:
+            old_end = _section_start_beat(_split_state['section'], beats_per_bar) + old_bars * beats_per_bar
+            new_end = _section_start_beat(_split_state['section'], beats_per_bar) + new_bars * beats_per_bar
+            delta = (new_bars - old_bars) * beats_per_bar
+            if delta < 0 and policy == 'crop':
+                _split_state['tracks'] = delete_notes_in_range(_split_state['tracks'], new_end, old_end)
+                _delete_note_keys_in_range(_split_state['base_note_keys_by_track_id'], new_end, old_end)
+            _split_state['tracks'] = shift_notes_after_beat(_split_state['tracks'], old_end, delta)
+            _shift_note_keys_after_beat(_split_state['base_note_keys_by_track_id'], old_end, delta)
+            _split_state['sections'][section_index] = SongSection(_split_state['section'].name, _split_state['section'].start_bar, new_bars, list(_split_state['section'].chords), _split_state['section'].lyrics)
+            _assert_total_bars(_split_state['sections'])
+            _split_state['sections'] = normalize_sections(_split_state['sections'])
+            _split_state['total_beats'] = _total_bars_from_sections(_split_state['sections']) * beats_per_bar
+            _split_state['tracks'] = trim_notes_to_total_beats(_split_state['tracks'], _split_state['total_beats'], _split_state['warnings'])
+            _trim_note_keys_to_total_beats(_split_state['base_note_keys_by_track_id'], _split_state['total_beats'])
+            _split_state['changed_sections'].add(_split_state['section'].name)
+            _split_state['changed_tracks'].update((_split_state['track'].name for _split_state['track'] in _split_state['tracks']))
+        return True
+    elif op == 'move_section':
+        beats_per_bar = _beats_per_bar(parent_plan)
+        section_index = _section_index_for_plan(operation, _split_state['sections'], _split_state['base_section_names_by_id'])
+        after_index = _optional_after_section_index(operation, _split_state['sections'], _split_state['base_section_names_by_id'], allow_self=False)
+        _split_state['section'] = _split_state['sections'][section_index]
+        before_names = [item.name for item in _split_state['sections']]
+        old_spans_by_name = {item.name: _section_span(item, beats_per_bar) for item in _split_state['sections']}
+        moved = _split_state['sections'].pop(section_index)
+        if after_index is None:
+            insert_index = 0
+        else:
+            insert_index = after_index + 1
+            if after_index > section_index:
+                insert_index -= 1
+        _split_state['sections'].insert(insert_index, moved)
+        if [item.name for item in _split_state['sections']] == before_names:
+            _split_state['changed_sections'].add(_split_state['section'].name)
+        else:
+            _split_state['sections'] = normalize_sections(_split_state['sections'])
+            new_spans_by_name = {item.name: _section_span(item, beats_per_bar) for item in _split_state['sections']}
+            move_names = set(before_names) if bool(operation.get('move_notes', True)) else set(before_names) - {_split_state['section'].name}
+            _split_state['tracks'] = remap_notes_by_section(_split_state['tracks'], old_spans_by_name, new_spans_by_name, move_names=move_names)
+            _remap_note_keys_by_section(_split_state['base_note_keys_by_track_id'], old_spans_by_name, new_spans_by_name, move_names=move_names)
+            _split_state['total_beats'] = _total_bars_from_sections(_split_state['sections']) * beats_per_bar
+            _split_state['changed_sections'].add(_split_state['section'].name)
+            _split_state['changed_tracks'].update((_split_state['track'].name for _split_state['track'] in _split_state['tracks']))
+        return True
+    elif op == 'add_track':
+        if len(_split_state['tracks']) >= MAX_EDITOR_TRACKS:
+            raise EditorPatchError(f'editor supports at most {MAX_EDITOR_TRACKS} tracks.')
+        name = _unique_track_name(operation.get('name'), _split_state['tracks'])
+        instrument = _bounded_text(operation.get('instrument'), MAX_INSTRUMENT_LENGTH)
+        if not instrument:
+            raise EditorPatchError('instrument must not be empty.')
+        _split_state['tracks'].append(TrackPlan(name, instrument, []))
+        _split_state['changed_tracks'].add(name)
+        _split_state['warnings'].append(f'Track {name} was added without notes.')
+        return True
+    else:
+        return False
+
+def _apply_editor_patch_operations_02(parent_plan, operation, op, _split_state) -> bool:
+    if op == 'duplicate_track':
+        if len(_split_state['tracks']) >= MAX_EDITOR_TRACKS:
+            raise EditorPatchError(f'editor supports at most {MAX_EDITOR_TRACKS} tracks.')
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        source = _split_state['tracks'][track_index]
+        name = _unique_track_name(operation.get('name'), _split_state['tracks'])
+        instrument = _bounded_text(operation.get('instrument') or source.instrument, MAX_INSTRUMENT_LENGTH)
+        transpose = _int_range(operation.get('transpose', 0), 'transpose', -24, 24)
+        notes = [NoteEvent(_clamp(note.pitch + transpose, 0, 127), note.start_beat, note.duration_beats, note.velocity) for note in source.notes]
+        _split_state['tracks'].append(TrackPlan(name, instrument, _sorted_notes(notes)))
+        _split_state['changed_tracks'].update({source.name, name})
+        return True
+    elif op == 'delete_track':
+        if len(_split_state['tracks']) <= 1:
+            raise EditorPatchError('Cannot delete the last track.')
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        _split_state['track'] = _split_state['tracks'][track_index]
+        remaining = [item for index, item in enumerate(_split_state['tracks']) if index != track_index]
+        if _split_state['track'].notes and (not any((item.notes for item in remaining))) and (not bool(operation.get('allow_empty_song'))):
+            raise EditorPatchError('Cannot delete the last track with notes unless allow_empty_song is true.')
+        if _split_state['track'].notes and (not any((item.notes for item in remaining))):
+            _split_state['warnings'].append('All notes were removed by deleting the last non-empty track.')
+        if _missing_required_track_roles(remaining) and (not bool(operation.get('allow_empty_song'))):
+            raise EditorPatchError('Cannot delete required track roles unless allow_empty_song is true.')
+        _split_state['tracks'] = remaining
+        _split_state['base_track_names_by_id'][str(operation.get('track_id') or '')] = None
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'rename_track':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        _split_state['track'] = _split_state['tracks'][track_index]
+        name = _unique_track_name(operation.get('name'), [item for index, item in enumerate(_split_state['tracks']) if index != track_index])
+        _split_state['tracks'][track_index] = TrackPlan(name, _split_state['track'].instrument, _split_state['track'].notes)
+        _split_state['base_track_names_by_id'][str(operation.get('track_id') or '')] = name
+        _split_state['changed_tracks'].update({_split_state['track'].name, name})
+        return True
+    elif op == 'add_note':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        if _split_state['added_notes'] >= MAX_ADDED_NOTES_PER_PATCH:
+            raise EditorPatchError(f'editor patch can add at most {MAX_ADDED_NOTES_PER_PATCH} notes.')
+        note = _note(operation.get('note'), _split_state['total_beats'])
+        _split_state['track'] = _split_state['tracks'][track_index]
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, _split_state['track'].instrument, _sorted_notes([*_split_state['track'].notes, note]))
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        _split_state['added_notes'] += 1
+        return True
+    elif op == 'update_note':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        _split_state['track'] = _split_state['tracks'][track_index]
+        note_keys_by_id = _split_state['base_note_keys_by_track_id'].get(str(operation.get('track_id') or ''), {})
+        notes, updated_note = _update_note(_split_state['track'], note_keys_by_id, operation, _split_state['total_beats'])
+        note_keys_by_id[str(operation.get('note_id') or '')] = _note_key(updated_note)
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, _split_state['track'].instrument, notes)
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'delete_notes':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        _split_state['track'] = _split_state['tracks'][track_index]
+        selected = set(_note_ids(operation.get('note_ids')))
+        note_keys_by_id = _split_state['base_note_keys_by_track_id'].get(str(operation.get('track_id') or ''), {})
+        notes, deleted_note_ids = _delete_selected_notes(_split_state['track'], note_keys_by_id, selected)
+        for note_id in deleted_note_ids:
+            note_keys_by_id[note_id] = None
+        if not notes:
+            _split_state['warnings'].append(f"Track {_split_state['track'].name} has no notes after editor patch.")
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, _split_state['track'].instrument, notes)
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'move_notes':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        delta = _float_range(operation.get('delta_beats'), 'delta_beats', -64.0, 64.0)
+        _split_state['track'] = _split_state['tracks'][track_index]
+        ids = set(_note_ids(operation.get('note_ids')))
+        note_keys_by_id = _split_state['base_note_keys_by_track_id'].get(str(operation.get('track_id') or ''), {})
+        notes, updated_keys = _map_selected_notes(_split_state['track'], note_keys_by_id=note_keys_by_id, ids=ids, total_beats=_split_state['total_beats'], mapper=lambda note: NoteEvent(note.pitch, _round_beat(note.start_beat + delta), note.duration_beats, note.velocity))
+        note_keys_by_id.update(updated_keys)
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, _split_state['track'].instrument, notes)
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'transpose_notes':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        semitones = _int_range(operation.get('semitones'), 'semitones', -24, 24)
+        _split_state['track'] = _split_state['tracks'][track_index]
+        selector = _note_selector(operation, _split_state['track'])
+        note_keys_by_id = _split_state['base_note_keys_by_track_id'].get(str(operation.get('track_id') or ''), {})
+        notes, updated_keys = _map_selected_notes(_split_state['track'], note_keys_by_id=note_keys_by_id, ids=selector.get('ids'), beat_range=selector.get('range'), total_beats=_split_state['total_beats'], mapper=lambda note: NoteEvent(_clamp(note.pitch + semitones, 0, 127), note.start_beat, note.duration_beats, note.velocity))
+        note_keys_by_id.update(updated_keys)
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, _split_state['track'].instrument, notes)
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'quantize_notes':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        grid = float(operation.get('grid'))
+        if grid not in QUANTIZE_GRIDS:
+            raise EditorPatchError('grid must be one of 0.125, 0.25, 0.5, 1.0.')
+        _split_state['track'] = _split_state['tracks'][track_index]
+        selector = _note_selector(operation, _split_state['track'])
+        note_keys_by_id = _split_state['base_note_keys_by_track_id'].get(str(operation.get('track_id') or ''), {})
+        notes, updated_keys = _map_selected_notes(_split_state['track'], note_keys_by_id=note_keys_by_id, ids=selector.get('ids'), beat_range=selector.get('range'), total_beats=_split_state['total_beats'], mapper=lambda note: NoteEvent(note.pitch, _round_beat(round(note.start_beat / grid) * grid), note.duration_beats, note.velocity))
+        note_keys_by_id.update(updated_keys)
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, _split_state['track'].instrument, notes)
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    elif op == 'scale_velocity':
+        track_index = _track_index_for_plan(operation, _split_state['tracks'], _split_state['base_track_names_by_id'])
+        factor = _float_range(operation.get('factor'), 'factor', 0.25, 2.0)
+        _split_state['track'] = _split_state['tracks'][track_index]
+        selector = _note_selector(operation, _split_state['track'])
+        note_keys_by_id = _split_state['base_note_keys_by_track_id'].get(str(operation.get('track_id') or ''), {})
+        notes, updated_keys = _map_selected_notes(_split_state['track'], note_keys_by_id=note_keys_by_id, ids=selector.get('ids'), beat_range=selector.get('range'), total_beats=_split_state['total_beats'], mapper=lambda note: NoteEvent(note.pitch, note.start_beat, note.duration_beats, _clamp(round(note.velocity * factor), 1, 127)))
+        note_keys_by_id.update(updated_keys)
+        _split_state['tracks'][track_index] = TrackPlan(_split_state['track'].name, _split_state['track'].instrument, notes)
+        _split_state['changed_tracks'].add(_split_state['track'].name)
+        return True
+    else:
+        return False
+
+def _apply_editor_patch_part_02(parent_plan: SongPlan, patch_data: ImplementationDocument | EditorPatch, _split_state):
+    for operation in _split_state['patch'].operations:
+        op = str(operation.get('op') or '')
+        _split_state['summary_counts'][op] = _split_state['summary_counts'].get(op, 0) + 1
+        if _apply_editor_patch_operations_01(parent_plan, operation, op, _split_state):
+            continue
+        if _apply_editor_patch_operations_02(parent_plan, operation, op, _split_state):
+            continue
+    return (False, None)
+
+def _apply_editor_patch_part_03(parent_plan: SongPlan, patch_data: ImplementationDocument | EditorPatch, _split_state):
+    _validate_note_limits(_split_state['tracks'])
+    edited = SongPlan(title=parent_plan.title, key=parent_plan.key, tempo_bpm=parent_plan.tempo_bpm, meter=parent_plan.meter, sections=_split_state['sections'], tracks=[TrackPlan(_split_state['track'].name, _split_state['track'].instrument, _sorted_notes(_split_state['track'].notes)) for _split_state['track'] in _split_state['tracks']], quality=parent_plan.quality)
     edited = attach_quality(edited)
     edited.validate()
-    summary = {
-        "operation_counts": summary_counts,
-        "changed_sections": sorted(changed_sections),
-        "changed_tracks": sorted(changed_tracks),
-        "section_identity": _identity_by_id(base_section_names_by_id),
-        "track_identity": _identity_by_id(base_track_names_by_id),
-        "note_identity": _note_identity_by_track_id(base_note_keys_by_track_id),
-    }
-    return EditorPatchResult(plan=edited, patch=patch, summary=summary, warnings=warnings)
+    summary = {'operation_counts': _split_state['summary_counts'], 'changed_sections': sorted(_split_state['changed_sections']), 'changed_tracks': sorted(_split_state['changed_tracks']), 'section_identity': _identity_by_id(_split_state['base_section_names_by_id']), 'track_identity': _identity_by_id(_split_state['base_track_names_by_id']), 'note_identity': _note_identity_by_track_id(_split_state['base_note_keys_by_track_id'])}
+    return (True, EditorPatchResult(plan=edited, patch=_split_state['patch'], summary=summary, warnings=_split_state['warnings']))
+    return (False, None)
+
+def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | EditorPatch) -> EditorPatchResult:
+    _split_state = {}
+    _split_result = _apply_editor_patch_part_01(parent_plan, patch_data, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
+    _split_result = _apply_editor_patch_part_02(parent_plan, patch_data, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
+    _split_result = _apply_editor_patch_part_03(parent_plan, patch_data, _split_state)
+    if _split_result[0]:
+        return _split_result[1]
 
 
 def summarize_editor_patch(result: EditorPatchResult) -> dict[str, Any]:
@@ -806,7 +840,7 @@ def describe_editor_operations(operations: list[dict[str, Any]]) -> list[str]:
     return descriptions
 
 
-def _operation_counts(operations: list[dict[str, Any]]) -> dict[str, int]:
+def _operation_counts(operations: list[ImplementationDocument]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for operation in operations:
         op = str(operation.get("op") or "unknown_operation")
@@ -814,12 +848,12 @@ def _operation_counts(operations: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
-def _operation_name(operation: dict[str, Any], field_name: str, fallback: str) -> str:
+def _operation_name(operation: ImplementationDocument, field_name: str, fallback: str) -> str:
     value = sanitize_sensitive_text(str(operation.get(field_name) or "")).strip()
     return value[:80] if value else fallback
 
 
-def _patch_metadata(value: Any) -> dict[str, Any]:
+def _patch_metadata(value: Any) -> ImplementationDocument:
     if not isinstance(value, dict):
         return {}
     metadata = sanitize_metadata(dict(value))
@@ -829,7 +863,7 @@ def _patch_metadata(value: Any) -> dict[str, Any]:
     return metadata
 
 
-def _clip_inserts_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+def _clip_inserts_from_metadata(metadata: ImplementationDocument) -> list[ImplementationDocument]:
     inserts = metadata.get("clip_inserts") if isinstance(metadata, dict) else None
     if not isinstance(inserts, list):
         return []
@@ -840,7 +874,7 @@ def _clip_inserts_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]
     return cleaned
 
 
-def _template_inserts_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]]:
+def _template_inserts_from_metadata(metadata: ImplementationDocument) -> list[ImplementationDocument]:
     inserts = metadata.get("template_inserts") if isinstance(metadata, dict) else None
     if not isinstance(inserts, list):
         return []
@@ -851,7 +885,7 @@ def _template_inserts_from_metadata(metadata: dict[str, Any]) -> list[dict[str, 
     return cleaned
 
 
-def _structure_edit_summary(operations: list[dict[str, Any]]) -> dict[str, Any]:
+def _structure_edit_summary(operations: list[ImplementationDocument]) -> ImplementationDocument:
     section_ops = {"add_section", "duplicate_section", "delete_section", "resize_section", "move_section"}
     track_ops = {"add_track", "duplicate_track", "delete_track", "rename_track"}
     counts = _operation_counts([operation for operation in operations if str(operation.get("op") or "") in section_ops | track_ops])
@@ -946,7 +980,7 @@ def note_id_for(track_id: str, note_index: int, note: NoteEvent) -> str:
     return f"note-{track_id}-{note_index + 1:04d}-{digest}"
 
 
-def _section_index(operation: dict[str, Any]) -> int:
+def _section_index(operation: ImplementationDocument) -> int:
     section_id = str(operation.get("section_id") or "").strip()
     if not re.match(r"^section-[0-9]{3}$", section_id):
         raise EditorPatchError("section_id is required.")
@@ -956,7 +990,7 @@ def _section_index(operation: dict[str, Any]) -> int:
     return index
 
 
-def _section_index_for_plan(operation: dict[str, Any], sections: list[SongSection], base_names_by_id: dict[str, str | None] | None = None) -> int:
+def _section_index_for_plan(operation: ImplementationDocument, sections: list[SongSection], base_names_by_id: dict[str, str | None] | None = None) -> int:
     section_id = str(operation.get("section_id") or "").strip()
     if base_names_by_id is not None:
         name = base_names_by_id.get(section_id)
@@ -974,7 +1008,7 @@ def _section_index_for_plan(operation: dict[str, Any], sections: list[SongSectio
     return index
 
 
-def _track_index(operation: dict[str, Any]) -> int:
+def _track_index(operation: ImplementationDocument) -> int:
     track_id = str(operation.get("track_id") or "").strip()
     if not re.match(r"^track-[0-9]{3}$", track_id):
         raise EditorPatchError("track_id is required.")
@@ -984,7 +1018,7 @@ def _track_index(operation: dict[str, Any]) -> int:
     return index
 
 
-def _track_index_for_plan(operation: dict[str, Any], tracks: list[TrackPlan], base_names_by_id: dict[str, str | None] | None = None) -> int:
+def _track_index_for_plan(operation: ImplementationDocument, tracks: list[TrackPlan], base_names_by_id: dict[str, str | None] | None = None) -> int:
     track_id = str(operation.get("track_id") or "").strip()
     if base_names_by_id is not None:
         name = base_names_by_id.get(track_id)
@@ -1052,7 +1086,7 @@ def _note(value: Any, total_beats: float) -> NoteEvent:
 def _update_note(
     track: TrackPlan,
     note_keys_by_id: dict[str, NoteKey | None],
-    operation: dict[str, Any],
+    operation: ImplementationDocument,
     total_beats: float,
 ) -> tuple[list[NoteEvent], NoteEvent]:
     note_id = str(operation.get("note_id") or "").strip()
@@ -1092,7 +1126,7 @@ def _note_ids(value: Any) -> list[str]:
     return result
 
 
-def _base_note_keys_by_track_id(state: dict[str, Any]) -> dict[str, dict[str, NoteKey | None]]:
+def _base_note_keys_by_track_id(state: ImplementationDocument) -> dict[str, dict[str, NoteKey | None]]:
     result: dict[str, dict[str, NoteKey | None]] = {}
     for track in state.get("tracks", []):
         if not isinstance(track, dict):
@@ -1110,7 +1144,7 @@ def _note_key(note: NoteEvent) -> NoteKey:
     return (int(note.pitch), _round_beat(note.start_beat), _round_beat(note.duration_beats), int(note.velocity))
 
 
-def _note_key_from_mapping(note: dict[str, Any]) -> NoteKey:
+def _note_key_from_mapping(note: ImplementationDocument) -> NoteKey:
     return (
         int(note.get("pitch")),
         _round_beat(float(note.get("start_beat"))),
@@ -1234,7 +1268,7 @@ def trim_notes_to_total_beats(tracks: list[TrackPlan], total_beats: float, warni
     return trimmed
 
 
-def _note_selector(operation: dict[str, Any], track: TrackPlan) -> dict[str, Any]:
+def _note_selector(operation: ImplementationDocument, track: TrackPlan) -> ImplementationDocument:
     if isinstance(operation.get("note_ids"), list):
         return {"ids": set(_note_ids(operation.get("note_ids")))}
     if isinstance(operation.get("range"), dict):
@@ -1384,7 +1418,7 @@ def _section_name_for_note_key(note_key: NoteKey, spans: dict[str, tuple[float, 
     return None
 
 
-def _beat_range(value: dict[str, Any]) -> tuple[float, float]:
+def _beat_range(value: ImplementationDocument) -> tuple[float, float]:
     start = _float_min(value.get("start_beat"), "range.start_beat", 0.0)
     end = _float_min(value.get("end_beat"), "range.end_beat", 0.0)
     if end <= start:
@@ -1392,7 +1426,7 @@ def _beat_range(value: dict[str, Any]) -> tuple[float, float]:
     return start, end
 
 
-def _section_from_operation(operation: dict[str, Any], sections: list[SongSection]) -> SongSection:
+def _section_from_operation(operation: ImplementationDocument, sections: list[SongSection]) -> SongSection:
     name = _unique_section_name(operation.get("name"), sections)
     bars = _int_range(operation.get("bars"), "bars", 1, MAX_SECTION_BARS)
     chords = _chords(operation.get("chords") or sections[-1].chords if sections else operation.get("chords"))
@@ -1421,7 +1455,7 @@ def _unique_track_name(value: Any, tracks: list[TrackPlan]) -> str:
 
 
 def _optional_after_section_index(
-    operation: dict[str, Any],
+    operation: ImplementationDocument,
     sections: list[SongSection],
     base_names_by_id: dict[str, str] | None = None,
     *,
@@ -1570,13 +1604,13 @@ def _track_role(name: str) -> str:
     return lower_name.strip()
 
 
-def _quality_summary(plan: SongPlan) -> dict[str, Any]:
+def _quality_summary(plan: SongPlan) -> ImplementationDocument:
     quality = plan.quality or analyze_song_quality(plan)
     scores = quality.scores.to_dict() if quality.scores else {}
     return {"overall": scores.get("overall"), "dimension_scores": scores, "warnings": list(quality.warnings)}
 
 
-def _preview_validator_report(plan: SongPlan, render_midi: bool) -> dict[str, Any]:
+def _preview_validator_report(plan: SongPlan, render_midi: bool) -> ImplementationDocument:
     return {
         "status": "passed",
         "checks": ["song_plan_schema", "song_plan_validation", *(("midi_render",) if render_midi else ())],
@@ -1587,7 +1621,7 @@ def _preview_validator_report(plan: SongPlan, render_midi: bool) -> dict[str, An
     }
 
 
-def _append_preview_event(preview_dir: Path, event_type: str, payload: dict[str, Any], now: str | None = None) -> None:
+def _append_preview_event(preview_dir: Path, event_type: str, payload: ImplementationDocument, now: str | None = None) -> None:
     event = {"timestamp": now or now_iso(), "type": event_type, "payload": sanitize_metadata(payload)}
     with (preview_dir / "events.jsonl").open("a", encoding="utf-8") as file:
         file.write(json.dumps(event, ensure_ascii=False) + "\n")

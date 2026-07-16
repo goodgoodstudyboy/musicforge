@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from dataclasses import dataclass, field
 from importlib import import_module
 from typing import Any, Callable
@@ -94,7 +96,7 @@ class CapabilitySpec:
     compatibility_aliases: tuple[str, ...] = ()
 
 
-def _report_containers(report: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+def _report_containers(report: ImplementationDocument) -> tuple[ImplementationDocument, ...]:
     identity_value = report.get("identity")
     summary_value = report.get("summary")
     source_value = report.get("source")
@@ -106,7 +108,7 @@ def _report_containers(report: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     return identity, summary, report, verification, source
 
 
-def _first_report_value(report: dict[str, Any], fields: tuple[str, ...]) -> Any:
+def _first_report_value(report: ImplementationDocument, fields: tuple[str, ...]) -> Any:
     for container in _report_containers(report):
         for name in fields:
             value = container.get(name)

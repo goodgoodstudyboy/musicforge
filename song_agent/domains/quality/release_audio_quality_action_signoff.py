@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -7,6 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -207,7 +210,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
             signoff["payload_hash"] = stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}})
             signoff["integrity_hash"] = _integrity_hash(signoff)
             write_json(self.signoff_path(queue_id), signoff)
-            self._append_history_event(
+            self._record_history_event(
                 queue_id,
                 "action_queue_signoff_created",
                 {
@@ -235,7 +238,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
                 shutil.rmtree(archive_dir)
             archive_dir.mkdir(parents=True, exist_ok=True)
             manifest = self._write_archive_dir(queue_id, source)
-            self._append_history_event(queue_id, "action_queue_signoff_archive_exported", {"signoff_hash": signoff_hash, "manifest_hash": manifest.get("integrity_hash")})
+            self._record_history_event(queue_id, "action_queue_signoff_archive_exported", {"signoff_hash": signoff_hash, "manifest_hash": manifest.get("integrity_hash")})
             return {"status": "passed", "queue_id": queue_id, "archive_dir": str(archive_dir), "manifest": manifest}
 
     def build_archive_zip(self, queue_id: str) -> dict[str, Any]:
@@ -252,7 +255,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
                     shutil.rmtree(archive_dir)
                 archive_dir.mkdir(parents=True, exist_ok=True)
                 self._write_archive_dir(queue_id, source)
-                self._append_history_event(queue_id, "action_queue_signoff_archive_exported", {"signoff_hash": signoff_hash, "manifest_hash": read_json(archive_dir / "manifest.json").get("integrity_hash")})
+                self._record_history_event(queue_id, "action_queue_signoff_archive_exported", {"signoff_hash": signoff_hash, "manifest_hash": read_json(archive_dir / "manifest.json").get("integrity_hash")})
             archive_dir = self.archive_dir(queue_id)
             zip_path = self.archive_zip_path(queue_id)
             if zip_path.exists():
@@ -273,7 +276,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
                     if path.is_file():
                         archive.write(path, path.relative_to(archive_dir).as_posix())
             final_sha = _sha256_path(zip_path)
-            self._append_history_event(queue_id, "action_queue_signoff_archive_zip_built", {"signoff_hash": signoff_hash, "archive_zip_sha256": final_sha, "manifest_hash": manifest.get("integrity_hash")})
+            self._record_history_event(queue_id, "action_queue_signoff_archive_zip_built", {"signoff_hash": signoff_hash, "archive_zip_sha256": final_sha, "manifest_hash": manifest.get("integrity_hash")})
             return {"status": "passed", "queue_id": queue_id, "zip_path": str(zip_path), "zip_sha256": final_sha, "manifest": manifest}
 
     def verify_archive(self, queue_id: str, **kwargs: Any) -> dict[str, Any]:
@@ -349,7 +352,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
-    def _queue_docs(self, queue_id: str) -> dict[str, dict[str, Any]]:
+    def _queue_docs(self, queue_id: str) -> dict[str, ImplementationDocument]:
         return {
             "queue": read_json(self.queue_store.queue_path(queue_id)),
             "source_binding": read_json(self.queue_store.source_binding_path(queue_id)),
@@ -359,7 +362,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
             "summary": read_json(self.queue_store.summary_path(queue_id)),
         }
 
-    def _write_archive_dir(self, queue_id: str, source: dict[str, Any]) -> dict[str, Any]:
+    def _write_archive_dir(self, queue_id: str, source: ImplementationDocument) -> ImplementationDocument:
         archive_dir = self.archive_dir(queue_id)
         files: list[dict[str, Any]] = []
 
@@ -409,7 +412,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         write_json(archive_dir / "manifest.json", manifest)
         return manifest
 
-    def _empty_resolutions(self, queue_id: str, docs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    def _empty_resolutions(self, queue_id: str, docs: dict[str, ImplementationDocument]) -> ImplementationDocument:
         manual_count = len(_manual_item_ids(docs["items"], docs["results"], docs["manual_actions"]))
         doc = {
             "schema_version": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION,
@@ -425,7 +428,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         doc["integrity_hash"] = _integrity_hash(doc)
         return doc
 
-    def _finalize_resolutions(self, resolutions: dict[str, Any], docs: dict[str, dict[str, Any]]) -> None:
+    def _finalize_resolutions(self, resolutions: ImplementationDocument, docs: dict[str, ImplementationDocument]) -> None:
         manual_ids = _manual_item_ids(docs["items"], docs["results"], docs["manual_actions"])
         rows = [row for row in resolutions.get("resolutions", []) if isinstance(row, dict) and str(row.get("item_id")) in manual_ids]
         resolved_ids = {str(row.get("item_id")) for row in rows}
@@ -444,7 +447,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         }
         resolutions["integrity_hash"] = _integrity_hash(resolutions)
 
-    def _build_closeout(self, queue_id: str, docs: dict[str, dict[str, Any]], resolutions: dict[str, Any], verification: dict[str, Any]) -> dict[str, Any]:
+    def _build_closeout(self, queue_id: str, docs: dict[str, ImplementationDocument], resolutions: ImplementationDocument, verification: ImplementationDocument) -> ImplementationDocument:
         manual_ids = _manual_item_ids(docs["items"], docs["results"], docs["manual_actions"])
         resolved = {str(row.get("item_id")): row for row in resolutions.get("resolutions", []) if isinstance(row, dict)}
         result_rows = [row for row in docs["results"].get("results", []) if isinstance(row, dict)]
@@ -517,7 +520,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         closeout["integrity_hash"] = _integrity_hash(closeout)
         return closeout
 
-    def _signed_source(self, queue_id: str) -> dict[str, Any]:
+    def _signed_source(self, queue_id: str) -> ImplementationDocument:
         if not self.signoff_path(queue_id).exists():
             if self._has_effective_signoff(queue_id):
                 raise ReleaseAudioQualityActionQueueSignoffStateError("Audio Quality Action Queue signoff file is missing but history is signed.")
@@ -563,28 +566,21 @@ class ReleaseAudioQualityActionQueueSignoffStore:
                 raise ReleaseAudioQualityActionQueueSignoffStateError(f"Audio Quality Action Queue signoff binding mismatch: {key}.")
         return {**docs, "manual_resolutions": resolutions, "closeout": closeout, "signoff": signoff, "queue_verification": verification, "history": history}
 
-    def _append_history_event(self, queue_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-        rows = _read_jsonl(self.history_path(queue_id))
-        previous = rows[-1].get("event_hash") if rows else None
-        event = sanitize_metadata(
+    def _record_history_event(self, queue_id: str, event_type: str, payload: ImplementationDocument) -> ImplementationDocument:
+        chain = HistoryChain(self.history_path(queue_id), sanitizer=sanitize_metadata, hash_mode="payload")
+        rows = chain.read()
+        return chain.append(
             {
                 "schema_version": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION,
                 "event_id": f"aqsig-event-{len(rows) + 1:06d}",
                 "event_type": event_type,
                 "queue_id": queue_id,
                 "created_at": now_iso(),
-                "previous_event_hash": previous,
                 "payload": payload,
             }
         )
-        event["payload_hash"] = stable_hash(event["payload"])
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        self.history_path(queue_id).parent.mkdir(parents=True, exist_ok=True)
-        with self.history_path(queue_id).open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
 
-    def _history_chain_ok(self, rows: list[dict[str, Any]]) -> bool:
+    def _history_chain_ok(self, rows: list[ImplementationDocument]) -> bool:
         previous = None
         for row in rows:
             payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
@@ -623,18 +619,18 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         return sorted(rows)[-1][1]
 
 
-def _manual_item_ids(items: dict[str, Any], results: dict[str, Any], manual_actions: dict[str, Any]) -> set[str]:
+def _manual_item_ids(items: ImplementationDocument, results: ImplementationDocument, manual_actions: ImplementationDocument) -> set[str]:
     ids = {str(row.get("item_id")) for row in manual_actions.get("manual_actions", []) if isinstance(row, dict) and row.get("item_id")}
     ids.update(str(row.get("item_id")) for row in results.get("results", []) if isinstance(row, dict) and row.get("status") == "manual_required" and row.get("item_id"))
     ids.update(str(row.get("item_id")) for row in items.get("items", []) if isinstance(row, dict) and (row.get("execution_mode") == "manual_required" or row.get("requires_manual")) and row.get("item_id"))
     return ids
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _archive_readme(signoff: dict[str, Any], closeout: dict[str, Any]) -> str:
+def _archive_readme(signoff: ImplementationDocument, closeout: ImplementationDocument) -> str:
     return "\n".join(
         [
             "MusicForge Release Audio Quality Action Queue Signoff Archive",
@@ -653,7 +649,7 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
-def _public_queue_verification_report(report: dict[str, Any]) -> dict[str, Any]:
+def _public_queue_verification_report(report: ImplementationDocument) -> ImplementationDocument:
     public = {
         key: value
         for key, value in report.items()
@@ -666,7 +662,7 @@ def _public_queue_verification_report(report: dict[str, Any]) -> dict[str, Any]:
     return sanitize_metadata(public)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -677,7 +673,7 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -702,5 +698,5 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return digest.hexdigest()
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}

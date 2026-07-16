@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -202,7 +204,7 @@ def unified_release_program_continuity_acceptance_change_verification_exit_code(
     return 0 if report.get("status") == "passed" else 1
 
 
-def _request_bundle(archive: zipfile.ZipFile, request_id: str) -> dict[str, Any]:
+def _request_bundle(archive: zipfile.ZipFile, request_id: str) -> ImplementationDocument:
     bundle = {
         "request": _read_json_entry(archive, f"cr/{request_id}/request.json"),
         "binding": _read_json_entry(archive, f"cr/{request_id}/binding.json"),
@@ -214,14 +216,14 @@ def _request_bundle(archive: zipfile.ZipFile, request_id: str) -> dict[str, Any]
     return bundle
 
 
-def _reset_bundle(archive: zipfile.ZipFile, reset_id: str) -> dict[str, Any]:
+def _reset_bundle(archive: zipfile.ZipFile, reset_id: str) -> ImplementationDocument:
     return {
         "proof": _read_json_entry(archive, f"rp/{reset_id}/proof.json"),
         "binding": _read_json_entry(archive, f"rp/{reset_id}/binding.json"),
     }
 
 
-def _generation_bundle(archive: zipfile.ZipFile, generation: int) -> dict[str, Any]:
+def _generation_bundle(archive: zipfile.ZipFile, generation: int) -> ImplementationDocument:
     prefix = f"gen/g{generation:06d}"
     return {
         "verification_summary": _read_json_entry(archive, f"{prefix}/verification.json"),
@@ -230,7 +232,7 @@ def _generation_bundle(archive: zipfile.ZipFile, generation: int) -> dict[str, A
     }
 
 
-def _request_checks(requests: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _request_checks(requests: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     for request_id, bundle in sorted(requests.items()):
         request = bundle["request"]
@@ -260,7 +262,7 @@ def _request_checks(requests: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
     return checks
 
 
-def _reset_checks(resets: dict[str, dict[str, Any]], requests: dict[str, dict[str, Any]], events: list[dict[str, Any]], reset_index: dict[str, Any]) -> list[dict[str, Any]]:
+def _reset_checks(resets: dict[str, ImplementationDocument], requests: dict[str, ImplementationDocument], events: list[ImplementationDocument], reset_index: ImplementationDocument) -> list[ImplementationDocument]:
     return continuity_acceptance_change_reset_semantic_checks(resets, requests, events, reset_index)
 
 
@@ -334,7 +336,7 @@ def continuity_acceptance_change_reset_semantic_checks(resets: dict[str, dict[st
     return checks
 
 
-def _index_checks(request_index: dict[str, Any], reset_index: dict[str, Any], requests: dict[str, dict[str, Any]], resets: dict[str, dict[str, Any]], lifecycle: dict[str, Any], events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _index_checks(request_index: ImplementationDocument, reset_index: ImplementationDocument, requests: dict[str, ImplementationDocument], resets: dict[str, ImplementationDocument], lifecycle: ImplementationDocument, events: list[ImplementationDocument]) -> list[ImplementationDocument]:
     request_rows = request_index.get("items") if isinstance(request_index.get("items"), list) else []
     reset_rows = reset_index.get("items") if isinstance(reset_index.get("items"), list) else []
     event_hashes = [row.get("event_hash") for row in events]
@@ -347,7 +349,7 @@ def _index_checks(request_index: dict[str, Any], reset_index: dict[str, Any], re
     ]
 
 
-def _generation_checks(generations: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+def _generation_checks(generations: dict[int, ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     for generation, bundle in sorted(generations.items()):
         for key, doc in bundle.items():
@@ -355,7 +357,7 @@ def _generation_checks(generations: dict[int, dict[str, Any]]) -> list[dict[str,
     return checks
 
 
-def _document_binding_checks(manifest: dict[str, Any], state: dict[str, Any], request_index: dict[str, Any], reset_index: dict[str, Any], generation: dict[str, Any], lifecycle: dict[str, Any]) -> list[dict[str, Any]]:
+def _document_binding_checks(manifest: ImplementationDocument, state: ImplementationDocument, request_index: ImplementationDocument, reset_index: ImplementationDocument, generation: ImplementationDocument, lifecycle: ImplementationDocument) -> list[ImplementationDocument]:
     source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
     docs = {
         "change_control_state_hash": state,
@@ -367,7 +369,7 @@ def _document_binding_checks(manifest: dict[str, Any], state: dict[str, Any], re
     return [_check(f"urpca_cc_manifest_{key}", source.get(key) == doc.get("integrity_hash"), f"Manifest binds {key}.") for key, doc in docs.items()]
 
 
-def _current_acceptance_checks(state: dict[str, Any], archive_path: Path | str | None, verification_report_path: Path | str | None, signoff_binding_path: Path | str | None, *, require: bool) -> list[dict[str, Any]]:
+def _current_acceptance_checks(state: ImplementationDocument, archive_path: Path | str | None, verification_report_path: Path | str | None, signoff_binding_path: Path | str | None, *, require: bool) -> list[ImplementationDocument]:
     if not require:
         return []
     if not archive_path:
@@ -403,7 +405,7 @@ def _current_acceptance_checks(state: dict[str, Any], archive_path: Path | str |
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str], expected_entries: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str], expected_entries: set[str]) -> list[ImplementationDocument]:
     files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     file_paths = {str(row.get("path") or "") for row in files}
     expected_files = expected_entries - {"manifest.json"}
@@ -424,7 +426,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _history_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _history_checks(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     previous = ""
     for index, row in enumerate(rows, start=1):
@@ -441,11 +443,11 @@ def _history_checks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return checks
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     return archive_redaction_check(archive, names, check_id="urpca_cc_redaction_scan")
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, extra: ImplementationDocument | None = None) -> ImplementationDocument:
     if extra:
         checks.append(extra)
     return build_verification_report(
@@ -478,11 +480,11 @@ def _next_generation_ok(previous: Any, next_generation: Any) -> bool:
     return previous_int is not None and next_int == previous_int + 1
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _parse_jsonl(text: str) -> list[dict[str, Any]]:
+def _parse_jsonl(text: str) -> list[ImplementationDocument]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
@@ -490,5 +492,5 @@ def _safe_check_key(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value.strip("/").replace("/", "_"))[:120] or "root"
 
 
-def _has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
+def _has_blocking_failures(checks: list[ImplementationDocument]) -> bool:
     return any(row.get("status") == "failed" and row.get("severity") == "blocking" for row in checks)

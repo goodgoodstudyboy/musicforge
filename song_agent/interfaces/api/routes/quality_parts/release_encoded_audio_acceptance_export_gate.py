@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
-    def _release_encoded_audio_acceptance_export_gate(self, export_manifest: dict[str, Any], acceptance_gate: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_encoded_audio_acceptance_export_gate(self, export_manifest: ImplementationDocument, acceptance_gate: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
         missing: list[str] = []
         mismatched: list[str] = []
@@ -81,7 +83,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
             "missing_profiles": missing_profiles,
         }
 
-    def _release_format_decision_export_gate(self, export_manifest: dict[str, Any], format_decision_gate: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_format_decision_export_gate(self, export_manifest: ImplementationDocument, format_decision_gate: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_decision = export_manifest.get("format_decision") if isinstance(export_manifest.get("format_decision"), dict) else {}
         missing: list[str] = []
         mismatched: list[str] = []
@@ -115,7 +117,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
             "missing_profiles": missing_profiles,
         }
 
-    def _release_rights_clearance_export_gate(self, export_manifest: dict[str, Any], rights_gate: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_rights_clearance_export_gate(self, export_manifest: ImplementationDocument, rights_gate: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_rights = export_manifest.get("rights_clearance") if isinstance(export_manifest.get("rights_clearance"), dict) else {}
         missing: list[str] = []
         mismatched: list[str] = []
@@ -138,7 +140,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
             "manifest_status": manifest_rights.get("status") or "missing",
         }
 
-    def _distribution_encoded_audio_acceptance_export_gate(self, export_manifest: dict[str, Any], acceptance_gate: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _distribution_encoded_audio_acceptance_export_gate(self, export_manifest: ImplementationDocument, acceptance_gate: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
         missing: list[str] = []
         mismatched: list[str] = []
@@ -162,7 +164,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
             "missing_profiles": missing_profiles,
         }
 
-    def _distribution_format_decision_export_gate(self, export_manifest: dict[str, Any], format_decision_gate: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _distribution_format_decision_export_gate(self, export_manifest: ImplementationDocument, format_decision_gate: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_decision = export_manifest.get("format_decision") if isinstance(export_manifest.get("format_decision"), dict) else {}
         missing: list[str] = []
         mismatched: list[str] = []
@@ -200,7 +202,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
             "role_incompatible_profiles": role_incompatible,
         }
 
-    def _package_rights_clearance_export_gate(self, export_manifest: dict[str, Any], rights_gate: dict[str, Any], *, package_label: str) -> dict[str, _interfaces_api_runtime.Any]:
+    def _package_rights_clearance_export_gate(self, export_manifest: ImplementationDocument, rights_gate: ImplementationDocument, *, package_label: str) -> dict[str, _interfaces_api_runtime.Any]:
         manifest_rights = export_manifest.get("rights_clearance") if isinstance(export_manifest.get("rights_clearance"), dict) else {}
         missing: list[str] = []
         mismatched: list[str] = []

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -371,11 +373,11 @@ class ReleaseOperationsRunbookStore:
                     pass
         return f"orb-{(max(existing) if existing else 0) + 1:06d}"
 
-    def _is_stale(self, runbook: dict[str, Any]) -> bool:
+    def _is_stale(self, runbook: ImplementationDocument) -> bool:
         current = self.operations_store.build_report(str(runbook.get("release_id") or ""), persist=False)
         return str(current.get("source_hash") or "") != str(runbook.get("source", {}).get("operations_source_hash") or "")
 
-    def _mark_stale(self, release_id: str, runbook: dict[str, Any], *, now: str | None = None) -> None:
+    def _mark_stale(self, release_id: str, runbook: ImplementationDocument, *, now: str | None = None) -> None:
         runbook["status"] = "stale"
         for item in runbook.get("items", []) if isinstance(runbook.get("items"), list) else []:
             if isinstance(item, dict) and item.get("status") in {"pending", "failed", "blocked"}:
@@ -384,7 +386,7 @@ class ReleaseOperationsRunbookStore:
         _write_json(self.runbook_path(release_id, str(runbook.get("runbook_id") or "")), _finalize_runbook(runbook))
         self._append_event(release_id, str(runbook.get("runbook_id") or ""), "stale_detected", {}, now=now)
 
-    def _execute_item(self, release_id: str, runbook: dict[str, Any], item: dict[str, Any], *, now: str) -> None:
+    def _execute_item(self, release_id: str, runbook: ImplementationDocument, item: ImplementationDocument, *, now: str) -> None:
         item["status"] = "running"
         item["started_at"] = now
         item["attempt"] = int(item.get("attempt") or 0) + 1
@@ -405,7 +407,7 @@ class ReleaseOperationsRunbookStore:
             item["result"] = {"status": item["status"], "before_summary": before}
             self._append_event(release_id, str(runbook.get("runbook_id")), "item_failed", {"item_id": item.get("item_id"), "error": item["error"]})
 
-    def _perform_action(self, release_id: str, item: dict[str, Any]) -> dict[str, Any]:
+    def _perform_action(self, release_id: str, item: ImplementationDocument) -> ImplementationDocument:
         action = str(item.get("action_type") or "")
         entity_id = str(item.get("entity_id") or release_id)
         if action == "release.qa.refresh":
@@ -496,7 +498,7 @@ class ReleaseOperationsRunbookStore:
             return release_operations_verification_summary(verify_release_operations_package(self.operations_store.zip_path(release_id)))
         raise ReleaseOperationsRunbookStateError(f"Unsupported runbook action: {action}")
 
-    def _item_summary(self, release_id: str, item: dict[str, Any]) -> dict[str, Any]:
+    def _item_summary(self, release_id: str, item: ImplementationDocument) -> ImplementationDocument:
         action = str(item.get("action_type") or "")
         entity_id = str(item.get("entity_id") or release_id)
         try:
@@ -516,7 +518,7 @@ class ReleaseOperationsRunbookStore:
         except Exception:
             return {}
 
-    def _append_event(self, release_id: str, runbook_id: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_event(self, release_id: str, runbook_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.events_path(release_id, runbook_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = 0
@@ -558,7 +560,7 @@ def runbook_summary(runbook: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _runbook_item(action: dict[str, Any], *, index: int, source_hash: str | None) -> dict[str, Any]:
+def _runbook_item(action: ImplementationDocument, *, index: int, source_hash: str | None) -> ImplementationDocument:
     action_type = str(action.get("action_type") or "")
     risk = _risk_for_action(action_type)
     status = "manual_required" if risk == "manual_required" else "pending"
@@ -600,7 +602,7 @@ def _risk_for_action(action_type: str) -> str:
     return "manual_required"
 
 
-def _finalize_runbook(runbook: dict[str, Any]) -> dict[str, Any]:
+def _finalize_runbook(runbook: ImplementationDocument) -> ImplementationDocument:
     items = [item for item in runbook.get("items", []) if isinstance(item, dict)]
     counts = {
         "total_count": len(items),
@@ -627,7 +629,7 @@ def _finalize_runbook(runbook: dict[str, Any]) -> dict[str, Any]:
     return sanitize_metadata(runbook, blocked_keys=RUNBOOK_BLOCKED_KEYS)
 
 
-def _execution_report(runbook: dict[str, Any], *, operations_after: dict[str, Any], stale: bool | None = None) -> dict[str, Any]:
+def _execution_report(runbook: ImplementationDocument, *, operations_after: ImplementationDocument, stale: bool | None = None) -> ImplementationDocument:
     report = {
         "schema_version": RUNBOOK_SCHEMA_VERSION,
         "runbook_id": runbook.get("runbook_id"),
@@ -644,7 +646,7 @@ def _execution_report(runbook: dict[str, Any], *, operations_after: dict[str, An
     return sanitize_metadata(report, blocked_keys=RUNBOOK_BLOCKED_KEYS)
 
 
-def _source_from_report(report: dict[str, Any]) -> dict[str, Any]:
+def _source_from_report(report: ImplementationDocument) -> ImplementationDocument:
     return {
         "operations_report_id": report.get("report_id"),
         "operations_source_hash": report.get("source_hash"),
@@ -654,11 +656,11 @@ def _source_from_report(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _report_reference(report: dict[str, Any]) -> dict[str, Any]:
+def _report_reference(report: ImplementationDocument) -> ImplementationDocument:
     return {"report_id": report.get("report_id"), "status": report.get("status"), "current_stage": report.get("current_stage"), "source_hash": report.get("source_hash"), "integrity_hash": report.get("integrity_hash")}
 
 
-def _find_item(runbook: dict[str, Any], item_id: str) -> dict[str, Any]:
+def _find_item(runbook: ImplementationDocument, item_id: str) -> ImplementationDocument:
     for item in runbook.get("items", []) if isinstance(runbook.get("items"), list) else []:
         if isinstance(item, dict) and item.get("item_id") == item_id:
             return item
@@ -691,11 +693,11 @@ def _safe_text(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
+def _write_json(path: Path, payload: ImplementationDocument) -> None:
     write_json(path, sanitize_metadata(payload, blocked_keys=RUNBOOK_BLOCKED_KEYS))
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = path.relative_to(root).as_posix()
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -723,7 +725,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleaseOperationsRunbookStateError(f"Unsafe path outside runbook workspace: {target}")
 
 
-def _write_readme(export_dir: Path, runbook: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, runbook: ImplementationDocument) -> None:
     lines = [
         "MusicForge Release Operations Runbook Package",
         "",

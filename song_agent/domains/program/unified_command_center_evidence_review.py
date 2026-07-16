@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import base64
 import json
 import threading
@@ -406,7 +408,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
         except (OSError, ValueError, UnifiedCommandCenterEvidenceReviewError) as exc:
             return {"status": "failed", "hard_block": True, "message": sanitize_sensitive_text(str(exc))}
 
-    def _local_paths(self, center_id: str, review_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _local_paths(self, center_id: str, review_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         continuous_review_id = str(payload.get("continuous_review_id") or payload.get("source_review_id") or "")
         if not continuous_review_id:
             reviews = self.review_store.list_reviews(center_id)
@@ -445,7 +447,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
         }
         return paths
 
-    def _merged_local_paths(self, center_id: str, review_id: str | None, payload: dict[str, Any]) -> dict[str, Any]:
+    def _merged_local_paths(self, center_id: str, review_id: str | None, payload: ImplementationDocument) -> ImplementationDocument:
         if review_id and self.local_paths_path(center_id, review_id).exists():
             paths = read_json(self.local_paths_path(center_id, review_id))
             for key, value in self._local_paths(center_id, review_id, payload).items():
@@ -454,7 +456,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             return paths
         return self._local_paths(center_id, review_id or str(payload.get("review_id") or ""), payload)
 
-    def _build_documents(self, center_id: str, review_id: str, local_paths: dict[str, Any], *, replay: bool) -> dict[str, Any]:
+    def _build_documents(self, center_id: str, review_id: str, local_paths: ImplementationDocument, *, replay: bool) -> ImplementationDocument:
         now = now_iso()
         source = _source_document(center_id, review_id, local_paths, now)
         evidence_index = _evidence_index_document(center_id, review_id, source)
@@ -473,7 +475,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             "manual_checklist": checklist,
         }
 
-    def _write_docs(self, center_id: str, review_id: str, docs: dict[str, Any]) -> None:
+    def _write_docs(self, center_id: str, review_id: str, docs: ImplementationDocument) -> None:
         for key, path in (
             ("source", self.source_path(center_id, review_id)),
             ("evidence_index", self.evidence_index_path(center_id, review_id)),
@@ -486,7 +488,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             write_json(path, docs[key])
         self.guide_path(center_id, review_id).write_text(_reviewer_guide(docs), encoding="utf-8")
 
-    def _verification_summaries(self, center_id: str, review_id: str, paths: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _verification_summaries(self, center_id: str, review_id: str, paths: ImplementationDocument) -> dict[str, ImplementationDocument]:
         del center_id, review_id
         return {
             "ucc.json": _summary_from_path(paths.get("ucc_verification_report"), "ucc"),
@@ -498,14 +500,14 @@ class UnifiedCommandCenterEvidenceReviewStore:
             "release-check.json": _summary_from_path(paths.get("release_check_report"), "release-check"),
         }
 
-    def _proof_summaries(self, center_id: str, review_id: str, paths: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _proof_summaries(self, center_id: str, review_id: str, paths: ImplementationDocument) -> dict[str, ImplementationDocument]:
         del center_id, review_id
         return {
             "signoff-binding-summary.json": _summary_from_path(paths.get("signoff_binding"), "signoff-binding"),
             "change-request-binding-report.json": _summary_from_path(paths.get("drift_change_request_binding_report"), "cr-binding-report"),
         }
 
-    def _ensure_not_stale(self, center_id: str, review_id: str, payload: dict[str, Any]) -> None:
+    def _ensure_not_stale(self, center_id: str, review_id: str, payload: ImplementationDocument) -> None:
         current = self.get_review(center_id, review_id)["source"]
         paths = self._merged_local_paths(center_id, review_id, payload)
         rebuilt = _source_document(center_id, review_id, paths, str(current.get("created_at") or now_iso()))
@@ -525,7 +527,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
         existing = [path.name for path in root.glob("uccera-*")] if root.exists() else []
         return f"uccera-{len(existing) + 1:06d}"
 
-    def _write_change_request_draft(self, center_id: str, review_id: str, response: dict[str, Any]) -> None:
+    def _write_change_request_draft(self, center_id: str, review_id: str, response: ImplementationDocument) -> None:
         path = self.review_dir(center_id, review_id) / "change-request-drafts.json"
         doc = _read_optional_json(path) or {"package_type": "musicforge_unified_command_center_evidence_review_change_request_drafts", "items": []}
         for finding in response.get("findings", []):
@@ -534,7 +536,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
         write_json(path, doc)
 
 
-def _source_document(center_id: str, review_id: str, paths: dict[str, Any], created_at: str) -> dict[str, Any]:
+def _source_document(center_id: str, review_id: str, paths: ImplementationDocument, created_at: str) -> ImplementationDocument:
     source = {
         "ucc_zip_sha256": _sha256_path(paths.get("ucc_zip")),
         "ucc_manifest_hash": _zip_manifest_hash(paths.get("ucc_zip")),
@@ -570,7 +572,7 @@ def _source_document(center_id: str, review_id: str, paths: dict[str, Any], crea
     return doc
 
 
-def _evidence_index_document(center_id: str, review_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _evidence_index_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
     source_map = source.get("source", {})
     items = []
     for component, prefix, required in (
@@ -591,7 +593,7 @@ def _evidence_index_document(center_id: str, review_id: str, source: dict[str, A
     return doc
 
 
-def _proof_index_document(center_id: str, review_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _proof_index_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
     source_map = source.get("source", {})
     proofs = []
     if source_map.get("cr_binding_report_hash"):
@@ -606,7 +608,7 @@ def _proof_index_document(center_id: str, review_id: str, source: dict[str, Any]
     return doc
 
 
-def _replay_plan_document(center_id: str, review_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _replay_plan_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
     source_map = source.get("source", {})
     steps = [
         {"step_id": "verify_ucc", "order": 10, "command": "verify-unified-command-center-package", "required": True, "inputs": ["ucc_zip", "ucc_verification_report"], "expected_status": "passed"},
@@ -626,14 +628,14 @@ def _replay_plan_document(center_id: str, review_id: str, source: dict[str, Any]
     return doc
 
 
-def _empty_replay_document(center_id: str, review_id: str, source: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
+def _empty_replay_document(center_id: str, review_id: str, source: ImplementationDocument, plan: ImplementationDocument) -> ImplementationDocument:
     steps = [{"step_id": row.get("step_id"), "status": "pending", "blockers": [], "verification_hash": None} for row in plan.get("steps", [])]
     doc = {"package_type": "musicforge_unified_command_center_evidence_review_replay_result", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "status": "pending", "steps": steps, "summary": {"total": len(steps), "passed": 0, "failed": 0, "manual_review": 1}}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _run_replay_document(center_id: str, review_id: str, source: dict[str, Any], plan: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
+def _run_replay_document(center_id: str, review_id: str, source: ImplementationDocument, plan: ImplementationDocument, paths: ImplementationDocument) -> ImplementationDocument:
     steps = []
     for step in plan.get("steps", []):
         step_id = step.get("step_id")
@@ -661,19 +663,19 @@ def _run_replay_document(center_id: str, review_id: str, source: dict[str, Any],
     return doc
 
 
-def _narrative_document(center_id: str, review_id: str, source: dict[str, Any], replay_result: dict[str, Any]) -> dict[str, Any]:
+def _narrative_document(center_id: str, review_id: str, source: ImplementationDocument, replay_result: ImplementationDocument) -> ImplementationDocument:
     doc = {"package_type": "musicforge_unified_command_center_evidence_review_narrative", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "status": replay_result.get("status"), "summary": {"ucc_ready": bool(source.get("source", {}).get("ucc_verification_hash")), "archive_current": bool(source.get("source", {}).get("archive_verification_hash")), "handoff_current": bool(source.get("source", {}).get("handoff_verification_hash")), "drift_response_present": bool(source.get("source", {}).get("drift_response_verification_hash")), "manual_review_required": True}}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _checklist_document(center_id: str, review_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _checklist_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
     doc = {"package_type": "musicforge_unified_command_center_evidence_review_manual_checklist", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "items": [{"item_id": "manual-001", "label": "Reviewer confirms UCC evidence chain narrative.", "required": True, "status": "manual_required"}]}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _manifest_document(center_id: str, review_id: str, source: dict[str, Any], root: Path, entries: set[str], status: str, *, package_type: str = UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_PACKAGE_TYPE, evidence_id: str | None = None) -> dict[str, Any]:
+def _manifest_document(center_id: str, review_id: str, source: ImplementationDocument, root: Path, entries: set[str], status: str, *, package_type: str = UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_PACKAGE_TYPE, evidence_id: str | None = None) -> ImplementationDocument:
     files = []
     for rel in sorted(entries - {"manifest.json"}):
         path = root / rel
@@ -683,7 +685,7 @@ def _manifest_document(center_id: str, review_id: str, source: dict[str, Any], r
     return manifest
 
 
-def _reviewer_guide(docs: dict[str, Any]) -> str:
+def _reviewer_guide(docs: ImplementationDocument) -> str:
     source = docs.get("source", {})
     replay = docs.get("replay_result", {})
     return sanitize_sensitive_text(
@@ -700,7 +702,7 @@ def _reviewer_guide(docs: dict[str, Any]) -> str:
     )
 
 
-def _review_verifier_kwargs(paths: dict[str, Any]) -> dict[str, Any]:
+def _review_verifier_kwargs(paths: ImplementationDocument) -> ImplementationDocument:
     return {
         "ucc_zip_path": _path_or_none(paths.get("ucc_zip")),
         "ucc_verification_report_path": _path_or_none(paths.get("ucc_verification_report")),
@@ -723,7 +725,7 @@ def _review_verifier_kwargs(paths: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _summary_from_path(path: Any, label: str) -> dict[str, Any]:
+def _summary_from_path(path: Any, label: str) -> ImplementationDocument:
     if not path or not Path(path).exists():
         doc = {"package_type": f"musicforge_{label}_summary", "status": "not_applicable", "label": label}
     else:
@@ -734,7 +736,7 @@ def _summary_from_path(path: Any, label: str) -> dict[str, Any]:
     return doc
 
 
-def _generic_report(path: Any) -> dict[str, Any]:
+def _generic_report(path: Any) -> ImplementationDocument:
     if not path or not Path(path).exists():
         return {"status": "not_applicable", "blockers": [], "integrity_hash": None}
     report = read_json(Path(path))
@@ -746,42 +748,42 @@ def _generic_report(path: Any) -> dict[str, Any]:
     return {"status": status or "failed", "blockers": report.get("blockers", []), "integrity_hash": _integrity_or_stable(report)}
 
 
-def _release_check_result(path: Any) -> dict[str, Any]:
+def _release_check_result(path: Any) -> ImplementationDocument:
     if not path or not Path(path).exists():
         return {"status": "not_applicable", "blockers": [], "integrity_hash": None}
     report = read_json(Path(path))
     return {"status": "passed" if report.get("ok") is True else "failed", "blockers": [row.get("check_id") for row in report.get("results", []) if isinstance(row, dict) and not row.get("ok")], "integrity_hash": _integrity_or_stable(report)}
 
 
-def _public_reviewer(reviewer: dict[str, Any]) -> dict[str, Any]:
+def _public_reviewer(reviewer: ImplementationDocument) -> ImplementationDocument:
     return {"name": sanitize_sensitive_text(str(reviewer.get("name") or "Reviewer"))[:120], "organization": sanitize_sensitive_text(str(reviewer.get("organization") or ""))[:120], "role": sanitize_sensitive_text(str(reviewer.get("role") or "reviewer"))[:80]}
 
 
-def _findings(value: Any) -> list[dict[str, Any]]:
+def _findings(value: Any) -> list[ImplementationDocument]:
     rows = value if isinstance(value, list) else []
     return [{"severity": sanitize_sensitive_text(str(row.get("severity") or "low"))[:40], "component": sanitize_sensitive_text(str(row.get("component") or ""))[:120], "message": sanitize_sensitive_text(str(row.get("message") or ""))[:1000]} for row in rows if isinstance(row, dict)]
 
 
-def _public_response(response: dict[str, Any]) -> dict[str, Any]:
+def _public_response(response: ImplementationDocument) -> ImplementationDocument:
     doc = {"package_type": "musicforge_unified_command_center_evidence_review_response_public", "response_id": response.get("response_id"), "review_id": response.get("review_id"), "result": response.get("result"), "reviewer": response.get("reviewer"), "findings": response.get("findings", []), "signed_at": response.get("signed_at")}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _response_verification_summary(response: dict[str, Any], public_response: dict[str, Any]) -> dict[str, Any]:
+def _response_verification_summary(response: ImplementationDocument, public_response: ImplementationDocument) -> ImplementationDocument:
     doc = {"package_type": "musicforge_unified_command_center_evidence_review_response_verification_summary", "response_id": response.get("response_id"), "status": response.get("status"), "result": response.get("result"), "response_payload_hash": response.get("payload_hash"), "response_integrity_hash": response.get("integrity_hash"), "response_public_hash": public_response.get("integrity_hash"), "bindings": response.get("bindings", {})}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _response_binding_summary(response: dict[str, Any]) -> dict[str, Any]:
+def _response_binding_summary(response: ImplementationDocument) -> ImplementationDocument:
     bindings = response.get("bindings", {})
     doc = {"package_type": "musicforge_unified_command_center_evidence_review_response_binding_summary", "response_id": response.get("response_id"), "review_pack_zip_sha256": bindings.get("review_pack_zip_sha256"), "review_pack_manifest_hash": bindings.get("review_pack_manifest_hash"), "review_pack_source_hash": bindings.get("review_pack_source_hash"), "replay_result_hash": bindings.get("replay_result_hash"), "response_payload_hash": response.get("payload_hash")}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     return read_json(path) if path.exists() else {}
 
 
@@ -791,7 +793,7 @@ def _path_or_none(value: Any) -> Path | None:
     return Path(value)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -802,7 +804,7 @@ def _integrity_from_path(path: Any) -> str | None:
     return data.get("integrity_hash") or stable_hash(data)
 
 
-def _integrity_or_stable(payload: dict[str, Any]) -> str:
+def _integrity_or_stable(payload: ImplementationDocument) -> str:
     return str(payload.get("integrity_hash") or stable_hash(payload))
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -418,7 +420,7 @@ def _project_version_context(project_store: ProjectStore, job_store: Any | None,
     return document, version, parent_job, SongPlan.from_dict(read_json(plan_path)), midi_path
 
 
-def _validator_report(plan_path: Path, midi_path: Path) -> dict[str, Any]:
+def _validator_report(plan_path: Path, midi_path: Path) -> ImplementationDocument:
     plan = read_json(plan_path)
     return {
         "status": "passed",
@@ -430,7 +432,7 @@ def _validator_report(plan_path: Path, midi_path: Path) -> dict[str, Any]:
     }
 
 
-def _run_summary(plan_path: Path, midi_path: Path) -> dict[str, Any]:
+def _run_summary(plan_path: Path, midi_path: Path) -> ImplementationDocument:
     plan = read_json(plan_path)
     tracks = plan.get("tracks", []) if isinstance(plan.get("tracks"), list) else []
     sections = plan.get("sections", []) if isinstance(plan.get("sections"), list) else []
@@ -446,7 +448,7 @@ def _run_summary(plan_path: Path, midi_path: Path) -> dict[str, Any]:
     }
 
 
-def _job_state(job_store: Any | None, job_id: str, run_dir: Path, title: str, now: str, summary: dict[str, Any], request_payload: dict[str, Any], metadata: dict[str, Any], pipeline_mode: str) -> Any:
+def _job_state(job_store: Any | None, job_id: str, run_dir: Path, title: str, now: str, summary: ImplementationDocument, request_payload: ImplementationDocument, metadata: ImplementationDocument, pipeline_mode: str) -> Any:
     from song_agent.application.jobs.model import JobState
 
     artifacts = {

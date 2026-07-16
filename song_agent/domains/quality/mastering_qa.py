@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import io
 import math
@@ -317,12 +319,12 @@ class MasteringStore:
         self,
         release_id: str,
         *,
-        analysis: dict[str, Any],
-        plan: dict[str, Any],
-        candidates: list[dict[str, Any]],
-        selected: dict[str, Any],
+        analysis: ImplementationDocument,
+        plan: ImplementationDocument,
+        candidates: list[ImplementationDocument],
+        selected: ImplementationDocument,
         now: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> ImplementationDocument:
         now = now or now_iso()
         status = "missing"
         blockers: list[str] = []
@@ -368,7 +370,7 @@ class MasteringStore:
         summary["integrity_hash"] = mastering_summary_hash(summary)
         return sanitize_metadata(summary, blocked_keys=MASTERING_BLOCKED_KEYS)
 
-    def _with_analysis_current_state(self, analysis: dict[str, Any]) -> dict[str, Any]:
+    def _with_analysis_current_state(self, analysis: ImplementationDocument) -> ImplementationDocument:
         clean = sanitize_metadata(analysis, blocked_keys=MASTERING_BLOCKED_KEYS)
         try:
             profile = self.profile_store.get_profile(str(clean.get("profile_id") or "streaming_balanced"))
@@ -387,7 +389,7 @@ class MasteringStore:
         clean["stale"] = any(reason != "integrity" for reason in reasons)
         return clean
 
-    def _with_plan_current_state(self, release_id: str, plan: dict[str, Any]) -> dict[str, Any]:
+    def _with_plan_current_state(self, release_id: str, plan: ImplementationDocument) -> ImplementationDocument:
         clean = sanitize_metadata(plan, blocked_keys=MASTERING_BLOCKED_KEYS)
         reasons: list[str] = []
         analysis = self.read_analysis(release_id, default={})
@@ -399,7 +401,7 @@ class MasteringStore:
         clean["stale"] = any(reason != "integrity" for reason in reasons)
         return clean
 
-    def _with_candidate_current_state(self, release_id: str, candidate: dict[str, Any]) -> dict[str, Any]:
+    def _with_candidate_current_state(self, release_id: str, candidate: ImplementationDocument) -> ImplementationDocument:
         clean = sanitize_metadata(candidate, blocked_keys=MASTERING_BLOCKED_KEYS)
         reasons: list[str] = []
         analysis = self.read_analysis(release_id, default={})
@@ -826,7 +828,7 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _analyze_mastering_track(*, track: dict[str, Any], wav_path: Path, profile: MasteringProfile, now: str) -> dict[str, Any]:
+def _analyze_mastering_track(*, track: ImplementationDocument, wav_path: Path, profile: MasteringProfile, now: str) -> ImplementationDocument:
     source = {"track_id": track.get("track_id"), "project_id": track.get("project_id"), "version_id": track.get("version_id"), "scope": "mastering"}
     if not wav_path.exists() or not wav_path.is_file() or wav_path.is_symlink():
         return {
@@ -913,7 +915,7 @@ def _analyze_mastering_track(*, track: dict[str, Any], wav_path: Path, profile: 
     )
 
 
-def _profile_limits(profile: MasteringProfile) -> dict[str, Any]:
+def _profile_limits(profile: MasteringProfile) -> ImplementationDocument:
     return {
         "target_loudness_proxy_db": profile.target_loudness_proxy_db,
         "loudness_tolerance_db": profile.loudness_tolerance_db,
@@ -926,7 +928,7 @@ def _profile_limits(profile: MasteringProfile) -> dict[str, Any]:
     }
 
 
-def _release_stub_from_analysis(analysis: dict[str, Any]) -> ReleaseDocument:
+def _release_stub_from_analysis(analysis: ImplementationDocument) -> ReleaseDocument:
     from song_agent.domains.delivery.releases import ReleaseDocument, ReleaseTrack
 
     tracks = []
@@ -976,17 +978,17 @@ class _NullProjectStore:
         return Path(".")
 
 
-def _object_hash(value: dict[str, Any], exclude: set[str]) -> str:
+def _object_hash(value: ImplementationDocument, exclude: set[str]) -> str:
     return stable_hash(sanitize_metadata({key: item for key, item in value.items() if key not in exclude}, blocked_keys=MASTERING_BLOCKED_KEYS))
 
 
-def _file_state(path: Path) -> dict[str, Any]:
+def _file_state(path: Path) -> ImplementationDocument:
     if not path.exists() or not path.is_file() or path.is_symlink():
         return {"exists": False, "sha256": None, "size_bytes": 0}
     return {"exists": True, "sha256": file_sha256(path), "size_bytes": path.stat().st_size}
 
 
-def _json_file_state(path: Path) -> dict[str, Any]:
+def _json_file_state(path: Path) -> ImplementationDocument:
     state = _file_state(path)
     if state.get("exists"):
         try:
@@ -996,7 +998,7 @@ def _json_file_state(path: Path) -> dict[str, Any]:
     return state
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = path.resolve().relative_to(export_dir.resolve()).as_posix()
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": file_sha256(path)}
 
@@ -1022,7 +1024,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise MasteringStateError("Refusing to operate outside mastering boundaries.") from exc
 
 
-def _check(check_id: str, status: str, message: str) -> dict[str, Any]:
+def _check(check_id: str, status: str, message: str) -> ImplementationDocument:
     return {"id": check_id, "status": status, "message": message}
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -15,7 +17,7 @@ class StudioRoutesReviewSprintActionQueue:
         sprint: Any,
         queue_store: ReviewSprintActionQueueStore,
         queue_id: str,
-        payload: dict[str, Any],
+        payload: ImplementationDocument,
     ) -> dict[str, _interfaces_api_runtime.Any]:
         queue = queue_store.read_queue(queue_id)
         if queue.project_id != project_id or queue.sprint_id != sprint.sprint_id:
@@ -124,7 +126,7 @@ class StudioRoutesReviewSprintActionQueue:
         _interfaces_api_runtime.ensure_task_current(task, parent_plan)
         return task
 
-    def _generate_review_task_local_candidates_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _generate_review_task_local_candidates_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         candidates = task_store.list_candidates(task.task_id)
         if bool(payload.get("skip_existing_ready", True)) and any(candidate.candidate_type == "local_review_intents" and candidate.status in {"ready", "applied"} for candidate in candidates):
             return {"status": "skipped", "reason": "ready local candidate exists", "created_count": 0, "created_candidate_ids": []}
@@ -154,7 +156,7 @@ class StudioRoutesReviewSprintActionQueue:
         except (FileNotFoundError, _interfaces_api_runtime.ProviderError, _interfaces_api_runtime.ReviewTaskError, _interfaces_api_runtime.ReviewTaskStateError, ValueError, TypeError):
             return _interfaces_api_runtime.mark_judge_report_stale(report, stale=True)
 
-    def _refresh_review_task_judge_report(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any] | None = None) -> dict[str, _interfaces_api_runtime.Any]:
+    def _refresh_review_task_judge_report(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: ImplementationDocument | None = None) -> dict[str, _interfaces_api_runtime.Any]:
         payload = payload if isinstance(payload, dict) else {}
         _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
         _interfaces_api_runtime.ensure_task_current(task, parent_plan)
@@ -203,7 +205,7 @@ class StudioRoutesReviewSprintActionQueue:
         self.project_store.append_event(project_id, "review_task_judge_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": saved.get("recommended_candidate_id"), "template_id": template.template_id})
         return {"ok": True, "task": task.to_dict(), "judge_report": saved, "summary": _interfaces_api_runtime.judge_report_summary(saved), "decision_report": refreshed_decision, "provider_snapshot": provider_snapshot}
 
-    def _refresh_review_task_decision_report_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _refresh_review_task_decision_report_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
         _interfaces_api_runtime.ensure_task_current(task, parent_plan)
         ranked = task_store.rank_candidates(task)
@@ -219,7 +221,7 @@ class StudioRoutesReviewSprintActionQueue:
         item: SprintActionItem,
         *,
         status: str,
-        result: dict[str, Any] | None = None,
+        result: ImplementationDocument | None = None,
         error: str | None = None,
         event: str | None = None,
     ) -> _interfaces_api_runtime.SprintActionItem:

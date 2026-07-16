@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -467,7 +469,7 @@ class UnifiedCommandCenterReleaseTrainStore:
                 rows.append(json.loads(line))
         return rows
 
-    def _build_documents(self, train_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _build_documents(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         train = self.read_train(train_id)
         items_doc = self._read_items(train_id)
         evidence_manifest = _read_external_manifest(payload.get("external_evidence_manifest") or payload.get("external_evidence_manifest_path"), payload)
@@ -497,14 +499,14 @@ class UnifiedCommandCenterReleaseTrainStore:
         runbook_result = _runbook_result(train_id, source["source_hash"], [])
         return {"train": train, "source": source, "items": items_doc, "inventory": inventory, "readiness": readiness, "dependency": dependency, "wave": wave, "report": report, "runbook": runbook, "runbook_result": runbook_result}
 
-    def _ensure_docs(self, train_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _ensure_docs(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         if self.report_path(train_id).exists():
             return self.read_docs(train_id)
         docs = self._build_documents(train_id, payload)
         self._write_docs(train_id, docs)
         return docs
 
-    def _write_docs(self, train_id: str, docs: dict[str, Any]) -> None:
+    def _write_docs(self, train_id: str, docs: ImplementationDocument) -> None:
         for key, path_fn in (
             ("source", self.source_path),
             ("items", self.items_path),
@@ -525,17 +527,17 @@ class UnifiedCommandCenterReleaseTrainStore:
         write_json(self.train_path(train_id), train)
         docs["train"] = train
 
-    def _read_items(self, train_id: str) -> dict[str, Any]:
+    def _read_items(self, train_id: str) -> ImplementationDocument:
         if not self.items_path(train_id).exists():
             self._write_items(train_id, [])
         return read_json(self.items_path(train_id))
 
-    def _write_items(self, train_id: str, rows: list[dict[str, Any]]) -> None:
+    def _write_items(self, train_id: str, rows: list[ImplementationDocument]) -> None:
         doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_items", "train_id": train_id, "items": rows, "summary": {"item_count": len(rows)}})
         doc["integrity_hash"] = _integrity_hash(doc)
         write_json(self.items_path(train_id), doc)
 
-    def _signed_docs_for_export(self, train_id: str) -> dict[str, Any]:
+    def _signed_docs_for_export(self, train_id: str) -> ImplementationDocument:
         train = self.read_train(train_id)
         signoff_path = self.signoff_path(train_id)
         state = self.latest_signoff_state(train_id)
@@ -569,7 +571,7 @@ class UnifiedCommandCenterReleaseTrainStore:
         docs["signoff_binding"] = binding
         return docs
 
-    def _read_signoff_binding(self, train_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _read_signoff_binding(self, train_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         path = self.signoff_binding_path(train_id)
         if not path.exists():
             raise UnifiedCommandCenterReleaseTrainStateError("Release Train signoff binding summary is missing.")
@@ -580,7 +582,7 @@ class UnifiedCommandCenterReleaseTrainStore:
             raise UnifiedCommandCenterReleaseTrainStateError("Release Train signoff binding does not match current signoff.")
         return binding
 
-    def _append_history(self, train_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         history = self.read_history(train_id)
         previous = str(history[-1].get("event_hash") or "") if history else ""
         event = sanitize_metadata({**payload, "previous_event_hash": previous})
@@ -592,7 +594,7 @@ class UnifiedCommandCenterReleaseTrainStore:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
         return event
 
-    def _signoff_binding_summary(self, train_id: str, signoff: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    def _signoff_binding_summary(self, train_id: str, signoff: ImplementationDocument, event: ImplementationDocument) -> ImplementationDocument:
         binding = sanitize_metadata(
             {
                 "schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_SCHEMA_VERSION,
@@ -630,7 +632,7 @@ class UnifiedCommandCenterReleaseTrainStore:
     def _archive_built_for_signoff(self, train_id: str, signoff_hash: str) -> bool:
         return any(event.get("event_type") == "ucc_release_train_archive_built" and event.get("signoff_hash") == signoff_hash for event in self.read_history(train_id))
 
-    def _open_approved_change_request(self, train_id: str) -> dict[str, Any] | None:
+    def _open_approved_change_request(self, train_id: str) -> ImplementationDocument | None:
         change_dir = self.train_dir(train_id) / "change-control" / "change-requests"
         if not change_dir.exists():
             return None
@@ -672,7 +674,7 @@ def write_external_evidence_manifest(path: Path | str, *, train_id: str, items: 
     return manifest
 
 
-def _read_external_manifest(path: Any, payload: dict[str, Any]) -> dict[str, Any]:
+def _read_external_manifest(path: Any, payload: ImplementationDocument) -> ImplementationDocument:
     if path:
         return read_json(Path(path))
     rows = payload.get("external_evidence") or payload.get("external_evidence_items") or []
@@ -688,7 +690,7 @@ def _read_external_manifest(path: Any, payload: dict[str, Any]) -> dict[str, Any
     return manifest
 
 
-def _build_evidence_rows(items_doc: dict[str, Any], external_manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _build_evidence_rows(items_doc: ImplementationDocument, external_manifest: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
     external_by_key = {_evidence_key(row): row for row in external_manifest.get("items", []) if isinstance(row, dict)}
     evidence_rows: list[dict[str, Any]] = []
     item_rows: list[dict[str, Any]] = []
@@ -710,7 +712,7 @@ def _build_evidence_rows(items_doc: dict[str, Any], external_manifest: dict[str,
     return evidence_rows, item_rows
 
 
-def _evidence_row(item: dict[str, Any], evidence_type: str, external: dict[str, Any]) -> dict[str, Any]:
+def _evidence_row(item: ImplementationDocument, evidence_type: str, external: ImplementationDocument) -> ImplementationDocument:
     row = {
         "item_id": item.get("item_id"),
         "center_id": item.get("center_id"),
@@ -757,7 +759,7 @@ def _evidence_row(item: dict[str, Any], evidence_type: str, external: dict[str, 
     return sanitize_metadata(row)
 
 
-def _inventory_document(train_id: str, source_hash: str, evidence_rows: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _inventory_document(train_id: str, source_hash: str, evidence_rows: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     doc = sanitize_metadata(
         {
             "schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_SCHEMA_VERSION,
@@ -777,7 +779,7 @@ def _inventory_document(train_id: str, source_hash: str, evidence_rows: list[dic
     return doc
 
 
-def _readiness_document(train_id: str, source_hash: str, items: list[dict[str, Any]], evidence_rows: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _readiness_document(train_id: str, source_hash: str, items: list[ImplementationDocument], evidence_rows: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     overall = "go" if items and all(row.get("status") == "ready" for row in items) else "no_go"
     doc = sanitize_metadata(
         {
@@ -800,7 +802,7 @@ def _readiness_document(train_id: str, source_hash: str, items: list[dict[str, A
     return doc
 
 
-def _dependency_document(train_id: str, source_hash: str, items: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _dependency_document(train_id: str, source_hash: str, items: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     item_status = {str(row.get("item_id")): str(row.get("status")) for row in items}
     edges = []
     for item in items:
@@ -824,7 +826,7 @@ def _dependency_document(train_id: str, source_hash: str, items: list[dict[str, 
     return doc
 
 
-def _wave_document(train_id: str, source_hash: str, items: list[dict[str, Any]], created_at: str) -> dict[str, Any]:
+def _wave_document(train_id: str, source_hash: str, items: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
     waves: dict[str, list[str]] = {}
     for row in items:
         waves.setdefault(str(row.get("wave") or 1), []).append(str(row.get("item_id")))
@@ -833,7 +835,7 @@ def _wave_document(train_id: str, source_hash: str, items: list[dict[str, Any]],
     return doc
 
 
-def _go_no_go_report(train_id: str, source_hash: str, train: dict[str, Any], readiness: dict[str, Any], dependency: dict[str, Any], inventory: dict[str, Any], created_at: str) -> dict[str, Any]:
+def _go_no_go_report(train_id: str, source_hash: str, train: ImplementationDocument, readiness: ImplementationDocument, dependency: ImplementationDocument, inventory: ImplementationDocument, created_at: str) -> ImplementationDocument:
     blockers = []
     if readiness.get("overall_status") != "go":
         blockers.append("readiness:no_go")
@@ -847,7 +849,7 @@ def _go_no_go_report(train_id: str, source_hash: str, train: dict[str, Any], rea
     return doc
 
 
-def _runbook_document(train_id: str, source_hash: str, readiness: dict[str, Any], report: dict[str, Any], created_at: str) -> dict[str, Any]:
+def _runbook_document(train_id: str, source_hash: str, readiness: ImplementationDocument, report: ImplementationDocument, created_at: str) -> ImplementationDocument:
     items = [{"item_id": "train-refresh", "action": "release_train.refresh", "safe": True, "status": "pending"}]
     for row in readiness.get("items", []):
         if row.get("status") != "ready":
@@ -857,13 +859,13 @@ def _runbook_document(train_id: str, source_hash: str, readiness: dict[str, Any]
     return doc
 
 
-def _runbook_result(train_id: str, source_hash: str | None, results: list[dict[str, Any]]) -> dict[str, Any]:
+def _runbook_result(train_id: str, source_hash: str | None, results: list[ImplementationDocument]) -> ImplementationDocument:
     doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_safe_runbook_result", "train_id": train_id, "created_at": now_iso(), "source_hash": source_hash, "results": results, "summary": {"completed_count": sum(1 for row in results if row.get("status") == "completed"), "failed_count": sum(1 for row in results if row.get("status") == "failed"), "manual_required_count": sum(1 for row in results if row.get("status") == "manual_required"), "skipped_unsupported_count": sum(1 for row in results if row.get("status") == "skipped_unsupported")}})
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _manifest_document(train_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _manifest_document(train_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_SCHEMA_VERSION,
@@ -894,11 +896,11 @@ def _manifest_document(train_id: str, docs: dict[str, Any], files: list[dict[str
     return manifest
 
 
-def _reviewer_guide(docs: dict[str, Any]) -> str:
+def _reviewer_guide(docs: ImplementationDocument) -> str:
     return "\n".join(["# MusicForge UCC Release Train", "", f"Train: {docs['train'].get('train_id')}", f"Status: {docs['report'].get('status')}", "", "Verify with verify-unified-command-center-release-train-package and the external evidence manifest.", ""])
 
 
-def _readme(docs: dict[str, Any]) -> str:
+def _readme(docs: ImplementationDocument) -> str:
     return "\n".join(["MusicForge Unified Command Center Release Train", "", f"Train: {docs['train'].get('train_id')}", f"Go/No-Go: {docs['report'].get('status')}", ""])
 
 
@@ -909,7 +911,7 @@ def _required_evidence(value: Any) -> list[str]:
     return [item for item in rows if item in EXPECTED_EVIDENCE_PACKAGE_TYPES]
 
 
-def _evidence_key(row: dict[str, Any]) -> str:
+def _evidence_key(row: ImplementationDocument) -> str:
     return "|".join(str(row.get(key) or "") for key in ("item_id", "center_id", "evidence_type"))
 
 
@@ -923,19 +925,19 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
@@ -960,7 +962,7 @@ def _zip_manifest_hash(path: Path | str) -> str | None:
         return None
 
 
-def _has_cycle(edges: list[dict[str, Any]]) -> bool:
+def _has_cycle(edges: list[ImplementationDocument]) -> bool:
     graph: dict[str, list[str]] = {}
     for row in edges:
         source = str(row.get("from_item_id") or "")

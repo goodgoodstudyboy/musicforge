@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 from pathlib import Path
@@ -284,7 +286,7 @@ def _sprint_sources(
     task_store: ReviewTaskStore,
     queue_store: ReviewSprintActionQueueStore,
     project_document: Any,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     tasks: list[ReviewTask] = []
     missing: list[str] = []
     candidates_by_task: dict[str, list[ReviewCandidate]] = {}
@@ -336,7 +338,7 @@ def _sprint_sources(
     }
 
 
-def _overview_metrics(sprint: ReviewSprint, tasks: list[ReviewTask], missing_task_ids: list[str]) -> dict[str, Any]:
+def _overview_metrics(sprint: ReviewSprint, tasks: list[ReviewTask], missing_task_ids: list[str]) -> ImplementationDocument:
     status_counts = _task_status_counts(tasks)
     active = [task for task in tasks if task.status != "archived"]
     resolved = status_counts.get("resolved", 0)
@@ -363,7 +365,7 @@ def _overview_metrics(sprint: ReviewSprint, tasks: list[ReviewTask], missing_tas
     )
 
 
-def _task_throughput_metrics(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]], missing_task_ids: list[str]) -> dict[str, Any]:
+def _task_throughput_metrics(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]], missing_task_ids: list[str]) -> ImplementationDocument:
     candidate_counts = [len(candidates_by_task.get(task.task_id, [])) for task in tasks]
     follow_up_count = len([task for task in tasks if task.follow_up_task_id])
     return sanitize_metadata(
@@ -380,7 +382,7 @@ def _task_throughput_metrics(tasks: list[ReviewTask], candidates_by_task: dict[s
     )
 
 
-def _candidate_funnel_metrics(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]]) -> dict[str, Any]:
+def _candidate_funnel_metrics(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]]) -> ImplementationDocument:
     candidates = [candidate for task in tasks for candidate in candidates_by_task.get(task.task_id, [])]
     ready = [candidate for candidate in candidates if candidate.status in {"ready", "applied"}]
     applied = [candidate for candidate in candidates if candidate.status == "applied" or any(task.selected_candidate_id == candidate.candidate_id for task in tasks)]
@@ -410,7 +412,7 @@ def _candidate_funnel_metrics(tasks: list[ReviewTask], candidates_by_task: dict[
     )
 
 
-def _recommendation_adoption_metrics(recommendation_report: dict[str, Any], queues: list[SprintActionQueue]) -> dict[str, Any]:
+def _recommendation_adoption_metrics(recommendation_report: ImplementationDocument, queues: list[SprintActionQueue]) -> ImplementationDocument:
     actions = [item for item in recommendation_report.get("recommended_actions", []) if isinstance(item, dict)] if isinstance(recommendation_report, dict) else []
     queue_items = [item for queue in queues for item in queue.items if item.recommendation.get("report_hash")]
     executable = [item for item in queue_items if item.safety in {"auto_safe", "provider_safe"}]
@@ -433,7 +435,7 @@ def _recommendation_adoption_metrics(recommendation_report: dict[str, Any], queu
     )
 
 
-def _action_queue_metrics(queues: list[SprintActionQueue]) -> dict[str, Any]:
+def _action_queue_metrics(queues: list[SprintActionQueue]) -> ImplementationDocument:
     items = [item for queue in queues for item in queue.items]
     latest = sorted(queues, key=lambda queue: queue.updated_at or queue.created_at, reverse=True)[0] if queues else None
     counts = _item_status_counts(items)
@@ -461,7 +463,7 @@ def _action_queue_metrics(queues: list[SprintActionQueue]) -> dict[str, Any]:
     )
 
 
-def _provider_usage_metrics(provider_report: dict[str, Any], tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]]) -> dict[str, Any]:
+def _provider_usage_metrics(provider_report: ImplementationDocument, tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]]) -> ImplementationDocument:
     applied_count = len([task for task in tasks if task.selected_candidate_id])
     ready_count = len([candidate for task in tasks for candidate in candidates_by_task.get(task.task_id, []) if candidate.status in {"ready", "applied"}])
     operations = {}
@@ -488,7 +490,7 @@ def _provider_usage_metrics(provider_report: dict[str, Any], tasks: list[ReviewT
     )
 
 
-def _quality_delta_metrics(*, sprint: ReviewSprint, tasks: list[ReviewTask], project_document: Any) -> dict[str, Any]:
+def _quality_delta_metrics(*, sprint: ReviewSprint, tasks: list[ReviewTask], project_document: Any) -> ImplementationDocument:
     baseline_id = _baseline_version_id(sprint, tasks, project_document)
     latest_id = _latest_applied_version_id(tasks, project_document)
     if not latest_id:
@@ -517,7 +519,7 @@ def _quality_delta_metrics(*, sprint: ReviewSprint, tasks: list[ReviewTask], pro
     )
 
 
-def _manual_decision_metrics(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]], decision_reports: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _manual_decision_metrics(tasks: list[ReviewTask], candidates_by_task: dict[str, list[ReviewCandidate]], decision_reports: dict[str, ImplementationDocument]) -> ImplementationDocument:
     manual_apply_count = len([task for task in tasks if task.selected_candidate_id])
     followed = 0
     top_ranked = 0
@@ -560,11 +562,11 @@ def _manual_decision_metrics(tasks: list[ReviewTask], candidates_by_task: dict[s
 
 
 def _judge_metrics(
-    judge_reports: dict[str, dict[str, Any]],
+    judge_reports: dict[str, ImplementationDocument],
     tasks: list[ReviewTask],
-    decision_reports: dict[str, dict[str, Any]],
-    provider_report: dict[str, Any],
-) -> dict[str, Any]:
+    decision_reports: dict[str, ImplementationDocument],
+    provider_report: ImplementationDocument,
+) -> ImplementationDocument:
     reports = {task_id: report for task_id, report in judge_reports.items() if isinstance(report, dict) and report}
     completed = {task_id: report for task_id, report in reports.items() if report.get("status") == "completed"}
     stale = {task_id: report for task_id, report in reports.items() if report.get("status") == "stale" or report.get("stale")}
@@ -609,7 +611,7 @@ def _judge_metrics(
     )
 
 
-def _project_judge_summary(summaries: list[dict[str, Any]]) -> dict[str, Any]:
+def _project_judge_summary(summaries: list[ImplementationDocument]) -> ImplementationDocument:
     judged = 0
     stale = 0
     tokens = 0
@@ -650,7 +652,7 @@ def _project_judge_summary(summaries: list[dict[str, Any]]) -> dict[str, Any]:
     )
 
 
-def _sprint_closeout_metrics(sprint_store: ReviewSprintStore, sprint: ReviewSprint) -> dict[str, Any]:
+def _sprint_closeout_metrics(sprint_store: ReviewSprintStore, sprint: ReviewSprint) -> ImplementationDocument:
     closeout = closeout_report_summary(sprint_store.read_closeout_report(sprint.sprint_id, default={}))
     signoff = signoff_summary(sprint_store.read_signoff(sprint.sprint_id, default={}))
     return sanitize_metadata(
@@ -668,7 +670,7 @@ def _sprint_closeout_metrics(sprint_store: ReviewSprintStore, sprint: ReviewSpri
     )
 
 
-def _project_closeout_summary(sprint_store: ReviewSprintStore, sprints: list[ReviewSprint]) -> dict[str, Any]:
+def _project_closeout_summary(sprint_store: ReviewSprintStore, sprints: list[ReviewSprint]) -> ImplementationDocument:
     closeouts = []
     signoffs = []
     for sprint in sprints:
@@ -691,14 +693,14 @@ def _project_closeout_summary(sprint_store: ReviewSprintStore, sprints: list[Rev
 
 def _risk_readiness_metrics(
     *,
-    overview: dict[str, Any],
-    task_throughput: dict[str, Any],
-    action_queue_execution: dict[str, Any],
-    conflict_report: dict[str, Any],
+    overview: ImplementationDocument,
+    task_throughput: ImplementationDocument,
+    action_queue_execution: ImplementationDocument,
+    conflict_report: ImplementationDocument,
     tasks: list[ReviewTask],
     queues: list[SprintActionQueue],
     missing_task_ids: list[str],
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     conflict_count = len([item for item in conflict_report.get("conflicts", []) if isinstance(item, dict) and item.get("severity") == "blocking"]) if isinstance(conflict_report, dict) else 0
     open_high_priority = len([task for task in tasks if task.status in {"open", "candidate_ready", "needs_more_work"} and int(task.priority or 0) >= 70])
     stale_count = int(overview.get("stale_task_count") or 0)
@@ -751,12 +753,12 @@ def _risk_readiness_metrics(
 
 
 def _dashboard_messages(
-    overview: dict[str, Any],
-    candidate_funnel: dict[str, Any],
-    action_queue_execution: dict[str, Any],
-    provider_usage: dict[str, Any],
-    quality_delta: dict[str, Any],
-    risk_readiness: dict[str, Any],
+    overview: ImplementationDocument,
+    candidate_funnel: ImplementationDocument,
+    action_queue_execution: ImplementationDocument,
+    provider_usage: ImplementationDocument,
+    quality_delta: ImplementationDocument,
+    risk_readiness: ImplementationDocument,
 ) -> tuple[list[str], list[str]]:
     highlights = []
     warnings = list(risk_readiness.get("warnings") or [])
@@ -817,7 +819,7 @@ def _included_task_ids(sprint: ReviewSprint) -> list[str]:
     return [str(ref.get("task_id")) for ref in refs if ref.get("included", True) and str(ref.get("task_id") or "").strip()]
 
 
-def _reason_counts(values: list[Any]) -> list[dict[str, Any]]:
+def _reason_counts(values: list[Any]) -> list[ImplementationDocument]:
     buckets: dict[str, int] = {}
     for value in values:
         text = sanitize_sensitive_text(str(value or "").strip())[:240]
@@ -865,7 +867,7 @@ def _version_song_plan(project_document: Any, version_id: str | None) -> SongPla
     return SongPlan.from_dict(read_json(Path(getattr(version, "output_dir", "") or "") / "data" / "song-plan.json"))
 
 
-def _version_quality(version: Any | None) -> dict[str, Any] | None:
+def _version_quality(version: Any | None) -> ImplementationDocument | None:
     if version is None:
         return None
     run_dir = Path(getattr(version, "output_dir", "") or "")
@@ -891,7 +893,7 @@ def _version_quality(version: Any | None) -> dict[str, Any] | None:
     }
 
 
-def _project_quality_trend(versions: list[Any]) -> dict[str, Any]:
+def _project_quality_trend(versions: list[Any]) -> ImplementationDocument:
     scored = [version for version in versions if getattr(version, "quality_score", None) is not None]
     if not scored:
         return {"status": "not_available", "reason": "No project version quality scores found."}
@@ -909,13 +911,13 @@ def _project_quality_trend(versions: list[Any]) -> dict[str, Any]:
     }
 
 
-def _source_hash(value: dict[str, Any]) -> str:
+def _source_hash(value: ImplementationDocument) -> str:
     clean = sanitize_metadata(value)
     payload = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _task_source_summary(task: ReviewTask, candidates: list[ReviewCandidate], decision_report: dict[str, Any]) -> dict[str, Any]:
+def _task_source_summary(task: ReviewTask, candidates: list[ReviewCandidate], decision_report: ImplementationDocument) -> ImplementationDocument:
     return {
         "task_id": task.task_id,
         "status": task.status,
@@ -938,7 +940,7 @@ def _task_source_summary(task: ReviewTask, candidates: list[ReviewCandidate], de
     }
 
 
-def _queue_source_summary(queue: SprintActionQueue) -> dict[str, Any]:
+def _queue_source_summary(queue: SprintActionQueue) -> ImplementationDocument:
     return {
         "queue_id": queue.queue_id,
         "status": queue.status,
@@ -958,7 +960,7 @@ def _queue_source_summary(queue: SprintActionQueue) -> dict[str, Any]:
     }
 
 
-def _version_source_summary(version: Any) -> dict[str, Any]:
+def _version_source_summary(version: Any) -> ImplementationDocument:
     return {
         "version_id": getattr(version, "version_id", None),
         "parent_version_id": getattr(version, "parent_version_id", None),
@@ -968,7 +970,7 @@ def _version_source_summary(version: Any) -> dict[str, Any]:
     }
 
 
-def _provider_usage_public(report: dict[str, Any]) -> dict[str, Any]:
+def _provider_usage_public(report: ImplementationDocument) -> ImplementationDocument:
     return {
         "total_calls": report.get("total_calls", 0),
         "prompt_tokens": report.get("prompt_tokens", 0),
@@ -987,7 +989,7 @@ def _provider_usage_public(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _provider_records_for_tasks(records: list[dict[str, Any]], task_ids: list[str]) -> list[dict[str, Any]]:
+def _provider_records_for_tasks(records: list[ImplementationDocument], task_ids: list[str]) -> list[ImplementationDocument]:
     task_id_set = set(task_ids)
     if not task_id_set:
         return []

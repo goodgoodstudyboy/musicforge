@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -451,7 +453,7 @@ def _review_text(audition: EditorAuditionManifest) -> str:
     return sanitize_sensitive_text(" ".join(parts))[:MAX_REVIEW_EDIT_TEXT].lower()
 
 
-def _review_edit_instruction(source: dict[str, Any], intents: list[EditIntent]) -> str:
+def _review_edit_instruction(source: ImplementationDocument, intents: list[EditIntent]) -> str:
     notes = str(source.get("notes_excerpt") or "").strip()
     edits = ", ".join(intent.edit_type for intent in intents)
     if notes:
@@ -459,14 +461,14 @@ def _review_edit_instruction(source: dict[str, Any], intents: list[EditIntent]) 
     return sanitize_sensitive_text(f"Create review-driven edit: {edits}.")[:MAX_REVIEW_EDIT_TEXT]
 
 
-def _confidence_for_source(source: dict[str, Any], intents: list[EditIntent]) -> float:
+def _confidence_for_source(source: ImplementationDocument, intents: list[EditIntent]) -> float:
     rating = int(source.get("rating") or 0)
     marker_count = len(source.get("markers") or [])
     score = 0.45 + min(0.25, rating * 0.04) + min(0.2, marker_count * 0.05) + min(0.1, len(intents) * 0.03)
     return round(min(0.95, score), 2)
 
 
-def _target_section(parent_plan: SongPlan, audition: EditorAuditionManifest, markers: list[dict[str, Any]]) -> SongSection:
+def _target_section(parent_plan: SongPlan, audition: EditorAuditionManifest, markers: list[ImplementationDocument]) -> SongSection:
     range_data = audition.range if isinstance(audition.range, dict) else {}
     if range_data.get("mode") == "section":
         section_name = str(range_data.get("section_name") or "")
@@ -535,7 +537,7 @@ def _section_for_beat(plan: SongPlan, beat: float) -> SongSection | None:
     return None
 
 
-def _global_marker_beat(range_data: dict[str, Any], marker_beat: float) -> float:
+def _global_marker_beat(range_data: ImplementationDocument, marker_beat: float) -> float:
     start = _float_or_none(range_data.get("start_beat"))
     if start is None:
         return marker_beat
@@ -550,7 +552,7 @@ def _intent(
     strength: int,
     instruction: str,
     preserve: list[str],
-    payload: dict[str, Any],
+    payload: ImplementationDocument,
 ) -> EditIntent:
     target: dict[str, Any] = {}
     if section_name:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 from pathlib import Path
 from typing import Any
@@ -626,7 +628,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
         if state.get("signed"):
             raise UnifiedReleaseProgramVaultOperationsStateError("Unified Release Program Vault Operations are signed. Create a successor operations record before mutation.")
 
-    def _read_registry(self, program_id: str) -> dict[str, Any]:
+    def _read_registry(self, program_id: str) -> ImplementationDocument:
         registry = _read_optional_json(self.registry_path(program_id))
         if not registry:
             raise UnifiedReleaseProgramVaultOperationsNotFoundError("Vault Operations registry is missing.")
@@ -634,7 +636,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             raise UnifiedReleaseProgramVaultOperationsStateError("Vault Operations registry integrity failed.")
         return registry
 
-    def _read_policy(self, program_id: str) -> dict[str, Any]:
+    def _read_policy(self, program_id: str) -> ImplementationDocument:
         policy = _read_optional_json(self.policy_path(program_id))
         if not policy:
             raise UnifiedReleaseProgramVaultOperationsNotFoundError("Vault Operations policy is missing.")
@@ -642,7 +644,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             raise UnifiedReleaseProgramVaultOperationsStateError("Vault Operations policy integrity failed.")
         return policy
 
-    def _read_latest_review(self, program_id: str) -> dict[str, Any]:
+    def _read_latest_review(self, program_id: str) -> ImplementationDocument:
         review = _read_optional_json(self.latest_review_path(program_id))
         if not review:
             raise UnifiedReleaseProgramVaultOperationsNotFoundError("Latest Vault custody review is missing.")
@@ -650,7 +652,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             raise UnifiedReleaseProgramVaultOperationsStateError("Latest Vault custody review integrity failed.")
         return review
 
-    def _read_transfer(self, program_id: str) -> dict[str, Any]:
+    def _read_transfer(self, program_id: str) -> ImplementationDocument:
         transfer = _read_optional_json(self.transfer_report_path(program_id))
         if not transfer:
             raise UnifiedReleaseProgramVaultOperationsNotFoundError("Vault transfer report is missing.")
@@ -658,14 +660,14 @@ class UnifiedReleaseProgramVaultOperationsStore:
             raise UnifiedReleaseProgramVaultOperationsStateError("Vault transfer report integrity failed.")
         return transfer
 
-    def _current_generation(self, registry: dict[str, Any]) -> dict[str, Any]:
+    def _current_generation(self, registry: ImplementationDocument) -> ImplementationDocument:
         current_id = str(registry.get("current_generation_id") or "")
         for row in registry.get("generations", []) or []:
             if isinstance(row, dict) and row.get("generation_id") == current_id:
                 return row
         return {}
 
-    def _current_vault_binding(self, program_id: str, payload: dict[str, Any], *, require_passed: bool) -> dict[str, Any]:
+    def _current_vault_binding(self, program_id: str, payload: ImplementationDocument, *, require_passed: bool) -> ImplementationDocument:
         vault_zip = Path(payload.get("vault_zip") or payload.get("vault") or self.vault_store.zip_path(program_id))
         vault_anchor = Path(payload.get("vault_anchor") or payload.get("anchor") or self.vault_store.anchor_path(program_id))
         vault_verification = Path(payload.get("vault_verification_report") or self.vault_store.verification_report_path(program_id))
@@ -699,7 +701,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             "runtime_vault_verification_hash": runtime.get("integrity_hash"),
         }
 
-    def _vault_evidence_paths(self, program_id: str, vault: dict[str, Any]) -> tuple[Path, Path, Path]:
+    def _vault_evidence_paths(self, program_id: str, vault: ImplementationDocument) -> tuple[Path, Path, Path]:
         candidates = (
             Path(str(vault.get("vault_zip_path") or "")),
             Path(str(vault.get("vault_anchor_path") or "")),
@@ -715,7 +717,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             resolved.append(candidate if candidate.exists() and candidate.is_file() else default)
         return resolved[0], resolved[1], resolved[2]
 
-    def _signed_archive_docs(self, program_id: str) -> dict[str, Any]:
+    def _signed_archive_docs(self, program_id: str) -> ImplementationDocument:
         state = self.latest_signoff_state(program_id)
         if not state.get("signed"):
             raise UnifiedReleaseProgramVaultOperationsStateError("Vault Operations must be signed before archive export.")
@@ -761,7 +763,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
                 raise UnifiedReleaseProgramVaultOperationsStateError(f"Vault Operations signed Vault binding mismatch: {key}.")
         return {"report": report, "registry": registry, "policy": policy, "review": review, "rotation": rotation, "transfer": transfer, "signoff": signoff, "binding": binding, "current_vault": vault}
 
-    def _current_registry_vault_binding(self, program_id: str, registry: dict[str, Any]) -> dict[str, Any]:
+    def _current_registry_vault_binding(self, program_id: str, registry: ImplementationDocument) -> ImplementationDocument:
         current = self._current_generation(registry)
         if not current:
             raise UnifiedReleaseProgramVaultOperationsStateError("A current Vault generation is required.")
@@ -795,7 +797,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             "blockers": blockers,
         }
 
-    def _current_registry_vault_blockers(self, vault: dict[str, Any], vault_zip: Path, runtime: dict[str, Any], external: dict[str, Any], anchor: dict[str, Any]) -> list[str]:
+    def _current_registry_vault_blockers(self, vault: ImplementationDocument, vault_zip: Path, runtime: ImplementationDocument, external: ImplementationDocument, anchor: ImplementationDocument) -> list[str]:
         blockers: list[str] = []
         if runtime.get("status") != "passed":
             blockers.append("runtime_vault_verification_failed")
@@ -836,7 +838,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
             blockers.append("registry_current_runtime_vault_verification_hash")
         return sorted(set(blockers))
 
-    def _append_history(self, program_id: str, event: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, program_id: str, event: ImplementationDocument) -> ImplementationDocument:
         path = self.history_path(program_id)
         chain = HistoryChain(path, sanitizer=lambda value: sanitize_metadata(value, blocked_keys=VAULT_OPERATIONS_BLOCKED_METADATA_KEYS))
         return chain.append({**event, "event_index": len(chain.read()) + 1})
@@ -847,7 +849,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
         return f"vault-review-{count + 1:06d}"
 
 
-def _signoff_binding_document(program_id: str, signoff: dict[str, Any], event: dict[str, Any], report: dict[str, Any], registry: dict[str, Any], policy: dict[str, Any], review: dict[str, Any], transfer: dict[str, Any]) -> dict[str, Any]:
+def _signoff_binding_document(program_id: str, signoff: ImplementationDocument, event: ImplementationDocument, report: ImplementationDocument, registry: ImplementationDocument, policy: ImplementationDocument, review: ImplementationDocument, transfer: ImplementationDocument) -> ImplementationDocument:
     current = next((row for row in registry.get("generations", []) if isinstance(row, dict) and row.get("generation_id") == registry.get("current_generation_id")), {})
     vault = current.get("vault") if isinstance(current.get("vault"), dict) else {}
     return _with_integrity(
@@ -879,7 +881,7 @@ def _signoff_binding_document(program_id: str, signoff: dict[str, Any], event: d
     )
 
 
-def _archive_manifest_document(program_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _archive_manifest_document(program_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     source = {
         "report_hash": docs["report"].get("integrity_hash"),
         "registry_hash": docs["registry"].get("integrity_hash"),
@@ -909,7 +911,7 @@ def _archive_manifest_document(program_id: str, docs: dict[str, Any], files: lis
     return manifest
 
 
-def _recipient_guide(program_id: str, transfer: dict[str, Any]) -> str:
+def _recipient_guide(program_id: str, transfer: ImplementationDocument) -> str:
     return "\n".join(
         [
             "# Unified Release Program Vault Transfer",
@@ -923,41 +925,41 @@ def _recipient_guide(program_id: str, transfer: dict[str, Any]) -> str:
     )
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     return read_json(path)
 
 
-def _read_history(path: Path) -> list[dict[str, Any]]:
+def _read_history(path: Path) -> list[ImplementationDocument]:
     return HistoryChain(path).read()
 
 
-def _json_line(doc: dict[str, Any]) -> str:
+def _json_line(doc: ImplementationDocument) -> str:
     import json
 
     return json.dumps(doc, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_payload(payload: ImplementationDocument) -> ImplementationDocument:
     for forbidden in ("source_path", "local_path", "file_path"):
         if payload.get(forbidden):
             raise UnifiedReleaseProgramVaultOperationsStateError(f"{forbidden} is not allowed for Vault Operations.")
     return payload
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     return SignoffService.seal(
         sanitize_metadata(doc, blocked_keys=VAULT_OPERATIONS_BLOCKED_METADATA_KEYS),
         payload_hash=False,
     )
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
@@ -973,7 +975,7 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return h.hexdigest()
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -989,5 +991,5 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}

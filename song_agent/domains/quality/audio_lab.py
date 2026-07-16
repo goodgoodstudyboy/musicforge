@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import math
 import re
@@ -513,7 +515,7 @@ class AudioLabStore:
             raise AudioLabNotFoundError(f"Comparison not found: {comparison_id}.")
         return self._with_comparison_stale(read_json(path))
 
-    def _read_comparison_raw(self, comparison_id: str) -> dict[str, Any]:
+    def _read_comparison_raw(self, comparison_id: str) -> ImplementationDocument:
         path = self.comparison_path(comparison_id)
         if not path.exists():
             raise AudioLabNotFoundError(f"Comparison not found: {comparison_id}.")
@@ -562,7 +564,7 @@ class AudioLabStore:
         write_json(self.comparison_dir(comparison_id) / "comparison-report.json", report)
         return report
 
-    def _generate_smoke_item(self, run_dir: Path, smoke_id: str, item_id: str, song: dict[str, Any], *, render_mode: str, profile_id: str | None) -> dict[str, Any]:
+    def _generate_smoke_item(self, run_dir: Path, smoke_id: str, item_id: str, song: ImplementationDocument, *, render_mode: str, profile_id: str | None) -> ImplementationDocument:
         item_dir = run_dir / "items" / item_id
         item_dir.mkdir(parents=True, exist_ok=True)
         request = SongRequest.from_dict(song.get("request") or {})
@@ -631,7 +633,7 @@ class AudioLabStore:
             }
         )
 
-    def _render_smoke_audio(self, midi_path: Path, wav_path: Path, *, render_mode: str, profile_id: str | None) -> tuple[str, str | None, dict[str, Any]]:
+    def _render_smoke_audio(self, midi_path: Path, wav_path: Path, *, render_mode: str, profile_id: str | None) -> tuple[str, str | None, ImplementationDocument]:
         if render_mode == "never":
             return "skipped_by_request", None, {"runner_kind": "none", "profile_id": profile_id or "default"}
         if self.wav_writer is not None:
@@ -651,19 +653,19 @@ class AudioLabStore:
                 return "failed", sanitize_sensitive_text(str(exc)), {"runner_kind": "real", "profile_id": profile_id or "default"}
             return "render_failed" if isinstance(exc, RendererError) else "skipped_renderer_not_configured", sanitize_sensitive_text(str(exc)), {"runner_kind": "real", "profile_id": profile_id or "default"}
 
-    def _write_session(self, session: dict[str, Any]) -> None:
+    def _write_session(self, session: ImplementationDocument) -> None:
         write_json(self.session_path(str(session["session_id"])), sanitize_metadata(session))
 
-    def _write_comparison(self, comparison: dict[str, Any]) -> None:
+    def _write_comparison(self, comparison: ImplementationDocument) -> None:
         write_json(self.comparison_path(str(comparison["comparison_id"])), comparison)
 
-    def _find_item(self, session: dict[str, Any], item_id: str) -> dict[str, Any]:
+    def _find_item(self, session: ImplementationDocument, item_id: str) -> ImplementationDocument:
         for item in session.get("items", []):
             if isinstance(item, dict) and item.get("item_id") == item_id:
                 return item
         raise AudioLabNotFoundError(f"Audio Lab session item not found: {item_id}.")
 
-    def _find_marker(self, session: dict[str, Any], marker_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _find_marker(self, session: ImplementationDocument, marker_id: str) -> tuple[ImplementationDocument, ImplementationDocument]:
         for item in session.get("items", []):
             if not isinstance(item, dict):
                 continue
@@ -672,7 +674,7 @@ class AudioLabStore:
                     return item, marker
         raise AudioLabNotFoundError(f"Audio Lab marker not found: {marker_id}.")
 
-    def _with_session_stale(self, session: dict[str, Any]) -> dict[str, Any]:
+    def _with_session_stale(self, session: ImplementationDocument) -> ImplementationDocument:
         items = []
         for item in session.get("items", []):
             if isinstance(item, dict):
@@ -685,10 +687,10 @@ class AudioLabStore:
         session["summary"] = _session_summary(items, str(session.get("status") or "needs_review"))
         return sanitize_metadata(session)
 
-    def _item_is_stale(self, item: dict[str, Any]) -> bool:
+    def _item_is_stale(self, item: ImplementationDocument) -> bool:
         return bool(self._item_stale_reasons(item))
 
-    def _item_stale_reasons(self, item: dict[str, Any]) -> list[str]:
+    def _item_stale_reasons(self, item: ImplementationDocument) -> list[str]:
         reasons = []
         relpaths = item.get("artifact_relpaths") if isinstance(item.get("artifact_relpaths"), dict) else {}
         hashes = item.get("artifact_hashes") if isinstance(item.get("artifact_hashes"), dict) else {}
@@ -710,7 +712,7 @@ class AudioLabStore:
                 reasons.append("audio_health_changed")
         return reasons
 
-    def _with_comparison_stale(self, comparison: dict[str, Any]) -> dict[str, Any]:
+    def _with_comparison_stale(self, comparison: ImplementationDocument) -> ImplementationDocument:
         reasons = []
         for side in ("left", "right"):
             artifact = comparison.get(side) if isinstance(comparison.get(side), dict) else {}
@@ -758,7 +760,7 @@ def write_lab_test_wav(_midi_path: Path, wav_path: Path, *, duration_seconds: fl
     return wav_path
 
 
-def _renderer_public_summary(config: Any, sources: dict[str, str]) -> dict[str, Any]:
+def _renderer_public_summary(config: Any, sources: dict[str, str]) -> ImplementationDocument:
     soundfont = Path(config.soundfont_path) if getattr(config, "soundfont_path", "") else None
     return sanitize_metadata(
         {
@@ -791,7 +793,7 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
-def _review_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _review_payload(payload: ImplementationDocument) -> ImplementationDocument:
     result = str(payload.get("result") or payload.get("status") or "").strip()
     if result not in REVIEW_RESULTS:
         raise AudioLabValidationError("review result must be accepted, needs_fix, or rejected.")
@@ -821,7 +823,7 @@ def _review_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return sanitize_metadata(review)
 
 
-def _comparison_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _comparison_review_payload(payload: ImplementationDocument) -> ImplementationDocument:
     preferred = str(payload.get("preferred") or "").strip()
     if preferred not in {"left", "right", "same"}:
         raise AudioLabValidationError("preferred must be left, right, or same.")
@@ -831,7 +833,7 @@ def _comparison_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return base
 
 
-def _marker_payload(marker_id: str, item: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def _marker_payload(marker_id: str, item: ImplementationDocument, payload: ImplementationDocument) -> ImplementationDocument:
     category = str(payload.get("category") or "other").strip()
     if category not in MARKER_CATEGORIES:
         category = "other"
@@ -855,7 +857,7 @@ def _marker_payload(marker_id: str, item: dict[str, Any], payload: dict[str, Any
     return marker
 
 
-def _artifact_from_payload(value: Any) -> dict[str, Any]:
+def _artifact_from_payload(value: Any) -> ImplementationDocument:
     if isinstance(value, dict):
         raw_path = value.get("path") or value.get("artifact_path") or value.get("source_abspath")
         label = str(value.get("label") or "").strip()
@@ -880,11 +882,11 @@ def _artifact_from_payload(value: Any) -> dict[str, Any]:
     return artifact
 
 
-def _artifact_source(artifact: dict[str, Any]) -> dict[str, Any]:
+def _artifact_source(artifact: ImplementationDocument) -> ImplementationDocument:
     return {"artifact_hash": artifact.get("artifact_hash"), "size_bytes": artifact.get("size_bytes"), "summary_hash": artifact.get("summary_hash")}
 
 
-def _item_source(item: dict[str, Any]) -> dict[str, Any]:
+def _item_source(item: ImplementationDocument) -> ImplementationDocument:
     return {
         "source_hash": item.get("source_hash"),
         "artifact_hashes": item.get("artifact_hashes"),
@@ -893,11 +895,11 @@ def _item_source(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _review_core(review: dict[str, Any]) -> dict[str, Any]:
+def _review_core(review: ImplementationDocument) -> ImplementationDocument:
     return {key: review.get(key) for key in ("status", "rating", "review_mode", "playback_confirmed", "reviewer", "preferred", "rating_delta")}
 
 
-def _session_item_public(item: dict[str, Any]) -> dict[str, Any]:
+def _session_item_public(item: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "item_id": item.get("item_id"),
@@ -914,7 +916,7 @@ def _session_item_public(item: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _session_status(items: list[dict[str, Any]]) -> str:
+def _session_status(items: list[ImplementationDocument]) -> str:
     if any(item.get("stale") for item in items):
         return "stale"
     reviews = [item.get("review") for item in items if isinstance(item.get("review"), dict) and item.get("review")]
@@ -927,7 +929,7 @@ def _session_status(items: list[dict[str, Any]]) -> str:
     return "passed"
 
 
-def _session_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]:
+def _session_summary(items: list[ImplementationDocument], status: str) -> ImplementationDocument:
     reviews = [item.get("review") for item in items if isinstance(item.get("review"), dict) and item.get("review")]
     return {
         "status": status,
@@ -952,7 +954,7 @@ def _session_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]
     }
 
 
-def _smoke_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]:
+def _smoke_summary(items: list[ImplementationDocument], status: str) -> ImplementationDocument:
     return {
         "status": status,
         "item_count": len(items),
@@ -965,7 +967,7 @@ def _smoke_summary(items: list[dict[str, Any]], status: str) -> dict[str, Any]:
     }
 
 
-def _smoke_warnings(items: list[dict[str, Any]]) -> list[str]:
+def _smoke_warnings(items: list[ImplementationDocument]) -> list[str]:
     warnings = []
     if any(item.get("audio_status") == "skipped_renderer_not_configured" for item in items):
         warnings.append("renderer_not_configured")
@@ -974,15 +976,15 @@ def _smoke_warnings(items: list[dict[str, Any]]) -> list[str]:
     return warnings
 
 
-def _check(check_id: str, passed: bool, message: str) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "warning", "message": message}
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     try:

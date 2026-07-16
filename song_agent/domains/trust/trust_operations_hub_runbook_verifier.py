@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -265,7 +267,7 @@ class _RunbookVerifier:
         self.redaction_findings = findings
         self._add_check("security", "tohr_redaction_scan", "failed" if findings else "passed", "blocking", "Sensitive values found in Runbook package." if findings else "No sensitive values found in Runbook package.")
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         summary = {
@@ -296,7 +298,7 @@ class _RunbookVerifier:
             blocked_keys=VERIFIER_BLOCKED_KEYS,
         )
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> ImplementationDocument:
         try:
             raw = archive.read(name)
             value = json.loads(raw.decode("utf-8"))
@@ -309,7 +311,7 @@ class _RunbookVerifier:
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parsed.")
         return value
 
-    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[dict[str, Any]]:
+    def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         try:
             raw = archive.read(name)
         except (KeyError, OSError) as exc:
@@ -339,7 +341,7 @@ class _RunbookVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-def _action_summary(actions: list[dict[str, Any]]) -> dict[str, int]:
+def _action_summary(actions: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "action_count": len(actions),
         "safe_action_count": sum(1 for action in actions if action.get("allowed_automation") is True),
@@ -347,7 +349,7 @@ def _action_summary(actions: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _result_summary(results: list[dict[str, Any]]) -> dict[str, int]:
+def _result_summary(results: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "result_count": len(results),
         "completed_count": sum(1 for item in results if item.get("status") == "completed"),
@@ -356,7 +358,7 @@ def _result_summary(results: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _event_chain_ok(events: list[dict[str, Any]]) -> bool:
+def _event_chain_ok(events: list[ImplementationDocument]) -> bool:
     previous_hash = None
     for event in events:
         if event.get("previous_event_hash") != previous_hash:
@@ -368,7 +370,7 @@ def _event_chain_ok(events: list[dict[str, Any]]) -> bool:
     return True
 
 
-def _event_hash(event: dict[str, Any]) -> str:
+def _event_hash(event: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in event.items() if key != "event_hash"})
 
 

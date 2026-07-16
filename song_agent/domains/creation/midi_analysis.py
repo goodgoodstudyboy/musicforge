@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import statistics
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -416,7 +418,7 @@ def _parse_track(
     )
 
 
-def _track_summary(track: MidiTrack, ppq: int) -> dict[str, Any]:
+def _track_summary(track: MidiTrack, ppq: int) -> ImplementationDocument:
     pitches = [note.pitch for note in track.notes]
     duration_ticks = max([note.end_tick for note in track.notes] + [track.end_tick, 0])
     return {

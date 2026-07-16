@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -495,7 +497,7 @@ class ReleasePortfolioGovernanceSignoffStore:
         summary["summary_hash"] = stable_hash(summary)
         return sanitize_metadata(summary, blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
 
-    def _source_state(self, queue: dict[str, Any], execution: dict[str, Any]) -> dict[str, Any]:
+    def _source_state(self, queue: ImplementationDocument, execution: ImplementationDocument) -> ImplementationDocument:
         current = self.governance_store._current_source(str(queue.get("portfolio_id") or ""))  # noqa: SLF001
         current_hash = stable_hash(current)
         post = execution.get("post_conditions") if isinstance(execution.get("post_conditions"), dict) else {}
@@ -521,7 +523,7 @@ class ReleasePortfolioGovernanceSignoffStore:
             blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS,
         )
 
-    def _read_export_manifest(self, queue_id: str, blockers: list[dict[str, Any]]) -> dict[str, Any]:
+    def _read_export_manifest(self, queue_id: str, blockers: list[ImplementationDocument]) -> ImplementationDocument:
         try:
             manifest = self.governance_store.read_export_manifest(queue_id)
         except Exception:
@@ -531,7 +533,7 @@ class ReleasePortfolioGovernanceSignoffStore:
             blockers.append(_blocker("queue_export_manifest_integrity", "Governance Queue export manifest integrity failed."))
         return manifest
 
-    def _zip_evidence(self, queue_id: str, queue: dict[str, Any], blockers: list[dict[str, Any]]) -> dict[str, Any]:
+    def _zip_evidence(self, queue_id: str, queue: ImplementationDocument, blockers: list[ImplementationDocument]) -> ImplementationDocument:
         zip_path = self.governance_store.zip_path(queue_id)
         if not zip_path.exists():
             blockers.append(_blocker("queue_zip_missing", "Governance Queue ZIP is missing."))
@@ -541,7 +543,7 @@ class ReleasePortfolioGovernanceSignoffStore:
             blockers.append(_blocker("queue_zip_sha256", "Governance Queue ZIP sha256 does not match queue evidence."))
         return {"filename": zip_path.name, "sha256": sha, "size_bytes": zip_path.stat().st_size}
 
-    def _read_queue_verification(self, queue_id: str, zip_info: dict[str, Any], export_manifest: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+    def _read_queue_verification(self, queue_id: str, zip_info: ImplementationDocument, export_manifest: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
         path = self.governance_store.verification_report_path(queue_id)
         if not path.exists():
             blockers.append(_blocker("queue_verification_missing", "Governance Queue verification report is missing."))
@@ -610,7 +612,7 @@ class ReleasePortfolioGovernanceSignoffStore:
                 pass
         return f"pgcr-{(max(existing) if existing else 0) + 1:06d}"
 
-    def _append_history(self, queue_id: str, event_type: str, summary: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_history(self, queue_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.history_path(queue_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -618,7 +620,7 @@ class ReleasePortfolioGovernanceSignoffStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
-    def _append_change_event(self, queue_id: str, event_type: str, item: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_change_event(self, queue_id: str, event_type: str, item: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.change_request_events_path(queue_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -675,7 +677,7 @@ def governance_archive_manifest_integrity_ok(manifest: dict[str, Any] | None) ->
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == governance_archive_manifest_hash(data)
 
 
-def _requirements(payload: dict[str, Any]) -> dict[str, bool]:
+def _requirements(payload: ImplementationDocument) -> dict[str, bool]:
     raw = payload.get("requirements") if isinstance(payload.get("requirements"), dict) else {}
     return {
         "require_queue_verified": bool(raw.get("require_queue_verified", True)),
@@ -686,7 +688,7 @@ def _requirements(payload: dict[str, Any]) -> dict[str, bool]:
     }
 
 
-def _manual_acknowledgements(value: Any) -> list[dict[str, Any]]:
+def _manual_acknowledgements(value: Any) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if not isinstance(value, list):
         return rows
@@ -709,23 +711,23 @@ def _manual_acknowledgements(value: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def _manual_required_ids(plan: dict[str, Any]) -> set[str]:
+def _manual_required_ids(plan: ImplementationDocument) -> set[str]:
     return {str(item.get("item_id") or "") for item in plan.get("items", []) if isinstance(item, dict) and item.get("status") == "manual_required" and str(item.get("item_id") or "")}
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return default if default is not None else {}
     value = read_json(path)
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, value: dict[str, Any]) -> Path:
+def _write_json(path: Path, value: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(value, blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS))
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(root.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -784,20 +786,20 @@ def _validate_change_request_id(value: str) -> str:
     return text
 
 
-def _maybe_block(blockers: list[dict[str, Any]], check_id: str, condition: bool, message: str) -> None:
+def _maybe_block(blockers: list[ImplementationDocument], check_id: str, condition: bool, message: str) -> None:
     if condition:
         blockers.append(_blocker(check_id, message))
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": message}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": message}
 
 
-def _write_closeout(export_dir: Path, signoff: dict[str, Any], execution: dict[str, Any], change_requests: dict[str, Any]) -> None:
+def _write_closeout(export_dir: Path, signoff: ImplementationDocument, execution: ImplementationDocument, change_requests: ImplementationDocument) -> None:
     summary = execution.get("summary") if isinstance(execution.get("summary"), dict) else {}
     lines = [
         "MusicForge Portfolio Governance Closeout",
@@ -815,7 +817,7 @@ def _write_closeout(export_dir: Path, signoff: dict[str, Any], execution: dict[s
     (export_dir / "GOVERNANCE_CLOSEOUT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_readme(export_dir: Path, signoff: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, signoff: ImplementationDocument) -> None:
     text = "\n".join(
         [
             "MusicForge Release Portfolio Governance Archive",

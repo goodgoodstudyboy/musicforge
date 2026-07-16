@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -168,7 +170,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack:
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Release Operations Runbook route not found.")
 
-    def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any]:
+    def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
         document = self.release_store.get_release(release_id)
         if not refresh:
             existing = self.release_store.read_qa(release_id, default={})
@@ -205,7 +207,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack:
         if document.status == "signed":
             raise _interfaces_api_runtime.ReleaseStateError("Signed releases cannot rebuild export or ZIP. Reset signoff before exporting again.")
 
-    def _release_declarative_policy_gate(self, payload: dict[str, Any]) -> dict[str, _interfaces_api_runtime.Any] | None:
+    def _release_declarative_policy_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any] | None:
         policy_id = str(payload.get("gate_policy") or payload.get("policy") or "").strip()
         if not policy_id:
             return None

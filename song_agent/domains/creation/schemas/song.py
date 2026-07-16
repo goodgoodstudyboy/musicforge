@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
-def _require_mapping(data: Any, name: str) -> dict[str, Any]:
+def _require_mapping(data: Any, name: str) -> ImplementationDocument:
     if not isinstance(data, dict):
         raise ValueError(f"{name} must be an object.")
     return data
@@ -159,7 +161,7 @@ def _int_list(data: Any, name: str) -> list[int]:
     return [int(item) for item in _require_list(data, name)]
 
 
-def _range_int(data: dict[str, Any], field_name: str, low: int, high: int, default: int | None = None) -> int:
+def _range_int(data: ImplementationDocument, field_name: str, low: int, high: int, default: int | None = None) -> int:
     if field_name not in data:
         if default is None:
             raise ValueError(f"Missing field: {field_name}")

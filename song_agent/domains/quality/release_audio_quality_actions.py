@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -8,6 +10,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from song_agent.platform.lifecycle import HistoryChain
 from song_agent.domains.studio.projectio import read_json, write_json
 from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
@@ -124,7 +127,7 @@ class ReleaseAudioQualityActionQueueStore:
             )
             queue_root.mkdir(parents=True, exist_ok=True)
             self._write_documents(queue_id, docs)
-            self._append_history_event(queue_id, "queue_created", {"source_hash": binding.get("source_hash"), "item_count": docs["summary"].get("summary", {}).get("item_count")})
+            self._record_history_event(queue_id, "queue_created", {"source_hash": binding.get("source_hash"), "item_count": docs["summary"].get("summary", {}).get("item_count")})
             return docs["queue"]
 
     def read_queue(self, queue_id: str) -> dict[str, Any]:
@@ -195,7 +198,7 @@ class ReleaseAudioQualityActionQueueStore:
             write_json(self.action_results_path(queue_id), results)
             write_json(self.manual_actions_path(queue_id), manual_actions)
             write_json(self.summary_path(queue_id), summary)
-            self._append_history_event(queue_id, "queue_run_safe_completed", {"status": summary.get("status"), "summary_hash": summary.get("integrity_hash")})
+            self._record_history_event(queue_id, "queue_run_safe_completed", {"status": summary.get("status"), "summary_hash": summary.get("integrity_hash")})
             return {"status": summary.get("status"), "queue_id": queue_id, "summary": summary.get("summary", {}), "results": results, "manual_actions": manual_actions}
 
     def export_package(self, queue_id: str) -> dict[str, Any]:
@@ -308,7 +311,7 @@ class ReleaseAudioQualityActionQueueStore:
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": sanitize_sensitive_text(str(exc))}
 
-    def _build_source_binding(self, observatory_id: str) -> dict[str, Any]:
+    def _build_source_binding(self, observatory_id: str) -> ImplementationDocument:
         self.observatory_store.release_store = self.release_store
         if not self.observatory_store.zip_path(observatory_id).exists():
             self.observatory_store.build_zip(observatory_id)
@@ -364,12 +367,12 @@ class ReleaseAudioQualityActionQueueStore:
         queue_id: str,
         *,
         name: str | None,
-        binding: dict[str, Any],
+        binding: ImplementationDocument,
         include_risks: bool,
         include_recommendations: bool,
         severity_floor: str,
-        policy: dict[str, Any],
-    ) -> dict[str, dict[str, Any]]:
+        policy: ImplementationDocument,
+    ) -> dict[str, ImplementationDocument]:
         now = now_iso()
         selection = _action_selection(include_risks=include_risks, include_recommendations=include_recommendations, severity_floor=severity_floor)
         binding = _with_action_selection(binding, selection)
@@ -418,7 +421,7 @@ class ReleaseAudioQualityActionQueueStore:
         summary = _build_summary(queue, binding, item_doc, results, manual_actions, stale_reasons=[])
         return {"queue": queue, "source_binding": binding, "items": item_doc, "results": results, "manual_actions": manual_actions, "summary": summary}
 
-    def _current_docs_for_export(self, queue_id: str) -> dict[str, dict[str, Any]]:
+    def _current_docs_for_export(self, queue_id: str) -> dict[str, ImplementationDocument]:
         self._ensure_mutable(queue_id, "export queue")
         docs = self._read_documents(queue_id)
         stale = self._stale_reasons(docs["source_binding"])
@@ -429,7 +432,7 @@ class ReleaseAudioQualityActionQueueStore:
         write_json(self.summary_path(queue_id), summary)
         return docs
 
-    def _read_documents(self, queue_id: str) -> dict[str, dict[str, Any]]:
+    def _read_documents(self, queue_id: str) -> dict[str, ImplementationDocument]:
         queue_id = _validate_queue_id(queue_id)
         if not self.queue_path(queue_id).exists():
             raise ReleaseAudioQualityActionQueueNotFoundError(f"Audio Quality Action Queue not found: {queue_id}.")
@@ -443,7 +446,7 @@ class ReleaseAudioQualityActionQueueStore:
         }
         return {key: read_json(path) for key, path in paths.items()}
 
-    def _write_documents(self, queue_id: str, docs: dict[str, dict[str, Any]]) -> None:
+    def _write_documents(self, queue_id: str, docs: dict[str, ImplementationDocument]) -> None:
         write_json(self.queue_path(queue_id), docs["queue"])
         write_json(self.source_binding_path(queue_id), docs["source_binding"])
         write_json(self.action_items_path(queue_id), docs["items"])
@@ -451,7 +454,7 @@ class ReleaseAudioQualityActionQueueStore:
         write_json(self.manual_actions_path(queue_id), docs["manual_actions"])
         write_json(self.summary_path(queue_id), docs["summary"])
 
-    def _stale_reasons(self, binding: dict[str, Any]) -> list[str]:
+    def _stale_reasons(self, binding: ImplementationDocument) -> list[str]:
         observatory_id = str(binding.get("observatory_id") or binding.get("observatory", {}).get("observatory_id") or "")
         if not observatory_id:
             return ["observatory_id_missing"]
@@ -492,25 +495,18 @@ class ReleaseAudioQualityActionQueueStore:
             rows.append((str(queue.get("updated_at") or queue.get("created_at") or ""), str(queue.get("queue_id") or queue_path.parent.name)))
         return sorted(rows, reverse=True)[0][1] if rows else None
 
-    def _append_history_event(self, queue_id: str, event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
-        rows = _read_jsonl(self.history_path(queue_id)) if self.history_path(queue_id).exists() else []
-        previous = rows[-1].get("event_hash") if rows else None
-        event = sanitize_metadata(
+    def _record_history_event(self, queue_id: str, event_type: str, payload: ImplementationDocument) -> ImplementationDocument:
+        chain = HistoryChain(self.history_path(queue_id), sanitizer=sanitize_metadata, hash_mode="payload")
+        rows = chain.read()
+        return chain.append(
             {
                 "schema_version": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION,
                 "event_id": f"aqaevt-{len(rows) + 1:06d}",
                 "event_type": event_type,
                 "created_at": now_iso(),
-                "previous_event_hash": previous,
                 "payload": payload,
             }
         )
-        event["payload_hash"] = stable_hash(event["payload"])
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        self.history_path(queue_id).parent.mkdir(parents=True, exist_ok=True)
-        with self.history_path(queue_id).open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        return event
 
     def _ensure_mutable(self, queue_id: str, action: str) -> None:
         if self._has_effective_signoff(queue_id):
@@ -549,7 +545,7 @@ class ReleaseAudioQualityActionQueueStore:
 
 
 
-def _execute_item(item: dict[str, Any]) -> dict[str, Any]:
+def _execute_item(item: ImplementationDocument) -> ImplementationDocument:
     started = now_iso()
     item_id = str(item.get("item_id") or "")
     action_type = str(item.get("action_type") or "")
@@ -570,7 +566,7 @@ def _execute_item(item: dict[str, Any]) -> dict[str, Any]:
     return {"item_id": item_id, "status": "completed", "action_type": action_type, "started_at": started, "finished_at": now_iso(), "result": {"created_object_type": created_type, "created_object_id": created_id, "manual_required": action_type.startswith("create_")}, "error": None}
 
 
-def _manual_action_from_item(item: dict[str, Any], index: int) -> dict[str, Any]:
+def _manual_action_from_item(item: ImplementationDocument, index: int) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "manual_action_id": f"aqman-{index:06d}",
@@ -583,7 +579,7 @@ def _manual_action_from_item(item: dict[str, Any], index: int) -> dict[str, Any]
     )
 
 
-def _build_summary(queue: dict[str, Any], source_binding: dict[str, Any], items: dict[str, Any], results: dict[str, Any], manual_actions: dict[str, Any], *, stale_reasons: list[str]) -> dict[str, Any]:
+def _build_summary(queue: ImplementationDocument, source_binding: ImplementationDocument, items: ImplementationDocument, results: ImplementationDocument, manual_actions: ImplementationDocument, *, stale_reasons: list[str]) -> ImplementationDocument:
     item_rows = [row for row in items.get("items", []) if isinstance(row, dict)]
     result_rows = [row for row in results.get("results", []) if isinstance(row, dict)]
     manual_rows = [row for row in manual_actions.get("manual_actions", []) if isinstance(row, dict)]
@@ -680,11 +676,11 @@ def _semantic_hash(value: Any) -> str:
 
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if not path.exists():
         return rows
@@ -697,7 +693,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
+def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -721,7 +717,7 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def _readme(queue: dict[str, Any], summary: dict[str, Any]) -> str:
+def _readme(queue: ImplementationDocument, summary: ImplementationDocument) -> str:
     data = summary.get("summary") if isinstance(summary.get("summary"), dict) else {}
     return "\n".join(
         [

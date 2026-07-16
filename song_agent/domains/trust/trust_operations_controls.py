@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -368,7 +370,7 @@ class TrustOperationsControlStore:
         _write_json(self.verification_report_path(hub_id, assessment_id), report)
         return report
 
-    def _catalog_source(self, hub_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _catalog_source(self, hub_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         hub_report = _read_json_default(Path(payload.get("hub_verification_report_path")) if payload.get("hub_verification_report_path") else _current_hub_verification_path(self.hub_store, hub_id), default={})
         incident_report = _read_json_default(Path(payload.get("incident_board_verification_report_path")) if payload.get("incident_board_verification_report_path") else self.incident_store.verification_report_path(hub_id), default={})
         knowledge_report = _read_json_default(Path(payload.get("incident_knowledge_verification_report_path")) if payload.get("incident_knowledge_verification_report_path") else self.knowledge_store.verification_report_path(hub_id), default={})
@@ -390,7 +392,7 @@ class TrustOperationsControlStore:
         source["source_hash"] = stable_hash(source)
         return source
 
-    def _assessment_source(self, hub_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _assessment_source(self, hub_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         paths = {
             "hub_package_path": _optional_path(payload.get("hub_package_path")),
             "hub_verification_report_path": _optional_path(payload.get("hub_verification_report_path") or _current_hub_verification_path(self.hub_store, hub_id)),
@@ -423,7 +425,7 @@ class TrustOperationsControlStore:
         source["source_hash"] = stable_hash(source)
         return source
 
-    def _baseline_control(self, hub_id: str, spec: dict[str, str], source: dict[str, Any], now: str, existing: dict[str, Any]) -> dict[str, Any]:
+    def _baseline_control(self, hub_id: str, spec: dict[str, str], source: ImplementationDocument, now: str, existing: ImplementationDocument) -> ImplementationDocument:
         existing_control = _existing_control(existing, spec["control_id"])
         control = {
             "schema_version": TRUST_OPERATIONS_CONTROL_SCHEMA_VERSION,
@@ -446,7 +448,7 @@ class TrustOperationsControlStore:
         control["integrity_hash"] = control_hash(control)
         return control
 
-    def _derived_control(self, hub_id: str, entry: dict[str, Any], guards: list[dict[str, Any]], source: dict[str, Any], now: str, existing: dict[str, Any]) -> dict[str, Any]:
+    def _derived_control(self, hub_id: str, entry: ImplementationDocument, guards: list[ImplementationDocument], source: ImplementationDocument, now: str, existing: ImplementationDocument) -> ImplementationDocument:
         control_id = "toc-derived-" + _safe_id(str(entry.get("entry_id") or "knowledge-entry"))
         existing_control = _existing_control(existing, control_id)
         guard = next((item for item in guards if item.get("source", {}).get("knowledge_entry_hash") == entry.get("integrity_hash") and item.get("status") not in {"archived", "manual_required"}), {})
@@ -485,7 +487,7 @@ class TrustOperationsControlStore:
         control["integrity_hash"] = control_hash(control)
         return control
 
-    def _evidence_bindings_doc(self, hub_id: str, policy_id: str, source: dict[str, Any]) -> dict[str, Any]:
+    def _evidence_bindings_doc(self, hub_id: str, policy_id: str, source: ImplementationDocument) -> ImplementationDocument:
         bindings = []
         for kind in ("hub", "incident", "knowledge"):
             bindings.append(
@@ -540,7 +542,7 @@ class TrustOperationsControlStore:
 
 
 
-def _existing_control(catalog: dict[str, Any], control_id: str) -> dict[str, Any]:
+def _existing_control(catalog: ImplementationDocument, control_id: str) -> ImplementationDocument:
     for control in catalog.get("controls", []) if isinstance(catalog.get("controls"), list) else []:
         if isinstance(control, dict) and control.get("control_id") == control_id:
             return control
@@ -580,17 +582,17 @@ def _next_id(root: Path, prefix: str) -> str:
     return f"{prefix}-{(max(indexes) if indexes else 0) + 1:06d}"
 
 
-def _read_required(path: Path) -> dict[str, Any]:
+def _read_required(path: Path) -> ImplementationDocument:
     if not path.exists():
         raise TrustOperationsControlNotFoundError(f"Trust Operations Control artifact missing: {path.name}")
     return _read_json(path)
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json(path: Path) -> ImplementationDocument:
     return read_json(path)
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         if not path or not path.exists():
             return dict(default)
@@ -599,7 +601,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]
         return dict(default)
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
@@ -607,7 +609,7 @@ def _write_readme(root: Path) -> None:
     (root / "README.txt").write_text("MusicForge Trust Operations Controls\n\nThis package contains local preventive control catalog and assessment evidence.\n", encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

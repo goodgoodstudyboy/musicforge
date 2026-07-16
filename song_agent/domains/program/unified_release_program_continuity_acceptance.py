@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import zipfile
@@ -301,7 +303,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             self.refresh_decision_board(program_id)
             return {"status": "accepted", "evidence": accepted, "report": report}
 
-    def _validate_external_response_proof(self, program_id: str, response: dict[str, Any], verification: dict[str, Any], binding: dict[str, Any], source: dict[str, Any]) -> None:
+    def _validate_external_response_proof(self, program_id: str, response: ImplementationDocument, verification: ImplementationDocument, binding: ImplementationDocument, source: ImplementationDocument) -> None:
         if response.get("package_type") != UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_RESPONSE_PACKAGE_TYPE:
             raise UnifiedReleaseProgramContinuityAcceptanceStateError("Continuity Acceptance response package_type is invalid.")
         if not _integrity_ok(response):
@@ -578,7 +580,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
     def read_history(self, program_id: str) -> list[dict[str, Any]]:
         return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).read()
 
-    def _build_board_documents(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _build_board_documents(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         source = self._current_kit_source(program_id)
         policy = _board_policy(payload.get("policy") if "policy" in payload else (_read_optional_json(self.board_path(program_id)).get("policy") or None))
         responses = self._response_bundles(program_id)
@@ -638,7 +640,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             "external_manifest": external_manifest,
         }
 
-    def _current_kit_source(self, program_id: str) -> dict[str, Any]:
+    def _current_kit_source(self, program_id: str) -> ImplementationDocument:
         kit_path = self.kit_store.kit_zip_path(program_id)
         report_path = self.kit_store.verification_report_path(program_id)
         if not kit_path.exists() or not report_path.exists():
@@ -665,7 +667,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             }
         )
 
-    def _response_bundles(self, program_id: str) -> dict[str, dict[str, Any]]:
+    def _response_bundles(self, program_id: str) -> dict[str, ImplementationDocument]:
         bundles: dict[str, dict[str, Any]] = {}
         if not self.responses_dir(program_id).exists():
             return bundles
@@ -680,7 +682,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             }
         return bundles
 
-    def _evidence_bundles(self, program_id: str) -> dict[str, dict[str, Any]]:
+    def _evidence_bundles(self, program_id: str) -> dict[str, ImplementationDocument]:
         base = self.acceptance_dir(program_id) / "accepted-evidence"
         bundles: dict[str, dict[str, Any]] = {}
         if not base.exists():
@@ -696,7 +698,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             }
         return bundles
 
-    def _participants_from_evidence(self, evidences: dict[str, dict[str, Any]], responses: dict[str, dict[str, Any]], source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def _participants_from_evidence(self, evidences: dict[str, ImplementationDocument], responses: dict[str, ImplementationDocument], source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
         participants: list[dict[str, Any]] = []
         conflicts: list[dict[str, Any]] = []
         for evidence_id, bundle in sorted(evidences.items()):
@@ -741,7 +743,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             )
         return participants, conflicts
 
-    def _response_decision_conflicts(self, responses: dict[str, dict[str, Any]], policy: dict[str, Any]) -> list[dict[str, Any]]:
+    def _response_decision_conflicts(self, responses: dict[str, ImplementationDocument], policy: ImplementationDocument) -> list[ImplementationDocument]:
         conflicts: list[dict[str, Any]] = []
         for response_id, bundle in responses.items():
             decision = bundle["binding"].get("decision")
@@ -751,7 +753,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
                 conflicts.append({"reason": "needs_changes_response_present", "response_id": response_id})
         return conflicts
 
-    def _write_docs(self, program_id: str, docs: dict[str, Any]) -> None:
+    def _write_docs(self, program_id: str, docs: ImplementationDocument) -> None:
         self.acceptance_dir(program_id).mkdir(parents=True, exist_ok=True)
         write_json(self.board_path(program_id), docs["board"])
         write_json(self.report_path(program_id), docs["report"])
@@ -761,7 +763,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
         write_json(self.external_manifest_path(program_id), docs["external_manifest"])
         write_json(self.source_binding_path(program_id), docs["source"])
 
-    def _archive_documents(self, program_id: str) -> dict[str, Any]:
+    def _archive_documents(self, program_id: str) -> ImplementationDocument:
         if self.latest_signoff_state(program_id).get("status") != "signed":
             raise UnifiedReleaseProgramContinuityAcceptanceStateError("Continuity Acceptance Board must be signed before archive export.")
         docs = {
@@ -791,7 +793,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
         self._validate_signed_archive_sources(program_id, docs)
         return docs
 
-    def _validate_signed_archive_sources(self, program_id: str, docs: dict[str, Any]) -> None:
+    def _validate_signed_archive_sources(self, program_id: str, docs: ImplementationDocument) -> None:
         source = self._current_kit_source(program_id)
         if docs["source"].get("integrity_hash") != source.get("integrity_hash"):
             raise UnifiedReleaseProgramContinuityAcceptanceStateError("Continuity Acceptance signed source no longer matches current Kit evidence.")
@@ -823,7 +825,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             raise UnifiedReleaseProgramContinuityAcceptanceStateError("Continuity Acceptance signed indexes are stale: " + ", ".join(mismatched))
         self._validate_history_chain(program_id, docs["signoff"], docs["binding"])
 
-    def _validate_accepted_evidence_bundle(self, program_id: str, evidence_id: str, bundle: dict[str, Any], responses: dict[str, dict[str, Any]], source: dict[str, Any]) -> None:
+    def _validate_accepted_evidence_bundle(self, program_id: str, evidence_id: str, bundle: ImplementationDocument, responses: dict[str, ImplementationDocument], source: ImplementationDocument) -> None:
         accepted = bundle["accepted"]
         public = bundle["public"]
         verification_summary = bundle["verification_summary"]
@@ -900,7 +902,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
         if failed_checks:
             raise UnifiedReleaseProgramContinuityAcceptanceStateError(f"Continuity Acceptance {evidence_id} source binding failed: " + ", ".join(failed_checks))
 
-    def _validate_history_chain(self, program_id: str, signoff: dict[str, Any], binding: dict[str, Any]) -> None:
+    def _validate_history_chain(self, program_id: str, signoff: ImplementationDocument, binding: ImplementationDocument) -> None:
         validation = HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).validate()
         if not validation.valid:
             index = (validation.error_index or 0) + 1
@@ -923,7 +925,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
         if failed:
             raise UnifiedReleaseProgramContinuityAcceptanceStateError("Continuity Acceptance signoff history binding failed: " + ", ".join(failed))
 
-    def _append_history(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _append_history(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         return HistoryChain(self.history_path(program_id), sanitizer=sanitize_metadata).append(payload)
 
     def _next_response_id(self, program_id: str) -> str:
@@ -936,7 +938,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
         return f"evidence-{len(list(base.glob('evidence-*'))) + 1:06d}"
 
 
-def _board_policy(value: Any) -> dict[str, Any]:
+def _board_policy(value: Any) -> ImplementationDocument:
     raw = value if isinstance(value, dict) else {}
     return {
         "min_accepted_receipts": int(raw.get("min_accepted_receipts") or raw.get("minimum_acceptances") or DEFAULT_BOARD_POLICY["min_accepted_receipts"]),
@@ -950,7 +952,7 @@ def _board_policy(value: Any) -> dict[str, Any]:
     }
 
 
-def _decision_readiness(policy: dict[str, Any], participants: list[dict[str, Any]], conflicts: list[dict[str, Any]]) -> dict[str, Any]:
+def _decision_readiness(policy: ImplementationDocument, participants: list[ImplementationDocument], conflicts: list[ImplementationDocument]) -> ImplementationDocument:
     accepted = [row for row in participants if row.get("decision") == "accepted"]
     roles = {row.get("role") for row in accepted}
     orgs = {row.get("organization") for row in accepted}
@@ -968,7 +970,7 @@ def _decision_readiness(policy: dict[str, Any], participants: list[dict[str, Any
     return {"status": "blocked" if blockers else "ready_for_signoff", "accepted_count": len(accepted), "organization_count": len(orgs), "missing_roles": missing_roles, "blockers": blockers}
 
 
-def _matrix_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _matrix_rows(participants: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         {
             "response_id": row.get("response_id"),
@@ -985,15 +987,15 @@ def _matrix_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def _receiver_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _receiver_rows(participants: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [{"receiver_id": row.get("receiver_id"), "role": row.get("role"), "organization": row.get("organization"), "decision": row.get("decision"), "response_id": row.get("response_id")} for row in participants]
 
 
-def _accepted_rows(participants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _accepted_rows(participants: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [{"evidence_id": row.get("evidence_id"), "response_id": row.get("response_id"), "role": row.get("role"), "organization": row.get("organization"), "decision": row.get("decision"), "binding_hash": row.get("binding_hash")} for row in participants]
 
 
-def _response_public_projection(response: dict[str, Any]) -> dict[str, Any]:
+def _response_public_projection(response: ImplementationDocument) -> ImplementationDocument:
     return {
         "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_SCHEMA_VERSION,
         "package_type": "musicforge_unified_release_program_continuity_acceptance_response_public_projection",
@@ -1008,33 +1010,33 @@ def _response_public_projection(response: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _response_payload_hash(payload: dict[str, Any]) -> str:
+def _response_payload_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key not in {"payload_hash", "integrity_hash", "status", "imported_at"}})
 
 
-def _package_manifest(package_type: str, program_id: str, files: list[dict[str, Any]], source: dict[str, Any]) -> dict[str, Any]:
+def _package_manifest(package_type: str, program_id: str, files: list[ImplementationDocument], source: ImplementationDocument) -> ImplementationDocument:
     manifest = sanitize_metadata({"schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_SCHEMA_VERSION, "package_type": package_type, "program_id": program_id, "created_at": now_iso(), "source": source, "files": sorted(files, key=lambda row: row.get("path") or ""), "zip": {}})
     manifest["integrity_hash"] = _integrity_hash(manifest)
     return manifest
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _history_text(rows: list[dict[str, Any]]) -> str:
+def _history_text(rows: list[ImplementationDocument]) -> str:
     return "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     return SignoffService.seal(sanitize_metadata(doc), payload_hash=False)
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
@@ -1050,20 +1052,20 @@ def _sha256_path(path: Path | str | None) -> str | None:
     return h.hexdigest()
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     return read_json(path)
 
 
-def _reject_forbidden(payload: dict[str, Any], label: str) -> None:
+def _reject_forbidden(payload: ImplementationDocument, label: str) -> None:
     for key, value in payload.items():
         lowered = str(key).lower()
         if lowered in BLOCKED_RESPONSE_KEYS and value:
             raise UnifiedReleaseProgramContinuityAcceptanceStateError(f"{key} is not allowed for {label}.")
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 

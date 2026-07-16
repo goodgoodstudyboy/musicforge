@@ -39,7 +39,7 @@ def test_architecture_module_ownership_is_complete() -> None:
     assert current_modules == baseline_modules
     assert all(row["layer"] in {"platform", "domain", "application", "interface", "release_check", "compatibility"} for row in baseline["modules"])
     assert all(row["context"] in {None, "creation", "studio", "quality", "delivery", "trust", "program", "registry", "cli", "api", "web"} for row in baseline["modules"])
-    assert baseline["active_to_compatibility_import_max_count"] > 0
+    assert baseline["active_to_compatibility_import_max_count"] == 0
     assert baseline["allowed_active_to_compatibility_imports"] == snapshot["active_to_compatibility_imports"]
 
 

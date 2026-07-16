@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -412,7 +414,7 @@ class TrustOperationsFinalReadinessStore:
         _write_json(self.verification_report_path(), report)
         return report
 
-    def _build_evidence_index(self, payload: dict[str, Any], now: str) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    def _build_evidence_index(self, payload: ImplementationDocument, now: str) -> tuple[ImplementationDocument, dict[str, ImplementationDocument]]:
         items: list[dict[str, Any]] = []
         summaries: dict[str, dict[str, Any]] = {}
         delivery_summary_rows: list[dict[str, Any]] = []
@@ -455,7 +457,7 @@ class TrustOperationsFinalReadinessStore:
         evidence_index["integrity_hash"] = final_readiness_hash(evidence_index)
         return evidence_index, summaries
 
-    def _single_evidence_row(self, spec: dict[str, str], payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _single_evidence_row(self, spec: dict[str, str], payload: ImplementationDocument) -> tuple[ImplementationDocument, ImplementationDocument]:
         package_path = _path_or_none(payload.get(spec["payload_path"]))
         report_path = _path_or_none(payload.get(spec["payload_report"]))
         report = _read_json_default(report_path, default={}) if report_path else {}
@@ -490,7 +492,7 @@ class TrustOperationsFinalReadinessStore:
         summary["integrity_hash"] = final_readiness_hash(summary)
         return row, summary
 
-    def _report_source(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    def _report_source(self, rows: list[ImplementationDocument]) -> ImplementationDocument:
         source: dict[str, Any] = {}
         delivery_rows = []
         for row in rows:
@@ -504,7 +506,7 @@ class TrustOperationsFinalReadinessStore:
         source["delivery_verification_set_hash"] = stable_hash({"delivery": sorted(delivery_rows, key=lambda row: (str(row.get("component_type")), str(row.get("component_id"))))})
         return source
 
-    def _signoff_source(self, report: dict[str, Any], certificate: dict[str, Any], index: dict[str, Any]) -> dict[str, Any]:
+    def _signoff_source(self, report: ImplementationDocument, certificate: ImplementationDocument, index: ImplementationDocument) -> ImplementationDocument:
         source = report.get("source") if isinstance(report.get("source"), dict) else {}
         return {
             "final_readiness_report_hash": report.get("integrity_hash"),
@@ -515,7 +517,7 @@ class TrustOperationsFinalReadinessStore:
             "delivery_verification_set_hash": source.get("delivery_verification_set_hash"),
         }
 
-    def _ensure_report_ready(self, report: dict[str, Any], index: dict[str, Any]) -> None:
+    def _ensure_report_ready(self, report: ImplementationDocument, index: ImplementationDocument) -> None:
         if report.get("integrity_hash") != final_readiness_hash(report):
             raise TrustOperationsFinalReadinessStateError("Final Readiness report integrity failed.")
         if index.get("integrity_hash") != final_readiness_hash(index):
@@ -525,14 +527,14 @@ class TrustOperationsFinalReadinessStore:
         if report.get("rows") != index.get("items"):
             raise TrustOperationsFinalReadinessStateError("Final Readiness report does not match evidence index.")
 
-    def _ensure_certificate_current(self, certificate: dict[str, Any], report: dict[str, Any], index: dict[str, Any]) -> None:
+    def _ensure_certificate_current(self, certificate: ImplementationDocument, report: ImplementationDocument, index: ImplementationDocument) -> None:
         if certificate.get("integrity_hash") != final_readiness_hash(certificate):
             raise TrustOperationsFinalReadinessStateError("Final Readiness certificate integrity failed.")
         source = certificate.get("source") if isinstance(certificate.get("source"), dict) else {}
         if source.get("report_hash") != report.get("integrity_hash") or source.get("evidence_index_hash") != index.get("integrity_hash"):
             raise TrustOperationsFinalReadinessStateError("Final Readiness certificate is stale.")
 
-    def _ensure_signoff_current(self, signoff: dict[str, Any]) -> None:
+    def _ensure_signoff_current(self, signoff: ImplementationDocument) -> None:
         if signoff.get("integrity_hash") != final_readiness_hash(signoff):
             raise TrustOperationsFinalReadinessStateError("Final Handoff signoff integrity failed.")
         report = self.read_report()
@@ -543,7 +545,7 @@ class TrustOperationsFinalReadinessStore:
         if signoff.get("source") != self._signoff_source(report, certificate, index):
             raise TrustOperationsFinalReadinessStateError("Final Handoff signoff source is stale. Reset before export.")
 
-    def _change_requests_doc(self, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _change_requests_doc(self, signoff: ImplementationDocument) -> ImplementationDocument:
         rows = self.list_change_requests()
         doc = {
             "schema_version": TRUST_OPERATIONS_FINAL_READINESS_SCHEMA_VERSION,
@@ -555,22 +557,22 @@ class TrustOperationsFinalReadinessStore:
         doc["integrity_hash"] = final_readiness_hash(doc)
         return doc
 
-    def _read_verification_summaries(self) -> dict[str, dict[str, Any]]:
+    def _read_verification_summaries(self) -> dict[str, ImplementationDocument]:
         doc = _read_json_default(self.root / "verification-summaries.json", default={})
         summaries = doc.get("summaries") if isinstance(doc.get("summaries"), dict) else {}
         return {str(key): value for key, value in summaries.items() if isinstance(value, dict)}
 
-    def _read_change_request(self, change_request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, change_request_id: str) -> ImplementationDocument:
         request = _read_json_default(self.change_request_path(change_request_id), default={})
         if not request:
             raise TrustOperationsFinalReadinessNotFoundError(f"Final Handoff change request not found: {change_request_id}")
         return request
 
-    def _ensure_change_request_integrity(self, request: dict[str, Any]) -> None:
+    def _ensure_change_request_integrity(self, request: ImplementationDocument) -> None:
         if request.get("integrity_hash") != final_readiness_hash(request):
             raise TrustOperationsFinalReadinessStateError("Final Handoff change request integrity failed.")
 
-    def _history_events(self) -> list[dict[str, Any]]:
+    def _history_events(self) -> list[ImplementationDocument]:
         if not self.history_path().exists():
             return []
         rows: list[dict[str, Any]] = []
@@ -583,7 +585,7 @@ class TrustOperationsFinalReadinessStore:
                 rows.append(_sanitize(item))
         return rows
 
-    def _signoff_state(self) -> dict[str, Any]:
+    def _signoff_state(self) -> ImplementationDocument:
         active_hash: str | None = None
         active_id: str | None = None
         for event in self._history_events():
@@ -617,7 +619,7 @@ class TrustOperationsFinalReadinessStore:
         if self._history_has_event("final_handoff_zip_built", signoff_hash):
             raise TrustOperationsFinalReadinessStateError("Final Handoff ZIP was already built for this signoff. Reset before rebuilding ZIP.")
 
-    def _append_history(self, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         events = self._history_events()
         event = {
             "event_id": _safe_id(_next_id(self.root, "tofh")),
@@ -646,7 +648,7 @@ class TrustOperationsFinalReadinessStore:
 
 
 
-def _verifier_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _verifier_payload(payload: ImplementationDocument) -> ImplementationDocument:
     return {
         "hub_package_path": payload.get("hub_package_path"),
         "hub_verification_report_path": payload.get("hub_verification_report_path"),
@@ -675,14 +677,14 @@ def _verifier_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _row_from_verification_report(
     component_type: str,
     component_id: str,
-    report: dict[str, Any],
+    report: ImplementationDocument,
     package_path: Path | None,
     *,
     required: bool,
     manifest_hash: Any | None = None,
     expected_verification_package_type: str | None = None,
     require_package: bool = False,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     package_sha = _sha256(package_path) if package_path else report.get("zip_sha256")
     package_size = os.stat(_fs_path(package_path)).st_size if package_path and package_path.exists() else report.get("zip_size_bytes")
     report_hash = verification_hash(report) if report else None
@@ -728,7 +730,7 @@ def _row_from_verification_report(
     }
 
 
-def _payload_paths(payload: dict[str, Any], plural_key: str, singular_key: str) -> list[Path]:
+def _payload_paths(payload: ImplementationDocument, plural_key: str, singular_key: str) -> list[Path]:
     values = payload.get(plural_key)
     paths: list[Path] = []
     if isinstance(values, (list, tuple)):
@@ -740,7 +742,7 @@ def _payload_paths(payload: dict[str, Any], plural_key: str, singular_key: str) 
     return [path for path in paths if path is not None]
 
 
-def _component_id_from_report(report: dict[str, Any], prefix: str, index: int) -> str:
+def _component_id_from_report(report: ImplementationDocument, prefix: str, index: int) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     for key in ("component_id", "target_id", "submission_id", "release_id", "operations_id", "package_id"):
         if report.get(key):
@@ -756,13 +758,13 @@ def _path_or_none(value: Any) -> Path | None:
     return Path(value)
 
 
-def _blocker(code: str, message: str) -> dict[str, Any]:
+def _blocker(code: str, message: str) -> ImplementationDocument:
     item = {"code": code, "message": message, "severity": "blocking"}
     item["integrity_hash"] = stable_hash(item)
     return item
 
 
-def _read_json_default(path: Path | None, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path | None, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         if path is None or not path.exists():
             return dict(default)
@@ -771,7 +773,7 @@ def _read_json_default(path: Path | None, *, default: dict[str, Any]) -> dict[st
         return dict(default)
 
 
-def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     if not zip_path or not zip_path.exists():
         return {}
     try:
@@ -782,12 +784,12 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     _mkdir(path.parent)
     return write_json(path, _sanitize(payload))
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
@@ -808,7 +810,7 @@ def _read_text(path: Path) -> str:
         return ""
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -284,7 +286,7 @@ class TrustOperationsAssuranceWatchStore:
         _write_json(self.verification_report_path(queue_id), report)
         return report
 
-    def _hub_ids(self, schedule: dict[str, Any], payload: dict[str, Any]) -> list[str]:
+    def _hub_ids(self, schedule: ImplementationDocument, payload: ImplementationDocument) -> list[str]:
         if payload.get("hub_ids"):
             return [str(item) for item in _list(payload.get("hub_ids"))]
         if payload.get("hub_id"):
@@ -297,7 +299,7 @@ class TrustOperationsAssuranceWatchStore:
         ids = sorted({str(run.get("hub_id") or "") for run in runs if run.get("hub_id")})
         return ids or ["hub"]
 
-    def _build_sources(self, queue_id: str, schedule: dict[str, Any], hub_ids: list[str], source_paths: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    def _build_sources(self, queue_id: str, schedule: ImplementationDocument, hub_ids: list[str], source_paths: ImplementationDocument) -> tuple[ImplementationDocument, ImplementationDocument, list[ImplementationDocument]]:
         raw_rows: list[dict[str, Any]] = []
         assurance_archive = _first_path(source_paths.get("assurance_archive_path"))
         assurance_report_path = _first_path(source_paths.get("assurance_verification_report_path"))
@@ -367,7 +369,7 @@ class TrustOperationsAssuranceWatchStore:
         external_summary["integrity_hash"] = watch_hash(external_summary)
         return run_index, external_summary, raw_rows
 
-    def _build_rows_and_actions(self, queue_id: str, schedule: dict[str, Any], hub_ids: list[str], run_index: dict[str, Any], external_summary: dict[str, Any], now: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    def _build_rows_and_actions(self, queue_id: str, schedule: ImplementationDocument, hub_ids: list[str], run_index: ImplementationDocument, external_summary: ImplementationDocument, now: str) -> tuple[list[ImplementationDocument], ImplementationDocument]:
         runs_by_hub = {str(row.get("hub_id") or ""): row for row in run_index.get("runs", []) if isinstance(row, dict)}
         cadence = schedule.get("cadence") if isinstance(schedule.get("cadence"), dict) else {}
         interval_days = int(cadence.get("interval_days") or 7)
@@ -434,7 +436,7 @@ class TrustOperationsAssuranceWatchStore:
         action_pack["integrity_hash"] = watch_hash(action_pack)
         return sorted(rows, key=lambda row: str(row.get("hub_id") or "")), action_pack
 
-    def _ensure_queue_current(self, queue: dict[str, Any], payload: dict[str, Any], *, now: str | None = None) -> None:
+    def _ensure_queue_current(self, queue: ImplementationDocument, payload: ImplementationDocument, *, now: str | None = None) -> None:
         if queue.get("integrity_hash") != watch_hash(queue):
             raise TrustOperationsAssuranceWatchStateError("Assurance Watch queue integrity failed.")
         stored = _read_json_default(self.source_paths_path(str(queue.get("queue_id") or "")), default={}).get("paths")
@@ -456,7 +458,7 @@ class TrustOperationsAssuranceWatchStore:
         if _queue_summary(rows, action_pack) != queue.get("summary"):
             raise TrustOperationsAssuranceWatchStateError("Assurance Watch queue summary is stale. Refresh before export.")
 
-    def _append_history(self, queue_id: str, payload: dict[str, Any]) -> None:
+    def _append_history(self, queue_id: str, payload: ImplementationDocument) -> None:
         _append_jsonl(self.history_path(queue_id), payload)
 
 
@@ -466,7 +468,7 @@ class TrustOperationsAssuranceWatchStore:
 
 
 
-def _default_schedule(now: str | None = None) -> dict[str, Any]:
+def _default_schedule(now: str | None = None) -> ImplementationDocument:
     now = now or _now()
     schedule = {
         "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SCHEMA_VERSION,
@@ -496,7 +498,7 @@ def _default_schedule(now: str | None = None) -> dict[str, Any]:
     return schedule
 
 
-def _external_row(component_type: str, archive_path: Path | None, report_path: Path | None, manifest_entry: str) -> dict[str, Any]:
+def _external_row(component_type: str, archive_path: Path | None, report_path: Path | None, manifest_entry: str) -> ImplementationDocument:
     report = _read_json_default(report_path, default={}) if report_path else {}
     manifest = _read_zip_json_optional(archive_path, manifest_entry) if archive_path and manifest_entry else {}
     zip_sha = _sha256(archive_path) if archive_path and archive_path.exists() else report.get("zip_sha256")
@@ -532,11 +534,11 @@ def _external_row(component_type: str, archive_path: Path | None, report_path: P
     return row
 
 
-def _public_row(row: dict[str, Any]) -> dict[str, Any]:
+def _public_row(row: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in row.items() if not str(key).startswith("_")}
 
 
-def _action(action_id: str, queue_id: str, hub_id: str, action_type: str, severity: str, reason: str, row: dict[str, Any], now: str) -> dict[str, Any]:
+def _action(action_id: str, queue_id: str, hub_id: str, action_type: str, severity: str, reason: str, row: ImplementationDocument, now: str) -> ImplementationDocument:
     action = {
         "action_id": action_id,
         "queue_id": queue_id,
@@ -557,7 +559,7 @@ def _action(action_id: str, queue_id: str, hub_id: str, action_type: str, severi
     return action
 
 
-def _actions_for_row(row: dict[str, Any]) -> list[tuple[str, str, str]]:
+def _actions_for_row(row: ImplementationDocument) -> list[tuple[str, str, str]]:
     actions: list[tuple[str, str, str]] = []
     due_status = row.get("due_status")
     if due_status == "missing":
@@ -573,7 +575,7 @@ def _actions_for_row(row: dict[str, Any]) -> list[tuple[str, str, str]]:
     return actions
 
 
-def _queue_summary(rows: list[dict[str, Any]], action_pack: dict[str, Any]) -> dict[str, Any]:
+def _queue_summary(rows: list[ImplementationDocument], action_pack: ImplementationDocument) -> ImplementationDocument:
     actions_summary = action_pack.get("summary") if isinstance(action_pack.get("summary"), dict) else {}
     return {
         "hub_count": len(rows),
@@ -587,7 +589,7 @@ def _queue_summary(rows: list[dict[str, Any]], action_pack: dict[str, Any]) -> d
     }
 
 
-def _queue_status(summary: dict[str, Any]) -> str:
+def _queue_status(summary: ImplementationDocument) -> str:
     if int(summary.get("failed_count") or 0) or int(summary.get("overdue_count") or 0) or int(summary.get("blocking_action_count") or 0):
         return "blocked"
     if int(summary.get("due_count") or 0) or int(summary.get("manual_action_count") or 0):
@@ -595,7 +597,7 @@ def _queue_status(summary: dict[str, Any]) -> str:
     return "clear"
 
 
-def _action_summary(actions: list[dict[str, Any]]) -> dict[str, Any]:
+def _action_summary(actions: list[ImplementationDocument]) -> ImplementationDocument:
     return {
         "action_count": len(actions),
         "blocking_count": sum(1 for action in actions if action.get("severity") in {"critical", "high"}),
@@ -604,7 +606,7 @@ def _action_summary(actions: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _manifest(queue: dict[str, Any], export_dir: Path, now: str) -> dict[str, Any]:
+def _manifest(queue: ImplementationDocument, export_dir: Path, now: str) -> ImplementationDocument:
     schedule = _read_json_required(export_dir / "schedule-snapshot.json", "Schedule snapshot is missing.")
     run_index = _read_json_required(export_dir / "assurance-run-index.json", "Assurance run index is missing.")
     action_pack = _read_json_required(export_dir / "drift-action-pack.json", "Drift action pack is missing.")
@@ -635,7 +637,7 @@ def _manifest(queue: dict[str, Any], export_dir: Path, now: str) -> dict[str, An
     return manifest
 
 
-def _manifest_files(export_dir: Path) -> list[dict[str, Any]]:
+def _manifest_files(export_dir: Path) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for path, rel in _zip_entries(export_dir):
         if rel == "trust-operations-assurance-watch-manifest.json":
@@ -670,13 +672,13 @@ def _parse_dt(value: str | None) -> datetime | None:
     return dt
 
 
-def _latest_run(runs: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _latest_run(runs: list[ImplementationDocument]) -> ImplementationDocument | None:
     if not runs:
         return None
     return sorted(runs, key=lambda run: str(run.get("created_at") or run.get("updated_at") or run.get("run_id") or ""))[-1]
 
 
-def _source_paths(payload: dict[str, Any]) -> dict[str, Any]:
+def _source_paths(payload: ImplementationDocument) -> ImplementationDocument:
     return {
         "assurance_archive_path": [str(path) for path in _paths(payload.get("assurance_archive_path") or payload.get("assurance_archive"))],
         "assurance_verification_report_path": [str(path) for path in _paths(payload.get("assurance_verification_report_path") or payload.get("assurance_verification_report"))],
@@ -685,7 +687,7 @@ def _source_paths(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _verifier_kwargs_from_source_paths(source_paths: dict[str, Any]) -> dict[str, Any]:
+def _verifier_kwargs_from_source_paths(source_paths: ImplementationDocument) -> ImplementationDocument:
     return {
         "assurance_archive_path": _first_path(source_paths.get("assurance_archive_path")),
         "assurance_verification_report_path": _first_path(source_paths.get("assurance_verification_report_path")),
@@ -717,14 +719,14 @@ def _list(value: Any) -> list[Any]:
     return [value]
 
 
-def _read_json_required(path: Path, message: str) -> dict[str, Any]:
+def _read_json_required(path: Path, message: str) -> ImplementationDocument:
     try:
         return read_json(path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         raise TrustOperationsAssuranceWatchStateError(message) from exc
 
 
-def _read_json_default(path: Path | None, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path | None, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         if path is None or not path.exists():
             return dict(default)
@@ -733,7 +735,7 @@ def _read_json_default(path: Path | None, *, default: dict[str, Any]) -> dict[st
         return dict(default)
 
 
-def _read_zip_json_optional(zip_path: Path | None, entry: str) -> dict[str, Any]:
+def _read_zip_json_optional(zip_path: Path | None, entry: str) -> ImplementationDocument:
     if not zip_path:
         return {}
     try:
@@ -744,17 +746,17 @@ def _read_zip_json_optional(zip_path: Path | None, entry: str) -> dict[str, Any]
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     _mkdir(path.parent)
     return write_json(path, _sanitize(payload))
 
 
-def _write_internal_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_internal_json(path: Path, payload: ImplementationDocument) -> Path:
     _mkdir(path.parent)
     return write_json(path, payload)
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
@@ -817,7 +819,7 @@ def _safe_id(value: str) -> str:
     return value.strip("-") or "item"
 
 
-def _deep_update(target: dict[str, Any], patch: dict[str, Any]) -> None:
+def _deep_update(target: ImplementationDocument, patch: ImplementationDocument) -> None:
     for key, value in patch.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
             _deep_update(target[key], value)
@@ -825,7 +827,7 @@ def _deep_update(target: dict[str, Any], patch: dict[str, Any]) -> None:
             target[key] = value
 
 
-def _clone(value: dict[str, Any]) -> dict[str, Any]:
+def _clone(value: ImplementationDocument) -> ImplementationDocument:
     return json.loads(json.dumps(value, ensure_ascii=False))
 
 

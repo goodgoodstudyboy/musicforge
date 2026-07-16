@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.domains.trust.public_trust_center_anchor_registry_contracts import ANCHOR_REGISTRY_BLOCKED_KEYS
 from song_agent.domains.creation.redaction import sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
@@ -82,6 +84,6 @@ def anchor_transparency_summary(report: dict[str, Any] | None) -> dict[str, Any]
     )
 
 
-def _checkpoint_payload_hash(checkpoint: dict[str, Any]) -> str:
+def _checkpoint_payload_hash(checkpoint: ImplementationDocument) -> str:
     payload = {key: value for key, value in (checkpoint or {}).items() if key not in {"signature", "integrity_hash"}}
     return stable_hash(payload)

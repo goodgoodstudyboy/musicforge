@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -181,8 +183,8 @@ def unified_command_center_drift_response_verification_exit_code(report: dict[st
 
 
 def _current_review_checks(
-    source: dict[str, Any],
-    recheck: dict[str, Any],
+    source: ImplementationDocument,
+    recheck: ImplementationDocument,
     *,
     source_review_zip_path: Path | str | None,
     source_review_verification_report_path: Path | str | None,
@@ -195,7 +197,7 @@ def _current_review_checks(
     command_center_zip_path: Path | str | None,
     command_center_verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     source_binding = source.get("source_review") if isinstance(source.get("source_review"), dict) else {}
     recheck_binding = recheck.get("review") if isinstance(recheck.get("review"), dict) else {}
@@ -264,7 +266,7 @@ def _current_review_checks(
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_set: set[str]) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("entry") or row.get("path")) for row in files if isinstance(row, dict) and (row.get("entry") or row.get("path"))}
@@ -282,7 +284,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], name_se
     return checks
 
 
-def _action_summary_ok(queue: dict[str, Any], results: dict[str, Any], cr_bindings: dict[str, Any]) -> bool:
+def _action_summary_ok(queue: ImplementationDocument, results: ImplementationDocument, cr_bindings: ImplementationDocument) -> bool:
     items = [row for row in queue.get("items", []) if isinstance(row, dict)]
     result_rows = [row for row in results.get("results", []) if isinstance(row, dict)]
     cr_rows = [row for row in cr_bindings.get("items", []) if isinstance(row, dict)]
@@ -298,7 +300,7 @@ def _action_summary_ok(queue: dict[str, Any], results: dict[str, Any], cr_bindin
     )
 
 
-def _change_request_proof_checks(queue: dict[str, Any], cr_bindings: dict[str, Any], report_path: Path | str | None) -> list[dict[str, Any]]:
+def _change_request_proof_checks(queue: ImplementationDocument, cr_bindings: ImplementationDocument, report_path: Path | str | None) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     manual_items = [row for row in queue.get("items", []) if isinstance(row, dict) and not row.get("safe")]
     if not manual_items:
@@ -358,7 +360,7 @@ def _change_request_proof_checks(queue: dict[str, Any], cr_bindings: dict[str, A
     return checks
 
 
-def _approval_hash(binding: dict[str, Any]) -> str:
+def _approval_hash(binding: ImplementationDocument) -> str:
     return stable_hash(
         {
             "change_request_id": binding.get("change_request_id"),
@@ -371,13 +373,13 @@ def _approval_hash(binding: dict[str, Any]) -> str:
     )
 
 
-def _closeout_summary_ok(closeout: dict[str, Any]) -> bool:
+def _closeout_summary_ok(closeout: ImplementationDocument) -> bool:
     blockers = closeout.get("blockers") if isinstance(closeout.get("blockers"), list) else []
     summary = closeout.get("summary") if isinstance(closeout.get("summary"), dict) else {}
     return int(summary.get("blocker_count") or 0) == len(blockers)
 
 
-def _events_chain_ok(events: list[dict[str, Any]]) -> bool:
+def _events_chain_ok(events: list[ImplementationDocument]) -> bool:
     previous = ""
     if not events:
         return False
@@ -394,11 +396,11 @@ def _events_chain_ok(events: list[dict[str, Any]]) -> bool:
     return True
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     return json.loads(archive.read(name).decode("utf-8"))
 
 
-def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[dict[str, Any]]:
+def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
     rows = []
     for line in archive.read(name).decode("utf-8").splitlines():
         if line.strip():
@@ -406,13 +408,13 @@ def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[dict[str, Any
     return rows
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
+def _read_json_file(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     return read_json(path)
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     findings = []
     for name in names:
         data = archive.read(name)
@@ -422,7 +424,7 @@ def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, An
     return _check("ucc_drift_response_redaction", not findings, "Package does not contain token-like or local path secrets.", {"findings": findings})
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra_checks: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra_checks: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra_checks)
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed"]
     warnings = [check["check_id"] for check in checks if check.get("status") == "warning"]
@@ -442,11 +444,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra_checks
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, detail: ImplementationDocument | None = None) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "detail": detail or {}}
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload) and payload.get("integrity_hash") == stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

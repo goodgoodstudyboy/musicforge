@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -482,7 +484,7 @@ class TrustOperationsHubStore:
             self._append_event(hub_id, "hub_signoff_reset", {"change_request_id": change_request_id}, now=now)
             return {"status": "reset", "change_request": _sanitize(cr)}
 
-    def _source_state(self, hub: dict[str, Any], report_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _source_state(self, hub: ImplementationDocument, report_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         states: list[dict[str, Any]] = []
         for state_path in _paths(payload.get("publication_channel_state_paths") or payload.get("publication_channel_state_path")):
             state = _read_json_default(state_path, default={})
@@ -494,7 +496,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _evidence_binding_index(self, hub: dict[str, Any], report_id: str, payload: dict[str, Any], source_state: dict[str, Any]) -> dict[str, Any]:
+    def _evidence_binding_index(self, hub: ImplementationDocument, report_id: str, payload: ImplementationDocument, source_state: ImplementationDocument) -> ImplementationDocument:
         rows: list[dict[str, Any]] = []
         for report_path in _paths(payload.get("public_trust_center_verification_paths") or payload.get("public_trust_center_verification_path")):
             report = _read_json_default(report_path, default={})
@@ -509,7 +511,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _verification_summary_index(self, hub: dict[str, Any], report_id: str, evidence_index: dict[str, Any]) -> dict[str, Any]:
+    def _verification_summary_index(self, hub: ImplementationDocument, report_id: str, evidence_index: ImplementationDocument) -> ImplementationDocument:
         rows = []
         for evidence in evidence_index.get("evidence", []) if isinstance(evidence_index.get("evidence"), list) else []:
             if not isinstance(evidence, dict) or not evidence.get("verification_report_hash"):
@@ -519,7 +521,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _readiness_matrix(self, hub: dict[str, Any], report_id: str, evidence_index: dict[str, Any], verification_index: dict[str, Any], source_state: dict[str, Any]) -> dict[str, Any]:
+    def _readiness_matrix(self, hub: ImplementationDocument, report_id: str, evidence_index: ImplementationDocument, verification_index: ImplementationDocument, source_state: ImplementationDocument) -> ImplementationDocument:
         requirements = hub.get("requirements") if isinstance(hub.get("requirements"), dict) else {}
         rows: list[dict[str, Any]] = []
         by_type = {str(row.get("component_type") or ""): row for row in evidence_index.get("evidence", []) if isinstance(row, dict)}
@@ -541,7 +543,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _blocker_register(self, hub: dict[str, Any], report_id: str, readiness: dict[str, Any]) -> dict[str, Any]:
+    def _blocker_register(self, hub: ImplementationDocument, report_id: str, readiness: ImplementationDocument) -> ImplementationDocument:
         blockers = []
         for index, row in enumerate([row for row in readiness.get("rows", []) if isinstance(row, dict) and row.get("status") in {"blocked", "stale", "missing", "not_configured"} and row.get("severity") == "blocking"], start=1):
             blockers.append({"blocker_id": f"hub-blocker-{index:06d}", "component_id": row.get("component_id"), "requirement": row.get("requirement"), "severity": "critical" if row.get("status") == "blocked" else "high", "status": "open", "source_check_id": row.get("source_check_id") or row.get("requirement"), "evidence_ref": (row.get("evidence_refs") or [None])[0], "manual_action_id": f"hub-action-{index:06d}", "message": row.get("summary")})
@@ -550,7 +552,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _manual_action_queue(self, hub: dict[str, Any], report_id: str, blocker_register: dict[str, Any]) -> dict[str, Any]:
+    def _manual_action_queue(self, hub: ImplementationDocument, report_id: str, blocker_register: ImplementationDocument) -> ImplementationDocument:
         actions = []
         for blocker in blocker_register.get("blockers", []) if isinstance(blocker_register.get("blockers"), list) else []:
             if not isinstance(blocker, dict):
@@ -561,7 +563,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _delivery_evidence_index(self, hub: dict[str, Any], report_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _delivery_evidence_index(self, hub: ImplementationDocument, report_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         rows: list[dict[str, Any]] = []
         for spec in DELIVERY_VERIFICATION_COMPONENTS:
             paths = _paths(payload.get(spec["payload_keys"]) or payload.get(spec["payload_key"]))
@@ -580,7 +582,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _delivery_readiness_matrix(self, hub: dict[str, Any], report_id: str, delivery_evidence: dict[str, Any]) -> dict[str, Any]:
+    def _delivery_readiness_matrix(self, hub: ImplementationDocument, report_id: str, delivery_evidence: ImplementationDocument) -> ImplementationDocument:
         requirements = hub.get("requirements") if isinstance(hub.get("requirements"), dict) else {}
         rows: list[dict[str, Any]] = []
         evidence_rows = [row for row in delivery_evidence.get("evidence", []) if isinstance(row, dict)]
@@ -633,7 +635,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _delivery_blocker_register(self, hub: dict[str, Any], report_id: str, delivery_readiness: dict[str, Any]) -> dict[str, Any]:
+    def _delivery_blocker_register(self, hub: ImplementationDocument, report_id: str, delivery_readiness: ImplementationDocument) -> ImplementationDocument:
         blockers = []
         for index, row in enumerate([row for row in delivery_readiness.get("rows", []) if isinstance(row, dict) and row.get("status") in {"blocked", "stale", "missing", "not_configured"} and row.get("severity") == "blocking"], start=1):
             blockers.append(
@@ -661,7 +663,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _delivery_manual_action_queue(self, hub: dict[str, Any], report_id: str, delivery_blockers: dict[str, Any]) -> dict[str, Any]:
+    def _delivery_manual_action_queue(self, hub: ImplementationDocument, report_id: str, delivery_blockers: ImplementationDocument) -> ImplementationDocument:
         actions = []
         for blocker in delivery_blockers.get("blockers", []) if isinstance(delivery_blockers.get("blockers"), list) else []:
             if not isinstance(blocker, dict):
@@ -689,7 +691,7 @@ class TrustOperationsHubStore:
         data["integrity_hash"] = hub_hash(data)
         return data
 
-    def _read_report_docs(self, hub_id: str, report_id: str) -> dict[str, dict[str, Any]]:
+    def _read_report_docs(self, hub_id: str, report_id: str) -> dict[str, ImplementationDocument]:
         docs = {
             "hub_report": _read_required(self.report_path(hub_id, report_id)),
             "readiness_matrix": _read_required(self.readiness_matrix_path(hub_id, report_id)),
@@ -705,10 +707,10 @@ class TrustOperationsHubStore:
         }
         return docs
 
-    def _read_source_paths(self, hub_id: str, report_id: str) -> dict[str, Any]:
+    def _read_source_paths(self, hub_id: str, report_id: str) -> ImplementationDocument:
         return _read_json_default(self.source_paths_path(hub_id, report_id), default={})
 
-    def _assert_report_docs_current(self, docs: dict[str, dict[str, Any]]) -> None:
+    def _assert_report_docs_current(self, docs: dict[str, ImplementationDocument]) -> None:
         if docs["hub_report"].get("integrity_hash") != hub_hash(docs["hub_report"]):
             raise TrustOperationsHubStateError("Hub report integrity failed.")
         for key in ("readiness_matrix", "blocker_register", "manual_action_queue", "evidence_binding_index", "verification_summary_index", "source_state", "delivery_evidence_index", "delivery_readiness_matrix", "delivery_blocker_register", "delivery_manual_action_queue"):
@@ -731,7 +733,7 @@ class TrustOperationsHubStore:
             if source.get(key) != value:
                 raise TrustOperationsHubStateError("Hub report source references are stale.")
 
-    def _assert_external_sources_current(self, docs: dict[str, dict[str, Any]], source_paths: dict[str, Any]) -> None:
+    def _assert_external_sources_current(self, docs: dict[str, ImplementationDocument], source_paths: ImplementationDocument) -> None:
         state_hashes = {
             str(item.get("state_hash") or "")
             for item in docs["source_state"].get("sources", {}).get("publication_channel_states", [])
@@ -770,7 +772,7 @@ class TrustOperationsHubStore:
         if self._signoff_state(hub_id)["status"] == "signed":
             raise TrustOperationsHubStateError("Signed Trust Operations Hub cannot be modified. Reset signoff with an approved change request first.")
 
-    def _signoff_state(self, hub_id: str) -> dict[str, Any]:
+    def _signoff_state(self, hub_id: str) -> ImplementationDocument:
         state: dict[str, Any] = {"status": "unsigned", "signoff_hash": None, "change_request_id": None}
         for row in _read_jsonl(self.signoff_history_path(hub_id)):
             event_type = str(row.get("event_type") or "")
@@ -802,19 +804,19 @@ class TrustOperationsHubStore:
                 state["signoff_file_status"] = "missing"
         return state
 
-    def _signoff_summary(self, hub_id: str) -> dict[str, Any]:
+    def _signoff_summary(self, hub_id: str) -> ImplementationDocument:
         signoff = _read_json_default(self.signoff_path(hub_id), default={})
         summary = {"schema_version": TRUST_OPERATIONS_SCHEMA_VERSION, "package_type": "musicforge_trust_operations_hub_signoff_summary", "hub_id": hub_id, "status": signoff.get("status") or "unsigned", "signoff_hash": signoff.get("integrity_hash"), "report_id": signoff.get("report_id")}
         summary["integrity_hash"] = hub_hash(summary)
         return summary
 
-    def _read_change_request(self, hub_id: str, change_request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, hub_id: str, change_request_id: str) -> ImplementationDocument:
         path = self.change_request_path(hub_id, change_request_id)
         if not path.exists():
             raise TrustOperationsHubNotFoundError("Trust Operations Hub change request not found.")
         return _read_json(path)
 
-    def _append_event(self, hub_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_event(self, hub_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         rows = _read_jsonl(self.events_path(hub_id))
         event = {"event_id": f"trust-hub-event-{len(rows) + 1:06d}", "event_type": event_type, "created_at": now, "payload": sanitize_metadata(payload, blocked_keys=TRUST_OPERATIONS_BLOCKED_KEYS), "previous_event_hash": rows[-1].get("event_hash") if rows else None}
         event["payload_hash"] = stable_hash(event["payload"])
@@ -842,11 +844,11 @@ def _default_requirements() -> dict[str, bool]:
     }
 
 
-def _scope(payload: dict[str, Any]) -> dict[str, Any]:
+def _scope(payload: ImplementationDocument) -> ImplementationDocument:
     return {"release_ids": _list(payload.get("release_ids") or payload.get("release_id")), "project_ids": _list(payload.get("project_ids") or payload.get("project_id")), "public_trust_center_ids": _list(payload.get("public_trust_center_ids") or payload.get("public_trust_center_id") or "ptc-default"), "publication_channel_ids": _list(payload.get("publication_channel_ids") or payload.get("publication_channel_id") or "public-release")}
 
 
-def _source_paths(payload: dict[str, Any]) -> dict[str, Any]:
+def _source_paths(payload: ImplementationDocument) -> ImplementationDocument:
     paths = {
         "publication_channel_state_paths": [str(path) for path in _paths(payload.get("publication_channel_state_paths") or payload.get("publication_channel_state_path"))],
         "public_trust_center_verification_paths": [str(path) for path in _paths(payload.get("public_trust_center_verification_paths") or payload.get("public_trust_center_verification_path"))],
@@ -857,11 +859,11 @@ def _source_paths(payload: dict[str, Any]) -> dict[str, Any]:
     return paths
 
 
-def _evidence_from_verification(evidence_id: str, component_type: str, report: dict[str, Any], path: Path) -> dict[str, Any]:
+def _evidence_from_verification(evidence_id: str, component_type: str, report: ImplementationDocument, path: Path) -> ImplementationDocument:
     return {"evidence_id": evidence_id, "component_type": component_type, "path_hint": str(path.name), "package_type": report.get("package_type"), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash"), "verification_report_hash": verification_hash(report), "source_hash": report.get("source_hash"), "status": report.get("status") or "missing", "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {}, "current_state_refs": {"publication_channel_state_hash": report.get("channel_state_hash")}}
 
 
-def _delivery_component_id(spec: dict[str, str], report: dict[str, Any], index: int) -> str:
+def _delivery_component_id(spec: dict[str, str], report: ImplementationDocument, index: int) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     for key in ("release_id", "target_id", "submission_id", "evidence_id", "operations_id", "package_id"):
         value = report.get(key) or summary.get(key)
@@ -870,7 +872,7 @@ def _delivery_component_id(spec: dict[str, str], report: dict[str, Any], index: 
     return f"{spec['component_id_prefix']}:{index:03d}"
 
 
-def _delivery_evidence_from_verification(component_id: str, component_type: str, requirement: str, report: dict[str, Any], path: Path) -> dict[str, Any]:
+def _delivery_evidence_from_verification(component_id: str, component_type: str, requirement: str, report: ImplementationDocument, path: Path) -> ImplementationDocument:
     return {
         "evidence_id": component_id + ":verification",
         "component_id": component_id,
@@ -888,7 +890,7 @@ def _delivery_evidence_from_verification(component_id: str, component_type: str,
     }
 
 
-def _delivery_evidence_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+def _delivery_evidence_summary(rows: list[ImplementationDocument]) -> dict[str, int]:
     return {
         "evidence_count": len(rows),
         "passed_count": sum(1 for row in rows if row.get("status") == "passed"),
@@ -898,7 +900,7 @@ def _delivery_evidence_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def _status_from_verification_evidence(evidence: dict[str, Any]) -> str:
+def _status_from_verification_evidence(evidence: ImplementationDocument) -> str:
     status = str(evidence.get("status") or "")
     if status == "passed":
         return "ready"
@@ -909,18 +911,18 @@ def _status_from_verification_evidence(evidence: dict[str, Any]) -> str:
     return "missing"
 
 
-def _readiness_row(component_id: str, component_type: str, requirement: str, evidence: dict[str, Any] | None) -> dict[str, Any]:
+def _readiness_row(component_id: str, component_type: str, requirement: str, evidence: ImplementationDocument | None) -> ImplementationDocument:
     if not evidence:
         return {"component_id": component_id, "component_type": component_type, "requirement": requirement, "status": "missing", "severity": "blocking", "evidence_refs": [], "summary": f"{requirement} evidence is missing."}
     status = "ready" if evidence.get("status") == "passed" else "blocked" if evidence.get("status") == "failed" else "stale" if evidence.get("status") == "stale" else "missing"
     return {"component_id": component_id, "component_type": component_type, "requirement": requirement, "status": status, "severity": "blocking", "evidence_refs": [str(evidence.get("evidence_id") or component_type)], "summary": f"{requirement} is {status}.", "source_check_id": requirement}
 
 
-def _readiness_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+def _readiness_summary(rows: list[ImplementationDocument]) -> dict[str, int]:
     return {"row_count": len(rows), "ready_count": sum(1 for row in rows if row.get("status") == "ready"), "blocked_count": sum(1 for row in rows if row.get("status") == "blocked"), "warning_count": sum(1 for row in rows if row.get("status") == "warning"), "stale_count": sum(1 for row in rows if row.get("status") == "stale"), "missing_count": sum(1 for row in rows if row.get("status") in {"missing", "not_configured"})}
 
 
-def _combine_readiness_summaries(*summaries: dict[str, Any]) -> dict[str, int]:
+def _combine_readiness_summaries(*summaries: ImplementationDocument) -> dict[str, int]:
     keys = ("row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count")
     return {key: sum(int(summary.get(key) or 0) for summary in summaries if isinstance(summary, dict)) for key in keys}
 
@@ -965,34 +967,34 @@ def _list(value: Any) -> list[str]:
     return [str(value)]
 
 
-def _read_required(path: Path) -> dict[str, Any]:
+def _read_required(path: Path) -> ImplementationDocument:
     if not path.exists():
         raise TrustOperationsHubNotFoundError(f"Trust Operations Hub artifact missing: {path.name}")
     return _read_json(path)
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json(path: Path) -> ImplementationDocument:
     return read_json(path)
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         return read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default)
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -1008,14 +1010,14 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _checksum_json(export_dir: Path) -> dict[str, Any]:
+def _checksum_json(export_dir: Path) -> ImplementationDocument:
     rows = [_file_record(export_dir, path) for path in _walk_files(export_dir) if path.relative_to(export_dir).as_posix() not in {"checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt", "trust-operations-hub-manifest.json"}]
     data = {"schema_version": TRUST_OPERATIONS_SCHEMA_VERSION, "files": rows}
     data["integrity_hash"] = hub_hash(data)
     return data
 
 
-def _write_sha256sums(export_dir: Path, checksum_json: dict[str, Any]) -> None:
+def _write_sha256sums(export_dir: Path, checksum_json: ImplementationDocument) -> None:
     lines = [f"{item.get('sha256')}  {item.get('path')}" for item in checksum_json.get("files", []) if isinstance(item, dict)]
     (export_dir / "checksum" / "SHA256SUMS.txt").write_text(sanitize_sensitive_text("\n".join(lines) + "\n"), encoding="utf-8")
 
@@ -1024,7 +1026,7 @@ def _write_readme(export_dir: Path) -> None:
     (export_dir / "README.txt").write_text("MusicForge Trust Operations Hub\n\nThis package contains a local cross-link trust operations readiness report and evidence binding indexes.\n", encoding="utf-8")
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

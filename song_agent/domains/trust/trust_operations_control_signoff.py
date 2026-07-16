@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -421,7 +423,7 @@ class TrustOperationsControlSignoffStore:
         state = self._signoff_state(hub_id)
         return {"hub_id": hub_id, "status": state.get("status") or "unsigned", "signoff": signoff, "exceptions": self.list_exceptions(hub_id), "change_requests": self.list_change_requests(hub_id)}
 
-    def _signoff_source(self, hub_id: str, assessment_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def _signoff_source(self, hub_id: str, assessment_id: str, payload: ImplementationDocument) -> tuple[ImplementationDocument, ImplementationDocument]:
         control_zip = Path(payload.get("control_package_path") or self.control_store.zip_path(hub_id, assessment_id))
         control_report_path = Path(payload.get("control_verification_report_path") or self.control_store.verification_report_path(hub_id, assessment_id))
         control_report = _read_json_required(control_report_path, "Trust Operations Control verification report is required before signoff.")
@@ -452,7 +454,7 @@ class TrustOperationsControlSignoffStore:
         self._assert_optional_external_source(payload, "knowledge", source)
         return source, control_report
 
-    def _assert_optional_external_source(self, payload: dict[str, Any], kind: str, source: dict[str, Any]) -> None:
+    def _assert_optional_external_source(self, payload: ImplementationDocument, kind: str, source: ImplementationDocument) -> None:
         report_key = {"hub": "hub_verification_report_path", "incident": "incident_board_verification_report_path", "knowledge": "incident_knowledge_verification_report_path"}[kind]
         zip_key = {"hub": "hub_package_path", "incident": "incident_board_package_path", "knowledge": "incident_knowledge_package_path"}[kind]
         report_path = payload.get(report_key)
@@ -467,7 +469,7 @@ class TrustOperationsControlSignoffStore:
             if _sha256(path) != source.get(f"{kind}_zip_sha256"):
                 raise TrustOperationsControlSignoffStateError(f"Control signoff source does not match current {kind} ZIP.")
 
-    def _ensure_source_signable(self, source: dict[str, Any], control_report: dict[str, Any], hub_id: str, now: str) -> None:
+    def _ensure_source_signable(self, source: ImplementationDocument, control_report: ImplementationDocument, hub_id: str, now: str) -> None:
         if control_report.get("status") != "passed":
             raise TrustOperationsControlSignoffStateError("Trust Operations Control verification failed.")
         if source.get("control_zip_sha256") != control_report.get("zip_sha256") or source.get("control_zip_size_bytes") != control_report.get("zip_size_bytes") or source.get("control_manifest_hash") != control_report.get("manifest_hash"):
@@ -479,7 +481,7 @@ class TrustOperationsControlSignoffStore:
             if exception.get("status") == "approved" and self._exception_expired(exception, now):
                 raise TrustOperationsControlSignoffStateError("Approved Control exception is expired.")
 
-    def _signoff_summary(self, hub_id: str, control_report: dict[str, Any], now: str) -> dict[str, Any]:
+    def _signoff_summary(self, hub_id: str, control_report: ImplementationDocument, now: str) -> ImplementationDocument:
         summary = control_report.get("summary") if isinstance(control_report.get("summary"), dict) else {}
         approved = [item for item in self.list_exceptions(hub_id) if item.get("status") == "approved" and not self._exception_expired(item, now)]
         return {
@@ -491,38 +493,38 @@ class TrustOperationsControlSignoffStore:
             "high_exception_count": sum(1 for item in approved if (item.get("risk") if isinstance(item.get("risk"), dict) else {}).get("severity") == "high"),
         }
 
-    def _control_result(self, hub_id: str, assessment_id: str, control_id: str) -> dict[str, Any]:
+    def _control_result(self, hub_id: str, assessment_id: str, control_id: str) -> ImplementationDocument:
         results_doc = _read_json_required(self.control_store.control_results_path(hub_id, assessment_id), "Control results are missing.")
         for item in results_doc.get("results", []) if isinstance(results_doc.get("results"), list) else []:
             if isinstance(item, dict) and item.get("control_id") == control_id:
                 return item
         raise TrustOperationsControlSignoffNotFoundError(f"Control result not found: {control_id}")
 
-    def _read_exception(self, hub_id: str, exception_id: str) -> dict[str, Any]:
+    def _read_exception(self, hub_id: str, exception_id: str) -> ImplementationDocument:
         exception = _read_json_default(self.exception_path(hub_id, exception_id), default={})
         if not exception:
             raise TrustOperationsControlSignoffNotFoundError(f"Control exception not found: {exception_id}")
         return exception
 
-    def _read_change_request(self, hub_id: str, change_request_id: str) -> dict[str, Any]:
+    def _read_change_request(self, hub_id: str, change_request_id: str) -> ImplementationDocument:
         request = _read_json_default(self.change_request_path(hub_id, change_request_id), default={})
         if not request:
             raise TrustOperationsControlSignoffNotFoundError(f"Control change request not found: {change_request_id}")
         return request
 
-    def _ensure_exception_integrity(self, exception: dict[str, Any]) -> None:
+    def _ensure_exception_integrity(self, exception: ImplementationDocument) -> None:
         if exception.get("integrity_hash") != control_signoff_hash(exception):
             raise TrustOperationsControlSignoffStateError("Control exception integrity failed.")
 
-    def _ensure_change_request_integrity(self, request: dict[str, Any]) -> None:
+    def _ensure_change_request_integrity(self, request: ImplementationDocument) -> None:
         if request.get("integrity_hash") != control_signoff_hash(request):
             raise TrustOperationsControlSignoffStateError("Control change request integrity failed.")
 
-    def _exception_expired(self, exception: dict[str, Any], now: str) -> bool:
+    def _exception_expired(self, exception: ImplementationDocument, now: str) -> bool:
         expires_at = (exception.get("risk") if isinstance(exception.get("risk"), dict) else {}).get("expires_at")
         return bool(expires_at and str(expires_at) < str(now))
 
-    def _ensure_signoff_current(self, hub_id: str, signoff: dict[str, Any], payload: dict[str, Any]) -> None:
+    def _ensure_signoff_current(self, hub_id: str, signoff: ImplementationDocument, payload: ImplementationDocument) -> None:
         if signoff.get("integrity_hash") != control_signoff_hash(signoff):
             raise TrustOperationsControlSignoffStateError("Trust Operations Control Signoff integrity failed.")
         source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
@@ -531,7 +533,7 @@ class TrustOperationsControlSignoffStore:
         if stable_hash(current_source) != signoff.get("source_hash"):
             raise TrustOperationsControlSignoffStateError("Trust Operations Control Signoff source is stale. Reset before archiving.")
 
-    def _archive_report(self, hub_id: str, signoff: dict[str, Any], now: str) -> dict[str, Any]:
+    def _archive_report(self, hub_id: str, signoff: ImplementationDocument, now: str) -> ImplementationDocument:
         report = {
             "schema_version": TRUST_OPERATIONS_CONTROL_SIGNOFF_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_CONTROL_SIGNOFF_REPORT_PACKAGE_TYPE,
@@ -546,7 +548,7 @@ class TrustOperationsControlSignoffStore:
         report["integrity_hash"] = control_signoff_hash(report)
         return report
 
-    def _source_summary(self, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _source_summary(self, signoff: ImplementationDocument) -> ImplementationDocument:
         doc = {
             "schema_version": TRUST_OPERATIONS_CONTROL_SIGNOFF_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_CONTROL_SIGNOFF_SOURCE_PACKAGE_TYPE,
@@ -557,19 +559,19 @@ class TrustOperationsControlSignoffStore:
         doc["integrity_hash"] = control_signoff_hash(doc)
         return doc
 
-    def _exceptions_doc(self, hub_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _exceptions_doc(self, hub_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         rows = self.list_exceptions(hub_id)
         doc = {"schema_version": TRUST_OPERATIONS_CONTROL_SIGNOFF_SCHEMA_VERSION, "package_type": TRUST_OPERATIONS_CONTROL_SIGNOFF_EXCEPTIONS_PACKAGE_TYPE, "hub_id": hub_id, "signoff_hash": signoff.get("integrity_hash"), "exceptions": rows, "summary": {"exception_count": len(rows), "approved_count": sum(1 for item in rows if item.get("status") == "approved")}}
         doc["integrity_hash"] = control_signoff_hash(doc)
         return doc
 
-    def _change_requests_doc(self, hub_id: str, signoff: dict[str, Any]) -> dict[str, Any]:
+    def _change_requests_doc(self, hub_id: str, signoff: ImplementationDocument) -> ImplementationDocument:
         rows = self.list_change_requests(hub_id)
         doc = {"schema_version": TRUST_OPERATIONS_CONTROL_SIGNOFF_SCHEMA_VERSION, "package_type": TRUST_OPERATIONS_CONTROL_SIGNOFF_CHANGE_REQUESTS_PACKAGE_TYPE, "hub_id": hub_id, "signoff_hash": signoff.get("integrity_hash"), "change_requests": rows, "summary": {"change_request_count": len(rows), "applied_count": sum(1 for item in rows if item.get("status") == "applied")}}
         doc["integrity_hash"] = control_signoff_hash(doc)
         return doc
 
-    def _history_events(self, hub_id: str) -> list[dict[str, Any]]:
+    def _history_events(self, hub_id: str) -> list[ImplementationDocument]:
         path = self.signoff_history_path(hub_id)
         if not path.exists():
             return []
@@ -583,7 +585,7 @@ class TrustOperationsControlSignoffStore:
                 events.append(_sanitize(item))
         return events
 
-    def _signoff_state(self, hub_id: str) -> dict[str, Any]:
+    def _signoff_state(self, hub_id: str) -> ImplementationDocument:
         active_hash: str | None = None
         active_id: str | None = None
         for event in self._history_events(hub_id):
@@ -612,10 +614,10 @@ class TrustOperationsControlSignoffStore:
         if self._history_has_event(hub_id, "control_signoff_archive_zip_built", signoff_hash):
             raise TrustOperationsControlSignoffStateError("Trust Operations Control Signoff archive ZIP was already built for this signoff. Reset before rebuilding archive ZIP.")
 
-    def _append_history(self, hub_id: str, payload: dict[str, Any]) -> None:
+    def _append_history(self, hub_id: str, payload: ImplementationDocument) -> None:
         _append_jsonl(self.signoff_history_path(hub_id), payload)
 
-    def _append_event(self, hub_id: str, event_type: str, payload: dict[str, Any], *, now: str) -> None:
+    def _append_event(self, hub_id: str, event_type: str, payload: ImplementationDocument, *, now: str) -> None:
         _append_jsonl(self.events_path(hub_id), {"event_type": event_type, "created_at": now, **payload})
 
 
@@ -625,11 +627,11 @@ class TrustOperationsControlSignoffStore:
 
 
 
-def _history_hash(events: list[dict[str, Any]]) -> str:
+def _history_hash(events: list[ImplementationDocument]) -> str:
     return stable_hash({"events": events})
 
 
-def _read_json_required(path: Path, message: str) -> dict[str, Any]:
+def _read_json_required(path: Path, message: str) -> ImplementationDocument:
     if not path.exists():
         raise TrustOperationsControlSignoffStateError(message)
     try:
@@ -638,7 +640,7 @@ def _read_json_required(path: Path, message: str) -> dict[str, Any]:
         raise TrustOperationsControlSignoffStateError(message) from exc
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             return json.loads(archive.read(entry).decode("utf-8"))
@@ -646,7 +648,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         raise TrustOperationsControlSignoffStateError(f"Required ZIP entry is missing or invalid: {entry}") from exc
 
 
-def _required(payload: dict[str, Any], key: str) -> str:
+def _required(payload: ImplementationDocument, key: str) -> str:
     value = str(payload.get(key) or "").strip()
     if not value:
         raise TrustOperationsControlSignoffStateError(f"{key} is required.")
@@ -676,7 +678,7 @@ def _next_id(root: Path, prefix: str) -> str:
     return f"{prefix}-{(max(indexes) if indexes else 0) + 1:06d}"
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument) -> ImplementationDocument:
     try:
         if not path or not path.exists():
             return dict(default)
@@ -685,7 +687,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any]) -> dict[str, Any]
         return dict(default)
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     return write_json(path, _sanitize(payload))
 
 
@@ -693,7 +695,7 @@ def _write_readme(root: Path) -> None:
     (root / "README.txt").write_text("MusicForge Trust Operations Control Signoff Archive\n\nThis package contains signed local control governance evidence.\n", encoding="utf-8")
 
 
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:
     _mkdir(path.parent)
     with open(_fs_path(path), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(_sanitize(payload), ensure_ascii=False, sort_keys=True) + "\n")
@@ -706,7 +708,7 @@ def _read_text(path: Path) -> str:
         return ""
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
 
 

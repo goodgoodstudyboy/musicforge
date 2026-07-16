@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import io
 import math
@@ -211,7 +213,7 @@ def audio_health_integrity_ok(report: dict[str, Any]) -> bool:
     return bool(expected) and expected == audio_health_integrity_hash(report)
 
 
-def _pcm_metrics(pcm: bytes, *, channels: int, sample_width: int, sample_rate: int) -> dict[str, Any]:
+def _pcm_metrics(pcm: bytes, *, channels: int, sample_width: int, sample_rate: int) -> ImplementationDocument:
     if channels <= 0 or sample_width not in {1, 2, 3, 4} or not pcm:
         return {
             "peak": 0.0,
@@ -289,11 +291,11 @@ def _decode_sample(data: bytes, sample_width: int) -> int:
     return int.from_bytes(data, byteorder="little", signed=True)
 
 
-def _check(check_id: str, status: str, message: str) -> dict[str, Any]:
+def _check(check_id: str, status: str, message: str) -> ImplementationDocument:
     return {"id": check_id, "status": status, "message": message}
 
 
-def _check_expected(checks: list[dict[str, Any]], warnings: list[str], failures: list[str], check_id: str, actual: int, expected: int | None, label: str) -> None:
+def _check_expected(checks: list[ImplementationDocument], warnings: list[str], failures: list[str], check_id: str, actual: int, expected: int | None, label: str) -> None:
     if expected is None:
         return
     if actual == expected:
@@ -303,7 +305,7 @@ def _check_expected(checks: list[dict[str, Any]], warnings: list[str], failures:
         failures.append(f"{check_id}_mismatch")
 
 
-def _finalize_report(report: dict[str, Any]) -> dict[str, Any]:
+def _finalize_report(report: ImplementationDocument) -> ImplementationDocument:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     source_payload = {
         "source": source,

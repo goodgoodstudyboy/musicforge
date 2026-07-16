@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, json, unquote
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import read_json
@@ -30,7 +32,7 @@ def _job_artifacts(
         artifacts["nodes"] = str(nodes_dir)
     return artifacts
 
-def _read_events(path: Path) -> list[dict[str, Any]]:
+def _read_events(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
     events: list[dict[str, Any]] = []
@@ -39,7 +41,7 @@ def _read_events(path: Path) -> list[dict[str, Any]]:
             events.append(json.loads(line))
     return events
 
-def _read_critic_report(run_dir: Path) -> dict[str, Any] | None:
+def _read_critic_report(run_dir: Path) -> ImplementationDocument | None:
     path = run_dir / "data" / "nodes" / "critic.json"
     if not path.exists():
         return None
@@ -50,7 +52,7 @@ def _read_critic_report(run_dir: Path) -> dict[str, Any] | None:
     output = record.get("output")
     return output if isinstance(output, dict) else None
 
-def _read_edit_metadata_for_run(run_dir: Path) -> dict[str, Any] | None:
+def _read_edit_metadata_for_run(run_dir: Path) -> ImplementationDocument | None:
     path = run_dir / "data" / "edit-metadata.json"
     if not path.exists():
         return None
@@ -76,7 +78,7 @@ def _optional_positive_int(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
 
-def _candidate_source_summary(value: Any) -> dict[str, Any]:
+def _candidate_source_summary(value: Any) -> ImplementationDocument:
     data = value if isinstance(value, dict) else {}
     return {
         "candidate_group_id": str(data.get("candidate_group_id") or ""),

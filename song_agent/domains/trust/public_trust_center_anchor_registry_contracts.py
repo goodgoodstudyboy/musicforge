@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -98,11 +100,11 @@ def anchor_registry_verification_summary(report: dict[str, Any]) -> dict[str, An
     return sanitize_metadata({"status": report.get("status"), "center_id": summary.get("center_id"), "current_entry_id": summary.get("current_entry_id"), "current_anchor_hash": summary.get("current_anchor_hash"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash")}, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
 
 
-def _current_entry(registry: dict[str, Any]) -> dict[str, Any]:
+def _current_entry(registry: ImplementationDocument) -> ImplementationDocument:
     return _find_entry(registry, str(registry.get("current_entry_id") or "")) if registry.get("current_entry_id") else {}
 
 
-def _find_entry(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
+def _find_entry(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
     for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
         if isinstance(entry, dict) and entry.get("entry_id") == entry_id:
             return entry

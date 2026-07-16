@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import shutil
@@ -309,7 +311,7 @@ def validate_context_pack_id(pack_id: str) -> str:
     return pack_id
 
 
-def _pack_asset_ref(ref: dict[str, Any]) -> dict[str, Any]:
+def _pack_asset_ref(ref: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "asset_id": ref.get("asset_id"),
@@ -319,7 +321,7 @@ def _pack_asset_ref(ref: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _pack_reference_ref(ref: dict[str, Any]) -> dict[str, Any]:
+def _pack_reference_ref(ref: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "reference_id": ref.get("reference_id"),
@@ -330,7 +332,7 @@ def _pack_reference_ref(ref: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _clean_asset_refs(value: Any) -> list[dict[str, Any]]:
+def _clean_asset_refs(value: Any) -> list[ImplementationDocument]:
     if not isinstance(value, list):
         return []
     if len(value) > MAX_CONTEXT_PACK_ASSET_REFS:
@@ -348,7 +350,7 @@ def _clean_asset_refs(value: Any) -> list[dict[str, Any]]:
     return refs
 
 
-def _clean_reference_refs(value: Any) -> list[dict[str, Any]]:
+def _clean_reference_refs(value: Any) -> list[ImplementationDocument]:
     if not isinstance(value, list):
         return []
     if len(value) > MAX_CONTEXT_PACK_REFERENCE_REFS:

@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.documents import ImplementationDocument
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -546,7 +548,7 @@ class _ReleaseZipVerifier:
                         path=stem_health_path,
                     )
 
-    def _verify_track_mix_state(self, archive: zipfile.ZipFile, *, track_id: str, directory: str, plan_payload: dict[str, Any], midi_path: str) -> None:
+    def _verify_track_mix_state(self, archive: zipfile.ZipFile, *, track_id: str, directory: str, plan_payload: ImplementationDocument, midi_path: str) -> None:
         mix_state_required = self._requires_current_mix_state()
         mix_state_path = f"{directory}/mix-state.json"
         if mix_state_path not in self.entry_map:
@@ -788,7 +790,7 @@ class _ReleaseZipVerifier:
                     "Metadata payload hash matches manifest summary." if expected_hash == actual_hash else "Metadata payload hash does not match manifest summary.",
                 )
 
-    def _read_audio_review_files(self, archive: zipfile.ZipFile, manifest_summary: dict[str, Any], *, enforce_per_track: bool) -> list[tuple[str, dict[str, Any]]]:
+    def _read_audio_review_files(self, archive: zipfile.ZipFile, manifest_summary: ImplementationDocument, *, enforce_per_track: bool) -> list[tuple[str, ImplementationDocument]]:
         declared = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
         paths = [str(item.get("path") or "") for item in declared if isinstance(item, dict) and str(item.get("path") or "").strip()]
         if not paths:
@@ -1302,7 +1304,7 @@ class _ReleaseZipVerifier:
                 missing.append(full)
         self._add_track_check(track_id, "track_optional_stems", "failed" if missing else "passed", "blocking", "Missing stem files: " + ", ".join(missing[:5]) if missing else "Stem manifest files exist.", path=path, count=len(missing))
 
-    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str, *, track_id: str | None = None) -> dict[str, Any]:
+    def _read_json_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str, *, track_id: str | None = None) -> ImplementationDocument:
         info = self.entry_map.get(name)
         if info is None:
             if track_id:
@@ -1389,7 +1391,7 @@ class _ReleaseZipVerifier:
             item["count"] = count
         self.track_checks.append(sanitize_metadata(item, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS))
 
-    def _build_report(self) -> dict[str, Any]:
+    def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in [*self.checks, *self.track_checks] if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in [*self.checks, *self.track_checks] if item.get("status") == "warning"]
         status = "failed" if blockers else "warning" if warnings else "passed"
@@ -1435,24 +1437,24 @@ class _ReleaseZipVerifier:
         return sanitize_metadata(report, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS)
 
 
-def _release_signoff_hash_payload(signoff: dict[str, Any]) -> dict[str, Any]:
+def _release_signoff_hash_payload(signoff: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in signoff.items() if key not in SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
 
 
-def _review_payload_hash(review: dict[str, Any]) -> str:
+def _review_payload_hash(review: ImplementationDocument) -> str:
     return stable_hash(sanitize_metadata({key: value for key, value in review.items() if key not in {"integrity_hash", "stale", "stale_reasons", "current_source_hash", "current"}}, blocked_keys=VERIFIER_REPORT_BLOCKED_KEYS))
 
 
-def _audio_review_summary_hash(summary: dict[str, Any]) -> str:
+def _audio_review_summary_hash(summary: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in summary.items() if key not in {"integrity_hash", "generated_at"}})
 
 
-def _audio_review_integrity_ok(review: dict[str, Any]) -> bool:
+def _audio_review_integrity_ok(review: ImplementationDocument) -> bool:
     expected = str(review.get("integrity_hash") or "")
     return bool(expected) and expected == _review_payload_hash(review)
 
 
-def _mix_source_state_for_zip(*, plan: SongPlan, midi_sha: str, project_id: str, version_id: str) -> dict[str, Any]:
+def _mix_source_state_for_zip(*, plan: SongPlan, midi_sha: str, project_id: str, version_id: str) -> ImplementationDocument:
     return {
         "project_id": project_id,
         "version_id": version_id,
@@ -1464,7 +1466,7 @@ def _mix_source_state_for_zip(*, plan: SongPlan, midi_sha: str, project_id: str,
     }
 
 
-def _manifest_review_hash(manifest_summary: dict[str, Any], path: str, review_id: Any) -> str | None:
+def _manifest_review_hash(manifest_summary: ImplementationDocument, path: str, review_id: Any) -> str | None:
     rows = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
     for row in rows:
         if not isinstance(row, dict):
@@ -1484,7 +1486,7 @@ def _wav_duration(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> float:
         return 0.0
 
 
-def _audio_review_value_findings(path: str, review: dict[str, Any]) -> list[dict[str, Any]]:
+def _audio_review_value_findings(path: str, review: ImplementationDocument) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     text = json.dumps(
         {
@@ -1525,7 +1527,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
+def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         if pattern.search(text):
@@ -1536,7 +1538,7 @@ def _redaction_findings(path: str, text: str) -> list[dict[str, Any]]:
     return findings
 
 
-def _blocked_key_findings(path: str, value: Any, *, prefix: str = "") -> list[dict[str, Any]]:
+def _blocked_key_findings(path: str, value: Any, *, prefix: str = "") -> list[ImplementationDocument]:
     findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():

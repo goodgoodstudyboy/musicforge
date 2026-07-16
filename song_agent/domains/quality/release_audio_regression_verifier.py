@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -185,7 +187,7 @@ def _external_facts(
     certification_path: Path | str | None,
     certification_report_path: Path | str | None,
     required: bool,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
     if not timeline_path or not timeline_report_path or not certification_path or not certification_report_path:
         if required:
@@ -270,7 +272,7 @@ def _external_facts(
     return {"checks": checks, "binding": binding if timeline_ok and cert_ok else None}
 
 
-def _timeline_facts(timeline_zip: Path) -> dict[str, Any]:
+def _timeline_facts(timeline_zip: Path) -> ImplementationDocument:
     with zipfile.ZipFile(timeline_zip) as archive:
         report = _read_json_entry(archive, "audio-timeline-report.json")
         track_index = _read_json_entry(archive, "track-timeline-index.json")
@@ -339,7 +341,7 @@ def _timeline_facts(timeline_zip: Path) -> dict[str, Any]:
     }
 
 
-def _expected_documents(baseline_binding: dict[str, Any], current_binding: dict[str, Any], *, policy: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _expected_documents(baseline_binding: ImplementationDocument, current_binding: ImplementationDocument, *, policy: ImplementationDocument) -> dict[str, ImplementationDocument]:
     baseline_tracks = baseline_binding.get("facts") if isinstance(baseline_binding.get("facts"), list) else []
     current_tracks = current_binding.get("facts") if isinstance(current_binding.get("facts"), list) else []
     baseline_by_key = {_identity_key(row, mode=str(policy.get("identity_mode") or "release_track_lineage")): row for row in baseline_tracks if _identity_key(row, mode=str(policy.get("identity_mode") or "release_track_lineage"))}
@@ -492,14 +494,14 @@ def _expected_documents(baseline_binding: dict[str, Any], current_binding: dict[
     return {"report": report, "matrix": matrix, "issue_index": issue_index, "quality": quality, "blockers": blocker_register}
 
 
-def _external_binding_checks(prefix: str, actual: dict[str, Any], expected: dict[str, Any]) -> list[dict[str, Any]]:
+def _external_binding_checks(prefix: str, actual: ImplementationDocument, expected: ImplementationDocument) -> list[ImplementationDocument]:
     return [
         _check(f"release_audio_regression_{prefix}_binding_integrity", _integrity_ok(actual), f"{prefix} binding integrity is valid."),
         _check(f"release_audio_regression_{prefix}_binding_matches_external", _semantic_hash(_strip_binding(actual)) == _semantic_hash(_strip_binding(expected)), f"{prefix} binding matches external Timeline/Certification evidence."),
     ]
 
 
-def _recomputed_document_checks(report: dict[str, Any], matrix: dict[str, Any], issue_index: dict[str, Any], quality: dict[str, Any], blockers: dict[str, Any], expected: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _recomputed_document_checks(report: ImplementationDocument, matrix: ImplementationDocument, issue_index: ImplementationDocument, quality: ImplementationDocument, blockers: ImplementationDocument, expected: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         _check("release_audio_regression_facts_recomputed", True, "Regression facts were recomputed from external Timeline/Certification packages."),
         _check("release_audio_regression_track_matrix_binding", _semantic_hash(matrix) == _semantic_hash(expected["matrix"]), "Track regression matrix matches recomputed external facts."),
@@ -511,7 +513,7 @@ def _recomputed_document_checks(report: dict[str, Any], matrix: dict[str, Any], 
     ]
 
 
-def _document_binding_checks(manifest: dict[str, Any], report: dict[str, Any], matrix: dict[str, Any], issue_index: dict[str, Any], quality: dict[str, Any], blockers: dict[str, Any], baseline: dict[str, Any], current: dict[str, Any]) -> list[dict[str, Any]]:
+def _document_binding_checks(manifest: ImplementationDocument, report: ImplementationDocument, matrix: ImplementationDocument, issue_index: ImplementationDocument, quality: ImplementationDocument, blockers: ImplementationDocument, baseline: ImplementationDocument, current: ImplementationDocument) -> list[ImplementationDocument]:
     same_source = report.get("source_hash") == matrix.get("source_hash") == issue_index.get("source_hash") == quality.get("source_hash") == blockers.get("source_hash")
     return [
         _check("release_audio_regression_manifest_report_binding", manifest.get("report_hash") == report.get("integrity_hash"), "Manifest binds regression report."),
@@ -525,7 +527,7 @@ def _document_binding_checks(manifest: dict[str, Any], report: dict[str, Any], m
     ]
 
 
-def _signoff_checks(signoff: dict[str, Any] | None, history: list[dict[str, Any]], manifest: dict[str, Any], report: dict[str, Any], matrix: dict[str, Any], issue_index: dict[str, Any], quality: dict[str, Any], blockers: dict[str, Any], baseline: dict[str, Any], current: dict[str, Any], *, require_signed: bool) -> list[dict[str, Any]]:
+def _signoff_checks(signoff: ImplementationDocument | None, history: list[ImplementationDocument], manifest: ImplementationDocument, report: ImplementationDocument, matrix: ImplementationDocument, issue_index: ImplementationDocument, quality: ImplementationDocument, blockers: ImplementationDocument, baseline: ImplementationDocument, current: ImplementationDocument, *, require_signed: bool) -> list[ImplementationDocument]:
     if signoff is None:
         return [_check("release_audio_regression_signoff_present", not require_signed, "Regression signoff is present when required.")]
     latest = history[-1] if history else {}
@@ -545,7 +547,7 @@ def _signoff_checks(signoff: dict[str, Any] | None, history: list[dict[str, Any]
     ]
 
 
-def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
+def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -559,7 +561,7 @@ def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
     return bool(history)
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], *, expected_entries: set[str], strict: bool) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
@@ -588,7 +590,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check for check in checks if check.get("status") == "warning"]
@@ -609,11 +611,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     with archive.open(name) as handle:
         data = json.loads(handle.read().decode("utf-8"))
     if not isinstance(data, dict):
@@ -621,7 +623,7 @@ def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
     return data
 
 
-def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[dict[str, Any]]:
+def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     with archive.open(name) as handle:
         for raw in handle.read().decode("utf-8").splitlines():
@@ -645,7 +647,7 @@ def _is_safe_entry(name: str) -> bool:
     return True
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     leaks: list[str] = []
     for name in names:
         if not name.lower().endswith((".json", ".md", ".txt", ".jsonl")):
@@ -666,7 +668,7 @@ def _certification_signoff_hash(cert_zip: Path) -> str | None:
         return None
 
 
-def _manual_rating(row: dict[str, Any]) -> float:
+def _manual_rating(row: ImplementationDocument) -> float:
     value = row.get("manual_rating") or row.get("rating")
     if isinstance(value, (int, float)):
         return float(value)
@@ -679,7 +681,7 @@ def _manual_rating(row: dict[str, Any]) -> float:
     return 0.0
 
 
-def _identity_key(row: dict[str, Any], *, mode: str) -> str:
+def _identity_key(row: ImplementationDocument, *, mode: str) -> str:
     if mode == "same_artifact_repeat_check":
         value = stable_hash({"project_id": row.get("project_id"), "title": _normalize_title(row.get("title")), "final_export_hash": row.get("final_export_hash")})
     else:
@@ -695,11 +697,11 @@ def _num(value: Any) -> float:
     return float(value) if isinstance(value, (int, float)) else 0.0
 
 
-def _blocker(check_id: str, message: str, **details: Any) -> dict[str, Any]:
+def _blocker(check_id: str, message: str, **details: Any) -> ImplementationDocument:
     return {"check_id": check_id, "message": message, **details}
 
 
-def _strip_binding(binding: dict[str, Any]) -> dict[str, Any]:
+def _strip_binding(binding: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in binding.items() if key not in {"payload_hash", "integrity_hash"}}
 
 
@@ -715,11 +717,11 @@ def _strip_volatile(value: Any) -> Any:
     return value
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 import zipfile
 from pathlib import Path
@@ -267,12 +269,12 @@ class UnifiedReleaseProgramVaultStore:
         except Exception as exc:
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
-    def _ensure_docs(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _ensure_docs(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         if not self.report_path(program_id).exists():
             self.refresh_vault(program_id, payload)
         return self._read_docs(program_id)
 
-    def _read_docs(self, program_id: str) -> dict[str, Any]:
+    def _read_docs(self, program_id: str) -> ImplementationDocument:
         return {
             "report": read_json(self.report_path(program_id)),
             "source": read_json(self.source_path(program_id)),
@@ -284,7 +286,7 @@ class UnifiedReleaseProgramVaultStore:
             "replay_plan": read_json(self.replay_plan_path(program_id)),
         }
 
-    def _build_documents(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _build_documents(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         package_rows = self._package_rows(program_id, payload)
         verification_rows = self._verification_rows(program_id, payload)
         proof_rows = self._proof_rows(program_id, payload)
@@ -334,7 +336,7 @@ class UnifiedReleaseProgramVaultStore:
         replay_plan = _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_vault_replay_plan", "program_id": program_id, "vault_id": report["vault_id"], "source_hash": source["source_hash"], "steps": _replay_steps(package_rows, verification_rows, proof_rows)})
         return {"report": report, "source": source, "package_index": package_index, "verification_index": verification_index, "proof_index": proof_index, "chain": chain, "public_summary": public_summary, "replay_plan": replay_plan}
 
-    def _package_rows(self, program_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _package_rows(self, program_id: str, payload: ImplementationDocument) -> list[ImplementationDocument]:
         rows = [
             _package_row("program", program_id, self.program_store.zip_path(program_id), "packages/unified-release-program.zip"),
             _package_row("operations", program_id, self.operations_store.archive_zip_path(program_id), "packages/unified-release-program-operations.zip"),
@@ -345,7 +347,7 @@ class UnifiedReleaseProgramVaultStore:
             rows.append(_package_row("accepted_evidence", evidence_id, Path(item["zip_path"]), f"packages/accepted-evidence/{evidence_id}.zip"))
         return rows
 
-    def _verification_rows(self, program_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _verification_rows(self, program_id: str, payload: ImplementationDocument) -> list[ImplementationDocument]:
         rows = [
             _verification_row("program", program_id, self.program_store.verification_report_path(program_id), "proofs/program-verification-report.json"),
             _verification_row("operations", program_id, self.operations_store.archive_verification_report_path(program_id), "proofs/operations-verification-report.json"),
@@ -356,7 +358,7 @@ class UnifiedReleaseProgramVaultStore:
             rows.append(_verification_row("accepted_evidence", evidence_id, Path(item["verification_report_path"]), f"proofs/accepted-evidence/{evidence_id}-verification-report.json"))
         return rows
 
-    def _proof_rows(self, program_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _proof_rows(self, program_id: str, payload: ImplementationDocument) -> list[ImplementationDocument]:
         rows = [
             _proof_row("program", program_id, "signoff_binding", self.program_store.signoff_binding_path(program_id), "proofs/program-signoff-binding-summary.json"),
             _proof_row("program", program_id, "external_evidence_manifest", self.program_store.external_manifest_path(program_id), "proofs/program-external-evidence-manifest.json"),
@@ -369,7 +371,7 @@ class UnifiedReleaseProgramVaultStore:
             rows.append(_proof_row("accepted_evidence", evidence_id, "response_binding", Path(item["response_binding_path"]), f"proofs/accepted-evidence/{evidence_id}-response-binding-summary.json"))
         return rows
 
-    def _accepted_evidence_items(self, program_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _accepted_evidence_items(self, program_id: str, payload: ImplementationDocument) -> list[ImplementationDocument]:
         explicit = payload.get("accepted_evidence")
         if isinstance(explicit, list):
             rows = []
@@ -398,16 +400,16 @@ class UnifiedReleaseProgramVaultStore:
         return rows
 
 
-def _package_row(component_type: str, component_id: str, source_path: Path, rel: str) -> dict[str, Any]:
+def _package_row(component_type: str, component_id: str, source_path: Path, rel: str) -> ImplementationDocument:
     return {"component_type": component_type, "component_id": component_id, "path": rel, "source_path": str(source_path), "zip_sha256": _sha256_path(source_path), "zip_size_bytes": source_path.stat().st_size if source_path.exists() else 0, "exists": source_path.exists()}
 
 
-def _verification_row(component_type: str, component_id: str, source_path: Path, rel: str) -> dict[str, Any]:
+def _verification_row(component_type: str, component_id: str, source_path: Path, rel: str) -> ImplementationDocument:
     doc = _verification_export_doc(source_path) if source_path.exists() else {}
     return {"component_type": component_type, "component_id": component_id, "path": rel, "source_path": str(source_path), "package_type": doc.get("package_type"), "status": doc.get("status") or "missing", "zip_sha256": doc.get("zip_sha256"), "manifest_hash": doc.get("manifest_hash"), "verification_report_hash": doc.get("integrity_hash"), "exists": source_path.exists()}
 
 
-def _proof_row(component_type: str, component_id: str, proof_type: str, source_path: Path, rel: str) -> dict[str, Any]:
+def _proof_row(component_type: str, component_id: str, proof_type: str, source_path: Path, rel: str) -> ImplementationDocument:
     proof_doc = _proof_export_doc(source_path, proof_type) if source_path.exists() else None
     data = _json_bytes(proof_doc) if isinstance(proof_doc, dict) else source_path.read_bytes() if source_path.exists() else b""
     integrity_hash = None
@@ -419,7 +421,7 @@ def _proof_row(component_type: str, component_id: str, proof_type: str, source_p
     return {"component_type": component_type, "component_id": component_id, "proof_type": proof_type, "path": rel, "source_path": str(source_path), "package_type": package_type, "sha256": _sha256_bytes(data) if data else None, "size_bytes": len(data), "integrity_hash": integrity_hash, "exists": source_path.exists()}
 
 
-def _verification_export_doc(source_path: Path) -> dict[str, Any]:
+def _verification_export_doc(source_path: Path) -> ImplementationDocument:
     if not source_path.exists():
         return {}
     source = read_json(source_path)
@@ -441,7 +443,7 @@ def _verification_export_doc(source_path: Path) -> dict[str, Any]:
     return doc
 
 
-def _public_verification_summary(summary: dict[str, Any]) -> dict[str, Any]:
+def _public_verification_summary(summary: ImplementationDocument) -> ImplementationDocument:
     allowed = {
         "program_id",
         "handoff_id",
@@ -462,7 +464,7 @@ def _public_verification_summary(summary: dict[str, Any]) -> dict[str, Any]:
     return sanitize_metadata(public, blocked_keys=VAULT_BLOCKED_METADATA_KEYS)
 
 
-def _proof_export_doc(source_path: Path, proof_type: str) -> dict[str, Any] | None:
+def _proof_export_doc(source_path: Path, proof_type: str) -> ImplementationDocument | None:
     if not source_path.exists() or source_path.suffix.lower() != ".json":
         return None
     doc = read_json(source_path)
@@ -511,7 +513,7 @@ def _proof_export_doc(source_path: Path, proof_type: str) -> dict[str, Any] | No
     return sanitize_metadata(doc, blocked_keys=VAULT_BLOCKED_METADATA_KEYS)
 
 
-def _manifest_document(program_id: str, docs: dict[str, Any], files: list[dict[str, Any]]) -> dict[str, Any]:
+def _manifest_document(program_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
     source = {
         "vault_report_hash": docs["report"].get("integrity_hash"),
         "source_summary_hash": docs["source"].get("integrity_hash"),
@@ -540,7 +542,7 @@ def _manifest_document(program_id: str, docs: dict[str, Any], files: list[dict[s
     return manifest
 
 
-def _anchor_document(program_id: str, zip_path: Path, manifest: dict[str, Any], docs: dict[str, Any]) -> dict[str, Any]:
+def _anchor_document(program_id: str, zip_path: Path, manifest: ImplementationDocument, docs: ImplementationDocument) -> ImplementationDocument:
     anchor = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION,
@@ -564,7 +566,7 @@ def _anchor_document(program_id: str, zip_path: Path, manifest: dict[str, Any], 
     return anchor
 
 
-def _chain_events(program_id: str, packages: list[dict[str, Any]], verifications: list[dict[str, Any]], proofs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _chain_events(program_id: str, packages: list[ImplementationDocument], verifications: list[ImplementationDocument], proofs: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     previous = ""
     for index, row in enumerate(packages + verifications + proofs, start=1):
@@ -577,7 +579,7 @@ def _chain_events(program_id: str, packages: list[dict[str, Any]], verifications
     return rows
 
 
-def _replay_steps(packages: list[dict[str, Any]], verifications: list[dict[str, Any]], proofs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _replay_steps(packages: list[ImplementationDocument], verifications: list[ImplementationDocument], proofs: list[ImplementationDocument]) -> list[ImplementationDocument]:
     return [
         {"step": "verify_package_index", "package_count": len(packages)},
         {"step": "verify_verification_index", "verification_count": len(verifications)},
@@ -587,7 +589,7 @@ def _replay_steps(packages: list[dict[str, Any]], verifications: list[dict[str, 
     ]
 
 
-def _auditor_guide(docs: dict[str, Any]) -> str:
+def _auditor_guide(docs: ImplementationDocument) -> str:
     summary = docs["report"].get("summary", {})
     return "\n".join(
         [
@@ -603,25 +605,25 @@ def _auditor_guide(docs: dict[str, Any]) -> str:
     )
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _public_row(row: dict[str, Any]) -> dict[str, Any]:
+def _public_row(row: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in row.items() if key not in {"source_path"}}
 
 
-def _with_integrity(doc: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
     doc = sanitize_metadata(doc, blocked_keys=VAULT_BLOCKED_METADATA_KEYS)
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
 
-def _integrity_hash(doc: dict[str, Any]) -> str:
+def _integrity_hash(doc: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key != "integrity_hash"})
 
 
-def _integrity_ok(doc: dict[str, Any]) -> bool:
+def _integrity_ok(doc: ImplementationDocument) -> bool:
     return bool(doc) and doc.get("integrity_hash") == _integrity_hash(doc)
 
 
@@ -643,7 +645,7 @@ def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _json_bytes(doc: dict[str, Any]) -> bytes:
+def _json_bytes(doc: ImplementationDocument) -> bytes:
     import json
     import os
 
@@ -653,18 +655,18 @@ def _json_bytes(doc: dict[str, Any]) -> bytes:
     return text.encode("utf-8")
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     return read_json(path)
 
 
-def _sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_payload(payload: ImplementationDocument) -> ImplementationDocument:
     for forbidden in ("source_path", "local_path", "file_path"):
         if payload.get(forbidden):
             raise UnifiedReleaseProgramVaultStateError(f"{forbidden} is not allowed for Vault operations.")
     return payload
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}

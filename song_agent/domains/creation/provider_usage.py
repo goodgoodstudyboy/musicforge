@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from pathlib import Path
 from typing import Any
@@ -261,7 +263,7 @@ def sanitize_provider_usage(value: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
-def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
+def _aggregate_records(records: list[ImplementationDocument]) -> ImplementationDocument:
     prompt_tokens = sum(int(record.get("prompt_tokens") or 0) for record in records)
     completion_tokens = sum(int(record.get("completion_tokens") or 0) for record in records)
     total_tokens = sum(int(record.get("total_tokens") or 0) for record in records)
@@ -277,7 +279,7 @@ def _aggregate_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _usage_int(data: dict[str, Any], field_name: str) -> int:
+def _usage_int(data: ImplementationDocument, field_name: str) -> int:
     value = data.get(field_name)
     if value is None:
         return 0

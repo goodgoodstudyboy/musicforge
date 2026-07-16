@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 from pathlib import Path
@@ -393,7 +395,7 @@ class RightsClearanceStore:
             document.latest_export_summary = {**document.latest_export_summary, "status": "stale", "stale": True, "stale_reason": reason}
             self.release_store.save_release(document)
 
-    def _append_event(self, release_id: str, event_type: str, payload: dict[str, Any], now: str) -> None:
+    def _append_event(self, release_id: str, event_type: str, payload: ImplementationDocument, now: str) -> None:
         path = self.events_path(release_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         event = sanitize_metadata({"timestamp": now, "type": event_type, "payload": payload}, blocked_keys=RIGHTS_BLOCKED_KEYS)
@@ -401,7 +403,7 @@ class RightsClearanceStore:
             file.write(json.dumps(event, ensure_ascii=False) + "\n")
         self.release_store.append_event(release_id, event_type, payload)
 
-    def _current_report_source_hash(self, release_id: str, report: dict[str, Any]) -> str:
+    def _current_report_source_hash(self, release_id: str, report: ImplementationDocument) -> str:
         release = self.release_store.get_release(release_id)
         parties = self.list_parties(release_id)
         metadata = read_release_metadata(self.release_store, release_id, default={})
@@ -415,7 +417,7 @@ class RightsClearanceStore:
             rows.append({"track_id": track.track_id, "status": row.get("status"), "source_hash": current_hash, "rights_track_hash": record.get("integrity_hash") if record else None})
         return rights_report_source_hash(release.to_dict(), metadata, rows, parties)
 
-    def _required_source_usages(self, track: Any) -> list[dict[str, Any]]:
+    def _required_source_usages(self, track: Any) -> list[ImplementationDocument]:
         return required_source_usages_for_track(
             track,
             release_store=self.release_store,
@@ -718,7 +720,7 @@ def required_source_usages_for_track(
     return [sources[key] for key in sorted(sources)]
 
 
-def _evaluate_track(record: dict[str, Any], *, party_map: dict[str, dict[str, Any]], metadata_track: dict[str, Any]) -> tuple[list[str], list[str]]:
+def _evaluate_track(record: ImplementationDocument, *, party_map: dict[str, ImplementationDocument], metadata_track: ImplementationDocument) -> tuple[list[str], list[str]]:
     failures: list[str] = []
     warnings: list[str] = []
     contributors = [item for item in _list(record.get("contributors")) if isinstance(item, dict)]
@@ -790,7 +792,7 @@ def _evaluate_track(record: dict[str, Any], *, party_map: dict[str, dict[str, An
     return failures, warnings
 
 
-def _declared_source_coverage(sources: Any) -> dict[str, dict[str, Any]]:
+def _declared_source_coverage(sources: Any) -> dict[str, ImplementationDocument]:
     coverage: dict[str, dict[str, Any]] = {}
     for source in _list(sources):
         if not isinstance(source, dict):
@@ -801,7 +803,7 @@ def _declared_source_coverage(sources: Any) -> dict[str, dict[str, Any]]:
     return coverage
 
 
-def _source_coverage_key(source: dict[str, Any]) -> str:
+def _source_coverage_key(source: ImplementationDocument) -> str:
     source_id = str(source.get("source_id") or "").strip().lower()
     source_type = str(source.get("source_type") or source.get("type") or "").strip().lower()
     if not source_id:
@@ -809,7 +811,7 @@ def _source_coverage_key(source: dict[str, Any]) -> str:
     return f"{source_type}:{source_id}"
 
 
-def _project_export_snapshot(release_store: ReleaseStore, project_id: str) -> dict[str, Any]:
+def _project_export_snapshot(release_store: ReleaseStore, project_id: str) -> ImplementationDocument:
     if not project_id:
         return {}
     try:
@@ -818,7 +820,7 @@ def _project_export_snapshot(release_store: ReleaseStore, project_id: str) -> di
         return {}
 
 
-def _final_export_manifest(release_store: ReleaseStore, project_id: str) -> dict[str, Any]:
+def _final_export_manifest(release_store: ReleaseStore, project_id: str) -> ImplementationDocument:
     if not project_id:
         return {}
     try:
@@ -842,7 +844,7 @@ def _project_version(release_store: ReleaseStore, project_id: str, version_id: s
     return next((version for version in document.versions if getattr(version, "version_id", "") == version_id), None)
 
 
-def _asset_required_source(ref: dict[str, Any], *, asset_store: AssetStore, detected_in: str, version_id: str) -> dict[str, Any]:
+def _asset_required_source(ref: ImplementationDocument, *, asset_store: AssetStore, detected_in: str, version_id: str) -> ImplementationDocument:
     asset_id = _safe_id(str(ref.get("asset_id") or ""), "asset")
     status = "current"
     stale_reasons: list[str] = []
@@ -873,7 +875,7 @@ def _asset_required_source(ref: dict[str, Any], *, asset_store: AssetStore, dete
     }
 
 
-def _reference_required_source(ref: dict[str, Any], *, reference_store: ReferenceStore, detected_in: str, version_id: str) -> dict[str, Any]:
+def _reference_required_source(ref: ImplementationDocument, *, reference_store: ReferenceStore, detected_in: str, version_id: str) -> ImplementationDocument:
     reference_id = _safe_id(str(ref.get("reference_id") or ""), "ref")
     status = "current"
     stale_reasons: list[str] = []
@@ -904,7 +906,7 @@ def _reference_required_source(ref: dict[str, Any], *, reference_store: Referenc
     }
 
 
-def _context_pack_required_source(ref: dict[str, Any], *, context_pack_store: ContextPackStore, detected_in: str, version_id: str) -> dict[str, Any]:
+def _context_pack_required_source(ref: ImplementationDocument, *, context_pack_store: ContextPackStore, detected_in: str, version_id: str) -> ImplementationDocument:
     pack_id = _safe_id(str(ref.get("pack_id") or ""), "pack")
     status = "current"
     stale_reasons: list[str] = []
@@ -928,7 +930,7 @@ def _context_pack_required_source(ref: dict[str, Any], *, context_pack_store: Co
     }
 
 
-def _metadata_required_source(ref: dict[str, Any], *, source_type: str, detected_in: str, version_id: str) -> dict[str, Any]:
+def _metadata_required_source(ref: ImplementationDocument, *, source_type: str, detected_in: str, version_id: str) -> ImplementationDocument:
     source_id = _metadata_source_id(ref, source_type)
     return {
         "source_id": source_id,
@@ -942,7 +944,7 @@ def _metadata_required_source(ref: dict[str, Any], *, source_type: str, detected
     }
 
 
-def _metadata_source_id(ref: dict[str, Any], source_type: str) -> str:
+def _metadata_source_id(ref: ImplementationDocument, source_type: str) -> str:
     for key in ("source_id", "asset_id", "reference_id", "clip_id", "template_id", "candidate_id", "group_id", "preview_id", "task_id", "provider_id", "template_name"):
         value = str(ref.get(key) or "").strip()
         if value:
@@ -950,7 +952,7 @@ def _metadata_source_id(ref: dict[str, Any], source_type: str) -> str:
     return _safe_id(stable_hash(ref)[:16], source_type)
 
 
-def _normalize_required_source(source: dict[str, Any]) -> dict[str, Any]:
+def _normalize_required_source(source: ImplementationDocument) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "source_id": _safe_id(str(source.get("source_id") or ""), "source") if str(source.get("source_id") or "").strip() else "",
@@ -967,13 +969,13 @@ def _normalize_required_source(source: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _used_by_version(ref: dict[str, Any], version_id: str) -> bool:
+def _used_by_version(ref: ImplementationDocument, version_id: str) -> bool:
     if not version_id:
         return False
     return version_id in {str(item) for item in _list(ref.get("used_by_versions"))}
 
 
-def _normalize_contributor(item: Any) -> dict[str, Any]:
+def _normalize_contributor(item: Any) -> ImplementationDocument:
     data = item if isinstance(item, dict) else {}
     role = str(data.get("role") or "composer").strip().lower()
     share = data.get("share") if data.get("share") is not None else data.get("split_percent")
@@ -994,7 +996,7 @@ def _normalize_contributor(item: Any) -> dict[str, Any]:
     )
 
 
-def _normalize_source_usage(item: Any) -> dict[str, Any]:
+def _normalize_source_usage(item: Any) -> ImplementationDocument:
     data = item if isinstance(item, dict) else {}
     return sanitize_metadata(
         {
@@ -1017,7 +1019,7 @@ def _release_track(release: Any, track_id: str) -> Any | None:
     return None
 
 
-def _track_snapshot(track: Any) -> dict[str, Any]:
+def _track_snapshot(track: Any) -> ImplementationDocument:
     return {
         "track_id": getattr(track, "track_id", None),
         "disc_number": getattr(track, "disc_number", None),
@@ -1030,19 +1032,19 @@ def _track_snapshot(track: Any) -> dict[str, Any]:
     }
 
 
-def _metadata_track(release_store: ReleaseStore, release_id: str, track_id: str) -> dict[str, Any]:
+def _metadata_track(release_store: ReleaseStore, release_id: str, track_id: str) -> ImplementationDocument:
     metadata = read_release_metadata(release_store, release_id, default={})
     return _metadata_track_from_doc(metadata, track_id)
 
 
-def _metadata_track_from_doc(metadata: dict[str, Any], track_id: str) -> dict[str, Any]:
+def _metadata_track_from_doc(metadata: ImplementationDocument, track_id: str) -> ImplementationDocument:
     for track in metadata.get("tracks", []) if isinstance(metadata.get("tracks"), list) else []:
         if isinstance(track, dict) and str(track.get("track_id") or "") == track_id:
             return track
     return {}
 
 
-def _metadata_snapshot(metadata_track: dict[str, Any]) -> dict[str, Any]:
+def _metadata_snapshot(metadata_track: ImplementationDocument) -> ImplementationDocument:
     return {
         "track_id": metadata_track.get("track_id"),
         "title": metadata_track.get("title"),
@@ -1058,7 +1060,7 @@ def _metadata_snapshot(metadata_track: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _metadata_credit_names(metadata_track: dict[str, Any]) -> dict[str, set[str]]:
+def _metadata_credit_names(metadata_track: ImplementationDocument) -> dict[str, set[str]]:
     result: dict[str, set[str]] = {}
     for credit in metadata_track.get("credits", []) if isinstance(metadata_track.get("credits"), list) else []:
         if not isinstance(credit, dict):
@@ -1070,7 +1072,7 @@ def _metadata_credit_names(metadata_track: dict[str, Any]) -> dict[str, set[str]
     return result
 
 
-def _read_json_default(path: Path, default: dict[str, Any]) -> dict[str, Any]:
+def _read_json_default(path: Path, default: ImplementationDocument) -> ImplementationDocument:
     if not path.exists():
         return dict(default)
     value = read_json(path)
@@ -1103,7 +1105,7 @@ def _list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
-def _safe_dict(value: Any) -> dict[str, Any]:
+def _safe_dict(value: Any) -> ImplementationDocument:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=RIGHTS_BLOCKED_KEYS)
 
 

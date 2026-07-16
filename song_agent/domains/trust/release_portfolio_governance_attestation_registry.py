@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -345,7 +347,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
         summary["verification_status"] = verification.get("status") or "missing"
         return sanitize_metadata(summary, blocked_keys=REGISTRY_BLOCKED_KEYS)
 
-    def _registry_or_empty(self, portfolio_id: str, profile: str, *, now: str) -> dict[str, Any]:
+    def _registry_or_empty(self, portfolio_id: str, profile: str, *, now: str) -> ImplementationDocument:
         registry = self.read_registry(portfolio_id, profile=profile, default={})
         if registry:
             return registry
@@ -353,17 +355,17 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
         registry["integrity_hash"] = registry_hash(registry)
         return registry
 
-    def _require_registry(self, portfolio_id: str, profile: str) -> dict[str, Any]:
+    def _require_registry(self, portfolio_id: str, profile: str) -> ImplementationDocument:
         registry = self.read_registry(portfolio_id, profile=profile, default={})
         if not registry:
             raise ReleasePortfolioGovernanceAttestationRegistryNotFoundError("Public Attestation Registry does not exist.")
         return registry
 
-    def _write_registry(self, portfolio_id: str, profile: str, registry: dict[str, Any]) -> None:
+    def _write_registry(self, portfolio_id: str, profile: str, registry: ImplementationDocument) -> None:
         self.root_dir(portfolio_id, profile).mkdir(parents=True, exist_ok=True)
         _write_json(self.registry_path(portfolio_id, profile), sanitize_metadata(registry, blocked_keys=REGISTRY_BLOCKED_KEYS))
 
-    def _finalize_registry(self, registry: dict[str, Any], *, now: str) -> None:
+    def _finalize_registry(self, registry: ImplementationDocument, *, now: str) -> None:
         entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
         registry["entry_count"] = len(entries)
         registry["published_count"] = sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "published")
@@ -373,7 +375,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
         registry["updated_at"] = now
         registry["integrity_hash"] = registry_hash(registry)
 
-    def _findings(self, registry: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    def _findings(self, registry: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         checks: list[dict[str, Any]] = []
@@ -408,7 +410,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
             check("redaction_scan", True, "Registry contains no sensitive values.")
         return blockers, warnings, checks
 
-    def _ensure_entry_current(self, entry: dict[str, Any], *, profile: str) -> None:
+    def _ensure_entry_current(self, entry: ImplementationDocument, *, profile: str) -> None:
         zip_path = self.attestation_store.zip_path(str(entry.get("source", {}).get("portfolio_id") or ""), profile)
         # Fall back to digest-only evidence when the current attestation package has been moved.
         if zip_path.exists() and _sha256(zip_path) != entry.get("source", {}).get("attestation_zip_sha256"):
@@ -416,7 +418,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
         if entry.get("verification", {}).get("status") != "passed":
             raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation entry verification is not passed.")
 
-    def _ensure_exportable(self, registry: dict[str, Any], report: dict[str, Any]) -> None:
+    def _ensure_exportable(self, registry: ImplementationDocument, report: ImplementationDocument) -> None:
         if not registry_integrity_ok(registry):
             raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry integrity failed.")
         if not registry_report_integrity_ok(report):
@@ -429,7 +431,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
             detail = str((blockers[0] if blockers else {}).get("message") or "Registry Report is failed.")
             raise ReleasePortfolioGovernanceAttestationRegistryStateError(f"Public Attestation Registry cannot be exported: {detail}")
 
-    def _reserve_entry_id(self, registry: dict[str, Any]) -> str:
+    def _reserve_entry_id(self, registry: ImplementationDocument) -> str:
         existing = {str(item.get("entry_id") or "") for item in registry.get("entries", []) if isinstance(item, dict)}
         index = len(existing) + 1
         while f"attreg-entry-{index:06d}" in existing:
@@ -452,7 +454,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                 return True
         return False
 
-    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: dict[str, Any], *, now: str) -> None:
+    def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: ImplementationDocument, *, now: str) -> None:
         path = self.history_path(portfolio_id, profile)
         path.parent.mkdir(parents=True, exist_ok=True)
         count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
@@ -522,7 +524,7 @@ def build_chain_of_custody(history_path: Path, registry: dict[str, Any], report:
     return sanitize_metadata(data, blocked_keys=REGISTRY_BLOCKED_KEYS)
 
 
-def _entry_source(zip_path: Path, manifest: dict[str, Any], certificate: dict[str, Any], report: dict[str, Any], verification: dict[str, Any]) -> dict[str, Any]:
+def _entry_source(zip_path: Path, manifest: ImplementationDocument, certificate: ImplementationDocument, report: ImplementationDocument, verification: ImplementationDocument) -> ImplementationDocument:
     source = report.get("source") if isinstance(report.get("source"), dict) else {}
     evidence = manifest.get("evidence_vault") if isinstance(manifest.get("evidence_vault"), dict) else certificate.get("evidence_vault") if isinstance(certificate.get("evidence_vault"), dict) else {}
     return sanitize_metadata(
@@ -544,12 +546,12 @@ def _entry_source(zip_path: Path, manifest: dict[str, Any], certificate: dict[st
     )
 
 
-def _state_triple(registry: dict[str, Any]) -> dict[str, str]:
+def _state_triple(registry: ImplementationDocument) -> dict[str, str]:
     current = _find_entry(registry, str(registry.get("current_entry_id") or "")) if registry.get("current_entry_id") else {}
     return {"registry_hash": str(registry.get("integrity_hash") or ""), "current_entry_id": str(registry.get("current_entry_id") or ""), "current_entry_hash": str(current.get("integrity_hash") or "")}
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     row = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
     external = manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}
     external_verification = manifest.get("external_review_verification") if isinstance(manifest.get("external_review_verification"), dict) else {}
@@ -559,14 +561,14 @@ def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
 
 
 
-def _find_entry_mut(registry: dict[str, Any], entry_id: str) -> dict[str, Any]:
+def _find_entry_mut(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
     entry = _find_entry(registry, entry_id)
     if not entry:
         raise ReleasePortfolioGovernanceAttestationRegistryNotFoundError("Public Attestation Registry entry not found.")
     return entry
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -574,7 +576,7 @@ def _zip_entries(root: Path) -> list[tuple[Path, str]]:
     return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -584,7 +586,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -593,7 +595,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, sanitize_metadata(payload, blocked_keys=REGISTRY_BLOCKED_KEYS))
 
@@ -615,7 +617,7 @@ def _ensure_within(root: Path, target: Path) -> None:
         raise ReleasePortfolioGovernanceAttestationRegistryStateError("Resolved path escapes Public Attestation Registry directory.") from exc
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     matches = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -624,7 +626,7 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if matches else "passed", "matches": matches[:20]}
 
 
-def _write_readme(export_dir: Path, registry: dict[str, Any], report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, registry: ImplementationDocument, report: ImplementationDocument) -> None:
     (export_dir / "README.txt").write_text(
         "\n".join(
             [
@@ -642,7 +644,7 @@ def _write_readme(export_dir: Path, registry: dict[str, Any], report: dict[str, 
     )
 
 
-def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
+def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> ImplementationDocument:
     try:
         from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_read_model import accepted_evidence_public_summary_from_portfolio_dir
 
@@ -651,7 +653,7 @@ def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile
         return {"status": "missing", "external_review_status": "missing"}
 
 
-def _accepted_evidence_verification_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
+def _accepted_evidence_verification_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> ImplementationDocument:
     try:
         from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_read_model import accepted_evidence_verification_summary_from_portfolio_dir
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import html
 import hashlib
 import json
@@ -421,7 +423,7 @@ class PublicTrustCenterStore:
     def delivery_anchor_path(self, center_id: str = "ptc-default") -> Path:
         return self.zip_path(center_id).with_name(self.zip_path(center_id).stem + ".delivery-anchor.json")
 
-    def _write_delivery_anchor(self, center_id: str, manifest: dict[str, Any], zip_info: dict[str, Any]) -> dict[str, Any]:
+    def _write_delivery_anchor(self, center_id: str, manifest: ImplementationDocument, zip_info: ImplementationDocument) -> ImplementationDocument:
         export_dir = self.export_dir(center_id)
         rows: list[dict[str, Any]] = []
         for item in manifest.get("files", []) if isinstance(manifest.get("files"), list) else []:
@@ -453,7 +455,7 @@ class PublicTrustCenterStore:
         _write_json(self.delivery_anchor_path(center_id), anchor)
         return anchor
 
-    def _release_summaries(self, selection: dict[str, Any]) -> list[dict[str, Any]]:
+    def _release_summaries(self, selection: ImplementationDocument) -> list[ImplementationDocument]:
         ids = [str(item).strip() for item in selection.get("release_ids", []) if str(item).strip()] if isinstance(selection.get("release_ids"), list) else []
         if not ids and bool(selection.get("include_all_releases", True)):
             try:
@@ -484,7 +486,7 @@ class PublicTrustCenterStore:
                 rows.append({"release_id": release_id, "status": "missing", "error": str(exc)})
         return rows
 
-    def _delivery_bundle(self, selection: dict[str, Any], releases: list[dict[str, Any]], portfolios: list[dict[str, Any]]) -> dict[str, Any]:
+    def _delivery_bundle(self, selection: ImplementationDocument, releases: list[ImplementationDocument], portfolios: list[ImplementationDocument]) -> ImplementationDocument:
         include_distribution = bool(selection.get("include_distribution", True))
         include_submission = bool(selection.get("include_submission", True))
         include_submission_evidence = bool(selection.get("include_submission_evidence", selection.get("include_submission", True)))
@@ -514,7 +516,7 @@ class PublicTrustCenterStore:
             "delivery_risk_register": risks,
         }
 
-    def _distribution_summaries(self, release_ids: list[str]) -> list[dict[str, Any]]:
+    def _distribution_summaries(self, release_ids: list[str]) -> list[ImplementationDocument]:
         if self.distribution_store is None:
             return [_domain_not_configured_row("distribution", release_id) for release_id in release_ids]
         rows: list[dict[str, Any]] = []
@@ -575,7 +577,7 @@ class PublicTrustCenterStore:
                 rows.append(_sanitize_public_metadata(row))
         return sorted(rows, key=lambda item: (str(item.get("release_id")), str(item.get("target_id"))))
 
-    def _submission_summaries(self, release_ids: list[str]) -> list[dict[str, Any]]:
+    def _submission_summaries(self, release_ids: list[str]) -> list[ImplementationDocument]:
         if self.submission_store is None:
             return [_domain_not_configured_row("submission", release_id) for release_id in release_ids]
         rows: list[dict[str, Any]] = []
@@ -619,7 +621,7 @@ class PublicTrustCenterStore:
                 rows.append(_sanitize_public_metadata(row))
         return sorted(rows, key=lambda item: (str(item.get("release_id")), str(item.get("submission_id"))))
 
-    def _submission_evidence_summaries(self, submissions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _submission_evidence_summaries(self, submissions: list[ImplementationDocument]) -> list[ImplementationDocument]:
         if self.submission_evidence_store is None:
             return [_domain_not_configured_row("submission_evidence", str(item.get("release_id") or ""), submission_id=item.get("submission_id")) for item in submissions if item.get("submission_id")]
         rows: list[dict[str, Any]] = []
@@ -658,7 +660,7 @@ class PublicTrustCenterStore:
             rows.append(_sanitize_public_metadata(row))
         return sorted(rows, key=lambda row: (str(row.get("release_id")), str(row.get("submission_id"))))
 
-    def _operations_summaries(self, release_ids: list[str]) -> list[dict[str, Any]]:
+    def _operations_summaries(self, release_ids: list[str]) -> list[ImplementationDocument]:
         if self.operations_store is None:
             return [_domain_not_configured_row("operations", release_id) for release_id in release_ids]
         rows: list[dict[str, Any]] = []
@@ -691,7 +693,7 @@ class PublicTrustCenterStore:
             rows.append(_sanitize_public_metadata(row))
         return sorted(rows, key=lambda row: str(row.get("release_id") or ""))
 
-    def _latest_runbook_summary(self, release_id: str) -> dict[str, Any]:
+    def _latest_runbook_summary(self, release_id: str) -> ImplementationDocument:
         if self.operations_runbook_store is None:
             return {"status": "not_configured"}
         try:
@@ -708,7 +710,7 @@ class PublicTrustCenterStore:
             "integrity_hash": latest.get("integrity_hash"),
         }
 
-    def _operations_package_fingerprints(self, release_id: str) -> list[dict[str, Any]]:
+    def _operations_package_fingerprints(self, release_id: str) -> list[ImplementationDocument]:
         rows: list[dict[str, Any]] = []
         if self.operations_store is not None:
             rows.append(self._generic_package_fingerprint(
@@ -744,7 +746,7 @@ class PublicTrustCenterStore:
             ))
         return [row for row in rows if row]
 
-    def _generic_package_fingerprint(self, package_type: str, release_id: str, zip_path: Path, manifest_path: Path, verification_report_path: Path) -> dict[str, Any]:
+    def _generic_package_fingerprint(self, package_type: str, release_id: str, zip_path: Path, manifest_path: Path, verification_report_path: Path) -> ImplementationDocument:
         manifest = _read_json_default(manifest_path, default={})
         verification = _read_json_default(verification_report_path, default={})
         row = {
@@ -760,7 +762,7 @@ class PublicTrustCenterStore:
         row["fingerprint_hash"] = stable_hash(row)
         return _sanitize_public_metadata(row)
 
-    def _portfolio_summaries(self, selection: dict[str, Any], *, profile: str) -> list[dict[str, Any]]:
+    def _portfolio_summaries(self, selection: ImplementationDocument, *, profile: str) -> list[ImplementationDocument]:
         ids = [str(item).strip() for item in selection.get("portfolio_ids", []) if str(item).strip()] if isinstance(selection.get("portfolio_ids"), list) else []
         if not ids and bool(selection.get("include_all_portfolios", True)):
             try:
@@ -772,7 +774,7 @@ class PublicTrustCenterStore:
             rows.append(self._portfolio_summary(portfolio_id, profile=profile))
         return rows
 
-    def _portfolio_summary(self, portfolio_id: str, *, profile: str) -> dict[str, Any]:
+    def _portfolio_summary(self, portfolio_id: str, *, profile: str) -> ImplementationDocument:
         portfolio = {}
         try:
             portfolio = self.portfolio_store.get_portfolio(portfolio_id)
@@ -803,7 +805,7 @@ class PublicTrustCenterStore:
             blocked_keys=PTC_BLOCKED_KEYS,
         )
 
-    def _package_summary(self, package_type: str, portfolio_id: str, profile: str, zip_path: Path, manifest_path: Path, verification_report_path: Path) -> dict[str, Any]:
+    def _package_summary(self, package_type: str, portfolio_id: str, profile: str, zip_path: Path, manifest_path: Path, verification_report_path: Path) -> ImplementationDocument:
         manifest = _read_json_default(manifest_path, default={})
         summary: dict[str, Any] = {}
         verification = _read_json_default(verification_report_path, default={})
@@ -828,7 +830,7 @@ class PublicTrustCenterStore:
             summary = dict(verification["summary"])
         return {"package": package, "verification": {**package, "blocker_count": len(verification.get("blockers", []) if isinstance(verification.get("blockers"), list) else [])}, "summary": summary}
 
-    def _verification_sidecar_documents(self, source: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _verification_sidecar_documents(self, source: ImplementationDocument) -> dict[str, ImplementationDocument]:
         docs: dict[str, dict[str, Any]] = {}
         for item in source.get("public_package_fingerprints", []) if isinstance(source.get("public_package_fingerprints"), list) else []:
             if not isinstance(item, dict):
@@ -842,7 +844,7 @@ class PublicTrustCenterStore:
             docs[path] = _verification_sidecar_document(item, verification_report)
         return docs
 
-    def _delivery_sidecar_documents(self, source: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    def _delivery_sidecar_documents(self, source: ImplementationDocument) -> dict[str, ImplementationDocument]:
         docs: dict[str, dict[str, Any]] = {}
         for collection, domain in _DELIVERY_COLLECTION_DOMAINS:
             rows = source.get(collection, []) if isinstance(source.get(collection), list) else []
@@ -861,7 +863,7 @@ class PublicTrustCenterStore:
                 docs[fingerprint_path] = fingerprint_doc
         return docs
 
-    def _independent_delivery_sidecar_item(self, domain: str, item: dict[str, Any]) -> dict[str, Any]:
+    def _independent_delivery_sidecar_item(self, domain: str, item: ImplementationDocument) -> ImplementationDocument:
         release_id = str(item.get("release_id") or "")
         if not release_id:
             return item
@@ -899,7 +901,7 @@ class PublicTrustCenterStore:
         return item
 
     @staticmethod
-    def _matching_delivery_row(rows: list[dict[str, Any]], item: dict[str, Any], key: str) -> dict[str, Any]:
+    def _matching_delivery_row(rows: list[ImplementationDocument], item: ImplementationDocument, key: str) -> ImplementationDocument:
         wanted = str(item.get(key) or "")
         if wanted:
             for row in rows:
@@ -931,7 +933,7 @@ class PublicTrustCenterStore:
             return candidate.portfolio_dir(portfolio_id)
         raise PublicTrustCenterStateError("Public Trust Center cannot resolve portfolio evidence directory.")
 
-    def _ensure_exportable(self, report: dict[str, Any], source: dict[str, Any]) -> None:
+    def _ensure_exportable(self, report: ImplementationDocument, source: ImplementationDocument) -> None:
         if not report:
             raise PublicTrustCenterStateError("Public Trust Center report has not been generated.")
         if str(report.get("source_hash") or "") != stable_hash(source):
@@ -939,13 +941,13 @@ class PublicTrustCenterStore:
         if not public_trust_center_report_integrity_ok(report):
             raise PublicTrustCenterStateError("Public Trust Center report integrity failed.")
 
-    def _append_history(self, center_id: str, event_type: str, payload: dict[str, Any], *, now: str | None = None) -> None:
+    def _append_history(self, center_id: str, event_type: str, payload: ImplementationDocument, *, now: str | None = None) -> None:
         path = self.history_path(center_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps({"event_type": event_type, "created_at": now or now_iso(), "payload": sanitize_metadata(payload, blocked_keys=PTC_BLOCKED_KEYS)}, ensure_ascii=False, sort_keys=True) + "\n")
 
-    def _history_has_state_event(self, center_id: str, state: dict[str, Any], event_type: str) -> bool:
+    def _history_has_state_event(self, center_id: str, state: ImplementationDocument, event_type: str) -> bool:
         path = self.history_path(center_id)
         if not path.exists():
             return False
@@ -1034,7 +1036,7 @@ def public_trust_center_summary_from_source(source: dict[str, Any], blockers: li
 
 
 
-def _normalize_selection(payload: dict[str, Any]) -> dict[str, Any]:
+def _normalize_selection(payload: ImplementationDocument) -> ImplementationDocument:
     return {
         "release_ids": [str(item).strip() for item in payload.get("release_ids", []) if str(item).strip()] if isinstance(payload.get("release_ids"), list) else [],
         "portfolio_ids": [str(item).strip() for item in payload.get("portfolio_ids", []) if str(item).strip()] if isinstance(payload.get("portfolio_ids"), list) else [],
@@ -1048,7 +1050,7 @@ def _normalize_selection(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalize_policy(payload: dict[str, Any]) -> dict[str, Any]:
+def _normalize_policy(payload: ImplementationDocument) -> ImplementationDocument:
     return {
         "require_registry_current": bool(payload.get("require_registry_current", True)),
         "require_portal_current": bool(payload.get("require_portal_current", True)),
@@ -1064,7 +1066,7 @@ def _normalize_policy(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _findings_from_source(source: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def _findings_from_source(source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     checks: list[dict[str, Any]] = []
@@ -1151,7 +1153,7 @@ def _findings_from_source(source: dict[str, Any]) -> tuple[list[dict[str, Any]],
     return blockers, warnings, checks
 
 
-def _release_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _release_readiness(source: ImplementationDocument) -> list[ImplementationDocument]:
     rows = []
     for item in source.get("releases", []) if isinstance(source.get("releases"), list) else []:
         if not isinstance(item, dict):
@@ -1170,11 +1172,11 @@ def _release_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: str(item.get("release_id") or ""))
 
 
-def _delivery_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _delivery_readiness(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("delivery_readiness_matrix", []) if isinstance(item, dict)], key=lambda item: str(item.get("release_id") or ""))
 
 
-def _portfolio_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _portfolio_readiness(source: ImplementationDocument) -> list[ImplementationDocument]:
     rows = []
     for item in source.get("portfolios", []) if isinstance(source.get("portfolios"), list) else []:
         if not isinstance(item, dict):
@@ -1198,7 +1200,7 @@ def _portfolio_readiness(source: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 
-def _verification_sidecar_document(package: dict[str, Any], verification_report: dict[str, Any]) -> dict[str, Any]:
+def _verification_sidecar_document(package: ImplementationDocument, verification_report: ImplementationDocument) -> ImplementationDocument:
     verification_hash = _verification_hash(verification_report)
     doc = {
         "schema_version": PTC_SCHEMA_VERSION,
@@ -1239,7 +1241,7 @@ def _verification_sidecar_document(package: dict[str, Any], verification_report:
 
 
 
-def _delivery_sidecar_document(domain: str, item: dict[str, Any], *, fingerprint_path: str | None = None, fingerprint_hash: str | None = None) -> dict[str, Any]:
+def _delivery_sidecar_document(domain: str, item: ImplementationDocument, *, fingerprint_path: str | None = None, fingerprint_hash: str | None = None) -> ImplementationDocument:
     summary = _delivery_summary_from_item(domain, item)
     payload = _delivery_public_payload(domain, item)
     evidence = _delivery_sidecar_evidence(domain, item, payload)
@@ -1265,7 +1267,7 @@ def _delivery_sidecar_document(domain: str, item: dict[str, Any], *, fingerprint
     return _sanitize_public_metadata(doc)
 
 
-def _delivery_fingerprint_sidecar_document(domain: str, item: dict[str, Any], sidecar_path: str) -> dict[str, Any]:
+def _delivery_fingerprint_sidecar_document(domain: str, item: ImplementationDocument, sidecar_path: str) -> ImplementationDocument:
     payload = _delivery_public_payload(domain, item)
     fingerprints = _delivery_bottom_fingerprints(domain, item)
     doc = {
@@ -1283,7 +1285,7 @@ def _delivery_fingerprint_sidecar_document(domain: str, item: dict[str, Any], si
     return _sanitize_public_metadata(doc)
 
 
-def _delivery_bottom_fingerprints(domain: str, item: dict[str, Any]) -> dict[str, Any]:
+def _delivery_bottom_fingerprints(domain: str, item: ImplementationDocument) -> ImplementationDocument:
     keys = {
         "release_id",
         "target_id",
@@ -1319,7 +1321,7 @@ def _delivery_bottom_fingerprints(domain: str, item: dict[str, Any]) -> dict[str
     return {"domain": domain, **{key: item.get(key) for key in sorted(keys) if key in item}}
 
 
-def _delivery_sidecar_evidence(domain: str, item: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def _delivery_sidecar_evidence(domain: str, item: ImplementationDocument, payload: ImplementationDocument) -> ImplementationDocument:
     evidence_keys = {
         "release_id",
         "target_id",
@@ -1396,7 +1398,7 @@ def _delivery_fingerprint_sidecar_path(domain: str, release_id: str, entity_id: 
     return "delivery-fingerprint-summaries/" + "__".join(parts) + ".json"
 
 
-def _risk_register(source: dict[str, Any], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _risk_register(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> list[ImplementationDocument]:
     risks: list[dict[str, Any]] = []
     for index, item in enumerate(blockers, start=1):
         risks.append({"risk_id": f"ptc-risk_{index:03d}", "severity": "critical", "category": item.get("check_id"), "title": item.get("message"), "source": "blocker"})
@@ -1408,18 +1410,18 @@ def _risk_register(source: dict[str, Any], blockers: list[dict[str, Any]], warni
     return risks
 
 
-def _delivery_risk_register(source: dict[str, Any]) -> list[dict[str, Any]]:
+def _delivery_risk_register(source: ImplementationDocument) -> list[ImplementationDocument]:
     return sorted([dict(item) for item in source.get("delivery_risk_register", []) if isinstance(item, dict)], key=lambda item: str(item.get("risk_id") or ""))
 
 
 def _delivery_readiness_matrix_from_parts(
-    releases: list[dict[str, Any]],
-    portfolios: list[dict[str, Any]],
-    distribution: list[dict[str, Any]],
-    submissions: list[dict[str, Any]],
-    submission_evidence: list[dict[str, Any]],
-    operations: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+    releases: list[ImplementationDocument],
+    portfolios: list[ImplementationDocument],
+    distribution: list[ImplementationDocument],
+    submissions: list[ImplementationDocument],
+    submission_evidence: list[ImplementationDocument],
+    operations: list[ImplementationDocument],
+) -> list[ImplementationDocument]:
     portfolio_status = _aggregate_status([item.get("public_package_status") for item in portfolios if isinstance(item, dict)])
     rows: list[dict[str, Any]] = []
     for release in releases:
@@ -1452,7 +1454,7 @@ def _delivery_readiness_matrix_from_parts(
     return sorted(rows, key=lambda item: str(item.get("release_id") or ""))
 
 
-def _delivery_risk_register_from_matrix(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _delivery_risk_register_from_matrix(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
     risks: list[dict[str, Any]] = []
     for row in rows:
         risks.extend(_delivery_risks_for_row(row))
@@ -1463,7 +1465,7 @@ def _delivery_risk_register_from_matrix(rows: list[dict[str, Any]]) -> list[dict
     return risks
 
 
-def _delivery_risks_for_row(row: dict[str, Any]) -> list[dict[str, Any]]:
+def _delivery_risks_for_row(row: ImplementationDocument) -> list[ImplementationDocument]:
     release_id = row.get("release_id")
     checks = [
         ("release", row.get("release_signoff_status") in {"signed", "force_signed"}, "Release Signoff is missing."),
@@ -1481,11 +1483,11 @@ def _delivery_risks_for_row(row: dict[str, Any]) -> list[dict[str, Any]]:
     return risks
 
 
-def _has_blocking_delivery_status(row: dict[str, Any]) -> bool:
+def _has_blocking_delivery_status(row: ImplementationDocument) -> bool:
     return any(risk.get("severity") == "critical" for risk in _delivery_risks_for_row(row))
 
 
-def _distribution_status(rows: list[dict[str, Any]]) -> str:
+def _distribution_status(rows: list[ImplementationDocument]) -> str:
     if not rows:
         return "missing"
     if all(item.get("status") == "not_configured" for item in rows):
@@ -1499,7 +1501,7 @@ def _distribution_status(rows: list[dict[str, Any]]) -> str:
     return "ready" if len(ready) == len(existing) else "partial" if ready else "missing"
 
 
-def _submission_status(rows: list[dict[str, Any]]) -> str:
+def _submission_status(rows: list[ImplementationDocument]) -> str:
     if not rows:
         return "missing"
     if all(item.get("status") == "not_configured" for item in rows):
@@ -1516,7 +1518,7 @@ def _submission_status(rows: list[dict[str, Any]]) -> str:
     return "partial"
 
 
-def _submission_evidence_status(rows: list[dict[str, Any]]) -> str:
+def _submission_evidence_status(rows: list[ImplementationDocument]) -> str:
     if not rows:
         return "missing"
     if all(item.get("status") == "not_configured" for item in rows):
@@ -1531,7 +1533,7 @@ def _submission_evidence_status(rows: list[dict[str, Any]]) -> str:
     return "missing"
 
 
-def _operations_status(rows: list[dict[str, Any]]) -> str:
+def _operations_status(rows: list[ImplementationDocument]) -> str:
     if not rows:
         return "missing"
     if all(item.get("status") == "not_configured" for item in rows):
@@ -1543,28 +1545,28 @@ def _operations_status(rows: list[dict[str, Any]]) -> str:
     return status if status in {"signed", "force_signed"} else "unsigned" if first.get("operations_report_status") not in {"missing", None} else "missing"
 
 
-def _operations_audit_status(rows: list[dict[str, Any]]) -> str:
+def _operations_audit_status(rows: list[ImplementationDocument]) -> str:
     if not rows:
         return "missing"
     status = rows[0].get("operations_audit_status") or "missing"
     return status
 
 
-def _operations_reviewer_pack_status(rows: list[dict[str, Any]]) -> str:
+def _operations_reviewer_pack_status(rows: list[ImplementationDocument]) -> str:
     if not rows:
         return "missing"
     status = rows[0].get("operations_reviewer_pack_status") or "missing"
     return status
 
 
-def _package_status_from_fingerprints(packages: list[dict[str, Any]], package_type: str) -> str:
+def _package_status_from_fingerprints(packages: list[ImplementationDocument], package_type: str) -> str:
     matches = [item for item in packages if item.get("package_type") == package_type]
     if not matches:
         return "missing"
     return _aggregate_status([item.get("verification_status") for item in matches])
 
 
-def _finding(check_id: str, severity: str, message: str) -> dict[str, Any]:
+def _finding(check_id: str, severity: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": severity, "message": message}
 
 
@@ -1581,7 +1583,7 @@ def _aggregate_status(statuses: list[Any]) -> str:
     return "passed"
 
 
-def _domain_from_summary(item: dict[str, Any]) -> str | None:
+def _domain_from_summary(item: ImplementationDocument) -> str | None:
     if item.get("target_id") is not None:
         return "distribution"
     if item.get("submission_id") is not None and ("report_status" in item or "attachment_count" in item):
@@ -1598,7 +1600,7 @@ def _domain_from_summary(item: dict[str, Any]) -> str | None:
 
 
 
-def _domain_not_configured_row(domain: str, release_id: str, **extra: Any) -> dict[str, Any]:
+def _domain_not_configured_row(domain: str, release_id: str, **extra: Any) -> ImplementationDocument:
     row = {"release_id": release_id, "domain": domain, "status": "not_configured", "verification_status": "not_configured", **extra}
     row["fingerprint_hash"] = stable_hash(row)
     return row
@@ -1615,7 +1617,7 @@ def _latest_feedback_status(items: Any) -> str:
     return "none"
 
 
-def _nested_status(payload: dict[str, Any], path: tuple[str, ...], *, default: str = "missing") -> str:
+def _nested_status(payload: ImplementationDocument, path: tuple[str, ...], *, default: str = "missing") -> str:
     value: Any = payload
     for part in path:
         if not isinstance(value, dict):
@@ -1624,13 +1626,13 @@ def _nested_status(payload: dict[str, Any], path: tuple[str, ...], *, default: s
     return str(value or default)
 
 
-def _stable_hash_without_zip(payload: dict[str, Any]) -> str | None:
+def _stable_hash_without_zip(payload: ImplementationDocument) -> str | None:
     if not payload:
         return None
     return stable_hash({key: value for key, value in payload.items() if key != "zip"})
 
 
-def _package_report_current_status(report: dict[str, Any], zip_path: Path | None, manifest: dict[str, Any]) -> str:
+def _package_report_current_status(report: ImplementationDocument, zip_path: Path | None, manifest: ImplementationDocument) -> str:
     if not report:
         return "missing"
     if report.get("status") == "failed":
@@ -1654,12 +1656,12 @@ def _package_report_current_status(report: dict[str, Any], zip_path: Path | None
     return status if status else "missing"
 
 
-def _state_row(report: dict[str, Any]) -> dict[str, str]:
+def _state_row(report: ImplementationDocument) -> dict[str, str]:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return {"source_hash": str(report.get("source_hash") or ""), "report_integrity_hash": str(report.get("integrity_hash") or ""), "public_package_count": str(summary.get("public_package_count") or 0)}
 
 
-def _manifest_state(manifest: dict[str, Any]) -> dict[str, str]:
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
     return {"source_hash": str(manifest.get("source_hash") or ""), "report_integrity_hash": str((manifest.get("trust_center_report") if isinstance(manifest.get("trust_center_report"), dict) else {}).get("integrity_hash") or ""), "public_package_count": str(manifest.get("public_package_count") or 0)}
 
 
@@ -1680,12 +1682,12 @@ def _zip_manifest_state(zip_path: Path) -> dict[str, str]:
 
 
 
-def _page_record(root: Path, path: str, source_hash: Any) -> dict[str, Any]:
+def _page_record(root: Path, path: str, source_hash: Any) -> ImplementationDocument:
     resolved = root / path
     return {"path": path, "content_hash": _sha256(resolved), "source_hash": source_hash}
 
 
-def _file_record(root: Path, path: Path) -> dict[str, Any]:
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -1708,7 +1710,7 @@ def _write_zip(zip_path: Path, export_dir: Path) -> None:
             tmp_path.unlink()
 
 
-def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
     if not path.exists():
         return dict(default or {})
     try:
@@ -1718,7 +1720,7 @@ def _read_json_default(path: Path, *, default: dict[str, Any] | None = None) -> 
     return value if isinstance(value, dict) else dict(default or {})
 
 
-def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
@@ -1727,7 +1729,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> dict[str, Any]:
         return {}
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> Path:
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return write_json(path, _sanitize_public_metadata(payload))
 
@@ -1761,7 +1763,7 @@ def _sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _verification_hash(report: dict[str, Any]) -> str | None:
+def _verification_hash(report: ImplementationDocument) -> str | None:
     if not report:
         return None
     if report.get("schema_version") and "checks" in report:
@@ -1769,7 +1771,7 @@ def _verification_hash(report: dict[str, Any]) -> str | None:
     return stable_hash({key: value for key, value in report.items() if key != "generated_at"})
 
 
-def _verification_current_status(report: dict[str, Any], zip_sha256: Any, zip_size_bytes: Any, manifest_hash: Any) -> str:
+def _verification_current_status(report: ImplementationDocument, zip_sha256: Any, zip_size_bytes: Any, manifest_hash: Any) -> str:
     if not report:
         return "missing"
     status = str(report.get("status") or "missing")
@@ -1798,7 +1800,7 @@ def _safe_id(value: str) -> str:
     return text[:80]
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     matches = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -1807,7 +1809,7 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if matches else "passed", "matches": matches[:20]}
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     (export_dir / "README.txt").write_text(
         "\n".join(

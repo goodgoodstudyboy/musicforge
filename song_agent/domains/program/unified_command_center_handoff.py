@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import shutil
 import threading
 import zipfile
@@ -12,6 +14,7 @@ from song_agent.domains.studio.projects import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
 from song_agent.domains.program.unified_command_center_handoff_verifier import UNIFIED_COMMAND_CENTER_HANDOFF_PACKAGE_TYPE, UNIFIED_COMMAND_CENTER_HANDOFF_SCHEMA_VERSION, verify_unified_command_center_handoff_package, write_unified_command_center_handoff_verification_report
+from song_agent.domains.program.unified_command_center import UnifiedCommandCenterStore
 from song_agent.domains.program.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
 
 
@@ -29,7 +32,7 @@ class UnifiedCommandCenterHandoffStore:
         self.lock = threading.RLock()
 
     @property
-    def center_store(self):
+    def center_store(self) -> UnifiedCommandCenterStore:
         return self.signoff_store.center_store
 
     def handoff_dir(self, center_id: str) -> Path:
@@ -161,7 +164,7 @@ class UnifiedCommandCenterHandoffStore:
 
             return _gate_failed(sanitize_sensitive_text(str(exc)))
 
-    def _source_state(self, center_id: str) -> dict[str, Any]:
+    def _source_state(self, center_id: str) -> ImplementationDocument:
         signoff = self.signoff_store.read_signoff(center_id)
         archive_zip = self.signoff_store.archive_zip_path(center_id)
         archive_verification_path = self.signoff_store.archive_verification_report_path(center_id)
@@ -190,7 +193,7 @@ def verify_unified_command_center_handoff_archive(archive_zip: Path, archive_ver
     return {"status": "passed"}
 
 
-def _handoff_report(center_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _handoff_report(center_id: str, source: ImplementationDocument) -> ImplementationDocument:
     signoff = source["signoff"]
     archive_verification = source["archive_verification"]
     report = sanitize_metadata(
@@ -223,7 +226,7 @@ def _handoff_report(center_id: str, source: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
-def _package_index(center_id: str, source: dict[str, Any]) -> dict[str, Any]:
+def _package_index(center_id: str, source: ImplementationDocument) -> ImplementationDocument:
     archive_verification = source["archive_verification"]
     signoff = source["signoff"]
     source_hash = stable_hash(
@@ -258,7 +261,7 @@ def _package_index(center_id: str, source: dict[str, Any]) -> dict[str, Any]:
     return doc
 
 
-def _instructions(source: dict[str, Any]) -> str:
+def _instructions(source: ImplementationDocument) -> str:
     archive_sha = source["archive_verification"].get("zip_sha256")
     return "\n".join(
         [
@@ -271,7 +274,7 @@ def _instructions(source: dict[str, Any]) -> str:
     )
 
 
-def _readme(report: dict[str, Any]) -> str:
+def _readme(report: ImplementationDocument) -> str:
     summary = report.get("summary", {})
     return "\n".join(
         [
@@ -287,15 +290,15 @@ def _readme(report: dict[str, Any]) -> str:
     )
 
 
-def _gate_failed(message: str, **extra: Any) -> dict[str, Any]:
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
     return {"status": "failed", "hard_block": True, "message": message, **extra}
 
 
-def _file_record(path: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

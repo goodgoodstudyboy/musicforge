@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import shutil
@@ -187,7 +189,7 @@ class LegacyWorkspaceMigrator:
                 "backup_verified": True,
             }
 
-    def _source_files(self) -> list[dict[str, Any]]:
+    def _source_files(self) -> list[ImplementationDocument]:
         paths: list[Path] = []
         for relative_root in self.legacy_roots:
             root = self.workspace_root / relative_root
@@ -207,12 +209,12 @@ class LegacyWorkspaceMigrator:
             rows.append({"path": relative, "sha256": sha256_path(path), "size_bytes": path.stat().st_size})
         return rows
 
-    def _existing(self, migration_id: str) -> dict[str, Any]:
+    def _existing(self, migration_id: str) -> ImplementationDocument:
         with self.database.session() as connection:
             row = connection.execute("SELECT * FROM legacy_migrations WHERE migration_id=?", (migration_id,)).fetchone()
         return dict(row) if row else {}
 
-    def _migration_files(self, migration_id: str) -> list[dict[str, Any]]:
+    def _migration_files(self, migration_id: str) -> list[ImplementationDocument]:
         with self.database.session() as connection:
             rows = connection.execute(
                 "SELECT relative_path, sha256, size_bytes FROM legacy_migration_files WHERE migration_id=? ORDER BY relative_path",
@@ -221,7 +223,7 @@ class LegacyWorkspaceMigrator:
         return [{"path": str(row["relative_path"]), "sha256": str(row["sha256"]), "size_bytes": int(row["size_bytes"])} for row in rows]
 
 
-def _fingerprint_paths(root: Path, relative_paths: list[str]) -> list[dict[str, Any]]:
+def _fingerprint_paths(root: Path, relative_paths: list[str]) -> list[ImplementationDocument]:
     rows = []
     for relative in sorted(relative_paths):
         path = root / relative
@@ -233,8 +235,8 @@ def _fingerprint_paths(root: Path, relative_paths: list[str]) -> list[dict[str, 
 
 def _program_documents(
     root: Path,
-    rows: list[dict[str, Any]],
-) -> list[tuple[str, dict[str, Any], bytes]]:
+    rows: list[ImplementationDocument],
+) -> list[tuple[str, ImplementationDocument, bytes]]:
     documents: list[tuple[str, dict[str, Any], bytes]] = []
     for row in rows:
         relative = str(row["path"])

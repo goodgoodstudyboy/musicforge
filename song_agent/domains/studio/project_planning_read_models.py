@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 from pathlib import Path
@@ -58,7 +60,7 @@ def collect_planning_rule_impact_summary(project_id: str) -> dict[str, Any]:
     return planning_rule_impact_projection(_latest(matches))
 
 
-def _read_rows(root: Path, pattern: str) -> list[dict[str, Any]]:
+def _read_rows(root: Path, pattern: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if not root.exists():
         return rows
@@ -72,7 +74,7 @@ def _read_rows(root: Path, pattern: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _read_optional(path: Path) -> dict[str, Any]:
+def _read_optional(path: Path) -> ImplementationDocument:
     try:
         value = read_json(path)
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
@@ -80,11 +82,11 @@ def _read_optional(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _latest(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _latest(rows: list[ImplementationDocument]) -> ImplementationDocument:
     return max(rows, key=lambda row: str(row.get("updated_at") or row.get("created_at") or ""))
 
 
-def _simulation_matches_project(report: dict[str, Any], project_id: str) -> bool:
+def _simulation_matches_project(report: ImplementationDocument, project_id: str) -> bool:
     scope = report.get("scope") if isinstance(report.get("scope"), dict) else {}
     if scope.get("project_id") == project_id:
         return True
@@ -96,7 +98,7 @@ def _simulation_matches_project(report: dict[str, Any], project_id: str) -> bool
     return False
 
 
-def _plan_matches_project(plan: dict[str, Any], project_id: str) -> bool:
+def _plan_matches_project(plan: ImplementationDocument, project_id: str) -> bool:
     scope = plan.get("scope") if isinstance(plan.get("scope"), dict) else {}
     if scope.get("project_id") == project_id:
         return True
@@ -107,7 +109,7 @@ def _plan_matches_project(plan: dict[str, Any], project_id: str) -> bool:
     return False
 
 
-def _impact_matches_project(report: dict[str, Any], project_id: str) -> bool:
+def _impact_matches_project(report: ImplementationDocument, project_id: str) -> bool:
     scope = report.get("scope") if isinstance(report.get("scope"), dict) else {}
     if scope.get("project_id") == project_id:
         return True
@@ -118,7 +120,7 @@ def _impact_matches_project(report: dict[str, Any], project_id: str) -> bool:
     return False
 
 
-def _governance_evidence_stale(version: dict[str, Any]) -> bool:
+def _governance_evidence_stale(version: ImplementationDocument) -> bool:
     promoted = version.get("promoted_from") if isinstance(version.get("promoted_from"), dict) else {}
     simulation_id = str(promoted.get("simulation_id") or "")
     if not simulation_id:

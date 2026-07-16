@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -174,7 +176,7 @@ def evaluate_quality_gate(run_dir: Path, config: QualityGateConfig, *, now: str)
     )
 
 
-def _check(name: str, passed: bool, message: str, *, required: bool = True, **extra: Any) -> dict[str, Any]:
+def _check(name: str, passed: bool, message: str, *, required: bool = True, **extra: Any) -> ImplementationDocument:
     return {
         "name": name,
         "passed": passed,
@@ -184,7 +186,7 @@ def _check(name: str, passed: bool, message: str, *, required: bool = True, **ex
     }
 
 
-def _stem_midi_checks(run_dir: Path, manifest: Any, plan: SongPlan) -> list[dict[str, Any]]:
+def _stem_midi_checks(run_dir: Path, manifest: Any, plan: SongPlan) -> list[ImplementationDocument]:
     expected_note_tracks = [
         {"track_name": track.name, "note_count": len(track.notes)}
         for track in plan.tracks
@@ -243,7 +245,7 @@ def _stem_midi_checks(run_dir: Path, manifest: Any, plan: SongPlan) -> list[dict
     return checks
 
 
-def _stem_track_key(item: dict[str, Any]) -> tuple[str, int]:
+def _stem_track_key(item: ImplementationDocument) -> tuple[str, int]:
     return (str(item["track_name"]), int(item["note_count"]))
 
 

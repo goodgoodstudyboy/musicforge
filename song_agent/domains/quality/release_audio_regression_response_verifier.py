@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import zipfile
@@ -153,7 +155,7 @@ def release_audio_regression_response_verification_exit_code(report: dict[str, A
     return 0 if report.get("status") == "passed" else 1
 
 
-def _semantic_checks(plan: dict[str, Any], actions: dict[str, Any], waivers: dict[str, Any], closeout: dict[str, Any], *, require_closed: bool) -> list[dict[str, Any]]:
+def _semantic_checks(plan: ImplementationDocument, actions: ImplementationDocument, waivers: ImplementationDocument, closeout: ImplementationDocument, *, require_closed: bool) -> list[ImplementationDocument]:
     action_rows = actions.get("actions") if isinstance(actions.get("actions"), list) else []
     waiver_rows = waivers.get("waivers") if isinstance(waivers.get("waivers"), list) else []
     high_or_critical_waivers = [row.get("action_id") for row in waiver_rows if str(row.get("severity") or "").lower() in {"high", "critical", "blocking"}]
@@ -168,7 +170,7 @@ def _semantic_checks(plan: dict[str, Any], actions: dict[str, Any], waivers: dic
 
 
 def _regression_current_checks(
-    binding: dict[str, Any],
+    binding: ImplementationDocument,
     *,
     require_regression_current: bool,
     release_audio_regression_path: Path | str | None,
@@ -181,7 +183,7 @@ def _regression_current_checks(
     current_timeline_verification_report_path: Path | str | None,
     current_certification_path: Path | str | None,
     current_certification_verification_report_path: Path | str | None,
-) -> list[dict[str, Any]]:
+) -> list[ImplementationDocument]:
     if not require_regression_current:
         return []
     if not release_audio_regression_path or not release_audio_regression_verification_report_path:
@@ -221,7 +223,7 @@ def _regression_current_checks(
         return [_check("release_audio_regression_response_regression_current", False, "Response current Regression check failed.", {"error": str(exc)})]
 
 
-def _document_binding_checks(manifest: dict[str, Any], plan: dict[str, Any], actions: dict[str, Any], waivers: dict[str, Any], closeout: dict[str, Any], binding: dict[str, Any]) -> list[dict[str, Any]]:
+def _document_binding_checks(manifest: ImplementationDocument, plan: ImplementationDocument, actions: ImplementationDocument, waivers: ImplementationDocument, closeout: ImplementationDocument, binding: ImplementationDocument) -> list[ImplementationDocument]:
     source_hashes = {plan.get("source_hash"), actions.get("source_hash"), waivers.get("source_hash"), closeout.get("source_hash"), binding.get("source_hash")}
     return [
         _check("release_audio_regression_response_manifest_plan_binding", manifest.get("plan_hash") == plan.get("integrity_hash"), "Manifest binds response plan."),
@@ -233,7 +235,7 @@ def _document_binding_checks(manifest: dict[str, Any], plan: dict[str, Any], act
     ]
 
 
-def _signoff_checks(signoff: dict[str, Any] | None, history: list[dict[str, Any]], manifest: dict[str, Any], plan: dict[str, Any], actions: dict[str, Any], waivers: dict[str, Any], closeout: dict[str, Any], binding: dict[str, Any], *, require_signed: bool) -> list[dict[str, Any]]:
+def _signoff_checks(signoff: ImplementationDocument | None, history: list[ImplementationDocument], manifest: ImplementationDocument, plan: ImplementationDocument, actions: ImplementationDocument, waivers: ImplementationDocument, closeout: ImplementationDocument, binding: ImplementationDocument, *, require_signed: bool) -> list[ImplementationDocument]:
     if signoff is None:
         return [_check("release_audio_regression_response_signoff_present", not require_signed, "Response signoff is present when required.")]
     latest = history[-1] if history else {}
@@ -251,7 +253,7 @@ def _signoff_checks(signoff: dict[str, Any] | None, history: list[dict[str, Any]
     ]
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: set[str], *, expected_entries: set[str], strict: bool) -> list[dict[str, Any]]:
+def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
@@ -276,7 +278,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: dict[str, Any], names: 
     ]
 
 
-def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[str, Any]) -> dict[str, Any]:
+def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
     checks.extend(extra)
     blockers = [check for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
     warnings = [check for check in checks if check.get("status") == "warning"]
@@ -297,11 +299,11 @@ def _finish(checks: list[dict[str, Any]], summary: dict[str, Any], *extra: dict[
     return report
 
 
-def _check(check_id: str, passed: bool, message: str, details: dict[str, Any] | None = None, *, blocking: bool = True) -> dict[str, Any]:
+def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
     return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
 
 
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
     with archive.open(name) as handle:
         data = json.loads(handle.read().decode("utf-8"))
     if not isinstance(data, dict):
@@ -309,7 +311,7 @@ def _read_json_entry(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
     return data
 
 
-def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[dict[str, Any]]:
+def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     with archive.open(name) as handle:
         for raw in handle.read().decode("utf-8").splitlines():
@@ -333,7 +335,7 @@ def _is_safe_entry(name: str) -> bool:
     return True
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, Any]:
+def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
     leaks: list[str] = []
     for name in names:
         if not name.lower().endswith((".json", ".md", ".txt", ".jsonl")):
@@ -344,7 +346,7 @@ def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> dict[str, An
     return _check("release_audio_regression_response_redaction_scan", not leaks, "Package text files do not contain obvious secrets or local paths.", {"leaks": leaks})
 
 
-def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
+def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -358,11 +360,11 @@ def _history_chain_ok(history: list[dict[str, Any]]) -> bool:
     return bool(history)
 
 
-def _integrity_ok(payload: dict[str, Any]) -> bool:
+def _integrity_ok(payload: ImplementationDocument) -> bool:
     return payload.get("integrity_hash") == _integrity_hash(payload)
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

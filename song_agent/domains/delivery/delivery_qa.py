@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -299,9 +301,9 @@ def _delivery_sources(
     project_id: str,
     project_document: ProjectDocument | Any,
     project_dir: Path,
-    project_export: dict[str, Any] | None,
-    final_export_manifest: dict[str, Any] | None,
-) -> dict[str, Any]:
+    project_export: ImplementationDocument | None,
+    final_export_manifest: ImplementationDocument | None,
+) -> ImplementationDocument:
     manifest, raw_manifest, manifest_exists, manifest_error = _read_manifest(project_dir, final_export_manifest)
     expected_files = _expected_files(project_dir, manifest, manifest_exists)
     actual_files = _actual_export_files(project_dir)
@@ -322,7 +324,7 @@ def _delivery_sources(
     }
 
 
-def _read_manifest(project_dir: Path, provided: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any], bool, str]:
+def _read_manifest(project_dir: Path, provided: ImplementationDocument | None) -> tuple[ImplementationDocument, ImplementationDocument, bool, str]:
     if isinstance(provided, dict) and provided:
         return sanitize_metadata(provided, blocked_keys=BLOCKED_DELIVERY_KEYS), dict(provided), True, ""
     path = final_export_dir(project_dir) / "manifest.json"
@@ -336,7 +338,7 @@ def _read_manifest(project_dir: Path, provided: dict[str, Any] | None) -> tuple[
         return {}, {}, False, f"Final Export manifest is invalid. Rebuild final export. {exc}"
 
 
-def _project_source(project_id: str, project_document: ProjectDocument | Any) -> dict[str, Any]:
+def _project_source(project_id: str, project_document: ProjectDocument | Any) -> ImplementationDocument:
     state = getattr(project_document, "state", None)
     return sanitize_metadata(
         {
@@ -350,7 +352,7 @@ def _project_source(project_id: str, project_document: ProjectDocument | Any) ->
     )
 
 
-def _version_sources(project_document: ProjectDocument | Any) -> list[dict[str, Any]]:
+def _version_sources(project_document: ProjectDocument | Any) -> list[ImplementationDocument]:
     versions = []
     for version in getattr(project_document, "versions", []):
         versions.append(
@@ -368,7 +370,7 @@ def _version_sources(project_document: ProjectDocument | Any) -> list[dict[str, 
     return sanitize_metadata(versions, blocked_keys=BLOCKED_DELIVERY_KEYS)
 
 
-def _manifest_source(manifest: dict[str, Any]) -> dict[str, Any]:
+def _manifest_source(manifest: ImplementationDocument) -> ImplementationDocument:
     clean = _strip_delivery_summaries(manifest)
     return sanitize_metadata(
         {
@@ -398,11 +400,11 @@ def _manifest_source(manifest: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _strip_delivery_summaries(manifest: dict[str, Any]) -> dict[str, Any]:
+def _strip_delivery_summaries(manifest: ImplementationDocument) -> ImplementationDocument:
     return {key: value for key, value in (manifest or {}).items() if key not in {"delivery_qa", "delivery_signoff"}}
 
 
-def _expected_files(project_dir: Path, manifest: dict[str, Any], manifest_exists: bool) -> list[dict[str, Any]]:
+def _expected_files(project_dir: Path, manifest: ImplementationDocument, manifest_exists: bool) -> list[ImplementationDocument]:
     export_dir = final_export_dir(project_dir).resolve()
     rows_by_path: dict[str, dict[str, Any]] = {}
     manifest_items = [item for item in manifest.get("files", []) if isinstance(item, dict)] if isinstance(manifest.get("files"), list) else []
@@ -476,7 +478,7 @@ def _expected_file_row(
     required: bool,
     manifest_exists: bool,
     skipped: Any = None,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     row = {
         "kind": kind,
         "path": raw_path,
@@ -506,7 +508,7 @@ def _expected_file_row(
     return row
 
 
-def _quality_gate_requires_stems(manifest: dict[str, Any]) -> bool:
+def _quality_gate_requires_stems(manifest: ImplementationDocument) -> bool:
     gate = manifest.get("quality_gate") if isinstance(manifest.get("quality_gate"), dict) else {}
     config = gate.get("config") if isinstance(gate.get("config"), dict) else {}
     if config.get("require_stems"):
@@ -533,7 +535,7 @@ def _required_stem_midi_paths(export_dir: Path) -> list[str]:
     return paths
 
 
-def _actual_export_files(project_dir: Path) -> list[dict[str, Any]]:
+def _actual_export_files(project_dir: Path) -> list[ImplementationDocument]:
     export_dir = final_export_dir(project_dir).resolve()
     if not export_dir.exists() or not export_dir.is_dir() or export_dir.is_symlink():
         return []
@@ -555,7 +557,7 @@ def _actual_export_files(project_dir: Path) -> list[dict[str, Any]]:
     return sanitize_metadata(rows, blocked_keys=BLOCKED_DELIVERY_KEYS)
 
 
-def _actual_zip_info(project_dir: Path, actual_files: list[dict[str, Any]]) -> dict[str, Any]:
+def _actual_zip_info(project_dir: Path, actual_files: list[ImplementationDocument]) -> ImplementationDocument:
     zip_path = final_export_zip_path(project_dir).resolve()
     project_dir = project_dir.resolve()
     export_dir = final_export_dir(project_dir).resolve()
@@ -636,7 +638,7 @@ def _zip_manifest_matches_current(zipped_bytes: bytes, current_path: Path) -> bo
     return _stable_hash({key: value for key, value in zipped.items() if key != "zip"}) == _stable_hash({key: value for key, value in current.items() if key != "zip"})
 
 
-def _final_version_summary(project_document: ProjectDocument | Any) -> dict[str, Any]:
+def _final_version_summary(project_document: ProjectDocument | Any) -> ImplementationDocument:
     state = getattr(project_document, "state", None)
     final_id = getattr(state, "final_version_id", None)
     version = _version_by_id(project_document, final_id)
@@ -663,7 +665,7 @@ def _version_by_id(project_document: ProjectDocument | Any, version_id: str | No
     return None
 
 
-def _final_export_summary(manifest: dict[str, Any], manifest_exists: bool, manifest_error: str, expected: list[dict[str, Any]], actual: list[dict[str, Any]]) -> dict[str, Any]:
+def _final_export_summary(manifest: ImplementationDocument, manifest_exists: bool, manifest_error: str, expected: list[ImplementationDocument], actual: list[ImplementationDocument]) -> ImplementationDocument:
     manifest_path = next((row for row in actual if row.get("path") == "manifest.json"), {})
     unsafe_count = len([row for row in expected + actual if row.get("safe") is False])
     missing_required = len([row for row in expected if row.get("required") and not row.get("exists")])
@@ -682,7 +684,7 @@ def _final_export_summary(manifest: dict[str, Any], manifest_exists: bool, manif
     )
 
 
-def _zip_summary(zip_info: dict[str, Any], actual_files: list[dict[str, Any]], manifest: dict[str, Any]) -> dict[str, Any]:
+def _zip_summary(zip_info: ImplementationDocument, actual_files: list[ImplementationDocument], manifest: ImplementationDocument) -> ImplementationDocument:
     manifest_zip = manifest.get("zip") if isinstance(manifest.get("zip"), dict) else {}
     matches_manifest = bool(
         zip_info.get("exists")
@@ -716,7 +718,7 @@ def _zip_summary(zip_info: dict[str, Any], actual_files: list[dict[str, Any]], m
     )
 
 
-def _quality_gate_summary(manifest: dict[str, Any], final_version: dict[str, Any]) -> dict[str, Any]:
+def _quality_gate_summary(manifest: ImplementationDocument, final_version: ImplementationDocument) -> ImplementationDocument:
     gate = manifest.get("quality_gate") if isinstance(manifest.get("quality_gate"), dict) else {}
     return sanitize_metadata(
         {
@@ -729,7 +731,7 @@ def _quality_gate_summary(manifest: dict[str, Any], final_version: dict[str, Any
     )
 
 
-def _review_sprint_summary(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _review_sprint_summary(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {"sprint_count": 0}
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
@@ -760,7 +762,7 @@ def _review_sprint_summary(project_export: dict[str, Any] | None) -> dict[str, A
     )
 
 
-def _artifact_integrity_summary(expected: list[dict[str, Any]], actual: list[dict[str, Any]]) -> dict[str, Any]:
+def _artifact_integrity_summary(expected: list[ImplementationDocument], actual: list[ImplementationDocument]) -> ImplementationDocument:
     actual_paths = {str(row.get("path")) for row in actual if row.get("safe") and row.get("path")}
     expected_paths = {str(row.get("path")) for row in expected if row.get("safe") and row.get("path")}
     extra_paths = sorted(actual_paths - expected_paths)
@@ -796,17 +798,17 @@ def _artifact_integrity_summary(expected: list[dict[str, Any]], actual: list[dic
 
 def _build_checks(
     *,
-    final_version: dict[str, Any],
-    final_export: dict[str, Any],
-    zip_summary: dict[str, Any],
-    quality_gate: dict[str, Any],
-    review_sprint: dict[str, Any],
-    artifact_integrity: dict[str, Any],
-    manifest: dict[str, Any],
-    raw_manifest: dict[str, Any],
-    project_export: dict[str, Any] | None,
-    report_probe: dict[str, Any],
-) -> list[dict[str, Any]]:
+    final_version: ImplementationDocument,
+    final_export: ImplementationDocument,
+    zip_summary: ImplementationDocument,
+    quality_gate: ImplementationDocument,
+    review_sprint: ImplementationDocument,
+    artifact_integrity: ImplementationDocument,
+    manifest: ImplementationDocument,
+    raw_manifest: ImplementationDocument,
+    project_export: ImplementationDocument | None,
+    report_probe: ImplementationDocument,
+) -> list[ImplementationDocument]:
     final_id = final_version.get("version_id")
     manifest_version = final_export.get("manifest_version_id")
     sprint_count = int(review_sprint.get("sprint_count") or 0)
@@ -842,7 +844,7 @@ def _build_checks(
     return checks
 
 
-def _project_export_delivery_probe(project_export: dict[str, Any] | None) -> dict[str, Any]:
+def _project_export_delivery_probe(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
     return {
@@ -851,7 +853,7 @@ def _project_export_delivery_probe(project_export: dict[str, Any] | None) -> dic
     }
 
 
-def _qa_status(project_document: ProjectDocument | Any, blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> str:
+def _qa_status(project_document: ProjectDocument | Any, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> str:
     if not getattr(project_document, "versions", []):
         return "not_ready"
     if blockers:
@@ -861,7 +863,7 @@ def _qa_status(project_document: ProjectDocument | Any, blockers: list[dict[str,
     return "passed"
 
 
-def _qa_readiness(status: str, checks: list[dict[str, Any]]) -> str:
+def _qa_readiness(status: str, checks: list[ImplementationDocument]) -> str:
     if status == "not_ready":
         return "no_data"
     if status == "stale":
@@ -877,7 +879,7 @@ def _qa_readiness(status: str, checks: list[dict[str, Any]]) -> str:
     return "ready_to_handoff"
 
 
-def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> dict[str, Any]:
+def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> ImplementationDocument:
     return sanitize_metadata(
         {
             "check_id": check_id,
@@ -890,20 +892,20 @@ def _check(check_id: str, failed: bool, severity: str, message: str, count: int 
     )
 
 
-def _check_message(check: dict[str, Any]) -> str:
+def _check_message(check: ImplementationDocument) -> str:
     count = check.get("count")
     suffix = f" ({count})" if count not in {None, "", 0} else ""
     return sanitize_sensitive_text(f"{check.get('check_id')}: {check.get('message')}{suffix}")[:240]
 
 
-def _file_missing(artifact: dict[str, Any], kind: str) -> bool:
+def _file_missing(artifact: ImplementationDocument, kind: str) -> bool:
     for row in artifact.get("files", []) if isinstance(artifact.get("files"), list) else []:
         if isinstance(row, dict) and row.get("kind") == kind:
             return not bool(row.get("exists"))
     return False
 
 
-def _stem_audio_partial(artifact: dict[str, Any]) -> bool:
+def _stem_audio_partial(artifact: ImplementationDocument) -> bool:
     stem_rows = [row for row in artifact.get("files", []) if isinstance(row, dict) and row.get("kind") == "stem_audio"] if isinstance(artifact.get("files"), list) else []
     return bool(stem_rows and any(not row.get("exists") for row in stem_rows) and any(row.get("exists") for row in stem_rows))
 
@@ -947,7 +949,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _source_hash(source: dict[str, Any]) -> str:
+def _source_hash(source: ImplementationDocument) -> str:
     return _stable_hash({key: value for key, value in source.items() if key != "raw_manifest"})
 
 

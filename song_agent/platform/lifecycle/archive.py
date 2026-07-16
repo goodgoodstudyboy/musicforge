@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import zipfile
@@ -99,7 +101,7 @@ class ArchiveBuilder:
         return target
 
 
-def _serialize(value: dict[str, Any] | str | bytes) -> bytes:
+def _serialize(value: ImplementationDocument | str | bytes) -> bytes:
     if isinstance(value, bytes):
         return value
     if isinstance(value, str):

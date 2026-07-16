@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import shutil
 import threading
@@ -329,7 +331,7 @@ class ReleaseAudioTimelineStore:
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": sanitize_sensitive_text(str(exc))}
 
-    def _write_documents(self, release_id: str, timeline_id: str, docs: dict[str, Any]) -> None:
+    def _write_documents(self, release_id: str, timeline_id: str, docs: ImplementationDocument) -> None:
         root = self.timeline_dir(release_id, timeline_id)
         root.mkdir(parents=True, exist_ok=True)
         write_json(root / "audio-timeline-report.json", docs["report"])
@@ -340,12 +342,12 @@ class ReleaseAudioTimelineStore:
         write_json(root / "risk-register.json", docs["risks"])
         write_json(root / "evidence-bindings.json", docs["bindings"])
 
-    def _write_current(self, release_id: str, timeline_id: str, report: dict[str, Any]) -> None:
+    def _write_current(self, release_id: str, timeline_id: str, report: ImplementationDocument) -> None:
         current = {"schema_version": RELEASE_AUDIO_TIMELINE_SCHEMA_VERSION, "release_id": release_id, "timeline_id": timeline_id, "source_hash": report.get("source_hash"), "status": report.get("status"), "updated_at": now_iso()}
         current["integrity_hash"] = _integrity_hash(current)
         write_json(self.current_path(release_id), current)
 
-    def _read_document_set(self, release_id: str, timeline_id: str) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def _read_document_set(self, release_id: str, timeline_id: str) -> tuple[ImplementationDocument, ImplementationDocument, list[ImplementationDocument], ImplementationDocument, ImplementationDocument, ImplementationDocument, ImplementationDocument]:
         return (
             sanitize_metadata(read_json(self.report_path(release_id, timeline_id))),
             sanitize_metadata(read_json(self.track_index_path(release_id, timeline_id))),
@@ -367,7 +369,7 @@ class ReleaseAudioTimelineStore:
         if _semantic_hash(track_index) != _semantic_hash(current_docs["track_index"]) or _semantic_hash(events) != _semantic_hash(current_docs["events"]) or _semantic_hash(trend) != _semantic_hash(current_docs["trend"]) or _semantic_hash(taxonomy) != _semantic_hash(current_docs["taxonomy"]) or _semantic_hash(risks) != _semantic_hash(current_docs["risks"]) or _semantic_hash(bindings) != _semantic_hash(current_docs["bindings"]):
             raise ReleaseAudioTimelineStateError("Release Audio Timeline documents are stale. Refresh timeline before using timeline evidence.")
 
-    def _build_documents(self, release_id: str, timeline_id: str | None) -> dict[str, Any]:
+    def _build_documents(self, release_id: str, timeline_id: str | None) -> ImplementationDocument:
         release = self.release_store.get_release(release_id)
         timeline_id = timeline_id or "ratl-pending"
         certification_report = self.certification_store.read_report(release_id, default={})
@@ -478,7 +480,7 @@ class ReleaseAudioTimelineStore:
         report["integrity_hash"] = _integrity_hash(report)
         return {"report": report, "track_index": track_index, "events": events, "trend": trend, "taxonomy": taxonomy, "risks": risks, "bindings": bindings}
 
-    def _with_timeline_id(self, docs: dict[str, Any], release_id: str, timeline_id: str) -> dict[str, Any]:
+    def _with_timeline_id(self, docs: ImplementationDocument, release_id: str, timeline_id: str) -> ImplementationDocument:
         if docs["report"].get("timeline_id") == timeline_id:
             return docs
         events = []
@@ -516,7 +518,7 @@ class ReleaseAudioTimelineStore:
         docs["report"]["integrity_hash"] = _integrity_hash(docs["report"])
         return docs
 
-    def _track_event_payload(self, release_id: str, track: Any, campaign_report: dict[str, Any], case_index: dict[str, Any]) -> dict[str, Any]:
+    def _track_event_payload(self, release_id: str, track: Any, campaign_report: ImplementationDocument, case_index: ImplementationDocument) -> ImplementationDocument:
         project_id = str(getattr(track, "project_id", "") or "")
         version_id = str(getattr(track, "version_id", "") or "")
         project_dir = self.project_store.project_dir(project_id)
@@ -586,7 +588,7 @@ class ReleaseAudioTimelineStore:
         source = {"track_id": getattr(track, "track_id", None), "project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash, "current_final_export_hash": current_manifest_hash, "wav_sha256": wav_sha}
         return {"track": track_row, "issues": issues, "risks": risks, "source": source}
 
-    def _current_certification_verification(self, release_id: str) -> dict[str, Any]:
+    def _current_certification_verification(self, release_id: str) -> ImplementationDocument:
         cert_zip = self.certification_store.zip_path(release_id)
         cert_verification_path = self.certification_store.verification_report_path(release_id)
         external_report = _read_optional_json(cert_verification_path)
@@ -647,7 +649,7 @@ class ReleaseAudioTimelineStore:
         return f"ratl-{len(existing) + 1:06d}"
 
 
-def _checks(track_index: dict[str, Any], trend: dict[str, Any], risks: dict[str, Any], cert_binding: dict[str, Any]) -> list[dict[str, Any]]:
+def _checks(track_index: ImplementationDocument, trend: ImplementationDocument, risks: ImplementationDocument, cert_binding: ImplementationDocument) -> list[ImplementationDocument]:
     summary = track_index.get("summary") if isinstance(track_index.get("summary"), dict) else {}
     track_count = int(summary.get("track_count") or 0)
     return [
@@ -660,7 +662,7 @@ def _checks(track_index: dict[str, Any], trend: dict[str, Any], risks: dict[str,
     ]
 
 
-def _event(release_id: str, timeline_id: str, sequence: int, track_identity: dict[str, Any], event_type: str, status: str, severity: str, payload: dict[str, Any], previous_event_hash: str | None) -> dict[str, Any]:
+def _event(release_id: str, timeline_id: str, sequence: int, track_identity: ImplementationDocument, event_type: str, status: str, severity: str, payload: ImplementationDocument, previous_event_hash: str | None) -> ImplementationDocument:
     clean_payload = sanitize_metadata(payload)
     event = sanitize_metadata(
         {
@@ -686,7 +688,7 @@ def _event(release_id: str, timeline_id: str, sequence: int, track_identity: dic
     return event
 
 
-def _derive_from_events(release_id: Any, timeline_id: Any, events: list[dict[str, Any]], *, source_hash: Any) -> dict[str, Any]:
+def _derive_from_events(release_id: Any, timeline_id: Any, events: list[ImplementationDocument], *, source_hash: Any) -> ImplementationDocument:
     from song_agent.domains.quality.release_audio_timeline_verifier import _derive_from_events as derive
 
     return derive(release_id, timeline_id, events, source_hash=source_hash)
@@ -698,15 +700,15 @@ def _identity_key(project_id: str, version_id: str, final_export_hash: str) -> s
     return stable_hash({"project_id": project_id, "version_id": version_id, "final_export_hash": final_export_hash})
 
 
-def _case_identity_key(case: dict[str, Any]) -> str:
+def _case_identity_key(case: ImplementationDocument) -> str:
     return _identity_key(str(case.get("project_id") or ""), str(case.get("version_id") or ""), str(case.get("final_export_hash") or ""))
 
 
-def _renderer_release_ready(renderer: dict[str, Any]) -> bool:
+def _renderer_release_ready(renderer: ImplementationDocument) -> bool:
     return renderer.get("runner_kind") == "real" and renderer.get("release_ready") is not False
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     try:
         if path.exists():
             return read_json(path)
@@ -715,7 +717,7 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return {}
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if not path.exists():
         raise ReleaseAudioTimelineNotFoundError(f"Timeline event ledger not found: {path}")
@@ -728,16 +730,16 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+def _write_jsonl(path: Path, rows: list[ImplementationDocument]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
 
 
-def _event_ledger_hash(events: list[dict[str, Any]]) -> str:
+def _event_ledger_hash(events: list[ImplementationDocument]) -> str:
     return stable_hash(events)
 
 
-def _readme(report: dict[str, Any], track_index: dict[str, Any], trend: dict[str, Any], risks: dict[str, Any]) -> str:
+def _readme(report: ImplementationDocument, track_index: ImplementationDocument, trend: ImplementationDocument, risks: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return "\n".join(
         [
@@ -758,7 +760,7 @@ def _readme(report: dict[str, Any], track_index: dict[str, Any], trend: dict[str
     )
 
 
-def _file_record(path: Path, root: Path, rel: str) -> dict[str, Any]:
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
 
 
@@ -778,7 +780,7 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
-def _integrity_hash(payload: dict[str, Any]) -> str:
+def _integrity_hash(payload: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
 
 

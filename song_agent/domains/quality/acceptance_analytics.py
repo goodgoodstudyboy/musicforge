@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import json
 import re
 import threading
@@ -319,7 +321,7 @@ class AcceptanceAnalyticsStore:
             _append_event(task_dir / "events.jsonl", "review_task_created_from_acceptance_analytics", {"report_id": report_id, "recommendation_id": recommendation_id})
         return {"status": "created", "project_id": project_id, "task_id": task.task_id, "recommendation_id": recommendation_id}
 
-    def _with_stale(self, report: dict[str, Any]) -> dict[str, Any]:
+    def _with_stale(self, report: ImplementationDocument) -> ImplementationDocument:
         scope = _scope_from_report(report)
         current_hash = stable_hash(self.source_state(scope))
         stored_hash = str(report.get("source_hash") or "")
@@ -348,7 +350,7 @@ class AcceptanceAnalyticsStore:
             return sorted(set(suite_ids))
         return [suite.suite_id for suite in self.acceptance_store.list_suites(include_archived=True)]
 
-    def _human_review_pack_sources(self, suite_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def _human_review_pack_sources(self, suite_id: str) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
         suite_dir = self.acceptance_store.suite_dir(suite_id)
         packs = []
         for path in (suite_dir / "human-review-packs").glob("hrpack-*/pack.json"):
@@ -387,7 +389,7 @@ class AcceptanceAnalyticsStore:
             sorted(sanitize_metadata(imports), key=lambda item: str(item.get("import_id") or "")),
         )
 
-    def _review_task_sources(self, scope: AnalyticsScope) -> list[dict[str, Any]]:
+    def _review_task_sources(self, scope: AnalyticsScope) -> list[ImplementationDocument]:
         project_ids = _scope_project_ids(scope, self.release_store, self.project_store)
         rows = []
         for document in self.project_store.list_projects(include_hidden=True):
@@ -416,7 +418,7 @@ class AcceptanceAnalyticsStore:
                 )
         return sorted(sanitize_metadata(rows), key=lambda item: str(item.get("task_id") or ""))
 
-    def _release_source(self, scope: AnalyticsScope) -> dict[str, Any]:
+    def _release_source(self, scope: AnalyticsScope) -> ImplementationDocument:
         if scope.type != "release" or not scope.release_id:
             return {}
         release = self.release_store.get_release(scope.release_id)
@@ -507,7 +509,7 @@ def write_acceptance_analytics_summary(path: Path, report: dict[str, Any]) -> di
     return summary
 
 
-def _case_facts(source: dict[str, Any]) -> list[CaseFact]:
+def _case_facts(source: ImplementationDocument) -> list[CaseFact]:
     facts: list[CaseFact] = []
     for suite_row in source.get("suites", []):
         if not isinstance(suite_row, dict):
@@ -560,7 +562,7 @@ def _case_facts(source: dict[str, Any]) -> list[CaseFact]:
     return facts
 
 
-def _songbook_heatmap(facts: list[CaseFact], tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _songbook_heatmap(facts: list[CaseFact], tasks: list[ImplementationDocument]) -> list[ImplementationDocument]:
     songbook = {song["song_id"]: song for song in builtin_songbook().get("songs", []) if isinstance(song, dict)}
     grouped: dict[str, list[CaseFact]] = {song_id: [] for song_id in songbook}
     for fact in facts:
@@ -615,7 +617,7 @@ def _songbook_heatmap(facts: list[CaseFact], tasks: list[dict[str, Any]]) -> lis
     return sorted(rows, key=lambda item: (-int(item.get("weakness_score") or 0), -STATUS_SEVERITY.get(str(item.get("latest_status")), 0), -int(item.get("issue_count") or 0), str(item.get("song_id") or "")))
 
 
-def _style_breakdown(heatmap: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _style_breakdown(heatmap: list[ImplementationDocument]) -> list[ImplementationDocument]:
     groups: dict[str, list[dict[str, Any]]] = {}
     for row in heatmap:
         groups.setdefault(str(row.get("style") or "unknown"), []).append(row)
@@ -643,7 +645,7 @@ def _style_breakdown(heatmap: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(output, key=lambda item: (-int(item.get("weakness_score") or 0), str(item.get("style") or "")))
 
 
-def _issue_taxonomy(facts: list[CaseFact]) -> list[dict[str, Any]]:
+def _issue_taxonomy(facts: list[CaseFact]) -> list[ImplementationDocument]:
     buckets: dict[str, dict[str, Any]] = {}
     for fact in facts:
         for issue_type in _fact_issue_types(fact):
@@ -670,7 +672,7 @@ def _issue_taxonomy(facts: list[CaseFact]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (-int(item.get("count") or 0), str(item.get("issue_type") or "")))
 
 
-def _reviewer_breakdown(facts: list[CaseFact]) -> list[dict[str, Any]]:
+def _reviewer_breakdown(facts: list[CaseFact]) -> list[ImplementationDocument]:
     groups: dict[str, list[CaseFact]] = {}
     for fact in facts:
         reviewer = fact.listened_by or "unknown"
@@ -694,7 +696,7 @@ def _reviewer_breakdown(facts: list[CaseFact]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (-int(item.get("review_count") or 0), str(item.get("reviewer") or "")))
 
 
-def _trend(source: dict[str, Any], facts: list[CaseFact]) -> list[dict[str, Any]]:
+def _trend(source: ImplementationDocument, facts: list[CaseFact]) -> list[ImplementationDocument]:
     by_suite: dict[str, list[CaseFact]] = {}
     suite_meta: dict[str, dict[str, Any]] = {}
     for suite_row in source.get("suites", []):
@@ -732,12 +734,12 @@ def _trend(source: dict[str, Any], facts: list[CaseFact]) -> list[dict[str, Any]
     return rows
 
 
-def _trend_summary(trend: list[dict[str, Any]]) -> dict[str, Any]:
+def _trend_summary(trend: list[ImplementationDocument]) -> ImplementationDocument:
     latest = trend[-1] if trend else {}
     return {"status": latest.get("trend_status") or "none", "suite_count": len(trend)}
 
 
-def _weakness_ranking(heatmap: list[dict[str, Any]], styles: list[dict[str, Any]], taxonomy: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _weakness_ranking(heatmap: list[ImplementationDocument], styles: list[ImplementationDocument], taxonomy: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     for row in heatmap:
         if int(row.get("weakness_score") or 0) <= 0:
@@ -782,7 +784,7 @@ def _weakness_ranking(heatmap: list[dict[str, Any]], styles: list[dict[str, Any]
     return sorted(rows, key=lambda item: (-int(item.get("weakness_score") or 0), -int(item.get("issue_count") or 0), str(item.get("type") or ""), str(item.get("id") or "")))[:20]
 
 
-def _recommendations(heatmap: list[dict[str, Any]], taxonomy: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _recommendations(heatmap: list[ImplementationDocument], taxonomy: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows = []
     index = 1
     for item in heatmap:
@@ -826,7 +828,7 @@ def _recommendations(heatmap: list[dict[str, Any]], taxonomy: list[dict[str, Any
     return rows[:20]
 
 
-def _summary(facts: list[CaseFact], tasks: list[dict[str, Any]], taxonomy: list[dict[str, Any]], recommendations: list[dict[str, Any]]) -> dict[str, Any]:
+def _summary(facts: list[CaseFact], tasks: list[ImplementationDocument], taxonomy: list[ImplementationDocument], recommendations: list[ImplementationDocument]) -> ImplementationDocument:
     ratings = [fact.rating for fact in facts if isinstance(fact.rating, int)]
     manual_reviews = [fact for fact in facts if fact.review_mode == "manual" and fact.review_status != "missing"]
     manual_accepted = sum(1 for fact in facts if fact.review_mode == "manual" and fact.review_status == "accepted")
@@ -853,7 +855,7 @@ def _summary(facts: list[CaseFact], tasks: list[dict[str, Any]], taxonomy: list[
     }
 
 
-def _source_summary(source: dict[str, Any], facts: list[CaseFact], tasks: list[dict[str, Any]]) -> dict[str, Any]:
+def _source_summary(source: ImplementationDocument, facts: list[CaseFact], tasks: list[ImplementationDocument]) -> ImplementationDocument:
     suites = source.get("suites") if isinstance(source.get("suites"), list) else []
     pack_count = 0
     import_count = 0
@@ -872,7 +874,7 @@ def _source_summary(source: dict[str, Any], facts: list[CaseFact], tasks: list[d
     }
 
 
-def _warnings(source: dict[str, Any], facts: list[CaseFact], summary: dict[str, Any]) -> list[str]:
+def _warnings(source: ImplementationDocument, facts: list[CaseFact], summary: ImplementationDocument) -> list[str]:
     warnings = []
     if not source.get("suites"):
         warnings.append("no_acceptance_suites")
@@ -883,7 +885,7 @@ def _warnings(source: dict[str, Any], facts: list[CaseFact], summary: dict[str, 
     return warnings
 
 
-def _readiness(summary: dict[str, Any], recommendations: list[dict[str, Any]], warnings: list[str]) -> str:
+def _readiness(summary: ImplementationDocument, recommendations: list[ImplementationDocument], warnings: list[str]) -> str:
     if int(summary.get("case_count") or 0) == 0:
         return "empty"
     if int(summary.get("rejected_count") or 0) > 0 or int(summary.get("critical_issue_count") or 0) > 0:
@@ -947,7 +949,7 @@ def _issue_excerpt(fact: CaseFact) -> str:
     return ""
 
 
-def _weakness_score(row: dict[str, Any]) -> int:
+def _weakness_score(row: ImplementationDocument) -> int:
     score = 0
     latest = str(row.get("latest_status") or "")
     if latest == "rejected":
@@ -975,7 +977,7 @@ def _latest_fact(items: list[CaseFact]) -> CaseFact | None:
     return sorted(items, key=lambda fact: (fact.listened_at or fact.suite_updated_at or fact.suite_created_at, fact.case_id))[-1]
 
 
-def _open_task_count(tasks: list[dict[str, Any]], song_id: str) -> int:
+def _open_task_count(tasks: list[ImplementationDocument], song_id: str) -> int:
     count = 0
     for task in tasks:
         if task.get("status") not in OPEN_TASK_STATUSES:
@@ -999,7 +1001,7 @@ def _first_text(values: list[str]) -> str | None:
     return None
 
 
-def _suite_source(data: dict[str, Any]) -> dict[str, Any]:
+def _suite_source(data: ImplementationDocument) -> ImplementationDocument:
     keys = (
         "suite_id",
         "name",
@@ -1018,7 +1020,7 @@ def _suite_source(data: dict[str, Any]) -> dict[str, Any]:
     return {key: data.get(key) for key in keys}
 
 
-def _case_source(data: dict[str, Any]) -> dict[str, Any]:
+def _case_source(data: ImplementationDocument) -> ImplementationDocument:
     keys = (
         "case_id",
         "suite_id",
@@ -1039,12 +1041,12 @@ def _case_source(data: dict[str, Any]) -> dict[str, Any]:
     return {key: data.get(key) for key in keys}
 
 
-def _review_source(data: dict[str, Any]) -> dict[str, Any]:
+def _review_source(data: ImplementationDocument) -> ImplementationDocument:
     keys = ("case_id", "status", "rating", "playback_confirmed", "listened_by", "listened_at", "audio_mode", "notes", "issues", "waivers", "review_mode", "source", "tags", "markers")
     return {key: data.get(key) for key in keys}
 
 
-def _health_source(data: dict[str, Any]) -> dict[str, Any]:
+def _health_source(data: ImplementationDocument) -> ImplementationDocument:
     return {
         "status": data.get("status"),
         "summary": data.get("summary") if isinstance(data.get("summary"), dict) else {},
@@ -1053,7 +1055,7 @@ def _health_source(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _report_source(data: dict[str, Any]) -> dict[str, Any]:
+def _report_source(data: ImplementationDocument) -> ImplementationDocument:
     return {
         "suite_id": data.get("suite_id"),
         "status": data.get("status"),
@@ -1066,7 +1068,7 @@ def _report_source(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _case_in_scope(case: dict[str, Any], scope: AnalyticsScope) -> bool:
+def _case_in_scope(case: ImplementationDocument, scope: AnalyticsScope) -> bool:
     if scope.type == "project" and scope.project_id:
         return str(case.get("project_id") or "") == scope.project_id
     return True
@@ -1087,7 +1089,7 @@ def _suite_matches_release(suite_id: str, project_ids: set[str], store: Acceptan
     return any(case.project_id in project_ids for case in store.list_cases(suite_id))
 
 
-def _release_acceptance_suite_id(signoff: dict[str, Any]) -> str:
+def _release_acceptance_suite_id(signoff: ImplementationDocument) -> str:
     gate = signoff.get("acceptance_gate") if isinstance(signoff.get("acceptance_gate"), dict) else {}
     return str(gate.get("suite_id") or "")
 
@@ -1100,7 +1102,7 @@ def _release_ids_for_project(project_id: str, release_store: ReleaseStore) -> li
     return sorted(rows)
 
 
-def _scope_from_report(report: dict[str, Any]) -> AnalyticsScope:
+def _scope_from_report(report: ImplementationDocument) -> AnalyticsScope:
     scope = report.get("scope") if isinstance(report.get("scope"), dict) else {}
     return AnalyticsScope.from_values(
         scope_type=str(scope.get("type") or "global"),
@@ -1110,7 +1112,7 @@ def _scope_from_report(report: dict[str, Any]) -> AnalyticsScope:
     )
 
 
-def _report_id(scope: AnalyticsScope, source: dict[str, Any], now: str) -> str:
+def _report_id(scope: AnalyticsScope, source: ImplementationDocument, now: str) -> str:
     digits = re.sub(r"[^0-9]", "", now)[:14].ljust(14, "0")
     return f"analytics-{digits}-{stable_hash({'scope': scope.to_dict(), 'source': source})[:8]}"
 
@@ -1142,7 +1144,7 @@ def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or "")).strip()[:limit]
 
 
-def _append_event(path: Path, event_type: str, payload: dict[str, Any]) -> None:
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     event = sanitize_metadata({"timestamp": now_iso(), "event": event_type, **payload})
     with path.open("a", encoding="utf-8") as file:

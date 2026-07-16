@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 import hashlib
 import json
 import os
@@ -324,7 +326,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
     def summary(self, portfolio_id: str) -> dict[str, Any]:
         return reviewer_pack_summary(self.read_report(portfolio_id, default={}))
 
-    def _reviewer_findings(self, portfolio_id: str, audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]], audit_verification: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def _reviewer_findings(self, portfolio_id: str, audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument], audit_verification: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
         if not audit_report:
@@ -380,7 +382,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
             blockers.append(_blocker("governance_reviewer_source_redaction", "Portfolio Governance reviewer source evidence contains sensitive values."))
         return blockers, warnings
 
-    def _current_audit_package_binding(self, portfolio_id: str) -> dict[str, Any]:
+    def _current_audit_package_binding(self, portfolio_id: str) -> ImplementationDocument:
         zip_path = self.audit_store.zip_path(portfolio_id)
         zip_exists = zip_path.exists() and zip_path.is_file() and not zip_path.is_symlink()
         audit_export_manifest = _read_optional_json(self.audit_store.export_dir(portfolio_id) / "manifest.json")
@@ -538,7 +540,7 @@ def reviewer_pack_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def _reset_causality_status(entries: list[dict[str, Any]]) -> str:
+def _reset_causality_status(entries: list[ImplementationDocument]) -> str:
     resets = [item for item in entries if item.get("event_type") in {"governance_signoff_reset", "governance_signoff_history_reset", "governance_queue_governance_signoff_reset"}]
     if not resets:
         return "not_applicable"
@@ -555,7 +557,7 @@ def _reset_causality_status(entries: list[dict[str, Any]]) -> str:
     return "passed"
 
 
-def _risk_summary(audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]], blockers: list[dict[str, Any]], warnings: list[dict[str, Any]]) -> dict[str, Any]:
+def _risk_summary(audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
     coverage = audit_report.get("coverage") if isinstance(audit_report.get("coverage"), dict) else {}
     return {
         "status": "failed" if blockers else "warning" if warnings else "passed",
@@ -568,7 +570,7 @@ def _risk_summary(audit_report: dict[str, Any], ledger_entries: list[dict[str, A
     }
 
 
-def _risk_hotspots(ledger_entries: list[dict[str, Any]], warnings: list[dict[str, Any]], blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _risk_hotspots(ledger_entries: list[ImplementationDocument], warnings: list[ImplementationDocument], blockers: list[ImplementationDocument]) -> list[ImplementationDocument]:
     counts: dict[str, int] = {}
     for item in ledger_entries:
         if item.get("integrity_ok") is False:
@@ -586,7 +588,7 @@ def _risk_hotspots(ledger_entries: list[dict[str, Any]], warnings: list[dict[str
     return [{"risk": key, "count": value, "severity": "blocking" if key in {"integrity_failed", "stale_evidence", "blockers"} else "warning"} for key, value in sorted(counts.items())]
 
 
-def _recommendations(coverage: dict[str, Any], warnings: list[dict[str, Any]], blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _recommendations(coverage: ImplementationDocument, warnings: list[ImplementationDocument], blockers: list[ImplementationDocument]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     if blockers:
         rows.append({"recommendation": "Resolve blocking Governance Audit evidence before sending the reviewer pack.", "priority": "high"})
@@ -601,7 +603,7 @@ def _recommendations(coverage: dict[str, Any], warnings: list[dict[str, Any]], b
     return rows
 
 
-def _reviewer_guide(report: dict[str, Any]) -> str:
+def _reviewer_guide(report: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     lines = [
         "# MusicForge Portfolio Governance Reviewer Guide",
@@ -636,7 +638,7 @@ def _reviewer_guide(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _retrospective_markdown(report: dict[str, Any]) -> str:
+def _retrospective_markdown(report: ImplementationDocument) -> str:
     lines = ["# MusicForge Portfolio Governance Retrospective", "", f"Status: {report.get('status')}", "", "## Timeline"]
     for item in report.get("timeline", [])[:60] if isinstance(report.get("timeline"), list) else []:
         if isinstance(item, dict):
@@ -653,7 +655,7 @@ def _retrospective_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _evidence_index_markdown(index: dict[str, Any]) -> str:
+def _evidence_index_markdown(index: ImplementationDocument) -> str:
     lines = ["# Portfolio Governance Evidence Index", ""]
     for item in index.get("items", []) if isinstance(index.get("items"), list) else []:
         if isinstance(item, dict):
@@ -661,7 +663,7 @@ def _evidence_index_markdown(index: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _timeline_markdown(timeline: dict[str, Any]) -> str:
+def _timeline_markdown(timeline: ImplementationDocument) -> str:
     lines = ["# Portfolio Governance Timeline", ""]
     for item in timeline.get("events", []) if isinstance(timeline.get("events"), list) else []:
         if isinstance(item, dict):
@@ -669,7 +671,7 @@ def _timeline_markdown(timeline: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _report_markdown(report: dict[str, Any]) -> str:
+def _report_markdown(report: ImplementationDocument) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return "\n".join(
         [
@@ -685,7 +687,7 @@ def _report_markdown(report: dict[str, Any]) -> str:
     ) + "\n"
 
 
-def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
     lines = [
         "MusicForge Release Portfolio Governance Reviewer Pack",
         "",
@@ -697,19 +699,19 @@ def _write_readme(export_dir: Path, report: dict[str, Any]) -> None:
     (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     return {"status": report.get("status") or "missing", "summary": summary}
 
 
-def _read_json_or_default(path: Path, default: dict[str, Any] | None) -> dict[str, Any]:
+def _read_json_or_default(path: Path, default: ImplementationDocument | None) -> ImplementationDocument:
     if not path.exists():
         return default if default is not None else {}
     value = read_json(path)
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
 
-def _read_optional_json(path: Path) -> dict[str, Any]:
+def _read_optional_json(path: Path) -> ImplementationDocument:
     if not path.exists():
         return {}
     try:
@@ -719,11 +721,11 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> Path:
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
     return write_json(path, sanitize_metadata(data, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS))
 
 
-def _file_record(export_dir: Path, path: Path) -> dict[str, Any]:
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
     rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
     return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
@@ -778,7 +780,7 @@ def _int_or_none(value: Any) -> int | None:
         return None
 
 
-def _redaction_summary(value: Any) -> dict[str, Any]:
+def _redaction_summary(value: Any) -> ImplementationDocument:
     text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     findings = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -787,9 +789,9 @@ def _redaction_summary(value: Any) -> dict[str, Any]:
     return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
 
 
-def _blocker(check_id: str, message: str) -> dict[str, Any]:
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "blocking", "message": message}
 
 
-def _warning(check_id: str, message: str) -> dict[str, Any]:
+def _warning(check_id: str, message: str) -> ImplementationDocument:
     return {"check_id": check_id, "severity": "warning", "message": message}
