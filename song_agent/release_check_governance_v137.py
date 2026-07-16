@@ -8,7 +8,7 @@ from typing import Any
 from song_agent.release_check.reviewer_package import REQUIRED_DOCUMENTS, verify_reviewer_package, write_reviewer_manifest
 
 
-CURRENT_PROFILES = ("latest", "ga", "v13", "security")
+CURRENT_PROFILES = ("latest", "ga", "v14", "security")
 
 
 def run_release_check_ci_docs_governance_smoke(root: Path) -> tuple[bool, str]:
@@ -156,4 +156,5 @@ def _line_count(path: Path) -> int:
 
 def _changelog_current_major(path: Path) -> bool:
     headings = [line for line in path.read_text(encoding="utf-8").splitlines() if line.startswith("## v")]
-    return bool(headings) and all(line.startswith("## v13.") for line in headings)
+    majors = {line.split(".", 1)[0] for line in headings}
+    return bool(headings) and len(majors) == 1

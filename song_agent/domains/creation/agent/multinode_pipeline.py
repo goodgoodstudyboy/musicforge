@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from copy import deepcopy
-from dataclasses import replace
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable
+from copy import deepcopy as deepcopy
+from dataclasses import replace as replace
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path
+from typing import Any as Any, Callable as Callable
 
-from song_agent.domains.creation.agent.pipeline import _make_bass_notes, _make_chord_notes, _make_drum_notes, _make_drum_notes_for_sections, _make_melody, _make_melody_for_sections
-from song_agent.domains.creation.music_quality import analyze_song_quality, attach_quality, quality_issues_for_plan, repair_quality_metadata
-from song_agent.domains.creation.agent.provider_pipeline import _client_for_config
-from song_agent.domains.creation.node_graph import NODE_DEPENDENCIES, affected_nodes_for_retry
-from song_agent.domains.creation.node_store import NodeRecord, NodeStore, PIPELINE_NODE_ORDER
-from song_agent.domains.creation.provider import ProviderConfig, ProviderOutputError
-from song_agent.domains.quality.quality import REQUIRED_TRACKS, validate_song_plan
-from song_agent.domains.creation.schemas.agent_nodes import ArrangementPlan, ArrangementTrack, CriticIssue, CriticReport, HarmonyPlan, LyricPlan, LyricSection, MelodyPhrase, MelodyPlan, RepairAction, RepairPlan, SectionHarmony, SongBrief, SonicPalette, StructurePlan, StructureSectionPlan
-from song_agent.domains.creation.schemas.song import MotifPlan, NoteEvent, SongPlan, SongRequest, SongSection, TrackPlan
+from song_agent.domains.creation.agent.pipeline import _make_bass_notes as _make_bass_notes, _make_chord_notes as _make_chord_notes, _make_drum_notes as _make_drum_notes, _make_drum_notes_for_sections as _make_drum_notes_for_sections, _make_melody as _make_melody, _make_melody_for_sections as _make_melody_for_sections
+from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality, attach_quality as attach_quality, quality_issues_for_plan as quality_issues_for_plan, repair_quality_metadata as repair_quality_metadata
+from song_agent.domains.creation.agent.provider_pipeline import _client_for_config as _client_for_config
+from song_agent.domains.creation.node_graph import NODE_DEPENDENCIES as NODE_DEPENDENCIES, affected_nodes_for_retry as affected_nodes_for_retry
+from song_agent.domains.creation.node_store import NodeRecord as NodeRecord, NodeStore as NodeStore, PIPELINE_NODE_ORDER as PIPELINE_NODE_ORDER
+from song_agent.domains.creation.provider import ProviderConfig as ProviderConfig, ProviderOutputError as ProviderOutputError
+from song_agent.domains.quality.quality import REQUIRED_TRACKS as REQUIRED_TRACKS, validate_song_plan as validate_song_plan
+from song_agent.domains.creation.schemas.agent_nodes import ArrangementPlan as ArrangementPlan, ArrangementTrack as ArrangementTrack, CriticIssue as CriticIssue, CriticReport as CriticReport, HarmonyPlan as HarmonyPlan, LyricPlan as LyricPlan, LyricSection as LyricSection, MelodyPhrase as MelodyPhrase, MelodyPlan as MelodyPlan, RepairAction as RepairAction, RepairPlan as RepairPlan, SectionHarmony as SectionHarmony, SongBrief as SongBrief, SonicPalette as SonicPalette, StructurePlan as StructurePlan, StructureSectionPlan as StructureSectionPlan
+from song_agent.domains.creation.schemas.song import MotifPlan as MotifPlan, NoteEvent as NoteEvent, SongPlan as SongPlan, SongRequest as SongRequest, SongSection as SongSection, TrackPlan as TrackPlan
 
 
 ControlFn = Callable[[str, str], None]
@@ -392,7 +392,6 @@ def build_arrangement_plan(
     sections: list[SongSection],
     melody: MelodyPlan,
 ) -> ArrangementPlan:
-    total_bars = sum(section.bars for section in sections)
     melody_notes = [
         note for phrase in melody.phrases for note in phrase.notes
     ]

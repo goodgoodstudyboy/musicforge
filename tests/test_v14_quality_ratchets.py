@@ -15,6 +15,7 @@ from song_agent.release_check.v14_quality import (
 from tools.migrate_v14_private_document_types import migrate_private_document_types
 from tools.split_v14_active_functions import split_active_functions
 from tools.split_v14_interface_functions import _split_one, split_interfaces
+from tools.update_v14_quality_policy import _ratchet_mypy_policy, _ratchet_typing_policy
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,3 +81,61 @@ def test_v14_module_debt_is_registered_and_function_limits_are_hard() -> None:
     assert report["status"] == "passed", report["blockers"]
     assert report["registered_oversized_module_count"] == len(policy["module_size_debt"])
     assert all(row["expires_version"] == "14.1.0" for row in policy["module_size_debt"])
+
+
+def test_v14_mypy_ownership_ratchet_only_moves_down() -> None:
+    policy = {"mypy": {"max_total_errors": 3, "error_budgets": {"old.py|name-defined": 3}}}
+    _ratchet_mypy_policy(
+        policy,
+        {
+            "status": "measured",
+            "strict_status": "passed",
+            "total_errors": 2,
+            "error_budgets": {"new.py|attr-defined": 2},
+        },
+    )
+    assert policy["mypy"] == {"max_total_errors": 2, "error_budgets": {"new.py|attr-defined": 2}}
+
+    with pytest.raises(RuntimeError, match="cannot grow"):
+        _ratchet_mypy_policy(
+            policy,
+            {
+                "status": "measured",
+                "strict_status": "passed",
+                "total_errors": 3,
+                "error_budgets": {"new.py|attr-defined": 3},
+            },
+        )
+
+
+def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 8,
+            "implementation_document_max_count": 4,
+        }
+    }
+    _ratchet_typing_policy(
+        policy,
+        {
+            "raw_dict_str_any_count": 5,
+            "implementation_document_count": 6,
+            "public_implementation_document_count": 0,
+            "untyped_public_function_count": 0,
+        },
+    )
+    assert policy["typing"] == {
+        "raw_dict_str_any_max_count": 5,
+        "implementation_document_max_count": 6,
+    }
+
+    with pytest.raises(RuntimeError, match="cannot grow"):
+        _ratchet_typing_policy(
+            policy,
+            {
+                "raw_dict_str_any_count": 6,
+                "implementation_document_count": 6,
+                "public_implementation_document_count": 0,
+                "untyped_public_function_count": 0,
+            },
+        )

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import Any
+from dataclasses import replace as replace
+from typing import Any as Any
 
-from song_agent.domains.creation.schemas.agent_nodes import CriticIssue
-from song_agent.domains.creation.schemas.song import MotifPlan, NoteEvent, QualityScores, SectionIntent, SongPlan, SongQualityMeta, SongSection, TrackPlan
+from song_agent.domains.creation.schemas.agent_nodes import CriticIssue as CriticIssue
+from song_agent.domains.creation.schemas.song import MotifPlan as MotifPlan, NoteEvent as NoteEvent, QualityScores as QualityScores, SectionIntent as SectionIntent, SongPlan as SongPlan, SongQualityMeta as SongQualityMeta, SongSection as SongSection, TrackPlan as TrackPlan
 
 
 QUALITY_DIMENSIONS = ("structure", "melody", "harmony", "arrangement", "lyric_fit")

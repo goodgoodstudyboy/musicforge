@@ -21,12 +21,13 @@ def evaluate_v14_architecture(
     *,
     policy_path: Path | str = V14_POLICY_PATH,
     require_final: bool | None = None,
+    snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     policy_file = _rooted(root, policy_path)
     policy = json.loads(policy_file.read_text(encoding="utf-8"))
-    snapshot = build_architecture_snapshot(root)
-    metrics = _v14_metrics(root, snapshot, policy)
+    architecture_snapshot = snapshot or build_architecture_snapshot(root)
+    metrics = _v14_metrics(root, architecture_snapshot, policy)
     frozen = json.loads((root / "architecture-v14-migration.json").read_text(encoding="utf-8"))
     blockers = _policy_declaration_blockers(policy, frozen)
     final = bool(policy.get("enforce_final_targets")) if require_final is None else require_final

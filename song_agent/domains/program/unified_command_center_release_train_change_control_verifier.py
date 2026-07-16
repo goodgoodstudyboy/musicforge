@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.persistence.file_artifacts import read_json_document as read_json, write_json_atomic as write_json
-from song_agent.platform.verification.sanitization import sanitize_sensitive_text
-from song_agent.platform.verification.hashing import stable_hash
-from song_agent.domains.program.unified_command_center_release_train_verifier import verify_unified_command_center_release_train_package
+from song_agent.platform.verification.sanitization import sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.platform.verification.hashing import stable_hash as stable_hash
+from song_agent.domains.program.unified_command_center_release_train_verifier import verify_unified_command_center_release_train_package as verify_unified_command_center_release_train_package
 
 
 UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_CHANGE_CONTROL_PACKAGE_TYPE = "musicforge_unified_command_center_release_train_change_control"

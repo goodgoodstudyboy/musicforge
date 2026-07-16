@@ -2,36 +2,36 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import csv
-import hashlib
-import io
-import json
-import os
-import shutil
-import threading
-import zipfile
-from pathlib import Path, PurePosixPath
-from typing import Any
+import csv as csv
+import hashlib as hashlib
+import io as io
+import json as json
+import os as os
+import shutil as shutil
+import threading as threading
+import zipfile as zipfile
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.delivery.distribution import DistributionStore, DistributionTarget, build_distribution_signoff_record, distribution_signoff_summary
-from song_agent.domains.delivery.distribution_artwork import distribution_artwork_file_path, latest_distribution_artwork, read_distribution_artwork
-from song_agent.domains.delivery.distribution_checklist import checklist_export_payload, checklist_markdown, checklist_summary, reconcile_distribution_checklist
-from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS, get_distribution_profile
-from song_agent.domains.delivery.distribution_layout import build_distribution_layout_plan, layout_file_tree_text, layout_manifest_payload, layout_summary
-from song_agent.domains.delivery.distribution_templates import resolve_mapping_source, template_mapping, template_summary
-from song_agent.domains.delivery.distribution_qa import distribution_qa_allows_export, distribution_source_state
-from song_agent.domains.studio.projectio import read_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.release_export import read_release_export_manifest
-from song_agent.domains.delivery.release_metadata import read_release_metadata
-from song_agent.domains.delivery.release_qa import scan_release_payload_for_sensitive_values
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.quality.audio_encoding import AudioEncodingStore, resolve_target_audio_format_profiles
-from song_agent.domains.creation.encoded_audio_acceptance import export_distribution_encoded_audio_acceptance
-from song_agent.domains.delivery.format_decisions import FormatDecisionStore
-from song_agent.domains.delivery.rights_clearance import RightsClearanceStore
+from song_agent.domains.delivery.distribution import DistributionStore as DistributionStore, DistributionTarget as DistributionTarget, build_distribution_signoff_record as build_distribution_signoff_record, distribution_signoff_summary as distribution_signoff_summary
+from song_agent.domains.delivery.distribution_artwork import distribution_artwork_file_path as distribution_artwork_file_path, latest_distribution_artwork as latest_distribution_artwork, read_distribution_artwork as read_distribution_artwork
+from song_agent.domains.delivery.distribution_checklist import checklist_export_payload as checklist_export_payload, checklist_markdown as checklist_markdown, checklist_summary as checklist_summary, reconcile_distribution_checklist as reconcile_distribution_checklist
+from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS as DISTRIBUTION_BLOCKED_KEYS, get_distribution_profile as get_distribution_profile
+from song_agent.domains.delivery.distribution_layout import build_distribution_layout_plan as build_distribution_layout_plan, layout_file_tree_text as layout_file_tree_text, layout_manifest_payload as layout_manifest_payload, layout_summary as layout_summary
+from song_agent.domains.delivery.distribution_templates import resolve_mapping_source as resolve_mapping_source, template_mapping as template_mapping, template_summary as template_summary
+from song_agent.domains.delivery.distribution_qa import distribution_qa_allows_export as distribution_qa_allows_export, distribution_source_state as distribution_source_state
+from song_agent.domains.studio.projectio import read_json as read_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.release_export import read_release_export_manifest as read_release_export_manifest
+from song_agent.domains.delivery.release_metadata import read_release_metadata as read_release_metadata
+from song_agent.domains.delivery.release_qa import scan_release_payload_for_sensitive_values as scan_release_payload_for_sensitive_values
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.quality.audio_encoding import AudioEncodingStore as AudioEncodingStore, resolve_target_audio_format_profiles as resolve_target_audio_format_profiles
+from song_agent.domains.creation.encoded_audio_acceptance import export_distribution_encoded_audio_acceptance as export_distribution_encoded_audio_acceptance
+from song_agent.domains.delivery.format_decisions import FormatDecisionStore as FormatDecisionStore
+from song_agent.domains.delivery.rights_clearance import RightsClearanceStore as RightsClearanceStore
 
 
 DISTRIBUTION_EXPORT_SCHEMA_VERSION = 1

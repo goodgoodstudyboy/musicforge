@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import argparse
-import json
-from pathlib import Path
-from typing import Sequence
+import argparse as argparse
+import json as json
+from pathlib import Path as Path
+from typing import Sequence as Sequence
 
-from song_agent.platform.persistence import LegacyWorkspaceMigrator, PersistenceRecovery, V13MigrationOrchestrator, WorkspaceLock
+from song_agent.platform.persistence import LegacyWorkspaceMigrator as LegacyWorkspaceMigrator, PersistenceRecovery as PersistenceRecovery, V13MigrationOrchestrator as V13MigrationOrchestrator, V14MigrationOrchestrator, WorkspaceLock as WorkspaceLock
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,6 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("v13-plan")
     subparsers.add_parser("v13-apply")
     subparsers.add_parser("v13-rollback-rehearsal")
+    subparsers.add_parser("v14-plan")
+    subparsers.add_parser("v14-apply")
+    v14_rollback = subparsers.add_parser("v14-rollback")
+    v14_rollback.add_argument("migration_id")
+    subparsers.add_parser("v14-rollback-rehearsal")
     recover_lock = subparsers.add_parser("recover-lock")
     recover_lock.add_argument("--force", action="store_true")
     return parser
@@ -43,6 +48,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = V13MigrationOrchestrator(workspace).execute()
         elif args.action == "v13-rollback-rehearsal":
             result = V13MigrationOrchestrator(workspace).rollback_rehearsal()
+        elif args.action == "v14-plan":
+            result = V14MigrationOrchestrator(workspace).plan()
+        elif args.action == "v14-apply":
+            result = V14MigrationOrchestrator(workspace).apply()
+        elif args.action == "v14-rollback":
+            result = V14MigrationOrchestrator(workspace).rollback(args.migration_id)
+        elif args.action == "v14-rollback-rehearsal":
+            result = V14MigrationOrchestrator(workspace).rollback_rehearsal()
         else:
             result = {"status": "passed", "recovered": WorkspaceLock(workspace).recover(force=args.force)}
     except Exception as exc:

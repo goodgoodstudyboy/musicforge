@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from song_agent.application.interface_persistence import write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class CreationRoutesSaveReviewSprintRecommendationContextPack:
-    def _save_review_sprint_recommendation_context_pack(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, task_id: str, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _save_review_sprint_recommendation_context_pack(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, task_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         if task_id not in self._review_sprint_ordered_task_ids(sprint):
             raise FileNotFoundError(task_id)
         task = task_store.read_task(task_id)
@@ -60,7 +62,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
             if reference.hidden or str(ref.get("source_hash") or "") != reference.sha256:
                 raise _interfaces_api_runtime.ReviewSprintStateError("Recommendation context reference is stale. Refresh recommendations before saving.")
 
-    def _generate_review_sprint_provider_candidates(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _generate_review_sprint_provider_candidates(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, payload: ImplementationDocument) -> ImplementationDocument:
         if sprint.status not in {"open", "in_progress", "blocked"}:
             raise _interfaces_api_runtime.ReviewSprintStateError(f"Cannot generate provider candidates for a {sprint.status} review sprint.")
         sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
@@ -155,7 +157,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
         response.update({"results": _interfaces_api_runtime.sanitize_metadata(results), "created_count": created_total, "provider_snapshots": _interfaces_api_runtime.sanitize_metadata(provider_snapshots)})
         return response
 
-    def _execute_queue_context_pack_action(self, project_id: str, sprint_store: ReviewSprintStore, task_store: ReviewTaskStore, sprint: Any, item: SprintActionItem) -> dict[str, _interfaces_api_runtime.Any]:
+    def _execute_queue_context_pack_action(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, item: _interfaces_api_runtime.SprintActionItem) -> ImplementationDocument:
         context_pack_id = str((item.result or {}).get("context_pack_id") or "")
         if context_pack_id:
             pack = self.context_pack_store.read_pack(context_pack_id)
@@ -168,7 +170,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
         result = self._save_review_sprint_recommendation_context_pack(project_id, sprint_store, task_store, sprint, str(item.task_id), {"name": item.input.get("name") or ""})
         return {"status": "created", "context_pack_id": result["context_pack"]["pack_id"], "asset_count": len(result["context_pack"].get("asset_refs") or []), "reference_count": len(result["context_pack"].get("reference_refs") or [])}
 
-    def _generate_review_task_provider_candidates_for_queue(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _generate_review_task_provider_candidates_for_queue(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, payload: ImplementationDocument) -> ImplementationDocument:
         payload = self._expand_context_pack_payload(payload)
         candidates = task_store.list_candidates(task.task_id)
         if bool(payload.get("skip_existing_provider", True)) and any((candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider")) and candidate.status in {"ready", "applied"} for candidate in candidates):

@@ -5,32 +5,31 @@ from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
 
-import hashlib
-import json
-import os
-import re
-import struct
-import tempfile
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import hashlib as hashlib
+import json as json
+import os as os
+import re as re
+import struct as struct
+import tempfile as tempfile
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.trust.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package
-from song_agent.domains.trust.public_trust_center_acceptance_board_verifier import verify_public_trust_center_acceptance_board_package
-from song_agent.domains.trust.public_trust_center_acceptance_board_contracts import acceptance_board_verification_hash
-from song_agent.domains.trust.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package
-from song_agent.domains.trust.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package
-from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_contracts import verification_hash as accepted_evidence_verification_hash
-from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_verifier import verify_public_trust_center_distribution_kit_accepted_evidence_package
-from song_agent.domains.trust.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package
-from song_agent.domains.trust.public_trust_center_publication_contracts import PUBLICATION_BLOCKED_KEYS, PUBLICATION_PACKAGE_TYPE, PUBLICATION_REQUIRED_PACKAGE_KEYS, PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE, publication_channel_state_hash, publication_manifest_hash, publication_report_hash, sidecar_hash
-from song_agent.domains.trust.public_trust_center_verifier import verify_public_trust_center_package
-from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS
-from song_agent.domains.delivery.releases import stable_hash
-
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.trust.public_trust_center_acceptance_board_signoff_verifier import verify_public_trust_center_acceptance_board_signoff_archive_package as verify_public_trust_center_acceptance_board_signoff_archive_package
+from song_agent.domains.trust.public_trust_center_acceptance_board_verifier import verify_public_trust_center_acceptance_board_package as verify_public_trust_center_acceptance_board_package
+from song_agent.domains.trust.public_trust_center_acceptance_board_contracts import acceptance_board_verification_hash as acceptance_board_verification_hash
+from song_agent.domains.trust.public_trust_center_anchor_registry_verifier import verify_public_trust_center_anchor_registry_package as verify_public_trust_center_anchor_registry_package
+from song_agent.domains.trust.public_trust_center_anchor_transparency_verifier import verify_public_trust_center_anchor_transparency_package as verify_public_trust_center_anchor_transparency_package
+from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_verifier import verify_public_trust_center_distribution_kit_accepted_evidence_package as verify_public_trust_center_distribution_kit_accepted_evidence_package
+from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_contracts import verification_hash as _accepted_evidence_verification_hash
+from song_agent.domains.trust.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package as verify_public_trust_center_distribution_kit_package
+from song_agent.domains.trust.public_trust_center_publication_contracts import PUBLICATION_BLOCKED_KEYS as PUBLICATION_BLOCKED_KEYS, PUBLICATION_PACKAGE_TYPE as PUBLICATION_PACKAGE_TYPE, PUBLICATION_REQUIRED_PACKAGE_KEYS as PUBLICATION_REQUIRED_PACKAGE_KEYS, PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE as PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE, publication_channel_state_hash as publication_channel_state_hash, publication_manifest_hash as publication_manifest_hash, publication_report_hash as publication_report_hash, sidecar_hash as sidecar_hash
+from song_agent.domains.trust.public_trust_center_verifier import verify_public_trust_center_package as verify_public_trust_center_package
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS as DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS as LOCAL_PATH_VALUE_PATTERNS
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
 
 PUBLICATION_VERIFICATION_SCHEMA_VERSION = 1
 DEFAULT_MAX_ZIP_SIZE_MB = 512
@@ -39,6 +38,7 @@ DEFAULT_MAX_ENTRY_COUNT = 512
 MAX_TEXT_SCAN_BYTES = 2 * 1024 * 1024
 HEX_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
 VERIFIER_BLOCKED_KEYS = PUBLICATION_BLOCKED_KEYS | (DEFAULT_BLOCKED_METADATA_KEYS - {"path"})
+accepted_evidence_verification_hash = _accepted_evidence_verification_hash
 BASE_REQUIRED_ENTRIES = {
     "README.txt",
     "publication-manifest.json",
@@ -312,7 +312,7 @@ class _PublicationVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "ptcpub_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (((self.manifest.get("zip") or {}).get("entries") or []) if isinstance(self.manifest.get("zip"), dict) else []) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "ptcpub_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 

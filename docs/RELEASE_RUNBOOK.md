@@ -5,7 +5,7 @@ This runbook covers a local MusicForge release.
 ## Prepare
 
 1. Update `pyproject.toml`.
-2. Update `song_agent/__init__.py`.
+2. Update `song_agent/platform/version.py`.
 3. Add the top `CHANGELOG.md` section.
 4. Keep local runtime config out of git, especially `.musicforge/provider.json`
    and `.musicforge/renderer.json`.
@@ -17,6 +17,9 @@ python -m pytest tests\test_ga_readiness.py tests\test_cli_ga_readiness.py tests
 python -m song_agent.cli doctor
 python -m song_agent.cli release-check --profile ga --skip-tests --json
 python -m song_agent.cli release-check --profile latest --skip-tests --json
+python -m song_agent.cli release-check --profile v14 --skip-tests --json
+python -m song_agent.cli release-check --profile security --skip-tests --json
+python -m song_agent.cli release-check --profile full --skip-tests --json
 python -m song_agent.cli ga-check --strict --json --report-out runs\ga-readiness\ga-readiness-report.json
 python -m song_agent.cli verify-ga-readiness-report runs\ga-readiness\ga-readiness-report.json --strict --json
 git diff --check
@@ -35,6 +38,11 @@ enough for GA evidence.
 
 Use full `pytest -q` when time allows. If full tests exceed the local time
 budget, record the targeted tests and release-check profiles that were run.
+
+v14 final certification additionally requires active and legacy suites, the
+v14 migration rollback rehearsal, wheel installation outside the checkout,
+Python 3.11 and the latest supported Python on Windows/Linux, and a final-SHA
+reviewer package with no pending evidence.
 
 ## Commit And Tag
 

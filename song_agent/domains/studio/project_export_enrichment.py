@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-from pathlib import Path
-from typing import Any
+import json as json
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.studio.project_planning_read_models import collect_planning_rule_governance_summary, collect_planning_rule_impact_summary, collect_planning_rule_simulation_summary
-from song_agent.domains.studio.project_repository import BLOCKED_ASSET_METADATA_KEYS, ProjectDocument
-from song_agent.domains.studio.projectio import read_json
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.studio.project_planning_read_models import collect_planning_rule_governance_summary as collect_planning_rule_governance_summary, collect_planning_rule_impact_summary as collect_planning_rule_impact_summary, collect_planning_rule_simulation_summary as collect_planning_rule_simulation_summary
+from song_agent.domains.studio.project_repository import BLOCKED_ASSET_METADATA_KEYS as BLOCKED_ASSET_METADATA_KEYS, ProjectDocument as ProjectDocument
+from song_agent.domains.studio.projectio import read_json as read_json
 
 
 def build_project_summary(project_dir: Path, document: ProjectDocument) -> dict[str, Any]:

@@ -55,7 +55,7 @@
     {
       "old_path": "song_agent/application/legacy_dependencies/",
       "replacement": "song_agent/domains/* plus song_agent/application use cases",
-      "import_usage_count": 490,
+      "import_usage_count": 0,
       "cli_api_aliases": [],
       "data_schema_impact": "none; public JSON, ZIP, CLI, API, and Studio contracts remain under differential tests",
       "introduced_version": "13.5.0",
@@ -65,7 +65,7 @@
     {
       "old_path": "active flat song_agent domain implementations",
       "replacement": "song_agent/domains/{creation,studio,quality,delivery,trust,program}",
-      "import_usage_count": 224,
+      "import_usage_count": 0,
       "cli_api_aliases": [],
       "data_schema_impact": "historical signed evidence remains byte-readable; public Python imports may remain static facades",
       "introduced_version": "1.0.0",

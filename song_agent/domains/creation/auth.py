@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import hmac
-from dataclasses import dataclass
-from ipaddress import ip_address
-from collections.abc import Mapping
+import hmac as hmac
+from dataclasses import dataclass as dataclass
+from ipaddress import ip_address as ip_address
+from collections.abc import Mapping as Mapping
 
 
 REMOTE_TOKEN_ERROR = (

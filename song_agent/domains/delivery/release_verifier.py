@@ -6,34 +6,34 @@ from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
 
-import hashlib
-import json
-import re
-import struct
-import sys
-import zipfile
-import csv
-import io
-import wave
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+import struct as struct
+import sys as sys
+import zipfile as zipfile
+import csv as csv
+import io as io
+import wave as wave
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.quality.audio_health import analyze_wav_bytes, audio_health_allows_release
-from song_agent.domains.quality.audio_revision import audio_revision_summary_integrity_ok, candidate_integrity_ok as audio_revision_candidate_integrity_ok, closeout_integrity_ok as audio_revision_closeout_integrity_ok, issue_integrity_ok as audio_revision_issue_integrity_ok, session_integrity_ok as audio_revision_session_integrity_ok
-from song_agent.domains.quality.mastering_qa import mastering_analysis_integrity_ok, mastering_candidate_integrity_ok, mastering_plan_integrity_ok, mastering_summary_hash
-from song_agent.domains.quality.audio_encoding import encoded_audio_summary_hash, encoded_audio_summary_integrity_ok, encoded_audio_summary_uses_fake
-from song_agent.domains.creation.encoded_audio_acceptance import encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok, encoded_audio_review_integrity_hash, encoded_audio_review_integrity_ok
-from song_agent.domains.delivery.format_decisions import format_matrix_integrity_ok, format_recommendation_integrity_ok, format_report_hash, format_report_integrity_ok
-from song_agent.domains.delivery.rights_clearance import verify_release_rights_package_evidence
-from song_agent.domains.quality.mix_controls import mix_state_integrity_ok, song_plan_hash, stable_hash as mix_control_stable_hash, track_role
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.creation.stem_health import stem_health_integrity_ok
-from song_agent.domains.studio.song_editor import section_id_for_index, track_id_for_index
+from song_agent.domains.quality.audio_health import analyze_wav_bytes as analyze_wav_bytes, audio_health_allows_release as audio_health_allows_release
+from song_agent.domains.quality.audio_revision import audio_revision_summary_integrity_ok as audio_revision_summary_integrity_ok, candidate_integrity_ok as audio_revision_candidate_integrity_ok, closeout_integrity_ok as audio_revision_closeout_integrity_ok, issue_integrity_ok as audio_revision_issue_integrity_ok, session_integrity_ok as audio_revision_session_integrity_ok
+from song_agent.domains.quality.mastering_qa import mastering_analysis_integrity_ok as mastering_analysis_integrity_ok, mastering_candidate_integrity_ok as mastering_candidate_integrity_ok, mastering_plan_integrity_ok as mastering_plan_integrity_ok, mastering_summary_hash as mastering_summary_hash
+from song_agent.domains.quality.audio_encoding import encoded_audio_summary_hash as encoded_audio_summary_hash, encoded_audio_summary_integrity_ok as encoded_audio_summary_integrity_ok, encoded_audio_summary_uses_fake as encoded_audio_summary_uses_fake
+from song_agent.domains.creation.encoded_audio_acceptance import encoded_audio_acceptance_summary_hash as encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok as encoded_audio_acceptance_summary_integrity_ok, encoded_audio_review_integrity_hash as encoded_audio_review_integrity_hash, encoded_audio_review_integrity_ok as encoded_audio_review_integrity_ok
+from song_agent.domains.delivery.format_decisions import format_matrix_integrity_ok as format_matrix_integrity_ok, format_recommendation_integrity_ok as format_recommendation_integrity_ok, format_report_hash as format_report_hash, format_report_integrity_ok as format_report_integrity_ok
+from song_agent.domains.delivery.rights_clearance import verify_release_rights_package_evidence as verify_release_rights_package_evidence
+from song_agent.domains.quality.mix_controls import mix_state_integrity_ok as mix_state_integrity_ok, song_plan_hash as song_plan_hash, stable_hash as mix_control_stable_hash, track_role as track_role
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS as DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.creation.stem_health import stem_health_integrity_ok as stem_health_integrity_ok
+from song_agent.domains.studio.song_editor import section_id_for_index as section_id_for_index, track_id_for_index as track_id_for_index
 
 
 REPORT_SCHEMA_VERSION = 1

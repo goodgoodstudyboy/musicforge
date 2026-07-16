@@ -2,15 +2,14 @@
 
 MusicForge is a local-first modular monolith. It runs as one Python process,
 ships as one package, and stores mutable workspace state and immutable evidence
-locally. The v12.14-v13.0 architecture program replaces the historical flat
-package incrementally without changing public CLI/API behavior or weakening
+locally. The v12.14-v14.0 architecture program replaced the historical flat
+production package without changing public CLI/API behavior or weakening
 offline verification.
 
-v13.0 is the active LTS cutover: active Program workflows use the shared
+v14.0 is the active LTS cutover: all six bounded contexts use shared
 verification, lifecycle, persistence, Evidence Graph, and policy kernels.
-Earlier music capabilities remain operational compatibility code. Their
-inbound dependency edges and historical cycles are reported separately and
-held to a no-growth baseline rather than represented as migrated code.
+Retained public import facades have zero active inbound edges and no business
+implementation. Historical compatibility remains separately disclosed.
 
 ## Dependency Direction
 
@@ -39,7 +38,7 @@ interfaces -> application -> domains -> platform
 
 ## Architecture Governance
 
-`architecture-baseline.json` records module ownership and ratchets. The AST
+`architecture-v14-policy.json` records final module ownership and ratchets. The AST
 guardrail rejects new dependency violations, production cycles, unclassified
 modules, mega-file growth, and new duplicate security helpers. Runtime metrics
 are written to ignored `runs/architecture/metrics.json`.
@@ -57,6 +56,7 @@ Detailed documents:
 - [ADR 0005: Interface Registries](architecture/adr/0005-interface-registries.md)
 - [ADR 0006: Evidence Graph and Policy Engine](architecture/adr/0006-evidence-graph-policy-engine.md)
 - [ADR 0007: Release Engineering Governance](architecture/adr/0007-release-engineering-governance.md)
+- [ADR 0008: v14 Domain Cutover](architecture/adr/0008-v14-domain-cutover.md)
 - [Architecture review runbook](ARCHITECTURE_REVIEW_RUNBOOK.md)
 - [Data migration runbook](DATA_MIGRATION_RUNBOOK.md)
 - [Deprecation catalog](DEPRECATIONS.md)

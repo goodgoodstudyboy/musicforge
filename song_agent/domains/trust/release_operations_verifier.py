@@ -6,20 +6,20 @@ from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
 
-import hashlib
-import json
-import re
-import struct
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+import struct as struct
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.domains.trust.release_operations_contracts import OPERATIONS_BLOCKED_KEYS, operations_report_integrity_hash
-from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS as DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata
+from song_agent.domains.trust.release_operations_contracts import OPERATIONS_BLOCKED_KEYS as OPERATIONS_BLOCKED_KEYS, operations_report_integrity_hash as operations_report_integrity_hash
+from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS as LOCAL_PATH_VALUE_PATTERNS
 
 
 OPERATIONS_VERIFICATION_SCHEMA_VERSION = 1

@@ -1,22 +1,22 @@
 # Current Architecture
 
-MusicForge v13.8.0 is a local-first modular monolith. It remains one Python
-process, one installation, and one local workspace. Active v12/v13 Program
-paths follow `interfaces -> application -> domains -> platform`. Earlier music
-capabilities remain operational through flat compatibility implementations;
-their imports are centralized behind application anti-corruption facades and
-their complete inbound edge set is disclosed and ratcheted in the architecture
-baseline. Historical v1-v11 release checks are read-only compatibility paths.
+MusicForge v14.0.0 is a local-first modular monolith. It remains one Python
+process, one installation, and one local workspace. All active product paths
+follow `interfaces -> application -> domains -> platform`. The six bounded
+contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
+flat Python imports are static public facades and are not imported by active
+code. Historical release checks are read-only compatibility paths.
 
 ## Current Layers
 
 - `song_agent/platform/`: dependency-free shared contracts plus shared
   verification, lifecycle, and persistence kernels.
-- `song_agent/application/`: orchestration that coordinates domain behavior.
+- `song_agent/application/`: orchestration that coordinates domain behavior;
+  active code does not import `legacy_dependencies`.
 - `song_agent/domains/`: explicit creation, studio, quality, delivery, trust,
   and program bounded contexts.
-- `song_agent/interfaces/`: registry-driven CLI, API, and Studio adapters;
-  `cli.py`, `server.py`, and `webui.py` are bounded compatibility facades.
+- `song_agent/interfaces/`: registry-driven CLI, API, and Studio adapters with
+  no direct Store wiring, wildcard composition, or dynamic symbol forwarding.
 - `song_agent/release_check/`: domain-owned matrix, runner, performance, and
   check providers. The historical monolith is archive-only.
 
@@ -76,12 +76,10 @@ baseline. Historical v1-v11 release checks are read-only compatibility paths.
 
 ## Baseline
 
-`architecture-baseline.json` is authoritative for the current ratchets. Runtime
-metrics are generated at `runs/architecture/metrics.json` and are not committed.
-The active graph has no cycles or domain-to-interface imports. Historical
-compatibility cycles and every active-to-compatibility import remain visible in
-reviewer metrics. The baseline rejects any new compatibility edge while
-allowing this debt to shrink.
+`architecture-v14-policy.json` and the v14 migration/retirement/quality/contract
+documents are authoritative for current ratchets. Runtime metrics are generated
+under `runs/` and are not committed. The active graph has no production cycles,
+boundary violations, dependency exceptions, or compatibility imports.
 
 ## v13 Cutover
 
@@ -159,3 +157,20 @@ allowing this debt to shrink.
   performance, release alignment, architecture, and final SHA.
 - Run-state contracts moved to `platform/contracts`; active compatibility
   edges fell from 225 to 224 while the Program slice remains at zero.
+
+## v14.0 Domain Cutover
+
+- 270 production modules moved into six bounded contexts; 271 retained public
+  imports are static facades with no business implementation.
+- Active compatibility edges, `legacy_dependencies` imports, duplicate ZIP
+  security helpers, custom lifecycle algorithms, wildcard interface imports,
+  dynamic forwarding, anonymous Python part modules, and direct interface Store
+  references are all zero.
+- CLI parser semantics, API route schemas, Studio control IDs/endpoints, and
+  public output/exit policies are frozen against v13.8 and independently checked.
+- Mutable state migration writes a verified backup, prepared intent, committed
+  report, and commit marker. Signed evidence, history, bindings, anchors,
+  checkpoints, current pointers, and ZIPs are not rewritten.
+- v14 quality policy enforces active and migrated coverage, strict shared-kernel
+  typing, no new active mypy debt, and explicit v14.1 owners for remaining large
+  domain modules.

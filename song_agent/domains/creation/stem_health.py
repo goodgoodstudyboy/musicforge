@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-from pathlib import Path
-from typing import Any
+import json as json
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.audio_health import analyze_wav_health, audio_health_allows_release, audio_health_integrity_ok, audio_health_summary
-from song_agent.domains.quality.mix_controls import file_sha256, mix_state_hash, mix_state_integrity_ok, song_plan_hash, stable_hash
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.creation.stems import read_stem_manifest, stem_audio_path, stem_midi_path
+from song_agent.domains.quality.audio_health import analyze_wav_health as analyze_wav_health, audio_health_allows_release as audio_health_allows_release, audio_health_integrity_ok as audio_health_integrity_ok, audio_health_summary as audio_health_summary
+from song_agent.domains.quality.mix_controls import file_sha256 as file_sha256, mix_state_hash as mix_state_hash, mix_state_integrity_ok as mix_state_integrity_ok, song_plan_hash as song_plan_hash, stable_hash as stable_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.creation.stems import read_stem_manifest as read_stem_manifest, stem_audio_path as stem_audio_path, stem_midi_path as stem_midi_path
 
 
 STEM_HEALTH_SCHEMA_VERSION = 1
@@ -33,7 +33,6 @@ def build_stem_health_report(
 ) -> dict[str, Any]:
     run_dir = run_dir.resolve()
     plan_path = run_dir / "data" / "song-plan.json"
-    midi_path = run_dir / "renders" / "song.mid"
     if not plan_path.exists():
         raise StemHealthError("song-plan.json is missing.")
     plan = SongPlan.from_dict(read_json(plan_path))

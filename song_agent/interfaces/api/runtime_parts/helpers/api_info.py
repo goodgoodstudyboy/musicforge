@@ -4,7 +4,7 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, AuthConfig, Path, __version__, datetime, json, os, timezone, webbrowser
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import SprintActionItem, read_json, sanitize_metadata
+from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import SprintActionItem, SprintActionQueue, StemManifest, read_json, sanitize_metadata
 
 from song_agent.interfaces.api.runtime_parts.core import RUNS_DIR
 
@@ -175,7 +175,7 @@ def _provider_usage_record(
         "status": status,
     }
 
-def _try_read_review_decision_report(task_store: ReviewTaskStore, task_id: str) -> ImplementationDocument:
+def _try_read_review_decision_report(task_store: Any, task_id: str) -> ImplementationDocument:
     try:
         return task_store.read_decision_report(task_id)
     except (FileNotFoundError, OSError, ValueError, TypeError, json.JSONDecodeError):

@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import shutil
-import threading
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import shutil as shutil
+import threading as threading
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.lifecycle import HistoryChain
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.quality.release_audio_certification_verifier import verify_release_audio_certification_package
-from song_agent.domains.quality.release_audio_timeline_verifier import verify_release_audio_timeline_package
-from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
-from song_agent.domains.quality.release_audio_quality_observatory_semantics import RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE, RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, _avg, _baseline_drift, _basic_component, _build_release_entry, _build_release_entry_from_paths, _current_timeline_id, _default_thresholds, _delta, _external_facts_from_entry, _integrity_hash, _integrity_ok, _issue_heatmap, _manual_rating, _min, _normalize_title, _num, _read_json_entry, _recommendation_report, _remediation_cost, _risk_register, _sha256_path, _source_row, _stable_config_hash, _timeline_facts, _trend_report, _verification_component, build_observatory_documents, build_observatory_documents_from_evidence_root
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.quality.release_audio_certification_verifier import verify_release_audio_certification_package as verify_release_audio_certification_package
+from song_agent.domains.quality.release_audio_timeline_verifier import verify_release_audio_timeline_package as verify_release_audio_timeline_package
+from song_agent.domains.delivery.releases import ReleaseStore as ReleaseStore, stable_hash as stable_hash
+from song_agent.domains.quality.release_audio_quality_observatory_semantics import RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE as RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE, RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION as RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, _avg as _avg, _baseline_drift as _baseline_drift, _basic_component as _basic_component, _build_release_entry as _build_release_entry, _build_release_entry_from_paths as _build_release_entry_from_paths, _current_timeline_id as _current_timeline_id, _default_thresholds as _default_thresholds, _delta as _delta, _external_facts_from_entry as _external_facts_from_entry, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _issue_heatmap as _issue_heatmap, _manual_rating as _manual_rating, _min as _min, _normalize_title as _normalize_title, _num as _num, _read_json_entry as _read_json_entry, _recommendation_report as _recommendation_report, _remediation_cost as _remediation_cost, _risk_register as _risk_register, _sha256_path as _sha256_path, _source_row as _source_row, _stable_config_hash as _stable_config_hash, _timeline_facts as _timeline_facts, _trend_report as _trend_report, _verification_component as _verification_component, build_observatory_documents as build_observatory_documents, build_observatory_documents_from_evidence_root as build_observatory_documents_from_evidence_root
 
 
 

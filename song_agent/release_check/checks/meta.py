@@ -22,6 +22,12 @@ from song_agent.release_check_governance_v137 import run_release_check_ci_docs_g
 from song_agent.release_check.lts_recertification import run_lts_recertification_smoke
 from song_agent.release_check.v14_architecture import run_v14_architecture_cutover_smoke
 from song_agent.release_check.v14_compatibility import run_v14_compatibility_zero_smoke
+from song_agent.release_check.v14_certification import (
+    run_v14_domain_vertical_slice_smoke,
+    run_v14_migration_rollback_smoke,
+)
+from song_agent.release_check.v14_contracts import run_v14_public_contract_compatibility_smoke
+from song_agent.release_check.v14_reviewer import run_v14_reviewer_package_smoke
 from song_agent.release_check.v14_quality import (
     run_v14_interface_application_boundary_smoke,
     run_v14_typing_coverage_ratchet_smoke,
@@ -99,6 +105,10 @@ CALLABLES = {
     "_v140_architecture_cutover_smoke": run_v14_architecture_cutover_smoke,
     "_v140_compatibility_zero_smoke": run_v14_compatibility_zero_smoke,
     "_v140_interface_application_boundary_smoke": run_v14_interface_application_boundary_smoke,
+    "_v140_domain_vertical_slice_smoke": run_v14_domain_vertical_slice_smoke,
+    "_v140_migration_rollback_smoke": run_v14_migration_rollback_smoke,
+    "_v140_public_contract_compatibility_smoke": run_v14_public_contract_compatibility_smoke,
+    "_v140_reviewer_package_smoke": run_v14_reviewer_package_smoke,
     "_v140_typing_coverage_ratchet_smoke": run_v14_typing_coverage_ratchet_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,

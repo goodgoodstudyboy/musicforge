@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from typing import Any
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 
 class StudioRoutesApplyReviewTaskCandidate:
-    def _apply_review_task_candidate_part_01(self, project_id: str, task_store: ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: JobState, parent_plan: SongPlan, payload: ImplementationDocument, _split_state):
+    def _apply_review_task_candidate_part_01(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: _interfaces_api_runtime.JobState, parent_plan: _interfaces_api_runtime.SongPlan, payload: ImplementationDocument, _split_state):
         _interfaces_api_runtime._ensure_task_open_for_apply(task)
         if candidate.status != 'ready':
             raise _interfaces_api_runtime.ReviewTaskStateError('Candidate is not ready.')
@@ -54,14 +55,14 @@ class StudioRoutesApplyReviewTaskCandidate:
         _split_state['version'] = next((_split_state['version'] for _split_state['version'] in document.versions if _split_state['version'].job_id == _split_state['job'].job_id))
         return (False, None)
 
-    def _apply_review_task_candidate_part_02(self, project_id: str, task_store: ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: JobState, parent_plan: SongPlan, payload: ImplementationDocument, _split_state):
+    def _apply_review_task_candidate_part_02(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: _interfaces_api_runtime.JobState, parent_plan: _interfaces_api_runtime.SongPlan, payload: ImplementationDocument, _split_state):
         candidate = task_store.update_candidate(type(candidate).from_dict({**candidate.to_dict(), 'status': 'applied'}), event='review_candidate_applied', payload={'version_id': _split_state['version'].version_id, 'job_id': _split_state['job'].job_id}, now=_interfaces_api_runtime._utc_now())
         task = task_store.update_task(type(task).from_dict({**task.to_dict(), 'status': 'applied', 'selected_candidate_id': candidate.candidate_id, 'applied_version_id': _split_state['version'].version_id, 'applied_job_id': _split_state['job'].job_id}), event='review_task_candidate_applied', payload={'candidate_id': candidate.candidate_id, 'version_id': _split_state['version'].version_id, 'job_id': _split_state['job'].job_id}, now=_interfaces_api_runtime._utc_now())
         self.project_store.append_event(project_id, 'review_task_candidate_applied', {'task_id': task.task_id, 'candidate_id': candidate.candidate_id, 'version_id': _split_state['version'].version_id, 'job_id': _split_state['job'].job_id})
         return (True, (task, candidate, _split_state['version'], _split_state['job'], _split_state['result']))
         return (False, None)
 
-    def _apply_review_task_candidate(self, project_id: str, task_store: ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: JobState, parent_plan: SongPlan, payload: ImplementationDocument) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.Any]:
+    def _apply_review_task_candidate(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, candidate: Any, parent: Any, parent_job: _interfaces_api_runtime.JobState, parent_plan: _interfaces_api_runtime.SongPlan, payload: ImplementationDocument) -> tuple[Any, Any, Any, _interfaces_api_runtime.JobState, Any]:
         _split_state = {}
         _split_result = self._apply_review_task_candidate_part_01(project_id, task_store, task, candidate, parent, parent_job, parent_plan, payload, _split_state)
         if _split_result[0]:
@@ -70,7 +71,7 @@ class StudioRoutesApplyReviewTaskCandidate:
         if _split_result[0]:
             return _split_result[1]
 
-    def _create_review_task_follow_up(self, project_id: str, task_store: ReviewTaskStore, task: Any, payload: ImplementationDocument) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any]:
+    def _create_review_task_follow_up(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, payload: ImplementationDocument) -> tuple[Any, Any]:
         if task.status != "applied" or not task.applied_version_id:
             raise _interfaces_api_runtime.ReviewTaskStateError("Only applied review tasks can be marked needs_more_work.")
         candidate = task_store.read_candidate(task.task_id, task.selected_candidate_id or "")
@@ -123,7 +124,7 @@ class StudioRoutesApplyReviewTaskCandidate:
         except (FileNotFoundError, ValueError):
             return
 
-    def _send_runtime_view(self, job: JobState, view_name: str) -> None:
+    def _send_runtime_view(self, job: _interfaces_api_runtime.JobState, view_name: str) -> None:
         run_dir = _interfaces_api_runtime.Path(job.output_dir)
         plan_path = run_dir / "data" / "song-plan.json"
         validator_path = run_dir / "data" / "validator-report.json"
@@ -165,7 +166,7 @@ class StudioRoutesApplyReviewTaskCandidate:
             return
         self._send_json({"job_id": job.job_id, "view": view})
 
-    def _send_nodes_list(self, job: JobState) -> None:
+    def _send_nodes_list(self, job: _interfaces_api_runtime.JobState) -> None:
         records = _interfaces_api_runtime.NodeStore(_interfaces_api_runtime.Path(job.output_dir)).list_nodes()
         self._send_json(
             {
@@ -174,7 +175,7 @@ class StudioRoutesApplyReviewTaskCandidate:
             }
         )
 
-    def _send_node_retry(self, method: str, job: JobState, tail: str) -> None:
+    def _send_node_retry(self, method: str, job: _interfaces_api_runtime.JobState, tail: str) -> None:
         parts = tail.strip("/").split("/")
         if len(parts) != 3 or parts[0] != "nodes" or parts[2] != "retry":
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Node route not found.")
@@ -192,7 +193,7 @@ class StudioRoutesApplyReviewTaskCandidate:
             status=status,
         )
 
-    def _send_node_route(self, method: str, job: JobState, tail: str) -> None:
+    def _send_node_route(self, method: str, job: _interfaces_api_runtime.JobState, tail: str) -> None:
         parts = tail.strip("/").split("/")
         if len(parts) == 2:
             _nodes, node_name = parts
@@ -229,7 +230,7 @@ class StudioRoutesApplyReviewTaskCandidate:
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Node route not found.")
 
-    def _send_stem_file(self, job: JobState, tail: str) -> None:
+    def _send_stem_file(self, job: _interfaces_api_runtime.JobState, tail: str) -> None:
         parts = tail.strip("/").split("/")
         if len(parts) != 3 or parts[0] != "stems" or parts[2] not in {"midi", "audio"}:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Stem route not found.")
@@ -263,7 +264,7 @@ class StudioRoutesApplyReviewTaskCandidate:
         except ValueError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
 
-    def _read_json_body(self) -> dict[str, _interfaces_api_runtime.Any]:
+    def _read_json_body(self) -> ImplementationDocument:
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length).decode("utf-8")
         if not body:
@@ -273,7 +274,7 @@ class StudioRoutesApplyReviewTaskCandidate:
             raise ValueError("Request body must be a JSON object.")
         return data
 
-    def _optional_json_body(self) -> dict[str, _interfaces_api_runtime.Any]:
+    def _optional_json_body(self) -> ImplementationDocument:
         length = int(self.headers.get("Content-Length", "0"))
         if length == 0:
             return {}
@@ -285,10 +286,10 @@ class StudioRoutesApplyReviewTaskCandidate:
             raise ValueError("Request body must be a JSON object.")
         return data
 
-    def _merge_editor_patch_metadata(self, left: ImplementationDocument | None, right: ImplementationDocument | None) -> dict[str, _interfaces_api_runtime.Any]:
+    def _merge_editor_patch_metadata(self, left: ImplementationDocument | None, right: ImplementationDocument | None) -> ImplementationDocument:
         return _interfaces_api_runtime._merge_editor_patch_metadata(left, right)
 
-    def _send_json(self, data: ImplementationDocument, status: HTTPStatus = _interfaces_api_runtime.HTTPStatus.OK) -> None:
+    def _send_json(self, data: ImplementationDocument, status: _interfaces_api_runtime.HTTPStatus = _interfaces_api_runtime.HTTPStatus.OK) -> None:
         body = _interfaces_api_runtime.json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status.value)
         self.send_header("Content-Type", "application/json; charset=utf-8")

@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import re
-import shutil
-import threading
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+import shutil as shutil
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.editor_clips import ClipNote, EditorClipError, EditorClipUnavailableError
-from song_agent.domains.studio.editor_view import build_editor_view_from_result
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.studio.song_editor import apply_editor_patch, build_editor_state, song_plan_hash
+from song_agent.domains.studio.editor_clips import ClipNote as ClipNote, EditorClipError as EditorClipError, EditorClipUnavailableError as EditorClipUnavailableError
+from song_agent.domains.studio.editor_view import build_editor_view_from_result as build_editor_view_from_result
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.studio.song_editor import apply_editor_patch as apply_editor_patch, build_editor_state as build_editor_state, song_plan_hash as song_plan_hash
 
 
 EDITOR_TEMPLATE_SCHEMA_VERSION = 1

@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import os
-import shutil
-import threading
-import zipfile
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import os as os
+import shutil as shutil
+import threading as threading
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import now_iso
-from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.trust.release_portfolio_governance import PORTFOLIO_GOVERNANCE_BLOCKED_KEYS, ReleasePortfolioGovernanceStore, action_plan_integrity_ok, execution_report_integrity_ok, governance_manifest_integrity_hash, governance_manifest_integrity_ok, manual_action_list_integrity_ok, queue_integrity_ok, queue_summary
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.trust.release_portfolio_governance_signoff_contracts import ARCHIVE_MANIFEST_HASH_EXCLUDE_KEYS, CHANGE_REQUEST_HASH_EXCLUDE_KEYS, PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS, SIGNOFF_HASH_EXCLUDE_KEYS, governance_archive_manifest_hash, governance_change_request_hash, governance_change_request_integrity_ok, governance_signoff_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.projects import now_iso as now_iso
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS as DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.trust.release_portfolio_governance import PORTFOLIO_GOVERNANCE_BLOCKED_KEYS as PORTFOLIO_GOVERNANCE_BLOCKED_KEYS, ReleasePortfolioGovernanceStore as ReleasePortfolioGovernanceStore, action_plan_integrity_ok as action_plan_integrity_ok, execution_report_integrity_ok as execution_report_integrity_ok, governance_manifest_integrity_hash as governance_manifest_integrity_hash, governance_manifest_integrity_ok as governance_manifest_integrity_ok, manual_action_list_integrity_ok as manual_action_list_integrity_ok, queue_integrity_ok as queue_integrity_ok, queue_summary as queue_summary
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.trust.release_portfolio_governance_signoff_contracts import ARCHIVE_MANIFEST_HASH_EXCLUDE_KEYS as ARCHIVE_MANIFEST_HASH_EXCLUDE_KEYS, CHANGE_REQUEST_HASH_EXCLUDE_KEYS as CHANGE_REQUEST_HASH_EXCLUDE_KEYS, PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS as PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS, SIGNOFF_HASH_EXCLUDE_KEYS as SIGNOFF_HASH_EXCLUDE_KEYS, governance_archive_manifest_hash as governance_archive_manifest_hash, governance_change_request_hash as governance_change_request_hash, governance_change_request_integrity_ok as governance_change_request_integrity_ok, governance_signoff_hash as governance_signoff_hash
 
 
 PORTFOLIO_GOVERNANCE_SIGNOFF_SCHEMA_VERSION = 1
@@ -136,7 +136,6 @@ class ReleasePortfolioGovernanceSignoffStore:
         summary = execution.get("summary") if isinstance(execution.get("summary"), dict) else {}
         failed = int(summary.get("failed") or 0)
         blocked = int(summary.get("blocked") or 0)
-        manual_required = int(summary.get("manual_required") or 0)
         if failed:
             blockers.append(_blocker("failed_safe_actions", "Governance Queue has failed safe actions."))
         if blocked:

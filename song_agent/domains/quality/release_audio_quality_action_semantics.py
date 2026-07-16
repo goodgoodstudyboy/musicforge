@@ -3,18 +3,14 @@ from __future__ import annotations
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json
-import re
-import shutil
-import threading
 import zipfile
 from pathlib import Path
 from typing import Any
-from song_agent.domains.studio.projectio import read_json, write_json
+from song_agent.domains.studio.projectio import read_json
 from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.quality.release_audio_quality_observatory import ReleaseAudioQualityObservatoryStore
-from song_agent.domains.quality.release_audio_quality_observatory_verifier import RELEASE_AUDIO_QUALITY_OBSERVATORY_VERIFICATION_PACKAGE_TYPE, verify_release_audio_quality_observatory_package, write_release_audio_quality_observatory_verification_report
-from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
+from song_agent.domains.creation.redaction import sanitize_metadata
+from song_agent.domains.quality.release_audio_quality_observatory_verifier import RELEASE_AUDIO_QUALITY_OBSERVATORY_VERIFICATION_PACKAGE_TYPE, verify_release_audio_quality_observatory_package
+from song_agent.domains.delivery.releases import stable_hash
 
 
 RELEASE_AUDIO_QUALITY_ACTION_QUEUE_PACKAGE_TYPE = "release_audio_quality_action_queue"

@@ -1,9 +1,10 @@
 # MusicForge
 
 MusicForge is a local-first music generation, review, release, and trust
-operations workspace. The v13 line is a modular monolith: production use cases
+operations workspace. The v14 line is a modular monolith: production use cases
 are organized under `platform`, `application`, `domains`, `capabilities`, and
-`interfaces`, while historical compatibility remains isolated and auditable.
+`interfaces`. Active code has no dependency on the retained static compatibility
+facades; historical evidence remains readable and auditable.
 
 ## Install
 
@@ -52,7 +53,7 @@ listening acceptance.
 ```powershell
 python -m song_agent.cli --help
 python -m song_agent.cli doctor
-python -m song_agent.cli release-check --profile v13 --skip-tests --json
+python -m song_agent.cli release-check --profile v14 --skip-tests --json
 python -m song_agent.cli release-check --profile security --skip-tests --json
 python -m song_agent.cli release-check --profile latest --skip-tests --json
 python -m song_agent.cli release-check --profile ga --skip-tests --json
@@ -64,17 +65,20 @@ State maintenance:
 song-agent-state --workspace .musicforge v13-plan
 song-agent-state --workspace .musicforge v13-apply
 song-agent-state --workspace .musicforge v13-rollback-rehearsal
+song-agent-state --workspace .musicforge v14-plan
+song-agent-state --workspace .musicforge v14-rollback-rehearsal
+song-agent-state --workspace .musicforge v14-apply
 ```
 
 ## Release Checks
 
-Current LTS profiles (`latest`, `ga`, `v13`, and `security`) resolve only active
+Current LTS profiles (`latest`, `ga`, `v14`, and `security`) resolve only active
 callables. Historical smoke implementations are labeled `legacy` and run only
 in the explicit full/nightly compatibility suites or their historical major
 profile.
 
 ```powershell
-python -m song_agent.cli release-check --profile v13 --skip-tests --json
+python -m song_agent.cli release-check --profile v14 --skip-tests --json
 python -m song_agent.cli release-check --profile full --skip-tests --json
 python -m pytest -m "not legacy"
 python -m pytest -m "legacy"
@@ -86,8 +90,8 @@ quality/nightly evidence all bound to the final commit. Build the reviewer
 package only after those reports exist:
 
 ```powershell
-python tools/build_v13_final_reviewer_package.py --evidence-dir runs/v13.8-evidence --output runs/v13.8-reviewer
-python tools/verify_v13_reviewer_package.py runs/v13.8-reviewer --expected-sha (git rev-parse HEAD)
+python tools/build_v14_final_reviewer_package.py --evidence-dir runs/v14-evidence --output runs/v14-reviewer
+python tools/verify_v14_reviewer_package.py runs/v14-reviewer --expected-sha (git rev-parse HEAD) --require-final
 ```
 
 Every test module has an explicit primary owner in
@@ -144,7 +148,8 @@ report is not sufficient after the source package changes.
 
 The pre-v13.7 long-form README is retained under
 `docs/archive/README-v13.6.md` for historical lookup. It is not the current
-operational contract.
+operational contract. The v13 major changelog is archived under
+`docs/changelog/CHANGELOG-v13.0-v13.8.md`.
 
 ## Repository Layout
 

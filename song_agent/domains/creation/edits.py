@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import re
-from dataclasses import asdict, dataclass, field, replace
-from typing import Any
+import re as re
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field, replace as replace
+from typing import Any as Any
 
-from song_agent.domains.creation.agent.pipeline import _bass_pitch, _chord_pitches
-from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.domains.creation.schemas.song import NoteEvent, SectionIntent, SongPlan, SongSection, TrackPlan
+from song_agent.domains.creation.agent.pipeline import _bass_pitch as _bass_pitch, _chord_pitches as _chord_pitches
+from song_agent.domains.creation.music_quality import attach_quality as attach_quality
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SectionIntent as SectionIntent, SongPlan as SongPlan, SongSection as SongSection, TrackPlan as TrackPlan
 
 
 EDIT_TYPES = {

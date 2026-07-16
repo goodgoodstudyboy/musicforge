@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.audio_campaign_remediation_contracts import AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE, AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.delivery.releases import stable_hash
+from song_agent.domains.quality.audio_campaign_remediation_contracts import AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE as AUDIO_CAMPAIGN_REMEDIATION_PACKAGE_TYPE, AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION as AUDIO_CAMPAIGN_REMEDIATION_SCHEMA_VERSION
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
 
 
 REQUIRED_ENTRIES = {"manifest.json", "remediation-plan.json", "action-queue.json", "closeout-report.json", "linked-fix-sprints.json", "README.txt"}

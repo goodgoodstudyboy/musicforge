@@ -6,32 +6,32 @@ from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
 
-import csv
-import hashlib
-import io
-import json
-import re
-import struct
-import sys
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import csv as csv
+import hashlib as hashlib
+import io as io
+import json as json
+import re as re
+import struct as struct
+import sys as sys
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.delivery.distribution_export import DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS
-from song_agent.domains.delivery.distribution_layout import RESERVED_LAYOUT_PATHS, effective_file_naming, layout_payload_hash, validate_layout_path
-from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
-from song_agent.domains.delivery.distribution_checklist import checklist_payload_hash, checklist_summary
-from song_agent.domains.delivery.distribution_templates import DistributionTemplateError, template_content_hash, template_summary, validate_template_pack
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS
-from song_agent.domains.quality.audio_encoding import detect_audio_format_bytes, encoded_manifest_integrity_ok, encoded_audio_summary_integrity_ok, encoded_audio_summary_uses_fake, encoded_manifest_uses_fake
-from song_agent.domains.creation.encoded_audio_acceptance import encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok, encoded_audio_review_integrity_hash, encoded_audio_review_integrity_ok
-from song_agent.domains.delivery.format_decisions import distribution_target_format_decision_coverage, format_distribution_decision_summary_integrity_ok
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.delivery.rights_clearance import verify_rights_summary_evidence
+from song_agent.domains.delivery.distribution_export import DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS as DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS
+from song_agent.domains.delivery.distribution_layout import RESERVED_LAYOUT_PATHS as RESERVED_LAYOUT_PATHS, effective_file_naming as effective_file_naming, layout_payload_hash as layout_payload_hash, validate_layout_path as validate_layout_path
+from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS as DISTRIBUTION_BLOCKED_KEYS
+from song_agent.domains.delivery.distribution_checklist import checklist_payload_hash as checklist_payload_hash, checklist_summary as checklist_summary
+from song_agent.domains.delivery.distribution_templates import DistributionTemplateError as DistributionTemplateError, template_content_hash as template_content_hash, template_summary as template_summary, validate_template_pack as validate_template_pack
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS as LOCAL_PATH_VALUE_PATTERNS
+from song_agent.domains.quality.audio_encoding import detect_audio_format_bytes as detect_audio_format_bytes, encoded_manifest_integrity_ok as encoded_manifest_integrity_ok, encoded_audio_summary_integrity_ok as encoded_audio_summary_integrity_ok, encoded_audio_summary_uses_fake as encoded_audio_summary_uses_fake, encoded_manifest_uses_fake as encoded_manifest_uses_fake
+from song_agent.domains.creation.encoded_audio_acceptance import encoded_audio_acceptance_summary_hash as encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok as encoded_audio_acceptance_summary_integrity_ok, encoded_audio_review_integrity_hash as encoded_audio_review_integrity_hash, encoded_audio_review_integrity_ok as encoded_audio_review_integrity_ok
+from song_agent.domains.delivery.format_decisions import distribution_target_format_decision_coverage as distribution_target_format_decision_coverage, format_distribution_decision_summary_integrity_ok as format_distribution_decision_summary_integrity_ok
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.delivery.rights_clearance import verify_rights_summary_evidence as verify_rights_summary_evidence
 
 
 DISTRIBUTION_VERIFICATION_SCHEMA_VERSION = 1
@@ -516,7 +516,6 @@ class _DistributionPackageVerifier:
             self._add_check("audio", "distribution_audio_file_valid", "failed" if failed else "passed", "blocking", "Audio files are missing or invalid." if failed else "Audio layout files are present and valid.", count=len(missing_audio) + len(bad_audio) if audio_entries else 1)
 
     def _verify_encoded_audio(self, archive: zipfile.ZipFile) -> None:
-        encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
         layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
         encoded_entries = [entry for entry in layout_entries if isinstance(entry, dict) and entry.get("kind") == "audio" and entry.get("source_kind") == "encoded_audio"]
         required = self.require_encoded_audio or bool(encoded_entries)

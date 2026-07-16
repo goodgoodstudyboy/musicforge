@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass as dataclass, field as field
+from typing import Any as Any
 
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, stable_hash
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, stable_hash as stable_hash
 
 
 DISTRIBUTION_PROFILE_SCHEMA_VERSION = 1

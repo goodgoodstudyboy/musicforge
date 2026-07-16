@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from http import HTTPStatus
+from pathlib import Path
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 
 class StudioRoutesSendHtml:
     def _send_html(self, html: str) -> None:

@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import re
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
-from song_agent.domains.quality.music_acceptance import stable_hash
-from song_agent.domains.studio.projectio import write_json
+from song_agent.domains.quality.music_acceptance import stable_hash as stable_hash
+from song_agent.domains.studio.projectio import write_json as write_json
 
 
 MAINTENANCE_BACKUP_PACKAGE_TYPE = "musicforge_lts_maintenance_backup"

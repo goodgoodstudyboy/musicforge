@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from collections import Counter
-from typing import Any
+from collections import Counter as Counter
+from typing import Any as Any
 
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.studio.song_editor import EditorPatch, EditorPatchResult, build_editor_state
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.studio.song_editor import EditorPatch as EditorPatch, EditorPatchResult as EditorPatchResult, build_editor_state as build_editor_state
 
 
 EDITOR_VIEW_SCHEMA_VERSION = 1

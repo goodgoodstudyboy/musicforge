@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from song_agent.application.interface_persistence import write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 

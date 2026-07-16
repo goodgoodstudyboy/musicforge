@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
+
+from song_agent.domains.creation.redaction import sanitize_sensitive_text
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -170,7 +173,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack:
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Release Operations Runbook route not found.")
 
-    def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: ImplementationDocument) -> ImplementationDocument:
         document = self.release_store.get_release(release_id)
         if not refresh:
             existing = self.release_store.read_qa(release_id, default={})
@@ -184,7 +187,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack:
         self.release_store.update_qa_summary(release_id, _interfaces_api_runtime.release_qa_summary(report))
         return report
 
-    def _get_or_refresh_release_metadata_qa(self, release_id: str, *, refresh: bool) -> dict[str, _interfaces_api_runtime.Any]:
+    def _get_or_refresh_release_metadata_qa(self, release_id: str, *, refresh: bool) -> ImplementationDocument:
         document = self.release_store.get_release(release_id)
         metadata = _interfaces_api_runtime.read_release_metadata(self.release_store, release_id, default={})
         if not metadata:
@@ -207,7 +210,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack:
         if document.status == "signed":
             raise _interfaces_api_runtime.ReleaseStateError("Signed releases cannot rebuild export or ZIP. Reset signoff before exporting again.")
 
-    def _release_declarative_policy_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any] | None:
+    def _release_declarative_policy_gate(self, payload: ImplementationDocument) -> ImplementationDocument | None:
         policy_id = str(payload.get("gate_policy") or payload.get("policy") or "").strip()
         if not policy_id:
             return None
@@ -244,14 +247,14 @@ class DeliveryRoutesReleaseOperationsReviewerPack:
                 "blockers": ["release_policy_runtime"],
             }
 
-    def _release_mix_gate(self, release_id: str, *, require_stem_health: bool, require_current_mix: bool) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_mix_gate(self, release_id: str, *, require_stem_health: bool, require_current_mix: bool) -> ImplementationDocument:
         if not (require_stem_health or require_current_mix):
             return {}
         try:
             document = self.release_store.get_release(release_id)
         except Exception as exc:
             return {"status": "failed", "message": f"Release is unavailable: {sanitize_sensitive_text(str(exc))}"}
-        tracks: list[dict[str, _interfaces_api_runtime.Any]] = []
+        tracks: list[dict[str, Any]] = []
         blockers: list[str] = []
         for track in document.tracks:
             project_dir = self.project_store.project_dir(track.project_id)

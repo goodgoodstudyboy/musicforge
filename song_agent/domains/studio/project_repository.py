@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import shutil
-import threading
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Protocol
+import json as json
+import shutil as shutil
+import threading as threading
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any, Protocol as Protocol
 
-from song_agent.domains.creation.music_quality import analyze_song_quality
-from song_agent.domains.studio.projectio import read_json, slugify, write_json
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.creation.schemas.song import SongPlan
+from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality
+from song_agent.domains.studio.projectio import read_json as read_json, slugify as slugify, write_json as write_json
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 
 
 PROJECT_ROOT = Path(".musicforge") / "projects"

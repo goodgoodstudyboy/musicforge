@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-from pathlib import Path
-from typing import Any
+import json as json
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json
+from song_agent.domains.studio.projectio import read_json as read_json
 
 
 PRICING_PATH = Path(".musicforge") / "provider-pricing.json"

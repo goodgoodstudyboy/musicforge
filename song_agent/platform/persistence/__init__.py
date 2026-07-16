@@ -18,6 +18,7 @@ from song_agent.platform.persistence.recovery import PersistenceRecovery
 from song_agent.platform.persistence.repository import WorkflowRecord, WorkflowRepository
 from song_agent.platform.persistence.unit_of_work import FileUnitOfWork
 from song_agent.platform.persistence.v13_migration import V13MigrationOrchestrator, migration_anchor_path, verify_v13_migration_evidence
+from song_agent.platform.persistence.v14_migration import V14MigrationOrchestrator
 
 __all__ = [
     "FileArtifactStore",
@@ -36,6 +37,7 @@ __all__ = [
     "WorkspaceLock",
     "WorkspaceLockError",
     "V13MigrationOrchestrator",
+    "V14MigrationOrchestrator",
     "migration_anchor_path",
     "verify_v13_migration_evidence",
     "read_program_json",

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import math
-import wave
-from pathlib import Path
-from typing import Any
+import math as math
+import wave as wave
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.midi_analysis import MidiParseError, midi_summary, parse_midi
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, TrackPlan
+from song_agent.domains.creation.midi_analysis import MidiParseError as MidiParseError, midi_summary as midi_summary, parse_midi as parse_midi
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan, TrackPlan as TrackPlan
 
 
 MUSIC_HEALTH_SCHEMA_VERSION = 1

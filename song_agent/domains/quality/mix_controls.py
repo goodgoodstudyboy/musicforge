@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import math
-import re
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import math as math
+import re as re
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, TrackPlan
-from song_agent.domains.studio.song_editor import section_id_for_index, track_id_for_index
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan, TrackPlan as TrackPlan
+from song_agent.domains.studio.song_editor import section_id_for_index as section_id_for_index, track_id_for_index as track_id_for_index
 
 
 MIX_STATE_SCHEMA_VERSION = 1

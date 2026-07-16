@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import statistics
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+import statistics as statistics
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.renderers.midi import render_midi
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
+from song_agent.domains.creation.renderers.midi import render_midi as render_midi
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan, SongSection as SongSection, TrackPlan as TrackPlan
 
 
 class MidiParseError(ValueError):

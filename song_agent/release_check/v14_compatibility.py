@@ -19,13 +19,14 @@ def evaluate_v14_compatibility_retirement(
     repo_root: Path | str = ".",
     *,
     retirement_path: Path | str = RETIREMENT_PATH,
+    snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     target = _rooted(root, retirement_path)
     document = _read_json(target)
     frozen = _read_json(root / FROZEN_PATH)
     migration = _read_json(root / DOMAIN_MIGRATION_PATH)
-    snapshot = build_architecture_snapshot(root)
+    architecture_snapshot = snapshot or build_architecture_snapshot(root)
     blockers: list[str] = []
 
     if document.get("schema_version") != 1:
@@ -94,8 +95,8 @@ def evaluate_v14_compatibility_retirement(
         if expected_target_path is None or row.get("target_path") != expected_target_path.relative_to(root).as_posix():
             blockers.append(f"{prefix}:target_path")
 
-    active_compatibility = list(snapshot.get("active_to_compatibility_imports") or [])
-    active_legacy = _active_legacy_imports(snapshot)
+    active_compatibility = list(architecture_snapshot.get("active_to_compatibility_imports") or [])
+    active_legacy = _active_legacy_imports(architecture_snapshot)
     blockers.extend(
         f"v14_compatibility_active_edge:{row['importer']}->{row['imported']}"
         for row in active_compatibility

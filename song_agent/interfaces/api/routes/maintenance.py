@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class MaintenanceRoutes:
@@ -130,7 +129,7 @@ class MaintenanceRoutes:
                 return
             payload = self._optional_json_body()
             report = store.run_upgrade_preflight(
-                target_version=str(payload.get("target_version") or __version__),
+                target_version=str(payload.get("target_version") or _interfaces_api_runtime.__version__),
                 require_verified_backup=bool(payload.get("require_verified_backup", False)),
                 allow_dirty=bool(payload.get("allow_dirty", False)),
             )

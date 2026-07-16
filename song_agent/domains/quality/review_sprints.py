@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import shutil
-import threading
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import shutil as shutil
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.quality.review_tasks import ReviewTask, ReviewTaskStore, validate_review_task_id
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.quality.review_tasks import ReviewTask as ReviewTask, ReviewTaskStore as ReviewTaskStore, validate_review_task_id as validate_review_task_id
 
 
 REVIEW_SPRINT_SCHEMA_VERSION = 1

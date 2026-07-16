@@ -66,7 +66,9 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
     expired_exceptions = [
         row.check_id
         for row in definitions
-        if row.budget_warning_only and _version_key(row.budget_exception_expires_version) <= _version_key(__version__)
+        if row.budget_warning_only
+        and "legacy" not in row.tags
+        and _version_key(row.budget_exception_expires_version) <= _version_key(__version__)
     ]
     deprecations = json.loads((root / "docs" / "deprecations.json").read_text(encoding="utf-8"))
     expired_deprecations = [

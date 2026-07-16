@@ -6,6 +6,7 @@ from song_agent.release_check_verification_kernel import (
     run_shared_kernel_security_smoke,
     run_verification_kernel_smoke,
 )
+from song_agent.release_check.v14_certification import run_v14_verification_lifecycle_security_smoke
 
 
 DOMAIN = "security"
@@ -18,4 +19,5 @@ CALLABLES = {
     "_v1219_evidence_policy_smoke": run_evidence_policy_smoke,
     "_v1301_shared_kernel_security_smoke": run_shared_kernel_security_smoke,
     "_v132_kernel_adoption_smoke": run_kernel_adoption_smoke,
+    "_v140_verification_lifecycle_security_smoke": run_v14_verification_lifecycle_security_smoke,
 }

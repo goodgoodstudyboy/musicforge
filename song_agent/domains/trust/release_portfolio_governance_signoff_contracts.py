@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.trust.release_portfolio_governance_contracts import PORTFOLIO_GOVERNANCE_BLOCKED_KEYS

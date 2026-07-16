@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass as dataclass
+from typing import Any as Any
 
-from song_agent.domains.creation.agent.pipeline import deterministic_compose
-from song_agent.domains.creation.provider_contracts import ProviderRequestError
-from song_agent.domains.creation.schemas.song import SongPlan, SongRequest
+from song_agent.domains.creation.agent.pipeline import deterministic_compose as deterministic_compose
+from song_agent.domains.creation.provider_contracts import ProviderRequestError as ProviderRequestError
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, SongRequest as SongRequest
 
 
 @dataclass

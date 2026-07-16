@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
+import json as json
+import re as re
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
-from typing import Any, Callable
+from dataclasses import dataclass as dataclass
+from typing import Any as Any, Callable as Callable
 
-from song_agent.domains.creation.provider_contracts import ProviderConfig, ProviderEditResponse, ProviderRequestError, ProviderResponseError
-from song_agent.domains.creation.schemas.song import SongRequest
-from song_agent.domains.creation.schemas.song import SongPlan
+from song_agent.domains.creation.provider_contracts import ProviderConfig as ProviderConfig, ProviderEditResponse as ProviderEditResponse, ProviderRequestError as ProviderRequestError, ProviderResponseError as ProviderResponseError
+from song_agent.domains.creation.schemas.song import SongRequest as SongRequest
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 
 
 UrlOpen = Callable[..., Any]

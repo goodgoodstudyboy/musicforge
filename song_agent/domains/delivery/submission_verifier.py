@@ -6,28 +6,28 @@ from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
 
-import csv
-import hashlib
-import io
-import json
-import re
-import struct
-import sys
-import tempfile
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import csv as csv
+import hashlib as hashlib
+import io as io
+import json as json
+import re as re
+import struct as struct
+import sys as sys
+import tempfile as tempfile
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
-from song_agent.domains.delivery.distribution_verifier import verify_distribution_package, distribution_verification_summary
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.delivery.rights_clearance import verify_rights_summary_evidence
-from song_agent.domains.delivery.submission_export import SUBMISSION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS
+from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS as DISTRIBUTION_BLOCKED_KEYS
+from song_agent.domains.delivery.distribution_verifier import verify_distribution_package as verify_distribution_package, distribution_verification_summary as distribution_verification_summary
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS as LOCAL_PATH_VALUE_PATTERNS
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.delivery.rights_clearance import verify_rights_summary_evidence as verify_rights_summary_evidence
+from song_agent.domains.delivery.submission_export import SUBMISSION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS as SUBMISSION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS
 
 
 SUBMISSION_VERIFICATION_SCHEMA_VERSION = 1

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import re
-import shutil
-import threading
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import re as re
+import shutil as shutil
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
 
 
 AB_ID_PATTERN = re.compile(r"^ab-[0-9]{3,5}$")

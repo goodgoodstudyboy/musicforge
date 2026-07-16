@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, json, unquote
+from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, json, unquote
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import read_json
 

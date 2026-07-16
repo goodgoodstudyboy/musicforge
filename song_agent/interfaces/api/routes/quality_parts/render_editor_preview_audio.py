@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from typing import Any
+
+from song_agent.application.interface_persistence import write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesRenderEditorPreviewAudio:
-    def _render_editor_preview_audio(self, project_id: str, preview_id: str) -> _interfaces_api_runtime.Any:
+    def _render_editor_preview_audio(self, project_id: str, preview_id: str) -> Any:
         store = _interfaces_api_runtime.EditorPreviewStore(self.project_store.project_dir(project_id))
         preview = store.read_preview(preview_id)
         preview_dir = store.preview_dir(preview_id)

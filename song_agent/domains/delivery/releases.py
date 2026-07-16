@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import shutil
-import threading
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import shutil as shutil
+import threading as threading
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.final_export import final_export_dir, final_export_zip_path
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import ProjectDocument, ProjectStore, ProjectVersion, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata
+from song_agent.domains.creation.final_export import final_export_dir as final_export_dir, final_export_zip_path as final_export_zip_path
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectDocument as ProjectDocument, ProjectStore as ProjectStore, ProjectVersion as ProjectVersion, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
 
 
 RELEASE_ROOT = Path(".musicforge") / "releases"

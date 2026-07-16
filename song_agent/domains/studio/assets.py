@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import re
-import shutil
-import threading
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+import shutil as shutil
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, render_audio
-from song_agent.domains.creation.renderers.midi import render_midi
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.creation.renderers.audio import RendererConfig as RendererConfig, RendererError as RendererError, render_audio as render_audio
+from song_agent.domains.creation.renderers.midi import render_midi as render_midi
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan, SongSection as SongSection, TrackPlan as TrackPlan
 
 
 ASSET_ROOT = Path(".musicforge") / "assets"
@@ -459,13 +459,6 @@ def asset_preview_song_plan(asset: CreativeAsset) -> SongPlan:
         "bass_pattern": "bass",
         "section_template": "chords",
     }.get(asset.asset_type, "melody")
-    instrument = {
-        "motif": "lead",
-        "chord_progression": "electric piano",
-        "drum_pattern": "gm drums",
-        "bass_pattern": "electric bass",
-        "section_template": "electric piano",
-    }.get(asset.asset_type, "lead")
     max_note_end = max((note.start_beat + note.duration_beats for note in notes), default=asset.duration_beats)
     bars = max(1, int(round(max(asset.duration_beats, max_note_end) / 4 + 0.499)))
     section = SongSection(name="asset", start_bar=1, bars=bars, chords=_asset_chords(asset))

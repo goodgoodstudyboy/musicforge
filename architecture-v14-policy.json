@@ -2,8 +2,8 @@
   "schema_version": 1,
   "release_version": "14.0.0",
   "baseline_tag": "v13.8.0",
-  "current_phase": 9,
-  "enforce_final_targets": false,
+  "current_phase": 10,
+  "enforce_final_targets": true,
   "limits": {
     "active_to_compatibility_import_count": 0,
     "active_to_compatibility_by_context": {

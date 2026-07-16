@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import BatchDocument, HTTPStatus, now_iso, threading
+from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, BatchDocument, HTTPStatus, now_iso, threading
 
-import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
 
 class BatchRunnerRecoverExistingBatches:
-    def __init__(self, batch_store: BatchStore, job_store: JobStore, project_store: creation_dependencies.ProjectStore | None = None) -> None:
+    def __init__(self, batch_store: Any, job_store: Any, project_store: Any | None = None) -> None:
         self.batch_store = batch_store
         self.job_store = job_store
         self.project_store = project_store

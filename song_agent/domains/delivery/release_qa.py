@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import zipfile
-from pathlib import Path, PurePosixPath
-from typing import Any
+import json as json
+import re as re
+import zipfile as zipfile
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
-from song_agent.domains.delivery.delivery_qa import delivery_qa_source_hash
-from song_agent.domains.creation.final_export import final_export_dir, final_export_zip_path, read_final_export_manifest
-from song_agent.domains.studio.projectio import read_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseStore, ReleaseTrack, release_document_source, stable_hash
+from song_agent.domains.delivery.delivery_qa import delivery_qa_source_hash as delivery_qa_source_hash
+from song_agent.domains.creation.final_export import final_export_dir as final_export_dir, final_export_zip_path as final_export_zip_path, read_final_export_manifest as read_final_export_manifest
+from song_agent.domains.studio.projectio import read_json as read_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseDocument as ReleaseDocument, ReleaseStore as ReleaseStore, ReleaseTrack as ReleaseTrack, release_document_source as release_document_source, stable_hash as stable_hash
 
 
 RELEASE_QA_SCHEMA_VERSION = 1

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import re
-from dataclasses import asdict, dataclass, field
-from typing import Any
+import re as re
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from typing import Any as Any
 
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
-from song_agent.domains.studio.song_editor import build_editor_state, song_plan_hash
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan, SongSection as SongSection, TrackPlan as TrackPlan
+from song_agent.domains.studio.song_editor import build_editor_state as build_editor_state, song_plan_hash as song_plan_hash
 
 
 REVIEW_STATUSES = {"unreviewed", "keep", "maybe", "reject", "needs_fix"}

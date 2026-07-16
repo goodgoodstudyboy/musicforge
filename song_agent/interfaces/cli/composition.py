@@ -8,3 +8,5 @@ import song_agent.interfaces.cli.composition_parts.quality as _quality_compositi
 import song_agent.interfaces.cli.composition_parts.release_check as _release_check_composition
 import song_agent.interfaces.cli.composition_parts.studio as _studio_composition
 import song_agent.interfaces.cli.composition_parts.trust as _trust_composition
+
+_COMPOSITION_MODULES = (_creation_composition, _delivery_composition, _maintenance_composition, _program_composition, _quality_composition, _release_check_composition, _studio_composition, _trust_composition)

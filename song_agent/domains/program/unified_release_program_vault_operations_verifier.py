@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import tempfile
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import tempfile as tempfile
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.platform.contracts.packages import PackageSpec
-from song_agent.platform.verification.engine import verify_package_envelope
+from song_agent.platform.contracts.packages import PackageSpec as PackageSpec
+from song_agent.platform.verification.engine import verify_package_envelope as verify_package_envelope
 from song_agent.platform.verification.hashing import (
     integrity_ok as _integrity_ok,
     sha256_bytes as _sha256_bytes,
     sha256_file as _sha256_path,
 )
-from song_agent.platform.verification.model import build_check as _check, build_verification_report
-from song_agent.platform.verification.redaction import archive_redaction_check
+from song_agent.platform.verification.model import build_check as _check, build_verification_report as build_verification_report
+from song_agent.platform.verification.redaction import archive_redaction_check as archive_redaction_check
 from song_agent.platform.verification.zip_security import (
     is_safe_zip_entry as _is_safe_entry,
     raw_unsafe_entry_names as _raw_unsafe_entry_names,
@@ -25,13 +25,9 @@ from song_agent.platform.verification.zip_security import (
 )
 
 from song_agent.platform.persistence.program import read_program_json as read_json, write_program_json as write_json
-from song_agent.platform.verification.sanitization import sanitize_sensitive_text
-from song_agent.platform.verification.hashing import stable_hash
-from song_agent.domains.program.unified_release_program_vault_verifier import (
-    UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE,
-    verify_unified_release_program_vault_package,
-)
+from song_agent.platform.verification.sanitization import sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.platform.verification.hashing import stable_hash as stable_hash
+from song_agent.domains.program.unified_release_program_vault_verifier import UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_vault_package as verify_unified_release_program_vault_package
 
 
 UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_PACKAGE_TYPE = "musicforge_unified_release_program_vault_operations_archive"

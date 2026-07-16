@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from song_agent.platform.contracts.documents import ImplementationDocument
+
+from typing import Any
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class DeliveryRoutesGetOrRefreshDistributionQa:
-    def _get_or_refresh_distribution_qa(self, release_id: str, target: Any, *, refresh: bool) -> dict[str, _interfaces_api_runtime.Any]:
+    def _get_or_refresh_distribution_qa(self, release_id: str, target: Any, *, refresh: bool) -> ImplementationDocument:
         if not refresh:
             existing = self.distribution_store.read_qa(release_id, target.target_id, default={})
             if existing:

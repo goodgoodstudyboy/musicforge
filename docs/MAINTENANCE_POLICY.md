@@ -1,8 +1,8 @@
 # Maintenance Policy
 
-MusicForge v13.8 is the supported LTS baseline while v14 performs the explicit
-domain cutover and compatibility retirement. Maintenance work must preserve
-stable local operation and the v13 evidence contracts throughout that migration.
+MusicForge v14.0 is the supported LTS baseline. The domain cutover and active
+compatibility retirement are complete; maintenance work must preserve v13.8
+public contracts and the v14 architecture, migration, and security ratchets.
 
 ## Supported Work
 
@@ -20,8 +20,9 @@ stable local operation and the v13 evidence contracts throughout that migration.
 - Hotfix releases must include a regression for the reproduced issue.
 - Signed evidence and archives remain immutable unless reset through the
   established Change Request flow for that domain.
-- v14 migration commits must reduce or preserve every architecture debt limit;
-  changing ownership labels or baseline allowances is not a migration.
+- Architecture maintenance must preserve zero active compatibility edges and
+  may only reduce registered module-size/type debt. Changing ownership labels
+  or baseline allowances is not a migration.
 
 ## Long-Term Checks
 

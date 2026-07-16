@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Any
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from song_agent.application.interface_persistence import write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -52,7 +54,7 @@ class CreationRoutesProjectCandidateGroupsList:
         return (True, _split_state['group'])
         return (False, None)
 
-    def _create_project_candidate_group(self, project_id: str, version_id: str, payload: ImplementationDocument, *, mark_asset_usage: bool=True) -> _interfaces_api_runtime.Any:
+    def _create_project_candidate_group(self, project_id: str, version_id: str, payload: ImplementationDocument, *, mark_asset_usage: bool=True) -> Any:
         _split_state = {}
         _split_result = self._create_project_candidate_group_part_01(project_id, version_id, payload, mark_asset_usage, _split_state)
         if _split_result[0]:

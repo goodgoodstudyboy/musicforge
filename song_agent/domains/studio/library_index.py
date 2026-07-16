@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import re
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.assets import AssetStore, CreativeAsset, asset_content_summary
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.studio.reference_analysis import get_analysis_report, get_slice_manifest
-from song_agent.domains.studio.references import ReferenceItem, ReferenceStore, reference_metadata_summary
+from song_agent.domains.studio.assets import AssetStore as AssetStore, CreativeAsset as CreativeAsset, asset_content_summary as asset_content_summary
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.studio.reference_analysis import get_analysis_report as get_analysis_report, get_slice_manifest as get_slice_manifest
+from song_agent.domains.studio.references import ReferenceItem as ReferenceItem, ReferenceStore as ReferenceStore, reference_metadata_summary as reference_metadata_summary
 
 
 LIBRARY_ROOT = Path(".musicforge") / "library"
@@ -569,9 +569,9 @@ def _type_role_points(item: LibraryItem, request: ImplementationDocument) -> tup
 def _style_mood_points(item: LibraryItem, request: ImplementationDocument) -> tuple[int, list[ImplementationDocument]]:
     points = 0
     breakdown = []
-    for field, max_points in (("style", 8), ("mood", 7)):
-        wanted = tokenize_library_text(request.get(field))
-        actual = set(tokenize_library_text(getattr(item, field)))
+    for field_name, max_points in (("style", 8), ("mood", 7)):
+        wanted = tokenize_library_text(request.get(field_name))
+        actual = set(tokenize_library_text(getattr(item, field_name)))
         matched = sorted(set(wanted) & actual)
         if matched:
             points += max_points

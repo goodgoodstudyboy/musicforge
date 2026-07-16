@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import math
-import shutil
-import wave
-from collections import Counter
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import math as math
+import shutil as shutil
+import wave as wave
+from collections import Counter as Counter
+from dataclasses import dataclass as dataclass
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.assets import AssetStore, asset_public_dict
-from song_agent.domains.creation.midi_analysis import MidiParseError, midi_summary, notes_for_slice, parse_midi, render_slice_midi, suggest_slices
-from song_agent.domains.studio.projectio import now_iso, read_json, write_json
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.studio.reference_paths import reference_file_path
-from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, render_audio
+from song_agent.domains.studio.assets import AssetStore as AssetStore, asset_public_dict as asset_public_dict
+from song_agent.domains.creation.midi_analysis import MidiParseError as MidiParseError, midi_summary as midi_summary, notes_for_slice as notes_for_slice, parse_midi as parse_midi, render_slice_midi as render_slice_midi, suggest_slices as suggest_slices
+from song_agent.domains.studio.projectio import now_iso as now_iso, read_json as read_json, write_json as write_json
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.studio.reference_paths import reference_file_path as reference_file_path
+from song_agent.domains.creation.renderers.audio import RendererConfig as RendererConfig, RendererError as RendererError, render_audio as render_audio
 
 
 REFERENCE_ANALYSIS_SCHEMA_VERSION = 1
@@ -50,7 +50,7 @@ def reference_context(store: Any, reference_id: str) -> ReferenceContext:
     return ReferenceContext(reference=reference, reference_dir=reference_dir, source_path=source_path)
 
 
-def get_analysis_report(store: ReferenceStore, reference_id: str) -> dict[str, Any]:
+def get_analysis_report(store: Any, reference_id: str) -> dict[str, Any]:
     context = reference_context(store, reference_id)
     path = analysis_path(context.reference_dir)
     if not path.exists():
@@ -65,7 +65,7 @@ def get_analysis_report(store: ReferenceStore, reference_id: str) -> dict[str, A
     return report
 
 
-def analyze_reference(store: ReferenceStore, reference_id: str, *, force: bool = False, now: str | None = None) -> dict[str, Any]:
+def analyze_reference(store: Any, reference_id: str, *, force: bool = False, now: str | None = None) -> dict[str, Any]:
     now = now or now_iso()
     context = reference_context(store, reference_id)
     path = analysis_path(context.reference_dir)
@@ -88,7 +88,7 @@ def analyze_reference(store: ReferenceStore, reference_id: str, *, force: bool =
     return get_analysis_report(store, reference_id)
 
 
-def get_slice_manifest(store: ReferenceStore, reference_id: str) -> dict[str, Any]:
+def get_slice_manifest(store: Any, reference_id: str) -> dict[str, Any]:
     context = reference_context(store, reference_id)
     path = slices_path(context.reference_dir)
     if not path.exists():
@@ -103,7 +103,7 @@ def get_slice_manifest(store: ReferenceStore, reference_id: str) -> dict[str, An
     return manifest
 
 
-def generate_slices(store: ReferenceStore, reference_id: str, *, force: bool = False, now: str | None = None) -> dict[str, Any]:
+def generate_slices(store: Any, reference_id: str, *, force: bool = False, now: str | None = None) -> dict[str, Any]:
     now = now or now_iso()
     context = reference_context(store, reference_id)
     if context.reference.reference_type != "midi":
@@ -131,7 +131,7 @@ def generate_slices(store: ReferenceStore, reference_id: str, *, force: bool = F
     return get_slice_manifest(store, reference_id)
 
 
-def render_reference_slice_midi(store: ReferenceStore, reference_id: str, slice_id: str, *, now: str | None = None) -> dict[str, Any]:
+def render_reference_slice_midi(store: Any, reference_id: str, slice_id: str, *, now: str | None = None) -> dict[str, Any]:
     now = now or now_iso()
     context = reference_context(store, reference_id)
     manifest = require_fresh_slices(store, reference_id)
@@ -160,7 +160,7 @@ def render_reference_slice_midi(store: ReferenceStore, reference_id: str, slice_
     return {"slice": _find_slice(updated, slice_id), "manifest": updated}
 
 
-def render_reference_slice_audio(store: ReferenceStore, reference_id: str, slice_id: str, config: RendererConfig, *, now: str | None = None) -> dict[str, Any]:
+def render_reference_slice_audio(store: Any, reference_id: str, slice_id: str, config: RendererConfig, *, now: str | None = None) -> dict[str, Any]:
     now = now or now_iso()
     context = reference_context(store, reference_id)
     manifest = require_fresh_slices(store, reference_id)
@@ -191,7 +191,7 @@ def render_reference_slice_audio(store: ReferenceStore, reference_id: str, slice
     return {"slice": _find_slice(updated, slice_id), "manifest": updated}
 
 
-def create_asset_from_slice(store: ReferenceStore, reference_id: str, slice_id: str, payload: dict[str, Any], asset_store: AssetStore, *, now: str | None = None) -> dict[str, Any]:
+def create_asset_from_slice(store: Any, reference_id: str, slice_id: str, payload: dict[str, Any], asset_store: AssetStore, *, now: str | None = None) -> dict[str, Any]:
     now = now or now_iso()
     context = reference_context(store, reference_id)
     if context.reference.hidden:
@@ -255,7 +255,7 @@ def create_asset_from_slice(store: ReferenceStore, reference_id: str, slice_id: 
     return asset_public_dict(asset)
 
 
-def require_fresh_analysis(store: ReferenceStore, reference_id: str) -> dict[str, Any]:
+def require_fresh_analysis(store: Any, reference_id: str) -> dict[str, Any]:
     report = get_analysis_report(store, reference_id)
     if report.get("status") == "not_analyzed":
         raise ReferenceAnalysisError("Reference analysis has not been generated.")
@@ -264,7 +264,7 @@ def require_fresh_analysis(store: ReferenceStore, reference_id: str) -> dict[str
     return report
 
 
-def require_fresh_slices(store: ReferenceStore, reference_id: str) -> dict[str, Any]:
+def require_fresh_slices(store: Any, reference_id: str) -> dict[str, Any]:
     manifest = get_slice_manifest(store, reference_id)
     if manifest.get("status") == "not_generated":
         raise ReferenceAnalysisError("Reference slices have not been generated.")
@@ -273,7 +273,7 @@ def require_fresh_slices(store: ReferenceStore, reference_id: str) -> dict[str, 
     return manifest
 
 
-def reference_analysis_summary_for_export(store: ReferenceStore, reference_id: str) -> dict[str, Any]:
+def reference_analysis_summary_for_export(store: Any, reference_id: str) -> dict[str, Any]:
     try:
         report = get_analysis_report(store, reference_id)
         slices = get_slice_manifest(store, reference_id)
@@ -309,7 +309,7 @@ def reference_analysis_summary_for_export(store: ReferenceStore, reference_id: s
     return sanitize_metadata(export_summary)
 
 
-def enrich_reference_refs_with_analysis(store: ReferenceStore, refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def enrich_reference_refs_with_analysis(store: Any, refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     enriched = []
     for ref in refs:
         item = dict(ref)
@@ -320,7 +320,7 @@ def enrich_reference_refs_with_analysis(store: ReferenceStore, refs: list[dict[s
     return enriched
 
 
-def provider_reference_summaries_with_analysis(store: ReferenceStore, refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def provider_reference_summaries_with_analysis(store: Any, refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     total = 0
     output = []
     for ref in enrich_reference_refs_with_analysis(store, refs):
@@ -385,7 +385,7 @@ def clear_reference_analysis_artifacts(reference_dir: Path, *, keep_analysis: bo
         shutil.rmtree(preview)
 
 
-def not_analyzed_report(reference: ReferenceItem) -> dict[str, Any]:
+def not_analyzed_report(reference: Any) -> dict[str, Any]:
     return {
         "schema_version": REFERENCE_ANALYSIS_SCHEMA_VERSION,
         "reference_id": reference.reference_id,
@@ -491,7 +491,7 @@ def _analyze_text(context: ReferenceContext, now: str) -> ImplementationDocument
     return report
 
 
-def _base_report(reference: ReferenceItem, now: str, *, status: str = "completed", errors: list[str] | None = None) -> ImplementationDocument:
+def _base_report(reference: Any, now: str, *, status: str = "completed", errors: list[str] | None = None) -> ImplementationDocument:
     return {
         "schema_version": REFERENCE_ANALYSIS_SCHEMA_VERSION,
         "reference_id": reference.reference_id,
@@ -659,7 +659,7 @@ def _asset_notes(notes: list[ImplementationDocument]) -> list[ImplementationDocu
     ]
 
 
-def _tempo_from_analysis(store: ReferenceStore, reference_id: str) -> int | None:
+def _tempo_from_analysis(store: Any, reference_id: str) -> int | None:
     try:
         summary = get_analysis_report(store, reference_id).get("summary") or {}
         tempo = summary.get("tempo_bpm")

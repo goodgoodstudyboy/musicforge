@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import io
-import math
-import shutil
-import threading
-import wave
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import io as io
+import math as math
+import shutil as shutil
+import threading as threading
+import wave as wave
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.audio_health import analyze_wav_health, audio_health_integrity_ok, audio_health_summary
-from song_agent.domains.creation.final_export import final_export_dir
-from song_agent.domains.quality.mastering_profiles import MasteringProfile, MasteringProfileError, MasteringProfileStore, mastering_profile_hash
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseDocument, ReleaseStateError, ReleaseStore, stable_hash
+from song_agent.domains.quality.audio_health import analyze_wav_health as analyze_wav_health, audio_health_integrity_ok as audio_health_integrity_ok, audio_health_summary as audio_health_summary
+from song_agent.domains.creation.final_export import final_export_dir as final_export_dir
+from song_agent.domains.quality.mastering_profiles import MasteringProfile as MasteringProfile, MasteringProfileError as MasteringProfileError, MasteringProfileStore as MasteringProfileStore, mastering_profile_hash as mastering_profile_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseDocument as ReleaseDocument, ReleaseStateError as ReleaseStateError, ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
 MASTERING_SCHEMA_VERSION = 1
@@ -685,7 +685,6 @@ def apply_mastering_actions(source: Path, target: Path, actions: list[dict[str, 
     if compression != "NONE" or sample_width != 2:
         shutil.copy2(source, target)
         return [{"type": "copy", "reason": "unsupported_pcm_format"}]
-    frame_size = channels * sample_width
     samples = [int.from_bytes(frames[index : index + 2], byteorder="little", signed=True) for index in range(0, len(frames), 2)]
     frame_count = len(samples) // max(1, channels)
     applied: list[dict[str, Any]] = []

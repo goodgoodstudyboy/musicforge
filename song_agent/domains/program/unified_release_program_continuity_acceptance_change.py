@@ -2,46 +2,23 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import shutil
-import zipfile
-from pathlib import Path
-from typing import Any
+import shutil as shutil
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.platform.contracts.lifecycle import GenerationRef, ResetAuthorization
-from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, GenerationService, HistoryChain, ResetService
-from song_agent.platform.persistence import WorkspaceLock
-from song_agent.platform.persistence.program import program_json_facade
-from song_agent.platform.time import now_iso
-from song_agent.platform.verification.sanitization import sanitize_metadata, sanitize_sensitive_text
-from song_agent.platform.verification.hashing import stable_hash
-from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore
-from song_agent.domains.program.unified_release_program_continuity_acceptance import (
-    UnifiedReleaseProgramContinuityAcceptanceStore,
-    _bounded,
-    _file_record,
-    _gate_failed,
-    _history_text,
-    _integrity_hash,
-    _integrity_ok,
-    _package_manifest,
-    _read_optional_json,
-    _safe_id,
-    _sha256_path,
-    _with_integrity,
-)
-from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import (
-    UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE,
-    verify_unified_release_program_continuity_acceptance_package,
-)
-from song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier import (
-    UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_ARCHIVE_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_REQUEST_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
-    continuity_acceptance_change_reset_semantic_checks,
-    verify_unified_release_program_continuity_acceptance_change_package,
-    write_unified_release_program_continuity_acceptance_change_verification_report,
-)
+from song_agent.platform.contracts.lifecycle import GenerationRef as GenerationRef, ResetAuthorization as ResetAuthorization
+from song_agent.platform.lifecycle import ArchiveBuilder as ArchiveBuilder, ChangeRequestService as ChangeRequestService, GenerationService as GenerationService, HistoryChain as HistoryChain, ResetService as ResetService
+from song_agent.platform.persistence import WorkspaceLock as WorkspaceLock
+from song_agent.platform.persistence.program import program_json_facade as program_json_facade
+from song_agent.platform.time import now_iso as now_iso
+from song_agent.platform.verification.sanitization import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.platform.verification.hashing import stable_hash as stable_hash
+from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore as UnifiedReleaseProgramStore
+from song_agent.domains.program.unified_release_program_continuity_acceptance import UnifiedReleaseProgramContinuityAcceptanceStore as UnifiedReleaseProgramContinuityAcceptanceStore, _bounded as _bounded, _file_record as _file_record, _gate_failed as _gate_failed, _history_text as _history_text, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _package_manifest as _package_manifest, _read_optional_json as _read_optional_json, _safe_id as _safe_id, _sha256_path as _sha256_path, _with_integrity as _with_integrity
+from song_agent.domains.program.unified_release_program_continuity_acceptance_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_continuity_acceptance_package as verify_unified_release_program_continuity_acceptance_package
+from song_agent.domains.program.unified_release_program_continuity_acceptance_change_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_ARCHIVE_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_ARCHIVE_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_REQUEST_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_REQUEST_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION as UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION, continuity_acceptance_change_reset_semantic_checks as continuity_acceptance_change_reset_semantic_checks, verify_unified_release_program_continuity_acceptance_change_package as verify_unified_release_program_continuity_acceptance_change_package, write_unified_release_program_continuity_acceptance_change_verification_report as write_unified_release_program_continuity_acceptance_change_verification_report
 
 
 RESET_ACTION = "reset_continuity_acceptance_signoff"

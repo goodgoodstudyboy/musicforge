@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from typing import Any
+from typing import Any as Any
 
-from song_agent.platform.verification.redaction import sanitize_metadata
+from song_agent.platform.verification.redaction import sanitize_metadata as sanitize_metadata
 
 
 ACCEPTANCE_DIFF_SCHEMA_VERSION = 1

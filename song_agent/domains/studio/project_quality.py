@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+import json as json
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.music_quality import analyze_song_quality
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.creation.stems import read_stem_manifest, stem_manifest_stale, stem_midi_path
+from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.creation.stems import read_stem_manifest as read_stem_manifest, stem_manifest_stale as stem_manifest_stale, stem_midi_path as stem_midi_path
 
 
 GATE_STATUSES = {"passed", "warning", "failed", "missing_plan", "error"}

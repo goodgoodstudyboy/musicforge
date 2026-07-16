@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
@@ -91,7 +92,6 @@ def _evaluate_control(control: ImplementationDocument, source: ImplementationDoc
 
 def _expected_control_status(method: str, control: ImplementationDocument, source: ImplementationDocument) -> str:
     hub_bound = bool(source.get("hub_verification_report_hash") and source.get("hub_zip_sha256") and source.get("hub_manifest_hash"))
-    hub_passed = source.get("hub_verification_status") == "passed"
     incident_passed = source.get("incident_verification_status") == "passed"
     knowledge_passed = source.get("knowledge_verification_status") == "passed"
     knowledge_summary = source.get("knowledge_summary") if isinstance(source.get("knowledge_summary"), dict) else {}

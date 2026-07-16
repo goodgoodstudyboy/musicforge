@@ -17,7 +17,7 @@ class JobStoreJob:
                 self._update_job(_split_state['job'], status='cancelled', step='cancelled', message='Job was cancelled before generation started.')
             return (True, None)
         self._heartbeat(_split_state['job'])
-        context_snapshot = self._prepare_context_pack_for_job(_split_state['job'])
+        _context_snapshot = self._prepare_context_pack_for_job(_split_state['job'])
         asset_snapshot = self._prepare_asset_refs_for_job(_split_state['job'])
         reference_snapshot = self._prepare_reference_refs_for_job(_split_state['job'])
         plan_path, midi_path = generate_request(_split_state['request'], out_dir=Path(_split_state['job'].output_dir), force=False, provider_config=_split_state['provider_config'], provider_snapshot=_split_state['provider_snapshot'] if _split_state['provider_config'] is not None else None, control=self._control_callback(job_id), pipeline_mode=_split_state['job'].pipeline_mode)

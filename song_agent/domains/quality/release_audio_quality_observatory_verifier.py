@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.quality.release_audio_quality_observatory_semantics import RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE, RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, build_observatory_documents_from_evidence_root
-from song_agent.domains.delivery.releases import stable_hash
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.quality.release_audio_quality_observatory_semantics import RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE as RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE, RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION as RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION, build_observatory_documents_from_evidence_root as build_observatory_documents_from_evidence_root
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
 
 
 RELEASE_AUDIO_QUALITY_OBSERVATORY_VERIFICATION_PACKAGE_TYPE = "release_audio_quality_observatory_verification"

@@ -4,17 +4,15 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json
 import re
-import shutil
-import threading
 import zipfile
 from pathlib import Path
 from typing import Any
-from song_agent.domains.studio.projectio import read_json, write_json
+from song_agent.domains.studio.projectio import read_json
 from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
+from song_agent.domains.creation.redaction import sanitize_sensitive_text
 from song_agent.domains.quality.release_audio_certification_verifier import verify_release_audio_certification_package
 from song_agent.domains.quality.release_audio_timeline_verifier import verify_release_audio_timeline_package
-from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
+from song_agent.domains.delivery.releases import stable_hash
 
 
 RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE = "release_audio_quality_observatory"

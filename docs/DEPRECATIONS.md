@@ -2,7 +2,7 @@
 
 The machine-readable source of truth is [deprecations.json](deprecations.json).
 Every entry records its replacement, repository usage, compatibility surface,
-schema impact, removal version, and rollback strategy. v13 may remove an entry
+schema impact, removal version, and rollback strategy. v14 may remove an entry
 only after production imports are zero and archived evidence remains readable.
 
 v13 removed the superseded matrix/runner facades and v13.7 removed the expired
@@ -14,3 +14,8 @@ The legacy CLI/API/Web dispatcher implementations reached their v13 removal
 target. Their public files remain as bounded entrypoint facades over the
 interface registries; those facades are compatibility surfaces, not duplicate
 dispatch implementations.
+
+v14 completed the domain cutover. `application/legacy_dependencies` and all
+flat domain implementations have zero active consumers. Supported Python import
+paths remain explicit static facades only; unsupported internals are archived
+or removed according to `deprecations.json`.

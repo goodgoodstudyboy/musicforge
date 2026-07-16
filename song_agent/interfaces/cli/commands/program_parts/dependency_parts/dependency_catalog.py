@@ -69,7 +69,6 @@ from song_agent.domains.program.unified_command_center_release_train_lifecycle i
 
 from song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier import write_unified_command_center_release_train_lifecycle_verification_report
 
-from song_agent.domains.studio.projectio import read_json
 
 from song_agent.domains.program.unified_command_center_release_train_handoff import UnifiedCommandCenterReleaseTrainHandoffStore
 

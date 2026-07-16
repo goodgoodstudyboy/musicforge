@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass as dataclass
+from typing import Any as Any
 
-from song_agent.domains.creation.redaction import sanitize_metadata
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
 
 
 REGRESSION_SONGBOOK_SCHEMA_VERSION = 1

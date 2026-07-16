@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import copy
-import json
-import re
-import threading
-from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
-from typing import Any
+import copy as copy
+import json as json
+import re as re
+import threading as threading
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
-from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import stable_hash
+from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS as DISTRIBUTION_BLOCKED_KEYS
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
 
 
 DISTRIBUTION_TEMPLATE_SCHEMA_VERSION = 1

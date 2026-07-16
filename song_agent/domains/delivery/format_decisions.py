@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import threading
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import threading as threading
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.audio_encoding import AudioEncodingStore, encoded_audio_summary_hash, encoded_audio_summary_integrity_ok, encoded_manifest_integrity_ok, encoded_manifest_uses_fake, normalize_required_profiles, resolve_target_audio_format_profiles
-from song_agent.domains.delivery.distribution import DistributionStore, DistributionTarget
-from song_agent.domains.creation.encoded_audio_acceptance import encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseStateError, ReleaseStore, stable_hash
+from song_agent.domains.quality.audio_encoding import AudioEncodingStore as AudioEncodingStore, encoded_audio_summary_hash as encoded_audio_summary_hash, encoded_audio_summary_integrity_ok as encoded_audio_summary_integrity_ok, encoded_manifest_integrity_ok as encoded_manifest_integrity_ok, encoded_manifest_uses_fake as encoded_manifest_uses_fake, normalize_required_profiles as normalize_required_profiles, resolve_target_audio_format_profiles as resolve_target_audio_format_profiles
+from song_agent.domains.delivery.distribution import DistributionStore as DistributionStore, DistributionTarget as DistributionTarget
+from song_agent.domains.creation.encoded_audio_acceptance import encoded_audio_acceptance_summary_hash as encoded_audio_acceptance_summary_hash, encoded_audio_acceptance_summary_integrity_ok as encoded_audio_acceptance_summary_integrity_ok
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseStateError as ReleaseStateError, ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
 FORMAT_DECISION_SCHEMA_VERSION = 1
@@ -438,7 +438,7 @@ class FormatDecisionStore:
 
     def activate_session(self, release_id: str, session_id: str, *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
-        session = self.read_session(release_id, session_id)
+        _session = self.read_session(release_id, session_id)
         report = self.read_report(release_id, session_id)
         if report.get("status") not in {"passed", "warning"} or report.get("stale") or not format_report_integrity_ok(report):
             raise FormatDecisionStateError("Format decision report must be current before activation.")

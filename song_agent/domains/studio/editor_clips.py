@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import re
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.assets import AssetStore, CreativeAsset, asset_content_summary, sanitize_asset_metadata
-from song_agent.domains.creation.midi_analysis import notes_for_slice, parse_midi
-from song_agent.domains.studio.projectio import read_json
-from song_agent.domains.studio.project_repository import ProjectStore
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.studio.reference_analysis import reference_context, require_fresh_slices
-from song_agent.domains.studio.references import ReferenceStore
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan
-from song_agent.domains.studio.song_editor import build_editor_state, song_plan_hash
+from song_agent.domains.studio.assets import AssetStore as AssetStore, CreativeAsset as CreativeAsset, asset_content_summary as asset_content_summary, sanitize_asset_metadata as sanitize_asset_metadata
+from song_agent.domains.creation.midi_analysis import notes_for_slice as notes_for_slice, parse_midi as parse_midi
+from song_agent.domains.studio.projectio import read_json as read_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.studio.reference_analysis import reference_context as reference_context, require_fresh_slices as require_fresh_slices
+from song_agent.domains.studio.references import ReferenceStore as ReferenceStore
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan
+from song_agent.domains.studio.song_editor import build_editor_state as build_editor_state, song_plan_hash as song_plan_hash
 
 
 EDITOR_CLIP_SCHEMA_VERSION = 1

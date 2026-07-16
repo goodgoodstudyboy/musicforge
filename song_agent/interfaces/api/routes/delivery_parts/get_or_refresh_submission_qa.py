@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from song_agent.platform.contracts.documents import ImplementationDocument
+
+from typing import Any
+
+from song_agent.domains.delivery.distribution_artwork import latest_distribution_artwork
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class DeliveryRoutesGetOrRefreshSubmissionQa:
-    def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> dict[str, _interfaces_api_runtime.Any]:
+    def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> ImplementationDocument:
         if not refresh:
             existing = self.submission_store.read_qa(release_id, batch.submission_id, default={})
             if existing:
@@ -18,7 +23,7 @@ class DeliveryRoutesGetOrRefreshSubmissionQa:
         self.submission_store.update_qa_summary(release_id, batch.submission_id, _interfaces_api_runtime.submission_qa_summary(report))
         return report
 
-    def _submission_payload_with_evidence_summary(self, release_id: str, batch: Any) -> dict[str, _interfaces_api_runtime.Any]:
+    def _submission_payload_with_evidence_summary(self, release_id: str, batch: Any) -> ImplementationDocument:
         payload = batch.to_dict()
         try:
             overview = self.submission_evidence_store.overview(release_id, batch.submission_id)
@@ -35,7 +40,7 @@ class DeliveryRoutesGetOrRefreshSubmissionQa:
             payload["latest_evidence_summary"] = {"status": "not_started", "signoff_status": "not_signed"}
         return payload
 
-    def _build_distribution_layout(self, release_id: str, target: Any) -> dict[str, _interfaces_api_runtime.Any]:
+    def _build_distribution_layout(self, release_id: str, target: Any) -> ImplementationDocument:
         release = self.release_store.get_release(release_id)
         try:
             release_manifest = _interfaces_api_runtime.read_release_export_manifest(self.release_store, release_id)

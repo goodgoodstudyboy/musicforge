@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass as dataclass
 
-from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.domains.creation.providers.base import LLMProvider
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, SongRequest, SongSection, TrackPlan
+from song_agent.domains.creation.music_quality import attach_quality as attach_quality
+from song_agent.domains.creation.providers.base import LLMProvider as LLMProvider
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan, SongRequest as SongRequest, SongSection as SongSection, TrackPlan as TrackPlan
 
 
 @dataclass
@@ -22,7 +22,6 @@ def deterministic_compose(request: SongRequest) -> SongPlan:
     tempo_bpm = request.tempo_bpm or 92
     key = request.key or "C major"
     sections = _make_sections(request)
-    total_bars = sum(section.bars for section in sections)
 
     tracks = [
         TrackPlan(

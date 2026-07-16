@@ -2,30 +2,30 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import shutil
-import threading
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import shutil as shutil
+import threading as threading
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.audio_artifacts import build_audio_artifact_manifest, write_audio_artifact_manifest
-from song_agent.domains.quality.audio_health import analyze_wav_health, audio_health_allows_release, audio_health_integrity_ok, audio_health_summary
-from song_agent.domains.delivery.delivery_qa import build_delivery_qa_report
-from song_agent.domains.quality.audio_review_evidence import AudioReviewEvidenceStore, review_integrity_ok, review_payload_hash
-from song_agent.domains.creation.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip, final_export_dir
-from song_agent.domains.quality.mix_controls import MixControlError, MixControlStateError, MixControlStore, MixPatch, apply_patch_and_render_plan, build_mix_patch, default_mix_state, file_sha256, marker_to_mix_patch_operations, mix_patch_hash, mix_patch_integrity_ok, mix_state_hash, mix_state_integrity_ok, mix_state_stale_reasons, song_plan_hash, stable_hash
-from song_agent.domains.quality.mix_render import _job_state, _project_version_context, _run_summary, _validator_report
-from song_agent.domains.studio.projectio import ProjectPaths, append_event, read_json, write_json
-from song_agent.domains.studio.project_quality import evaluate_quality_gate, load_quality_gate_config
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.quality.release_audio import build_release_audio_qa_report, write_release_audio_qa
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseNotFoundError, ReleaseStateError, ReleaseStore, build_release_track_snapshot
-from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, load_renderer_config, render_audio
-from song_agent.domains.creation.renderers.midi import render_midi
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.creation.stem_health import build_stem_health_report, stem_health_summary, write_stem_health_report
+from song_agent.domains.quality.audio_artifacts import build_audio_artifact_manifest as build_audio_artifact_manifest, write_audio_artifact_manifest as write_audio_artifact_manifest
+from song_agent.domains.quality.audio_health import analyze_wav_health as analyze_wav_health, audio_health_allows_release as audio_health_allows_release, audio_health_integrity_ok as audio_health_integrity_ok, audio_health_summary as audio_health_summary
+from song_agent.domains.delivery.delivery_qa import build_delivery_qa_report as build_delivery_qa_report
+from song_agent.domains.quality.audio_review_evidence import AudioReviewEvidenceStore as AudioReviewEvidenceStore, review_integrity_ok as review_integrity_ok, review_payload_hash as review_payload_hash
+from song_agent.domains.creation.final_export import FinalExportOptions as FinalExportOptions, build_final_export_bundle as build_final_export_bundle, build_final_export_zip as build_final_export_zip, final_export_dir as final_export_dir
+from song_agent.domains.quality.mix_controls import MixControlError as MixControlError, MixControlStateError as MixControlStateError, MixControlStore as MixControlStore, MixPatch as MixPatch, apply_patch_and_render_plan as apply_patch_and_render_plan, build_mix_patch as build_mix_patch, default_mix_state as default_mix_state, file_sha256 as file_sha256, marker_to_mix_patch_operations as marker_to_mix_patch_operations, mix_patch_hash as mix_patch_hash, mix_patch_integrity_ok as mix_patch_integrity_ok, mix_state_hash as mix_state_hash, mix_state_integrity_ok as mix_state_integrity_ok, mix_state_stale_reasons as mix_state_stale_reasons, song_plan_hash as song_plan_hash, stable_hash as stable_hash
+from song_agent.domains.quality.mix_render import _job_state as _job_state, _project_version_context as _project_version_context, _run_summary as _run_summary, _validator_report as _validator_report
+from song_agent.domains.studio.projectio import ProjectPaths as ProjectPaths, append_event as append_event, read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_quality import evaluate_quality_gate as evaluate_quality_gate, load_quality_gate_config as load_quality_gate_config
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.quality.release_audio import build_release_audio_qa_report as build_release_audio_qa_report, write_release_audio_qa as write_release_audio_qa
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseNotFoundError as ReleaseNotFoundError, ReleaseStateError as ReleaseStateError, ReleaseStore as ReleaseStore, build_release_track_snapshot as build_release_track_snapshot
+from song_agent.domains.creation.renderers.audio import RendererConfig as RendererConfig, RendererError as RendererError, load_renderer_config as load_renderer_config, render_audio as render_audio
+from song_agent.domains.creation.renderers.midi import render_midi as render_midi
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.creation.stem_health import build_stem_health_report as build_stem_health_report, stem_health_summary as stem_health_summary, write_stem_health_report as write_stem_health_report
 
 
 AUDIO_REVISION_SCHEMA_VERSION = 1

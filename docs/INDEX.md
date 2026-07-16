@@ -24,6 +24,7 @@
 - `architecture/CURRENT.md`
 - `architecture/DEBT.md`
 - `architecture/adr/`
+- `architecture/adr/0008-v14-domain-cutover.md`
 - `ARCHITECTURE_REVIEW_RUNBOOK.md`
 - `EVIDENCE_GRAPH_AND_POLICIES.md`
 - `SECURITY_AND_SECRETS.md`
@@ -32,6 +33,7 @@
 
 - `archive/README-v13.6.md` is the pre-v13.7 long-form project guide.
 - `changelog/CHANGELOG-v0-v13.6.md` is the complete pre-split changelog.
+- `changelog/CHANGELOG-v13.0-v13.8.md` is the archived v13 major changelog.
 - Planning and audit inputs are cataloged by `../material/index.json`.
 
 Archived documents are immutable historical inputs, not current operational

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from dataclasses import asdict, dataclass, field
-from typing import Any
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from typing import Any as Any
 
 
 def _require_mapping(data: Any, name: str) -> ImplementationDocument:

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-from pathlib import Path
-from typing import Any
+import json as json
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.project_quality import QualityGateConfig, evaluate_quality_gate
-from song_agent.domains.studio.projectio import read_json
-from song_agent.domains.studio.project_repository import ProjectDocument, ProjectVersion
-from song_agent.domains.creation.schemas.song import SongPlan
+from song_agent.domains.studio.project_quality import QualityGateConfig as QualityGateConfig, evaluate_quality_gate as evaluate_quality_gate
+from song_agent.domains.studio.projectio import read_json as read_json
+from song_agent.domains.studio.project_repository import ProjectDocument as ProjectDocument, ProjectVersion as ProjectVersion
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 
 
 def compare_project_versions(document: ProjectDocument, left_id: str, right_id: str) -> dict[str, Any]:

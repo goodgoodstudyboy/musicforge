@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, rerun_multinode_from_node
+from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, JobState, Path, rerun_multinode_from_node
 
 import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongRequest, append_event, clear_stem_artifacts, load_provider_config, render_midi, slugify, write_json

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from typing import Any
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -80,7 +81,7 @@ class CreationRoutesProjectEditorAuditionNextAction:
         except _interfaces_api_runtime.ProviderError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
 
-    def _review_edit_context(self, project_id: str, preview_id: str, audition_id: str) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.SongPlan, _interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.SongPlan]:
+    def _review_edit_context(self, project_id: str, preview_id: str, audition_id: str) -> tuple[Any, Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.SongPlan, Any, Any, _interfaces_api_runtime.SongPlan]:
         project_dir = self.project_store.project_dir(project_id)
         self.project_store.get_project(project_id)
         preview_store = _interfaces_api_runtime.EditorPreviewStore(project_dir)

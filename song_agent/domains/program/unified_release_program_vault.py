@@ -2,28 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import shutil
-import zipfile
-from pathlib import Path
-from typing import Any
+import shutil as shutil
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.platform.lifecycle import ArchiveBuilder, HistoryChain
-from song_agent.platform.persistence import WorkspaceLock
-from song_agent.platform.persistence.program import program_json_facade
-from song_agent.platform.time import now_iso
-from song_agent.platform.verification.sanitization import sanitize_metadata, sanitize_sensitive_text
-from song_agent.platform.verification.hashing import stable_hash
-from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore
-from song_agent.domains.program.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore
-from song_agent.domains.program.unified_release_program_operations import UnifiedReleaseProgramOperationsStore
-from song_agent.domains.program.unified_release_program_vault_verifier import (
-    UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_VAULT_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION,
-    verify_unified_release_program_vault_package,
-    write_unified_release_program_vault_verification_report,
-)
+from song_agent.platform.lifecycle import ArchiveBuilder as ArchiveBuilder, HistoryChain as HistoryChain
+from song_agent.platform.persistence import WorkspaceLock as WorkspaceLock
+from song_agent.platform.persistence.program import program_json_facade as program_json_facade
+from song_agent.platform.time import now_iso as now_iso
+from song_agent.platform.verification.sanitization import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.platform.verification.hashing import stable_hash as stable_hash
+from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore as UnifiedReleaseProgramStore
+from song_agent.domains.program.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore as UnifiedReleaseProgramHandoffStore
+from song_agent.domains.program.unified_release_program_operations import UnifiedReleaseProgramOperationsStore as UnifiedReleaseProgramOperationsStore
+from song_agent.domains.program.unified_release_program_vault_verifier import UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_VAULT_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION as UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION, verify_unified_release_program_vault_package as verify_unified_release_program_vault_package, write_unified_release_program_vault_verification_report as write_unified_release_program_vault_verification_report
 
 
 VAULT_BLOCKED_METADATA_KEYS = {

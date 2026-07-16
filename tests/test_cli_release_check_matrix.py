@@ -148,6 +148,27 @@ def test_release_check_cli_v13_profile_lists_cutover_governance() -> None:
     ]
 
 
+def test_release_check_cli_v14_profile_lists_final_certification() -> None:
+    completed = _run_cli(["release-check", "--profile", "v14", "--skip-tests", "--list", "--json"])
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert [item["check_id"] for item in payload["checks"]] == [
+        "git.diff_check",
+        "meta.version_consistency",
+        "security.secret_scan",
+        "v140.architecture_cutover_smoke",
+        "v140.compatibility_zero_smoke",
+        "v140.interface_application_boundary_smoke",
+        "v140.domain_vertical_slice_smoke",
+        "v140.verification_lifecycle_security_smoke",
+        "v140.migration_rollback_smoke",
+        "v140.typing_coverage_ratchet_smoke",
+        "v140.public_contract_compatibility_smoke",
+        "v140.reviewer_package_smoke",
+    ]
+
+
 def test_release_check_cli_v9_profile_lists_trust_operations_hub() -> None:
     completed = _run_cli(["release-check", "--profile", "v9", "--list", "--json"])
 

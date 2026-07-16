@@ -4,9 +4,9 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies as core_dependencies
 import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, HTTPStatus, JobState, Path, build_edit_metadata, json, threading, validate_edit_intent
+from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, EditIntent, HTTPStatus, JobState, Path, build_edit_metadata, json, threading, validate_edit_intent
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongRequest, load_provider_config, read_json, write_json
+from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongPlan, SongRequest, load_provider_config, read_json, write_json
 
 from song_agent.interfaces.api.runtime_parts.helpers.job_artifacts import _candidate_source_summary
 

@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import shutil
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import shutil as shutil
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.edits import EditIntent, EditedSongPlanResult, apply_edit_intent, validate_edit_intent
-from song_agent.domains.studio.editor_audition import EditorAuditionManifest
-from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.schemas.song import SongPlan, SongSection, TrackPlan
-from song_agent.domains.studio.song_editor import song_plan_hash
+from song_agent.domains.creation.edits import EditIntent as EditIntent, EditedSongPlanResult as EditedSongPlanResult, apply_edit_intent as apply_edit_intent, validate_edit_intent as validate_edit_intent
+from song_agent.domains.studio.editor_audition import EditorAuditionManifest as EditorAuditionManifest
+from song_agent.domains.creation.music_quality import attach_quality as attach_quality
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, SongSection as SongSection, TrackPlan as TrackPlan
+from song_agent.domains.studio.song_editor import song_plan_hash as song_plan_hash
 
 
 REVIEW_EDIT_SCHEMA_VERSION = 1

@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import base64
-import binascii
-import hashlib
-import json
-import re
-import shutil
-import threading
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import base64 as base64
+import binascii as binascii
+import hashlib as hashlib
+import json as json
+import re as re
+import shutil as shutil
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.assets import AssetStore, asset_public_dict, sanitize_asset_metadata
-from song_agent.domains.studio.projectio import now_iso, read_json, write_json
-from song_agent.domains.studio.reference_paths import reference_file_path, stored_reference_filename
-from song_agent.domains.creation.redaction import sanitize_sensitive_text
+from song_agent.domains.studio.assets import AssetStore as AssetStore, asset_public_dict as asset_public_dict, sanitize_asset_metadata as sanitize_asset_metadata
+from song_agent.domains.studio.projectio import now_iso as now_iso, read_json as read_json, write_json as write_json
+from song_agent.domains.studio.reference_paths import reference_file_path as reference_file_path, stored_reference_filename as stored_reference_filename
+from song_agent.domains.creation.redaction import sanitize_sensitive_text as sanitize_sensitive_text
 
 
 REFERENCE_ROOT = Path(".musicforge") / "references"

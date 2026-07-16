@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import base64
-import hashlib
-import os
-import shutil
-import struct
-import threading
-from pathlib import Path
-from typing import Any
+import base64 as base64
+import hashlib as hashlib
+import os as os
+import shutil as shutil
+import struct as struct
+import threading as threading
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.delivery.distribution import DistributionStateError, DistributionStore, DistributionValidationError
-from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
-from song_agent.domains.studio.projectio import read_json, slugify, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
+from song_agent.domains.delivery.distribution import DistributionStateError as DistributionStateError, DistributionStore as DistributionStore, DistributionValidationError as DistributionValidationError
+from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS as DISTRIBUTION_BLOCKED_KEYS
+from song_agent.domains.studio.projectio import read_json as read_json, slugify as slugify, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
 
 
 SUPPORTED_ARTWORK_EXTENSIONS = {".png", ".jpg", ".jpeg"}

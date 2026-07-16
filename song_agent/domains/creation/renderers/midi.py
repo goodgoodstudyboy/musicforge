@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import struct
-from dataclasses import dataclass
-from pathlib import Path
+import struct as struct
+from dataclasses import dataclass as dataclass
+from pathlib import Path as Path
 
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan
 
 
 TICKS_PER_BEAT = 480

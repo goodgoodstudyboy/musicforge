@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import threading
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import threading as threading
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.music_acceptance import AcceptanceStore, stable_hash
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.regression_songbook import builtin_songbook
-from song_agent.domains.delivery.releases import ReleaseStore
-from song_agent.domains.quality.review_tasks import REVIEW_TASK_SCHEMA_VERSION, ReviewTask, ReviewTaskStore
+from song_agent.domains.quality.music_acceptance import AcceptanceStore as AcceptanceStore, stable_hash as stable_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.regression_songbook import builtin_songbook as builtin_songbook
+from song_agent.domains.delivery.releases import ReleaseStore as ReleaseStore
+from song_agent.domains.quality.review_tasks import REVIEW_TASK_SCHEMA_VERSION as REVIEW_TASK_SCHEMA_VERSION, ReviewTask as ReviewTask, ReviewTaskStore as ReviewTaskStore
 
 
 ACCEPTANCE_ANALYTICS_ROOT = Path(".musicforge") / "aa"

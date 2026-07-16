@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.audio_profiles import RendererProfile, renderer_profile_hash
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.creation.renderers.audio import RendererConfig
+from song_agent.domains.quality.audio_profiles import RendererProfile as RendererProfile, renderer_profile_hash as renderer_profile_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.creation.renderers.audio import RendererConfig as RendererConfig
 
 
 AUDIO_ARTIFACT_SCHEMA_VERSION = 1

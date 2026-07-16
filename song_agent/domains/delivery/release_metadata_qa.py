@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import re
-from typing import Any
+import re as re
+from typing import Any as Any
 
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.delivery.release_metadata import METADATA_BLOCKED_KEYS, CREDIT_ROLES, release_metadata_source_hash
-from song_agent.domains.delivery.release_qa import scan_release_payload_for_sensitive_values
-from song_agent.domains.delivery.releases import ReleaseDocument, stable_hash
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.release_metadata import METADATA_BLOCKED_KEYS as METADATA_BLOCKED_KEYS, CREDIT_ROLES as CREDIT_ROLES, release_metadata_source_hash as release_metadata_source_hash
+from song_agent.domains.delivery.release_qa import scan_release_payload_for_sensitive_values as scan_release_payload_for_sensitive_values
+from song_agent.domains.delivery.releases import ReleaseDocument as ReleaseDocument, stable_hash as stable_hash
 
 
 RELEASE_METADATA_QA_SCHEMA_VERSION = 1

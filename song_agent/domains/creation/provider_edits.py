@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import hashlib
-import re
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import json as json
+import hashlib as hashlib
+import re as re
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.edits import EditIntent, EditedSongPlanResult, SUPPORTED_HARMONY_CHORDS, apply_edit_intent, validate_edit_intent
-from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.domains.studio.prompt_templates import PromptTemplate, render_prompt_template
-from song_agent.domains.creation.provider import ProviderConfig, ProviderConfigError, ProviderEditResponse, ProviderOutputError
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.quality.quality import validate_song_plan
-from song_agent.domains.creation.schemas.song import SongPlan
+from song_agent.domains.creation.edits import EditIntent as EditIntent, EditedSongPlanResult as EditedSongPlanResult, SUPPORTED_HARMONY_CHORDS as SUPPORTED_HARMONY_CHORDS, apply_edit_intent as apply_edit_intent, validate_edit_intent as validate_edit_intent
+from song_agent.domains.creation.music_quality import attach_quality as attach_quality
+from song_agent.domains.studio.prompt_templates import PromptTemplate as PromptTemplate, render_prompt_template as render_prompt_template
+from song_agent.domains.creation.provider import ProviderConfig as ProviderConfig, ProviderConfigError as ProviderConfigError, ProviderEditResponse as ProviderEditResponse, ProviderOutputError as ProviderOutputError
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.quality.quality import validate_song_plan as validate_song_plan
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 
 
 SCHEMA_VERSION = 1

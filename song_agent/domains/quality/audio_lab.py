@@ -2,28 +2,28 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import math
-import re
-import struct
-import threading
-import wave
-from collections.abc import Callable
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import math as math
+import re as re
+import struct as struct
+import threading as threading
+import wave as wave
+from collections.abc import Callable as Callable
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.agent.pipeline import SongAgent
-from song_agent.domains.quality.audio_health import analyze_wav_health, audio_health_summary
-from song_agent.domains.quality.audio_profiles import AudioProfileNotFoundError, AudioProfileStore, renderer_profile_hash
-from song_agent.domains.quality.music_acceptance import default_acceptance_song_cases
-from song_agent.domains.creation.music_health import analyze_music_health, music_health_summary
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.creation.renderers.audio import RendererError, load_renderer_config, renderer_configured, render_audio
-from song_agent.domains.creation.renderers.midi import render_midi
-from song_agent.domains.creation.schemas.song import SongPlan, SongRequest
+from song_agent.domains.creation.agent.pipeline import SongAgent as SongAgent
+from song_agent.domains.quality.audio_health import analyze_wav_health as analyze_wav_health, audio_health_summary as audio_health_summary
+from song_agent.domains.quality.audio_profiles import AudioProfileNotFoundError as AudioProfileNotFoundError, AudioProfileStore as AudioProfileStore, renderer_profile_hash as renderer_profile_hash
+from song_agent.domains.quality.music_acceptance import default_acceptance_song_cases as default_acceptance_song_cases
+from song_agent.domains.creation.music_health import analyze_music_health as analyze_music_health, music_health_summary as music_health_summary
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.creation.renderers.audio import RendererError as RendererError, load_renderer_config as load_renderer_config, renderer_configured as renderer_configured, render_audio as render_audio
+from song_agent.domains.creation.renderers.midi import render_midi as render_midi
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, SongRequest as SongRequest
 
 
 AUDIO_LAB_ROOT = Path(".musicforge") / "audio-lab"

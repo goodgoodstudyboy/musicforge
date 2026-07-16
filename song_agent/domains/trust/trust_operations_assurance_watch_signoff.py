@@ -2,25 +2,25 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import os
-import shutil
-import threading
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import os as os
+import shutil as shutil
+import threading as threading
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.trust.public_trust_center_publication_monitoring import verification_hash
-from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.trust.trust_operations_assurance_watch import TrustOperationsAssuranceWatchStore
-from song_agent.domains.trust.trust_operations_continuous_assurance import TrustOperationsAssuranceStore
-from song_agent.domains.trust.trust_operations_hub import TrustOperationsHubStore
-from song_agent.domains.trust.trust_operations_assurance_watch_signoff_contracts import ASSURANCE_WATCH_SIGNOFF_ARCHIVE_ENTRIES, TRUST_OPERATIONS_ASSURANCE_WATCH_CLOSEOUT_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_BLOCKED_KEYS, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_CHANGE_REQUESTS_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_HASH_EXCLUDE_KEYS, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_MANIFEST_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_REPORT_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SOURCE_PACKAGE_TYPE, watch_signoff_hash, watch_signoff_history_event_hash, watch_signoff_history_event_payload_hash, watch_signoff_manifest_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.trust.public_trust_center_publication_monitoring import verification_hash as verification_hash
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS as DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.trust.trust_operations_assurance_watch import TrustOperationsAssuranceWatchStore as TrustOperationsAssuranceWatchStore
+from song_agent.domains.trust.trust_operations_continuous_assurance import TrustOperationsAssuranceStore as TrustOperationsAssuranceStore
+from song_agent.domains.trust.trust_operations_hub import TrustOperationsHubStore as TrustOperationsHubStore
+from song_agent.domains.trust.trust_operations_assurance_watch_signoff_contracts import ASSURANCE_WATCH_SIGNOFF_ARCHIVE_ENTRIES as ASSURANCE_WATCH_SIGNOFF_ARCHIVE_ENTRIES, TRUST_OPERATIONS_ASSURANCE_WATCH_CLOSEOUT_PACKAGE_TYPE as TRUST_OPERATIONS_ASSURANCE_WATCH_CLOSEOUT_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_BLOCKED_KEYS as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_BLOCKED_KEYS, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_CHANGE_REQUESTS_PACKAGE_TYPE as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_CHANGE_REQUESTS_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_HASH_EXCLUDE_KEYS as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_HASH_EXCLUDE_KEYS, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_MANIFEST_PACKAGE_TYPE as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_MANIFEST_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_PACKAGE_TYPE as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_REPORT_PACKAGE_TYPE as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_REPORT_PACKAGE_TYPE, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION, TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SOURCE_PACKAGE_TYPE as TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SOURCE_PACKAGE_TYPE, watch_signoff_hash as watch_signoff_hash, watch_signoff_history_event_hash as watch_signoff_history_event_hash, watch_signoff_history_event_payload_hash as watch_signoff_history_event_payload_hash, watch_signoff_manifest_hash as watch_signoff_manifest_hash
 
 
 
@@ -311,8 +311,6 @@ class TrustOperationsAssuranceWatchSignoffStore:
                 shutil.rmtree(_fs_path(export_dir), ignore_errors=True)
             _mkdir(export_dir)
             closeout = self.read_closeout(queue_id)
-            report = self._archive_report(queue_id, signoff, closeout, now)
-            source_summary = self._source_summary(signoff)
             queue_summary = self._watch_queue_summary(queue_id, signoff)
             action_summary = self._drift_action_pack_summary(queue_id, signoff)
             external_summary = self._external_summary(signoff)

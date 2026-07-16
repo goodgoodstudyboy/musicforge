@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
-import subprocess
-from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Any, Callable
+import os as os
+import subprocess as subprocess
+from dataclasses import asdict as asdict, dataclass as dataclass
+from pathlib import Path as Path
+from typing import Any as Any, Callable as Callable
 
-from song_agent.domains.studio.projectio import read_json, write_json
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
 
 
 CONFIG_DIR = Path(".musicforge")

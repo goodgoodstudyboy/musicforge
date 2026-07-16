@@ -2,29 +2,29 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import shutil
-import threading
-from dataclasses import asdict, dataclass, field, replace
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import shutil as shutil
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field, replace as replace
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.candidate_scoring import score_provider_edit_candidate
-from song_agent.domains.creation.edits import EditIntent, EditedSongPlanResult, apply_edit_intent, validate_edit_intent
-from song_agent.domains.studio.editor_audition import EditorAuditionManifest
-from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.provider import ProviderConfig
-from song_agent.domains.creation.provider_edits import ProviderEditPatch, apply_provider_edit_patch, generate_provider_edit_candidates, provider_patch_to_intents
-from song_agent.domains.studio.prompt_templates import PromptTemplate
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, render_audio
-from song_agent.domains.creation.renderers.midi import render_midi
-from song_agent.domains.quality.review_edits import build_review_edit
-from song_agent.domains.creation.schemas.song import SongPlan, SongSection, TrackPlan
-from song_agent.domains.studio.song_editor import song_plan_hash
+from song_agent.domains.quality.candidate_scoring import score_provider_edit_candidate as score_provider_edit_candidate
+from song_agent.domains.creation.edits import EditIntent as EditIntent, EditedSongPlanResult as EditedSongPlanResult, apply_edit_intent as apply_edit_intent, validate_edit_intent as validate_edit_intent
+from song_agent.domains.studio.editor_audition import EditorAuditionManifest as EditorAuditionManifest
+from song_agent.domains.creation.music_quality import attach_quality as attach_quality
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.creation.provider import ProviderConfig as ProviderConfig
+from song_agent.domains.creation.provider_edits import ProviderEditPatch as ProviderEditPatch, apply_provider_edit_patch as apply_provider_edit_patch, generate_provider_edit_candidates as generate_provider_edit_candidates, provider_patch_to_intents as provider_patch_to_intents
+from song_agent.domains.studio.prompt_templates import PromptTemplate as PromptTemplate
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.renderers.audio import RendererConfig as RendererConfig, RendererError as RendererError, render_audio as render_audio
+from song_agent.domains.creation.renderers.midi import render_midi as render_midi
+from song_agent.domains.quality.review_edits import build_review_edit as build_review_edit
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, SongSection as SongSection, TrackPlan as TrackPlan
+from song_agent.domains.studio.song_editor import song_plan_hash as song_plan_hash
 
 
 REVIEW_TASK_SCHEMA_VERSION = 1

@@ -1,8 +1,8 @@
 # Evidence Graph and Gate Policies
 
-MusicForge v13.8 uses one runtime-verified Evidence Graph and declarative policy
-engine for current GA and Release gates. v14 preserves these contracts while
-moving their implementation into owned domain vertical slices. A graph node is
+MusicForge v14.0 uses one runtime-verified Evidence Graph and declarative policy
+engine for current GA and Release gates. Its implementation is owned by the
+shared platform and bounded domain vertical slices. A graph node is
 not a copy of a package summary. It exists only when all of these agree:
 
 - the external package currently exists;

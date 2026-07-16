@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import shutil
-import threading
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import shutil as shutil
+import threading as threading
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.audio_encoding import AudioEncodingStateError, AudioEncodingStore, detect_audio_header, encoded_manifest_integrity_ok, encoded_manifest_uses_fake, normalize_required_profiles, validate_relative_path
-from song_agent.domains.quality.audio_encoding_profiles import audio_encoding_profile_hash
-from song_agent.domains.delivery.distribution import DistributionStore, DistributionTarget
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseStore, stable_hash
+from song_agent.domains.quality.audio_encoding import AudioEncodingStateError as AudioEncodingStateError, AudioEncodingStore as AudioEncodingStore, detect_audio_header as detect_audio_header, encoded_manifest_integrity_ok as encoded_manifest_integrity_ok, encoded_manifest_uses_fake as encoded_manifest_uses_fake, normalize_required_profiles as normalize_required_profiles, validate_relative_path as validate_relative_path
+from song_agent.domains.quality.audio_encoding_profiles import audio_encoding_profile_hash as audio_encoding_profile_hash
+from song_agent.domains.delivery.distribution import DistributionStore as DistributionStore, DistributionTarget as DistributionTarget
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
 ENCODED_AUDIO_ACCEPTANCE_SCHEMA_VERSION = 1

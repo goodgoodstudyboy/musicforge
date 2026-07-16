@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.domains.creation.node_store import PIPELINE_NODE_ORDER, validate_node_name
+from song_agent.domains.creation.node_store import PIPELINE_NODE_ORDER as PIPELINE_NODE_ORDER, validate_node_name as validate_node_name
 
 
 NODE_DEPENDENCIES: dict[str, list[str]] = {

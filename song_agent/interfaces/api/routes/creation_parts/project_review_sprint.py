@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from song_agent.platform.contracts.documents import ImplementationDocument
+
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -305,7 +307,7 @@ class CreationRoutesProjectReviewSprint:
         except (_interfaces_api_runtime.ReviewSprintError, _interfaces_api_runtime.ReviewTaskError, ValueError) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
 
-    def _get_or_refresh_project_review_metrics(self, project_id: str, *, refresh: bool) -> dict[str, _interfaces_api_runtime.Any]:
+    def _get_or_refresh_project_review_metrics(self, project_id: str, *, refresh: bool) -> ImplementationDocument:
         project_dir = self.project_store.project_dir(project_id)
         metrics_store = _interfaces_api_runtime.ReviewMetricsStore(project_dir)
         if not refresh:

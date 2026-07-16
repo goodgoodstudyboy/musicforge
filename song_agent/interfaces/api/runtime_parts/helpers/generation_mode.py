@@ -112,7 +112,7 @@ def _server_file_sha256(path: Path) -> str | None:
             digest.update(chunk)
     return digest.hexdigest()
 
-def _safe_read_release_export_manifest(release_store: ReleaseStore, release_id: str) -> ImplementationDocument:
+def _safe_read_release_export_manifest(release_store: Any, release_id: str) -> ImplementationDocument:
     try:
         return read_release_export_manifest(release_store, release_id)
     except FileNotFoundError:
@@ -139,7 +139,7 @@ def _parse_iso_datetime(value: str | None) -> datetime | None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed
 
-def _start_watchdog(store: JobStore, stop_event: threading.Event) -> threading.Thread:
+def _start_watchdog(store: Any, stop_event: threading.Event) -> threading.Thread:
     def run() -> None:
         while not stop_event.wait(5):
             store.run_watchdog_tick()

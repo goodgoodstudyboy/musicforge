@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.assets import AssetStore
-from song_agent.domains.studio.context_packs import ContextPackStore
-from song_agent.domains.studio.library_index import asset_source_hash
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.domains.studio.references import ReferenceStore
-from song_agent.domains.delivery.release_metadata import read_release_metadata
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseStateError, ReleaseStore, stable_hash
+from song_agent.domains.studio.assets import AssetStore as AssetStore
+from song_agent.domains.studio.context_packs import ContextPackStore as ContextPackStore
+from song_agent.domains.studio.library_index import asset_source_hash as asset_source_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata
+from song_agent.domains.studio.references import ReferenceStore as ReferenceStore
+from song_agent.domains.delivery.release_metadata import read_release_metadata as read_release_metadata
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseStateError as ReleaseStateError, ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
 RIGHTS_SCHEMA_VERSION = 1

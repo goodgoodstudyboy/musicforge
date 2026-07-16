@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import hashlib
-import json
-import shutil
-from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import shutil as shutil
+from dataclasses import asdict as asdict, dataclass as dataclass
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, slugify, write_json
-from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, render_audio
-from song_agent.domains.creation.renderers.midi import CHANNELS_BY_ROLE, PROGRAMS_BY_ROLE, render_midi_stem
-from song_agent.domains.creation.schemas.song import SongPlan, TrackPlan
+from song_agent.domains.studio.projectio import read_json as read_json, slugify as slugify, write_json as write_json
+from song_agent.domains.creation.renderers.audio import RendererConfig as RendererConfig, RendererError as RendererError, render_audio as render_audio
+from song_agent.domains.creation.renderers.midi import CHANNELS_BY_ROLE as CHANNELS_BY_ROLE, PROGRAMS_BY_ROLE as PROGRAMS_BY_ROLE, render_midi_stem as render_midi_stem
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, TrackPlan as TrackPlan
 
 
 STEM_STATUSES = {"not_started", "queued", "running", "completed", "failed", "skipped"}

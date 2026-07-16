@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import shutil
-import threading
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import shutil as shutil
+import threading as threading
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.quality.release_audio_baseline_governance_verifier import RELEASE_AUDIO_BASELINE_REGISTRY_PACKAGE_TYPE, RELEASE_AUDIO_BASELINE_SCHEMA_VERSION, build_baseline_source_binding, verify_release_audio_baseline_registry_package, write_release_audio_baseline_registry_verification_report
-from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.quality.release_audio_baseline_governance_verifier import RELEASE_AUDIO_BASELINE_REGISTRY_PACKAGE_TYPE as RELEASE_AUDIO_BASELINE_REGISTRY_PACKAGE_TYPE, RELEASE_AUDIO_BASELINE_SCHEMA_VERSION as RELEASE_AUDIO_BASELINE_SCHEMA_VERSION, build_baseline_source_binding as build_baseline_source_binding, verify_release_audio_baseline_registry_package as verify_release_audio_baseline_registry_package, write_release_audio_baseline_registry_verification_report as write_release_audio_baseline_registry_verification_report
+from song_agent.domains.delivery.releases import ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
 class ReleaseAudioBaselineGovernanceError(ValueError):

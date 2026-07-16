@@ -6,19 +6,19 @@ from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
 
-import hashlib
-import json
-import re
-import struct
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import hashlib as hashlib
+import json as json
+import re as re
+import struct as struct
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import write_json
-from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata
-from song_agent.domains.trust.release_portfolio_governance_audit_contracts import PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS, audit_ledger_hash, audit_ledger_integrity_ok, audit_manifest_integrity_hash, audit_report_integrity_hash
-from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS
+from song_agent.domains.studio.projectio import write_json as write_json
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS as DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata
+from song_agent.domains.trust.release_portfolio_governance_audit_contracts import PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS as PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS, audit_ledger_hash as audit_ledger_hash, audit_ledger_integrity_ok as audit_ledger_integrity_ok, audit_manifest_integrity_hash as audit_manifest_integrity_hash, audit_report_integrity_hash as audit_report_integrity_hash
+from song_agent.domains.delivery.release_verifier import LOCAL_PATH_VALUE_PATTERNS as LOCAL_PATH_VALUE_PATTERNS
 
 
 PORTFOLIO_GOVERNANCE_AUDIT_VERIFICATION_SCHEMA_VERSION = 1

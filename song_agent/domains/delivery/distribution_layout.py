@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from pathlib import Path, PurePosixPath
-from typing import Any
-import hashlib
-import json
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
+import hashlib as hashlib
+import json as json
 
-from song_agent.domains.quality.audio_encoding import normalize_required_profiles
-from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
-from song_agent.domains.delivery.distribution_templates import DistributionTemplateError, template_file_naming, template_summary
-from song_agent.domains.studio.projectio import slugify
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.delivery.releases import stable_hash
+from song_agent.domains.quality.audio_encoding import normalize_required_profiles as normalize_required_profiles
+from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS as DISTRIBUTION_BLOCKED_KEYS
+from song_agent.domains.delivery.distribution_templates import DistributionTemplateError as DistributionTemplateError, template_file_naming as template_file_naming, template_summary as template_summary
+from song_agent.domains.studio.projectio import slugify as slugify
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
 
 
 DISTRIBUTION_LAYOUT_SCHEMA_VERSION = 1

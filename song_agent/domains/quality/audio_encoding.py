@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import os
-import shutil
-import subprocess
-import threading
-from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
-from typing import Any, Protocol
+import hashlib as hashlib
+import json as json
+import os as os
+import shutil as shutil
+import subprocess as subprocess
+import threading as threading
+from dataclasses import dataclass as dataclass
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any, Protocol as Protocol
 
-from song_agent.domains.quality.audio_encoding_profiles import AudioEncodingProfile, AudioEncodingProfileError, AudioEncodingProfileStore, audio_encoding_profile_hash, audio_encoding_profile_integrity_ok
-from song_agent.domains.quality.mastering_qa import mastering_summary_hash
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS, ReleaseStateError, ReleaseStore, stable_hash
+from song_agent.domains.quality.audio_encoding_profiles import AudioEncodingProfile as AudioEncodingProfile, AudioEncodingProfileError as AudioEncodingProfileError, AudioEncodingProfileStore as AudioEncodingProfileStore, audio_encoding_profile_hash as audio_encoding_profile_hash, audio_encoding_profile_integrity_ok as audio_encoding_profile_integrity_ok
+from song_agent.domains.quality.mastering_qa import mastering_summary_hash as mastering_summary_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseStateError as ReleaseStateError, ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
 AUDIO_ENCODING_SCHEMA_VERSION = 1

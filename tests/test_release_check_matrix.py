@@ -85,6 +85,20 @@ def test_release_check_profile_and_filters() -> None:
     assert "v1219.evidence_policy_smoke" in {definition.check_id for definition in ga}
     assert "v1220.release_check_governance_smoke" in {definition.check_id for definition in ga}
     assert "v140.architecture_cutover_smoke" in {definition.check_id for definition in v14}
+    assert [definition.check_id for definition in v14] == [
+        "git.diff_check",
+        "meta.version_consistency",
+        "security.secret_scan",
+        "v140.architecture_cutover_smoke",
+        "v140.compatibility_zero_smoke",
+        "v140.interface_application_boundary_smoke",
+        "v140.domain_vertical_slice_smoke",
+        "v140.verification_lifecycle_security_smoke",
+        "v140.migration_rollback_smoke",
+        "v140.typing_coverage_ratchet_smoke",
+        "v140.public_contract_compatibility_smoke",
+        "v140.reviewer_package_smoke",
+    ]
     assert "v75.release_check_matrix_smoke" not in {definition.check_id for definition in ga}
     assert [definition.check_id for definition in v10] == [
         "v100.ga_lts_readiness_smoke",

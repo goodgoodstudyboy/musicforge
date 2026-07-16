@@ -2,31 +2,22 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import shutil
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import shutil as shutil
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.platform.lifecycle import ArchiveBuilder, HistoryChain, SignoffService
-from song_agent.platform.persistence import WorkspaceLock
-from song_agent.platform.persistence.program import program_json_facade
-from song_agent.domains.program.ports import ProgramReleaseStore
-from song_agent.platform.time import now_iso
-from song_agent.platform.verification.hashing import stable_hash
-from song_agent.platform.verification.sanitization import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.program.unified_release_program_verifier import (
-    UNIFIED_RELEASE_PROGRAM_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION,
-    verify_unified_release_program_package,
-    write_unified_release_program_verification_report,
-)
-from song_agent.domains.program.unified_command_center_release_train_handoff_verifier import (
-    UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE,
-    verify_unified_command_center_release_train_handoff_package,
-)
+from song_agent.platform.lifecycle import ArchiveBuilder as ArchiveBuilder, HistoryChain as HistoryChain, SignoffService as SignoffService
+from song_agent.platform.persistence import WorkspaceLock as WorkspaceLock
+from song_agent.platform.persistence.program import program_json_facade as program_json_facade
+from song_agent.domains.program.ports import ProgramReleaseStore as ProgramReleaseStore
+from song_agent.platform.time import now_iso as now_iso
+from song_agent.platform.verification.hashing import stable_hash as stable_hash
+from song_agent.platform.verification.sanitization import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.program.unified_release_program_verifier import UNIFIED_RELEASE_PROGRAM_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION as UNIFIED_RELEASE_PROGRAM_SCHEMA_VERSION, verify_unified_release_program_package as verify_unified_release_program_package, write_unified_release_program_verification_report as write_unified_release_program_verification_report
+from song_agent.domains.program.unified_command_center_release_train_handoff_verifier import UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE as UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_release_train_handoff_package as verify_unified_command_center_release_train_handoff_package
 
 
 DEFAULT_POLICY = {

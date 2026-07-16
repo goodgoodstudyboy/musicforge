@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
+from collections.abc import Callable as Callable
+from dataclasses import dataclass as dataclass
+from pathlib import Path as Path
 
-from song_agent.domains.studio.projectio import ProjectPaths, append_event, read_run_state, write_run_state
-from song_agent.domains.creation.state import RunState, StepStatus
+from song_agent.domains.studio.projectio import ProjectPaths as ProjectPaths, append_event as append_event, read_run_state as read_run_state, write_run_state as write_run_state
+from song_agent.domains.creation.state import RunState as RunState, StepStatus as StepStatus
 
 
 StepFn = Callable[[RunState, ProjectPaths], None]

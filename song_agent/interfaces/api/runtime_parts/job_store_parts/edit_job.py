@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, EditIntent, EditedSongPlanResult, Path, apply_asset_refs_to_plan, apply_edit_intent, asset_refs_snapshot, build_edit_metadata, write_asset_refs_snapshot
+from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import EditIntent, EditedSongPlanResult, JobState, Path, apply_asset_refs_to_plan, apply_edit_intent, asset_refs_snapshot, build_edit_metadata, write_asset_refs_snapshot
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, ProviderEditPatch, SongPlan, append_event, apply_candidate_intents, apply_provider_edit_patch, apply_review_edit, clear_stem_artifacts, context_pack_snapshot, read_json, reference_refs_snapshot, render_midi, write_context_pack_snapshot, write_json, write_reference_refs_snapshot
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 
 from .commands import creation as creation_commands
@@ -16,6 +15,8 @@ from .commands import release_check as release_check_commands
 import song_agent.interfaces.cli.composition as _composition
 from .registry import CommandRegistry
 
+
+_CLI_COMPOSITION = _composition
 
 COMMAND_MODULES = (creation_commands, studio_commands, quality_commands, delivery_commands, trust_commands, program_commands, program_context_commands, maintenance_commands, release_check_commands,)
 REGISTRY = CommandRegistry(spec for module in COMMAND_MODULES for spec in module.SPECS)

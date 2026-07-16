@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
@@ -234,8 +236,8 @@ class CreationRoutesProjectReviewTask:
         *,
         project_id: str,
         parent: Any,
-        parent_job: JobState,
-        parent_plan: SongPlan,
+        parent_job: _interfaces_api_runtime.JobState,
+        parent_plan: _interfaces_api_runtime.SongPlan,
         review_edit: Any,
         result: Any,
         payload: ImplementationDocument,
@@ -270,7 +272,7 @@ class CreationRoutesProjectReviewTask:
         self.store.start_job(job.job_id)
         return job
 
-    def _handle_provider_review_edit_preview(self, project_id: str, parent: Any, parent_job: JobState, parent_plan: SongPlan, review_edit: Any, payload: ImplementationDocument) -> None:
+    def _handle_provider_review_edit_preview(self, project_id: str, parent: Any, parent_job: _interfaces_api_runtime.JobState, parent_plan: _interfaces_api_runtime.SongPlan, review_edit: Any, payload: ImplementationDocument) -> None:
         template_id = str(payload.get("template_id") or "provider-review-edit-intent").strip()
         template = self.prompt_template_store.get_template(template_id)
         if not template.enabled:

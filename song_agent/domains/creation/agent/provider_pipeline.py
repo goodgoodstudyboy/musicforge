@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.provider import ProviderConfig, ProviderConfigError, ProviderOutputError
-from song_agent.domains.creation.providers.mock import MockProviderClient
-from song_agent.domains.creation.providers.openai_compatible import OpenAICompatibleClient
-from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.domains.quality.quality import validate_song_plan
-from song_agent.domains.creation.schemas.song import SongPlan, SongRequest
+from song_agent.domains.creation.provider import ProviderConfig as ProviderConfig, ProviderConfigError as ProviderConfigError, ProviderOutputError as ProviderOutputError
+from song_agent.domains.creation.providers.mock import MockProviderClient as MockProviderClient
+from song_agent.domains.creation.providers.openai_compatible import OpenAICompatibleClient as OpenAICompatibleClient
+from song_agent.domains.creation.music_quality import attach_quality as attach_quality
+from song_agent.domains.quality.quality import validate_song_plan as validate_song_plan
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, SongRequest as SongRequest
 
 
 PROMPT_PATH = Path(__file__).resolve().parents[3] / "prompts" / "provider_song_plan.md"

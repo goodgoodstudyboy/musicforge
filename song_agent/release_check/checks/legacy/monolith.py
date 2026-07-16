@@ -24,7 +24,7 @@ from song_agent import __version__
 from song_agent.release_check.fixtures import prepare_v12_command_center_world
 from song_agent.agent.pipeline import deterministic_compose
 from song_agent.assets import AssetStore, apply_asset_refs_to_plan, extract_assets_from_song_plan, write_asset_refs_snapshot
-from song_agent import candidate_groups as candidate_groups_module
+from song_agent.domains.quality import candidate_groups as candidate_groups_module
 from song_agent.candidate_groups import CandidateGroupStore, candidate_audio_path, candidate_group_stale, candidate_midi_path
 from song_agent.candidate_scoring import score_provider_edit_candidate
 from song_agent.edits import EditIntent, apply_edit_intent, build_edit_metadata
@@ -7164,7 +7164,7 @@ def _v53_audio_revision_workbench_smoke(root: Path) -> tuple[bool, str]:
     original_revision_render = None
     try:
         os.chdir(base)
-        import song_agent.audio_revision as audio_revision_module
+        import song_agent.domains.quality.audio_revision as audio_revision_module
         from song_agent.server import create_server
 
         original_revision_render = audio_revision_module.render_audio
@@ -13667,7 +13667,7 @@ def _v89_public_trust_center_publication_monitoring_smoke(root: Path) -> tuple[b
     original_publication_verifier = None
     original_mirror_verifier = None
     try:
-        import song_agent.public_trust_center_publication_monitoring as monitoring_module
+        import song_agent.domains.trust.public_trust_center_publication_monitoring as monitoring_module
         from song_agent.public_trust_center_publication_monitoring import PublicTrustCenterPublicationMonitoringStore, monitoring_hash, monitoring_manifest_hash
         from song_agent.public_trust_center_publication_monitoring_verifier import verify_public_trust_center_publication_monitoring_package
 

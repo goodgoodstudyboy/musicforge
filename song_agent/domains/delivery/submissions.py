@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import threading
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import threading as threading
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.delivery.distribution import DistributionNotFoundError, DistributionStore, DistributionTarget, SIGNED_DISTRIBUTION_STATUSES, distribution_signoff_summary, distribution_target_summary
-from song_agent.domains.delivery.distribution_export import read_distribution_export_manifest
-from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS
-from song_agent.domains.delivery.distribution_verifier import distribution_verification_summary, verify_distribution_package
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.delivery.releases import ReleaseStore, stable_hash
+from song_agent.domains.delivery.distribution import DistributionNotFoundError as DistributionNotFoundError, DistributionStore as DistributionStore, DistributionTarget as DistributionTarget, SIGNED_DISTRIBUTION_STATUSES as SIGNED_DISTRIBUTION_STATUSES, distribution_signoff_summary as distribution_signoff_summary, distribution_target_summary as distribution_target_summary
+from song_agent.domains.delivery.distribution_export import read_distribution_export_manifest as read_distribution_export_manifest
+from song_agent.domains.delivery.distribution_profiles import DISTRIBUTION_BLOCKED_KEYS as DISTRIBUTION_BLOCKED_KEYS
+from song_agent.domains.delivery.distribution_verifier import distribution_verification_summary as distribution_verification_summary, verify_distribution_package as verify_distribution_package
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
 SUBMISSION_ROOT_NAME = "submissions"

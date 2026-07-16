@@ -2,25 +2,25 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import shutil
-import threading
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import json as json
+import shutil as shutil
+import threading as threading
+from dataclasses import dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.quality.acceptance_profiles import AcceptanceProfile, get_acceptance_profile, profile_payload
-from song_agent.domains.creation.agent.pipeline import SongAgent
-from song_agent.domains.quality.audio_health import analyze_wav_health, audio_health_summary
-from song_agent.domains.creation.music_health import analyze_music_health, music_health_allows_review, music_health_summary
-from song_agent.domains.studio.projectio import read_json, slugify, write_json
-from song_agent.domains.studio.project_repository import ProjectStore, now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.regression_songbook import BUILTIN_SONGBOOK_ID, BUILTIN_SONGBOOK_VERSION, list_regression_songs
-from song_agent.domains.creation.renderers.audio import RendererError, load_renderer_config, render_audio, renderer_configured
-from song_agent.domains.creation.renderers.midi import render_midi
-from song_agent.domains.creation.schemas.song import SongPlan, SongRequest
+from song_agent.domains.quality.acceptance_profiles import AcceptanceProfile as AcceptanceProfile, get_acceptance_profile as get_acceptance_profile, profile_payload as profile_payload
+from song_agent.domains.creation.agent.pipeline import SongAgent as SongAgent
+from song_agent.domains.quality.audio_health import analyze_wav_health as analyze_wav_health, audio_health_summary as audio_health_summary
+from song_agent.domains.creation.music_health import analyze_music_health as analyze_music_health, music_health_allows_review as music_health_allows_review, music_health_summary as music_health_summary
+from song_agent.domains.studio.projectio import read_json as read_json, slugify as slugify, write_json as write_json
+from song_agent.domains.studio.project_repository import ProjectStore as ProjectStore, now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.regression_songbook import BUILTIN_SONGBOOK_ID as BUILTIN_SONGBOOK_ID, BUILTIN_SONGBOOK_VERSION as BUILTIN_SONGBOOK_VERSION, list_regression_songs as list_regression_songs
+from song_agent.domains.creation.renderers.audio import RendererError as RendererError, load_renderer_config as load_renderer_config, render_audio as render_audio, renderer_configured as renderer_configured
+from song_agent.domains.creation.renderers.midi import render_midi as render_midi
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, SongRequest as SongRequest
 
 
 ACCEPTANCE_ROOT = Path(".musicforge") / "acceptance"

@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import os
-import re
-import shutil
-import threading
-import zipfile
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import os as os
+import re as re
+import shutil as shutil
+import threading as threading
+import zipfile as zipfile
+from dataclasses import dataclass as dataclass
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.project_quality import QualityGateResult
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.creation.stems import read_stem_manifest, stem_audio_path, stem_manifest_stale, stem_midi_path
+from song_agent.domains.studio.project_quality import QualityGateResult as QualityGateResult
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.creation.stems import read_stem_manifest as read_stem_manifest, stem_audio_path as stem_audio_path, stem_manifest_stale as stem_manifest_stale, stem_midi_path as stem_midi_path
 
 
 class FinalExportError(ValueError):

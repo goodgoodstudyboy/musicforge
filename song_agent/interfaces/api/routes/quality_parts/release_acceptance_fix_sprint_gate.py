@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from typing import Any
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesReleaseAcceptanceFixSprintGate:
-    def _release_acceptance_fix_sprint_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_acceptance_fix_sprint_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         fix_sprint_id = str(payload.get("acceptance_fix_sprint_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_acceptance_fix_sprint", False))
@@ -38,7 +39,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
         except _interfaces_api_runtime.AcceptanceFixSprintError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_acceptance_fix_plan_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_acceptance_fix_plan_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         plan_id = str(payload.get("acceptance_fix_plan_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_acceptance_fix_plan", False))
@@ -66,7 +67,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
         except _interfaces_api_runtime.AcceptanceFixPlanError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_acceptance_fix_plan_review_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_acceptance_fix_plan_review_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         review_id = str(payload.get("acceptance_fix_plan_review_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_acceptance_fix_plan_review", False))
@@ -97,7 +98,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
         except _interfaces_api_runtime.AcceptanceFixPlanReviewError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_acceptance_kb_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_acceptance_kb_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         release_id = str(payload.get("release_id") or "").strip()
         if not release_id:
             return {}
@@ -108,7 +109,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseError as exc:
             return {"status": "warning", "message": str(exc)}
 
-    def _release_planning_rule_simulation_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_planning_rule_simulation_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         simulation_id = str(payload.get("planning_simulation_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_planning_rule_simulation", False))
@@ -142,7 +143,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
         except _interfaces_api_runtime.PlanningRuleSimulationError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_planning_rule_governance_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_planning_rule_governance_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         require_gate = bool(payload.get("require_planning_rule_governance", False))
         requested_version_id = str(payload.get("planning_rule_version_id") or "").strip()
         force = bool(payload.get("force", False))
@@ -174,7 +175,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
         except _interfaces_api_runtime.PlanningRuleGovernanceError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_planning_rule_impact_gate(self, payload: ImplementationDocument) -> dict[str, _interfaces_api_runtime.Any]:
+    def _release_planning_rule_impact_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         report_id = str(payload.get("planning_rule_impact_report_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_planning_rule_impact", False))

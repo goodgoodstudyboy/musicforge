@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import threading
-from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import now_iso, read_json, write_json
+from song_agent.domains.studio.projectio import now_iso as now_iso, read_json as read_json, write_json as write_json
 
 
 SCHEMA_VERSION = 1

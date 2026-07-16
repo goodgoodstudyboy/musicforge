@@ -2,24 +2,24 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import math
-import re
-import shutil
-import threading
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+import json as json
+import math as math
+import re as re
+import shutil as shutil
+import threading as threading
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.music_quality import attach_quality
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.creation.renderers.audio import RendererConfig, RendererError, render_audio
-from song_agent.domains.creation.renderers.midi import PROGRAMS_BY_ROLE, _header_chunk, _meta_track, _music_track, _track_role
-from song_agent.domains.creation.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
-from song_agent.domains.studio.song_editor import EditorPreview, build_editor_state, song_plan_hash, validate_editor_preview_id
-from song_agent.domains.studio.editor_review import add_marker, apply_review_patch, audition_review_row, default_review, delete_marker, normalize_review, record_asset_created, review_board, review_summary as audition_review_summary, update_marker
+from song_agent.domains.creation.music_quality import attach_quality as attach_quality
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.creation.renderers.audio import RendererConfig as RendererConfig, RendererError as RendererError, render_audio as render_audio
+from song_agent.domains.creation.renderers.midi import PROGRAMS_BY_ROLE as PROGRAMS_BY_ROLE, _header_chunk as _header_chunk, _meta_track as _meta_track, _music_track as _music_track, _track_role as _track_role
+from song_agent.domains.creation.schemas.song import NoteEvent as NoteEvent, SongPlan as SongPlan, SongSection as SongSection, TrackPlan as TrackPlan
+from song_agent.domains.studio.song_editor import EditorPreview as EditorPreview, build_editor_state as build_editor_state, song_plan_hash as song_plan_hash, validate_editor_preview_id as validate_editor_preview_id
+from song_agent.domains.studio.editor_review import add_marker as add_marker, apply_review_patch as apply_review_patch, audition_review_row as audition_review_row, default_review as default_review, delete_marker as delete_marker, normalize_review as normalize_review, record_asset_created as record_asset_created, review_board as review_board, review_summary as audition_review_summary, update_marker as update_marker
 
 
 EDITOR_AUDITION_SCHEMA_VERSION = 1

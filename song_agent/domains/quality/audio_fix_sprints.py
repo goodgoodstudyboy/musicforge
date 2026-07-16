@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import shutil
-import threading
-from pathlib import Path
-from typing import Any, Callable
+import json as json
+import shutil as shutil
+import threading as threading
+from pathlib import Path as Path
+from typing import Any as Any, Callable as Callable
 
-from song_agent.domains.quality.audio_lab import AudioLabStore
-from song_agent.domains.creation.music_health import analyze_music_health
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.redaction import sanitize_sensitive_text
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.creation.schemas.song import SongRequest
-from song_agent.domains.creation.agent.pipeline import SongAgent
-from song_agent.domains.creation.renderers.midi import render_midi
+from song_agent.domains.quality.audio_lab import AudioLabStore as AudioLabStore
+from song_agent.domains.creation.music_health import analyze_music_health as analyze_music_health
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.creation.redaction import sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.creation.schemas.song import SongRequest as SongRequest
+from song_agent.domains.creation.agent.pipeline import SongAgent as SongAgent
+from song_agent.domains.creation.renderers.midi import render_midi as render_midi
 
 
 AUDIO_FIX_SCHEMA_VERSION = 1

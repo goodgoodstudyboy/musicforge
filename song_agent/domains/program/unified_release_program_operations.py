@@ -2,33 +2,23 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import shutil
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import shutil as shutil
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.platform.contracts.lifecycle import ResetAuthorization
-from song_agent.platform.lifecycle import ArchiveBuilder, ChangeRequestService, HistoryChain, ResetService, SignoffService
-from song_agent.platform.persistence import WorkspaceLock
-from song_agent.platform.persistence.program import program_json_facade
-from song_agent.platform.time import now_iso
-from song_agent.platform.verification.sanitization import sanitize_metadata, sanitize_sensitive_text
-from song_agent.platform.verification.hashing import stable_hash
-from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore
-from song_agent.domains.program.unified_release_program_operations_verifier import (
-    UNIFIED_RELEASE_PROGRAM_CONTINUOUS_REVIEW_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_LIFECYCLE_AUDIT_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_OPERATIONS_PACKAGE_TYPE,
-    UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION,
-    verify_unified_release_program_operations_package,
-    write_unified_release_program_operations_verification_report,
-)
-from song_agent.domains.program.unified_release_program_verifier import (
-    UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE,
-    verify_unified_release_program_package,
-)
+from song_agent.platform.contracts.lifecycle import ResetAuthorization as ResetAuthorization
+from song_agent.platform.lifecycle import ArchiveBuilder as ArchiveBuilder, ChangeRequestService as ChangeRequestService, HistoryChain as HistoryChain, ResetService as ResetService, SignoffService as SignoffService
+from song_agent.platform.persistence import WorkspaceLock as WorkspaceLock
+from song_agent.platform.persistence.program import program_json_facade as program_json_facade
+from song_agent.platform.time import now_iso as now_iso
+from song_agent.platform.verification.sanitization import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.platform.verification.hashing import stable_hash as stable_hash
+from song_agent.domains.program.unified_release_program import UnifiedReleaseProgramStore as UnifiedReleaseProgramStore
+from song_agent.domains.program.unified_release_program_operations_verifier import UNIFIED_RELEASE_PROGRAM_CONTINUOUS_REVIEW_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_CONTINUOUS_REVIEW_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_LIFECYCLE_AUDIT_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_LIFECYCLE_AUDIT_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_OPERATIONS_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_OPERATIONS_PACKAGE_TYPE, UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION as UNIFIED_RELEASE_PROGRAM_OPERATIONS_SCHEMA_VERSION, verify_unified_release_program_operations_package as verify_unified_release_program_operations_package, write_unified_release_program_operations_verification_report as write_unified_release_program_operations_verification_report
+from song_agent.domains.program.unified_release_program_verifier import UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE as UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE, verify_unified_release_program_package as verify_unified_release_program_package
 
 
 class UnifiedReleaseProgramOperationsError(ValueError):

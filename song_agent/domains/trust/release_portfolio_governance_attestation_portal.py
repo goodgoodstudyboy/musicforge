@@ -2,27 +2,27 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import html
-import hashlib
-import json
-import os
-import shutil
-import threading
-import zipfile
-from pathlib import Path
-from typing import Any
+import html as html
+import hashlib as hashlib
+import json as json
+import os as os
+import shutil as shutil
+import threading as threading
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.studio.projects import now_iso
-from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS, sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.trust.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore
-from song_agent.domains.trust.attestation_store_ports import AttestationRegistryStorePort
-from song_agent.domains.trust.release_portfolio_governance_attestation_registry_contracts import registry_summary
-from song_agent.domains.trust.release_portfolio_governance_attestation_registry_verifier import verify_release_portfolio_governance_attestation_registry
-from song_agent.domains.trust.release_portfolio_governance_attestation_verifier import verify_release_portfolio_governance_attestation
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.trust.release_portfolio_governance_attestation_portal_contracts import PORTAL_BLOCKED_KEYS, PORTAL_MANIFEST_HASH_EXCLUDE_KEYS, PORTAL_PACKAGE_TYPE, PORTAL_PAGES, PORTAL_REPORT_HASH_EXCLUDE_KEYS, portal_manifest_hash, portal_report_hash, portal_summary, portal_verification_summary
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.studio.projects import now_iso as now_iso
+from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS as DEFAULT_BLOCKED_METADATA_KEYS, SENSITIVE_VALUE_PATTERNS as SENSITIVE_VALUE_PATTERNS, sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.trust.release_portfolio_governance_attestation import ReleasePortfolioGovernanceAttestationStore as ReleasePortfolioGovernanceAttestationStore
+from song_agent.domains.trust.attestation_store_ports import AttestationRegistryStorePort as AttestationRegistryStorePort
+from song_agent.domains.trust.release_portfolio_governance_attestation_registry_contracts import registry_summary as registry_summary
+from song_agent.domains.trust.release_portfolio_governance_attestation_registry_verifier import verify_release_portfolio_governance_attestation_registry as verify_release_portfolio_governance_attestation_registry
+from song_agent.domains.trust.release_portfolio_governance_attestation_verifier import verify_release_portfolio_governance_attestation as verify_release_portfolio_governance_attestation
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.trust.release_portfolio_governance_attestation_portal_contracts import PORTAL_BLOCKED_KEYS as PORTAL_BLOCKED_KEYS, PORTAL_MANIFEST_HASH_EXCLUDE_KEYS as PORTAL_MANIFEST_HASH_EXCLUDE_KEYS, PORTAL_PACKAGE_TYPE as PORTAL_PACKAGE_TYPE, PORTAL_PAGES as PORTAL_PAGES, PORTAL_REPORT_HASH_EXCLUDE_KEYS as PORTAL_REPORT_HASH_EXCLUDE_KEYS, portal_manifest_hash as portal_manifest_hash, portal_report_hash as portal_report_hash, portal_summary as portal_summary, portal_verification_summary as portal_verification_summary
 
 
 PORTAL_SCHEMA_VERSION = 1

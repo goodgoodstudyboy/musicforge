@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import io
-import math
-import wave
-from pathlib import Path
-from typing import Any
+import hashlib as hashlib
+import io as io
+import math as math
+import wave as wave
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata
-from song_agent.domains.quality.mix_controls import stable_hash
+from song_agent.domains.studio.projectio import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
+from song_agent.domains.quality.mix_controls import stable_hash as stable_hash
 
 
 AUDIO_HEALTH_SCHEMA_VERSION = 1

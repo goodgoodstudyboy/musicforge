@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
+from typing import Any
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -75,7 +76,7 @@ class CreationRoutesProjectCandidateArtifact:
 
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Candidate artifact route not found.")
 
-    def _project_candidate_group_or_conflict(self, project_id: str, group_store: CandidateGroupStore, group_id: str) -> _interfaces_api_runtime.Any | None:
+    def _project_candidate_group_or_conflict(self, project_id: str, group_store: _interfaces_api_runtime.CandidateGroupStore, group_id: str) -> Any | None:
         document = self.project_store.sync_project(project_id, self.store.get_job)
         group = group_store.read_group(group_id)
         parent = next((version for version in document.versions if version.version_id == group.parent_version_id), None)
@@ -287,7 +288,7 @@ class CreationRoutesProjectCandidateArtifact:
             self.project_store.append_event(project_id, "project_review_metrics_refreshed", {"latest_readiness": report.get("latest_readiness"), "sprint_count": report.get("sprint_count")})
         self._send_json({"ok": True, "project_id": project_id, "review_metrics": report, "summary": _interfaces_api_runtime.project_review_metrics_summary(report)})
 
-    def _project_edit_parent(self, project_id: str, version_id: str) -> tuple[_interfaces_api_runtime.Any, _interfaces_api_runtime.Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.SongPlan]:
+    def _project_edit_parent(self, project_id: str, version_id: str) -> tuple[Any, Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.SongPlan]:
         document = self.project_store.sync_project(project_id, self.store.get_job)
         parent = next((version for version in document.versions if version.version_id == version_id), None)
         if parent is None:

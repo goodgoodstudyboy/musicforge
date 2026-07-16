@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import re
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+import re as re
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, write_json
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
 
 
 NODE_NAME_RE = re.compile(r"^[a-z0-9_-]+$")

@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-import os
-import shutil
-import subprocess
-import zipfile
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
-from typing import Any
+import hashlib as hashlib
+import json as json
+import os as os
+import shutil as shutil
+import subprocess as subprocess
+import zipfile as zipfile
+from datetime import datetime as datetime, timezone as timezone
+from pathlib import Path as Path, PurePosixPath as PurePosixPath
+from typing import Any as Any
 
 from song_agent.platform.version import VERSION as __version__
-from song_agent.domains.creation.lts_backup_verifier import LEGAL_SIDECAR_ENTRIES, MAINTENANCE_BACKUP_PACKAGE_TYPE, maintenance_backup_manifest_hash, verify_maintenance_backup_zip, write_maintenance_backup_verification_report
-from song_agent.domains.quality.music_acceptance import stable_hash
-from song_agent.domains.studio.projectio import read_json, write_json
+from song_agent.domains.creation.lts_backup_verifier import LEGAL_SIDECAR_ENTRIES as LEGAL_SIDECAR_ENTRIES, MAINTENANCE_BACKUP_PACKAGE_TYPE as MAINTENANCE_BACKUP_PACKAGE_TYPE, maintenance_backup_manifest_hash as maintenance_backup_manifest_hash, verify_maintenance_backup_zip as verify_maintenance_backup_zip, write_maintenance_backup_verification_report as write_maintenance_backup_verification_report
+from song_agent.domains.quality.music_acceptance import stable_hash as stable_hash
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
 
 
 DEFAULT_MAINTENANCE_ROOT = Path(".musicforge") / "maintenance"

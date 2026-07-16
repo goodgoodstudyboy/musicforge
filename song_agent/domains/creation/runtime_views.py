@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from pathlib import Path
-from typing import Any
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.creation.music_quality import analyze_song_quality, quality_issues_for_plan
-from song_agent.domains.studio.projectio import read_json
-from song_agent.domains.creation.schemas.song import SongPlan
+from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality, quality_issues_for_plan as quality_issues_for_plan
+from song_agent.domains.studio.projectio import read_json as read_json
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 
 
 def build_summary_view(plan: Any) -> dict[str, Any]:

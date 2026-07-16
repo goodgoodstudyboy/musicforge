@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import hashlib
-import json
-from typing import Any
+import hashlib as hashlib
+import json as json
+from typing import Any as Any
 
-from song_agent.domains.studio.prompt_templates import PromptTemplate, render_prompt_template
-from song_agent.domains.creation.provider import ProviderConfig, ProviderConfigError, ProviderEditResponse, ProviderOutputError
-from song_agent.domains.studio.project_repository import now_iso
-from song_agent.domains.creation.redaction import sanitize_metadata, sanitize_sensitive_text
-from song_agent.domains.quality.review_tasks import ReviewCandidate, ReviewTask, validate_review_candidate_id
-from song_agent.domains.creation.schemas.song import SongPlan
-from song_agent.domains.studio.song_editor import song_plan_hash
+from song_agent.domains.studio.prompt_templates import PromptTemplate as PromptTemplate, render_prompt_template as render_prompt_template
+from song_agent.domains.creation.provider import ProviderConfig as ProviderConfig, ProviderConfigError as ProviderConfigError, ProviderEditResponse as ProviderEditResponse, ProviderOutputError as ProviderOutputError
+from song_agent.domains.studio.project_repository import now_iso as now_iso
+from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.quality.review_tasks import ReviewCandidate as ReviewCandidate, ReviewTask as ReviewTask, validate_review_candidate_id as validate_review_candidate_id
+from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
+from song_agent.domains.studio.song_editor import song_plan_hash as song_plan_hash
 
 
 REVIEW_JUDGE_SCHEMA_VERSION = 1

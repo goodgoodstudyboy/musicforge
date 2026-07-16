@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-import json
-import re
-import zipfile
-from pathlib import Path
-from typing import Any
+import json as json
+import re as re
+import zipfile as zipfile
+from pathlib import Path as Path
+from typing import Any as Any
 
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.redaction import sanitize_sensitive_text
-from song_agent.domains.delivery.releases import stable_hash
-from song_agent.domains.program.unified_command_center_continuous_review_verifier import UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_continuous_review_package
+from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
+from song_agent.domains.creation.redaction import sanitize_sensitive_text as sanitize_sensitive_text
+from song_agent.domains.delivery.releases import stable_hash as stable_hash
+from song_agent.domains.program.unified_command_center_continuous_review_verifier import UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE as UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_VERIFICATION_PACKAGE_TYPE, verify_unified_command_center_continuous_review_package as verify_unified_command_center_continuous_review_package
 
 
 UNIFIED_COMMAND_CENTER_DRIFT_RESPONSE_PACKAGE_TYPE = "musicforge_unified_command_center_drift_response"

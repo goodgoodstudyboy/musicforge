@@ -2,18 +2,11 @@ from __future__ import annotations
 
 from song_agent.interfaces.cli.bindings import BINDINGS as CLI_BINDINGS
 import argparse
-import json
-import sys
 import os
 from pathlib import Path
 from typing import Any
-from song_agent.application.generation.service import generate_request
 from song_agent.domains.creation.auth import build_auth_config
-from song_agent.domains.studio.projectio import read_json, write_json
-from song_agent.domains.creation.provider import ProviderConfig, ProviderError, load_provider_config, provider_configured, test_provider_config
-from song_agent.domains.creation.schemas.song import SongRequest
 
-from song_agent.application.interface_persistence import write_interface_document
 
 from song_agent.interfaces.cli.registry import CommandSpec
 def build_serve_parser(*args: Any, **kwargs: Any) -> Any:

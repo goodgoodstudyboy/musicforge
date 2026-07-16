@@ -30,3 +30,22 @@ ZIP-external `*.anchor.json` is frozen when the archive is built and binds the
 migration/source/target plus final ZIP and manifest fingerprints. Final LTS
 verification requires this anchor, so an internally re-signed archive cannot
 replace the migration facts.
+
+## v14 Domain Cutover
+
+```powershell
+song-agent-state --workspace .musicforge v14-plan
+song-agent-state --workspace .musicforge v14-rollback-rehearsal
+song-agent-state --workspace .musicforge v14-apply
+python -m song_agent.cli doctor
+python -m song_agent.cli release-check --profile v14 --skip-tests --json
+```
+
+The v14 migrator adopts mutable indexes under a workspace lock and SQLite
+transaction. Before apply it fingerprints source files, signed/history/binding
+artifacts, and current pointers; it writes a verified backup and a prepared
+intent. A successful apply writes a bound migration report and commit marker.
+Rollback requires those three integrity-protected documents and restores the
+logical mutable index while source evidence remains byte-identical. Never delete
+an incomplete intent or fabricate a commit marker; recover from the verified
+backup and retain the migration directory for audit.

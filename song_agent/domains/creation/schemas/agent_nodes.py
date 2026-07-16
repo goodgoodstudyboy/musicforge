@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
-from dataclasses import asdict, dataclass, field
-from typing import Any
+from dataclasses import asdict as asdict, dataclass as dataclass, field as field
+from typing import Any as Any
 
-from song_agent.domains.creation.schemas.song import MotifPlan, NoteEvent
+from song_agent.domains.creation.schemas.song import MotifPlan as MotifPlan, NoteEvent as NoteEvent
 
 
 def _require_mapping(data: Any, name: str) -> ImplementationDocument:
@@ -53,6 +53,10 @@ def _range_int(
     if value < low or value > high:
         raise ValueError(f"{field_name} must be between {low} and {high}.")
     return value
+
+
+def _clamp_int(value: int, low: int, high: int) -> int:
+    return max(low, min(high, value))
 
 
 @dataclass(frozen=True)

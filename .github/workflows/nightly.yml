@@ -90,6 +90,8 @@ jobs:
       - run: python tools/assert_ci_final_sha.py
       - name: v13-rollback-rehearsal
         run: python tools/run_migration_rehearsal.py --output migration-rehearsal.json
+      - name: v14-rollback-rehearsal
+        run: python tools/run_v14_migration_rehearsal.py --output migration-rehearsal-v14.json
 
   certification:
     if: always()
