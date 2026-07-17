@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import re
@@ -25,7 +27,7 @@ def build_observatory_documents(config: dict[str, Any], release_entries: list[di
     now = now_iso()
     config_doc = dict(config)
     config_doc["integrity_hash"] = _integrity_hash(config_doc)
-    thresholds = _default_thresholds(config_doc.get("thresholds") if isinstance(config_doc.get("thresholds"), dict) else {})
+    thresholds = _default_thresholds(_as_document(config_doc.get("thresholds")))
     facts = [_external_facts_from_entry(entry) for entry in release_entries]
     release_rows = [_source_row(item) for item in facts]
     fingerprint_rows = [component for item in facts for component in item.get("components", [])]
@@ -61,7 +63,10 @@ def build_observatory_documents(config: dict[str, Any], release_entries: list[di
     risk_register = _risk_register(config_doc, facts, trend_report, issue_heatmap, baseline_drift, remediation_cost, thresholds=thresholds, source_hash=source_hash)
     recommendation_report = _recommendation_report(config_doc, risk_register, source_hash=source_hash)
     status = "failed" if risk_register.get("summary", {}).get("critical_risk_count", 0) else "warning" if risk_register.get("summary", {}).get("warning_risk_count", 0) else "passed"
-    summary = {
+    fingerprint_summary = _as_document(evidence_fingerprints.get("summary"))
+    risk_summary = _as_document(risk_register.get("summary"))
+    trend_summary = _as_document(trend_report.get("summary"))
+    summary: ImplementationDocument = {
         "schema_version": RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION,
         "package_type": RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE,
         "observatory_id": config_doc.get("observatory_id"),
@@ -73,11 +78,11 @@ def build_observatory_documents(config: dict[str, Any], release_entries: list[di
             "release_ids": [row.get("release_id") for row in release_rows if row.get("release_id")],
             "track_count": sum(int(row.get("track_count") or 0) for row in release_rows),
             "component_count": len(fingerprint_rows),
-            "failed_component_count": evidence_fingerprints["summary"]["failed_component_count"],
-            "critical_risk_count": risk_register["summary"]["critical_risk_count"],
-            "warning_risk_count": risk_register["summary"]["warning_risk_count"],
-            "average_manual_rating": trend_report["summary"]["average_manual_rating"],
-            "minimum_manual_rating": trend_report["summary"]["minimum_manual_rating"],
+            "failed_component_count": fingerprint_summary.get("failed_component_count"),
+            "critical_risk_count": risk_summary.get("critical_risk_count"),
+            "warning_risk_count": risk_summary.get("warning_risk_count"),
+            "average_manual_rating": trend_summary.get("average_manual_rating"),
+            "minimum_manual_rating": trend_summary.get("minimum_manual_rating"),
         },
         "document_hashes": {},
         "created_at": now,
@@ -388,7 +393,7 @@ def _risk_register(config: ImplementationDocument, facts: list[ImplementationDoc
 
 
 def _recommendation_report(config: ImplementationDocument, risk_register: ImplementationDocument, *, source_hash: str) -> ImplementationDocument:
-    recommendations = []
+    recommendations: list[_InferenceType] = []
     for risk in risk_register.get("risks") or []:
         action = "refresh_audio_evidence" if risk.get("check_id") == "audio_evidence_not_current" else "open_audio_quality_review"
         recommendations.append({"recommendation_id": f"aqrec-{len(recommendations)+1:06d}", "source_risk_id": risk.get("risk_id"), "action": action, "manual_required": True, "reason": risk.get("message")})

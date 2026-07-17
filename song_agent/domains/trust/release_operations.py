@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_text as _as_text
 
 import hashlib as hashlib
 import json as json
@@ -109,7 +109,7 @@ class ReleaseOperationsStore:
         if not path.exists():
             return default if default is not None else {}
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {}, blocked_keys=OPERATIONS_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(data), blocked_keys=OPERATIONS_BLOCKED_KEYS)
 
     def overview(self, release_id: str) -> dict[str, Any]:
         self.release_store.get_release(release_id)
@@ -242,7 +242,7 @@ class ReleaseOperationsStore:
                 "blocker_count": report.get("summary", {}).get("blocker_count", 0),
                 "warning_count": report.get("summary", {}).get("warning_count", 0),
             }
-            verifier_summaries = report.get("verifier_summaries") if isinstance(report.get("verifier_summaries"), dict) else {}
+            verifier_summaries = _as_document(report.get("verifier_summaries"))
             _write_json(export_dir / "operations-report.json", report)
             _write_json(export_dir / "readiness-summary.json", readiness)
             _write_json(export_dir / "evidence-graph.json", report.get("evidence_graph", {}))
@@ -329,7 +329,7 @@ class ReleaseOperationsStore:
         if not path.exists():
             raise FileNotFoundError("Operations export has not been generated.")
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {}, blocked_keys=OPERATIONS_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(data), blocked_keys=OPERATIONS_BLOCKED_KEYS)
 
 
 class _OperationsCollector:
@@ -593,7 +593,7 @@ class _OperationsCollector:
                     verifier_summary = {"status": "failed", "submission_id": batch.submission_id, "error": str(exc)}
             verifiers.append(verifier_summary)
             packages.append({**package_summary, "submission_id": batch.submission_id, "verify_status": verifier_summary.get("status")})
-            row = {"submission": batch_summary, "qa_summary": _summary_status(qa), "export_summary": export_summary, "signoff_summary": submission_signoff_summary(signoff), "package_summary": package_summary, "verifier_summary": verifier_summary, "items": [item.to_dict() for item in batch.items]}
+            row: ImplementationDocument = {"submission": batch_summary, "qa_summary": _summary_status(qa), "export_summary": export_summary, "signoff_summary": submission_signoff_summary(signoff), "package_summary": package_summary, "verifier_summary": verifier_summary, "items": [item.to_dict() for item in batch.items]}
             rows.append(row)
             self._node(f"submission:{batch.submission_id}", "submission_batch", batch.name, row["signoff_summary"].get("status") or batch.status)
             self._edge(f"release:{self.release_id}", f"submission:{batch.submission_id}", "submits")
@@ -641,7 +641,7 @@ class _OperationsCollector:
             rows.append({"submission_id": batch.submission_id, "report_summary": report_summary, "signoff_summary": signoff_summary, "export_summary": export_summary, "package_summary": package_summary, "verifier_summary": verifier_summary})
             verifiers.append(verifier_summary)
             packages.append({**package_summary, "submission_id": batch.submission_id, "verify_status": verifier_summary.get("status")})
-            self._node(f"submission_evidence:{batch.submission_id}", "submission_evidence", f"Evidence {batch.submission_id}", signoff_summary.get("status") or report_summary.get("status"))
+            self._node(f"submission_evidence:{batch.submission_id}", "submission_evidence", f"Evidence {batch.submission_id}", _as_text(signoff_summary.get("status") or report_summary.get("status")))
             self._edge(f"submission:{batch.submission_id}", f"submission_evidence:{batch.submission_id}", "evidence")
             if report_summary.get("status") not in {"passed", "warning"}:
                 _add_blocker_action(domain, batch.submission_id, "submission_evidence_report_missing", f"Submission Evidence report is missing or failed for {batch.submission_id}.", _action_for_check("submission_evidence_report_missing"), stage="accepted")
@@ -696,13 +696,13 @@ class _OperationsCollector:
 
 
 def operations_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == operations_report_integrity_hash(data)
 
 
 def operations_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -725,8 +725,8 @@ def _domain(domain_id: str, status: str, *, summary: ImplementationDocument, req
 
 
 def _finalize_domain(domain: ImplementationDocument, *, optional_missing_pass: bool = False) -> None:
-    blockers = domain.get("blockers") if isinstance(domain.get("blockers"), list) else []
-    warnings = domain.get("warnings") if isinstance(domain.get("warnings"), list) else []
+    blockers = _as_list(domain.get("blockers"))
+    warnings = _as_list(domain.get("warnings"))
     domain["blocker_count"] = len(blockers)
     domain["warning_count"] = len(warnings)
     if blockers:
@@ -879,17 +879,17 @@ def _package_summary_count(package_summaries: ImplementationDocument) -> int:
 
 
 def _summary_status(value: ImplementationDocument | None) -> ImplementationDocument:
-    data = value if isinstance(value, dict) else {}
+    data = _as_document(value)
     if not data:
         return {"status": "missing"}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata({**summary, "status": data.get("status") or summary.get("status") or "present", "source_hash": data.get("source_hash") or summary.get("source_hash"), "integrity_hash": data.get("integrity_hash") or summary.get("integrity_hash")}, blocked_keys=OPERATIONS_BLOCKED_KEYS)
 
 
 def _rights_summary(report: ImplementationDocument) -> ImplementationDocument:
     if not report:
         return {"status": "missing"}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status") or summary.get("status") or "present",
@@ -961,7 +961,7 @@ def _redaction_summary(value: Any) -> ImplementationDocument:
 
 
 def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     lines = [
         "MusicForge Release Operations Package",
         "",

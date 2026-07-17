@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -74,7 +74,7 @@ def print_release_portfolio_governance_attestation_registry_verification_report(
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -196,7 +196,7 @@ class _RegistryVerifier:
         self._add_check("manifest", "registry_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Registry manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Registry manifest integrity hash does not match.")
         package_type_ok = self.manifest.get("package_type") == REGISTRY_PACKAGE_TYPE
         self._add_check("manifest", "registry_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is valid." if package_type_ok else "Manifest package_type is invalid.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -253,9 +253,9 @@ class _RegistryVerifier:
     def _verify_documents(self) -> None:
         if self.registry:
             self._add_hash_check("registry", "registry_integrity", self.registry.get("integrity_hash"), registry_hash(self.registry), "Registry integrity")
-            row = self.manifest.get("registry") if isinstance(self.manifest.get("registry"), dict) else {}
+            row = _as_document(self.manifest.get("registry"))
             self._add_hash_check("registry", "registry_manifest_registry_hash", row.get("integrity_hash"), self.registry.get("integrity_hash"), "Manifest registry hash")
-            entries = self.registry.get("entries") if isinstance(self.registry.get("entries"), list) else []
+            entries = _as_list(self.registry.get("entries"))
             ids = [str(item.get("entry_id") or "") for item in entries if isinstance(item, dict)]
             self._add_check("registry", "registry_entry_ids_unique", "passed" if len(ids) == len(set(ids)) else "failed", "blocking", "Registry entry IDs are unique." if len(ids) == len(set(ids)) else "Registry entry IDs are duplicated.")
             certificate_map: dict[str, set[str]] = {}
@@ -267,7 +267,7 @@ class _RegistryVerifier:
                 self._add_hash_check("registry", f"{entry_id}_integrity", entry.get("integrity_hash"), registry_entry_hash(entry), f"Entry {entry_id} integrity")
                 self._add_check("registry", f"{entry_id}_status", "passed" if entry.get("status") in ENTRY_STATUSES else "failed", "blocking", f"Entry {entry_id} status is valid." if entry.get("status") in ENTRY_STATUSES else f"Entry {entry_id} status is invalid.")
                 cert_id = str(entry.get("certificate_id") or "")
-                zip_sha = str((entry.get("source") if isinstance(entry.get("source"), dict) else {}).get("attestation_zip_sha256") or "")
+                zip_sha = str((_as_document(entry.get("source"))).get("attestation_zip_sha256") or "")
                 if cert_id:
                     certificate_map.setdefault(cert_id, set()).add(zip_sha)
                 if entry.get("status") == "superseded":
@@ -284,10 +284,10 @@ class _RegistryVerifier:
             self._add_check("registry", "registry_document_exists", "failed", "blocking", "registry.json must contain a JSON object.")
         if self.report_doc:
             self._add_hash_check("report", "registry_report_integrity", self.report_doc.get("integrity_hash"), registry_report_hash(self.report_doc), "Registry Report integrity")
-            row = self.manifest.get("registry_report") if isinstance(self.manifest.get("registry_report"), dict) else {}
+            row = _as_document(self.manifest.get("registry_report"))
             self._add_hash_check("report", "registry_manifest_report_hash", row.get("integrity_hash"), self.report_doc.get("integrity_hash"), "Manifest report hash")
             self._add_hash_check("report", "registry_manifest_report_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest report source hash")
-            source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+            source = _as_document(self.report_doc.get("source"))
             self._add_hash_check("report", "registry_report_source_registry_hash", source.get("registry_hash"), self.registry.get("integrity_hash"), "Report registry source hash")
             expected_source = _report_source_from_registry(self.registry)
             for key in (
@@ -301,7 +301,7 @@ class _RegistryVerifier:
             ):
                 self._add_exact_check("report", f"registry_report_source_{key}", source.get(key), expected_source.get(key), f"Report source {key}")
             expected = registry_summary(self.registry)
-            summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+            summary = _as_document(self.report_doc.get("summary"))
             for key in ("entry_count", "published_count", "revoked_count", "superseded_count", "current_entry_id"):
                 self._add_value_check("report", f"registry_report_summary_{key}", summary.get(key), expected.get(key), f"Report summary {key}")
         else:
@@ -311,9 +311,9 @@ class _RegistryVerifier:
             self._add_hash_check("package_index", "registry_package_index_source_hash", self.package_index.get("source_hash"), self.report_doc.get("source_hash"), "Package index source hash")
             self._add_exact_check("package_index", "registry_package_index_portfolio_id", self.package_index.get("portfolio_id"), self.registry.get("portfolio_id"), "Package index portfolio_id")
             expected_items = _package_index_items_from_registry(self.registry)
-            actual_items = self.package_index.get("items") if isinstance(self.package_index.get("items"), list) else []
+            actual_items = _as_list(self.package_index.get("items"))
             self._add_hash_check("package_index", "registry_package_index_items_match_registry", stable_hash(expected_items), stable_hash(actual_items), "Package index items derived from registry")
-            summary = self.package_index.get("summary") if isinstance(self.package_index.get("summary"), dict) else {}
+            summary = _as_document(self.package_index.get("summary"))
             self._add_exact_check("package_index", "registry_package_index_summary_entry_count", summary.get("entry_count"), len(expected_items), "Package index entry_count")
         else:
             self._add_check("package_index", "registry_package_index_document_exists", "failed", "blocking", "package-index.json must contain a JSON object.")
@@ -321,8 +321,8 @@ class _RegistryVerifier:
             self._add_hash_check("chain", "registry_chain_integrity", self.chain.get("integrity_hash"), stable_hash({key: value for key, value in self.chain.items() if key != "integrity_hash"}), "Chain of custody integrity")
             self._add_hash_check("chain", "registry_chain_source_hash", self.chain.get("source_hash"), self.report_doc.get("source_hash"), "Chain of custody source hash")
             self._add_exact_check("chain", "registry_chain_portfolio_id", self.chain.get("portfolio_id"), self.registry.get("portfolio_id"), "Chain portfolio_id")
-            chain_summary = self.chain.get("summary") if isinstance(self.chain.get("summary"), dict) else {}
-            events = self.chain.get("events") if isinstance(self.chain.get("events"), list) else []
+            chain_summary = _as_document(self.chain.get("summary"))
+            events = _as_list(self.chain.get("events"))
             latest_event_type = events[-1].get("type") if events and isinstance(events[-1], dict) else None
             self._add_exact_check("chain", "registry_chain_summary_current_entry_id", chain_summary.get("current_entry_id"), self.registry.get("current_entry_id"), "Chain current_entry_id")
             self._add_exact_check("chain", "registry_chain_summary_event_count", chain_summary.get("event_count"), len(events), "Chain event_count")
@@ -330,16 +330,16 @@ class _RegistryVerifier:
         else:
             self._add_check("chain", "registry_chain_document_exists", "failed", "blocking", "chain-of-custody.json must contain a JSON object.")
         if self.accepted_evidence:
-            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
-            evidence_external = self.accepted_evidence.get("external_review") if isinstance(self.accepted_evidence.get("external_review"), dict) else {}
+            external = _as_document(self.manifest.get("external_review"))
+            evidence_external = _as_document(self.accepted_evidence.get("external_review"))
             self._add_exact_check("accepted_evidence", "registry_accepted_evidence_source_hash", self.accepted_evidence.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence summary source_hash")
             for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash", "accepted_evidence_verification_report_hash"):
                 self._add_exact_check("accepted_evidence", f"registry_accepted_evidence_{key}", evidence_external.get(key), external.get(key), f"Accepted Evidence summary {key}")
         if self.accepted_evidence_verification:
-            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
-            manifest_verification = self.manifest.get("external_review_verification") if isinstance(self.manifest.get("external_review_verification"), dict) else {}
-            evidence_external = self.accepted_evidence.get("external_review") if isinstance(self.accepted_evidence.get("external_review"), dict) else {}
-            verification = self.accepted_evidence_verification.get("accepted_evidence_verification") if isinstance(self.accepted_evidence_verification.get("accepted_evidence_verification"), dict) else {}
+            external = _as_document(self.manifest.get("external_review"))
+            manifest_verification = _as_document(self.manifest.get("external_review_verification"))
+            evidence_external = _as_document(self.accepted_evidence.get("external_review"))
+            verification = _as_document(self.accepted_evidence_verification.get("accepted_evidence_verification"))
             self._add_exact_check("accepted_evidence", "registry_accepted_evidence_verification_source_hash", self.accepted_evidence_verification.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence verification summary source_hash")
             for key in (
                 "accepted_evidence_id",
@@ -385,8 +385,8 @@ class _RegistryVerifier:
         if self.require_no_revoked_current:
             self._add_check("requirements", "registry_require_no_revoked_current", "passed" if not current or current.get("status") != "revoked" else "failed", "blocking", "Current Registry entry is not revoked." if not current or current.get("status") != "revoked" else "Current Registry entry is revoked.")
         if self.require_accepted_evidence:
-            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
-            verification = self.accepted_evidence_verification.get("accepted_evidence_verification") if isinstance(self.accepted_evidence_verification.get("accepted_evidence_verification"), dict) else {}
+            external = _as_document(self.manifest.get("external_review"))
+            verification = _as_document(self.accepted_evidence_verification.get("accepted_evidence_verification"))
             ok = (
                 bool(self.accepted_evidence)
                 and bool(self.accepted_evidence_verification)
@@ -435,7 +435,7 @@ class _RegistryVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
@@ -482,22 +482,22 @@ def _report_source_from_registry(registry: ImplementationDocument) -> Implementa
         "registry_hash": registry.get("integrity_hash"),
         "current_entry_id": registry.get("current_entry_id"),
         "current_entry_hash": current.get("integrity_hash") if current else None,
-        "current_attestation_zip_sha256": source.get("attestation_zip_sha256") if current else None,
-        "current_attestation_manifest_hash": source.get("attestation_manifest_hash") if current else None,
-        "current_attestation_verification_hash": source.get("attestation_verification_hash") if current else None,
-        "evidence_vault_zip_sha256": source.get("evidence_vault_zip_sha256") if current else None,
-        "final_board_signoff_hash": source.get("final_board_signoff_hash") if current else None,
+        "current_attestation_zip_sha256": _as_document(source).get("attestation_zip_sha256") if current else None,
+        "current_attestation_manifest_hash": _as_document(source).get("attestation_manifest_hash") if current else None,
+        "current_attestation_verification_hash": _as_document(source).get("attestation_verification_hash") if current else None,
+        "evidence_vault_zip_sha256": _as_document(source).get("evidence_vault_zip_sha256") if current else None,
+        "final_board_signoff_hash": _as_document(source).get("final_board_signoff_hash") if current else None,
     }
 
 
 def _package_index_items_from_registry(registry: ImplementationDocument) -> list[ImplementationDocument]:
-    entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
+    entries = _as_list(registry.get("entries"))
     items: list[dict[str, Any]] = []
     for entry in entries:
         if not isinstance(entry, dict):
             continue
         item = {"entry_id": entry.get("entry_id"), "certificate_id": entry.get("certificate_id"), "status": entry.get("status")}
-        source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+        source = _as_document(entry.get("source"))
         item.update(source)
         items.append(item)
     return sanitize_metadata(items, blocked_keys=VERIFIER_BLOCKED_KEYS)

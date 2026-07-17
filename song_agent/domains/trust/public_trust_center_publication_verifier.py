@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -158,12 +158,12 @@ def write_public_trust_center_publication_verification_report(report: dict[str, 
 
 
 def print_public_trust_center_publication_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Publication verification")
     print(f"status: {report.get('status')}")
     print(f"publication: {summary.get('publication_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def public_trust_center_publication_verification_exit_code(report: dict[str, Any]) -> int:
@@ -288,13 +288,13 @@ class _PublicationVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "ptcpub_manifest_integrity", self.manifest.get("integrity_hash"), publication_manifest_hash(self.manifest), "Publication manifest integrity")
         self._add_exact_check("manifest", "ptcpub_manifest_package_type", self.manifest.get("package_type"), PUBLICATION_PACKAGE_TYPE, "Publication manifest package_type")
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         expected = _expected_entries(source)
         missing = sorted(expected - set(self.entry_names))
         unexpected = sorted(set(self.entry_names) - expected)
         self._add_check("zip", "ptcpub_zip_required_entries", "failed" if missing else "passed", "blocking", "Missing publication entries: " + ", ".join(missing[:8]) if missing else "All required publication entries exist.")
         self._add_check("zip", "ptcpub_zip_allowed_entries", "failed" if unexpected else "passed", "blocking", "Unexpected publication entries: " + ", ".join(unexpected[:8]) if unexpected else "Publication ZIP contains only fixed/derived allowed entries.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "ptcpub_manifest_allowed_files", sorted(manifest_paths), sorted(expected - {"publication-manifest.json"}), "Manifest file list matches fixed/derived publication structure")
         mismatches: list[str] = []
@@ -317,7 +317,7 @@ class _PublicationVerifier:
         self._add_check("manifest", "ptcpub_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
     def _verify_documents(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         self._add_hash_check("report", "ptcpub_report_integrity", self.report_doc.get("integrity_hash"), publication_report_hash(self.report_doc), "Publication report integrity")
         self._add_hash_check("report", "ptcpub_report_source_hash", self.report_doc.get("source_hash"), stable_hash(source), "Publication report source hash")
         self._add_exact_check("report", "ptcpub_manifest_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest source hash")
@@ -333,9 +333,9 @@ class _PublicationVerifier:
         self._add_exact_check("mirror_policy", "ptcpub_mirror_policy_allowed_entries", sorted(self.mirror_policy.get("allowed_entries") or []), sorted(_expected_entries(source)), "Mirror policy allowed entries")
 
     def _verify_checksums(self, archive: zipfile.ZipFile) -> None:
-        rows = self.checksum_json.get("files") if isinstance(self.checksum_json.get("files"), list) else []
+        rows = _as_list(self.checksum_json.get("files"))
         row_map = {str(item.get("path") or ""): item for item in rows if isinstance(item, dict)}
-        expected_paths = sorted(_expected_entries(self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}) - {"publication-manifest.json", "checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt"})
+        expected_paths = sorted(_expected_entries(_as_document(self.report_doc.get("source"))) - {"publication-manifest.json", "checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt"})
         self._add_exact_check("checksum", "ptcpub_checksum_paths", sorted(row_map), expected_paths, "Checksum JSON paths")
         self._add_hash_check("checksum", "ptcpub_checksum_integrity", self.checksum_json.get("integrity_hash"), sidecar_hash(self.checksum_json), "Checksum JSON integrity")
         mismatches: list[str] = []
@@ -353,8 +353,8 @@ class _PublicationVerifier:
         self._add_check("checksum", "ptcpub_sha256sums_text", "failed" if missing_lines else "passed", "blocking", "SHA256SUMS.txt missing entries: " + ", ".join(missing_lines[:8]) if missing_lines else "SHA256SUMS.txt lists expected files.")
 
     def _verify_requirements(self) -> None:
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
+        source = _as_document(self.report_doc.get("source"))
         if self.require_ready:
             self._add_exact_check("requirements", "ptcpub_require_ready", [self.report_doc.get("status"), summary.get("ready_for_publication")], ["ready", True], "Publication ready status")
         if self.require_acceptance_board_signoff:
@@ -379,7 +379,7 @@ class _PublicationVerifier:
         self._add_hash_check("requirements", "ptcpub_channel_state_integrity", state.get("integrity_hash"), publication_channel_state_hash(state), "Publication channel state integrity")
         self._add_exact_check("requirements", "ptcpub_channel_state_package_type", state.get("package_type"), PUBLICATION_CHANNEL_STATE_PACKAGE_TYPE, "Publication channel state package_type")
         self._add_exact_check("requirements", "ptcpub_channel_state_channel_id", state.get("channel_id"), self.manifest.get("channel_id") or self.report_doc.get("channel_id"), "Publication channel state channel_id")
-        rows = state.get("publications") if isinstance(state.get("publications"), list) else []
+        rows = _as_list(state.get("publications"))
         publication_id = str(self.manifest.get("publication_id") or self.report_doc.get("publication_id") or "")
         row = next((item for item in rows if isinstance(item, dict) and str(item.get("publication_id") or "") == publication_id), None)
         if row is None:
@@ -506,12 +506,12 @@ class _PublicationVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
         summary = dict(summary)
         summary.update({"publication_id": self.manifest.get("publication_id") or self.report_doc.get("publication_id"), "channel_id": self.manifest.get("channel_id") or self.report_doc.get("channel_id"), "blocker_count": len(blockers), "warning_count": len(warnings), "deep_verification": self.deep_summary})
         return sanitize_metadata(
@@ -575,7 +575,7 @@ def _expected_package_index(source: ImplementationDocument) -> list[Implementati
 
 
 def _strip_integrity_list(value: Any) -> Any:
-    return value if isinstance(value, list) else []
+    return _as_list(value)
 
 
 def _is_safe_entry(name: str) -> bool:
@@ -634,7 +634,7 @@ def _read_json_file(path: Path | None) -> ImplementationDocument:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _counts(values: list[str]) -> dict[str, int]:

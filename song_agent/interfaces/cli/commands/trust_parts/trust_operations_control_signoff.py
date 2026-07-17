@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from typing import Any as _InterfaceType
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_trust_parts_dependencies
@@ -285,10 +289,10 @@ def _trust_operations_final_readiness_source_payload(args: argparse.Namespace) -
     )
     return payload
 
-def print_release_portfolio_audit_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
-    portfolio = result.get("portfolio") if isinstance(result.get("portfolio"), dict) else {}
+def print_release_portfolio_audit_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    verification = _as_document(result.get("verification_summary"))
+    portfolio = _as_document(result.get("portfolio"))
     print("MusicForge release-portfolio-audit")
     print(f"portfolio: {result.get('portfolio_id') or portfolio.get('portfolio_id') or '-'}")
     print(f"status: {summary.get('status') or portfolio.get('status') or '-'}")
@@ -303,10 +307,10 @@ def print_release_portfolio_audit_result(result: dict[str, Any]) -> None:
     if verification:
         print(f"verify: {verification.get('status')}")
 
-def print_release_portfolio_governance_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
-    queue = result.get("queue") if isinstance(result.get("queue"), dict) else {}
+def print_release_portfolio_governance_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    verification = _as_document(result.get("verification_summary"))
+    queue = _as_document(result.get("queue"))
     print("MusicForge release-portfolio-governance-queue")
     print(f"queue: {result.get('queue_id') or queue.get('queue_id') or '-'}")
     print(f"portfolio: {queue.get('portfolio_id') or '-'}")

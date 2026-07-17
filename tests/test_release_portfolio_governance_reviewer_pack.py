@@ -8,7 +8,6 @@ import pytest
 
 from tests.test_release_portfolio_governance_audit import _accepted_governance_fixture
 
-from song_agent.projectio import write_json
 from song_agent.release_portfolio_governance_audit_verifier import verify_release_portfolio_governance_audit_package, write_release_portfolio_governance_audit_verification_report
 from song_agent.release_portfolio_governance_reviewer_pack import (
     ReleasePortfolioGovernanceReviewerPackStateError,

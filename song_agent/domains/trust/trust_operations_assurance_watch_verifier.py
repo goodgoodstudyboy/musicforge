@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -70,14 +70,14 @@ def write_trust_operations_assurance_watch_verification_report(report: dict[str,
 
 
 def print_trust_operations_assurance_watch_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Assurance Watch verification")
     print(f"status: {report.get('status')}")
     print(f"queue: {summary.get('queue_id') or '-'}")
     print(f"clear: {report.get('clear')}")
     print(f"overdue: {report.get('overdue_count')}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def trust_operations_assurance_watch_verification_exit_code(report: dict[str, Any]) -> int:
@@ -226,7 +226,7 @@ class _WatchVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_exact_check("manifest", "toaw_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_ASSURANCE_WATCH_MANIFEST_PACKAGE_TYPE, "Manifest package_type")
         self._add_exact_check("manifest", "toaw_manifest_integrity", self.manifest.get("integrity_hash"), watch_manifest_hash(self.manifest), "Manifest integrity hash")
-        file_rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        file_rows = _as_list(self.manifest.get("files"))
         expected_paths = sorted(ASSURANCE_WATCH_ARCHIVE_ENTRIES - {"trust-operations-assurance-watch-manifest.json"})
         manifest_paths = sorted(str(row.get("path") or "") for row in file_rows if isinstance(row, dict))
         self._add_exact_check("manifest", "toaw_manifest_fixed_file_list", manifest_paths, expected_paths, "Manifest file list matches fixed entries")
@@ -240,7 +240,7 @@ class _WatchVerifier:
             self.files.append({"path": path, "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
             self._add_exact_check("manifest", "toaw_manifest_file_" + _safe_check_id(path), row.get("sha256"), hashlib.sha256(data).hexdigest(), f"{path} sha256")
             self._add_exact_check("manifest", "toaw_manifest_size_" + _safe_check_id(path), row.get("size_bytes"), len(data), f"{path} size")
-        zip_meta = self.manifest.get("zip") if isinstance(self.manifest.get("zip"), dict) else {}
+        zip_meta = _as_document(self.manifest.get("zip"))
         if zip_meta:
             self._add_exact_check("manifest", "toaw_manifest_zip_entries_reference_only", sorted(zip_meta.get("entries") or []), sorted(self.entry_names), "manifest.zip.entries mirrors actual entries")
 
@@ -262,7 +262,7 @@ class _WatchVerifier:
             "drift_action_pack_hash": self.action_pack.get("integrity_hash"),
         }
         self._add_exact_check("queue", "toaw_queue_source_hash", self.queue.get("source_hash"), stable_hash(source), "Queue source hash")
-        manifest_source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        manifest_source = _as_document(self.manifest.get("source"))
         self._add_exact_check("manifest", "toaw_manifest_queue_hash", manifest_source.get("watch_queue_hash"), self.queue.get("integrity_hash"), "Manifest queue hash")
         self._add_exact_check("manifest", "toaw_manifest_schedule_hash", manifest_source.get("schedule_hash"), self.schedule.get("integrity_hash"), "Manifest schedule hash")
         self._add_exact_check("manifest", "toaw_manifest_run_index_hash", manifest_source.get("assurance_run_index_hash"), self.run_index.get("integrity_hash"), "Manifest run index hash")
@@ -351,7 +351,7 @@ class _WatchVerifier:
             self._add_exact_check("external", "toaw_external_hub_manifest_binding", self.hub_report.get("manifest_hash"), self.hub_manifest.get("integrity_hash"), "Hub report binds current Hub manifest")
 
     def _verify_requirements(self) -> None:
-        summary = self.queue.get("summary") if isinstance(self.queue.get("summary"), dict) else {}
+        summary = _as_document(self.queue.get("summary"))
         clear = self.queue.get("status") == "clear" and int(summary.get("overdue_count") or 0) == 0 and int(summary.get("blocking_action_count") or 0) == 0 and int(summary.get("failed_count") or 0) == 0
         self._add_check("requirements", "toaw_require_clear", "passed" if clear or not self.require_clear else "failed", "blocking", "Assurance Watch queue is clear." if clear else "Assurance Watch queue is not clear.")
 
@@ -375,7 +375,7 @@ class _WatchVerifier:
     def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
         warnings = [check for check in self.checks if check.get("status") in {"failed", "warning"} and check.get("severity") != "blocking"]
-        summary = self.queue.get("summary") if isinstance(self.queue.get("summary"), dict) else {}
+        summary = _as_document(self.queue.get("summary"))
         report = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_VERIFICATION_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_VERIFICATION_PACKAGE_TYPE,
@@ -412,7 +412,7 @@ class _WatchVerifier:
 
 
 def _queue_summary(rows: list[ImplementationDocument], action_pack: ImplementationDocument) -> ImplementationDocument:
-    actions_summary = action_pack.get("summary") if isinstance(action_pack.get("summary"), dict) else {}
+    actions_summary = _as_document(action_pack.get("summary"))
     return {
         "hub_count": len(rows),
         "clear_count": sum(1 for row in rows if row.get("readiness") == "clear"),
@@ -439,10 +439,10 @@ def _expected_rows_and_action_pack(queue: ImplementationDocument, schedule: Impl
     queue_id = str(queue.get("queue_id") or "")
     hub_ids = _hub_ids_from_queue_or_run_index(queue, run_index)
     runs_by_hub = {str(row.get("hub_id") or ""): row for row in run_index.get("runs", []) if isinstance(row, dict)}
-    cadence = schedule.get("cadence") if isinstance(schedule.get("cadence"), dict) else {}
+    cadence = _as_document(schedule.get("cadence"))
     interval_days = int(cadence.get("interval_days") or 7)
     grace_days = int(cadence.get("grace_days") or 1)
-    requirements = schedule.get("requirements") if isinstance(schedule.get("requirements"), dict) else {}
+    requirements = _as_document(schedule.get("requirements"))
     require_verified = bool(requirements.get("require_latest_assurance_verified", True))
     for hub_id in hub_ids:
         run = runs_by_hub.get(hub_id, {"hub_id": hub_id, "status": "missing", "verification_status": "missing"})
@@ -469,7 +469,7 @@ def _expected_rows_and_action_pack(queue: ImplementationDocument, schedule: Impl
         elif due_status == "due" and readiness == "clear":
             readiness = "warning"
             reasons.append("assurance_due")
-        row = {
+        row: ImplementationDocument = {
             "hub_id": hub_id,
             "latest_assurance_run_id": run.get("run_id"),
             "latest_assurance_status": run.get("status") or "missing",
@@ -500,7 +500,7 @@ def _expected_rows_and_action_pack(queue: ImplementationDocument, schedule: Impl
             row["action_ids"].append(action_id)
         row["integrity_hash"] = watch_hash(row)
         rows.append(row)
-    action_pack = {
+    action_pack: ImplementationDocument = {
         "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SCHEMA_VERSION,
         "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_ACTION_PACK_PACKAGE_TYPE,
         "queue_id": queue_id,
@@ -514,7 +514,7 @@ def _expected_rows_and_action_pack(queue: ImplementationDocument, schedule: Impl
 
 
 def _external_summary_hash_for_queue(queue: ImplementationDocument) -> str | None:
-    source = queue.get("source") if isinstance(queue.get("source"), dict) else {}
+    source = _as_document(queue.get("source"))
     return source.get("external_verification_summary_hash")
 
 
@@ -605,7 +605,7 @@ def _read_json_file(path: Path | None) -> ImplementationDocument:
         return {}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return {}
 
@@ -616,7 +616,7 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

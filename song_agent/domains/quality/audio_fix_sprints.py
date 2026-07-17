@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import shutil as shutil
@@ -208,7 +208,7 @@ class AudioFixSprintStore:
             item, candidate = _find_item_candidate(sprint, item_id, candidate_id)
             if _candidate_is_stale(candidate, self.sprint_dir(sprint_id)):
                 raise AudioFixSprintStateError("Audio Fix candidate is stale. Regenerate before select.")
-            review = candidate.get("review") if isinstance(candidate.get("review"), dict) else {}
+            review = _as_document(candidate.get("review"))
             if review.get("review_mode") != "manual" or review.get("playback_confirmed") is not True:
                 raise AudioFixSprintStateError("Candidate requires manual A/B review before select.")
             if review.get("preferred") == "left":
@@ -281,19 +281,19 @@ class AudioFixSprintStore:
     def review_recheck_item(self, sprint_id: str, item_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
             sprint = self._require_open_current(sprint_id)
-            session = self._read_recheck_session(sprint_id)
-            item = next((row for row in session.get("items", []) if row.get("item_id") == item_id), None)
+            session = _as_document(self._read_recheck_session(sprint_id))
+            item = next((row for row in _as_list(session.get("items")) if isinstance(row, dict) and row.get("item_id") == item_id), None)
             if not item:
                 raise AudioFixSprintNotFoundError(f"Recheck item not found: {item_id}.")
             review = _manual_review(payload)
             item["review"] = review
             item["updated_at"] = now_iso()
-            session["status"] = _recheck_status(session.get("items", []))
-            session["summary"] = _recheck_summary(session.get("items", []), session["status"])
-            session["source_hash"] = stable_hash({"source": session.get("source"), "items": [_fix_item_source(row) for row in session.get("items", [])]})
-            session["integrity_hash"] = _integrity_hash(session)
+            session["status"] = _recheck_status(_as_document(session).get("items", []))
+            session["summary"] = _recheck_summary(_as_document(session).get("items", []), session["status"])
+            session["source_hash"] = stable_hash({"source": _as_document(session).get("source"), "items": [_fix_item_source(row) for row in _as_document(session).get("items", [])]})
+            session["integrity_hash"] = _integrity_hash(_as_document(session))
             write_json(self.sprint_dir(sprint_id) / "recheck" / "listening-session-ref.json", session)
-            sprint["recheck"]["session_source_hash"] = session["source_hash"]
+            _as_document(sprint.get("recheck"))["session_source_hash"] = session["source_hash"]
             self._touch_sprint(sprint)
             return {"sprint": _public_sprint(sprint), "recheck_session": session, "review": review}
 
@@ -467,7 +467,7 @@ class AudioFixSprintStore:
             source_wav = self.audio_lab_store.root / str(item.get("artifact_relpaths", {}).get("wav"))
             if source_wav.exists():
                 shutil.copyfile(source_wav, wav_path)
-                source_renderer = item.get("renderer") if isinstance(item.get("renderer"), dict) else {}
+                source_renderer = _as_document(item.get("renderer"))
                 if source_renderer.get("runner_kind") == "real" and source_renderer.get("release_ready") is True:
                     renderer = {**source_renderer, "runner_kind": "real", "copied_source": True, "release_ready": True}
                 else:
@@ -528,12 +528,12 @@ def _collect_fix_items(sessions: list[ImplementationDocument], *, include_test_a
         for item in session.get("items", []):
             if item.get("stale"):
                 continue
-            renderer = item.get("renderer") if isinstance(item.get("renderer"), dict) else {}
+            renderer = _as_document(item.get("renderer"))
             if renderer.get("runner_kind") == "test_fake" and not include_test_audio:
                 continue
             if not item.get("artifact_hashes", {}).get("wav_sha256"):
                 continue
-            review = item.get("review") if isinstance(item.get("review"), dict) else {}
+            review = _as_document(item.get("review"))
             markers = [marker for marker in item.get("markers", []) if isinstance(marker, dict)]
             review_status = str(review.get("status") or "")
             review_markers = [marker for marker in markers if str(marker.get("severity") or "") in HIGH_SEVERITIES or str(marker.get("category") or "") in FIX_CATEGORIES]
@@ -693,7 +693,7 @@ def _candidate_review(payload: ImplementationDocument) -> ImplementationDocument
     preferred = str(payload.get("preferred") or "").strip()
     if preferred not in {"left", "right", "same"}:
         raise AudioFixSprintValidationError("preferred must be left, right, or same.")
-    reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
+    reviewer = _as_document(payload.get("reviewer"))
     name = _bounded(reviewer.get("name") or payload.get("reviewer_name") or payload.get("reviewer"), 120)
     role = _bounded(reviewer.get("role") or payload.get("role"), 80)
     if not name or not role:
@@ -742,8 +742,8 @@ def _candidate_by_id(item: ImplementationDocument, candidate_id: str) -> Impleme
 
 
 def _candidate_is_stale(candidate: ImplementationDocument, sprint_dir: Path) -> bool:
-    artifacts = candidate.get("artifacts") if isinstance(candidate.get("artifacts"), dict) else {}
-    hashes = candidate.get("artifact_hashes") if isinstance(candidate.get("artifact_hashes"), dict) else {}
+    artifacts = _as_document(candidate.get("artifacts"))
+    hashes = _as_document(candidate.get("artifact_hashes"))
     midi_rel = artifacts.get("midi")
     wav_rel = artifacts.get("wav")
     if midi_rel and (not (sprint_dir / str(midi_rel)).exists() or _sha256_path(sprint_dir / str(midi_rel)) != hashes.get("midi_sha256")):
@@ -777,7 +777,7 @@ def _closeout_blockers(sprint: ImplementationDocument, recheck: ImplementationDo
         summary = _recheck_summary(recheck.get("items", []), str(recheck.get("status") or "needs_review"))
         if summary.get("stale_count"):
             blockers.append("recheck_stale")
-        if summary.get("manual_review_count") < summary.get("item_count"):
+        if int(summary.get("manual_review_count") or 0) < int(summary.get("item_count") or 0):
             blockers.append("manual_recheck_missing")
         if summary.get("needs_fix_count") or summary.get("rejected_count"):
             blockers.append("recheck_not_accepted")
@@ -821,10 +821,10 @@ def _recheck_summary(items: list[ImplementationDocument], status: str) -> Implem
     return {
         "status": status,
         "item_count": len(items),
-        "manual_review_count": sum(1 for review in reviews if review.get("review_mode") == "manual"),
-        "accepted_count": sum(1 for review in reviews if review.get("status") == "accepted"),
-        "needs_fix_count": sum(1 for review in reviews if review.get("status") == "needs_fix"),
-        "rejected_count": sum(1 for review in reviews if review.get("status") == "rejected"),
+        "manual_review_count": sum(1 for review in reviews if _as_document(review).get("review_mode") == "manual"),
+        "accepted_count": sum(1 for review in reviews if _as_document(review).get("status") == "accepted"),
+        "needs_fix_count": sum(1 for review in reviews if _as_document(review).get("status") == "needs_fix"),
+        "rejected_count": sum(1 for review in reviews if _as_document(review).get("status") == "rejected"),
         "stale_count": sum(1 for item in items if item.get("stale")),
         "test_fake_count": sum(1 for item in items if item.get("renderer", {}).get("runner_kind") == "test_fake" or item.get("renderer", {}).get("source_runner_kind") == "test_fake"),
         "release_ready_audio_count": sum(1 for item in items if item.get("renderer", {}).get("release_ready") is True),

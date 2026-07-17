@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -45,8 +47,8 @@ def registry_manifest_hash(manifest: dict[str, Any]) -> str:
 
 
 def registry_summary(registry: dict[str, Any] | None) -> dict[str, Any]:
-    data = registry if isinstance(registry, dict) else {}
-    entries = data.get("entries") if isinstance(data.get("entries"), list) else []
+    data = _as_document(registry)
+    entries = _as_list(data.get("entries"))
     current = _find_entry(data, str(data.get("current_entry_id") or "")) if data.get("current_entry_id") else {}
     return sanitize_metadata(
         {
@@ -58,14 +60,14 @@ def registry_summary(registry: dict[str, Any] | None) -> dict[str, Any]:
             "revoked_count": sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "revoked"),
             "superseded_count": sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "superseded"),
             "has_current_published_attestation": bool(current and current.get("status") == "published"),
-            "latest_attestation_verification_status": (current.get("verification") if isinstance(current.get("verification"), dict) else {}).get("status") if current else None,
+            "latest_attestation_verification_status": (_as_document(current.get("verification"))).get("status") if current else None,
         },
         blocked_keys=REGISTRY_BLOCKED_KEYS,
     )
 
 
 def registry_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata({"status": report.get("status"), "portfolio_id": summary.get("portfolio_id"), "current_entry_id": summary.get("current_entry_id"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash")}, blocked_keys=REGISTRY_BLOCKED_KEYS)
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -231,10 +231,10 @@ def unified_release_program_continuity_distribution_verification_exit_code(repor
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     file_paths = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
-    zip_meta = manifest.get("zip") if isinstance(manifest.get("zip"), dict) else {}
+    zip_meta = _as_document(manifest.get("zip"))
     checks = [
         _check("urpcdk_manifest_files_exact", file_paths == expected_files, "Manifest files match fixed kit entries.", {"missing": sorted(expected_files - file_paths), "extra": sorted(file_paths - expected_files)}),
         _check("urpcdk_manifest_entries_exact", name_set == REQUIRED_ENTRIES, "ZIP entries match fixed kit entries.", {"missing": sorted(REQUIRED_ENTRIES - name_set), "extra": sorted(name_set - REQUIRED_ENTRIES)}),
@@ -257,7 +257,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument,
 
 
 def _package_index_checks(archive: zipfile.ZipFile, package_index: ImplementationDocument) -> list[ImplementationDocument]:
-    rows = package_index.get("packages") if isinstance(package_index.get("packages"), list) else []
+    rows = _as_list(package_index.get("packages"))
     expected = {
         key: {
             "component_type": key,
@@ -284,7 +284,7 @@ def _package_index_checks(archive: zipfile.ZipFile, package_index: Implementatio
 
 
 def _verification_index_checks(verification_index: ImplementationDocument, verification_docs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
-    rows = verification_index.get("verifications") if isinstance(verification_index.get("verifications"), list) else []
+    rows = _as_list(verification_index.get("verifications"))
     row_by_type = {str(row.get("component_type") or ""): row for row in rows if isinstance(row, dict)}
     checks = [_check("urpcdk_verification_index_components", set(row_by_type) == set(PACKAGE_COMPONENTS), "Verification index lists exactly the fixed verification components.", {"components": sorted(row_by_type)})]
     for key, doc in verification_docs.items():

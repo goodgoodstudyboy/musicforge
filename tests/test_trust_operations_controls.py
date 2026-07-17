@@ -5,7 +5,6 @@ import json
 import zipfile
 from pathlib import Path
 
-from song_agent.projectio import read_json
 from song_agent.trust_operations_controls import TrustOperationsControlStore, control_hash, control_manifest_hash
 from song_agent.trust_operations_controls_verifier import verify_trust_operations_control_package
 from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package

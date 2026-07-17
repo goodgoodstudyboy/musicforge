@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesAcceptanceFixSprint:
+class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
     def _handle_acceptance_fix_sprint_route_part_01(self, method: str, route: tuple[str, list[str]], _split_state):
         if not _split_state['parts']:
             if method != 'GET':
@@ -127,7 +131,7 @@ class QualityRoutesAcceptanceFixSprint:
         return (False, None)
 
     def _handle_acceptance_fix_sprint_route(self, method: str, route: tuple[str, list[str]]) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InterfaceType] = {}
         _split_state['fix_sprint_id'], _split_state['parts'] = route
         try:
             _split_result = self._handle_acceptance_fix_sprint_route_part_01(method, route, _split_state)

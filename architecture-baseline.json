@@ -6,13 +6,13 @@
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
-    "song_agent/interfaces/api/routes/creation.py": 477,
+    "song_agent/interfaces/api/routes/creation.py": 481,
     "song_agent/interfaces/api/routes/delivery.py": 25,
     "song_agent/interfaces/api/routes/maintenance.py": 165,
-    "song_agent/interfaces/api/routes/program.py": 67,
+    "song_agent/interfaces/api/routes/program.py": 66,
     "song_agent/interfaces/api/routes/quality.py": 40,
-    "song_agent/interfaces/api/routes/studio.py": 83,
-    "song_agent/interfaces/api/routes/trust.py": 123,
+    "song_agent/interfaces/api/routes/studio.py": 85,
+    "song_agent/interfaces/api/routes/trust.py": 125,
     "song_agent/interfaces/api/runtime.py": 43,
     "song_agent/interfaces/cli/commands/creation.py": 27,
     "song_agent/interfaces/cli/commands/delivery.py": 52,
@@ -26,7 +26,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 1001,
+  "module_count": 1016,
   "modules": [
     {
       "context": null,
@@ -183,6 +183,12 @@
       "layer": "application",
       "module": "song_agent.application.program.http",
       "path": "song_agent/application/program/http.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.program.http_context",
+      "path": "song_agent/application/program/http_context.py"
     },
     {
       "context": null,
@@ -2671,6 +2677,72 @@
     {
       "context": "api",
       "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts",
+      "path": "song_agent/interfaces/api/route_contexts/__init__.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.core",
+      "path": "song_agent/interfaces/api/route_contexts/core.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.creation",
+      "path": "song_agent/interfaces/api/route_contexts/creation.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.delivery",
+      "path": "song_agent/interfaces/api/route_contexts/delivery.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.program",
+      "path": "song_agent/interfaces/api/route_contexts/program.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.program_ucc",
+      "path": "song_agent/interfaces/api/route_contexts/program_ucc.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.quality",
+      "path": "song_agent/interfaces/api/route_contexts/quality.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.studio",
+      "path": "song_agent/interfaces/api/route_contexts/studio.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.studio_dispatch",
+      "path": "song_agent/interfaces/api/route_contexts/studio_dispatch.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.trust",
+      "path": "song_agent/interfaces/api/route_contexts/trust.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.route_contexts.trust_portfolio",
+      "path": "song_agent/interfaces/api/route_contexts/trust_portfolio.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
       "module": "song_agent.interfaces.api.router",
       "path": "song_agent/interfaces/api/router.py"
     },
@@ -3337,6 +3409,12 @@
     {
       "context": "api",
       "layer": "interface",
+      "module": "song_agent.interfaces.api.runtime_parts.batch_runner_context",
+      "path": "song_agent/interfaces/api/runtime_parts/batch_runner_context.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
       "module": "song_agent.interfaces.api.runtime_parts.batch_runner_parts",
       "path": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/__init__.py"
     },
@@ -3447,6 +3525,12 @@
       "layer": "interface",
       "module": "song_agent.interfaces.api.runtime_parts.job_store",
       "path": "song_agent/interfaces/api/runtime_parts/job_store.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.runtime_parts.job_store_context",
+      "path": "song_agent/interfaces/api/runtime_parts/job_store_context.py"
     },
     {
       "context": "api",
@@ -4329,6 +4413,12 @@
       "layer": "platform",
       "module": "song_agent.platform.contracts",
       "path": "song_agent/platform/contracts/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.contracts.coercion",
+      "path": "song_agent/platform/contracts/coercion.py"
     },
     {
       "context": null,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -71,7 +71,7 @@ def verify_submission_package(
 
 
 def submission_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -103,7 +103,7 @@ def print_submission_verification_report(report: dict[str, Any]) -> None:
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -228,7 +228,7 @@ class _SubmissionPackageVerifier:
         if not isinstance(self.manifest.get("summary"), dict):
             missing_fields.append("summary")
         self._add_check("manifest", "submission_manifest_schema", "failed" if missing_fields else "passed", "blocking", "Missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Submission manifest schema has required fields.", count=len(missing_fields))
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid_rows: list[dict[str, Any]] = []
         shape_errors: list[str] = []
         for index, item in enumerate(rows):
@@ -290,8 +290,8 @@ class _SubmissionPackageVerifier:
         manifest_hash = stable_hash({key: value for key, value in self.manifest.items() if key != "zip"})
         signoff_hash = self.signoff.get("export_manifest_hash")
         self._add_check("signoff", "submission_signoff_manifest_hash", "passed" if signoff_hash == manifest_hash else "failed", "blocking", "Submission signoff export_manifest_hash matches manifest without zip." if signoff_hash == manifest_hash else "Submission signoff export_manifest_hash does not match manifest without zip.")
-        sidecars = self.manifest.get("sidecars") if isinstance(self.manifest.get("sidecars"), dict) else {}
-        signoff_sidecar = sidecars.get("submission_signoff") if isinstance(sidecars.get("submission_signoff"), dict) else {}
+        sidecars = _as_document(self.manifest.get("sidecars"))
+        signoff_sidecar = _as_document(sidecars.get("submission_signoff"))
         expected_payload_hash = signoff_sidecar.get("payload_hash")
         payload_hash = stable_hash(_submission_signoff_hash_payload(self.signoff))
         self._add_check("signoff", "submission_signoff_sidecar_payload_hash", "passed" if expected_payload_hash == payload_hash else "failed", "blocking", "submission-signoff.json payload hash matches manifest sidecar record." if expected_payload_hash == payload_hash else "submission-signoff.json payload hash does not match manifest sidecar record.")
@@ -300,7 +300,7 @@ class _SubmissionPackageVerifier:
         self._add_check("signoff", "submission_signoff_qa_source", "passed" if qa_source and qa_source == manifest_qa_source else "failed", "blocking", "Submission signoff qa_source_hash matches manifest." if qa_source and qa_source == manifest_qa_source else "Submission signoff qa_source_hash is missing or does not match manifest.")
 
     def _verify_items(self, archive: zipfile.ZipFile) -> None:
-        items = self.manifest.get("items") if isinstance(self.manifest.get("items"), list) else []
+        items = _as_list(self.manifest.get("items"))
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -354,8 +354,8 @@ class _SubmissionPackageVerifier:
         self._add_check("csv", "submission_targets_csv_formula_safe", "failed" if issues else "passed", "blocking", "CSV formula issues: " + ", ".join(issues[:5]) if issues else "Submission target CSV cells are formula-safe.", count=len(issues))
 
     def _verify_rights_clearance(self, archive: zipfile.ZipFile) -> None:
-        manifest_rights = self.manifest.get("rights_clearance") if isinstance(self.manifest.get("rights_clearance"), dict) else {}
-        signoff_rights = self.signoff.get("rights_clearance") if isinstance(self.signoff.get("rights_clearance"), dict) else {}
+        manifest_rights = _as_document(self.manifest.get("rights_clearance"))
+        signoff_rights = _as_document(self.signoff.get("rights_clearance"))
         required = bool(self.require_rights_clearance or signoff_rights.get("require_rights_clearance") or manifest_rights.get("report_hash"))
         if not required and str(manifest_rights.get("status") or "") in {"", "missing", "not_required"}:
             self._add_check("rights_clearance", "submission_rights_clearance_optional", "passed", "warning", "Rights clearance evidence is not required.")
@@ -438,7 +438,7 @@ class _SubmissionPackageVerifier:
         blockers = [item for item in [*self.checks, *self.item_checks] if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in [*self.checks, *self.item_checks] if item.get("status") == "warning"]
         status = "failed" if blockers else "warning" if warnings else "passed"
-        items = self.manifest.get("items") if isinstance(self.manifest.get("items"), list) else []
+        items = _as_list(self.manifest.get("items"))
         report = {
             "schema_version": SUBMISSION_VERIFICATION_SCHEMA_VERSION,
             "package_type": SUBMISSION_VERIFICATION_PACKAGE_TYPE,

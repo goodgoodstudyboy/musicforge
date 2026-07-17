@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -145,7 +145,7 @@ class PublicTrustCenterPublicationStore:
                 "description": sanitize_sensitive_text(str(payload.get("description") or "")[:1000]),
                 "policy": policy,
                 "site_options": {
-                    "include_html": bool((payload.get("site_options") if isinstance(payload.get("site_options"), dict) else {}).get("include_html", True)),
+                    "include_html": bool((_as_document(payload.get("site_options"))).get("include_html", True)),
                     "include_checksums": True,
                     "include_readme": True,
                     "include_verification_commands": True,
@@ -198,9 +198,9 @@ class PublicTrustCenterPublicationStore:
                 "status": "failed" if blockers else "warning" if warnings else "ready",
                 "source": source,
                 "summary": {
-                    "package_count": len(source.get("packages") if isinstance(source.get("packages"), list) else []),
-                    "verification_report_count": len(source.get("verifications") if isinstance(source.get("verifications"), list) else []),
-                    "accepted_evidence_count": len(source.get("accepted_evidence") if isinstance(source.get("accepted_evidence"), list) else []),
+                    "package_count": len(_as_list(source.get("packages"))),
+                    "verification_report_count": len(_as_list(source.get("verifications"))),
+                    "accepted_evidence_count": len(_as_list(source.get("accepted_evidence"))),
                     "all_required_packages_current": not blockers,
                     "ready_for_publication": not blockers,
                     "blocker_count": len(blockers),
@@ -385,7 +385,7 @@ class PublicTrustCenterPublicationStore:
             "channel_id": channel.get("channel_id"),
             "channel_hash": channel.get("integrity_hash"),
             "channel_type": channel.get("channel_type"),
-            "policy": channel.get("policy") if isinstance(channel.get("policy"), dict) else {},
+            "policy": _as_document(channel.get("policy")),
             "packages": package_rows,
             "verifications": verification_rows,
             "accepted_evidence": accepted_rows,
@@ -513,7 +513,7 @@ class PublicTrustCenterPublicationStore:
         return data
 
     def _mirror_policy(self, report: ImplementationDocument) -> ImplementationDocument:
-        source = report.get("source") if isinstance(report.get("source"), dict) else {}
+        source = _as_document(report.get("source"))
         allowed = _expected_entries(source)
         data = {
             "schema_version": PUBLICATION_SCHEMA_VERSION,
@@ -546,7 +546,7 @@ class PublicTrustCenterPublicationStore:
         failed = sorted(key for key in PUBLICATION_REQUIRED_PACKAGE_KEYS if verification_statuses.get(key) != "passed")
         check("ptcpub_required_verifications_passed", not failed, "Required package verifications passed." if not failed else "Failed verifications: " + ", ".join(failed))
         check("ptcpub_acceptance_board_signoff_present", bool(source.get("acceptance_board_signoff_hash")), "Acceptance Board signoff is present.")
-        if (channel.get("policy") if isinstance(channel.get("policy"), dict) else {}).get("require_accepted_evidence", True):
+        if (_as_document(channel.get("policy"))).get("require_accepted_evidence", True):
             check("ptcpub_accepted_evidence_present", bool(source.get("accepted_evidence")), "Accepted Evidence is included.")
         return checks, blockers, warnings
 
@@ -612,7 +612,7 @@ class PublicTrustCenterPublicationStore:
         for event in _read_jsonl(self.events_path(center_id, channel_id)):
             if event.get("event_type") != event_type:
                 continue
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             if payload.get("source_hash") == report.get("source_hash") and payload.get("publication_id") == report.get("publication_id"):
                 return True
         return False
@@ -641,7 +641,7 @@ def publication_report_integrity_ok(report: dict[str, Any]) -> bool:
 def _publication_lifecycle_from_events(events: list[ImplementationDocument]) -> dict[str, ImplementationDocument]:
     rows: dict[str, dict[str, Any]] = {}
     for event in events:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         publication_id = str(payload.get("publication_id") or "")
         if not publication_id:
             continue
@@ -698,7 +698,7 @@ def _publication_state_row(publication_id: str, report: ImplementationDocument, 
 
 
 def publication_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return {"publication_id": report.get("publication_id"), "channel_id": report.get("channel_id"), "status": report.get("status") or "missing", "ready_for_publication": summary.get("ready_for_publication"), "source_hash": report.get("source_hash")}
 
 
@@ -873,7 +873,7 @@ def _write_readme(export_dir: Path) -> None:
 
 
 def _write_html_pages(export_dir: Path, report: ImplementationDocument) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     body = (
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>MusicForge Public Trust Center Publication</title>"
         "<style>body{font-family:Arial,sans-serif;margin:2rem;line-height:1.45}code{background:#f4f4f4;padding:.1rem .25rem}</style></head>"
@@ -949,7 +949,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _read_jsonl(path: Path) -> list[ImplementationDocument]:

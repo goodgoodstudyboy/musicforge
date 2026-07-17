@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -118,7 +118,7 @@ class AudioCampaignRemediationStore:
             campaign_report = read_json(report_path) if report_path.exists() else self.campaign_store.refresh_report(campaign_id)
         case_index = read_json(self.campaign_store.case_index_path(campaign_id))
         track_rows = [_release_track_current_row(self.project_store, track) for track in release.tracks]
-        blockers = []
+        blockers: list[ImplementationDocument] = []
         if link.get("coverage_status") != "passed":
             blockers.append({"check_id": "release_campaign_link_coverage", "message": "Release Audio Campaign link coverage is not passed."})
         stale_tracks = [row for row in track_rows if row.get("status") != "passed"]
@@ -502,8 +502,8 @@ class AudioCampaignRemediationStore:
             signed = self.signoff_path(release_id).exists()
             signed_snapshot = self._assert_signed_current(release_id) if signed else {}
             closeout = signed_snapshot.get("closeout") if signed else self.closeout_report(release_id)
-            result = {"status": "passed" if closeout.get("status") == "passed" else "failed", "hard_block": closeout.get("status") != "passed", "closeout": closeout, "message": "Audio Campaign remediation closeout is passed."}
-            if closeout.get("status") != "passed":
+            result = {"status": "passed" if _as_document(closeout).get("status") == "passed" else "failed", "hard_block": _as_document(closeout).get("status") != "passed", "closeout": closeout, "message": "Audio Campaign remediation closeout is passed."}
+            if _as_document(closeout).get("status") != "passed":
                 result["message"] = "Audio Campaign remediation closeout has blockers."
             if signed:
                 signoff = signed_snapshot["signoff"]
@@ -512,7 +512,7 @@ class AudioCampaignRemediationStore:
             elif require_signed:
                 signoff = read_json(self.signoff_path(release_id)) if self.signoff_path(release_id).exists() else {}
                 result["signoff"] = signoff
-                if signoff.get("status") != "signed" or signoff.get("closeout_hash") != closeout.get("integrity_hash"):
+                if signoff.get("status") != "signed" or signoff.get("closeout_hash") != _as_document(closeout).get("integrity_hash"):
                     result.update({"status": "failed", "hard_block": True, "message": "Audio Campaign remediation signoff is missing or stale."})
             return sanitize_metadata(result)
         except Exception as exc:
@@ -533,7 +533,7 @@ def _issues_from_campaign(campaign: ImplementationDocument, report: Implementati
             continue
         report_row = report_rows.get(str(case.get("case_id")), {})
         blockers = set(str(item) for item in report_row.get("blockers", []) if str(item))
-        review = case.get("review") if isinstance(case.get("review"), dict) else {}
+        review = _as_document(case.get("review"))
         markers = [marker for marker in case.get("markers", []) if isinstance(marker, dict)]
         requires_fix = review.get("status") in {"needs_fix", "rejected"} or any(str(marker.get("severity") or "") in HIGH_SEVERITIES for marker in markers) or bool(blockers & {"case_needs_fix", "case_rejected", "open_high_or_critical_marker", "fix_sprint_missing", "fix_sprint_not_closed", "fix_sprint_closeout_failed"})
         if not requires_fix:
@@ -617,10 +617,10 @@ def _sprint_state(sprint: ImplementationDocument, fix_store: AudioFixSprintStore
         candidate_count += len(candidates)
         selected = selected or bool(item.get("selected_candidate_id"))
         for candidate in candidates:
-            review = candidate.get("review") if isinstance(candidate.get("review"), dict) else {}
+            review = _as_document(candidate.get("review"))
             if review.get("review_mode") == "manual" and review.get("playback_confirmed") is True:
                 manual_ab = True
-    recheck = fix_store._read_recheck_session(sprint_id, missing_ok=True)  # type: ignore[attr-defined]
+    recheck = fix_store._read_recheck_session(sprint_id, missing_ok=True)
     manual_recheck = False
     release_ready_audio_count = 0
     test_fake_count = 0
@@ -628,8 +628,8 @@ def _sprint_state(sprint: ImplementationDocument, fix_store: AudioFixSprintStore
         for item in recheck.get("items", []):
             if not isinstance(item, dict):
                 continue
-            review = item.get("review") if isinstance(item.get("review"), dict) else {}
-            renderer = item.get("renderer") if isinstance(item.get("renderer"), dict) else {}
+            review = _as_document(item.get("review"))
+            renderer = _as_document(item.get("renderer"))
             if review.get("review_mode") == "manual" and review.get("status") == "accepted" and review.get("playback_confirmed") is True:
                 manual_recheck = True
             if renderer.get("runner_kind") == "real" and renderer.get("release_ready") is True:

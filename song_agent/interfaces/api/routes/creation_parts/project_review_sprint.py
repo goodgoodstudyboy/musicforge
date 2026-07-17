@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list, list_or as _list_or
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProjectReviewSprint:
+class CreationRoutesProjectReviewSprint(CreationRouteContext):
     def _handle_project_review_sprint_route_part_01(self, method: str, project_id: str, sprint_id: str, action: str, _split_state):
         self.project_store.get_project(project_id)
         project_dir = self.project_store.project_dir(project_id)
@@ -74,7 +80,7 @@ class CreationRoutesProjectReviewSprint:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return (True, None)
             _split_state['payload'] = self._optional_json_body()
-            task_ids = _split_state['payload'].get('task_ids') if isinstance(_split_state['payload'].get('task_ids'), list) else [_split_state['payload'].get('task_id')] if _split_state['payload'].get('task_id') else []
+            task_ids = _list_or(_split_state['payload'].get('task_ids'), [_split_state['payload'].get('task_id')] if _split_state['payload'].get('task_id') else [])
             _split_state['sprint'] = _split_state['sprint_store'].add_tasks(_split_state['sprint'], task_store=_split_state['task_store'], task_ids=[str(item) for item in task_ids], lane=str(_split_state['payload'].get('lane') or ''), notes=str(_split_state['payload'].get('notes') or ''), now=_interfaces_api_runtime._utc_now())
             self.project_store.append_event(project_id, 'review_sprint_tasks_added', {'sprint_id': _split_state['sprint'].sprint_id, 'task_ids': task_ids})
             self._send_json(self._review_sprint_response(_split_state['sprint_store'], _split_state['task_store'], _split_state['sprint']))
@@ -84,7 +90,7 @@ class CreationRoutesProjectReviewSprint:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return (True, None)
             _split_state['payload'] = self._optional_json_body()
-            task_ids = _split_state['payload'].get('task_ids') if isinstance(_split_state['payload'].get('task_ids'), list) else [_split_state['payload'].get('task_id')] if _split_state['payload'].get('task_id') else []
+            task_ids = _list_or(_split_state['payload'].get('task_ids'), [_split_state['payload'].get('task_id')] if _split_state['payload'].get('task_id') else [])
             for _split_state['task_id'] in task_ids:
                 _split_state['sprint'] = _split_state['sprint_store'].remove_task(_split_state['sprint'], str(_split_state['task_id']), task_store=_split_state['task_store'], now=_interfaces_api_runtime._utc_now())
             self.project_store.append_event(project_id, 'review_sprint_tasks_removed', {'sprint_id': _split_state['sprint'].sprint_id, 'task_ids': task_ids})
@@ -95,7 +101,7 @@ class CreationRoutesProjectReviewSprint:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return (True, None)
             _split_state['payload'] = self._optional_json_body()
-            task_ids = _split_state['payload'].get('task_ids') if isinstance(_split_state['payload'].get('task_ids'), list) else []
+            task_ids = _as_list(_split_state['payload'].get('task_ids'))
             _split_state['sprint'] = _split_state['sprint_store'].reorder_tasks(_split_state['sprint'], [str(item) for item in task_ids], task_store=_split_state['task_store'], now=_interfaces_api_runtime._utc_now())
             self.project_store.append_event(project_id, 'review_sprint_tasks_reordered', {'sprint_id': _split_state['sprint'].sprint_id, 'task_ids': task_ids})
             self._send_json(self._review_sprint_response(_split_state['sprint_store'], _split_state['task_store'], _split_state['sprint']))
@@ -198,7 +204,7 @@ class CreationRoutesProjectReviewSprint:
             queue_store = _interfaces_api_runtime.ReviewSprintActionQueueStore(_split_state['sprint_store'].sprint_dir(_split_state['sprint'].sprint_id))
             if method == 'GET':
                 queues = queue_store.list_queues(include_archived=True)
-                self._send_json({'ok': True, 'sprint': _split_state['sprint'].to_dict(), 'queues': [queue.to_dict() for queue in queues], 'latest_queue': queues[0].to_dict() if queues else {}, 'summary': _interfaces_api_runtime.action_queue_collection_summary(queues)})
+                self._send_json({'ok': True, 'sprint': _split_state['sprint'].to_dict(), 'queues': [queue.to_dict() for queue in queues], 'latest_queue': queues[0].to_dict() if queues else {}, 'summary': _interfaces_api_runtime.action_queue_collection_summary(_as_list(queues))})
                 return (True, None)
             if method == 'POST':
                 _split_state['payload'] = self._optional_json_body()
@@ -209,7 +215,7 @@ class CreationRoutesProjectReviewSprint:
                     _split_state['report'] = _split_state['sprint_store'].read_recommendation_report(_split_state['sprint'].sprint_id, default={})
                     if not _split_state['report']:
                         _split_state['report'] = self._refresh_review_sprint_recommendations(project_id, _split_state['sprint_store'], _split_state['task_store'], _split_state['sprint'])
-                queue = _interfaces_api_runtime.build_action_queue_from_recommendation_report(project_id=project_id, sprint=_split_state['sprint'], recommendation_report=_split_state['report'], name=str(_split_state['payload'].get('name') or '') or None, settings=_split_state['payload'].get('settings') if isinstance(_split_state['payload'].get('settings'), dict) else {}, now=_interfaces_api_runtime._utc_now())
+                queue = _interfaces_api_runtime.build_action_queue_from_recommendation_report(project_id=project_id, sprint=_split_state['sprint'], recommendation_report=_split_state['report'], name=str(_split_state['payload'].get('name') or '') or None, settings=_as_document(_split_state['payload'].get('settings')), now=_interfaces_api_runtime._utc_now())
                 created = queue_store.create_queue(queue, now=_interfaces_api_runtime._utc_now())
                 self.project_store.append_event(project_id, 'review_sprint_action_queue_created', {'sprint_id': _split_state['sprint'].sprint_id, 'queue_id': created.queue_id, 'item_count': len(created.items)})
                 self._send_json({'ok': True, 'sprint': _split_state['sprint'].to_dict(), 'queue': created.to_dict(), 'summary': _interfaces_api_runtime.action_queue_summary(created)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
@@ -281,7 +287,7 @@ class CreationRoutesProjectReviewSprint:
         return (False, None)
 
     def _handle_project_review_sprint_route(self, method: str, project_id: str, sprint_id: str, action: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_project_review_sprint_route_part_01(method, project_id, sprint_id, action, _split_state)
             if _split_result[0]:

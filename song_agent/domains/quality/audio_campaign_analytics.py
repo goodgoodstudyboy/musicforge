@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 from pathlib import Path as Path
 from typing import Any as Any
@@ -42,7 +42,7 @@ class AudioCampaignAnalyticsStore:
 
 
 def build_audio_campaign_analytics(campaign: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
-    cases = campaign.get("cases") if isinstance(campaign.get("cases"), list) else []
+    cases = _as_list(campaign.get("cases"))
     issue_counts: dict[str, dict[str, Any]] = {}
     fix_effectiveness: list[dict[str, Any]] = []
     ratings: list[int] = []
@@ -53,7 +53,7 @@ def build_audio_campaign_analytics(campaign: dict[str, Any], report: dict[str, A
     for case in cases:
         if not isinstance(case, dict):
             continue
-        review = case.get("review") if isinstance(case.get("review"), dict) else {}
+        review = _as_document(case.get("review"))
         rating = _safe_int(review.get("rating"))
         if rating:
             ratings.append(rating)
@@ -68,7 +68,7 @@ def build_audio_campaign_analytics(campaign: dict[str, Any], report: dict[str, A
                 high_count += 1
             if severity == "critical":
                 critical_count += 1
-        fix = case.get("fix") if isinstance(case.get("fix"), dict) else {}
+        fix = _as_document(case.get("fix"))
         if fix.get("fix_sprint_id"):
             fixed_count += 1
             if str(review.get("status") or "") == "accepted":
@@ -86,7 +86,7 @@ def build_audio_campaign_analytics(campaign: dict[str, Any], report: dict[str, A
                     "status": "effective" if str(review.get("status") or "") == "accepted" else "needs_review",
                 }
             )
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     case_count = _safe_int(summary.get("case_count")) or len(cases)
     needs_fix_count = _safe_int(summary.get("needs_fix_count"))
     analytics = sanitize_metadata(

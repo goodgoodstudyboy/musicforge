@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -120,8 +120,8 @@ class ReleaseAudioQualityObservatoryStore:
                     "observatory_id": observatory_id,
                     "name": _bounded(payload.get("name") or "Release Audio Quality Observatory", 120),
                     "scope": _safe_dict(payload.get("scope")),
-                    "window": _default_window(payload.get("window") if isinstance(payload.get("window"), dict) else {}),
-                    "thresholds": _default_thresholds(payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else {}),
+                    "window": _default_window(_as_document(payload.get("window"))),
+                    "thresholds": _default_thresholds(_as_document(payload.get("thresholds"))),
                     "release_ids": [str(item) for item in payload.get("release_ids", []) if str(item).strip()],
                     "created_at": now_iso(),
                     "updated_at": now_iso(),
@@ -256,8 +256,8 @@ class ReleaseAudioQualityObservatoryStore:
             if not observatory_id:
                 return {"status": "failed", "hard_block": True, "message": "Release Audio Quality Observatory is missing."}
             report = self.verify_zip(observatory_id, strict=True, require_current_evidence=True, require_no_critical_risk=require_no_critical_risk)
-            summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-            source_releases = summary.get("release_ids") if isinstance(summary.get("release_ids"), list) else []
+            summary = _as_document(report.get("summary"))
+            source_releases = _as_list(summary.get("release_ids"))
             if release_id not in {str(item) for item in source_releases}:
                 return {"status": "failed", "hard_block": True, "message": "Release Audio Quality Observatory does not cover this Release.", "verification": report}
             if report.get("status") == "failed":
@@ -353,7 +353,7 @@ class ReleaseAudioQualityObservatoryStore:
 
 def _build_release_entry_from_payload(row: ImplementationDocument, *, release_store: ReleaseStore) -> ImplementationDocument:
     release_id = str(row.get("release_id") or "")
-    release_doc = row.get("release") if isinstance(row.get("release"), dict) else {}
+    release_doc = _as_document(row.get("release"))
     if release_id and not release_doc:
         try:
             release_doc = release_store.get_release(release_id).to_dict()
@@ -440,7 +440,7 @@ def _default_window(overrides: ImplementationDocument) -> ImplementationDocument
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _bounded(value: Any, limit: int) -> str:
@@ -486,8 +486,8 @@ def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
 
 
 def _readme(summary: ImplementationDocument, risks: ImplementationDocument) -> str:
-    data = summary.get("summary") if isinstance(summary.get("summary"), dict) else {}
-    risk_summary = risks.get("summary") if isinstance(risks.get("summary"), dict) else {}
+    data = _as_document(summary.get("summary"))
+    risk_summary = _as_document(risks.get("summary"))
     return "\n".join(
         [
             "MusicForge Release Audio Quality Observatory",

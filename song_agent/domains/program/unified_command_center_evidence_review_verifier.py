@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -158,7 +158,7 @@ def verify_unified_command_center_evidence_review_package(
                 ("ucc_review_manual_checklist_integrity", checklist),
             ):
                 checks.append(_check(check_id, _integrity_ok(doc), f"{check_id} hash is valid."))
-            manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+            manifest_source = _as_document(manifest.get("source"))
             checks.extend(
                 [
                     _check("ucc_review_source_hash_binding", manifest.get("source_hash") == source.get("source_hash") == evidence_index.get("source_hash") == proof_index.get("source_hash") == replay_plan.get("source_hash") == replay_result.get("source_hash") == narrative.get("source_hash") == checklist.get("source_hash"), "Review documents bind the same source hash."),
@@ -263,7 +263,7 @@ def verify_unified_command_center_evidence_review_acceptance_package(
                 ("ucc_review_acceptance_binding_summary_integrity", binding_summary),
             ):
                 checks.append(_check(check_id, _integrity_ok(doc), f"{check_id} hash is valid."))
-            source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+            source = _as_document(manifest.get("source"))
             checks.extend(
                 [
                     _check("ucc_review_acceptance_report_binding", source.get("acceptance_report_hash") == report.get("integrity_hash"), "Manifest binds acceptance report."),
@@ -298,7 +298,7 @@ def unified_command_center_evidence_review_acceptance_verification_exit_code(rep
 
 def _runtime_replay_checks(source: ImplementationDocument, replay_result: ImplementationDocument, **paths: Any) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    source_map = source.get("source") if isinstance(source.get("source"), dict) else {}
+    source_map = _as_document(source.get("source"))
     step_reports: dict[str, dict[str, Any]] = {}
 
     def require_pair(step: str, zip_key: str, report_key: str, label: str) -> tuple[Path, Path] | None:
@@ -433,9 +433,9 @@ def _acceptance_external_checks(report: ImplementationDocument, response_summary
         checks.append(_check("ucc_review_acceptance_response_verification_required", False, "External response verification summary is required."))
     if any(check["status"] == "failed" for check in checks):
         return checks
-    review_pack_path = Path(review_pack_path)
-    review_verification = _read_json_file(Path(review_pack_verification_report_path))
-    response_verification = _read_json_file(Path(response_verification_report_path))
+    review_pack_path = _as_path(review_pack_path)
+    review_verification = _read_json_file(_as_path(review_pack_verification_report_path))
+    response_verification = _read_json_file(_as_path(response_verification_report_path))
     checks.extend(
         [
             _check("ucc_review_acceptance_review_pack_status", review_verification.get("status") == "passed", "Review Pack verification is passed."),
@@ -451,7 +451,7 @@ def _acceptance_external_checks(report: ImplementationDocument, response_summary
 
 def _summary_binding_checks(source: ImplementationDocument, evidence_index: ImplementationDocument, proof_index: ImplementationDocument, summaries: dict[str, ImplementationDocument], proofs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    source_map = source.get("source") if isinstance(source.get("source"), dict) else {}
+    source_map = _as_document(source.get("source"))
     evidence_items = [row for row in evidence_index.get("items", []) if isinstance(row, dict)]
     proof_items = [row for row in proof_index.get("proofs", []) if isinstance(row, dict)]
     checks.append(_check("ucc_review_evidence_index_summary", evidence_index.get("summary", {}).get("required_count") == len([row for row in evidence_items if row.get("required")]), "Evidence index summary matches rows."))
@@ -491,7 +491,7 @@ def _required_replay_failures(plan: ImplementationDocument, result: Implementati
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], required: set[str], prefix: str) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = required - {"manifest.json"}
     effective = names - {"manifest.json"}

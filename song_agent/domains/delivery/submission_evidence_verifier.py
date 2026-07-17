@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -65,7 +65,7 @@ def verify_submission_evidence_package(
 
 
 def submission_evidence_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -99,7 +99,7 @@ def print_submission_evidence_verification_report(report: dict[str, Any]) -> Non
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -222,7 +222,7 @@ class _SubmissionEvidencePackageVerifier:
         if not isinstance(self.manifest.get("summary"), dict):
             missing_fields.append("summary")
         self._add_check("manifest", "submission_evidence_manifest_schema", "failed" if missing_fields else "passed", "blocking", "Missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Evidence manifest schema has required fields.", count=len(missing_fields))
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid_rows: list[dict[str, Any]] = []
         shape_errors: list[str] = []
         for index, item in enumerate(rows):
@@ -284,8 +284,8 @@ class _SubmissionEvidencePackageVerifier:
         manifest_hash = stable_hash({key: value for key, value in self.manifest.items() if key != "zip"})
         signoff_hash = self.signoff.get("export_manifest_hash")
         self._add_check("signoff", "submission_evidence_signoff_manifest_hash", "passed" if signoff_hash == manifest_hash else "failed", "blocking", "Evidence signoff export_manifest_hash matches manifest without zip." if signoff_hash == manifest_hash else "Evidence signoff export_manifest_hash does not match manifest without zip.")
-        sidecars = self.manifest.get("sidecars") if isinstance(self.manifest.get("sidecars"), dict) else {}
-        sidecar = sidecars.get("submission_evidence_signoff") if isinstance(sidecars.get("submission_evidence_signoff"), dict) else {}
+        sidecars = _as_document(self.manifest.get("sidecars"))
+        sidecar = _as_document(sidecars.get("submission_evidence_signoff"))
         expected_payload_hash = sidecar.get("payload_hash")
         payload_hash = submission_evidence_signoff_payload_hash(self.signoff)
         self._add_check("signoff", "submission_evidence_signoff_sidecar_payload_hash", "passed" if expected_payload_hash == payload_hash else "failed", "blocking", "submission-evidence-signoff.json payload hash matches manifest sidecar record." if expected_payload_hash == payload_hash else "submission-evidence-signoff.json payload hash does not match manifest sidecar record.")
@@ -356,7 +356,7 @@ class _SubmissionEvidencePackageVerifier:
             self._add_check("nested_submission", "submission_evidence_nested_submission_deep_verify", "passed" if nested_report.get("status") in {"passed", "warning"} else "failed", "blocking", f"Nested submission verifier status is {nested_report.get('status')}.", verification_summary=submission_verification_summary(nested_report))
 
     def _verify_status_requirements(self) -> None:
-        items = self.report_doc.get("item_summaries") if isinstance(self.report_doc.get("item_summaries"), list) else []
+        items = _as_list(self.report_doc.get("item_summaries"))
         if self.require_submitted:
             bad = [str(item.get("item_id") or "") for item in items if isinstance(item, dict) and item.get("status") not in SUBMITTED_OR_LATER]
             self._add_check("status", "submission_evidence_items_submitted", "failed" if bad else "passed", "blocking", "Items not submitted: " + ", ".join(bad[:5]) if bad else "All evidence items are submitted-or-later.", count=len(bad))
@@ -420,7 +420,7 @@ class _SubmissionEvidencePackageVerifier:
         blockers = [item for item in [*self.checks, *self.item_checks] if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in [*self.checks, *self.item_checks] if item.get("status") == "warning"]
         status = "failed" if blockers else "warning" if warnings else "passed"
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
         report = {
             "schema_version": SUBMISSION_EVIDENCE_VERIFICATION_SCHEMA_VERSION,
             "generated_at": self.generated_at,

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_float as _as_float, as_int as _as_int
+
+from typing import Any as _InferenceType
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 import hashlib as hashlib
@@ -10,7 +14,7 @@ import threading as threading
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
 from datetime import datetime as datetime, timedelta as timedelta, timezone as timezone
 from pathlib import Path as Path
-from typing import Any as Any
+from typing import Any as Any, Mapping as Mapping
 
 from song_agent.domains.creation.edits import SUPPORTED_HARMONY_CHORDS as SUPPORTED_HARMONY_CHORDS
 from song_agent.domains.creation.music_quality import attach_quality as attach_quality, analyze_song_quality as analyze_song_quality
@@ -472,15 +476,15 @@ def _apply_editor_patch_part_01(parent_plan: SongPlan, patch_data: Implementatio
     if _split_state['patch'].base_plan_hash != current_hash:
         raise EditorPatchStaleError('Editor patch is stale because the base song-plan hash changed.')
     state = build_editor_state(parent_plan)
-    _split_state['base_section_names_by_id']: dict[str, str | None] = {_split_state['section']['section_id']: str(_split_state['section']['name']) for _split_state['section'] in state['sections']}
-    _split_state['base_track_names_by_id']: dict[str, str | None] = {_split_state['track']['track_id']: str(_split_state['track']['name']) for _split_state['track'] in state['tracks']}
+    _split_state['base_section_names_by_id'] = {_split_state['section']['section_id']: str(_split_state['section']['name']) for _split_state['section'] in state['sections']}
+    _split_state['base_track_names_by_id'] = {_split_state['track']['track_id']: str(_split_state['track']['name']) for _split_state['track'] in state['tracks']}
     _split_state['base_note_keys_by_track_id'] = _base_note_keys_by_track_id(state)
     _split_state['sections'] = list(parent_plan.sections)
     _split_state['tracks'] = list(parent_plan.tracks)
-    _split_state['summary_counts']: dict[str, int] = {}
-    _split_state['changed_sections']: set[str] = set()
-    _split_state['changed_tracks']: set[str] = set()
-    _split_state['warnings']: list[str] = []
+    _split_state['summary_counts'] = {}
+    _split_state['changed_sections'] = set()
+    _split_state['changed_tracks'] = set()
+    _split_state['warnings'] = []
     _split_state['added_notes'] = 0
     _split_state['total_beats'] = _total_bars(parent_plan) * _beats_per_bar(parent_plan)
     return (False, None)
@@ -783,7 +787,7 @@ def _apply_editor_patch_part_03(parent_plan: SongPlan, patch_data: Implementatio
     return (False, None)
 
 def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | EditorPatch) -> EditorPatchResult:
-    _split_state = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _apply_editor_patch_part_01(parent_plan, patch_data, _split_state)
     if _split_result[0]:
         return _split_result[1]
@@ -793,6 +797,7 @@ def apply_editor_patch(parent_plan: SongPlan, patch_data: dict[str, Any] | Edito
     _split_result = _apply_editor_patch_part_03(parent_plan, patch_data, _split_state)
     if _split_result[0]:
         return _split_result[1]
+    raise RuntimeError("apply_editor_patch did not produce a result.")
 
 
 def summarize_editor_patch(result: EditorPatchResult) -> dict[str, Any]:
@@ -990,7 +995,7 @@ def _section_index(operation: ImplementationDocument) -> int:
     return index
 
 
-def _section_index_for_plan(operation: ImplementationDocument, sections: list[SongSection], base_names_by_id: dict[str, str | None] | None = None) -> int:
+def _section_index_for_plan(operation: ImplementationDocument, sections: list[SongSection], base_names_by_id: Mapping[str, str | None] | None = None) -> int:
     section_id = str(operation.get("section_id") or "").strip()
     if base_names_by_id is not None:
         name = base_names_by_id.get(section_id)
@@ -1146,9 +1151,9 @@ def _note_key(note: NoteEvent) -> NoteKey:
 
 def _note_key_from_mapping(note: ImplementationDocument) -> NoteKey:
     return (
-        int(note.get("pitch")),
-        _round_beat(float(note.get("start_beat"))),
-        _round_beat(float(note.get("duration_beats"))),
+        _as_int(note.get("pitch")),
+        _round_beat(_as_float(note.get("start_beat"))),
+        _round_beat(_as_float(note.get("duration_beats"))),
         int(note.get("velocity", 90)),
     )
 

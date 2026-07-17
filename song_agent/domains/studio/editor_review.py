@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import re as re
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
@@ -81,7 +81,7 @@ class AuditionReview:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None, *, duration_beats: float | None = None) -> "AuditionReview":
-        raw = data if isinstance(data, dict) else {}
+        raw = _as_document(data)
         rating = _int(raw.get("rating"), "review.rating", default=0)
         if rating < 0 or rating > 5:
             raise EditorReviewError("review.rating must be between 0 and 5.")
@@ -114,13 +114,13 @@ def default_review() -> dict[str, Any]:
 
 
 def normalize_review(value: Any, *, duration_beats: float | None = None) -> dict[str, Any]:
-    return AuditionReview.from_dict(value if isinstance(value, dict) else {}, duration_beats=duration_beats).to_dict()
+    return AuditionReview.from_dict(_as_document(value), duration_beats=duration_beats).to_dict()
 
 
 def apply_review_patch(review_value: Any, patch: dict[str, Any], *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
     if not isinstance(patch, dict):
         raise EditorReviewError("review patch must be an object.")
-    review = AuditionReview.from_dict(review_value if isinstance(review_value, dict) else {}, duration_beats=duration_beats)
+    review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
     data = review.to_dict()
     allowed = {"rating", "favorite", "status", "notes", "tags"}
     unknown = sorted(set(patch) - allowed)
@@ -150,7 +150,7 @@ def add_marker(review_value: Any, payload: dict[str, Any], *, duration_beats: fl
     if not isinstance(payload, dict):
         raise EditorReviewError("marker payload must be an object.")
     now = now or now_iso()
-    review = AuditionReview.from_dict(review_value if isinstance(review_value, dict) else {}, duration_beats=duration_beats)
+    review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
     markers = list(review.markers)
     if len(markers) >= MAX_MARKERS:
         raise EditorReviewError(f"review markers supports at most {MAX_MARKERS} items.")
@@ -181,7 +181,7 @@ def update_marker(review_value: Any, marker_id: str, patch: dict[str, Any], *, d
     if unknown:
         raise EditorReviewError(f"marker patch contains unsupported fields: {', '.join(unknown)}.")
     now = now or now_iso()
-    review = AuditionReview.from_dict(review_value if isinstance(review_value, dict) else {}, duration_beats=duration_beats)
+    review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
     updated_markers: list[dict[str, Any]] = []
     found = False
     for item in review.markers:
@@ -201,7 +201,7 @@ def update_marker(review_value: Any, marker_id: str, patch: dict[str, Any], *, d
 
 def delete_marker(review_value: Any, marker_id: str, *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
     marker_id = validate_marker_id(marker_id)
-    review = AuditionReview.from_dict(review_value if isinstance(review_value, dict) else {}, duration_beats=duration_beats)
+    review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
     markers = [item for item in review.markers if item.get("marker_id") != marker_id]
     if len(markers) == len(review.markers):
         raise FileNotFoundError(marker_id)
@@ -212,7 +212,7 @@ def delete_marker(review_value: Any, marker_id: str, *, duration_beats: float, n
 
 
 def record_asset_created(review_value: Any, asset_id: str, *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
-    review = AuditionReview.from_dict(review_value if isinstance(review_value, dict) else {}, duration_beats=duration_beats)
+    review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
     data = review.to_dict()
     data["asset_count"] = int(data.get("asset_count") or 0) + 1
     data["last_asset_id"] = str(asset_id)
@@ -237,7 +237,7 @@ def review_summary(auditions_or_rows: list[Any]) -> dict[str, Any]:
     asset_count = 0
     favorite_count = 0
     for row in rows:
-        review = row.get("review") if isinstance(row.get("review"), dict) else {}
+        review = _as_document(row.get("review"))
         status = str(review.get("status") or "unreviewed")
         if status not in status_counts:
             status_counts[status] = 0
@@ -292,7 +292,7 @@ def audition_asset_payload(plan: SongPlan, manifest: Any, payload: dict[str, Any
     if asset_type not in SUPPORTED_AUDITION_ASSET_TYPES:
         raise EditorReviewError("asset_type must be motif, bass_pattern, drum_pattern, or chord_progression.")
     track_id = str(payload.get("track_id") or "").strip()
-    section = _section_from_range(plan, data.get("range") if isinstance(data.get("range"), dict) else {})
+    section = _section_from_range(plan, _as_document(data.get("range")))
     track = _select_asset_track(plan, asset_type, track_id)
     content: dict[str, Any]
     source_track_name = None
@@ -330,7 +330,7 @@ def audition_asset_payload(plan: SongPlan, manifest: Any, payload: dict[str, Any
             "parent_version_id": data.get("parent_version_id"),
             "parent_job_id": data.get("parent_job_id"),
             "source": data.get("source"),
-            "range": data.get("range") if isinstance(data.get("range"), dict) else {},
+            "range": _as_document(data.get("range")),
             "track_mode": data.get("track_mode"),
             "track_ids": data.get("track_ids") or [],
             "track_name": source_track_name,
@@ -370,7 +370,7 @@ def validate_marker_id(marker_id: str) -> str:
 def _matches_filters(row: ImplementationDocument, filters: ImplementationDocument) -> bool:
     if filters.get("source") and row.get("source") != filters.get("source"):
         return False
-    review = row.get("review") if isinstance(row.get("review"), dict) else {}
+    review = _as_document(row.get("review"))
     if filters.get("status") and review.get("status") != filters.get("status"):
         return False
     if str(filters.get("favorite") or "").lower() in {"true", "false"}:
@@ -394,7 +394,8 @@ def _sort_rows(rows: list[ImplementationDocument], filters: ImplementationDocume
     reverse = str(filters.get("order") or "desc").strip() != "asc"
 
     def key(row: dict[str, Any]) -> tuple[Any, ...]:
-        review = row.get("review") if isinstance(row.get("review"), dict) else {}
+        review = _as_document(row.get("review"))
+        primary: Any
         if sort == "rating":
             primary = int(review.get("rating") or 0)
         elif sort == "created":

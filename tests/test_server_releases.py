@@ -146,7 +146,6 @@ def test_release_signoff_blocks_non_manual_release_candidate_acceptance(tmp_path
         created_status, created = request_json(server, "POST", "/api/releases", {"name": "Acceptance Gate Release", "release_type": "demo_pack", "primary_artist": "MusicForge"})
         release_id = created["release"]["release_id"]
         request_json(server, "POST", f"/api/releases/{release_id}/tracks", {"project_id": project_id})
-        release_track = server.release_store.get_release(release_id).tracks[0]
         request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")
         request_json(server, "POST", f"/api/releases/{release_id}/export")
         request_json(server, "POST", f"/api/releases/{release_id}/export/zip")

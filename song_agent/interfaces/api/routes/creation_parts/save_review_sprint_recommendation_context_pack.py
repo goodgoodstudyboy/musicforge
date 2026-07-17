@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
+
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -8,8 +14,8 @@ from song_agent.application.interface_persistence import write_interface_documen
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesSaveReviewSprintRecommendationContextPack:
-    def _save_review_sprint_recommendation_context_pack(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, task_id: str, payload: ImplementationDocument) -> ImplementationDocument:
+class CreationRoutesSaveReviewSprintRecommendationContextPack(CreationRouteContext):
+    def _save_review_sprint_recommendation_context_pack(self, project_id: str, sprint_store: _InterfaceType, task_store: _InterfaceType, sprint: Any, task_id: str, payload: ImplementationDocument) -> ImplementationDocument:
         if task_id not in self._review_sprint_ordered_task_ids(sprint):
             raise FileNotFoundError(task_id)
         task = task_store.read_task(task_id)
@@ -21,9 +27,9 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
         action = _interfaces_api_runtime._recommendation_action_for_task(report, task_id)
         if not action:
             raise _interfaces_api_runtime.ReviewSprintStateError("Recommendation for task is missing.")
-        preview = action.get("context_pack_preview") if isinstance(action.get("context_pack_preview"), dict) else {}
-        asset_refs = preview.get("asset_refs") if isinstance(preview.get("asset_refs"), list) else []
-        reference_refs = preview.get("reference_refs") if isinstance(preview.get("reference_refs"), list) else []
+        preview = _as_document(action.get("context_pack_preview"))
+        asset_refs = _as_list(preview.get("asset_refs"))
+        reference_refs = _as_list(preview.get("reference_refs"))
         if not asset_refs and not reference_refs:
             raise _interfaces_api_runtime.ReviewSprintStateError("Recommendation has no context refs to save.")
         self._ensure_recommendation_context_refs_current(asset_refs, reference_refs)
@@ -39,13 +45,13 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
                 "recommendation_rank": action.get("rank"),
                 "recommended_action": action.get("action"),
             },
-            "query": preview.get("query") if isinstance(preview.get("query"), dict) else {},
+            "query": _as_document(preview.get("query")),
             "asset_refs": asset_refs,
             "reference_refs": reference_refs,
             "selection": {
                 "mode": "recommendation",
                 "selected_by": str(payload.get("selected_by") or "user")[:80],
-                "score_summary": action.get("score_breakdown") if isinstance(action.get("score_breakdown"), dict) else {},
+                "score_summary": _as_document(action.get("score_breakdown")),
             },
         }
         pack = self.context_pack_store.create_pack(pack_payload, asset_store=self.asset_store, reference_store=self.reference_store, now=_interfaces_api_runtime._utc_now())
@@ -62,7 +68,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
             if reference.hidden or str(ref.get("source_hash") or "") != reference.sha256:
                 raise _interfaces_api_runtime.ReviewSprintStateError("Recommendation context reference is stale. Refresh recommendations before saving.")
 
-    def _generate_review_sprint_provider_candidates(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, payload: ImplementationDocument) -> ImplementationDocument:
+    def _generate_review_sprint_provider_candidates(self, project_id: str, sprint_store: _InterfaceType, task_store: _InterfaceType, sprint: Any, payload: ImplementationDocument) -> ImplementationDocument:
         if sprint.status not in {"open", "in_progress", "blocked"}:
             raise _interfaces_api_runtime.ReviewSprintStateError(f"Cannot generate provider candidates for a {sprint.status} review sprint.")
         sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
@@ -119,7 +125,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
                     generated.append(stored)
                 ranked = task_store.rank_candidates(task)
                 task = task_store.update_counts(task, now=_interfaces_api_runtime._utc_now())
-                provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+                provider_usage = _as_document(provider_snapshot.get("usage"))
                 usage_record = _interfaces_api_runtime._provider_usage_record(
                     config_snapshot=provider_snapshot,
                     operation="review_sprint_provider_candidates",
@@ -157,20 +163,20 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
         response.update({"results": _interfaces_api_runtime.sanitize_metadata(results), "created_count": created_total, "provider_snapshots": _interfaces_api_runtime.sanitize_metadata(provider_snapshots)})
         return response
 
-    def _execute_queue_context_pack_action(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, item: _interfaces_api_runtime.SprintActionItem) -> ImplementationDocument:
+    def _execute_queue_context_pack_action(self, project_id: str, sprint_store: _InterfaceType, task_store: _InterfaceType, sprint: Any, item: _InterfaceType) -> ImplementationDocument:
         context_pack_id = str((item.result or {}).get("context_pack_id") or "")
         if context_pack_id:
             pack = self.context_pack_store.read_pack(context_pack_id)
             return {"status": "skipped", "reason": "context pack already created", "context_pack_id": pack.pack_id}
-        preview = item.input.get("context_pack_preview") if isinstance(item.input.get("context_pack_preview"), dict) else {}
-        asset_refs = preview.get("asset_refs") if isinstance(preview.get("asset_refs"), list) else []
-        reference_refs = preview.get("reference_refs") if isinstance(preview.get("reference_refs"), list) else []
+        preview = _as_document(item.input.get("context_pack_preview"))
+        asset_refs = _as_list(preview.get("asset_refs"))
+        reference_refs = _as_list(preview.get("reference_refs"))
         if not asset_refs and not reference_refs:
             return {"status": "skipped", "reason": "recommendation has no context refs"}
         result = self._save_review_sprint_recommendation_context_pack(project_id, sprint_store, task_store, sprint, str(item.task_id), {"name": item.input.get("name") or ""})
         return {"status": "created", "context_pack_id": result["context_pack"]["pack_id"], "asset_count": len(result["context_pack"].get("asset_refs") or []), "reference_count": len(result["context_pack"].get("reference_refs") or [])}
 
-    def _generate_review_task_provider_candidates_for_queue(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, payload: ImplementationDocument) -> ImplementationDocument:
+    def _generate_review_task_provider_candidates_for_queue(self, project_id: str, task_store: _InterfaceType, task: Any, payload: ImplementationDocument) -> ImplementationDocument:
         payload = self._expand_context_pack_payload(payload)
         candidates = task_store.list_candidates(task.task_id)
         if bool(payload.get("skip_existing_provider", True)) and any((candidate.candidate_type == "provider_review_patch" or candidate.source.get("provider")) and candidate.status in {"ready", "applied"} for candidate in candidates):
@@ -203,7 +209,7 @@ class CreationRoutesSaveReviewSprintRecommendationContextPack:
             generated.append(task_store.create_candidate(task=task, candidate=candidate, candidate_plan=candidate_plan, validator=validator, summary=summary, render_midi_file=bool(payload.get("render_midi", True)), now=_interfaces_api_runtime._utc_now()))
         ranked = task_store.rank_candidates(task)
         updated_task = task_store.update_counts(task, now=_interfaces_api_runtime._utc_now())
-        provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+        provider_usage = _as_document(provider_snapshot.get("usage"))
         usage_record = _interfaces_api_runtime._provider_usage_record(config_snapshot=provider_snapshot, operation="review_sprint_action_provider_candidates", template_id=template.template_id, started_at=_interfaces_api_runtime._utc_now(), status="completed", provider_usage=provider_usage, request_id=provider_snapshot.get("request_id"))
         write_interface_document(task_store.task_dir(task.task_id) / "provider-usage.json", usage_record)
         decision_report = task_store.write_decision_report(updated_task, _interfaces_api_runtime.build_review_decision_report(task=updated_task, candidates=ranked, parent_plan=parent_plan, now=_interfaces_api_runtime._utc_now(), notes=str(payload.get("decision_note") or "")), now=_interfaces_api_runtime._utc_now())

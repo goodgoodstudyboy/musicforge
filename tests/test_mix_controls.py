@@ -6,12 +6,10 @@ import pytest
 
 from song_agent.mix_controls import (
     MixControlError,
-    apply_mix_state_to_plan,
     apply_patch_and_render_plan,
     build_mix_patch,
     default_mix_state,
 )
-from song_agent.projectio import write_json
 from song_agent.renderers.midi import render_midi
 from song_agent.schemas.song import NoteEvent, SongPlan, SongSection, TrackPlan
 

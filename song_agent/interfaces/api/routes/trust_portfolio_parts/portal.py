@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustPortfolioPortalRoutes:
+class TrustPortfolioPortalRoutes(TrustPortfolioRouteContext):
     def _dispatch_portfolio_portal(self, method, parts, portfolio_id, action) -> bool:
         if action == 'governance-attestation-portal':
             query = _interfaces_api_runtime.parse_qs(_interfaces_api_runtime.urlparse(self.path).query)

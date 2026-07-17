@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import csv as csv
 import io as io
@@ -134,8 +134,8 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
 
 
 def distribution_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or summary.get("status") or "missing",
@@ -166,7 +166,7 @@ def mark_distribution_qa_stale(report: dict[str, Any] | None, *, current_source_
     data["stale"] = True
     if current_source_hash:
         data["current_source_hash"] = current_source_hash
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    summary = _as_document(data.get("summary"))
     summary["status"] = "stale"
     if current_source_hash:
         summary["current_source_hash"] = current_source_hash
@@ -220,7 +220,7 @@ def _encoded_audio_summary_for_layout(store: DistributionStore, release_id: str,
 
 
 def _checks(store: DistributionStore, release: ReleaseDocument, target: DistributionTarget, source: ImplementationDocument) -> list[ImplementationDocument]:
-    options = target.options if isinstance(target.options, dict) else {}
+    options = _as_document(target.options)
     checks: list[dict[str, Any]] = []
     export_manifest = _safe_release_export_manifest(store, release.release_id)
     release_zip_path = store.release_store.zip_path(release.release_id)
@@ -270,7 +270,7 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
         )
     elif not bool(options.get("require_release_zip_verified", False)):
         checks.append(_check("release_zip_verify", False, "warning", "Release ZIP verification is not required for this target."))
-    metadata_summary = export_manifest.get("metadata") if isinstance(export_manifest.get("metadata"), dict) else {}
+    metadata_summary = _as_document(export_manifest.get("metadata"))
     require_metadata = bool(options.get("require_metadata_export", False))
     checks.append(_check("metadata_exists", require_metadata and not bool(metadata), "blocking", "Release metadata must exist."))
     if metadata:
@@ -315,8 +315,8 @@ def _checks(store: DistributionStore, release: ReleaseDocument, target: Distribu
 
 def _mapping_checks(metadata: ImplementationDocument, template: ImplementationDocument) -> list[ImplementationDocument]:
     mapping = template_mapping(template)
-    rows = mapping.get("platform_csv") if isinstance(mapping.get("platform_csv"), list) else []
-    tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
+    rows = _as_list(mapping.get("platform_csv"))
+    tracks = _as_list(metadata.get("tracks"))
     checks: list[dict[str, Any]] = []
     missing_required: list[str] = []
     missing_optional = 0
@@ -345,8 +345,8 @@ def _mapping_checks(metadata: ImplementationDocument, template: ImplementationDo
 
 
 def _identifier_checks(metadata: ImplementationDocument, options: ImplementationDocument) -> list[ImplementationDocument]:
-    release_meta = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
-    tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
+    release_meta = _as_document(metadata.get("release"))
+    tracks = _as_list(metadata.get("tracks"))
     checks: list[dict[str, Any]] = []
     if bool(options.get("require_upc", False)):
         checks.append(_check("upc_required", not str(release_meta.get("upc") or "").strip(), "blocking", "UPC is required for this profile."))
@@ -389,7 +389,7 @@ def _safe_release_export_manifest(store: DistributionStore, release_id: str) -> 
 
 
 def _missing_release_export_audio(store: DistributionStore, release_id: str, manifest: ImplementationDocument) -> list[str]:
-    tracks = manifest.get("tracks") if isinstance(manifest.get("tracks"), list) else []
+    tracks = _as_list(manifest.get("tracks"))
     missing: list[str] = []
     for item in tracks:
         if not isinstance(item, dict):
@@ -417,7 +417,7 @@ def _formula_cell(cell: str) -> bool:
 
 
 def _check(check_id: str, failed: bool, severity: str, message: str, count: int | None = None, extra: ImplementationDocument | None = None) -> ImplementationDocument:
-    item = {
+    item: ImplementationDocument = {
         "scope": "distribution",
         "check_id": check_id,
         "status": "failed" if failed and severity == "blocking" else "warning" if failed else "passed",

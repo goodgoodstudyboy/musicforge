@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioDistributionDispatch:
+class StudioDistributionDispatch(StudioDispatchRouteContext):
     def _dispatch_studio_distribution(self, method, path, parsed) -> bool:
         if path == '/api/distribution/profiles':
             self._handle_distribution_profiles_root(method)

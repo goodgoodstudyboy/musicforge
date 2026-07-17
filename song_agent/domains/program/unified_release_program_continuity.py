@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import shutil as shutil
 import tempfile as tempfile
@@ -656,7 +656,7 @@ class UnifiedReleaseProgramContinuityStore:
         manifest = read_json(export_dir / "manifest.json")
         if not _integrity_ok(manifest):
             raise UnifiedReleaseProgramContinuityStateError("Continuity Archive manifest integrity failed.")
-        source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+        source = _as_document(manifest.get("source"))
         expected_source = _archive_manifest_document(program_id, docs, []).get("source") or {}
         for key, value in expected_source.items():
             if source.get(key) != value:

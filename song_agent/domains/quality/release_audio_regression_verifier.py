@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -153,7 +153,7 @@ def verify_release_audio_regression_package(
             checks.extend(baseline_facts["checks"])
             checks.extend(current_facts["checks"])
             if baseline_facts["binding"] and current_facts["binding"]:
-                expected = _expected_documents(baseline_facts["binding"], current_facts["binding"], policy=report.get("policy") if isinstance(report.get("policy"), dict) else {})
+                expected = _expected_documents(baseline_facts["binding"], current_facts["binding"], policy=_as_document(report.get("policy")))
                 checks.extend(_external_binding_checks("baseline", baseline_binding, baseline_facts["binding"]))
                 checks.extend(_external_binding_checks("current", current_binding, current_facts["binding"]))
                 checks.extend(_recomputed_document_checks(report, matrix, issue_index, quality, blockers, expected))
@@ -342,8 +342,8 @@ def _timeline_facts(timeline_zip: Path) -> ImplementationDocument:
 
 
 def _expected_documents(baseline_binding: ImplementationDocument, current_binding: ImplementationDocument, *, policy: ImplementationDocument) -> dict[str, ImplementationDocument]:
-    baseline_tracks = baseline_binding.get("facts") if isinstance(baseline_binding.get("facts"), list) else []
-    current_tracks = current_binding.get("facts") if isinstance(current_binding.get("facts"), list) else []
+    baseline_tracks = _as_list(baseline_binding.get("facts"))
+    current_tracks = _as_list(current_binding.get("facts"))
     baseline_by_key = {_identity_key(row, mode=str(policy.get("identity_mode") or "release_track_lineage")): row for row in baseline_tracks if _identity_key(row, mode=str(policy.get("identity_mode") or "release_track_lineage"))}
     current_by_key = {_identity_key(row, mode=str(policy.get("identity_mode") or "release_track_lineage")): row for row in current_tracks if _identity_key(row, mode=str(policy.get("identity_mode") or "release_track_lineage"))}
     keys = sorted(set(baseline_by_key) | set(current_by_key))
@@ -469,7 +469,8 @@ def _expected_documents(baseline_binding: ImplementationDocument, current_bindin
     for doc in (matrix, issue_index, quality, blocker_register):
         doc["source_hash"] = source["source_hash"]
         doc["integrity_hash"] = _integrity_hash(doc)
-    report = {
+    quality_metrics = _as_document(quality.get("metrics"))
+    report: ImplementationDocument = {
         "schema_version": RELEASE_AUDIO_REGRESSION_SCHEMA_VERSION,
         "package_type": RELEASE_AUDIO_REGRESSION_PACKAGE_TYPE,
         "release_id": current_binding.get("release_id"),
@@ -477,9 +478,9 @@ def _expected_documents(baseline_binding: ImplementationDocument, current_bindin
         "status": status,
         "readiness": "blocked" if blockers else "warning_requires_audio_lead_review" if warnings else "ready",
         "summary": {
-            **matrix["summary"],
-            "new_high_issue_count": quality["metrics"]["high_issue_delta"],
-            "new_critical_issue_count": quality["metrics"]["critical_issue_delta"],
+            **_as_document(matrix.get("summary")),
+            "new_high_issue_count": quality_metrics.get("high_issue_delta"),
+            "new_critical_issue_count": quality_metrics.get("critical_issue_delta"),
             "average_manual_rating_delta": average_rating_delta,
             "blocker_count": len(blockers),
             "warning_count": len(warnings),
@@ -550,7 +551,7 @@ def _signoff_checks(signoff: ImplementationDocument | None, history: list[Implem
 def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("previous_event_hash") != previous:
             return False
         if event.get("payload_hash") != stable_hash(payload):
@@ -562,7 +563,7 @@ def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = expected_entries - {"manifest.json"}

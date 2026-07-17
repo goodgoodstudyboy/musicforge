@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -7,7 +11,7 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesLibraryRecommend:
+class CreationRoutesLibraryRecommend(CreationRouteContext):
     def _handle_library_recommend(self, method: str) -> None:
         if method != "POST":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -260,7 +264,7 @@ class CreationRoutesLibraryRecommend:
             return
         self._send_json({"ok": True, "assets": [_interfaces_api_runtime.asset_public_dict(asset) for asset in assets]}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
 
-    def _create_assets_from_plan(self, plan: _interfaces_api_runtime.SongPlan, source: ImplementationDocument, payload: ImplementationDocument) -> list[Any]:
+    def _create_assets_from_plan(self, plan: _InterfaceType, source: ImplementationDocument, payload: ImplementationDocument) -> list[Any]:
         assets = []
         for asset_payload in _interfaces_api_runtime.extract_assets_from_song_plan(plan, source, payload):
             assets.append(self.asset_store.create_asset(asset_payload, now=_interfaces_api_runtime._utc_now()))

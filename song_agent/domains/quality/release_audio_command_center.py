@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -460,7 +462,7 @@ def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
     }
     kwargs: dict[str, Any] = {}
     for key, (zip_arg, report_arg) in mapping.items():
-        paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
+        paths = _as_document(evidence.get(key))
         zip_value = paths.get("zip") or paths.get("zip_path") or evidence.get(zip_arg) or evidence.get(zip_arg.replace("_path", ""))
         report_value = paths.get("verification_report") or paths.get("verification_report_path") or evidence.get(report_arg) or evidence.get(report_arg.replace("_path", ""))
         if zip_value:
@@ -473,13 +475,13 @@ def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
 
 
 def _requirements(evidence: ImplementationDocument) -> dict[str, bool]:
-    raw = evidence.get("requirements") if isinstance(evidence.get("requirements"), dict) else {}
+    raw = _as_document(evidence.get("requirements"))
     return {key: bool(raw.get(key, True)) for key in COMPONENT_KEYS}
 
 
 def _component_row(component: dict[str, str], evidence: ImplementationDocument, *, verifier_kwargs: ImplementationDocument) -> ImplementationDocument:
     key = component["key"]
-    paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
+    paths = _as_document(evidence.get(key))
     mapping = {
         "certification": ("certification_zip_path", "certification_verification_report_path"),
         "timeline": ("timeline_zip_path", "timeline_verification_report_path"),
@@ -496,7 +498,7 @@ def _component_row(component: dict[str, str], evidence: ImplementationDocument, 
     status = "missing"
     readiness = "missing"
     message = "Evidence ZIP or verification report is missing."
-    fingerprint = {
+    fingerprint: _InferenceType = {
         "component_key": key,
         "artifact_type": component["artifact"],
         "zip_sha256": None,
@@ -515,7 +517,7 @@ def _component_row(component: dict[str, str], evidence: ImplementationDocument, 
         runtime = verify_release_audio_command_center_component(key, zip_path, report_path, **verifier_kwargs)
         fingerprint.update(runtime.get("fingerprint") or {})
         fingerprint["artifact_type"] = component["artifact"]
-        external_report = runtime.get("external_report") if isinstance(runtime.get("external_report"), dict) else {}
+        external_report = _as_document(runtime.get("external_report"))
         verification_summary = _public_verification_summary(key, external_report) if external_report else verification_summary
         runtime_summary = {
             "component_key": key,
@@ -552,7 +554,7 @@ def _component_row(component: dict[str, str], evidence: ImplementationDocument, 
 
 
 def _public_verification_summary(component_key: str, report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     public = {
         "component_key": component_key,
         "package_type": report.get("package_type"),
@@ -568,7 +570,7 @@ def _public_verification_summary(component_key: str, report: ImplementationDocum
 
 
 def _sync_report_document_hashes(docs: ImplementationDocument) -> None:
-    report = docs.get("report") if isinstance(docs.get("report"), dict) else {}
+    report = _as_document(docs.get("report"))
     report["document_hashes"] = {
         "command_center": docs.get("command_center", {}).get("integrity_hash"),
         "evidence_inventory": docs.get("inventory", {}).get("integrity_hash"),

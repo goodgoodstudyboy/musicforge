@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -94,8 +96,8 @@ def _expected_control_status(method: str, control: ImplementationDocument, sourc
     hub_bound = bool(source.get("hub_verification_report_hash") and source.get("hub_zip_sha256") and source.get("hub_manifest_hash"))
     incident_passed = source.get("incident_verification_status") == "passed"
     knowledge_passed = source.get("knowledge_verification_status") == "passed"
-    knowledge_summary = source.get("knowledge_summary") if isinstance(source.get("knowledge_summary"), dict) else {}
-    hub_summary = source.get("hub_summary") if isinstance(source.get("hub_summary"), dict) else {}
+    knowledge_summary = _as_document(source.get("knowledge_summary"))
+    hub_summary = _as_document(source.get("hub_summary"))
     if method == "external_evidence_binding":
         return "passed" if hub_bound and incident_passed and knowledge_passed else "failed"
     if method == "fixed_zip_allowlist":

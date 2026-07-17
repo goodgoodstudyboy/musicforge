@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list, list_or as _list_or
+
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesReleaseFormatDecisions:
+class QualityRoutesReleaseFormatDecisions(QualityRouteContext):
     def _handle_release_format_decisions(self, method: str, release_id: str, tail: str) -> None:
         try:
             if tail in {"", "/"}:
@@ -163,7 +169,7 @@ class QualityRoutesReleaseFormatDecisions:
                         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                         return
                     payload = self._optional_json_body()
-                    contributors = payload.get("contributors") if isinstance(payload.get("contributors"), list) else payload if isinstance(payload, list) else []
+                    contributors = _list_or(payload.get("contributors"), _as_list(payload))
                     record = self.rights_clearance_store.upsert_track(release_id, track_id, {"contributors": contributors}, now=_interfaces_api_runtime._utc_now())
                     self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
                     return
@@ -172,7 +178,7 @@ class QualityRoutesReleaseFormatDecisions:
                         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                         return
                     payload = self._optional_json_body()
-                    sources = payload.get("source_usages") if isinstance(payload.get("source_usages"), list) else payload.get("sources") if isinstance(payload.get("sources"), list) else payload if isinstance(payload, list) else []
+                    sources = _list_or(payload.get("source_usages"), _list_or(payload.get("sources"), _as_list(payload)))
                     record = self.rights_clearance_store.upsert_track(release_id, track_id, {"source_usages": sources}, now=_interfaces_api_runtime._utc_now())
                     self._send_json({"ok": True, "release_id": release_id, "track_id": track_id, "rights": record})
                     return
@@ -203,14 +209,14 @@ class QualityRoutesReleaseFormatDecisions:
         except (_interfaces_api_runtime.RightsClearanceError, ValueError) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
 
-    def _job_audio_artifact_stale_reasons(self, job: _interfaces_api_runtime.JobState) -> list[str]:
+    def _job_audio_artifact_stale_reasons(self, job: _InterfaceType) -> list[str]:
         run_dir = _interfaces_api_runtime.Path(job.output_dir)
         wav_path = run_dir / "renders" / "song.wav"
         midi_path = run_dir / "renders" / "song.mid"
         plan_path = run_dir / "data" / "song-plan.json"
         manifest = _interfaces_api_runtime.read_audio_artifact_manifest(run_dir / "renders" / _interfaces_api_runtime.AUDIO_ARTIFACT_FILENAME, default={})
         profile = None
-        renderer = manifest.get("renderer") if isinstance(manifest.get("renderer"), dict) else {}
+        renderer = _as_document(manifest.get("renderer"))
         profile_id = str(renderer.get("profile_id") or "")
         if profile_id.startswith("arp-"):
             try:
@@ -220,7 +226,7 @@ class QualityRoutesReleaseFormatDecisions:
         return _interfaces_api_runtime.audio_artifact_stale_reasons_for_profile(manifest, wav_path=wav_path, midi_path=midi_path, song_plan_path=plan_path, profile=profile)
 
     def _release_mastering_export_gate(self, export_manifest: ImplementationDocument, mastering_gate: ImplementationDocument) -> ImplementationDocument:
-        manifest_mastering = export_manifest.get("mastering") if isinstance(export_manifest.get("mastering"), dict) else {}
+        manifest_mastering = _as_document(export_manifest.get("mastering"))
         required_fields = ("analysis_hash", "plan_hash", "selected_candidate_id", "selected_candidate_hash")
         missing_fields = [field for field in required_fields if not manifest_mastering.get(field)]
         mismatched_fields = [
@@ -244,8 +250,8 @@ class QualityRoutesReleaseFormatDecisions:
         }
 
     def _release_encoded_audio_export_gate(self, export_manifest: ImplementationDocument, encoded_gate: ImplementationDocument) -> ImplementationDocument:
-        manifest_encoded = export_manifest.get("encoded_audio") if isinstance(export_manifest.get("encoded_audio"), dict) else {}
-        manifest_profiles = manifest_encoded.get("profiles") if isinstance(manifest_encoded.get("profiles"), list) else []
+        manifest_encoded = _as_document(export_manifest.get("encoded_audio"))
+        manifest_profiles = _as_list(manifest_encoded.get("profiles"))
         by_profile = {str(row.get("profile_id") or ""): row for row in manifest_profiles if isinstance(row, dict)}
         missing: list[str] = []
         mismatched: list[str] = []

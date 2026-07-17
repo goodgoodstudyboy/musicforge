@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
@@ -427,7 +431,7 @@ class LegacyReleaseSignoffAdapter:
             if _split_state['export_manifest'].get('source_hash') != _split_state['report'].get('source_hash'):
                 self._send_error(HTTPStatus.CONFLICT, 'Release Export is stale. Rebuild export before signoff.')
                 return (True, None)
-            zip_summary = _split_state['export_manifest'].get('zip') if isinstance(_split_state['export_manifest'].get('zip'), dict) else {}
+            zip_summary = _as_document(_split_state['export_manifest'].get('zip'))
             zip_path = self.release_store.zip_path(release_id)
             if bool(_split_state['payload'].get('require_zip', True)) and (not (zip_path.exists() and zip_path.is_file() and (not zip_path.is_symlink()) and zip_summary.get('entry_count'))):
                 self._send_error(HTTPStatus.CONFLICT, 'Release ZIP has not been generated.')
@@ -456,7 +460,7 @@ class LegacyReleaseSignoffAdapter:
         return (False, None)
 
     def execute(self, method: str, release_id: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._execute_part_01(method, release_id, _split_state)
         if _split_result[0]:
             return _split_result[1]

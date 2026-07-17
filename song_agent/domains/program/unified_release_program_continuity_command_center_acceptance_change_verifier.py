@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -154,12 +154,12 @@ def verify_unified_release_program_continuity_command_center_acceptance_change_p
             if _has_blocking_failures(checks):
                 return _finish(checks, summary)
 
-            manifest = _read_json_entry(archive, "manifest.json")
-            state = _read_json_entry(archive, "state.json")
-            request_index = _read_json_entry(archive, "request-index.json")
-            reset_index = _read_json_entry(archive, "reset-index.json")
-            generation = _read_json_entry(archive, "generation.json")
-            lifecycle = _read_json_entry(archive, "lifecycle.json")
+            manifest = _as_document(_read_json_entry(archive, "manifest.json"))
+            state = _as_document(_read_json_entry(archive, "state.json"))
+            request_index = _as_document(_read_json_entry(archive, "request-index.json"))
+            reset_index = _as_document(_read_json_entry(archive, "reset-index.json"))
+            current_generation_doc = _as_document(_read_json_entry(archive, "generation.json"))
+            lifecycle = _as_document(_read_json_entry(archive, "lifecycle.json"))
             events = _parse_jsonl(archive.read("events.jsonl").decode("utf-8"))
             requests = {request_id: _request_bundle(archive, request_id) for request_id in request_ids}
             resets = {reset_id: _reset_bundle(archive, reset_id) for reset_id in reset_ids}
@@ -170,7 +170,7 @@ def verify_unified_release_program_continuity_command_center_acceptance_change_p
                     "manifest_hash": manifest.get("integrity_hash"),
                     "status": lifecycle.get("status"),
                     "reset_count": (reset_index.get("summary") or {}).get("reset_count"),
-                    "current_generation": generation.get("generation"),
+                    "current_generation": current_generation_doc.get("generation"),
                 }
             )
 
@@ -180,10 +180,10 @@ def verify_unified_release_program_continuity_command_center_acceptance_change_p
                 ("urpcccacc_state_integrity", state),
                 ("urpcccacc_request_index_integrity", request_index),
                 ("urpcccacc_reset_index_integrity", reset_index),
-                ("urpcccacc_current_generation_integrity", generation),
+                ("urpcccacc_current_generation_integrity", current_generation_doc),
                 ("urpcccacc_lifecycle_integrity", lifecycle),
             ):
-                checks.append(_check(check_id, _integrity_ok(doc), f"{check_id} hash is valid."))
+                checks.append(_check(check_id, _integrity_ok(_as_document(doc)), f"{check_id} hash is valid."))
             checks.extend(
                 [
                     _check("urpcccacc_manifest_package_type", manifest.get("package_type") == UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_ARCHIVE_PACKAGE_TYPE, "Manifest package type is valid."),
@@ -202,9 +202,9 @@ def verify_unified_release_program_continuity_command_center_acceptance_change_p
                 )
             )
             checks.extend(_index_checks(request_index, reset_index, requests, resets, lifecycle, events))
-            checks.extend(_current_generation_checks(generation, state, resets, events))
-            checks.extend(_generation_checks(generation_docs, generation, state, resets))
-            checks.extend(_document_binding_checks(manifest, state, request_index, reset_index, generation, lifecycle))
+            checks.extend(_current_generation_checks(current_generation_doc, state, resets, events))
+            checks.extend(_generation_checks(generation_docs, current_generation_doc, state, resets))
+            checks.extend(_document_binding_checks(manifest, state, request_index, reset_index, current_generation_doc, lifecycle))
             checks.extend(_current_acceptance_checks(state, acceptance_archive_path, acceptance_verification_report_path, acceptance_signoff_binding_path, require=require_current_acceptance))
             checks.append(_redaction_check(archive, names))
     except (OSError, zipfile.BadZipFile, json.JSONDecodeError, ValueError) as exc:
@@ -293,7 +293,7 @@ def command_center_acceptance_change_reset_semantic_checks(resets: dict[str, dic
     reset_event_by_hash = {row.get("reset_event_hash"): row for row in events if row.get("event_type") == "receiver_acceptance_signoff_reset_applied"}
     reset_index_rows = {
         str(row.get("reset_id") or ""): row
-        for row in (reset_index.get("items") if isinstance(reset_index.get("items"), list) else [])
+        for row in (_as_list(reset_index.get("items")))
         if isinstance(row, dict)
     }
     used_requests: set[str] = set()
@@ -305,8 +305,8 @@ def command_center_acceptance_change_reset_semantic_checks(resets: dict[str, dic
         request = request_bundle.get("request") or {}
         approval = request_bundle.get("approval") or {}
         request_binding = request_bundle.get("binding") or {}
-        target = request.get("target") if isinstance(request.get("target"), dict) else {}
-        source = request.get("source") if isinstance(request.get("source"), dict) else {}
+        target = _as_document(request.get("target"))
+        source = _as_document(request.get("source"))
         event = reset_event_by_hash.get(proof.get("reset_event_hash")) or {}
         submitted_event = next(
             (
@@ -393,8 +393,8 @@ def command_center_acceptance_change_reset_semantic_checks(resets: dict[str, dic
 
 
 def _index_checks(request_index: ImplementationDocument, reset_index: ImplementationDocument, requests: dict[str, ImplementationDocument], resets: dict[str, ImplementationDocument], lifecycle: ImplementationDocument, events: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    request_rows = request_index.get("items") if isinstance(request_index.get("items"), list) else []
-    reset_rows = reset_index.get("items") if isinstance(reset_index.get("items"), list) else []
+    request_rows = _as_list(request_index.get("items"))
+    reset_rows = _as_list(reset_index.get("items"))
     event_hashes = [row.get("event_hash") for row in events]
     return [
         _check("urpcccacc_request_index_count", len(request_rows) == len(requests), "Change request index count matches archived requests."),
@@ -472,7 +472,7 @@ def _generation_checks(
 ) -> list[ImplementationDocument]:
     current_number = _as_int(current_generation.get("generation"))
     proofs_by_previous = {
-        int(proof.get("previous_generation")): proof
+        _as_int(proof.get("previous_generation")): proof
         for proof in (bundle.get("proof") or {} for bundle in resets.values())
         if _as_int(proof.get("previous_generation")) is not None
     }
@@ -487,7 +487,7 @@ def _generation_checks(
             {"expected": sorted(expected), "actual": sorted(generations)},
         )
     ]
-    current_acceptance = state.get("current_acceptance") if isinstance(state.get("current_acceptance"), dict) else {}
+    current_acceptance = _as_document(state.get("current_acceptance"))
     for generation, bundle in sorted(generations.items()):
         for key, doc in bundle.items():
             checks.append(_check(f"urpcccacc_generation_{generation:06d}_{key}_integrity", _integrity_ok(doc), "Generation sidecar integrity is valid."))
@@ -495,7 +495,7 @@ def _generation_checks(
         verification = bundle.get("verification_summary") or {}
         signoff = bundle.get("signoff_binding_summary") or {}
         source_doc = bundle.get("source_summary") or {}
-        source = source_doc.get("source") if isinstance(source_doc.get("source"), dict) else {}
+        source = _as_document(source_doc.get("source"))
         expected_source = current_acceptance if generation == current_number else (proofs_by_previous.get(generation) or {}).get("source") or {}
         checks.extend(
             [
@@ -517,7 +517,7 @@ def _current_generation_checks(
     events: list[ImplementationDocument],
 ) -> list[ImplementationDocument]:
     current_number = _as_int(generation.get("generation"))
-    current_acceptance = state.get("current_acceptance") if isinstance(state.get("current_acceptance"), dict) else {}
+    current_acceptance = _as_document(state.get("current_acceptance"))
     signed_event = next(
         (
             row
@@ -549,7 +549,7 @@ def _current_generation_checks(
 
 
 def _document_binding_checks(manifest: ImplementationDocument, state: ImplementationDocument, request_index: ImplementationDocument, reset_index: ImplementationDocument, generation: ImplementationDocument, lifecycle: ImplementationDocument) -> list[ImplementationDocument]:
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     docs = {
         "change_control_state_hash": state,
         "change_request_index_hash": request_index,
@@ -586,7 +586,7 @@ def _current_acceptance_checks(state: ImplementationDocument, archive_path: Path
         strict=True,
         require_signed=False,
     )
-    current = state.get("current_acceptance") if isinstance(state.get("current_acceptance"), dict) else {}
+    current = _as_document(state.get("current_acceptance"))
     checks.extend(
         [
             _check("urpcccacc_current_acceptance_report_package_type", external.get("package_type") == UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE, "Current Acceptance verification package type is valid."),

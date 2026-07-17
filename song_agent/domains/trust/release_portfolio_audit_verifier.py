@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -73,7 +73,7 @@ def verify_release_portfolio_audit_package(
 
 
 def release_portfolio_audit_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -101,7 +101,7 @@ def print_release_portfolio_audit_verification_report(report: dict[str, Any]) ->
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -211,7 +211,7 @@ class _PortfolioAuditVerifier:
         self._add_check("manifest", "portfolio_audit_manifest_exists", "passed", "blocking", "manifest.json exists.")
         actual_manifest_hash = portfolio_manifest_integrity_hash(self.manifest)
         self._add_check("manifest", "portfolio_audit_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Portfolio Audit manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Portfolio Audit manifest integrity hash does not match.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -277,7 +277,7 @@ class _PortfolioAuditVerifier:
             self._add_check("risk_register", "portfolio_audit_manifest_risk_hash", "passed" if ok else "failed", "blocking", "Manifest Portfolio Risk Register reference matches report." if ok else "Manifest Portfolio Risk Register reference does not match report.")
 
     def _verify_requirements(self) -> None:
-        summaries = self.audit_report.get("release_summaries") if isinstance(self.audit_report.get("release_summaries"), list) else []
+        summaries = _as_list(self.audit_report.get("release_summaries"))
         if self.require_reviewer_packs:
             bad = [str(item.get("release_id")) for item in summaries if isinstance(item, dict) and item.get("reviewer_pack_verification_status") != "passed"]
             self._add_check("requirements", "portfolio_audit_require_reviewer_packs", "failed" if bad else "passed", "blocking", "Passed Reviewer Pack verification is required: " + ", ".join(bad[:5]) if bad else "All releases include passed Reviewer Pack verification.")
@@ -326,13 +326,13 @@ class _PortfolioAuditVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = self.audit_report.get("summary") if isinstance(self.audit_report.get("summary"), dict) else {}
-        risk_score = self.audit_report.get("risk_score") if isinstance(self.audit_report.get("risk_score"), dict) else {}
+        summary = _as_document(self.audit_report.get("summary"))
+        risk_score = _as_document(self.audit_report.get("risk_score"))
         report = {
             "schema_version": PORTFOLIO_AUDIT_VERIFICATION_SCHEMA_VERSION,
             "generated_at": self.generated_at,

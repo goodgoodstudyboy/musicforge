@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from typing import Any as _InterfaceType
+
 from . import dependencies as _commands_trust_parts_dependencies
 
 from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance import accepted_evidence_summary
@@ -26,10 +32,10 @@ def _execute_public_trust_center_part_01(argv: list[str], _split_state):
     _split_state['distribution_kit_store'] = PublicTrustCenterDistributionKitStore(trust_center_store=_split_state['store'], anchor_registry_store=_split_state['anchor_store'], anchor_transparency_store=_split_state['anchor_transparency_store'])
     _split_state['distribution_kit_acceptance_store'] = PublicTrustCenterDistributionKitAcceptanceStore(distribution_kit_store=_split_state['distribution_kit_store'])
     _split_state['acceptance_board_store'] = PublicTrustCenterAcceptanceBoardStore(acceptance_store=_split_state['distribution_kit_acceptance_store'])
-    payload: dict[str, Any] = {'center_id': _split_state['args'].center_id, 'attestation_profile': _split_state['args'].profile, 'release_ids': _split_state['args'].release_ids, 'portfolio_ids': _split_state['args'].portfolio_ids, 'include_all_releases': not bool(_split_state['args'].release_ids), 'include_all_portfolios': not bool(_split_state['args'].portfolio_ids), 'require_registry_current': True, 'require_portal_current': True, 'require_transparency_current': True, 'require_acknowledgement_current': _split_state['args'].require_acknowledgement_current, 'include_delivery': _split_state['args'].include_delivery, 'include_distribution': _split_state['args'].include_delivery and _split_state['args'].include_distribution, 'include_submission': _split_state['args'].include_delivery and _split_state['args'].include_submission, 'include_submission_evidence': _split_state['args'].include_delivery and _split_state['args'].include_submission_evidence, 'include_operations': _split_state['args'].include_delivery and _split_state['args'].include_operations, 'require_release_signoff': _split_state['args'].require_release_signoff, 'require_distribution_signed': _split_state['args'].require_distribution_signed, 'require_submission_accepted': _split_state['args'].require_submission_accepted, 'require_submission_evidence_signed': _split_state['args'].require_submission_evidence_signed, 'require_operations_signed': _split_state['args'].require_operations_signed, 'require_operations_audit_verified': _split_state['args'].require_operations_audit_verified, 'require_operations_reviewer_pack_verified': _split_state['args'].require_operations_reviewer_pack_verified}
+    payload: dict[str, _InterfaceType] = {'center_id': _split_state['args'].center_id, 'attestation_profile': _split_state['args'].profile, 'release_ids': _split_state['args'].release_ids, 'portfolio_ids': _split_state['args'].portfolio_ids, 'include_all_releases': not bool(_split_state['args'].release_ids), 'include_all_portfolios': not bool(_split_state['args'].portfolio_ids), 'require_registry_current': True, 'require_portal_current': True, 'require_transparency_current': True, 'require_acknowledgement_current': _split_state['args'].require_acknowledgement_current, 'include_delivery': _split_state['args'].include_delivery, 'include_distribution': _split_state['args'].include_delivery and _split_state['args'].include_distribution, 'include_submission': _split_state['args'].include_delivery and _split_state['args'].include_submission, 'include_submission_evidence': _split_state['args'].include_delivery and _split_state['args'].include_submission_evidence, 'include_operations': _split_state['args'].include_delivery and _split_state['args'].include_operations, 'require_release_signoff': _split_state['args'].require_release_signoff, 'require_distribution_signed': _split_state['args'].require_distribution_signed, 'require_submission_accepted': _split_state['args'].require_submission_accepted, 'require_submission_evidence_signed': _split_state['args'].require_submission_evidence_signed, 'require_operations_signed': _split_state['args'].require_operations_signed, 'require_operations_audit_verified': _split_state['args'].require_operations_audit_verified, 'require_operations_reviewer_pack_verified': _split_state['args'].require_operations_reviewer_pack_verified}
     if _split_state['args'].name:
         payload['name'] = _split_state['args'].name
-    _split_state['result']: dict[str, Any] = {'ok': True, 'center_id': _split_state['args'].center_id}
+    _split_state['result'] = {'ok': True, 'center_id': _split_state['args'].center_id}
     if _split_state['args'].refresh:
         _split_state['report'] = _split_state['store'].refresh_report(_split_state['args'].center_id, payload)
         _split_state['result'].update({'report': _split_state['report'], 'summary': public_trust_center_summary(_split_state['report']), 'stale': False})
@@ -63,20 +69,20 @@ def _execute_public_trust_center_part_02(argv: list[str], _split_state):
     if _split_state['args'].anchor_register:
         registered = _split_state['anchor_store'].register_current_anchor(_split_state['args'].center_id, {'reason': _split_state['args'].anchor_reason})
         _split_state['result']['anchor_registry'] = registered
-        _split_state['result']['anchor_summary'] = anchor_registry_summary(registered.get('registry') if isinstance(registered.get('registry'), dict) else {})
+        _split_state['result']['anchor_summary'] = anchor_registry_summary(_as_document(registered.get('registry')))
     if _split_state['args'].anchor_publish:
         registry = _split_state['anchor_store'].read_registry(_split_state['args'].center_id, default={})
         entry_id = str(registry.get('current_entry_id') or '')
         if not entry_id:
             registered = _split_state['anchor_store'].register_current_anchor(_split_state['args'].center_id, {'reason': _split_state['args'].anchor_reason})
-            entry_id = str((registered.get('entry') if isinstance(registered.get('entry'), dict) else {}).get('entry_id') or '')
+            entry_id = str((_as_document(registered.get('entry'))).get('entry_id') or '')
         published = _split_state['anchor_store'].publish_entry(_split_state['args'].center_id, entry_id, {'reason': _split_state['args'].anchor_reason, 'supersede_current': True})
         _split_state['result']['anchor_publish'] = published
-        _split_state['result']['anchor_summary'] = anchor_registry_summary(published.get('registry') if isinstance(published.get('registry'), dict) else {})
+        _split_state['result']['anchor_summary'] = anchor_registry_summary(_as_document(published.get('registry')))
     if _split_state['args'].anchor_revoke:
         revoked = _split_state['anchor_store'].revoke_entry(_split_state['args'].center_id, _split_state['args'].anchor_revoke, {'reason': _split_state['args'].anchor_reason})
         _split_state['result']['anchor_revoke'] = revoked
-        _split_state['result']['anchor_summary'] = anchor_registry_summary(revoked.get('registry') if isinstance(revoked.get('registry'), dict) else {})
+        _split_state['result']['anchor_summary'] = anchor_registry_summary(_as_document(revoked.get('registry')))
     if _split_state['args'].anchor_export:
         _split_state['result']['anchor_manifest'] = _split_state['anchor_store'].export_registry(_split_state['args'].center_id)
     if _split_state['args'].anchor_zip:
@@ -121,7 +127,7 @@ def _execute_public_trust_center_part_03(argv: list[str], _split_state):
         template = _split_state['distribution_kit_acceptance_store'].create_response_template(_split_state['args'].center_id)
         _split_state['result']['distribution_kit_acceptance_template'] = template
     if _split_state['args'].distribution_kit_acceptance_response_file is not None or _split_state['args'].distribution_kit_acceptance_response_base64:
-        import_payload: dict[str, Any] = {}
+        import_payload: dict[str, _InterfaceType] = {}
         if _split_state['args'].distribution_kit_acceptance_response_file is not None:
             import_payload['content'] = _split_state['args'].distribution_kit_acceptance_response_file.read_text(encoding='utf-8')
         if _split_state['args'].distribution_kit_acceptance_response_base64:
@@ -209,7 +215,7 @@ def _execute_public_trust_center_part_04(argv: list[str], _split_state):
     return (False, None)
 
 def _execute_public_trust_center(argv: list[str]) -> None:
-    _split_state = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _execute_public_trust_center_part_01(argv, _split_state)
     if _split_result[0]:
         return _split_result[1]

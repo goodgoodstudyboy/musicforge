@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -101,7 +101,7 @@ class ReleaseOperationsAuditStore:
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=OPERATIONS_AUDIT_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=OPERATIONS_AUDIT_BLOCKED_KEYS)
 
     def read_ledger(self, release_id: str) -> list[dict[str, Any]]:
         path = self.ledger_path(release_id)
@@ -172,7 +172,7 @@ class ReleaseOperationsAuditStore:
             if not isinstance(event, dict):
                 continue
             event_type = str(event.get("type") or "unknown")
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             change_request_id = str(payload.get("change_request_id") or "")
             reset_payload_hash = payload.get("payload_hash") or reset_hash_by_change_request_id.get(change_request_id)
             if event_type == "operations_signoff_reset":
@@ -257,7 +257,7 @@ class ReleaseOperationsAuditStore:
             )
         for event in _read_jsonl(self.signoff_store.history_path(release_id)):
             event_type = f"operations_signoff_history_{_slug(event.get('type') or 'event')}"
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             change_request_id = str(summary.get("change_request_id") or "")
             reset_payload_hash = summary.get("payload_hash") or reset_hash_by_change_request_id.get(change_request_id)
             rows.append(
@@ -317,8 +317,8 @@ class ReleaseOperationsAuditStore:
         nodes = []
         edges = []
         for item in rows:
-            source_ref = item.get("source_ref") if isinstance(item.get("source_ref"), dict) else {}
-            evidence_ref = item.get("evidence_ref") if isinstance(item.get("evidence_ref"), dict) else {}
+            source_ref = _as_document(item.get("source_ref"))
+            evidence_ref = _as_document(item.get("evidence_ref"))
             node_id = str(source_ref.get("source_id") or item.get("entry_id"))
             nodes.append({"id": node_id, "type": source_ref.get("source_type") or item.get("domain"), "status": "passed" if evidence_ref.get("integrity_ok", True) else "failed", "hash": evidence_ref.get("payload_hash")})
             if item.get("previous_hash"):
@@ -403,7 +403,7 @@ class ReleaseOperationsAuditStore:
         if not path.exists():
             raise FileNotFoundError("Operations Audit export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=OPERATIONS_AUDIT_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=OPERATIONS_AUDIT_BLOCKED_KEYS)
 
     def summary(self, release_id: str) -> dict[str, Any]:
         report = self.read_report(release_id, default={})
@@ -468,7 +468,7 @@ class ReleaseOperationsAuditStore:
 
 
 def audit_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == audit_report_integrity_hash(data)
 
 
@@ -476,7 +476,7 @@ def audit_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def audit_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == audit_manifest_integrity_hash(data)
 
 
@@ -487,7 +487,7 @@ def audit_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
 
 
 def audit_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status") or "missing",
@@ -570,7 +570,7 @@ def _bind_change_request_causal_refs(entries: list[ImplementationDocument]) -> N
     for entry in entries:
         if entry.get("event_type") != "operations_change_request_applied":
             continue
-        source_ref = entry.get("source_ref") if isinstance(entry.get("source_ref"), dict) else {}
+        source_ref = _as_document(entry.get("source_ref"))
         change_request_id = str(source_ref.get("source_id") or "")
         if change_request_id:
             applied_by_id[change_request_id] = entry
@@ -582,7 +582,7 @@ def _bind_change_request_causal_refs(entries: list[ImplementationDocument]) -> N
         if entry.get("event_type") not in reset_event_types:
             continue
         reset_hash = str((entry.get("evidence_ref") or {}).get("payload_hash") or "")
-        refs = entry.get("causal_refs") if isinstance(entry.get("causal_refs"), list) else []
+        refs = _as_list(entry.get("causal_refs"))
         change_request_id = ""
         for ref in refs:
             if isinstance(ref, dict) and ref.get("type") == "change_request" and ref.get("id"):
@@ -629,7 +629,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=OPERATIONS_AUDIT_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=OPERATIONS_AUDIT_BLOCKED_KEYS)
 
 
 def _read_jsonl(path: Path) -> list[ImplementationDocument]:
@@ -662,7 +662,7 @@ def _reset_hash_by_change_request_id(signoff_store: ReleaseOperationsSignoffStor
 
 def _verifier_entries_from_operations_report(release_id: str, report: ImplementationDocument) -> list[tuple[str, ImplementationDocument]]:
     rows: list[tuple[str, dict[str, Any]]] = []
-    verifiers = report.get("verifier_summaries") if isinstance(report.get("verifier_summaries"), dict) else {}
+    verifiers = _as_document(report.get("verifier_summaries"))
     for key, value in verifiers.items():
         if isinstance(value, dict):
             rows.append((str(key), _entry_seed(release_id, report.get("generated_at"), "operations_report", f"package_verifier_{_slug(key)}", "local-user", "auto_safe", "verify", "package_verifier", key, value, source_hash=report.get("source_hash"), integrity_ok=value.get("status") != "failed")))
@@ -699,7 +699,7 @@ def _coverage(entries: list[ImplementationDocument]) -> ImplementationDocument:
 
 
 def _operations_report_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return {"status": report.get("status") or "missing", "current_stage": report.get("current_stage"), "source_hash": report.get("source_hash"), "integrity_hash": report.get("integrity_hash"), "entry_summary": summary}
 
 

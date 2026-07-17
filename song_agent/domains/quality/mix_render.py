@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import threading as threading
 from dataclasses import asdict as asdict, dataclass as dataclass
@@ -58,7 +58,7 @@ class MixPreview:
             status=str(data.get("status") or "created"),
             created_at=str(data.get("created_at") or ""),
             updated_at=str(data.get("updated_at") or ""),
-            summary=sanitize_metadata(data.get("summary") if isinstance(data.get("summary"), dict) else {}),
+            summary=sanitize_metadata(_as_document(data.get("summary"))),
             midi_path=str(data.get("midi_path") or "song.mid"),
             audio_path=None if data.get("audio_path") is None else str(data.get("audio_path")),
             audio_status=str(data.get("audio_status") or "not_started"),
@@ -110,7 +110,7 @@ class MixRenderStore:
             raise MixControlStateError("Mix state integrity failed.")
         operations = payload.get("operations")
         if not isinstance(operations, list):
-            patch_payload = payload.get("patch") if isinstance(payload.get("patch"), dict) else {}
+            patch_payload = _as_document(payload.get("patch"))
             operations = patch_payload.get("operations")
         if not isinstance(operations, list) or not operations:
             raise MixControlError("operations must be a non-empty list.")
@@ -122,7 +122,7 @@ class MixRenderStore:
             state=state,
             plan=parent_plan,
             operations=operations,
-            source=payload.get("source") if isinstance(payload.get("source"), dict) else {"source_type": "manual_mix_patch"},
+            source=_document_or(payload.get("source"), {"source_type": "manual_mix_patch"}),
             label=str(payload.get("label") or payload.get("name") or "Mix preview"),
             now=now,
         )
@@ -344,7 +344,7 @@ class MixRenderStore:
         review = audio_review_store.read_review(release_id, review_id)
         if review.get("stale"):
             raise MixControlStateError("Audio review is stale. Refresh review before creating a mix patch draft.")
-        markers = review.get("markers") if isinstance(review.get("markers"), list) else []
+        markers = _as_list(review.get("markers"))
         marker = next((item for item in markers if isinstance(item, dict) and item.get("marker_id") == marker_id), None)
         if marker is None:
             raise FileNotFoundError(marker_id)
@@ -363,7 +363,7 @@ class MixRenderStore:
             "track_id": review.get("track_id"),
             "category": marker.get("category"),
             "severity": marker.get("severity"),
-            "mapped": marker.get("mapped") if isinstance(marker.get("mapped"), dict) else {},
+            "mapped": _as_document(marker.get("mapped")),
         }
         patch = build_mix_patch(patch_id=patch_id, project_id=project_id, version_id=version.version_id, state=state, plan=plan, operations=operations, source=source, label="Audio review mix patch draft", now=now)
         patch = control_store.write_patch(patch)

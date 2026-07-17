@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -120,7 +120,7 @@ class PublicTrustCenterPublicationMonitoringStore:
             payload = payload or {}
             self.publication_store.read_channel(center_id, channel_id)
             monitor_id = _safe_id(str(payload.get("monitor_id") or _next_id(self.monitors_dir(center_id, channel_id), "ptc-pub-mon")))
-            selector = payload.get("publication_selector") if isinstance(payload.get("publication_selector"), dict) else {}
+            selector = _as_document(payload.get("publication_selector"))
             selector_mode = str(selector.get("mode") or ("pinned" if payload.get("publication_id") else "current"))
             if selector_mode not in {"current", "pinned"}:
                 raise PublicTrustCenterPublicationMonitoringStateError("Publication monitor selector mode must be current or pinned.")
@@ -142,8 +142,8 @@ class PublicTrustCenterPublicationMonitoringStore:
                     "publication_id": str(selector.get("publication_id") or payload.get("publication_id") or "") or None,
                 },
                 "targets": {
-                    "publication_zip": bool((payload.get("targets") if isinstance(payload.get("targets"), dict) else {}).get("publication_zip", True)),
-                    "mirror_dir": bool((payload.get("targets") if isinstance(payload.get("targets"), dict) else {}).get("mirror_dir", True)),
+                    "publication_zip": bool((_as_document(payload.get("targets"))).get("publication_zip", True)),
+                    "mirror_dir": bool((_as_document(payload.get("targets"))).get("mirror_dir", True)),
                     "channel_state": True,
                 },
                 "mirror": {"kind": "local_dir", "path_hint": _public_path_hint(payload.get("mirror_dir"))},
@@ -204,8 +204,8 @@ class PublicTrustCenterPublicationMonitoringStore:
                 _write_json(self.channel_state_snapshot_path(center_id, channel_id, monitor_id, run_id), channel_state)
             publication_zip = self.publication_store.zip_path(center_id, channel_id, publication_id)
             mirror_dir = Path(payload.get("mirror_dir") or self.publication_store.export_dir(center_id, channel_id, publication_id))
-            requirements = monitor.get("requirements") if isinstance(monitor.get("requirements"), dict) else _default_requirements()
-            targets = monitor.get("targets") if isinstance(monitor.get("targets"), dict) else {}
+            requirements = _document_or(monitor.get("requirements"), _default_requirements())
+            targets = _as_document(monitor.get("targets"))
             publication_verification = verify_public_trust_center_publication_package(
                 publication_zip,
                 strict=True,
@@ -418,7 +418,7 @@ class PublicTrustCenterPublicationMonitoringStore:
         explicit = str(payload.get("publication_id") or "").strip()
         if explicit and explicit != "current":
             return _safe_id(explicit)
-        selector = monitor.get("publication_selector") if isinstance(monitor.get("publication_selector"), dict) else {}
+        selector = _as_document(monitor.get("publication_selector"))
         if str(selector.get("mode") or "current") == "pinned" and selector.get("publication_id"):
             return _safe_id(str(selector.get("publication_id")))
         return self.publication_store._current_publication_id(center_id, channel_id)
@@ -727,7 +727,7 @@ class PublicTrustCenterPublicationMonitoringStore:
 
 
 def monitoring_summary(run: dict[str, Any]) -> dict[str, Any]:
-    summary = run.get("summary") if isinstance(run.get("summary"), dict) else {}
+    summary = _as_document(run.get("summary"))
     return {"run_id": run.get("run_id"), "monitor_id": run.get("monitor_id"), "publication_id": run.get("publication_id"), "status": run.get("status"), **summary}
 
 
@@ -782,7 +782,7 @@ def _overall_severity(drifts: list[ImplementationDocument]) -> str:
 
 
 def _run_status(drift_report: ImplementationDocument, incident_report: ImplementationDocument) -> str:
-    summary = incident_report.get("summary") if isinstance(incident_report.get("summary"), dict) else {}
+    summary = _as_document(incident_report.get("summary"))
     if drift_report.get("status") == "failed" or int(summary.get("critical_count") or 0) > 0:
         return "failed"
     if drift_report.get("status") == "warning" or int(summary.get("open_count") or 0) > 0:
@@ -819,7 +819,7 @@ def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, inci
     if not events:
         return {}
     opened = next((event for event in events if event.get("event_type") == "opened"), events[0])
-    payload = opened.get("payload") if isinstance(opened.get("payload"), dict) else {}
+    payload = _as_document(opened.get("payload"))
     status = "open"
     evidence = {
         "drift_report_hash": payload.get("drift_report_hash"),
@@ -829,7 +829,7 @@ def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, inci
     latest_run_id = payload.get("run_id")
     for event in events:
         event_type = str(event.get("event_type") or "")
-        epayload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        epayload = _as_document(event.get("payload"))
         if epayload.get("run_id"):
             latest_run_id = epayload.get("run_id")
         if event_type in {"opened", "reopened"}:
@@ -877,7 +877,7 @@ def _event_chain_valid(events: list[ImplementationDocument]) -> bool:
     for event in events:
         if event.get("previous_event_hash") != previous:
             return False
-        if event.get("payload_hash") != stable_hash(event.get("payload") if isinstance(event.get("payload"), dict) else {}):
+        if event.get("payload_hash") != stable_hash(_as_document(event.get("payload"))):
             return False
         expected = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
         if event.get("event_hash") != expected:
@@ -925,7 +925,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
             value = json.load(handle)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _append_jsonl(path: Path, payload: ImplementationDocument) -> None:

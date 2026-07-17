@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustPortfolioDownloadsRoutes:
+class TrustPortfolioDownloadsRoutes(TrustPortfolioRouteContext):
     def _dispatch_portfolio_downloads(self, method, parts, portfolio_id, action) -> bool:
         if action == 'governance-audit.zip' and len(parts) == 2:
             if method != 'GET':

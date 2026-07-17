@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document, document_or as _document_or
 from typing import Any
 from pathlib import Path
 
@@ -13,7 +15,7 @@ from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_
 
 
 def accepted_evidence_integrity_ok(evidence: dict[str, Any] | None) -> bool:
-    data = evidence if isinstance(evidence, dict) else {}
+    data = _as_document(evidence)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == accepted_evidence_hash(data)
 
 
@@ -122,7 +124,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _sha256(path: Path) -> str | None:

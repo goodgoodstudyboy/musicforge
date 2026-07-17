@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -81,7 +81,7 @@ def verify_release_portfolio_governance_reviewer_pack(
 
 
 def release_portfolio_governance_reviewer_pack_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -114,7 +114,7 @@ def print_release_portfolio_governance_reviewer_pack_verification_report(report:
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -232,7 +232,7 @@ class _PortfolioGovernanceReviewerPackVerifier:
         self._add_check("manifest", "portfolio_governance_reviewer_pack_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Reviewer Pack manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Reviewer Pack manifest integrity hash does not match.")
         package_type_ok = self.manifest.get("package_type") == "release_portfolio_governance_reviewer_pack"
         self._add_check("manifest", "portfolio_governance_reviewer_pack_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is release_portfolio_governance_reviewer_pack." if package_type_ok else "Manifest package_type is not release_portfolio_governance_reviewer_pack.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -283,31 +283,31 @@ class _PortfolioGovernanceReviewerPackVerifier:
         if self.reviewer_report:
             actual = reviewer_report_integrity_hash(self.reviewer_report)
             self._add_check("reviewer_report", "portfolio_governance_reviewer_pack_report_integrity", "passed" if self.reviewer_report.get("integrity_hash") == actual else "failed", "blocking", "Reviewer Report integrity hash matches." if self.reviewer_report.get("integrity_hash") == actual else "Reviewer Report integrity hash does not match.")
-            manifest_row = self.manifest.get("reviewer_report") if isinstance(self.manifest.get("reviewer_report"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("reviewer_report"))
             ok = manifest_row.get("integrity_hash") == self.reviewer_report.get("integrity_hash") and manifest_row.get("source_hash") == self.reviewer_report.get("source_hash")
             self._add_check("reviewer_report", "portfolio_governance_reviewer_pack_manifest_report_hash", "passed" if ok else "failed", "blocking", "Manifest Reviewer Report reference matches report." if ok else "Manifest Reviewer Report reference does not match report.")
         if self.retrospective_report:
             actual = retrospective_report_integrity_hash(self.retrospective_report)
             self._add_check("retrospective", "portfolio_governance_reviewer_pack_retrospective_integrity", "passed" if self.retrospective_report.get("integrity_hash") == actual else "failed", "blocking", "Retrospective Report integrity hash matches." if self.retrospective_report.get("integrity_hash") == actual else "Retrospective Report integrity hash does not match.")
-            manifest_row = self.manifest.get("retrospective_report") if isinstance(self.manifest.get("retrospective_report"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("retrospective_report"))
             ok = manifest_row.get("integrity_hash") == self.retrospective_report.get("integrity_hash") and manifest_row.get("source_hash") == self.retrospective_report.get("source_hash")
             self._add_check("retrospective", "portfolio_governance_reviewer_pack_manifest_retrospective_hash", "passed" if ok else "failed", "blocking", "Manifest Retrospective reference matches report." if ok else "Manifest Retrospective reference does not match report.")
         if self.evidence_index:
             actual = evidence_index_integrity_hash(self.evidence_index)
             self._add_check("evidence_index", "portfolio_governance_reviewer_pack_evidence_index_integrity", "passed" if self.evidence_index.get("integrity_hash") == actual else "failed", "blocking", "Evidence Index integrity hash matches." if self.evidence_index.get("integrity_hash") == actual else "Evidence Index integrity hash does not match.")
-            manifest_row = self.manifest.get("evidence_index") if isinstance(self.manifest.get("evidence_index"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("evidence_index"))
             ok = manifest_row.get("integrity_hash") == self.evidence_index.get("integrity_hash") and manifest_row.get("source_hash") == self.evidence_index.get("source_hash")
             self._add_check("evidence_index", "portfolio_governance_reviewer_pack_manifest_evidence_index_hash", "passed" if ok else "failed", "blocking", "Manifest Evidence Index reference matches index." if ok else "Manifest Evidence Index reference does not match index.")
         if self.timeline:
             actual = timeline_integrity_hash(self.timeline)
             self._add_check("timeline", "portfolio_governance_reviewer_pack_timeline_integrity", "passed" if self.timeline.get("integrity_hash") == actual else "failed", "blocking", "Timeline integrity hash matches." if self.timeline.get("integrity_hash") == actual else "Timeline integrity hash does not match.")
-            manifest_row = self.manifest.get("timeline") if isinstance(self.manifest.get("timeline"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("timeline"))
             ok = manifest_row.get("integrity_hash") == self.timeline.get("integrity_hash") and manifest_row.get("source_hash") == self.timeline.get("source_hash")
             self._add_check("timeline", "portfolio_governance_reviewer_pack_manifest_timeline_hash", "passed" if ok else "failed", "blocking", "Manifest Timeline reference matches timeline." if ok else "Manifest Timeline reference does not match timeline.")
 
     def _verify_requirements(self) -> None:
-        summary = self.reviewer_report.get("summary") if isinstance(self.reviewer_report.get("summary"), dict) else {}
-        manifest_audit = self.manifest.get("audit_summary") if isinstance(self.manifest.get("audit_summary"), dict) else {}
+        summary = _as_document(self.reviewer_report.get("summary"))
+        manifest_audit = _as_document(self.manifest.get("audit_summary"))
         if self.require_audit:
             report_integrity_ok = bool(self.reviewer_report) and self.reviewer_report.get("integrity_hash") == reviewer_report_integrity_hash(self.reviewer_report)
             ok = bool(
@@ -374,12 +374,12 @@ class _PortfolioGovernanceReviewerPackVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = self.reviewer_report.get("summary") if isinstance(self.reviewer_report.get("summary"), dict) else {}
+        summary = _as_document(self.reviewer_report.get("summary"))
         report = {
             "schema_version": PORTFOLIO_GOVERNANCE_REVIEWER_PACK_VERIFICATION_SCHEMA_VERSION,
             "generated_at": self.generated_at,

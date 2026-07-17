@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import json as json
 import shutil as shutil
@@ -472,9 +472,9 @@ def _track_row(project_store: ProjectStore, track: Any, release_id: str) -> Impl
 
 def _build_track_matrix(release_id: str, campaign_id: str, track_rows: list[ImplementationDocument], campaign: ImplementationDocument, campaign_report: ImplementationDocument, case_index: ImplementationDocument) -> ImplementationDocument:
     case_by_key = {_case_identity_key(case): case for case in case_index.get("cases", []) if isinstance(case, dict) and _case_identity_key(case)}
-    campaign_cases = campaign.get("cases") if isinstance(campaign.get("cases"), list) else []
+    campaign_cases = _as_list(campaign.get("cases"))
     campaign_by_key = {_case_identity_key(case): case for case in campaign_cases if isinstance(case, dict) and _case_identity_key(case)}
-    report_cases = campaign_report.get("cases") if isinstance(campaign_report.get("cases"), list) else []
+    report_cases = _as_list(campaign_report.get("cases"))
     report_by_case_id = {str(case.get("case_id") or ""): case for case in report_cases if isinstance(case, dict)}
     tracks: list[dict[str, Any]] = []
     blockers: list[dict[str, Any]] = []
@@ -483,9 +483,9 @@ def _build_track_matrix(release_id: str, campaign_id: str, track_rows: list[Impl
         case = campaign_by_key.get(key) or case_by_key.get(key) or {}
         case_id = str(case.get("case_id") or "")
         report_case = report_by_case_id.get(case_id, {})
-        review = case.get("review") if isinstance(case.get("review"), dict) else {}
-        renderer = case.get("renderer") if isinstance(case.get("renderer"), dict) else row.get("renderer", {})
-        artifact_hashes = case.get("artifact_hashes") if isinstance(case.get("artifact_hashes"), dict) else {}
+        review = _as_document(case.get("review"))
+        renderer = _document_or(case.get("renderer"), row.get("renderer", {}))
+        artifact_hashes = _as_document(case.get("artifact_hashes"))
         manual_accepted = review.get("status") == "accepted" and review.get("review_mode") == "manual" and review.get("playback_confirmed") is True
         wav_matches = bool(row.get("wav_sha256") and row.get("wav_sha256") == artifact_hashes.get("wav_sha256"))
         track_blockers = [dict(item) for item in row.get("blockers", []) if isinstance(item, dict)]
@@ -552,11 +552,11 @@ def _build_blocker_register(release_id: str, campaign_id: str, source: Implement
 
 
 def _checks_from_matrix_and_evidence(matrix: ImplementationDocument, evidence: ImplementationDocument, blockers: ImplementationDocument) -> list[ImplementationDocument]:
-    summary = matrix.get("summary") if isinstance(matrix.get("summary"), dict) else {}
+    summary = _as_document(matrix.get("summary"))
     track_count = int(summary.get("track_count") or 0)
-    evidence_summary = evidence.get("summary") if isinstance(evidence.get("summary"), dict) else {}
-    remediation = evidence_summary.get("remediation") if isinstance(evidence_summary.get("remediation"), dict) else {}
-    governance = evidence_summary.get("governance") if isinstance(evidence_summary.get("governance"), dict) else {}
+    evidence_summary = _as_document(evidence.get("summary"))
+    remediation = _as_document(evidence_summary.get("remediation"))
+    governance = _as_document(evidence_summary.get("governance"))
     return [
         _check("release_audio_certification_tracks_present", track_count > 0, "Release has tracks."),
         _check("release_audio_certification_track_matrix_passed", matrix.get("status") == "passed", "Track audio matrix is passed."),
@@ -583,7 +583,7 @@ def _coverage(track_rows: list[ImplementationDocument], cases: list[Implementati
 
 
 def _remediation_needed(matrix: ImplementationDocument, campaign_report: ImplementationDocument) -> bool:
-    summary = campaign_report.get("summary") if isinstance(campaign_report.get("summary"), dict) else {}
+    summary = _as_document(campaign_report.get("summary"))
     return any(
         int(summary.get(key) or 0) > 0
         for key in ("needs_fix_count", "rejected_count", "open_high_marker_count", "open_critical_marker_count", "failed_fix_sprint_count", "open_fix_sprint_count")
@@ -635,7 +635,7 @@ def _renderer_summary(manifest: ImplementationDocument) -> ImplementationDocumen
     for key in ("audio_artifact", "audio", "renderer", "audio_health"):
         value = manifest.get(key) if isinstance(manifest, dict) else None
         if isinstance(value, dict):
-            renderer = value.get("renderer") if isinstance(value.get("renderer"), dict) else value
+            renderer = _document_or(value.get("renderer"), value)
             if isinstance(renderer, dict) and renderer:
                 result = dict(renderer)
                 result.setdefault("runner_kind", "real")
@@ -658,7 +658,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
 
 
 def _readme(report: ImplementationDocument, matrix: ImplementationDocument, evidence: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return "\n".join(
         [
             "MusicForge Release Audio Certification",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -73,12 +73,12 @@ def write_release_portfolio_governance_attestation_accepted_evidence_verificatio
 def print_release_portfolio_governance_attestation_accepted_evidence_verification_report(report: dict[str, Any]) -> None:
     print("MusicForge release portfolio governance attestation accepted evidence verification")
     print(f"status: {report.get('status')}")
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print(f"portfolio: {summary.get('portfolio_id') or 'unknown'}")
     print(f"accepted evidence: {summary.get('accepted_evidence_id') or 'none'}")
     print(f"external review: {summary.get('external_review_status') or 'missing'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def release_portfolio_governance_attestation_accepted_evidence_verification_exit_code(report: dict[str, Any]) -> int:
@@ -180,7 +180,7 @@ class _AcceptedEvidenceVerifier:
             return
         self._add_hash_check("manifest", "accepted_evidence_manifest_integrity", self.manifest.get("integrity_hash"), accepted_evidence_manifest_hash(self.manifest), "Accepted Evidence manifest integrity")
         self._add_check("manifest", "accepted_evidence_manifest_package_type", "passed" if self.manifest.get("package_type") == ACCEPTED_EVIDENCE_PACKAGE_TYPE else "failed", "blocking", "Manifest package_type is valid." if self.manifest.get("package_type") == ACCEPTED_EVIDENCE_PACKAGE_TYPE else "Manifest package_type is invalid.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -239,9 +239,9 @@ class _AcceptedEvidenceVerifier:
             self._add_check("report", "accepted_evidence_report_exists", "failed", "blocking", "accepted-evidence-report.json must contain a JSON object.")
             return
         self._add_hash_check("report", "accepted_evidence_report_integrity", self.report_doc.get("integrity_hash"), accepted_evidence_hash(self.report_doc), "Accepted Evidence report integrity")
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         self._add_hash_check("report", "accepted_evidence_report_source_hash", self.report_doc.get("source_hash"), stable_hash(source), "Accepted Evidence source hash")
-        row = self.manifest.get("accepted_evidence") if isinstance(self.manifest.get("accepted_evidence"), dict) else {}
+        row = _as_document(self.manifest.get("accepted_evidence"))
         for label, expected, actual in (
             ("id", row.get("accepted_evidence_id"), self.report_doc.get("accepted_evidence_id")),
             ("integrity_hash", row.get("integrity_hash"), self.report_doc.get("integrity_hash")),
@@ -250,8 +250,8 @@ class _AcceptedEvidenceVerifier:
             ("manifest_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash")),
         ):
             self._add_exact_check("manifest", f"accepted_evidence_manifest_{label}", expected, actual, f"Manifest {label}")
-        public = self.report_doc.get("public_summary") if isinstance(self.report_doc.get("public_summary"), dict) else {}
-        summary = self.summary_doc.get("summary") if isinstance(self.summary_doc.get("summary"), dict) else {}
+        public = _as_document(self.report_doc.get("public_summary"))
+        summary = _as_document(self.summary_doc.get("summary"))
         expected_summary = accepted_evidence_summary(self.report_doc)
         for key, expected in expected_summary.items():
             self._add_exact_check("summary", f"accepted_evidence_summary_{key}", summary.get(key), expected, f"Accepted Evidence summary {key}")
@@ -313,8 +313,8 @@ class _AcceptedEvidenceVerifier:
             self._add_exact_check("data", f"accepted_evidence_data_external_{key}", external.get(key), public.get(key), f"External review public summary {key}")
 
     def _verify_requirements(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
-        public = self.report_doc.get("public_summary") if isinstance(self.report_doc.get("public_summary"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
+        public = _as_document(self.report_doc.get("public_summary"))
         self._add_check("requirements", "accepted_evidence_decision_accepted", "passed" if source.get("response_decision") == "accepted" else "failed", "blocking", "Response decision is accepted." if source.get("response_decision") == "accepted" else "Response decision must be accepted.")
         self._add_check("requirements", "accepted_evidence_response_verified", "passed" if source.get("response_verification_status") == "passed" else "failed", "blocking", "Response verification is passed." if source.get("response_verification_status") == "passed" else "Passed response verification is required.")
         self._add_check("requirements", "accepted_evidence_external_status", "passed" if public.get("external_review_status") == "accepted" else "failed", "blocking", "External review status is accepted." if public.get("external_review_status") == "accepted" else "External review status must be accepted.")
@@ -353,7 +353,7 @@ class _AcceptedEvidenceVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]

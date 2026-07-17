@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -401,8 +401,8 @@ def write_asset_refs_snapshot(run_dir: Path, snapshot: dict[str, Any]) -> Path:
 
 def asset_content_summary(asset: CreativeAsset) -> dict[str, Any]:
     content = asset.content
-    notes = content.get("notes") if isinstance(content.get("notes"), list) else []
-    chords = content.get("chords") if isinstance(content.get("chords"), list) else []
+    notes = _as_list(content.get("notes"))
+    chords = _as_list(content.get("chords"))
     return {
         "duration_beats": asset.duration_beats,
         "note_count": len(notes),

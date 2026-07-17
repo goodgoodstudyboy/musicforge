@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import shutil as shutil
 import threading as threading
@@ -218,7 +218,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             if current.get("source_hash") != docs["source"].get("source_hash"):
                 raise UnifiedCommandCenterContinuousReviewStateError("Continuous review source is stale. Run review again.")
             payload_projection = _review_payload_projection(payload)
-            latest_payload = docs["plan"].get("latest_payload") if isinstance(docs["plan"].get("latest_payload"), dict) else {}
+            latest_payload = _as_document(docs["plan"].get("latest_payload"))
             if payload_projection != latest_payload:
                 raise UnifiedCommandCenterContinuousReviewStateError("Continuous review evidence inputs changed. Run review again.")
             self._write_export_manifest(center_id, review_id, docs)
@@ -574,7 +574,7 @@ def _review_payload_projection(payload: ImplementationDocument) -> Implementatio
 
 def _drift_report(center_id: str, review_id: str, plan: ImplementationDocument, source: ImplementationDocument) -> ImplementationDocument:
     drifts: list[dict[str, Any]] = []
-    baseline = plan.get("source") if isinstance(plan.get("source"), dict) else {}
+    baseline = _as_document(plan.get("source"))
     inputs = source.get("inputs", {})
     comparisons = (
         ("archive", "archive_zip_sha256", inputs.get("archive", {}).get("zip_sha256")),
@@ -595,13 +595,13 @@ def _drift_report(center_id: str, review_id: str, plan: ImplementationDocument, 
         item = inputs.get(component, {})
         if item.get("status") == "failed":
             drifts.append(_drift_row(len(drifts) + 1, component, "verification_failed", "status", "passed", item.get("status"), "critical" if component in {"archive", "handoff"} else "high"))
-    ga = inputs.get("ga") if isinstance(inputs.get("ga"), dict) else {}
+    ga = _as_document(inputs.get("ga"))
     if _evidence_is_blocking(ga.get("status")):
         drifts.append(_drift_row(len(drifts) + 1, "ga", "external_evidence_failed", "status", "passed", ga.get("status"), "high"))
-    release_check = inputs.get("release_check") if isinstance(inputs.get("release_check"), dict) else {}
+    release_check = _as_document(inputs.get("release_check"))
     if _evidence_is_blocking(release_check.get("status")):
         drifts.append(_drift_row(len(drifts) + 1, "release_check", "external_evidence_failed", "status", "passed", release_check.get("status"), "high"))
-    external_rows = inputs.get("external_evidence") if isinstance(inputs.get("external_evidence"), list) else []
+    external_rows = _as_list(inputs.get("external_evidence"))
     for index, row in enumerate([item for item in external_rows if isinstance(item, dict)], start=1):
         if _evidence_is_blocking(row.get("status")):
             component = str(row.get("component") or row.get("component_type") or row.get("evidence_type") or f"external_evidence_{index}")

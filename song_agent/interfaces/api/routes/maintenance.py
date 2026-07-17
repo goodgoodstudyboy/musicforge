@@ -1,8 +1,8 @@
 from __future__ import annotations
-
+from song_agent.interfaces.api.route_contexts.core import CoreRouteContext
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class MaintenanceRoutes:
+class MaintenanceRoutes(CoreRouteContext):
     def _handle_ga_route(self, method: str) -> None:
         if method != "GET":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")

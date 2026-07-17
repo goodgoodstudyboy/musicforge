@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -70,7 +70,7 @@ def verify_release_operations_audit_package(
 
 
 def release_operations_audit_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -99,7 +99,7 @@ def print_release_operations_audit_verification_report(report: dict[str, Any]) -
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -213,7 +213,7 @@ class _OperationsAuditVerifier:
         self._add_check("manifest", "operations_audit_manifest_exists", "passed", "blocking", "operations-audit-manifest.json exists.")
         actual_manifest_hash = audit_manifest_integrity_hash(self.manifest)
         self._add_check("manifest", "operations_audit_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Operations Audit manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Operations Audit manifest integrity hash does not match.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -266,7 +266,7 @@ class _OperationsAuditVerifier:
         if self.report_doc:
             actual = audit_report_integrity_hash(self.report_doc)
             self._add_check("audit_report", "operations_audit_report_integrity", "passed" if self.report_doc.get("integrity_hash") == actual else "failed", "blocking", "Operations Audit Report integrity hash matches." if self.report_doc.get("integrity_hash") == actual else "Operations Audit Report integrity hash does not match.")
-            manifest_row = self.manifest.get("audit_report") if isinstance(self.manifest.get("audit_report"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("audit_report"))
             ok = manifest_row.get("integrity_hash") == self.report_doc.get("integrity_hash") and manifest_row.get("source_hash") == self.report_doc.get("source_hash")
             self._add_check("audit_report", "operations_audit_manifest_report_hash", "passed" if ok else "failed", "blocking", "Manifest Audit Report reference matches report." if ok else "Manifest Audit Report reference does not match report.")
         if self.ledger_entries:
@@ -275,7 +275,7 @@ class _OperationsAuditVerifier:
             self._add_check("ledger", "operations_audit_ledger_chain", "passed" if chain_ok else "failed", "blocking", "Operations Audit ledger hash chain is valid." if chain_ok else "Operations Audit ledger hash chain failed.")
             report_hash_ok = bool(self.report_doc) and self.report_doc.get("ledger_hash") == ledger_hash
             self._add_check("ledger", "operations_audit_report_ledger_hash", "passed" if report_hash_ok else "failed", "blocking", "Audit Report ledger hash matches ledger entries." if report_hash_ok else "Audit Report ledger hash does not match ledger entries.")
-            manifest_row = self.manifest.get("audit_report") if isinstance(self.manifest.get("audit_report"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("audit_report"))
             manifest_hash_ok = manifest_row.get("ledger_hash") == ledger_hash
             self._add_check("ledger", "operations_audit_manifest_ledger_hash", "passed" if manifest_hash_ok else "failed", "blocking", "Audit manifest ledger hash matches ledger entries." if manifest_hash_ok else "Audit manifest ledger hash does not match ledger entries.")
         else:
@@ -285,7 +285,7 @@ class _OperationsAuditVerifier:
         self._add_check("package_verifiers", "operations_audit_package_verifier_status", "failed" if failed_verifiers else "passed", "blocking", "Package verifier evidence failed: " + ", ".join(failed_verifiers[:5]) if failed_verifiers else "Package verifier evidence is passed, warning, or missing.")
 
     def _verify_change_request_causality(self) -> None:
-        requests = self.change_request_ledger.get("change_requests") if isinstance(self.change_request_ledger.get("change_requests"), list) else []
+        requests = _as_list(self.change_request_ledger.get("change_requests"))
         requests_by_id = {str(item.get("change_request_id") or ""): item for item in requests if isinstance(item, dict)}
         reset_event_types = {
             "operations_signoff_reset",
@@ -295,7 +295,7 @@ class _OperationsAuditVerifier:
         reset_entries = [item for item in self.ledger_entries if item.get("event_type") in reset_event_types]
         errors: list[str] = []
         for entry in reset_entries:
-            causal_refs = entry.get("causal_refs") if isinstance(entry.get("causal_refs"), list) else []
+            causal_refs = _as_list(entry.get("causal_refs"))
             change_request_id = ""
             for ref in causal_refs:
                 if isinstance(ref, dict) and ref.get("type") == "change_request" and ref.get("id"):
@@ -379,7 +379,7 @@ class _OperationsAuditVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramRootHttpRoutes:
+class ProgramRootHttpRoutes(ProgramHttpContext):
     def _dispatch_root(self, method, path) -> bool:
         if path == '/api/unified-release-programs':
             if method == 'GET':

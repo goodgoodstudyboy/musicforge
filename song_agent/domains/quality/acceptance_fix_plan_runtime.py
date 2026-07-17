@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import re
 from pathlib import Path
@@ -25,7 +25,7 @@ def current_fix_plan_state(plan_id: str, *, analytics_store: Any) -> dict[str, A
     reasons: list[str] = []
     if plan.get("status") in {"archived", "stale"}:
         reasons.append("plan_status")
-    source = plan.get("source") if isinstance(plan.get("source"), dict) else {}
+    source = _as_document(plan.get("source"))
     try:
         analytics = analytics_store.get_report(str(source.get("analytics_report_id") or ""))
     except Exception:
@@ -39,11 +39,11 @@ def current_fix_plan_state(plan_id: str, *, analytics_store: Any) -> dict[str, A
         for item in analytics.get("recommendations", [])
         if isinstance(item, dict)
     }
-    expected_recommendations = source.get("recommendation_hashes") if isinstance(source.get("recommendation_hashes"), dict) else {}
+    expected_recommendations = _as_document(source.get("recommendation_hashes"))
     for recommendation_id, expected_hash in expected_recommendations.items():
         if recommendation_id not in recommendations or stable_hash(recommendations[recommendation_id]) != expected_hash:
             reasons.append(f"recommendation:{recommendation_id}")
-    expected_entries = source.get("kb_entry_hashes") if isinstance(source.get("kb_entry_hashes"), dict) else {}
+    expected_entries = _as_document(source.get("kb_entry_hashes"))
     for entry_id, expected_hash in expected_entries.items():
         if not ENTRY_ID_PATTERN.fullmatch(str(entry_id)):
             reasons.append(f"kb_entry:{entry_id}")
@@ -55,10 +55,10 @@ def current_fix_plan_state(plan_id: str, *, analytics_store: Any) -> dict[str, A
 
 
 def _entry_plan_summary(entry: ImplementationDocument) -> ImplementationDocument:
-    target = entry.get("target") if isinstance(entry.get("target"), dict) else {}
-    outcome = entry.get("outcome") if isinstance(entry.get("outcome"), dict) else {}
-    fix = entry.get("fix") if isinstance(entry.get("fix"), dict) else {}
-    source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+    target = _as_document(entry.get("target"))
+    outcome = _as_document(entry.get("outcome"))
+    fix = _as_document(entry.get("fix"))
+    source = _as_document(entry.get("source"))
     return {
         "entry_id": entry.get("entry_id"),
         "status": entry.get("status"),
@@ -67,11 +67,11 @@ def _entry_plan_summary(entry: ImplementationDocument) -> ImplementationDocument
         "release_id": target.get("release_id"),
         "song_id": target.get("song_id"),
         "style": target.get("style"),
-        "issue_types": target.get("issue_types") if isinstance(target.get("issue_types"), list) else [],
+        "issue_types": _as_list(target.get("issue_types")),
         "outcome_status": outcome.get("outcome_status"),
         "effectiveness_score": outcome.get("effectiveness_score"),
         "waived_count": fix.get("waived_count", 0),
-        "warnings": entry.get("warnings") if isinstance(entry.get("warnings"), list) else [],
+        "warnings": _as_list(entry.get("warnings")),
         "source_fingerprint": source.get("source_fingerprint"),
     }
 
@@ -81,4 +81,4 @@ def _read_optional(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except (OSError, TypeError, ValueError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)

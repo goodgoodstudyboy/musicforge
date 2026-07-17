@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import builtins
-from collections import defaultdict
 import importlib
 import re
 from pathlib import Path

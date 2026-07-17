@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -68,7 +68,7 @@ def verify_release_portfolio_governance_package(
 
 
 def release_portfolio_governance_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -100,7 +100,7 @@ def print_release_portfolio_governance_verification_report(report: dict[str, Any
     print(f"blocked: {summary.get('blocked', 0)}")
     print(f"failed: {summary.get('failed', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -209,7 +209,7 @@ class _PortfolioGovernanceVerifier:
         self._add_check("manifest", "portfolio_governance_manifest_exists", "passed", "blocking", "manifest.json exists.")
         actual_manifest_hash = governance_manifest_integrity_hash(self.manifest)
         self._add_check("manifest", "portfolio_governance_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Governance Queue manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Governance Queue manifest integrity hash does not match.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -288,12 +288,12 @@ class _PortfolioGovernanceVerifier:
             self._add_check("cross_reference", "portfolio_governance_queue_execution_link", "passed" if ok else "failed", "blocking", "Queue latest execution hash links to execution-report.json." if ok else "Queue latest execution hash does not link to execution-report.json.")
 
     def _verify_requirements(self) -> None:
-        summary = self.execution_report.get("summary") if isinstance(self.execution_report.get("summary"), dict) else {}
+        summary = _as_document(self.execution_report.get("summary"))
         manual_required = int(summary.get("manual_required") or 0)
         blocked = int(summary.get("blocked") or 0)
         failed = int(summary.get("failed") or 0)
-        manual_items = self.manual_actions.get("items") if isinstance(self.manual_actions.get("items"), list) else []
-        plan_items = self.action_plan.get("items") if isinstance(self.action_plan.get("items"), list) else []
+        manual_items = _as_list(self.manual_actions.get("items"))
+        plan_items = _as_list(self.action_plan.get("items"))
         required_manual_ids = {str(item.get("item_id")) for item in plan_items if isinstance(item, dict) and item.get("status") == "manual_required"}
         manual_list_ids = {str(item.get("item_id")) for item in manual_items if isinstance(item, dict)}
         if self.require_manual_actions:
@@ -342,12 +342,12 @@ class _PortfolioGovernanceVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = self.execution_report.get("summary") if isinstance(self.execution_report.get("summary"), dict) else {}
+        summary = _as_document(self.execution_report.get("summary"))
         report = {
             "schema_version": PORTFOLIO_GOVERNANCE_VERIFICATION_SCHEMA_VERSION,
             "generated_at": self.generated_at,

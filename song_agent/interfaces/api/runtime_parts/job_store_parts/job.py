@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Path, apply_asset_refs_to_plan, generate_request, write_asset_refs_snapshot
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongPlan, SongRequest, append_event, clear_stem_artifacts, load_provider_config, read_json, render_midi, write_json, write_reference_refs_snapshot
@@ -8,7 +10,7 @@ from song_agent.interfaces.api.runtime_parts.helpers.api_info import _build_summ
 
 from song_agent.interfaces.api.runtime_parts.core import JobCancelled
 
-class JobStoreJob:
+class JobStoreJob(JobStoreContext):
     def _run_job_part_01(self, job_id: str, _split_state):
         append_event(ProjectPaths.create(Path(_split_state['job'].output_dir)), {'event': 'attempt_started', 'attempt_count': _split_state['job'].attempt_count})
         _split_state['job'] = self.get_job(job_id)

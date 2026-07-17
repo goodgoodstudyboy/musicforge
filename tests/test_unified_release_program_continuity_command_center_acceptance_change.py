@@ -15,7 +15,6 @@ from song_agent.projectio import read_json, write_json
 from tests.zip_helpers import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_release_program_continuity_command_center_acceptance_change import (
-    RESET_ACTION,
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStateError,
     UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore,
 )

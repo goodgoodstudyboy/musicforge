@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -242,7 +242,7 @@ def _external_handoff_checks(path: Path | str | None, items: ImplementationDocum
 def _external_row_fingerprint_checks(key: str, expected: ImplementationDocument, external_row: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
     prefix = f"urp_external_evidence_{_safe_check_key(key)}"
-    fp = expected.get("fingerprint") if isinstance(expected.get("fingerprint"), dict) else {}
+    fp = _as_document(expected.get("fingerprint"))
     for field in ("handoff_zip_sha256", "handoff_manifest_hash", "handoff_verification_report_hash", "handoff_signoff_binding_hash"):
         checks.append(_check(f"{prefix}_{field}", not fp.get(field) or fp.get(field) == external_row.get(field), f"External evidence manifest {field} matches Program item.", {"key": key}))
     return checks
@@ -283,7 +283,7 @@ def _runtime_handoff_checks(key: str, expected: ImplementationDocument, external
         and external_zip_sha256 == runtime_zip_sha256 == _sha256_path(zip_path)
         and external_manifest_hash == runtime_manifest_hash
     )
-    fp = expected.get("fingerprint") if isinstance(expected.get("fingerprint"), dict) else {}
+    fp = _as_document(expected.get("fingerprint"))
     checks.extend(
         [
             _check(f"{prefix}_package_type", external_report.get("package_type") == UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_VERIFICATION_PACKAGE_TYPE, "Handoff verification package type is valid.", {"key": key}),
@@ -312,7 +312,7 @@ def _document_binding_checks(
     signoff: ImplementationDocument,
     binding: ImplementationDocument,
 ) -> list[ImplementationDocument]:
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     source_hash = report.get("source_hash")
     checks = [
         _check("urp_source_hash_consistent", manifest.get("source_hash") == source_hash == readiness.get("source_hash") == risk.get("source_hash") == gap_plan.get("source_hash"), "Source hash is consistent across Program documents."),
@@ -499,12 +499,12 @@ def _parse_jsonl(text: str) -> list[ImplementationDocument]:
 
 
 def _verification_zip_sha256(report: ImplementationDocument) -> str | None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return report.get("zip_sha256") or summary.get("zip_sha256")
 
 
 def _verification_manifest_hash(report: ImplementationDocument) -> str | None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return report.get("manifest_hash") or summary.get("manifest_hash")
 
 

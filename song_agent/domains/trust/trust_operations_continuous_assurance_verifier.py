@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -92,13 +92,13 @@ def write_trust_operations_assurance_verification_report(report: dict[str, Any],
 
 
 def print_trust_operations_assurance_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Continuous Assurance verification")
     print(f"status: {report.get('status')}")
     print(f"hub: {summary.get('hub_id') or '-'}")
     print(f"run: {summary.get('run_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def trust_operations_assurance_verification_exit_code(report: dict[str, Any]) -> int:
@@ -226,7 +226,7 @@ class _AssuranceVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "toa_manifest_integrity", self.manifest.get("integrity_hash"), assurance_manifest_hash(self.manifest), "Assurance manifest integrity")
         self._add_exact_check("manifest", "toa_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_ASSURANCE_MANIFEST_PACKAGE_TYPE, "Assurance manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "toa_manifest_files_match_entries", sorted(manifest_paths), sorted(ASSURANCE_ARCHIVE_ENTRIES - {"trust-operations-assurance-manifest.json"}), "Manifest file list matches fixed Assurance structure")
         mismatches: list[str] = []
@@ -244,14 +244,14 @@ class _AssuranceVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "toa_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "toa_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files." if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
     def _verify_documents(self) -> None:
         self._add_exact_check("run", "toa_run_package_type", self.run_doc.get("package_type"), TRUST_OPERATIONS_ASSURANCE_RUN_PACKAGE_TYPE, "Run package_type")
         self._add_hash_check("run", "toa_run_integrity", self.run_doc.get("integrity_hash"), assurance_hash(self.run_doc), "Run integrity")
-        self._add_hash_check("run", "toa_run_source_hash", self.run_doc.get("source_hash"), stable_hash(self.run_doc.get("source") if isinstance(self.run_doc.get("source"), dict) else {}), "Run source hash")
+        self._add_hash_check("run", "toa_run_source_hash", self.run_doc.get("source_hash"), stable_hash(_as_document(self.run_doc.get("source"))), "Run source hash")
         self._add_exact_check("report", "toa_report_package_type", self.report.get("package_type"), TRUST_OPERATIONS_ASSURANCE_REPORT_PACKAGE_TYPE, "Report package_type")
         self._add_hash_check("report", "toa_report_integrity", self.report.get("integrity_hash"), assurance_hash(self.report), "Report integrity")
         self._add_exact_check("report", "toa_report_source_hash", self.report.get("source_hash"), self.run_doc.get("source_hash"), "Report source hash")
@@ -261,12 +261,12 @@ class _AssuranceVerifier:
         self._add_hash_check("evidence", "toa_evidence_integrity", self.evidence_index.get("integrity_hash"), assurance_hash(self.evidence_index), "Evidence index integrity")
         self._add_exact_check("external", "toa_external_package_type", self.external_summary.get("package_type"), TRUST_OPERATIONS_ASSURANCE_EXTERNAL_SUMMARY_PACKAGE_TYPE, "External summary package_type")
         self._add_hash_check("external", "toa_external_integrity", self.external_summary.get("integrity_hash"), assurance_hash(self.external_summary), "External summary integrity")
-        report_source = self.report.get("source") if isinstance(self.report.get("source"), dict) else {}
+        report_source = _as_document(self.report.get("source"))
         self._add_exact_check("report", "toa_report_run_hash", report_source.get("run_hash"), self.run_doc.get("integrity_hash"), "Report run hash")
         self._add_exact_check("report", "toa_report_policy_hash", report_source.get("policy_hash"), self.policy.get("integrity_hash"), "Report policy hash")
         self._add_exact_check("report", "toa_report_evidence_index_hash", report_source.get("evidence_index_hash"), self.evidence_index.get("integrity_hash"), "Report evidence index hash")
         self._add_exact_check("report", "toa_report_external_summary_hash", report_source.get("external_verification_summary_hash"), self.external_summary.get("integrity_hash"), "Report external summary hash")
-        manifest_source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        manifest_source = _as_document(self.manifest.get("source"))
         expected_manifest_source = {
             "run_hash": self.run_doc.get("integrity_hash"),
             "report_hash": self.report.get("integrity_hash"),
@@ -280,7 +280,7 @@ class _AssuranceVerifier:
         self._add_exact_check("manifest", "toa_manifest_source_hash", self.manifest.get("source_hash"), self.run_doc.get("source_hash"), "Manifest source hash")
 
     def _verify_semantics(self) -> None:
-        checks = self.run_doc.get("checks") if isinstance(self.run_doc.get("checks"), list) else []
+        checks = _as_list(self.run_doc.get("checks"))
         bad_checks = [str(item.get("check_id") or "unknown") for item in checks if isinstance(item, dict) and item.get("integrity_hash") != assurance_hash(item)]
         self._add_check("run", "toa_run_check_integrity", "failed" if bad_checks else "passed", "blocking", "Run checks have valid integrity." if not bad_checks else "Run check integrity failed: " + ", ".join(bad_checks[:5]))
         expected_summary = _checks_summary([item for item in checks if isinstance(item, dict)])
@@ -348,10 +348,10 @@ class _AssuranceVerifier:
             if archive_path:
                 self._add_exact_check("external", f"toa_{evidence_type}_package_zip_sha256", row.get("zip_sha256"), _sha256_file(archive_path), f"{evidence_type} package ZIP sha256")
                 self._add_exact_check("external", f"toa_{evidence_type}_package_zip_size_bytes", row.get("zip_size_bytes"), os.stat(_fs_path(archive_path)).st_size if archive_path.exists() else None, f"{evidence_type} package ZIP size")
-                manifest = self.external_manifests.get(evidence_type, {})
-                self._add_exact_check("external", f"toa_{evidence_type}_package_manifest_hash", row.get("manifest_hash"), manifest.get("integrity_hash"), f"{evidence_type} package manifest hash")
-        for spec in DELIVERY_VERIFICATION_COMPONENTS:
-            component_type = str(spec["component_type"])
+                package_manifest = self.external_manifests.get(evidence_type, {})
+                self._add_exact_check("external", f"toa_{evidence_type}_package_manifest_hash", row.get("manifest_hash"), package_manifest.get("integrity_hash"), f"{evidence_type} package manifest hash")
+        for delivery_spec in DELIVERY_VERIFICATION_COMPONENTS:
+            component_type = str(delivery_spec["component_type"])
             reports = self.external_reports.get(component_type) or []
             expected = [row for row in external_rows if row.get("evidence_type") == component_type]
             self._verify_delivery_reports(component_type, expected, reports)
@@ -402,11 +402,11 @@ class _AssuranceVerifier:
     def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
-        source = self.run_doc.get("source") if isinstance(self.run_doc.get("source"), dict) else {}
-        fingerprints = source.get("external_package_fingerprints") if isinstance(source.get("external_package_fingerprints"), dict) else {}
-        hub = fingerprints.get("hub:hub") if isinstance(fingerprints.get("hub:hub"), dict) else {}
-        control_signoff = fingerprints.get("control_signoff:control_signoff") if isinstance(fingerprints.get("control_signoff:control_signoff"), dict) else {}
-        external_hashes = source.get("external_verification_hashes") if isinstance(source.get("external_verification_hashes"), dict) else {}
+        source = _as_document(self.run_doc.get("source"))
+        fingerprints = _as_document(source.get("external_package_fingerprints"))
+        hub = _as_document(fingerprints.get("hub:hub"))
+        control_signoff = _as_document(fingerprints.get("control_signoff:control_signoff"))
+        external_hashes = _as_document(source.get("external_verification_hashes"))
         summary = {
             "hub_id": self.run_doc.get("hub_id"),
             "run_id": self.run_doc.get("run_id"),
@@ -492,7 +492,7 @@ def _evidence_from_external(row: ImplementationDocument) -> ImplementationDocume
         "manifest_hash": row.get("manifest_hash"),
         "verification_report_hash": row.get("verification_report_hash"),
         "source_hash": row.get("source_hash"),
-        "summary": row.get("summary") if isinstance(row.get("summary"), dict) else {},
+        "summary": _as_document(row.get("summary")),
     }
 
 
@@ -503,7 +503,7 @@ def _evidence_projection(row: ImplementationDocument) -> ImplementationDocument:
 def _read_json_file(path: Path) -> ImplementationDocument:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 
@@ -512,7 +512,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

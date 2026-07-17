@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import html as html
 import hashlib as hashlib
@@ -86,7 +86,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceAttestationPortalNotFoundError("Attestation Portal export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTAL_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTAL_BLOCKED_KEYS)
 
     def refresh_report(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
@@ -124,7 +124,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         registry = _read_zip_json(registry_zip, "registry.json")
         current_id = str(registry.get("current_entry_id") or "")
         current = _find_entry(registry, current_id) if current_id else {}
-        current_source = current.get("source") if isinstance(current.get("source"), dict) else {}
+        current_source = _as_document(current.get("source"))
         attestation_zip = self.attestation_store.zip_path(portfolio_id, profile)
         attestation_verification = verify_release_portfolio_governance_attestation(attestation_zip, strict=True, require_vault=True, require_final_board=True)
         attestation_manifest = _read_zip_json(attestation_zip, "manifest.json")
@@ -162,11 +162,11 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         return sanitize_metadata(source, blocked_keys=PORTAL_BLOCKED_KEYS)
 
     def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
-        data = report if isinstance(report, dict) else self.read_report(portfolio_id, profile=profile, default={})
+        data = _document_or(report, self.read_report(portfolio_id, profile=profile, default={}))
         if not data:
             return False
         try:
-            source = self.build_source(portfolio_id, profile=str((data.get("source") if isinstance(data.get("source"), dict) else {}).get("attestation_profile") or profile))
+            source = self.build_source(portfolio_id, profile=str((_as_document(data.get("source"))).get("attestation_profile") or profile))
         except Exception:
             return True
         return stable_hash(source) != str(data.get("source_hash") or "")
@@ -255,9 +255,9 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
                 if _manifest_state(manifest_in_zip) == state:
                     raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal ZIP already exists for this source state.")
             manifest = read_json(export_dir / "portal-manifest.json")
-            if stable_hash(manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}) != stable_hash(external_review):
+            if stable_hash(_as_document(manifest.get("external_review"))) != stable_hash(external_review):
                 raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal export is stale. Re-export before ZIP.")
-            if stable_hash(manifest.get("external_review_verification") if isinstance(manifest.get("external_review_verification"), dict) else {}) != stable_hash(external_review_verification):
+            if stable_hash(_as_document(manifest.get("external_review_verification"))) != stable_hash(external_review_verification):
                 raise ReleasePortfolioGovernanceAttestationPortalStateError("Attestation Portal accepted evidence verification is stale. Re-export before ZIP.")
             entries = _zip_entries(export_dir)
             manifest["zip"] = {"created_at": now, "filename": zip_path.name, "entry_count": len(entries), "entries": [entry for _path, entry in entries], "total_uncompressed_size_bytes": sum(path.stat().st_size for path, _entry in entries)}
@@ -333,7 +333,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
                 continue
             if not isinstance(event, dict) or str(event.get("type") or "") != event_type:
                 continue
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             if all(str(summary.get(key) or "") == str(value or "") for key, value in state.items()):
                 return True
         return False
@@ -343,7 +343,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
 
 
 def portal_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == portal_report_hash(data)
 
 
@@ -351,7 +351,7 @@ def portal_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def portal_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == portal_manifest_hash(data)
 
 
@@ -375,8 +375,8 @@ def _portal_summary_from_source(source: ImplementationDocument, blockers: list[I
 
 
 def _data_documents(report: ImplementationDocument) -> dict[str, ImplementationDocument]:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    source = _as_document(report.get("source"))
+    summary = _as_document(report.get("summary"))
     return {
         "portal-summary.json": {"source_hash": report.get("source_hash"), "summary": summary},
         "registry-summary.json": {
@@ -451,9 +451,9 @@ def _data_documents(report: ImplementationDocument) -> dict[str, ImplementationD
 
 
 def _html_pages(report: ImplementationDocument, data_docs: dict[str, ImplementationDocument], *, external_review: ImplementationDocument | None = None) -> dict[str, str]:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    external = external_review if isinstance(external_review, dict) else {}
+    source = _as_document(report.get("source"))
+    summary = _as_document(report.get("summary"))
+    external = _as_document(external_review)
     base = _html_shell
     hashes = {
         "Registry ZIP": source.get("registry_zip_sha256"),
@@ -585,14 +585,14 @@ def _attestation_manifest_row(source: ImplementationDocument) -> ImplementationD
 
 
 def _state_triple(report: ImplementationDocument) -> dict[str, str]:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    source = _as_document(report.get("source"))
     return {"source_hash": str(report.get("source_hash") or ""), "current_entry_hash": str(source.get("registry_current_entry_hash") or ""), "registry_zip_sha256": str(source.get("registry_zip_sha256") or "")}
 
 
 def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
-    registry = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
-    external = manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}
-    external_verification = manifest.get("external_review_verification") if isinstance(manifest.get("external_review_verification"), dict) else {}
+    registry = _as_document(manifest.get("registry"))
+    external = _as_document(manifest.get("external_review"))
+    external_verification = _as_document(manifest.get("external_review_verification"))
     return {"source_hash": str(manifest.get("source_hash") or ""), "current_entry_hash": str(registry.get("current_entry_hash") or ""), "registry_zip_sha256": str(registry.get("zip_sha256") or ""), "external_review_hash": stable_hash(external), "external_review_verification_hash": stable_hash(external_verification)}
 
 
@@ -616,14 +616,14 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except Exception:
         return {}
 
@@ -660,7 +660,7 @@ def _redaction_summary(value: Any) -> ImplementationDocument:
 
 
 def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     (export_dir / "README.txt").write_text(
         "\n".join(
             [

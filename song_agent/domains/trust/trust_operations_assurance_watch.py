@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -198,7 +198,7 @@ class TrustOperationsAssuranceWatchStore:
                 "rows": rows,
                 "summary": _queue_summary(rows, action_pack),
             }
-            queue["status"] = _queue_status(queue["summary"])
+            queue["status"] = _queue_status(_as_document(queue["summary"]))
             queue["readiness"] = queue["status"]
             queue["integrity_hash"] = watch_hash(queue)
             _mkdir(self.queue_dir(queue_id))
@@ -275,7 +275,7 @@ class TrustOperationsAssuranceWatchStore:
 
         payload = payload or {}
         stored = _read_json_default(self.source_paths_path(queue_id), default={}).get("paths")
-        source_paths = _source_paths(payload) if payload else (stored if isinstance(stored, dict) else {})
+        source_paths = _source_paths(payload) if payload else (_as_document(stored))
         report = verify_trust_operations_assurance_watch_package(
             self.watch_zip_path(queue_id),
             strict=bool(payload.get("strict", False)),
@@ -291,7 +291,7 @@ class TrustOperationsAssuranceWatchStore:
             return [str(item) for item in _list(payload.get("hub_ids"))]
         if payload.get("hub_id"):
             return [str(payload.get("hub_id"))]
-        scope = schedule.get("scope") if isinstance(schedule.get("scope"), dict) else {}
+        scope = _as_document(schedule.get("scope"))
         ids = [str(item) for item in _list(scope.get("hub_ids")) if str(item)]
         if ids:
             return ids
@@ -314,7 +314,7 @@ class TrustOperationsAssuranceWatchStore:
         for hub_id in hub_ids:
             latest = _latest_run(self.assurance_store.list_runs(hub_id))
             if not latest and external_assurance_report:
-                summary = external_assurance_report.get("summary") if isinstance(external_assurance_report.get("summary"), dict) else {}
+                summary = _as_document(external_assurance_report.get("summary"))
                 report_hub_id = str(summary.get("hub_id") or "")
                 if not report_hub_id or report_hub_id == hub_id:
                     latest = {
@@ -371,10 +371,10 @@ class TrustOperationsAssuranceWatchStore:
 
     def _build_rows_and_actions(self, queue_id: str, schedule: ImplementationDocument, hub_ids: list[str], run_index: ImplementationDocument, external_summary: ImplementationDocument, now: str) -> tuple[list[ImplementationDocument], ImplementationDocument]:
         runs_by_hub = {str(row.get("hub_id") or ""): row for row in run_index.get("runs", []) if isinstance(row, dict)}
-        cadence = schedule.get("cadence") if isinstance(schedule.get("cadence"), dict) else {}
+        cadence = _as_document(schedule.get("cadence"))
         interval_days = int(cadence.get("interval_days") or 7)
         grace_days = int(cadence.get("grace_days") or 1)
-        requirements = schedule.get("requirements") if isinstance(schedule.get("requirements"), dict) else {}
+        requirements = _as_document(schedule.get("requirements"))
         require_verified = bool(requirements.get("require_latest_assurance_verified", True))
         rows: list[dict[str, Any]] = []
         actions: list[dict[str, Any]] = []
@@ -403,7 +403,7 @@ class TrustOperationsAssuranceWatchStore:
             elif due_status == "due" and readiness == "clear":
                 readiness = "warning"
                 reasons.append("assurance_due")
-            row = {
+            row: ImplementationDocument = {
                 "hub_id": hub_id,
                 "latest_assurance_run_id": run.get("run_id"),
                 "latest_assurance_status": run.get("status") or "missing",
@@ -423,7 +423,7 @@ class TrustOperationsAssuranceWatchStore:
                 row["action_ids"].append(action_id)
             row["integrity_hash"] = watch_hash(row)
             rows.append(row)
-        action_pack = {
+        action_pack: ImplementationDocument = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_ACTION_PACK_PACKAGE_TYPE,
             "queue_id": queue_id,
@@ -432,7 +432,8 @@ class TrustOperationsAssuranceWatchStore:
             "summary": _action_summary(actions),
             "source": {"external_verification_summary_hash": external_summary.get("integrity_hash")},
         }
-        action_pack["status"] = "blocked" if action_pack["summary"]["blocking_count"] else "warning" if action_pack["summary"]["action_count"] else "clear"
+        action_summary = _as_document(action_pack.get("summary"))
+        action_pack["status"] = "blocked" if action_summary.get("blocking_count") else "warning" if action_summary.get("action_count") else "clear"
         action_pack["integrity_hash"] = watch_hash(action_pack)
         return sorted(rows, key=lambda row: str(row.get("hub_id") or "")), action_pack
 
@@ -440,7 +441,7 @@ class TrustOperationsAssuranceWatchStore:
         if queue.get("integrity_hash") != watch_hash(queue):
             raise TrustOperationsAssuranceWatchStateError("Assurance Watch queue integrity failed.")
         stored = _read_json_default(self.source_paths_path(str(queue.get("queue_id") or "")), default={}).get("paths")
-        source_paths = _source_paths(payload) if payload else (stored if isinstance(stored, dict) else {})
+        source_paths = _source_paths(payload) if payload else (_as_document(stored))
         schedule = _read_json_default(self.schedule_snapshot_path(str(queue.get("queue_id") or "")), default={})
         hub_ids = [str(row.get("hub_id") or "") for row in queue.get("rows", []) if isinstance(row, dict) and row.get("hub_id")]
         run_index, external_summary, _raw = self._build_sources(str(queue.get("queue_id") or ""), schedule, hub_ids, source_paths)
@@ -505,7 +506,7 @@ def _external_row(component_type: str, archive_path: Path | None, report_path: P
     zip_size = os.stat(_fs_path(archive_path)).st_size if archive_path and archive_path.exists() else report.get("zip_size_bytes")
     manifest_hash = manifest.get("integrity_hash") or report.get("manifest_hash")
     status = str(report.get("status") or "missing")
-    component_id = str((report.get("summary") if isinstance(report.get("summary"), dict) else {}).get("run_id") or report.get("run_id") or component_type)
+    component_id = str((_as_document(report.get("summary"))).get("run_id") or report.get("run_id") or component_type)
     row = {
         "component_type": component_type,
         "component_id": component_id,
@@ -517,7 +518,7 @@ def _external_row(component_type: str, archive_path: Path | None, report_path: P
         "verification_report_hash": verification_hash(report) if report else None,
         "source_hash": report.get("source_hash"),
         "generated_at": report.get("generated_at"),
-        "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
+        "summary": _as_document(report.get("summary")),
         "_archive_path": str(archive_path) if archive_path else None,
         "_report_path": str(report_path) if report_path else None,
     }
@@ -576,7 +577,7 @@ def _actions_for_row(row: ImplementationDocument) -> list[tuple[str, str, str]]:
 
 
 def _queue_summary(rows: list[ImplementationDocument], action_pack: ImplementationDocument) -> ImplementationDocument:
-    actions_summary = action_pack.get("summary") if isinstance(action_pack.get("summary"), dict) else {}
+    actions_summary = _as_document(action_pack.get("summary"))
     return {
         "hub_count": len(rows),
         "clear_count": sum(1 for row in rows if row.get("readiness") == "clear"),
@@ -741,7 +742,7 @@ def _read_zip_json_optional(zip_path: Path | None, entry: str) -> Implementation
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

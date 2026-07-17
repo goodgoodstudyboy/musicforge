@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -421,10 +423,11 @@ class AcceptanceStore:
             case_dir = self.case_dir(suite_id, case_id)
             midi_path = case_dir / "song.mid"
             wav_path = case_dir / "song.wav"
-            sources = {}
+            sources: dict[str, _InferenceType] = {}
             if config is None:
                 config, sources = load_renderer_config()
             configured = renderer_configured(config)
+            result: ImplementationDocument
             if mode == "never":
                 status = "skipped_renderer_not_configured" if not configured else "skipped_by_request"
                 result = {"status": "skipped", "summary": {"audio_status": status, "renderer": _renderer_snapshot(config, sources)}}
@@ -481,7 +484,7 @@ class AcceptanceStore:
                 )
                 write_json(case_dir / "audio-health.json", audio_report)
                 report["audio_health"] = audio_health_summary(audio_report)
-                artifacts = report.get("artifacts") if isinstance(report.get("artifacts"), dict) else {}
+                artifacts = _as_document(report.get("artifacts"))
                 artifacts["audio_health"] = f"cases/{case_id}/audio-health.json"
                 report["artifacts"] = artifacts
             write_json(self.health_path(suite_id, case_id), report)
@@ -501,7 +504,7 @@ class AcceptanceStore:
                 raise AcceptanceStateError("Case health has blocking failures. Use waived with a waiver reason or fix the case.")
             review = _review_payload(case_id, payload, min_rating=suite.min_rating)
             if str(review.get("audio_mode") or "").lower() == "wav":
-                audio_health = health.get("audio_health") if isinstance(health.get("audio_health"), dict) else {}
+                audio_health = _as_document(health.get("audio_health"))
                 if not audio_health or audio_health.get("status") not in {"passed", "warning"}:
                     raise AcceptanceStateError("WAV review requires a passing audio health report.")
                 review["audio_evidence"] = sanitize_metadata(
@@ -565,7 +568,7 @@ class AcceptanceStore:
                 report = self.build_report(suite_id)
             if report.get("status") != "passed":
                 raise AcceptanceStateError("Acceptance report must pass before signoff.")
-            verification = report.get("verification") if isinstance(report.get("verification"), dict) else {}
+            verification = _as_document(report.get("verification"))
             if verification.get("status") != "passed":
                 raise AcceptanceStateError("Acceptance report integrity check must pass before signoff.")
             report_hash = stable_hash(report)
@@ -636,7 +639,7 @@ class AcceptanceStore:
         return suite
 
     def verify_report(self, suite_id: str, report: dict[str, Any] | None = None) -> dict[str, Any]:
-        report_data = sanitize_metadata(report if isinstance(report, dict) else read_json(self.report_path(suite_id)))
+        report_data = sanitize_metadata(_document_or(report, read_json(self.report_path(suite_id))))
         current = build_acceptance_report(self, self.get_suite(suite_id))
         verification = _report_verification(
             str(report_data.get("source_hash") or ""),
@@ -653,7 +656,7 @@ class AcceptanceStore:
             if verification["content_status"] != "passed" and "acceptance report content hash mismatch" not in blockers:
                 blockers.append("acceptance report content hash mismatch")
             report_data["blockers"] = blockers
-            summary = dict(report_data.get("summary") if isinstance(report_data.get("summary"), dict) else {})
+            summary = dict(_as_document(report_data.get("summary")))
             summary["blocking_count"] = int(summary.get("blocking_count", 0) or 0) + 1
             report_data["summary"] = summary
         return sanitize_metadata(report_data)
@@ -775,7 +778,7 @@ def build_acceptance_report(store: AcceptanceStore, suite: AcceptanceSuite) -> d
             blockers.append(f"{case.case_id}: manual review required")
         expectation_blockers = _expectation_blockers(case, health_summary)
         blockers.extend(expectation_blockers)
-        audio_summary = audio_health_summary(health.get("audio_health") if isinstance(health.get("audio_health"), dict) else {})
+        audio_summary = audio_health_summary(_as_document(health.get("audio_health")))
         case_rows.append(
             {
                 "case_id": case.case_id,
@@ -941,8 +944,8 @@ def _report_verification(stored_source_hash: str, current_source_hash: str, stor
 
 
 def acceptance_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -965,7 +968,7 @@ def acceptance_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "missing_song_ids": summary.get("missing_song_ids", []),
             "duplicate_song_ids": summary.get("duplicate_song_ids", []),
             "songbook_coverage_status": summary.get("songbook_coverage_status") or "not_applicable",
-            "human_review_pack": summary.get("human_review_pack") if isinstance(summary.get("human_review_pack"), dict) else {"status": "missing", "pack_count": 0, "import_count": 0},
+            "human_review_pack": _document_or(summary.get("human_review_pack"), {"status": "missing", "pack_count": 0, "import_count": 0}),
             "profile_id": data.get("profile_id"),
             "songbook_id": data.get("songbook_id"),
             "songbook_version": data.get("songbook_version"),
@@ -974,7 +977,7 @@ def acceptance_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def listening_review_summary(review: dict[str, Any] | None) -> dict[str, Any]:
-    data = review if isinstance(review, dict) else {}
+    data = _as_document(review)
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -983,7 +986,7 @@ def listening_review_summary(review: dict[str, Any] | None) -> dict[str, Any]:
             "listened_by": data.get("listened_by"),
             "listened_at": data.get("listened_at"),
             "audio_mode": data.get("audio_mode"),
-            "audio_evidence": data.get("audio_evidence") if isinstance(data.get("audio_evidence"), dict) else {},
+            "audio_evidence": _as_document(data.get("audio_evidence")),
             "review_mode": data.get("review_mode") or "manual",
             "review_source_type": (data.get("source") or {}).get("source_type") if isinstance(data.get("source"), dict) else None,
             "review_pack_id": (data.get("source") or {}).get("pack_id") if isinstance(data.get("source"), dict) else None,
@@ -995,12 +998,12 @@ def listening_review_summary(review: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def acceptance_signoff_summary(signoff: dict[str, Any] | None) -> dict[str, Any]:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     return sanitize_metadata({"status": data.get("status") or "not_signed", "signed_by": data.get("signed_by"), "signed_at": data.get("signed_at"), "report_hash": data.get("report_hash")})
 
 
 def acceptance_suite_summary(suite: AcceptanceSuite | dict[str, Any] | None) -> dict[str, Any]:
-    data = suite.to_dict() if isinstance(suite, AcceptanceSuite) else suite if isinstance(suite, dict) else {}
+    data = suite.to_dict() if isinstance(suite, AcceptanceSuite) else _as_document(suite)
     return sanitize_metadata(
         {
             "suite_id": data.get("suite_id"),
@@ -1104,7 +1107,7 @@ def _review_payload(case_id: str, payload: ImplementationDocument, *, min_rating
     notes = _safe_text(payload.get("notes"), 2000)
     if len(notes.strip()) < 10:
         raise AcceptanceValidationError("review notes must be at least 10 characters.")
-    waivers = payload.get("waivers") if isinstance(payload.get("waivers"), list) else []
+    waivers = _as_list(payload.get("waivers"))
     if status == "waived" and not waivers and not _safe_text(payload.get("waiver_reason"), 500):
         raise AcceptanceValidationError("waived review requires a waiver reason.")
     if status == "accepted" and rating < min_rating:
@@ -1161,7 +1164,7 @@ def _case_status_from_review(review: ImplementationDocument) -> str:
 
 
 def _suite_requires_audio(suite: AcceptanceSuite) -> bool:
-    profile = suite.profile if isinstance(suite.profile, dict) else {}
+    profile = _as_document(suite.profile)
     return suite.profile_id == "audio_required" or str(profile.get("profile_id") or "") == "audio_required" or str(profile.get("render_audio") or "") in {"always", "require"}
 
 
@@ -1178,8 +1181,8 @@ def _audio_evidence_status(review: ImplementationDocument, health: Implementatio
         return "missing"
     if str(review.get("audio_mode") or "").lower() != "wav":
         return "not_wav"
-    evidence = review.get("audio_evidence") if isinstance(review.get("audio_evidence"), dict) else {}
-    summary = audio_health_summary(health.get("audio_health") if isinstance(health.get("audio_health"), dict) else {})
+    evidence = _as_document(review.get("audio_evidence"))
+    summary = audio_health_summary(_as_document(health.get("audio_health")))
     if not evidence or not summary:
         return "missing"
     if evidence.get("audio_health_hash") != summary.get("integrity_hash") or evidence.get("wav_sha256") != summary.get("wav_sha256"):
@@ -1199,7 +1202,7 @@ def _profile_from_payload(payload: ImplementationDocument) -> AcceptanceProfile:
 
 
 def _expectation_blockers(case: AcceptanceCase, health_summary: ImplementationDocument) -> list[str]:
-    expectations = case.expectations if isinstance(case.expectations, dict) else {}
+    expectations = _as_document(case.expectations)
     blockers: list[str] = []
     minimums = (
         ("note_count_min", "note_count", "note count"),
@@ -1259,8 +1262,8 @@ def _songbook_coverage_blockers(coverage: ImplementationDocument, suite: Accepta
     if not suite.release_ready_profile or coverage.get("songbook_coverage_status") == "complete":
         return []
     blockers = ["release-ready profile requires complete regression songbook coverage"]
-    missing = coverage.get("missing_song_ids") if isinstance(coverage.get("missing_song_ids"), list) else []
-    duplicates = coverage.get("duplicate_song_ids") if isinstance(coverage.get("duplicate_song_ids"), list) else []
+    missing = _as_list(coverage.get("missing_song_ids"))
+    duplicates = _as_list(coverage.get("duplicate_song_ids"))
     expected = int(coverage.get("expected_case_count", 0) or 0)
     if expected and int(coverage.get("case_count", 0) or 0) < expected:
         blockers.append(f"case count below expected {expected}")
@@ -1312,11 +1315,11 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except (OSError, json.JSONDecodeError, ValueError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _report_markdown(report: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     lines = [
         "# Music Acceptance Report",
         "",
@@ -1361,7 +1364,7 @@ def _human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> Imp
         imports = sorted(imports, key=lambda row: str(row.get("imported_at") or row.get("created_at") or ""), reverse=True)
         latest_pack = packs[0] if packs else {}
         latest_import = imports[0] if imports else {}
-        summary = latest_import.get("summary") if isinstance(latest_import.get("summary"), dict) else {}
+        summary = _as_document(latest_import.get("summary"))
         return sanitize_metadata(
             {
                 "status": "imported" if latest_import else "packaged" if latest_pack else "missing",

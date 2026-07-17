@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 from pathlib import Path as Path
@@ -36,7 +36,7 @@ def read_distribution_checklist(store: DistributionStore, release_id: str, targe
     if not path.exists():
         return default if default is not None else {}
     value = read_json(path)
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def initialize_distribution_checklist(
@@ -63,7 +63,7 @@ def reconcile_distribution_checklist(
     now = now or now_iso()
     existing = read_distribution_checklist(store, release_id, target.target_id, default={})
     existing_items = {str(item.get("item_id")): item for item in existing.get("items", []) if isinstance(item, dict)}
-    template_items = template.get("checklist") if isinstance(template.get("checklist"), list) else []
+    template_items = _as_list(template.get("checklist"))
     items: list[dict[str, Any]] = []
     for item in template_items:
         if not isinstance(item, dict):
@@ -149,8 +149,8 @@ def update_distribution_checklist_item(
 
 
 def checklist_summary(document: dict[str, Any] | None) -> dict[str, Any]:
-    data = document if isinstance(document, dict) else {}
-    items = data.get("items") if isinstance(data.get("items"), list) else []
+    data = _as_document(document)
+    items = _as_list(data.get("items"))
     counts = {status: 0 for status in CHECKLIST_STATUSES}
     required_pending = 0
     required_blocked = 0
@@ -186,7 +186,7 @@ def checklist_summary(document: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def checklist_checks(document: dict[str, Any] | None) -> list[dict[str, Any]]:
-    data = document if isinstance(document, dict) else {}
+    data = _as_document(document)
     summary = checklist_summary(data)
     checks: list[dict[str, Any]] = [
         _check("checklist_exists", not bool(data), "blocking", "Submission checklist exists."),
@@ -199,7 +199,7 @@ def checklist_checks(document: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 
 def checklist_payload_hash(document: dict[str, Any] | None) -> str:
-    data = document if isinstance(document, dict) else {}
+    data = _as_document(document)
     return stable_hash(
         {
             "release_id": data.get("release_id"),
@@ -268,7 +268,7 @@ def _stale_summary(summary: ImplementationDocument | None, reason: str) -> Imple
 
 
 def _check(check_id: str, failed: bool, severity: str, message: str, count: int | None = None) -> ImplementationDocument:
-    item = {
+    item: ImplementationDocument = {
         "scope": "distribution_checklist",
         "check_id": check_id,
         "status": "failed" if failed and severity == "blocking" else "warning" if failed else "passed",

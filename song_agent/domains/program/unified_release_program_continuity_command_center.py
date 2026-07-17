@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import shutil as shutil
 from pathlib import Path as Path
@@ -506,7 +506,7 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
             blockers.append("continuity_acceptance_reset_pending")
         status = "ready" if not blockers else "blocked"
         now = now_iso()
-        acceptance_event = acceptance_state.get("event") if isinstance(acceptance_state.get("event"), dict) else {}
+        acceptance_event = _as_document(acceptance_state.get("event"))
         current_state = {
             "generation": generation.get("generation"),
             "generation_hash": generation.get("integrity_hash"),
@@ -587,9 +587,9 @@ class UnifiedReleaseProgramContinuityCommandCenterStore:
 
 
 def _runtime_fingerprint(runtime: ImplementationDocument) -> ImplementationDocument:
-    verification = runtime.get("verification") if isinstance(runtime.get("verification"), dict) else {}
-    summary = runtime.get("summary") if isinstance(runtime.get("summary"), dict) else {}
-    verification_summary = verification.get("summary") if isinstance(verification.get("summary"), dict) else {}
+    verification = _as_document(runtime.get("verification"))
+    summary = _as_document(runtime.get("summary"))
+    verification_summary = _as_document(verification.get("summary"))
     return {
         "zip_sha256": runtime.get("zip_sha256") or verification.get("zip_sha256") or summary.get("zip_sha256") or verification_summary.get("zip_sha256"),
         "zip_size_bytes": runtime.get("zip_size_bytes") or verification.get("zip_size_bytes") or summary.get("zip_size_bytes") or verification_summary.get("zip_size_bytes"),
@@ -598,7 +598,7 @@ def _runtime_fingerprint(runtime: ImplementationDocument) -> ImplementationDocum
 
 
 def _runtime_blockers(runtime: ImplementationDocument) -> list[str]:
-    verification = runtime.get("verification") if isinstance(runtime.get("verification"), dict) else {}
+    verification = _as_document(runtime.get("verification"))
     values = runtime.get("blockers") or verification.get("blockers") or []
     if values:
         return [sanitize_sensitive_text(str(item)) for item in values]

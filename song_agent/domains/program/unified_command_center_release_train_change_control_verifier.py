@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -173,7 +173,7 @@ def _current_train_checks(
         external_evidence_manifest_path=external_evidence_manifest_path,
         signoff_binding_path=train_signoff_binding_path,
     )
-    current = report.get("current_train") if isinstance(report.get("current_train"), dict) else {}
+    current = _as_document(report.get("current_train"))
     checks.extend(
         [
             _check("ucc_train_change_control_current_train_verification_integrity", _integrity_ok(external), "Current train verification report integrity is valid."),
@@ -215,7 +215,7 @@ def _external_reset_proof_checks(path: Path | str | None, summaries: Implementat
 def _reset_semantics_checks(report: ImplementationDocument, summaries: ImplementationDocument, archive_history: ImplementationDocument, *, require_reset_applied: bool) -> list[ImplementationDocument]:
     requests = [row for row in summaries.get("requests", []) if isinstance(row, dict)]
     applied = [row for row in requests if row.get("status") == "applied"]
-    duplicate_applied = sorted({row.get("change_request_id") for row in applied if [item.get("change_request_id") for item in applied].count(row.get("change_request_id")) > 1})
+    duplicate_applied = sorted({str(row.get("change_request_id")) for row in applied if row.get("change_request_id") and [item.get("change_request_id") for item in applied].count(row.get("change_request_id")) > 1})
     history_hashes = {row.get("previous_signoff_hash") for row in archive_history.get("items", []) if isinstance(row, dict)}
     missing_history = [row.get("previous_signoff_hash") for row in applied if row.get("previous_signoff_hash") not in history_hashes]
     checks = [
@@ -229,7 +229,7 @@ def _reset_semantics_checks(report: ImplementationDocument, summaries: Implement
 
 
 def _document_binding_checks(manifest: ImplementationDocument, report: ImplementationDocument, index: ImplementationDocument, summaries: ImplementationDocument, archive_history: ImplementationDocument) -> list[ImplementationDocument]:
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     return [
         _check("ucc_train_change_control_report_hash_binding", source.get("report_hash") == report.get("integrity_hash"), "Manifest binds report."),
         _check("ucc_train_change_control_index_hash_binding", source.get("index_hash") == index.get("integrity_hash"), "Manifest binds index."),
@@ -256,7 +256,7 @@ def _history_checks(history: list[ImplementationDocument], summaries: Implementa
             reset_events[request_id] = event
     for request in summaries.get("requests", []):
         if isinstance(request, dict) and request.get("status") == "applied":
-            event = reset_events.get(str(request.get("change_request_id") or ""))
+            event = _as_document(reset_events.get(str(request.get("change_request_id") or "")))
             checks.append(_check(f"ucc_train_change_control_reset_event_{_safe_check_key(str(request.get('change_request_id')))}", bool(event) and event.get("reset_event_hash") == request.get("reset_event_hash"), "Applied request has matching reset history event."))
     return checks
 

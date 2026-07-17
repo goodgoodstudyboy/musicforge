@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list, as_text as _as_text
 
 import json as json
 import shutil as shutil
@@ -254,7 +254,7 @@ class UnifiedReleaseProgramHandoffStore:
             write_entry("data/risk-summary-public.json", _risk_summary(docs))
             write_entry("data/reviewer-form-template.json", template)
             write_entry("README.txt", "MusicForge Unified Release Program Review Pack\n")
-            manifest = _package_manifest(UNIFIED_RELEASE_PROGRAM_REVIEW_PACK_PACKAGE_TYPE, program_id, report.get("handoff_id"), files, {"review_pack_report_hash": report.get("integrity_hash"), "review_pack_binding_hash": binding.get("integrity_hash")})
+            manifest = _package_manifest(UNIFIED_RELEASE_PROGRAM_REVIEW_PACK_PACKAGE_TYPE, program_id, _as_text(report.get("handoff_id")), files, {"review_pack_report_hash": report.get("integrity_hash"), "review_pack_binding_hash": binding.get("integrity_hash")})
             write_json(export_dir / "manifest.json", manifest)
             write_json(pack_dir / "review-pack-report.json", report)
             write_json(pack_dir / "review-pack-binding-summary.json", binding)
@@ -478,7 +478,7 @@ class UnifiedReleaseProgramHandoffStore:
         readme.write_text("MusicForge Unified Release Program Accepted Evidence\n", encoding="utf-8")
         files.append(_file_record(readme, "README.txt"))
         report = read_json(evidence_dir / "accepted-evidence-report.json")
-        manifest = _package_manifest(UNIFIED_RELEASE_PROGRAM_ACCEPTED_EVIDENCE_PACKAGE_TYPE, program_id, report.get("handoff_id"), files, {"accepted_evidence_report_hash": report.get("integrity_hash")})
+        manifest = _package_manifest(UNIFIED_RELEASE_PROGRAM_ACCEPTED_EVIDENCE_PACKAGE_TYPE, program_id, _as_text(report.get("handoff_id")), files, {"accepted_evidence_report_hash": report.get("integrity_hash")})
         write_json(export_dir / "manifest.json", manifest)
         return self._build_zip(export_dir, self.accepted_evidence_zip_path(program_id, evidence_id), "accepted_evidence")
 
@@ -752,7 +752,7 @@ class UnifiedReleaseProgramHandoffStore:
                 "source_hash": source_hash,
                 "summary": {
                     "accepted_response_count": len(participants),
-                    "required_role_count": len((decision.get("policy") or DEFAULT_BOARD_POLICY).get("required_roles") or []),
+                    "required_role_count": len(_as_list(_as_document(decision.get("policy") or DEFAULT_BOARD_POLICY).get("required_roles"))),
                     "quorum_status": readiness_summary.get("status"),
                     "open_blocker_count": len(blockers),
                     "risk_level": "low" if not blockers else "critical",
@@ -820,7 +820,7 @@ class UnifiedReleaseProgramHandoffStore:
         if binding.get("signoff_hash") != signoff.get("integrity_hash"):
             raise UnifiedReleaseProgramHandoffStateError("Program Handoff signoff binding does not match signoff.")
         frozen = self.frozen_dir(program_id)
-        docs = {
+        docs: ImplementationDocument = {
             "report": read_json(frozen / "program-handoff-report.json"),
             "inventory": read_json(frozen / "evidence-inventory.json"),
             "guide": (frozen / "recipient-guide.md").read_text(encoding="utf-8"),
@@ -842,10 +842,12 @@ class UnifiedReleaseProgramHandoffStore:
         for key, value in expected.items():
             if signoff.get(key) != value or binding.get(key) != value:
                 raise UnifiedReleaseProgramHandoffStateError("Program Handoff frozen docs do not match signoff.")
-        runtime_external_manifest = _read_optional_json(self.runtime_external_manifest_path(program_id)) or docs["external_manifest"]
-        docs["program_summary"] = _verification_summary_from_state("program", self._current_program_state(runtime_external_manifest))
-        docs["operations_summary"] = _verification_summary_from_state("operations", self._current_operations_state(runtime_external_manifest))
-        docs["accepted_summary"] = self._accepted_verification_summary(runtime_external_manifest)
+        runtime_external_manifest = _as_document(
+            _read_optional_json(self.runtime_external_manifest_path(program_id)) or docs["external_manifest"]
+        )
+        docs["program_summary"] = _verification_summary_from_state("program", self._current_program_state(_as_document(runtime_external_manifest)))
+        docs["operations_summary"] = _verification_summary_from_state("operations", self._current_operations_state(_as_document(runtime_external_manifest)))
+        docs["accepted_summary"] = self._accepted_verification_summary(_as_document(runtime_external_manifest))
         return docs
 
     def _write_frozen(self, program_id: str, docs: ImplementationDocument) -> None:
@@ -1050,7 +1052,7 @@ class UnifiedReleaseProgramHandoffStore:
             if decision == "needs_changes" and policy.get("block_on_needs_changes", True):
                 conflicts.append({**base_row, "reason": "needs_changes_response_present"})
             if policy.get("block_on_critical_finding", True):
-                findings = response.get("findings") if isinstance(response.get("findings"), list) else []
+                findings = _as_list(response.get("findings"))
                 if any(str(row.get("severity") or "").lower() == "critical" for row in findings if isinstance(row, dict)):
                     conflicts.append({**base_row, "reason": "critical_finding_present"})
         return conflicts
@@ -1303,10 +1305,10 @@ def _decision_readiness(policy: ImplementationDocument, participants: list[Imple
 
 
 def _board_policy(value: Any) -> ImplementationDocument:
-    raw = value if isinstance(value, dict) else {}
+    raw = _as_document(value)
     return {
-        "minimum_acceptances": int(raw.get("minimum_acceptances") or DEFAULT_BOARD_POLICY["minimum_acceptances"]),
-        "minimum_organizations": int(raw.get("minimum_organizations") or DEFAULT_BOARD_POLICY["minimum_organizations"]),
+        "minimum_acceptances": _as_int(raw.get("minimum_acceptances") or DEFAULT_BOARD_POLICY["minimum_acceptances"]),
+        "minimum_organizations": _as_int(raw.get("minimum_organizations") or DEFAULT_BOARD_POLICY["minimum_organizations"]),
         "required_roles": [_bounded(role, 80) for role in raw.get("required_roles", DEFAULT_BOARD_POLICY["required_roles"])],
         "block_on_rejected": bool(raw.get("block_on_rejected", DEFAULT_BOARD_POLICY["block_on_rejected"])),
         "block_on_needs_changes": bool(raw.get("block_on_needs_changes", DEFAULT_BOARD_POLICY["block_on_needs_changes"])),

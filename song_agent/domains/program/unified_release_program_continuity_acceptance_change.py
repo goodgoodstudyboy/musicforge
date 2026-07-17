@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import shutil as shutil
 import zipfile as zipfile
@@ -564,7 +564,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
         expected_target = self._target_from_state(current)
         if request.get("target") != expected_target:
             raise UnifiedReleaseProgramContinuityAcceptanceChangeStateError("Continuity Acceptance Change Request target no longer matches current signoff.")
-        source = request.get("source") if isinstance(request.get("source"), dict) else {}
+        source = _as_document(request.get("source"))
         for field in ("signoff_hash", "signoff_binding_hash", "archive_zip_sha256", "archive_manifest_hash", "verification_report_hash"):
             if source.get(field) != current.get(field):
                 raise UnifiedReleaseProgramContinuityAcceptanceChangeStateError(f"Continuity Acceptance Change Request source mismatch: {field}")
@@ -752,7 +752,7 @@ class UnifiedReleaseProgramContinuityAcceptanceChangeStore:
         summaries: dict[int, dict[str, Any]] = {}
         acceptance_verification = _read_optional_json(self.acceptance_store.verification_report_path(program_id))
         signoff_binding = _read_optional_json(self.acceptance_store.signoff_binding_path(program_id))
-        source = state.get("current_acceptance") if isinstance(state.get("current_acceptance"), dict) else {}
+        source = _as_document(state.get("current_acceptance"))
         summaries[generation_number] = {
             "verification_summary": _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_continuity_acceptance_generation_verification_summary", "program_id": program_id, "generation": generation_number, "verification_status": acceptance_verification.get("status"), "verification_report_hash": acceptance_verification.get("integrity_hash"), "archive_zip_sha256": acceptance_verification.get("zip_sha256"), "archive_manifest_hash": acceptance_verification.get("manifest_hash")}),
             "signoff_binding_summary": _with_integrity({"schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_CHANGE_SCHEMA_VERSION, "package_type": "musicforge_unified_release_program_continuity_acceptance_generation_signoff_binding_summary", "program_id": program_id, "generation": generation_number, "signoff_hash": signoff_binding.get("signoff_hash"), "signoff_binding_hash": signoff_binding.get("integrity_hash"), "history_event_hash": signoff_binding.get("history_event_hash")}),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 from pathlib import Path as Path
@@ -155,8 +155,8 @@ def release_audio_allows_signoff(report: dict[str, Any], *, current_source_hash:
 
 
 def release_audio_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -216,7 +216,7 @@ def _sha256(path: Path) -> str:
 
 
 def _artifact_stale_reasons(artifact: ImplementationDocument, *, wav_path: Path, midi_path: Path, song_plan_path: Path, project_store: ProjectStore) -> list[str]:
-    renderer = artifact.get("renderer") if isinstance(artifact.get("renderer"), dict) else {}
+    renderer = _as_document(artifact.get("renderer"))
     profile_id = str(renderer.get("profile_id") or "")
     profile = None
     if profile_id.startswith("arp-"):

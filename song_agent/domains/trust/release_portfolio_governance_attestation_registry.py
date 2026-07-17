@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -124,8 +124,8 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                 },
                 "verification": {
                     "status": verification.get("status"),
-                    "blocker_count": int((verification.get("summary") if isinstance(verification.get("summary"), dict) else {}).get("blocker_count") or 0),
-                    "warning_count": int((verification.get("summary") if isinstance(verification.get("summary"), dict) else {}).get("warning_count") or 0),
+                    "blocker_count": int((_as_document(verification.get("summary"))).get("blocker_count") or 0),
+                    "warning_count": int((_as_document(verification.get("summary"))).get("warning_count") or 0),
                     "verified_at": verification.get("generated_at") or now,
                 },
             }
@@ -207,11 +207,11 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                 "registry_hash": registry.get("integrity_hash"),
                 "current_entry_id": registry.get("current_entry_id"),
                 "current_entry_hash": current.get("integrity_hash") if current else None,
-                "current_attestation_zip_sha256": (current.get("source") if isinstance(current.get("source"), dict) else {}).get("attestation_zip_sha256") if current else None,
-                "current_attestation_manifest_hash": (current.get("source") if isinstance(current.get("source"), dict) else {}).get("attestation_manifest_hash") if current else None,
-                "current_attestation_verification_hash": (current.get("source") if isinstance(current.get("source"), dict) else {}).get("attestation_verification_hash") if current else None,
-                "evidence_vault_zip_sha256": (current.get("source") if isinstance(current.get("source"), dict) else {}).get("evidence_vault_zip_sha256") if current else None,
-                "final_board_signoff_hash": (current.get("source") if isinstance(current.get("source"), dict) else {}).get("final_board_signoff_hash") if current else None,
+                "current_attestation_zip_sha256": (_as_document(current.get("source"))).get("attestation_zip_sha256") if current else None,
+                "current_attestation_manifest_hash": (_as_document(current.get("source"))).get("attestation_manifest_hash") if current else None,
+                "current_attestation_verification_hash": (_as_document(current.get("source"))).get("attestation_verification_hash") if current else None,
+                "evidence_vault_zip_sha256": (_as_document(current.get("source"))).get("evidence_vault_zip_sha256") if current else None,
+                "final_board_signoff_hash": (_as_document(current.get("source"))).get("final_board_signoff_hash") if current else None,
             }
             report = {
                 "schema_version": REGISTRY_SCHEMA_VERSION,
@@ -315,9 +315,9 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                 if _manifest_state(manifest_in_zip) == state:
                     raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry ZIP already exists for this registry state.")
             manifest = read_json(export_dir / "manifest.json")
-            if stable_hash(manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}) != stable_hash(external_review):
+            if stable_hash(_as_document(manifest.get("external_review"))) != stable_hash(external_review):
                 raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry export is stale. Re-export before ZIP.")
-            if stable_hash(manifest.get("external_review_verification") if isinstance(manifest.get("external_review_verification"), dict) else {}) != stable_hash(external_review_verification):
+            if stable_hash(_as_document(manifest.get("external_review_verification"))) != stable_hash(external_review_verification):
                 raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry accepted evidence verification is stale. Re-export before ZIP.")
             entries = _zip_entries(export_dir)
             manifest["zip"] = {"created_at": now, "filename": zip_path.name, "entry_count": len(entries), "entries": [entry for _path, entry in entries], "total_uncompressed_size_bytes": sum(path.stat().st_size for path, _entry in entries)}
@@ -366,7 +366,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
         _write_json(self.registry_path(portfolio_id, profile), sanitize_metadata(registry, blocked_keys=REGISTRY_BLOCKED_KEYS))
 
     def _finalize_registry(self, registry: ImplementationDocument, *, now: str) -> None:
-        entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
+        entries = _as_list(registry.get("entries"))
         registry["entry_count"] = len(entries)
         registry["published_count"] = sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "published")
         registry["revoked_count"] = sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "revoked")
@@ -387,7 +387,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                 return
             (warnings if warning else blockers).append({"check_id": check_id, "severity": row["severity"], "message": message})
 
-        entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
+        entries = _as_list(registry.get("entries"))
         check("registry_integrity", registry_integrity_ok(registry), "Registry integrity hash is valid.")
         ids = [str(item.get("entry_id") or "") for item in entries if isinstance(item, dict)]
         check("entry_ids_unique", len(ids) == len(set(ids)), "Registry entry IDs are unique.")
@@ -423,7 +423,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
             raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry integrity failed.")
         if not registry_report_integrity_ok(report):
             raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry Report integrity failed.")
-        source = report.get("source") if isinstance(report.get("source"), dict) else {}
+        source = _as_document(report.get("source"))
         if source.get("registry_hash") != registry.get("integrity_hash") or report.get("source_hash") != stable_hash(source):
             raise ReleasePortfolioGovernanceAttestationRegistryStateError("Public Attestation Registry Report is stale. Refresh before export.")
         blockers, _warnings, _checks = self._findings(registry)
@@ -449,7 +449,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
                 continue
             if not isinstance(event, dict) or str(event.get("type") or "") != event_type:
                 continue
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             if all(str(summary.get(key) or "") == str(value or "") for key, value in state.items()):
                 return True
         return False
@@ -467,7 +467,7 @@ class ReleasePortfolioGovernanceAttestationRegistryStore:
 
 
 def registry_integrity_ok(registry: dict[str, Any] | None) -> bool:
-    data = registry if isinstance(registry, dict) else {}
+    data = _as_document(registry)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == registry_hash(data)
 
 
@@ -475,7 +475,7 @@ def registry_integrity_ok(registry: dict[str, Any] | None) -> bool:
 
 
 def registry_entry_integrity_ok(entry: dict[str, Any] | None) -> bool:
-    data = entry if isinstance(entry, dict) else {}
+    data = _as_document(entry)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == registry_entry_hash(data)
 
 
@@ -483,7 +483,7 @@ def registry_entry_integrity_ok(entry: dict[str, Any] | None) -> bool:
 
 
 def registry_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == registry_report_hash(data)
 
 
@@ -491,7 +491,7 @@ def registry_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def registry_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == registry_manifest_hash(data)
 
 
@@ -502,8 +502,8 @@ def registry_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
 
 
 def build_package_index(registry: dict[str, Any], report: dict[str, Any], *, generated_at: str) -> dict[str, Any]:
-    entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
-    items = [{"entry_id": item.get("entry_id"), "certificate_id": item.get("certificate_id"), "status": item.get("status"), **(item.get("source") if isinstance(item.get("source"), dict) else {})} for item in entries if isinstance(item, dict)]
+    entries = _as_list(registry.get("entries"))
+    items = [{"entry_id": item.get("entry_id"), "certificate_id": item.get("certificate_id"), "status": item.get("status"), **(_as_document(item.get("source")))} for item in entries if isinstance(item, dict)]
     data = {"schema_version": REGISTRY_SCHEMA_VERSION, "portfolio_id": registry.get("portfolio_id"), "generated_at": generated_at, "source_hash": report.get("source_hash"), "summary": {"entry_count": len(items)}, "items": items}
     data["integrity_hash"] = stable_hash({key: value for key, value in data.items() if key != "integrity_hash"})
     return sanitize_metadata(data, blocked_keys=REGISTRY_BLOCKED_KEYS)
@@ -518,15 +518,15 @@ def build_chain_of_custody(history_path: Path, registry: dict[str, Any], report:
             except json.JSONDecodeError:
                 continue
             if isinstance(event, dict):
-                events.append({"event_id": event.get("event_id"), "at": event.get("at"), "type": event.get("type"), "summary_hash": stable_hash(event.get("summary") if isinstance(event.get("summary"), dict) else {})})
+                events.append({"event_id": event.get("event_id"), "at": event.get("at"), "type": event.get("type"), "summary_hash": stable_hash(_as_document(event.get("summary")))})
     data = {"schema_version": REGISTRY_SCHEMA_VERSION, "portfolio_id": registry.get("portfolio_id"), "generated_at": generated_at, "source_hash": report.get("source_hash"), "summary": {"event_count": len(events), "latest_event_type": events[-1].get("type") if events else None, "current_entry_id": registry.get("current_entry_id")}, "events": events}
     data["integrity_hash"] = stable_hash({key: value for key, value in data.items() if key != "integrity_hash"})
     return sanitize_metadata(data, blocked_keys=REGISTRY_BLOCKED_KEYS)
 
 
 def _entry_source(zip_path: Path, manifest: ImplementationDocument, certificate: ImplementationDocument, report: ImplementationDocument, verification: ImplementationDocument) -> ImplementationDocument:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
-    evidence = manifest.get("evidence_vault") if isinstance(manifest.get("evidence_vault"), dict) else certificate.get("evidence_vault") if isinstance(certificate.get("evidence_vault"), dict) else {}
+    source = _as_document(report.get("source"))
+    evidence = _document_or(manifest.get("evidence_vault"), _as_document(certificate.get("evidence_vault")))
     return sanitize_metadata(
         {
             "portfolio_id": report.get("portfolio_id") or manifest.get("portfolio_id"),
@@ -540,7 +540,7 @@ def _entry_source(zip_path: Path, manifest: ImplementationDocument, certificate:
             "evidence_vault_manifest_hash": evidence.get("manifest_hash") or source.get("evidence_vault_manifest_hash"),
             "evidence_vault_verification_hash": evidence.get("verification_hash") or source.get("evidence_vault_verification_hash"),
             "evidence_vault_deep_verification_status": evidence.get("deep_verification_status") or source.get("evidence_vault_deep_verification_status"),
-            "final_board_signoff_hash": source.get("final_board_signoff_hash") or (certificate.get("final_board") if isinstance(certificate.get("final_board"), dict) else {}).get("signoff_hash"),
+            "final_board_signoff_hash": source.get("final_board_signoff_hash") or (_as_document(certificate.get("final_board"))).get("signoff_hash"),
         },
         blocked_keys=REGISTRY_BLOCKED_KEYS,
     )
@@ -552,9 +552,9 @@ def _state_triple(registry: ImplementationDocument) -> dict[str, str]:
 
 
 def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
-    row = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
-    external = manifest.get("external_review") if isinstance(manifest.get("external_review"), dict) else {}
-    external_verification = manifest.get("external_review_verification") if isinstance(manifest.get("external_review_verification"), dict) else {}
+    row = _as_document(manifest.get("registry"))
+    external = _as_document(manifest.get("external_review"))
+    external_verification = _as_document(manifest.get("external_review_verification"))
     return {"registry_hash": str(row.get("integrity_hash") or ""), "current_entry_id": str(row.get("current_entry_id") or ""), "current_entry_hash": str(row.get("current_entry_hash") or ""), "external_review_hash": stable_hash(external), "external_review_verification_hash": stable_hash(external_verification)}
 
 
@@ -583,14 +583,14 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except Exception:
         return {}
 

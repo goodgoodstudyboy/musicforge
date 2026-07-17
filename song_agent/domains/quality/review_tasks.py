@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -207,9 +207,9 @@ class ReviewTaskStore:
         previous: dict[str, Any] | None = None,
         now: str | None = None,
     ) -> ReviewTask:
-        payload = payload if isinstance(payload, dict) else {}
+        payload = _as_document(payload)
         now = now or now_iso()
-        review = audition.review if isinstance(audition.review, dict) else {}
+        review = _as_document(audition.review)
         status = str(review.get("status") or "unreviewed")
         rating = int(review.get("rating") or 0)
         if status == "unreviewed" and rating <= 0 and not review.get("notes") and not review.get("markers"):
@@ -572,7 +572,7 @@ def build_local_review_candidates(task: ReviewTask, parent_plan: SongPlan, *, st
     strategies = [item for item in strategies if item in STRATEGIES]
     if not strategies:
         strategies = list(STRATEGIES)
-    result = []
+    result: list[tuple[ReviewCandidate, SongPlan | None, dict[str, Any], dict[str, Any]]] = []
     seen: set[str] = set()
     for strategy in strategies[:4]:
         try:
@@ -908,10 +908,10 @@ def review_decision_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "judge_recommended_candidate_id": report.get("judge_recommended_candidate_id"),
             "candidate_count": report.get("candidate_count"),
             "requires_manual_apply": bool(report.get("requires_manual_apply", True)),
-            "source_breakdown": report.get("source_breakdown") if isinstance(report.get("source_breakdown"), dict) else {},
-            "risk_flags": report.get("risk_flags") if isinstance(report.get("risk_flags"), list) else [],
-            "judge_summary": report.get("judge_summary") if isinstance(report.get("judge_summary"), dict) else {},
-            "warnings": report.get("warnings") if isinstance(report.get("warnings"), list) else [],
+            "source_breakdown": _as_document(report.get("source_breakdown")),
+            "risk_flags": _as_list(report.get("risk_flags")),
+            "judge_summary": _as_document(report.get("judge_summary")),
+            "warnings": _as_list(report.get("warnings")),
             "created_at": report.get("created_at"),
         }
     )
@@ -923,10 +923,10 @@ def review_candidate_source_breakdown(candidates: list[ReviewCandidate]) -> dict
     usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     models: set[str] = set()
     templates: set[str] = set()
-    seen_usage_calls: set[tuple[str, str, str, int]] = set()
+    seen_usage_calls: set[tuple[str, str, str, str, int]] = set()
     for candidate in provider:
         source = candidate.source
-        usage_data = source.get("usage") if isinstance(source.get("usage"), dict) else {}
+        usage_data = _as_document(source.get("usage"))
         usage_key = (
             str(source.get("provider_run_id") or ""),
             str(source.get("request_id") or ""),
@@ -956,7 +956,7 @@ def review_candidate_source_breakdown(candidates: list[ReviewCandidate]) -> dict
 
 
 def _decision_rank_entry(candidate: ReviewCandidate, rank: int) -> ImplementationDocument:
-    scores = candidate.scores if isinstance(candidate.scores, dict) else {}
+    scores = _as_document(candidate.scores)
     return sanitize_metadata(
         {
             "candidate_id": candidate.candidate_id,
@@ -1005,7 +1005,7 @@ def _decision_risk_flags(task: ReviewTask, candidates: list[ReviewCandidate], re
 def _judge_summary_for_decision(report: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(report, dict) or not report:
         return {}
-    scores = report.get("candidate_scores") if isinstance(report.get("candidate_scores"), list) else []
+    scores = _as_list(report.get("candidate_scores"))
     recommended_id = report.get("recommended_candidate_id")
     top = next((score for score in scores if isinstance(score, dict) and score.get("candidate_id") == recommended_id), {})
     if not isinstance(top, dict):
@@ -1020,13 +1020,13 @@ def _judge_summary_for_decision(report: ImplementationDocument | None) -> Implem
             "top_confidence": top.get("confidence"),
             "top_risk": top.get("risk"),
             "manual_review_required": bool(report.get("manual_review_required", True)),
-            "risk_flags": report.get("risk_flags") if isinstance(report.get("risk_flags"), list) else [],
+            "risk_flags": _as_list(report.get("risk_flags")),
         }
     )
 
 
 def _provider_patch_summary(patch: ImplementationDocument) -> ImplementationDocument:
-    operations = patch.get("operations") if isinstance(patch.get("operations"), list) else []
+    operations = _as_list(patch.get("operations"))
     return sanitize_metadata(
         {
             "schema_version": patch.get("schema_version"),
@@ -1037,12 +1037,12 @@ def _provider_patch_summary(patch: ImplementationDocument) -> ImplementationDocu
                     "op": operation.get("op"),
                     "section_name": operation.get("section_name"),
                     "track_name": operation.get("track_name"),
-                    "preserve": operation.get("preserve") if isinstance(operation.get("preserve"), list) else [],
+                    "preserve": _as_list(operation.get("preserve")),
                 }
                 for operation in operations
                 if isinstance(operation, dict)
             ],
-            "warnings": patch.get("warnings") if isinstance(patch.get("warnings"), list) else [],
+            "warnings": _as_list(patch.get("warnings")),
             "confidence": patch.get("confidence"),
         }
     )
@@ -1115,7 +1115,7 @@ def apply_candidate_intents(parent_plan: SongPlan, intents: list[EditIntent]) ->
 def review_task_target(parent_plan: SongPlan, audition: EditorAuditionManifest, review: dict[str, Any]) -> dict[str, Any]:
     markers = [item for item in review.get("markers", []) if isinstance(item, dict)]
     marker = _primary_marker(markers)
-    range_data = audition.range if isinstance(audition.range, dict) else {}
+    range_data = _as_document(audition.range)
     local_beat = _float_or_none(marker.get("beat") if marker else None)
     global_beat = None if local_beat is None else _range_start(range_data) + local_beat
     section = _section_from_range_or_marker(parent_plan, range_data, global_beat)
@@ -1317,7 +1317,7 @@ def _candidate_source(task: ReviewTask) -> ImplementationDocument:
 
 
 def _provider_candidate_source(task: ReviewTask, provider_snapshot: ImplementationDocument, template_id: str, candidate_index: int) -> ImplementationDocument:
-    usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+    usage = _as_document(provider_snapshot.get("usage"))
     return sanitize_metadata(
         {
             "review_task_id": task.task_id,

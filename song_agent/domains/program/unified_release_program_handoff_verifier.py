@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -654,7 +654,7 @@ def _accepted_evidence_semantic_checks(
     *,
     require_accepted: bool,
 ) -> list[ImplementationDocument]:
-    reviewer = report.get("reviewer") if isinstance(report.get("reviewer"), dict) else {}
+    reviewer = _as_document(report.get("reviewer"))
     return [
         _check("urpae_public_role_binding", public_response.get("reviewer_role") == reviewer.get("role") == response_binding.get("reviewer_role"), "Reviewer role is derived from original response binding."),
         _check("urpae_public_org_binding", public_response.get("organization") == reviewer.get("organization") == response_binding.get("organization"), "Reviewer organization is derived from original response binding."),
@@ -717,7 +717,7 @@ def _handoff_document_binding_checks(
     operations_summary: ImplementationDocument,
     accepted_summary: ImplementationDocument,
 ) -> list[ImplementationDocument]:
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     docs = {
         "handoff_report_hash": report,
         "evidence_inventory_hash": inventory,

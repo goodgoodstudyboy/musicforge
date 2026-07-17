@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -280,7 +282,7 @@ def verify_unified_command_center_component(
     public_trust_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
-    fingerprint = {
+    fingerprint: _InferenceType = {
         "component_key": key,
         "zip_sha256": None,
         "zip_size_bytes": None,
@@ -354,7 +356,7 @@ def unified_command_center_verification_exit_code(report: dict[str, Any]) -> int
 
 def _runtime_zip_component(key: str, zip_path: Path | str, report_path: Path | str, verifier) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
-    fingerprint = {"component_key": key, "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
+    fingerprint: _InferenceType = {"component_key": key, "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     zip_path = Path(zip_path)
     report_path = Path(report_path)
     checks.append(_check(f"ucc_{key}_zip_exists", zip_path.exists() and zip_path.is_file(), f"{key} ZIP exists."))
@@ -412,7 +414,7 @@ def _runtime_zip_component(key: str, zip_path: Path | str, report_path: Path | s
 
 def _ga_component(report_path: Path | str, verification_report_path: Path | str | None) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
-    fingerprint = {"component_key": "ga-readiness", "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
+    fingerprint: _InferenceType = {"component_key": "ga-readiness", "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     report_path = Path(report_path)
     checks.append(_check("ucc_ga-readiness_report_exists", report_path.exists() and report_path.is_file(), "GA readiness report exists."))
     if checks[-1]["status"] == "failed":
@@ -478,7 +480,7 @@ def _verify_ga_readiness_report_core(report_path: Path) -> ImplementationDocumen
 
 def _release_check_component(report_path: Path | str | None) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
-    fingerprint = {"component_key": "release-check", "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
+    fingerprint: _InferenceType = {"component_key": "release-check", "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     if not report_path:
         checks.append(_check("ucc_release-check_report_required", False, "release-check JSON report is required."))
         return _component_finish("release-check", fingerprint, checks)
@@ -496,7 +498,7 @@ def _release_check_component(report_path: Path | str | None) -> ImplementationDo
 
 def _generic_report_component(key: str, report_path: Path | str | None) -> ImplementationDocument:
     checks: list[dict[str, Any]] = []
-    fingerprint = {"component_key": key, "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
+    fingerprint: _InferenceType = {"component_key": key, "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     if not report_path:
         checks.append(_check(f"ucc_{key}_report_required", False, f"{key} verification report is required."))
         return _component_finish(key, fingerprint, checks)
@@ -547,7 +549,7 @@ def _external_component_checks(key: str, fingerprint: ImplementationDocument, *,
         trust_evidence=trust_evidence,
         public_trust_evidence=public_trust_evidence,
     )
-    current = runtime.get("fingerprint") if isinstance(runtime.get("fingerprint"), dict) else {}
+    current = _as_document(runtime.get("fingerprint"))
     return list(runtime.get("checks") or []) + [
         _check(
             f"ucc_{key}_fingerprint_binding",
@@ -584,11 +586,11 @@ def _external_multi_component_checks(key: str, fingerprint: ImplementationDocume
     runtime_items: list[dict[str, Any]] = []
     for index, (zip_path, report_path) in enumerate(zip(zip_paths, report_paths), start=1):
         runtime = verify_unified_command_center_component(key, zip_path=zip_path, verification_report_path=report_path)
-        current = runtime.get("fingerprint") if isinstance(runtime.get("fingerprint"), dict) else {}
+        current = _as_document(runtime.get("fingerprint"))
         component_id = _component_id_from_report(key, current.get("external_report") or {}, index)
         # current may not include public reports; fall back to runtime report embedded by component result.
-        external_report = runtime.get("external_report") if isinstance(runtime.get("external_report"), dict) else {}
-        runtime_report = runtime.get("runtime_report") if isinstance(runtime.get("runtime_report"), dict) else {}
+        external_report = _as_document(runtime.get("external_report"))
+        runtime_report = _as_document(runtime.get("runtime_report"))
         component_id = _component_id_from_report(key, external_report or runtime_report, index)
         item = {
             "component_id": component_id,
@@ -611,7 +613,7 @@ def _external_multi_component_checks(key: str, fingerprint: ImplementationDocume
 
 def _document_binding_checks(manifest: ImplementationDocument, source: ImplementationDocument, report: ImplementationDocument, graph: ImplementationDocument, inventory: ImplementationDocument, readiness: ImplementationDocument, gap_plan: ImplementationDocument, runbook: ImplementationDocument, runbook_result: ImplementationDocument, verification_index: ImplementationDocument, fingerprints: dict[str, ImplementationDocument], *, require_ready: bool) -> list[ImplementationDocument]:
     source_hash = report.get("source_hash")
-    doc_hashes = report.get("document_hashes") if isinstance(report.get("document_hashes"), dict) else {}
+    doc_hashes = _as_document(report.get("document_hashes"))
     checks = [
         _check("ucc_source_hash_binding", bool(source_hash) and source.get("source_hash") == source_hash and graph.get("source_hash") == source_hash and inventory.get("source_hash") == source_hash and readiness.get("source_hash") == source_hash and gap_plan.get("source_hash") == source_hash and runbook.get("source_hash") == source_hash and runbook_result.get("source_hash") == source_hash, "All documents bind the same source hash."),
         _check("ucc_report_document_hashes", doc_hashes.get("source") == source.get("integrity_hash") and doc_hashes.get("evidence_graph") == graph.get("integrity_hash") and doc_hashes.get("evidence_inventory") == inventory.get("integrity_hash") and doc_hashes.get("readiness_matrix") == readiness.get("integrity_hash") and doc_hashes.get("gap_plan") == gap_plan.get("integrity_hash") and doc_hashes.get("safe_runbook") == runbook.get("integrity_hash") and doc_hashes.get("runbook_result") == runbook_result.get("integrity_hash") and doc_hashes.get("verification_index") == verification_index.get("integrity_hash"), "Report binds all Unified Command Center documents."),
@@ -623,7 +625,7 @@ def _document_binding_checks(manifest: ImplementationDocument, source: Implement
         component = components.get(key, {})
         checks.append(_check(f"ucc_{key}_inventory_fingerprint_binding", _semantic_hash(component.get("fingerprint") or {}) == _semantic_hash(fingerprints[key]), f"{key} inventory fingerprint matches sidecar."))
         node = graph_nodes.get(str(component.get("node_id") or ""))
-        checks.append(_check(f"ucc_{key}_graph_inventory_binding", bool(node) and node.get("readiness") == component.get("readiness") and _semantic_hash(node.get("fingerprint") or {}) == _semantic_hash(component.get("fingerprint") or {}), f"{key} graph node matches inventory."))
+        checks.append(_check(f"ucc_{key}_graph_inventory_binding", bool(node) and _as_document(node).get("readiness") == component.get("readiness") and _semantic_hash(_as_document(node).get("fingerprint") or {}) == _semantic_hash(component.get("fingerprint") or {}), f"{key} graph node matches inventory."))
     required_blocked = [row.get("component_key") for row in inventory.get("components", []) if isinstance(row, dict) and row.get("required") and row.get("readiness") != "ready"]
     gap_component_keys = sorted(str(row.get("component_key")) for row in gap_plan.get("items", []) if isinstance(row, dict))
     checks.append(_check("ucc_readiness_gap_semantics", sorted(str(item) for item in required_blocked) == gap_component_keys, "Gap plan matches blocked required inventory components.", {"blocked": required_blocked, "gaps": gap_component_keys}))
@@ -634,7 +636,7 @@ def _document_binding_checks(manifest: ImplementationDocument, source: Implement
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective = names - {"manifest.json"}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
@@ -698,7 +700,7 @@ def _external_paths(**kwargs: Any) -> dict[str, ImplementationDocument]:
 
 
 def _public_report(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     public = {
         "package_type": report.get("package_type"),
         "status": report.get("status"),
@@ -807,14 +809,14 @@ def _report_integrity_ok(report: ImplementationDocument) -> bool:
 
 
 def _report_zip_sha256(report: ImplementationDocument) -> str | None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    input_doc = report.get("input") if isinstance(report.get("input"), dict) else {}
+    summary = _as_document(report.get("summary"))
+    input_doc = _as_document(report.get("input"))
     return report.get("zip_sha256") or summary.get("zip_sha256") or input_doc.get("sha256")
 
 
 def _report_zip_size(report: ImplementationDocument) -> int | None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    input_doc = report.get("input") if isinstance(report.get("input"), dict) else {}
+    summary = _as_document(report.get("summary"))
+    input_doc = _as_document(report.get("input"))
     value = report.get("zip_size_bytes") or summary.get("zip_size_bytes") or input_doc.get("size_bytes")
     try:
         return int(value) if value is not None else None
@@ -823,7 +825,7 @@ def _report_zip_size(report: ImplementationDocument) -> int | None:
 
 
 def _report_manifest_hash(report: ImplementationDocument) -> str | None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return report.get("manifest_hash") or summary.get("manifest_hash")
 
 
@@ -837,7 +839,7 @@ def _manifest_binding_matches(report: ImplementationDocument, runtime_manifest_h
 
 
 def _component_id_from_report(key: str, report: ImplementationDocument, index: int) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     prefix = {"distribution": "distribution", "submission": "submission"}.get(key, key)
     for field in ("release_id", "target_id", "submission_id", "package_id"):
         value = report.get(field) or summary.get(field)
@@ -851,7 +853,7 @@ def _safe_component_id(value: str) -> str:
 
 
 def _fingerprint_items(fingerprint: ImplementationDocument) -> list[ImplementationDocument]:
-    items = fingerprint.get("items") if isinstance(fingerprint.get("items"), list) else []
+    items = _as_list(fingerprint.get("items"))
     return sorted([_public_fingerprint(item) for item in items if isinstance(item, dict)], key=lambda item: str(item.get("component_id") or ""))
 
 

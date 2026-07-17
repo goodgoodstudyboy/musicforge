@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -7,9 +11,9 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
+class QualityRoutesReleaseEncodedAudioAcceptanceExportGate(QualityRouteContext):
     def _release_encoded_audio_acceptance_export_gate(self, export_manifest: ImplementationDocument, acceptance_gate: ImplementationDocument) -> ImplementationDocument:
-        manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
+        manifest_acceptance = _as_document(export_manifest.get("encoded_audio_acceptance"))
         missing: list[str] = []
         mismatched: list[str] = []
         if not manifest_acceptance:
@@ -21,7 +25,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         if manifest_acceptance:
             try:
                 candidate = _interfaces_api_runtime.read_json(export_dir / summary_path)
-                summary = candidate if isinstance(candidate, dict) else {}
+                summary = _as_document(candidate)
             except Exception:
                 missing.append(summary_path)
         if summary:
@@ -34,14 +38,14 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         manifest_profiles = {str(item) for item in summary.get("required_profiles", []) if str(item).strip()} if isinstance(summary.get("required_profiles"), list) else {str(item) for item in manifest_acceptance.get("required_profiles", []) if str(item).strip()} if isinstance(manifest_acceptance.get("required_profiles"), list) else set()
         gate_profiles = {str(item) for item in acceptance_gate.get("required_profiles", []) if str(item).strip()} if isinstance(acceptance_gate.get("required_profiles"), list) else set()
         missing_profiles = sorted(gate_profiles - manifest_profiles)
-        summary_tracks = summary.get("tracks") if isinstance(summary.get("tracks"), list) else []
+        summary_tracks = _as_list(summary.get("tracks"))
         by_profile_track = {
             (str(row.get("profile_id") or ""), str(row.get("track_id") or "")): row
             for row in summary_tracks
             if isinstance(row, dict)
         }
         gate_summary = self.encoded_audio_acceptance_store.build_summary(release_id, required_profiles=sorted(gate_profiles), now=_interfaces_api_runtime._utc_now())
-        gate_tracks = gate_summary.get("tracks") if isinstance(gate_summary.get("tracks"), list) else []
+        gate_tracks = _as_list(gate_summary.get("tracks"))
         review_hashes = {
             str(row.get("review_id") or ""): {"path": str(row.get("path") or ""), "payload_hash": str(row.get("payload_hash") or "")}
             for row in manifest_acceptance.get("review_hashes", [])
@@ -72,7 +76,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
                 continue
             if not isinstance(review, dict) or not _interfaces_api_runtime.encoded_audio_review_integrity_ok(review):
                 mismatched.append(f"{profile_id}/{track_id}:review_integrity")
-            if _interfaces_api_runtime.encoded_audio_review_integrity_hash(review if isinstance(review, dict) else {}) != str(review_record.get("payload_hash") or ""):
+            if _interfaces_api_runtime.encoded_audio_review_integrity_hash(_as_document(review)) != str(review_record.get("payload_hash") or ""):
                 mismatched.append(f"{profile_id}/{track_id}:review_hash")
         failed = bool(missing or mismatched or missing_profiles)
         return {
@@ -85,7 +89,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         }
 
     def _release_format_decision_export_gate(self, export_manifest: ImplementationDocument, format_decision_gate: ImplementationDocument) -> ImplementationDocument:
-        manifest_decision = export_manifest.get("format_decision") if isinstance(export_manifest.get("format_decision"), dict) else {}
+        manifest_decision = _as_document(export_manifest.get("format_decision"))
         missing: list[str] = []
         mismatched: list[str] = []
         if not manifest_decision or manifest_decision.get("status") in {"", "missing"}:
@@ -96,7 +100,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         report: dict[str, Any] = {}
         try:
             candidate = _interfaces_api_runtime.read_json(export_dir / report_path)
-            report = candidate if isinstance(candidate, dict) else {}
+            report = _as_document(candidate)
         except Exception:
             missing.append(report_path)
         expected_report_hash = str(format_decision_gate.get("report_hash") or "")
@@ -119,7 +123,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         }
 
     def _release_rights_clearance_export_gate(self, export_manifest: ImplementationDocument, rights_gate: ImplementationDocument) -> ImplementationDocument:
-        manifest_rights = export_manifest.get("rights_clearance") if isinstance(export_manifest.get("rights_clearance"), dict) else {}
+        manifest_rights = _as_document(export_manifest.get("rights_clearance"))
         missing: list[str] = []
         mismatched: list[str] = []
         if not manifest_rights:
@@ -142,7 +146,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         }
 
     def _distribution_encoded_audio_acceptance_export_gate(self, export_manifest: ImplementationDocument, acceptance_gate: ImplementationDocument) -> ImplementationDocument:
-        manifest_acceptance = export_manifest.get("encoded_audio_acceptance") if isinstance(export_manifest.get("encoded_audio_acceptance"), dict) else {}
+        manifest_acceptance = _as_document(export_manifest.get("encoded_audio_acceptance"))
         missing: list[str] = []
         mismatched: list[str] = []
         if not manifest_acceptance:
@@ -166,7 +170,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         }
 
     def _distribution_format_decision_export_gate(self, export_manifest: ImplementationDocument, format_decision_gate: ImplementationDocument) -> ImplementationDocument:
-        manifest_decision = export_manifest.get("format_decision") if isinstance(export_manifest.get("format_decision"), dict) else {}
+        manifest_decision = _as_document(export_manifest.get("format_decision"))
         missing: list[str] = []
         mismatched: list[str] = []
         if not manifest_decision or manifest_decision.get("status") in {"", "missing"}:
@@ -179,7 +183,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         if isinstance(manifest_decision.get("missing_profiles"), list):
             missing_profiles = sorted(set(missing_profiles) | {str(item) for item in manifest_decision.get("missing_profiles", []) if str(item).strip()})
         role_incompatible = sorted({str(item) for item in manifest_decision.get("role_incompatible_profiles", []) if str(item).strip()}) if isinstance(manifest_decision.get("role_incompatible_profiles"), list) else []
-        target = export_manifest.get("target") if isinstance(export_manifest.get("target"), dict) else {}
+        target = _as_document(export_manifest.get("target"))
         coverage = _interfaces_api_runtime.distribution_target_format_decision_coverage(
             target,
             sorted(gate_required),
@@ -204,7 +208,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate:
         }
 
     def _package_rights_clearance_export_gate(self, export_manifest: ImplementationDocument, rights_gate: ImplementationDocument, *, package_label: str) -> ImplementationDocument:
-        manifest_rights = export_manifest.get("rights_clearance") if isinstance(export_manifest.get("rights_clearance"), dict) else {}
+        manifest_rights = _as_document(export_manifest.get("rights_clearance"))
         missing: list[str] = []
         mismatched: list[str] = []
         if not manifest_rights:

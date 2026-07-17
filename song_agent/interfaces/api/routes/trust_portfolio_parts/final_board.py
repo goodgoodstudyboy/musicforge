@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustPortfolioFinalBoardRoutes:
+class TrustPortfolioFinalBoardRoutes(TrustPortfolioRouteContext):
     def _dispatch_portfolio_final_board(self, method, parts, portfolio_id, action) -> bool:
         if action == 'governance-final-board':
             if len(parts) == 2:
@@ -13,7 +15,7 @@ class TrustPortfolioFinalBoardRoutes:
                 report = self.release_portfolio_governance_final_board_store.read_report(portfolio_id, default={})
                 signoff = self.release_portfolio_governance_final_board_store.read_signoff(portfolio_id, default={})
                 stale = self.release_portfolio_governance_final_board_store.report_is_stale(portfolio_id, report) if report else False
-                summary = _interfaces_api_runtime.portfolio_governance_final_board_summary(report) if report else {'status': 'missing'}
+                summary = _interfaces_api_runtime.sanitize_metadata(_interfaces_api_runtime.portfolio_governance_final_board_summary(report) if report else {'status': 'missing'})
                 summary['stale'] = stale
                 self._send_json({'ok': True, 'portfolio_id': portfolio_id, 'report': report, 'signoff': signoff, 'signoff_summary': self.release_portfolio_governance_final_board_store.signoff_summary(portfolio_id, signoff=signoff) if signoff else _interfaces_api_runtime.portfolio_governance_final_board_signoff_summary(signoff), 'reviewer_responses': self.release_portfolio_governance_final_board_store.list_reviewer_responses(portfolio_id), 'change_requests': self.release_portfolio_governance_final_board_store.list_change_requests(portfolio_id), 'verification': _interfaces_api_runtime.read_json(self.release_portfolio_governance_final_board_store.verification_report_path(portfolio_id)) if self.release_portfolio_governance_final_board_store.verification_report_path(portfolio_id).exists() else {}, 'summary': summary, 'stale': stale})
                 return True

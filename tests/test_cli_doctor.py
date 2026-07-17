@@ -1,4 +1,3 @@
-import pytest
 
 from song_agent.cli import main
 from song_agent.provider import ProviderConfig, save_provider_config

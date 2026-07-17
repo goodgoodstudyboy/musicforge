@@ -25,11 +25,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install -e .[dev]
       - run: python tools/assert_ci_final_sha.py
-      - run: python -m ruff check song_agent/platform song_agent/application song_agent/capabilities song_agent/domains song_agent/interfaces song_agent/release_check song_agent/architecture_guardrails.py song_agent/persistence_cli.py song_agent/release_check_verification_kernel.py
+      - run: python -m ruff check song_agent tests tools
       - run: python tools/normalize_v14_domain_exports.py --check
       - run: python tools/repair_v14_domain_imports.py --check
       - run: python tools/normalize_v14_interface_bindings.py --check
-      - run: python -m mypy
+      - run: python -m mypy --no-incremental
       - run: python -m pytest tests/test_architecture_boundaries.py tests/test_architecture_metrics.py tests/test_release_check_governance.py tests/test_release_check_governance_v137.py -q
       - run: python -m song_agent.cli release-check --profile v14 --skip-tests --json
 

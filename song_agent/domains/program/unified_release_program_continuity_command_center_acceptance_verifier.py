@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -168,7 +168,7 @@ def verify_review_pack(
             report = _read_json_entry(archive, "review-pack-report.json")
             package_index = _read_json_entry(archive, "package-index.json")
             verification = _read_json_entry(archive, "verification-summary.json")
-            source = report.get("source") if isinstance(report.get("source"), dict) else {}
+            source = _as_document(report.get("source"))
             summary.update({"program_id": report.get("program_id"), "manifest_hash": manifest.get("integrity_hash"), "source_hash": report.get("source_hash"), "status": report.get("status")})
             checks.extend(_manifest_checks(archive, manifest, REVIEW_PACK_ENTRIES, "urpcccarp"))
             checks.extend(
@@ -317,9 +317,9 @@ def verify_accepted_evidence(
                 if not all(paths) or not all(Path(path).is_file() for path in paths if path):
                     checks.append(_check("urpcccae_external_response_required", False, "External response proof files are required."))
                 else:
-                    response = read_json(Path(response_path))
-                    verification = read_json(Path(response_verification_report_path))
-                    binding = read_json(Path(response_binding_summary_path))
+                    response = read_json(_as_path(response_path))
+                    verification = read_json(_as_path(response_verification_report_path))
+                    binding = read_json(_as_path(response_binding_summary_path))
                     checks.extend(validate_response_proof(response, verification, binding, binding_summary))
                     checks.extend(
                         [
@@ -569,9 +569,9 @@ def _current_v1210_checks(
     paths = [archive_report_path, handoff_report_path, binding_path, command_center_path, command_center_report_path, command_center_evidence_path]
     if not all(paths) or not all(Path(path).is_file() for path in paths if path):
         return [_check("urpcccarp_v1210_paths", False, "All v12.10 external evidence paths exist.")]
-    archive_external = read_json(Path(archive_report_path))
-    handoff_external = read_json(Path(handoff_report_path))
-    binding = read_json(Path(binding_path))
+    archive_external = read_json(_as_path(archive_report_path))
+    handoff_external = read_json(_as_path(handoff_report_path))
+    binding = read_json(_as_path(binding_path))
     archive_runtime = verify_unified_release_program_continuity_command_center_signoff_package(
         archive_path,
         strict=True,
@@ -667,7 +667,7 @@ def _archive_external_checks(
             _check("urpccca_review_pack_binding", review_external.get("zip_sha256") == review_runtime.get("zip_sha256") == _sha256_path(review_pack) and review_external.get("manifest_hash") == review_runtime.get("manifest_hash"), "Review Pack verification report matches current ZIP."),
         ]
     )
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    source = _as_document(report.get("source"))
     checks.extend(
         [
             _check("urpccca_review_pack_source_hash", source.get("review_pack_source_hash") == review_runtime.get("source_hash"), "Board source binds Review Pack source."),
@@ -746,7 +746,7 @@ def _archive_external_checks(
         )
         binding = response_bundle.get("binding") or {}
         participants.append(_participant_from_binding(evidence_id, response_id, binding, row))
-    policy = report.get("policy") if isinstance(report.get("policy"), dict) else {}
+    policy = _as_document(report.get("policy"))
     rebuilt_findings = _findings_rows(external_responses)
     rebuilt_matrix = _matrix_rows(participants)
     rebuilt_quorum = _quorum_result(policy, participants, external_responses)
@@ -784,11 +784,11 @@ def _source_package_summary_checks(
     values = (archive_path_value, archive_report_value, handoff_path_value, handoff_report_value, binding_path_value)
     if not all(values) or not all(Path(value).is_file() for value in values if value):
         return [_check("urpccca_source_packages_required", False, "Current source packages and reports exist.")]
-    archive_path = Path(archive_path_value)
-    handoff_path = Path(handoff_path_value)
-    archive_report = read_json(Path(archive_report_value))
-    handoff_report = read_json(Path(handoff_report_value))
-    binding = read_json(Path(binding_path_value))
+    archive_path = _as_path(archive_path_value)
+    handoff_path = _as_path(handoff_path_value)
+    archive_report = read_json(_as_path(archive_report_value))
+    handoff_report = read_json(_as_path(handoff_report_value))
+    binding = read_json(_as_path(binding_path_value))
     return [
         _check("urpccca_source_archive_zip", archive_summary.get("zip_sha256") == _sha256_path(archive_path) == archive_report.get("zip_sha256"), "Source Archive summary binds current ZIP."),
         _check("urpccca_source_archive_manifest", archive_summary.get("manifest_hash") == archive_report.get("manifest_hash"), "Source Archive summary binds manifest."),
@@ -819,7 +819,7 @@ def _archive_internal_checks(
     require_signed: bool,
 ) -> list[ImplementationDocument]:
     event = next((row for row in reversed(history) if row.get("event_type") == "receiver_acceptance_signoff_created"), {})
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     docs = {
         "signoff_hash": signoff,
         "signoff_binding_hash": binding,
@@ -863,7 +863,7 @@ def _archive_internal_checks(
 
 
 def _package_index_matches(index: ImplementationDocument, archive: zipfile.ZipFile, source: ImplementationDocument) -> bool:
-    rows = index.get("packages") if isinstance(index.get("packages"), list) else []
+    rows = _as_list(index.get("packages"))
     expected = [
         {
             "component_type": "command_center_signoff_archive",
@@ -887,7 +887,8 @@ def _package_index_matches(index: ImplementationDocument, archive: zipfile.ZipFi
     if rows != expected:
         return False
     return all(
-        row["zip_sha256"] == _sha256_bytes(archive.read(row["path"])) and int(row["zip_size_bytes"] or -1) == len(archive.read(row["path"]))
+        row.get("zip_sha256") == _sha256_bytes(archive.read(str(row.get("path") or "")))
+        and int(row.get("zip_size_bytes") or -1) == len(archive.read(str(row.get("path") or "")))
         for row in expected
     )
 
@@ -995,7 +996,7 @@ def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, required: set[str], prefix: str) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = required - {"manifest.json"}
     checks = [

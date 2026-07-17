@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
 import json
 from typing import Any
 
@@ -16,6 +18,6 @@ def read_release_export_manifest(release_store: ReleaseStore, release_id: str) -
         raise FileNotFoundError("Release export has not been generated.")
     data = json.loads(path.read_text(encoding="utf-8"))
     return sanitize_metadata(
-        data if isinstance(data, dict) else {},
+        _as_document(data),
         blocked_keys=RELEASE_EXPORT_BLOCKED_KEYS,
     )

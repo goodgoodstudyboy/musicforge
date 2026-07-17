@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_quality_parts_dependencies
@@ -191,13 +194,14 @@ def _run_audio_campaign_command_part_02(args: argparse.Namespace, _split_state):
     return (False, None)
 
 def _run_audio_campaign_command(args: argparse.Namespace) -> ImplementationDocument:
-    _split_state = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _run_audio_campaign_command_part_01(args, _split_state)
     if _split_result[0]:
         return _split_result[1]
     _split_result = _run_audio_campaign_command_part_02(args, _split_state)
     if _split_result[0]:
         return _split_result[1]
+    raise RuntimeError("_run_audio_campaign_command did not produce a result.")
 
 def _run_release_audio_certification_command(args: argparse.Namespace) -> ImplementationDocument:
     pass

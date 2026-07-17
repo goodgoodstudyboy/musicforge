@@ -2,8 +2,7 @@
 
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
-| ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.1.0 | Listed files may not exceed their frozen line count; no unregistered oversized module or oversized function is allowed. |
-| TYPE-002 | Dynamic Store/application surfaces retain a measured active mypy budget while the strict shared-kernel configuration is clean. | Bounded-context owners | v14.1.0 | Total, per-file, and per-error-code budgets may not grow; new error categories and public untyped APIs block release. |
+| ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.2.0 | ADR-015 freezes per-file ceilings plus aggregate module count, thousand-line count, largest-module size, and total oversized lines. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -52,7 +51,19 @@ dynamic forwarding, direct interface Store references, oversized active
 functions, duplicate ZIP helpers, and custom lifecycle algorithms are zero.
 The retained flat modules are static public facades with no active implementation.
 
-Remaining module-size and active typing debt is fully enumerated in
+At v14.0, remaining module-size and active typing debt was fully enumerated in
 `architecture-v14-quality.json` as ARCH-014 and TYPE-002. Moving a deadline,
 changing a layer label, shrinking checked roots, or deleting tests does not
-close these entries.
+close a debt entry.
+
+## v14.1 Closure
+
+TYPE-002 is closed in v14.1. The configured mypy roots are the complete active
+`platform`, `application`, `domains`, `capabilities`, and `interfaces` trees,
+and both CI and release-check require zero errors. Repository-wide Ruff now
+checks `song_agent`, `tests`, and `tools`; the only ignores are the documented
+static public facades in `pyproject.toml`.
+
+ARCH-014 is not closed. ADR-015 formally reapproves it through v14.2.0 after a
+measured aggregate reduction, and adds hard aggregate limits so individual
+rebaselining cannot hide total growth.

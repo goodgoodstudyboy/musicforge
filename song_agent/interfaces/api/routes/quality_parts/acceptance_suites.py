@@ -1,40 +1,46 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesAcceptanceSuites:
+class QualityRoutesAcceptanceSuites(QualityRouteContext):
     @property
-    def audio_campaign_planner_store(self) -> _interfaces_api_runtime.AudioCampaignPlannerStore:
-        return self.server.audio_campaign_planner_store  # type: ignore[attr-defined]
+    def audio_campaign_planner_store(self) -> _InterfaceType:
+        return self.server.audio_campaign_planner_store
 
     @property
-    def audio_review_store(self) -> _interfaces_api_runtime.AudioReviewEvidenceStore:
-        return self.server.audio_review_store  # type: ignore[attr-defined]
+    def audio_review_store(self) -> _InterfaceType:
+        return self.server.audio_review_store
 
     @property
-    def audio_revision_store(self) -> _interfaces_api_runtime.AudioRevisionStore:
-        return self.server.audio_revision_store  # type: ignore[attr-defined]
+    def audio_revision_store(self) -> _InterfaceType:
+        return self.server.audio_revision_store
 
     @property
-    def audio_lab_store(self) -> _interfaces_api_runtime.AudioLabStore:
-        return self.server.audio_lab_store  # type: ignore[attr-defined]
+    def audio_lab_store(self) -> _InterfaceType:
+        return self.server.audio_lab_store
 
     @property
-    def audio_fix_sprint_store(self) -> _interfaces_api_runtime.AudioFixSprintStore:
-        return self.server.audio_fix_sprint_store  # type: ignore[attr-defined]
+    def audio_fix_sprint_store(self) -> _InterfaceType:
+        return self.server.audio_fix_sprint_store
 
     @property
-    def audio_campaign_store(self) -> _interfaces_api_runtime.AudioCampaignStore:
-        return self.server.audio_campaign_store  # type: ignore[attr-defined]
+    def audio_campaign_store(self) -> _InterfaceType:
+        return self.server.audio_campaign_store
 
     @property
-    def audio_campaign_governance_store(self) -> _interfaces_api_runtime.AudioCampaignGovernanceStore:
-        return self.server.audio_campaign_governance_store  # type: ignore[attr-defined]
+    def audio_campaign_governance_store(self) -> _InterfaceType:
+        return self.server.audio_campaign_governance_store
 
     @property
-    def audio_campaign_remediation_store(self) -> _interfaces_api_runtime.AudioCampaignRemediationStore:
-        store = self.server.audio_campaign_remediation_store  # type: ignore[attr-defined]
+    def audio_campaign_remediation_store(self) -> _InterfaceType:
+        store = self.server.audio_campaign_remediation_store
         store.release_store = self.release_store
         store.project_store = self.project_store
         store.planner_store = self.audio_campaign_planner_store
@@ -43,8 +49,8 @@ class QualityRoutesAcceptanceSuites:
         return store
 
     @property
-    def release_audio_certification_store(self) -> _interfaces_api_runtime.ReleaseAudioCertificationStore:
-        store = self.server.release_audio_certification_store  # type: ignore[attr-defined]
+    def release_audio_certification_store(self) -> _InterfaceType:
+        store = self.server.release_audio_certification_store
         store.release_store = self.release_store
         store.project_store = self.project_store
         store.planner_store = self.audio_campaign_planner_store
@@ -54,8 +60,8 @@ class QualityRoutesAcceptanceSuites:
         return store
 
     @property
-    def release_audio_timeline_store(self) -> _interfaces_api_runtime.ReleaseAudioTimelineStore:
-        store = self.server.release_audio_timeline_store  # type: ignore[attr-defined]
+    def release_audio_timeline_store(self) -> _InterfaceType:
+        store = self.server.release_audio_timeline_store
         store.release_store = self.release_store
         store.project_store = self.project_store
         store.planner_store = self.audio_campaign_planner_store
@@ -66,49 +72,49 @@ class QualityRoutesAcceptanceSuites:
         return store
 
     @property
-    def release_audio_regression_store(self) -> _interfaces_api_runtime.ReleaseAudioRegressionStore:
-        store = self.server.release_audio_regression_store  # type: ignore[attr-defined]
+    def release_audio_regression_store(self) -> _InterfaceType:
+        store = self.server.release_audio_regression_store
         store.release_store = self.release_store
         store.certification_store = self.release_audio_certification_store
         store.timeline_store = self.release_audio_timeline_store
         return store
 
     @property
-    def release_audio_baseline_governance_store(self) -> _interfaces_api_runtime.ReleaseAudioBaselineGovernanceStore:
-        store = self.server.release_audio_baseline_governance_store  # type: ignore[attr-defined]
+    def release_audio_baseline_governance_store(self) -> _InterfaceType:
+        store = self.server.release_audio_baseline_governance_store
         store.release_store = self.release_store
         return store
 
     @property
-    def release_audio_regression_response_store(self) -> _interfaces_api_runtime.ReleaseAudioRegressionResponseStore:
-        store = self.server.release_audio_regression_response_store  # type: ignore[attr-defined]
+    def release_audio_regression_response_store(self) -> _InterfaceType:
+        store = self.server.release_audio_regression_response_store
         store.release_store = self.release_store
         store.regression_store = self.release_audio_regression_store
         return store
 
     @property
-    def release_audio_quality_observatory_store(self) -> _interfaces_api_runtime.ReleaseAudioQualityObservatoryStore:
-        store = self.server.release_audio_quality_observatory_store  # type: ignore[attr-defined]
+    def release_audio_quality_observatory_store(self) -> _InterfaceType:
+        store = self.server.release_audio_quality_observatory_store
         store.release_store = self.release_store
         return store
 
     @property
-    def release_audio_quality_action_queue_store(self) -> _interfaces_api_runtime.ReleaseAudioQualityActionQueueStore:
-        store = self.server.release_audio_quality_action_queue_store  # type: ignore[attr-defined]
+    def release_audio_quality_action_queue_store(self) -> _InterfaceType:
+        store = self.server.release_audio_quality_action_queue_store
         store.release_store = self.release_store
         store.observatory_store = self.release_audio_quality_observatory_store
         return store
 
     @property
-    def release_audio_quality_action_signoff_store(self) -> _interfaces_api_runtime.ReleaseAudioQualityActionQueueSignoffStore:
-        store = self.server.release_audio_quality_action_signoff_store  # type: ignore[attr-defined]
+    def release_audio_quality_action_signoff_store(self) -> _InterfaceType:
+        store = self.server.release_audio_quality_action_signoff_store
         store.release_store = self.release_store
         store.queue_store = self.release_audio_quality_action_queue_store
         return store
 
     @property
-    def release_audio_command_center_store(self) -> _interfaces_api_runtime.ReleaseAudioCommandCenterStore:
-        store = self.server.release_audio_command_center_store  # type: ignore[attr-defined]
+    def release_audio_command_center_store(self) -> _InterfaceType:
+        store = self.server.release_audio_command_center_store
         store.release_store = self.release_store
         store.observatory_store = self.release_audio_quality_observatory_store
         store.action_queue_store = self.release_audio_quality_action_queue_store
@@ -116,72 +122,72 @@ class QualityRoutesAcceptanceSuites:
         return store
 
     @property
-    def acceptance_store(self) -> _interfaces_api_runtime.AcceptanceStore:
-        return self.server.acceptance_store  # type: ignore[attr-defined]
+    def acceptance_store(self) -> _InterfaceType:
+        return self.server.acceptance_store
 
     @property
-    def acceptance_analytics_store(self) -> _interfaces_api_runtime.AcceptanceAnalyticsStore:
-        return self.server.acceptance_analytics_store  # type: ignore[attr-defined]
+    def acceptance_analytics_store(self) -> _InterfaceType:
+        return self.server.acceptance_analytics_store
 
     @property
-    def acceptance_fix_sprint_store(self) -> _interfaces_api_runtime.AcceptanceFixSprintStore:
-        return self.server.acceptance_fix_sprint_store  # type: ignore[attr-defined]
+    def acceptance_fix_sprint_store(self) -> _InterfaceType:
+        return self.server.acceptance_fix_sprint_store
 
     @property
-    def acceptance_fix_plan_store(self) -> _interfaces_api_runtime.AcceptanceFixPlanningStore:
-        return self.server.acceptance_fix_plan_store  # type: ignore[attr-defined]
+    def acceptance_fix_plan_store(self) -> _InterfaceType:
+        return self.server.acceptance_fix_plan_store
 
     @property
-    def acceptance_fix_plan_review_store(self) -> _interfaces_api_runtime.AcceptanceFixPlanReviewStore:
-        return self.server.acceptance_fix_plan_review_store  # type: ignore[attr-defined]
+    def acceptance_fix_plan_review_store(self) -> _InterfaceType:
+        return self.server.acceptance_fix_plan_review_store
 
     @property
-    def acceptance_kb_store(self) -> _interfaces_api_runtime.AcceptanceKnowledgeBaseStore:
-        return self.server.acceptance_kb_store  # type: ignore[attr-defined]
+    def acceptance_kb_store(self) -> _InterfaceType:
+        return self.server.acceptance_kb_store
 
     @property
-    def planning_rule_simulation_store(self) -> _interfaces_api_runtime.PlanningRuleSimulationStore:
-        return self.server.planning_rule_simulation_store  # type: ignore[attr-defined]
+    def planning_rule_simulation_store(self) -> _InterfaceType:
+        return self.server.planning_rule_simulation_store
 
     @property
-    def planning_rule_governance_store(self) -> _interfaces_api_runtime.PlanningRuleGovernanceStore:
-        return self.server.planning_rule_governance_store  # type: ignore[attr-defined]
+    def planning_rule_governance_store(self) -> _InterfaceType:
+        return self.server.planning_rule_governance_store
 
     @property
-    def planning_rule_impact_store(self) -> _interfaces_api_runtime.PlanningRuleImpactStore:
-        return self.server.planning_rule_impact_store  # type: ignore[attr-defined]
+    def planning_rule_impact_store(self) -> _InterfaceType:
+        return self.server.planning_rule_impact_store
 
     @property
-    def audio_profile_store(self) -> _interfaces_api_runtime.AudioProfileStore:
-        return self.server.audio_profile_store  # type: ignore[attr-defined]
+    def audio_profile_store(self) -> _InterfaceType:
+        return self.server.audio_profile_store
 
     @property
-    def mastering_profile_store(self) -> _interfaces_api_runtime.MasteringProfileStore:
-        return self.server.mastering_profile_store  # type: ignore[attr-defined]
+    def mastering_profile_store(self) -> _InterfaceType:
+        return self.server.mastering_profile_store
 
     @property
-    def mastering_store(self) -> _interfaces_api_runtime.MasteringStore:
-        return self.server.mastering_store  # type: ignore[attr-defined]
+    def mastering_store(self) -> _InterfaceType:
+        return self.server.mastering_store
 
     @property
-    def audio_encoding_profile_store(self) -> _interfaces_api_runtime.AudioEncodingProfileStore:
-        return self.server.audio_encoding_profile_store  # type: ignore[attr-defined]
+    def audio_encoding_profile_store(self) -> _InterfaceType:
+        return self.server.audio_encoding_profile_store
 
     @property
-    def audio_encoding_store(self) -> _interfaces_api_runtime.AudioEncodingStore:
-        return self.server.audio_encoding_store  # type: ignore[attr-defined]
+    def audio_encoding_store(self) -> _InterfaceType:
+        return self.server.audio_encoding_store
 
     @property
-    def encoded_audio_acceptance_store(self) -> _interfaces_api_runtime.EncodedAudioAcceptanceStore:
-        return self.server.encoded_audio_acceptance_store  # type: ignore[attr-defined]
+    def encoded_audio_acceptance_store(self) -> _InterfaceType:
+        return self.server.encoded_audio_acceptance_store
 
     @property
-    def format_decision_store(self) -> _interfaces_api_runtime.FormatDecisionStore:
-        return self.server.format_decision_store  # type: ignore[attr-defined]
+    def format_decision_store(self) -> _InterfaceType:
+        return self.server.format_decision_store
 
     @property
-    def rights_clearance_store(self) -> _interfaces_api_runtime.RightsClearanceStore:
-        return self.server.rights_clearance_store  # type: ignore[attr-defined]
+    def rights_clearance_store(self) -> _InterfaceType:
+        return self.server.rights_clearance_store
 
     def _handle_acceptance_suites_root(self, method: str, query_string: str) -> None:
         if method == "GET":
@@ -304,7 +310,7 @@ class QualityRoutesAcceptanceSuites:
         return (False, None)
 
     def _handle_release_audio_reviews(self, method: str, release_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_release_audio_reviews_part_01(method, release_id, tail, _split_state)
             if _split_result[0]:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import base64 as base64
 import hashlib as hashlib
@@ -157,7 +157,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
                 "summary": {
                     "event_count": len(feed.get("events", []) if isinstance(feed.get("events"), list) else []),
                     "notice_count": len(feed.get("notices", []) if isinstance(feed.get("notices"), list) else []),
-                    "latest_notice_type": (feed.get("summary") if isinstance(feed.get("summary"), dict) else {}).get("latest_notice_type"),
+                    "latest_notice_type": (_as_document(feed.get("summary"))).get("latest_notice_type"),
                     "requires_response": True,
                 },
                 "response_requirements": {
@@ -209,11 +209,11 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
             "transparency_verification_hash": verification_hash(verification),
             "transparency_event_semantics_status": checks.get("transparency_event_semantics_match"),
             "transparency_notice_semantics_status": checks.get("transparency_notice_semantics_match"),
-            "current_public_state_hash": (feed.get("source") if isinstance(feed.get("source"), dict) else {}).get("public_state_hash"),
-            "current_entry_id": (feed.get("summary") if isinstance(feed.get("summary"), dict) else {}).get("current_entry_id"),
-            "current_certificate_id": (feed.get("summary") if isinstance(feed.get("summary"), dict) else {}).get("current_certificate_id"),
-            "portal_manifest_hash": (feed.get("source") if isinstance(feed.get("source"), dict) else {}).get("portal_manifest_hash"),
-            "accepted_evidence_manifest_hash": (feed.get("source") if isinstance(feed.get("source"), dict) else {}).get("accepted_evidence_manifest_hash"),
+            "current_public_state_hash": (_as_document(feed.get("source"))).get("public_state_hash"),
+            "current_entry_id": (_as_document(feed.get("summary"))).get("current_entry_id"),
+            "current_certificate_id": (_as_document(feed.get("summary"))).get("current_certificate_id"),
+            "portal_manifest_hash": (_as_document(feed.get("source"))).get("portal_manifest_hash"),
+            "accepted_evidence_manifest_hash": (_as_document(feed.get("source"))).get("accepted_evidence_manifest_hash"),
             "event_ids": [str(item.get("event_id")) for item in feed.get("events", []) if isinstance(item, dict) and item.get("event_id")],
             "notice_ids": [str(item.get("notice_id")) for item in feed.get("notices", []) if isinstance(item, dict) and item.get("notice_id")],
             "warning_notice_ids": [str(item.get("notice_id")) for item in feed.get("notices", []) if isinstance(item, dict) and item.get("notice_id") and item.get("severity") in {"warning", "critical"}],
@@ -221,7 +221,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
         return sanitize_metadata(source, blocked_keys=ACK_BLOCKED_KEYS)
 
     def pack_is_stale(self, portfolio_id: str, pack: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
-        data = pack if isinstance(pack, dict) else self.read_pack(portfolio_id, profile=profile, default={})
+        data = _document_or(pack, self.read_pack(portfolio_id, profile=profile, default={}))
         if not data:
             return False
         try:
@@ -358,12 +358,12 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
     def verify_response(self, portfolio_id: str, response_id: str, *, profile: str = "public_summary", now: str | None = None) -> dict[str, Any]:
         record = self.read_response(portfolio_id, response_id, profile=profile)
         pack = self.read_pack(portfolio_id, profile=profile, default={})
-        payload = record.get("response_payload") if isinstance(record.get("response_payload"), dict) else {}
+        payload = _as_document(record.get("response_payload"))
         return verify_response_document(payload, pack, now=now)
 
     def response_is_stale(self, portfolio_id: str, response: dict[str, Any], *, profile: str = "public_summary") -> bool:
         pack = self.read_pack(portfolio_id, profile=profile, default={})
-        payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
+        payload = _as_document(response.get("response_payload"))
         return not pack or _response_stale(payload, pack) or self.pack_is_stale(portfolio_id, pack, profile=profile)
 
     def refresh_evidence(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
@@ -408,10 +408,10 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
         response: dict[str, Any] | None = None,
         verification: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        response = response if isinstance(response, dict) else self.read_response(portfolio_id, response_id, profile=profile)
-        verification = verification if isinstance(verification, dict) else self.verify_response(portfolio_id, response_id, profile=profile)
+        response = _document_or(response, self.read_response(portfolio_id, response_id, profile=profile))
+        verification = _document_or(verification, self.verify_response(portfolio_id, response_id, profile=profile))
         pack = self.read_pack(portfolio_id, profile=profile, default={})
-        src = response.get("source") if isinstance(response.get("source"), dict) else {}
+        src = _as_document(response.get("source"))
         return sanitize_metadata(
             {
                 "portfolio_id": portfolio_id,
@@ -435,10 +435,10 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
         )
 
     def evidence_is_stale(self, portfolio_id: str, evidence: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
-        data = evidence if isinstance(evidence, dict) else self.read_evidence(portfolio_id, profile=profile, default={})
+        data = _document_or(evidence, self.read_evidence(portfolio_id, profile=profile, default={}))
         if not data:
             return False
-        source = data.get("source") if isinstance(data.get("source"), dict) else {}
+        source = _as_document(data.get("source"))
         response_id = str(source.get("response_id") or "")
         if not response_id:
             return True
@@ -526,7 +526,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
             if existing:
                 return existing
             cr_id = _next_id(self.change_requests_dir(portfolio_id, profile), "att-trans-ack-cr")
-            response_payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
+            response_payload = _as_document(response.get("response_payload"))
             cr = {
                 "change_request_id": cr_id,
                 "source": "transparency_acknowledgement_response",
@@ -587,7 +587,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
                 continue
             if not isinstance(event, dict) or event.get("type") != event_type:
                 continue
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             if all(str(summary.get(key) or "") == str(value or "") for key, value in state.items()):
                 return True
         return False
@@ -643,7 +643,7 @@ def verify_response_document(response: dict[str, Any], pack: dict[str, Any], *, 
     checks.append(_check("ack_response_required_source_binding", not missing, "Response source binding fields are present." if not missing else "Missing response source binding: " + ", ".join(missing)))
     status = str(response.get("review_status") or "")
     checks.append(_check("ack_response_status_allowed", status in ACK_ALLOWED_RESPONSE_STATUSES, "Response status is allowed."))
-    source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+    source = _as_document(pack.get("source"))
     checks.append(_check("ack_response_pack_binding", response.get("review_pack_id") == pack.get("pack_id") and response.get("review_pack_source_hash") == pack.get("source_hash"), "Response binds to the acknowledgement pack."))
     checks.append(
         _check(
@@ -662,7 +662,7 @@ def verify_response_document(response: dict[str, Any], pack: dict[str, Any], *, 
     checks.append(_check("ack_response_event_subset", reviewed_events.issubset(event_ids), "Reviewed events belong to pack."))
     warning_notices = set(str(item) for item in source.get("warning_notice_ids", []) if item)
     checks.append(_check("ack_response_warning_notices_reviewed", status != "accepted" or warning_notices.issubset(reviewed_notices), "Accepted response reviewed all warning notices."))
-    concerns = response.get("concerns") if isinstance(response.get("concerns"), list) else []
+    concerns = _as_list(response.get("concerns"))
     checks.append(_check("ack_response_concerns_required", status == "accepted" or bool(concerns), "Needs changes/rejected response includes concerns."))
     expected_hash = response_payload_hash(response)
     checks.append(_check("ack_response_payload_hash", not response.get("response_hash") or response.get("response_hash") == expected_hash, "Response hash matches payload."))
@@ -701,9 +701,9 @@ def _evidence_id(portfolio_id: str, profile: str, source: ImplementationDocument
 
 
 def _pack_data_documents(pack: ImplementationDocument, feed: ImplementationDocument) -> ImplementationDocument:
-    source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
-    events = feed.get("events") if isinstance(feed.get("events"), list) else []
-    notices = feed.get("notices") if isinstance(feed.get("notices"), list) else []
+    source = _as_document(pack.get("source"))
+    events = _as_list(feed.get("events"))
+    notices = _as_list(feed.get("notices"))
     return sanitize_metadata(
         {
             "transparency-verification-summary.json": {"source_hash": pack.get("source_hash"), "status": source.get("transparency_verification_status"), "verification_hash": source.get("transparency_verification_hash"), "event_semantics": source.get("transparency_event_semantics_status"), "notice_semantics": source.get("transparency_notice_semantics_status")},
@@ -718,8 +718,8 @@ def _pack_data_documents(pack: ImplementationDocument, feed: ImplementationDocum
 
 
 def _evidence_data_documents(evidence: ImplementationDocument) -> ImplementationDocument:
-    source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
-    public = evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}
+    source = _as_document(evidence.get("source"))
+    public = _as_document(evidence.get("public_summary"))
     return {
         "response-binding-summary.json": {"source_hash": evidence.get("source_hash"), **source},
         "response-verification-summary.json": {
@@ -757,8 +757,8 @@ def _response_schema(pack: ImplementationDocument) -> ImplementationDocument:
 
 
 def _evidence_public_summary(response: ImplementationDocument) -> ImplementationDocument:
-    payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
-    reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
+    payload = _as_document(response.get("response_payload"))
+    reviewer = _as_document(payload.get("reviewer"))
     return {
         "reviewer_name": reviewer.get("name"),
         "reviewer_organization": reviewer.get("organization"),
@@ -803,7 +803,7 @@ def _require_response_source_binding(response: ImplementationDocument) -> None:
 
 
 def _response_stale(response: ImplementationDocument, pack: ImplementationDocument) -> bool:
-    source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+    source = _as_document(pack.get("source"))
     return not (
         response.get("review_pack_id") == pack.get("pack_id")
         and response.get("review_pack_source_hash") == pack.get("source_hash")
@@ -814,7 +814,7 @@ def _response_stale(response: ImplementationDocument, pack: ImplementationDocume
 
 
 def _change_request_actions(response: ImplementationDocument) -> list[ImplementationDocument]:
-    concerns = response.get("concerns") if isinstance(response.get("concerns"), list) else []
+    concerns = _as_list(response.get("concerns"))
     actions: list[dict[str, Any]] = []
     for concern in concerns:
         if isinstance(concern, dict):
@@ -865,7 +865,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except Exception:
         return dict(default or {})
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=ACK_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=ACK_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, payload: ImplementationDocument) -> Path:

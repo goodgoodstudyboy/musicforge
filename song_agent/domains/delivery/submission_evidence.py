@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import base64 as base64
 import hashlib as hashlib
@@ -119,7 +119,7 @@ class SubmissionEvidenceStore:
         if not path.exists():
             return self._empty_index(release_id, submission_id)
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else self._empty_index(release_id, submission_id), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+        return sanitize_metadata(_document_or(value, self._empty_index(release_id, submission_id)), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
     def write_index(self, release_id: str, submission_id: str, index: dict[str, Any]) -> dict[str, Any]:
         clean = sanitize_metadata(index, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
@@ -320,7 +320,7 @@ class SubmissionEvidenceStore:
             for summary in item_summaries:
                 item_id = str(summary.get("item_id") or "")
                 status = str(summary.get("status") or "")
-                evidence_types = set(summary.get("evidence_types") if isinstance(summary.get("evidence_types"), list) else [])
+                evidence_types = set(_as_list(summary.get("evidence_types")))
                 missing_type = None
                 if status == "submitted" and not evidence_types.intersection({"submission_receipt", "resubmission_receipt"}):
                     missing_type = "submission_receipt"
@@ -915,7 +915,7 @@ class SubmissionEvidenceStore:
         except Exception:
             return ["source item is missing"]
         current = self.source_snapshot(batch, item)
-        expected = record.get("source_snapshot") if isinstance(record.get("source_snapshot"), dict) else {}
+        expected = _as_document(record.get("source_snapshot"))
         reasons = [key for key, value in expected.items() if current.get(key) != value]
         if reasons:
             return [f"source snapshot mismatch: {', '.join(sorted(reasons))}"]
@@ -927,7 +927,7 @@ class SubmissionEvidenceStore:
         reasons: list[str] = []
         if not submission_evidence_attachment_integrity_ok(attachment):
             reasons.append("attachment metadata integrity mismatch")
-        redaction = attachment.get("redaction_summary") if isinstance(attachment.get("redaction_summary"), dict) else {}
+        redaction = _as_document(attachment.get("redaction_summary"))
         if redaction.get("status") == "failed":
             reasons.append("attachment redaction scan failed")
         path = self.evidence_dir(str(attachment.get("release_id")), str(attachment.get("submission_id"))) / "items" / str(attachment.get("item_id")) / "attachments" / str(attachment.get("stored_filename") or "")
@@ -955,7 +955,7 @@ class SubmissionEvidenceStore:
             raise SubmissionEvidenceStateError("Submission evidence report integrity failed.")
         if report.get("status") == "failed":
             raise SubmissionEvidenceStateError("Submission evidence report failed.")
-        summaries = report.get("item_summaries") if isinstance(report.get("item_summaries"), list) else []
+        summaries = _as_list(report.get("item_summaries"))
         if require_submitted:
             missing = [str(item.get("item_id") or "") for item in summaries if item.get("status") not in SUBMITTED_OR_LATER]
             if missing:
@@ -995,7 +995,7 @@ def submission_evidence_signoff_payload_hash(signoff: dict[str, Any]) -> str:
 
 
 def submission_evidence_signoff_summary(signoff: dict[str, Any] | None) -> dict[str, Any]:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     return sanitize_metadata(
         {
             "status": data.get("status") or "not_signed",
@@ -1014,8 +1014,8 @@ def submission_evidence_signoff_summary(signoff: dict[str, Any] | None) -> dict[
 
 
 def submission_evidence_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -1252,7 +1252,7 @@ def _default_evidence_title(evidence_type: str) -> str:
 
 
 def _latest_blocking_after_acceptance(summary: ImplementationDocument) -> str | None:
-    timeline = summary.get("timeline") if isinstance(summary.get("timeline"), list) else []
+    timeline = _as_list(summary.get("timeline"))
     accepted_at = max([str(row.get("recorded_at") or "") for row in timeline if isinstance(row, dict) and row.get("evidence_type") == "acceptance_confirmation"], default="")
     if not accepted_at:
         return "missing_acceptance_confirmation"

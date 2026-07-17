@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_float as _as_float, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -60,7 +60,7 @@ class RendererProfile:
             sample_rate=int(data.get("sample_rate") or 44100),
             channels=int(data.get("channels") or 2),
             bit_depth=int(data.get("bit_depth") or 16),
-            gain=float(data.get("gain") if data.get("gain") not in {None, ""} else 0.6),
+            gain=_as_float(data.get("gain") if data.get("gain") not in {None, ""} else 0.6),
             timeout_seconds=max(1, int(data.get("timeout_seconds") or 60)),
             created_at=str(data.get("created_at") or now),
             updated_at=str(data.get("updated_at") or now),
@@ -232,7 +232,7 @@ class AudioProfileStore:
             return []
         data = read_json(self.profiles_path)
         rows = data.get("profiles") if isinstance(data, dict) else []
-        return [RendererProfile.from_dict(item) for item in rows if isinstance(item, dict)]
+        return [RendererProfile.from_dict(item) for item in _as_list(rows) if isinstance(item, dict)]
 
     def _write_profiles(self, profiles: list[RendererProfile]) -> None:
         self.root.mkdir(parents=True, exist_ok=True)

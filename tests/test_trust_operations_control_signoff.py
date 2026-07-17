@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from song_agent.projectio import write_json
 from song_agent.trust_operations_control_signoff import TrustOperationsControlSignoffStateError, TrustOperationsControlSignoffStore, control_signoff_hash, control_signoff_manifest_hash
 from song_agent.trust_operations_control_signoff_verifier import verify_trust_operations_control_signoff_archive_package
 from song_agent.trust_operations_controls import TrustOperationsControlStore

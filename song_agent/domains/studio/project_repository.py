@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import shutil as shutil
@@ -9,7 +9,7 @@ from dataclasses import dataclass as dataclass, field as field
 from pathlib import Path as Path
 from typing import Any as Any, Protocol as Protocol
 
-from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality
+from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality, score_song_plan as score_song_plan
 from song_agent.domains.studio.projectio import read_json as read_json, slugify as slugify, write_json as write_json
 from song_agent.domains.creation.redaction import sanitize_metadata as sanitize_metadata
 from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
@@ -621,11 +621,11 @@ class ProjectStore:
                 return default
             raise FileNotFoundError(path)
         data = read_json(path)
-        return _sanitize_asset_metadata(data if isinstance(data, dict) else {})
+        return _sanitize_asset_metadata(_as_document(data))
 
     def write_delivery_qa(self, project_id: str, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         self.get_project(project_id)
-        clean = _sanitize_asset_metadata(report if isinstance(report, dict) else {})
+        clean = _sanitize_asset_metadata(_as_document(report))
         if now:
             clean["created_at"] = clean.get("created_at") or now
         write_json(self.delivery_qa_path(project_id), clean)
@@ -644,11 +644,11 @@ class ProjectStore:
                 return default
             raise FileNotFoundError(path)
         data = read_json(path)
-        return _sanitize_asset_metadata(data if isinstance(data, dict) else {})
+        return _sanitize_asset_metadata(_as_document(data))
 
     def write_delivery_signoff(self, project_id: str, record: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         self.get_project(project_id)
-        clean = _sanitize_asset_metadata(record if isinstance(record, dict) else {})
+        clean = _sanitize_asset_metadata(_as_document(record))
         if now:
             clean["signed_at"] = clean.get("signed_at") or now
         write_json(self.delivery_signoff_path(project_id), clean)
@@ -658,7 +658,7 @@ class ProjectStore:
         existing = self.read_delivery_signoff(project_id, default={})
         if not existing:
             raise FileNotFoundError("Delivery signoff does not exist.")
-        event = _sanitize_asset_metadata(history_event if isinstance(history_event, dict) else {})
+        event = _sanitize_asset_metadata(_as_document(history_event))
         history_path = self.delivery_signoff_history_path(project_id)
         history_path.parent.mkdir(parents=True, exist_ok=True)
         with history_path.open("a", encoding="utf-8") as file:
@@ -733,7 +733,7 @@ def quality_score_for_run(run_dir: Path) -> int | None:
     if plan.quality and plan.quality.scores:
         return plan.quality.scores.overall
     try:
-        return analyze_song_quality(plan).scores.overall
+        return score_song_plan(plan).overall
     except (ValueError, TypeError):
         return None
 
@@ -818,19 +818,19 @@ def _edit_info(version: ProjectVersion) -> ImplementationDocument | None:
         "changed_tracks": metadata.get("changed_tracks") or [],
         "clip_inserts": metadata.get("clip_inserts") or [],
         "template_inserts": metadata.get("template_inserts") or [],
-        "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
-        "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
-        "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
-        "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
-        "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
-        "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
-        "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
-        "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
-        "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
-        "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
-        "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
-        "review_judge": metadata.get("review_judge") if isinstance(metadata.get("review_judge"), dict) else {},
-        "review_candidate_intents": metadata.get("review_candidate_intents") if isinstance(metadata.get("review_candidate_intents"), list) else [],
+        "audition_summary": _as_document(metadata.get("audition_summary")),
+        "review_edit": _as_document(metadata.get("review_edit")),
+        "review_summary": _as_document(metadata.get("review_summary")),
+        "review_task": _as_document(metadata.get("review_task")),
+        "review_candidate": _as_document(metadata.get("review_candidate")),
+        "review_candidate_source": _as_document(metadata.get("review_candidate_source")),
+        "review_provider_patch": _as_document(metadata.get("review_provider_patch")),
+        "review_decision": _as_document(metadata.get("review_decision")),
+        "review_sprint": _as_document(metadata.get("review_sprint")),
+        "review_sprint_recommendation": _as_document(metadata.get("review_sprint_recommendation")),
+        "review_sprint_action_queue": _as_document(metadata.get("review_sprint_action_queue")),
+        "review_judge": _as_document(metadata.get("review_judge")),
+        "review_candidate_intents": _as_list(metadata.get("review_candidate_intents")),
         "summary": metadata.get("summary") or {},
         "structure": metadata.get("structure") or {},
         "warnings": metadata.get("warnings") or [],
@@ -1098,7 +1098,7 @@ def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument
                 data = read_json(path)
             except (OSError, ValueError, TypeError, json.JSONDecodeError):
                 continue
-            linked_project_ids = data.get("linked_project_ids") if isinstance(data, dict) else []
+            linked_project_ids = _as_list(data.get("linked_project_ids")) if isinstance(data, dict) else []
             if document.state.project_id in linked_project_ids:
                 add_ref(
                     {

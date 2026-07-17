@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import shutil as shutil
@@ -245,7 +247,7 @@ class ReleaseAudioRegressionResponseStore:
             if self.history_path(release_id).exists():
                 write_entry("response-signoff-history.jsonl", self.history_path(release_id).read_text(encoding="utf-8"))
             write_entry("README.txt", "MusicForge Release Audio Regression Response\n")
-            manifest = {
+            manifest: _InferenceType = {
                 "package_type": RELEASE_AUDIO_REGRESSION_RESPONSE_PACKAGE_TYPE,
                 "schema_version": RELEASE_AUDIO_REGRESSION_RESPONSE_SCHEMA_VERSION,
                 "release_id": release_id,
@@ -323,14 +325,14 @@ class ReleaseAudioRegressionResponseStore:
     def _build_documents(self, release_id: str, *, payload: ImplementationDocument, closeout_override: ImplementationDocument | None) -> dict[str, ImplementationDocument]:
         binding = self._regression_binding(release_id)
         regression_report = self.regression_store.read_report(release_id)
-        blockers = regression_report.get("blockers") if isinstance(regression_report.get("blockers"), list) else []
+        blockers = _as_list(regression_report.get("blockers"))
         actions = _actions_from_regression(regression_report, blockers)
         source = {
             "release_id": release_id,
             "regression_binding_hash": binding.get("integrity_hash"),
             "regression_status": binding.get("regression_status"),
             "blocker_hash": stable_hash(blockers),
-            "policy": payload.get("policy") if isinstance(payload.get("policy"), dict) else {},
+            "policy": _as_document(payload.get("policy")),
         }
         source_hash = stable_hash(source)
         plan = sanitize_metadata(
@@ -369,7 +371,7 @@ class ReleaseAudioRegressionResponseStore:
         for key in ("actions", "waivers", "closeout", "binding"):
             docs[key]["source_hash"] = source_hash
         docs["plan"]["summary"] = {
-            **(docs["plan"].get("summary") if isinstance(docs["plan"].get("summary"), dict) else {}),
+            **(_as_document(docs["plan"].get("summary"))),
             "action_count": len(docs["actions"].get("actions", [])),
             "waiver_count": len(docs["waivers"].get("waivers", [])),
             "closeout_status": docs["closeout"].get("status"),
@@ -437,8 +439,8 @@ class ReleaseAudioRegressionResponseStore:
 
     def _regression_verifier_kwargs(self, release_id: str) -> ImplementationDocument:
         config = self.regression_store.read_config(release_id, default={})
-        baseline = config.get("baseline") if isinstance(config.get("baseline"), dict) else {}
-        current = config.get("current") if isinstance(config.get("current"), dict) else {}
+        baseline = _as_document(config.get("baseline"))
+        current = _as_document(config.get("current"))
         return {
             "baseline_timeline_path": baseline.get("timeline_zip_path"),
             "baseline_timeline_verification_report_path": baseline.get("timeline_verification_report_path"),
@@ -494,7 +496,7 @@ class ReleaseAudioRegressionResponseStore:
 def _actions_from_regression(report: ImplementationDocument, blockers: list[Any]) -> list[ImplementationDocument]:
     rows: list[dict[str, Any]] = []
     source_items = blockers or (report.get("summary") or {}).get("blockers") or []
-    for index, item in enumerate(source_items if isinstance(source_items, list) else [], start=1):
+    for index, item in enumerate(_as_list(source_items), start=1):
         text = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, sort_keys=True)
         lowered = text.lower()
         severity = "critical" if "critical" in lowered or "blocking" in lowered else "high" if "high" in lowered or "failed" in lowered else "warning"
@@ -562,7 +564,7 @@ def _integrity_hash(payload: ImplementationDocument) -> str:
 def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("previous_event_hash") != previous:
             return False
         if event.get("payload_hash") != stable_hash(payload):

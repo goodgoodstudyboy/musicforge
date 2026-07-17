@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import threading as threading
@@ -137,8 +137,8 @@ class UnifiedCommandCenterDriftResponseStore:
             if not review_id:
                 raise UnifiedCommandCenterDriftResponseStateError("source_review_id is required.")
             source_docs = self.review_store.read_review(center_id, review_id)
-            drift = source_docs.get("drift_report") if isinstance(source_docs.get("drift_report"), dict) else {}
-            incidents = source_docs.get("incident_board") if isinstance(source_docs.get("incident_board"), dict) else {}
+            drift = _as_document(source_docs.get("drift_report"))
+            incidents = _as_document(source_docs.get("incident_board"))
             if drift.get("status") != "failed" or int((drift.get("summary") or {}).get("blocking_drift_count") or 0) <= 0:
                 raise UnifiedCommandCenterDriftResponseStateError("Drift Response requires a failed Continuous Review with blocking drift.")
             response_id = str(payload.get("response_id") or self._next_response_id(center_id))
@@ -256,8 +256,8 @@ class UnifiedCommandCenterDriftResponseStore:
             if not review_id:
                 raise UnifiedCommandCenterDriftResponseStateError("recheck_review_id is required.")
             recheck_docs = self.review_store.read_review(center_id, review_id)
-            drift = recheck_docs.get("drift_report") if isinstance(recheck_docs.get("drift_report"), dict) else {}
-            incidents = recheck_docs.get("incident_board") if isinstance(recheck_docs.get("incident_board"), dict) else {}
+            drift = _as_document(recheck_docs.get("drift_report"))
+            incidents = _as_document(recheck_docs.get("incident_board"))
             if drift.get("status") != "passed" or incidents.get("status") not in {"clear", None}:
                 raise UnifiedCommandCenterDriftResponseStateError("Recheck Continuous Review must be clear before binding.")
             review_zip = Path(payload.get("recheck_review_zip") or self.review_store.zip_path(center_id, review_id))
@@ -535,8 +535,8 @@ class UnifiedCommandCenterDriftResponseStore:
 
 def _source_document(center_id: str, response_id: str, source_docs: ImplementationDocument, review_zip_path: Path, verification_path: Path) -> ImplementationDocument:
     review_id = str(source_docs.get("plan", {}).get("review_id") or source_docs.get("drift_report", {}).get("review_id") or "")
-    drift = source_docs.get("drift_report") if isinstance(source_docs.get("drift_report"), dict) else {}
-    incidents = source_docs.get("incident_board") if isinstance(source_docs.get("incident_board"), dict) else {}
+    drift = _as_document(source_docs.get("drift_report"))
+    incidents = _as_document(source_docs.get("incident_board"))
     verification = read_json(verification_path) if verification_path.exists() else {}
     review_binding = _review_binding(review_id, review_zip_path, verification_path, verification, drift, incidents)
     source_hash = stable_hash({"center_id": center_id, "response_id": response_id, "source_review": review_binding, "drift_report_hash": drift.get("integrity_hash"), "incident_board_hash": incidents.get("integrity_hash")})
@@ -681,7 +681,7 @@ def _recheck_document(center_id: str, response_id: str, source_hash: str | None,
 
 
 def _closeout_document(center_id: str, response_id: str, source_hash: str | None, queue: ImplementationDocument, results: ImplementationDocument, cr_bindings: ImplementationDocument, recheck: ImplementationDocument, *, status: str, closed_by: str | None = None, reason: str | None = None) -> ImplementationDocument:
-    blockers = []
+    blockers: list[ImplementationDocument] = []
     manual_ids = {str(row.get("item_id")) for row in queue.get("items", []) if isinstance(row, dict) and not row.get("safe")}
     bound_ids = {str(row.get("item_id")) for row in cr_bindings.get("items", []) if isinstance(row, dict) and row.get("status") == "approved"}
     completed_safe = {str(row.get("item_id")) for row in results.get("results", []) if isinstance(row, dict) and row.get("status") == "completed"}

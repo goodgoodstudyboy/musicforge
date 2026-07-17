@@ -50,7 +50,7 @@ class LTSBackupStore:
         files = self._collect_files(mode, source_root=source_root)
         excluded = self._excluded_summary(mode, source_root=source_root)
         manifest_files: list[dict[str, Any]] = []
-        workspace_index = {
+        workspace_index: ImplementationDocument = {
             "schema_version": 1,
             "backup_id": backup_id,
             "mode": mode,

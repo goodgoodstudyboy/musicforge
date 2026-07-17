@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path, document_or as _document_or
 
 import json as json
 import threading as threading
@@ -352,7 +352,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
         if not review_id:
             reviews = self.evidence_review_store.list_reviews(center_id)
             review_id = str((reviews[-1] if reviews else {}).get("review_id") or "")
-        accepted_rows = payload.get("accepted_evidence") if isinstance(payload.get("accepted_evidence"), list) else []
+        accepted_rows = _as_list(payload.get("accepted_evidence"))
         normalized_accepted: list[dict[str, Any]] = []
         for row in accepted_rows:
             if not isinstance(row, dict):
@@ -375,8 +375,8 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             "review_zip": str(payload.get("review_zip") or payload.get("evidence_review_zip") or payload.get("unified_command_center_evidence_review") or (self.evidence_review_store.zip_path(center_id, review_id) if review_id else "")),
             "review_verification_report": str(payload.get("review_verification_report") or payload.get("evidence_review_verification_report") or (self.evidence_review_store.verification_report_path(center_id, review_id) if review_id else "")),
             "accepted_evidence": normalized_accepted,
-            "responses": sanitize_metadata(payload.get("responses") if isinstance(payload.get("responses"), list) else []),
-            "findings": sanitize_metadata(payload.get("findings") if isinstance(payload.get("findings"), list) else []),
+            "responses": sanitize_metadata(_as_list(payload.get("responses"))),
+            "findings": sanitize_metadata(_as_list(payload.get("findings"))),
         }
         if isinstance(payload.get("policy"), dict):
             paths["policy"] = _policy(payload["policy"])
@@ -395,8 +395,8 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
             if value not in (None, "", [], {}):
                 base[key] = value
         if "policy" in incoming:
-            explicit_policy = payload.get("policy") if isinstance(payload.get("policy"), dict) else incoming["policy"]
-            base["policy"] = _policy({**(base.get("policy") if isinstance(base.get("policy"), dict) else {}), **explicit_policy})
+            explicit_policy = _document_or(payload.get("policy"), incoming["policy"])
+            base["policy"] = _policy({**(_as_document(base.get("policy"))), **explicit_policy})
         return base
 
     def _stored_local_paths(self, center_id: str, board_id: str) -> ImplementationDocument:
@@ -412,7 +412,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
         roster = _roster_document(center_id, board_id, source, accepted_items, response_rows)
         response_index = _response_index_document(center_id, board_id, source, response_rows)
         accepted_index = _accepted_index_document(center_id, board_id, source, accepted_items)
-        findings = _finding_ledger_document(center_id, board_id, source, response_rows, paths.get("findings") if isinstance(paths.get("findings"), list) else [])
+        findings = _finding_ledger_document(center_id, board_id, source, response_rows, _as_list(paths.get("findings")))
         conflicts = _conflict_report_document(center_id, board_id, source, response_rows, findings, source.get("policy", {}))
         quorum = _quorum_report_document(center_id, board_id, source, accepted_items, response_rows)
         matrix = _decision_matrix_document(center_id, board_id, source, roster, response_index, quorum, conflicts)
@@ -522,21 +522,21 @@ def _accepted_evidence_item(row: ImplementationDocument, review_zip: Any, review
         blockers.append("accepted_evidence_response_verification_missing")
     if not blockers:
         runtime = verify_unified_command_center_evidence_review_acceptance_package(
-            zip_path,
+            _as_path(zip_path),
             strict=True,
             require_accepted=True,
             review_pack_path=review_zip,
             review_pack_verification_report_path=review_report,
             response_verification_report_path=response_report_path,
         )
-        external = read_json(verification_report_path)
-        response_summary = read_json(response_report_path)
-        public_response = _read_zip_json(zip_path, "original-response-public.json")
+        external = read_json(_as_path(verification_report_path))
+        response_summary = read_json(_as_path(response_report_path))
+        public_response = _read_zip_json(_as_path(zip_path), "original-response-public.json")
         if external.get("status") != "passed" or runtime.get("status") != "passed":
             blockers.append("accepted_evidence_verification_failed")
         if external.get("zip_sha256") != runtime.get("zip_sha256") or external.get("manifest_hash") != runtime.get("manifest_hash"):
             blockers.append("accepted_evidence_verification_stale")
-    reviewer = public_response.get("reviewer") if isinstance(public_response.get("reviewer"), dict) else {}
+    reviewer = _as_document(public_response.get("reviewer"))
     role = _bounded(reviewer.get("role") or "reviewer", 80)
     organization = _bounded(reviewer.get("organization") or "", 120)
     reviewer_name = _bounded(reviewer.get("name") or "Reviewer", 120)
@@ -586,7 +586,7 @@ def _source_document(center_id: str, board_id: str, paths: ImplementationDocumen
     review_verification_report = _path_or_none(paths.get("review_verification_report"))
     review_verification = read_json(review_verification_report) if review_verification_report and review_verification_report.exists() else {}
     runtime = verify_unified_command_center_evidence_review_package(review_zip, strict=False, require_replay_passed=False) if review_zip and review_zip.exists() else {}
-    policy = _policy(paths.get("policy") if isinstance(paths.get("policy"), dict) else {})
+    policy = _policy(_as_document(paths.get("policy")))
     source = sanitize_metadata(
         {
             "schema_version": UNIFIED_COMMAND_CENTER_REVIEWER_DECISION_BOARD_SCHEMA_VERSION,
@@ -631,7 +631,7 @@ def _response_rows(paths: ImplementationDocument, accepted_items: list[Implement
     for row in paths.get("responses", []) if isinstance(paths.get("responses"), list) else []:
         if not isinstance(row, dict):
             continue
-        reviewer = row.get("reviewer") if isinstance(row.get("reviewer"), dict) else {}
+        reviewer = _as_document(row.get("reviewer"))
         rows.append(
             sanitize_metadata(
                 {
@@ -646,7 +646,7 @@ def _response_rows(paths: ImplementationDocument, accepted_items: list[Implement
                     "role": _bounded(row.get("role") or reviewer.get("role") or "reviewer", 80),
                     "organization": _bounded(row.get("organization") or reviewer.get("organization") or "", 120),
                     "accepted_evidence_id": row.get("accepted_evidence_id"),
-                    "findings": row.get("findings") if isinstance(row.get("findings"), list) else [],
+                    "findings": _as_list(row.get("findings")),
                 }
             )
         )
@@ -656,7 +656,7 @@ def _response_rows(paths: ImplementationDocument, accepted_items: list[Implement
 def _roster_document(center_id: str, board_id: str, source: ImplementationDocument, accepted_items: list[ImplementationDocument], responses: list[ImplementationDocument]) -> ImplementationDocument:
     reviewers: dict[str, dict[str, Any]] = {}
     for row in responses:
-        reviewer = row.get("reviewer") if isinstance(row.get("reviewer"), dict) else {}
+        reviewer = _as_document(row.get("reviewer"))
         key = str(row.get("response_id") or reviewer.get("name") or len(reviewers))
         reviewers[key] = {
             "reviewer_id": key,
@@ -868,7 +868,7 @@ def _signoff_binding_summary(center_id: str, board_id: str, signoff: Implementat
 
 
 def _policy(value: ImplementationDocument) -> ImplementationDocument:
-    policy = dict(DEFAULT_POLICY)
+    policy: ImplementationDocument = dict(DEFAULT_POLICY)
     for key in DEFAULT_POLICY:
         if key in value:
             policy[key] = value[key]

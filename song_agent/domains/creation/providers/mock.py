@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
 from dataclasses import dataclass as dataclass
 from typing import Any as Any
 
@@ -38,7 +40,7 @@ class MockProviderClient:
         section_name = _target_section(parent_plan, instruction)
         lower = instruction.lower()
         if "chord" in lower or "harmony" in lower:
-            operation = {
+            operation: dict[str, Any] = {
                 "op": "set_section_chords",
                 "section_name": section_name,
                 "chords": ["Cmaj7", "Am7", "Fmaj7", "G7"],
@@ -186,10 +188,10 @@ class MockProviderClient:
                 "manual_review_required": True,
                 "warnings": ["no ready candidates"],
             }
-        scores = []
+        scores: list[dict[str, Any]] = []
         for index, candidate in enumerate(candidates):
             candidate_id = str(candidate.get("candidate_id") or "")
-            local_scores = candidate.get("scores") if isinstance(candidate.get("scores"), dict) else {}
+            local_scores = _as_document(candidate.get("scores"))
             combined = int(local_scores.get("combined") or max(60, 86 - index * 6))
             provider_bonus = 3 if candidate.get("source") == "provider" else 0
             overall = max(0, min(100, combined + provider_bonus - index))

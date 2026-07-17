@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import csv as csv
 import hashlib as hashlib
@@ -226,10 +226,10 @@ def refresh_submission_export_signoff_summary(store: SubmissionStore, release_id
     signoff_public = _submission_signoff_export_summary(signoff)
     _write_json(export_dir / "submission-signoff.json", signoff_public)
     manifest = read_submission_export_manifest(store, release_id, submission_id)
-    summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+    summary = _as_document(manifest.get("summary"))
     summary["signoff_status"] = signoff_public.get("status")
     manifest["summary"] = summary
-    sidecars = manifest.get("sidecars") if isinstance(manifest.get("sidecars"), dict) else {}
+    sidecars = _as_document(manifest.get("sidecars"))
     sidecars["submission_signoff"] = _submission_signoff_sidecar_record(signoff_public)
     manifest["sidecars"] = sidecars
     manifest["files"] = sorted([item for item in manifest.get("files", []) if isinstance(item, dict) and item.get("path") != "submission-signoff.json"], key=lambda item: item["path"])
@@ -242,13 +242,13 @@ def read_submission_export_manifest(store: SubmissionStore, release_id: str, sub
     if not path.exists():
         raise FileNotFoundError("Submission export has not been generated.")
     value = json.loads(path.read_text(encoding="utf-8"))
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def submission_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
-    data = manifest if isinstance(manifest, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    zip_info = data.get("zip") if isinstance(data.get("zip"), dict) else {}
+    data = _as_document(manifest)
+    summary = _as_document(data.get("summary"))
+    zip_info = _as_document(data.get("zip"))
     return sanitize_metadata(
         {
             "status": "exported" if data else "missing",
@@ -276,7 +276,7 @@ def _submission_report_payload(submission: SubmissionBatch, qa_report: Implement
             "generated_at": now,
             "submission": submission.to_dict(),
             "summary": submission_batch_summary(submission),
-            "qa_summary": qa_report.get("summary") if isinstance(qa_report.get("summary"), dict) else {},
+            "qa_summary": _as_document(qa_report.get("summary")),
         },
         blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
     )

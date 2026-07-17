@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -57,7 +57,7 @@ def verify_release_operations_archive_package(
 
 
 def release_operations_archive_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -87,7 +87,7 @@ def print_release_operations_archive_verification_report(report: dict[str, Any])
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -186,7 +186,7 @@ class _OperationsArchiveVerifier:
         self._add_check("manifest", "operations_archive_manifest_exists", "passed", "blocking", "operations-archive-manifest.json exists.")
         actual_manifest_hash = operations_archive_manifest_hash(self.manifest)
         self._add_check("manifest", "operations_archive_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Operations Archive manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Operations Archive manifest integrity hash does not match.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -238,17 +238,17 @@ class _OperationsArchiveVerifier:
         if self.signoff:
             actual = operations_signoff_hash(self.signoff)
             self._add_check("signoff", "operations_archive_signoff_payload_hash", "passed" if self.signoff.get("payload_hash") == actual else "failed", "blocking", "Operations Signoff payload hash matches." if self.signoff.get("payload_hash") == actual else "Operations Signoff payload hash does not match.")
-            manifest_row = self.manifest.get("operations_signoff") if isinstance(self.manifest.get("operations_signoff"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("operations_signoff"))
             self._add_check("signoff", "operations_archive_manifest_signoff_hash", "passed" if manifest_row.get("payload_hash") == actual else "failed", "blocking", "Manifest signoff hash matches." if manifest_row.get("payload_hash") == actual else "Manifest signoff hash does not match.")
         if self.report_doc:
             actual = operations_report_integrity_hash(self.report_doc)
             self._add_check("operations", "operations_archive_report_integrity", "passed" if self.report_doc.get("integrity_hash") == actual else "failed", "blocking", "Operations Report integrity hash matches." if self.report_doc.get("integrity_hash") == actual else "Operations Report integrity hash does not match.")
-            manifest_row = self.manifest.get("operations_report") if isinstance(self.manifest.get("operations_report"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("operations_report"))
             self._add_check("operations", "operations_archive_manifest_report_hash", "passed" if manifest_row.get("report_hash") == actual else "failed", "blocking", "Manifest Operations Report hash matches." if manifest_row.get("report_hash") == actual else "Manifest Operations Report hash does not match.")
         if self.package_ledger:
             actual = stable_hash({key: value for key, value in self.package_ledger.items() if key != "ledger_hash"})
             self._add_check("ledger", "operations_archive_package_ledger_hash", "passed" if self.package_ledger.get("ledger_hash") == actual else "failed", "blocking", "Package ledger hash matches." if self.package_ledger.get("ledger_hash") == actual else "Package ledger hash does not match.")
-            manifest_row = self.manifest.get("package_ledger") if isinstance(self.manifest.get("package_ledger"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("package_ledger"))
             self._add_check("ledger", "operations_archive_manifest_ledger_hash", "passed" if manifest_row.get("ledger_hash") == actual else "failed", "blocking", "Manifest package ledger hash matches." if manifest_row.get("ledger_hash") == actual else "Manifest package ledger hash does not match.")
         if self.verifier_summaries:
             failed = _failed_verifiers(self.verifier_summaries)
@@ -295,7 +295,7 @@ class _OperationsArchiveVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]

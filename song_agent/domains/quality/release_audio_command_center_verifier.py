@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -325,8 +325,8 @@ def _external_component_checks(
         action_queue_signoff_verification_report_path=external_paths["action_queue_signoff"][1],
         evidence_root=evidence_root,
     )
-    external_report = runtime_component.get("external_report") if isinstance(runtime_component.get("external_report"), dict) else {}
-    current_fingerprint = runtime_component.get("fingerprint") if isinstance(runtime_component.get("fingerprint"), dict) else {}
+    external_report = _as_document(runtime_component.get("external_report"))
+    current_fingerprint = _as_document(runtime_component.get("fingerprint"))
     public_summary = _public_verification_summary(key, external_report)
     return list(runtime_component.get("checks") or []) + [
         _check(
@@ -420,8 +420,8 @@ def _component_finish(
     external_report: ImplementationDocument | None = None,
 ) -> ImplementationDocument:
     blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
-    runtime = runtime if isinstance(runtime, dict) else {}
-    external_report = external_report if isinstance(external_report, dict) else {}
+    runtime = _as_document(runtime)
+    external_report = _as_document(external_report)
     if "integrity_hash" not in fingerprint:
         fingerprint["integrity_hash"] = _integrity_hash(fingerprint)
     result = {
@@ -439,7 +439,7 @@ def _component_finish(
 
 
 def _public_runtime_report(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     public_summary = {key: value for key, value in summary.items() if key not in {"zip_path"}}
     public = {
         "package_type": report.get("package_type"),
@@ -483,7 +483,7 @@ def _document_binding_checks(
 ) -> list[ImplementationDocument]:
     component_by_key = {str(row.get("component_key")): row for row in inventory.get("components", []) if isinstance(row, dict)}
     source_hash = report.get("source_hash")
-    doc_hashes = report.get("document_hashes") if isinstance(report.get("document_hashes"), dict) else {}
+    doc_hashes = _as_document(report.get("document_hashes"))
     checks = [
         _check("release_audio_command_center_manifest_report_binding", manifest.get("report_hash") == report.get("integrity_hash"), "Manifest binds report."),
         _check("release_audio_command_center_manifest_inventory_binding", manifest.get("evidence_inventory_hash") == inventory.get("integrity_hash"), "Manifest binds inventory."),
@@ -491,7 +491,7 @@ def _document_binding_checks(
         _check("release_audio_command_center_manifest_gap_plan_binding", manifest.get("gap_plan_hash") == gap_plan.get("integrity_hash"), "Manifest binds gap plan."),
         _check("release_audio_command_center_manifest_runbook_binding", manifest.get("runbook_hash") == runbook.get("integrity_hash"), "Manifest binds runbook."),
         _check("release_audio_command_center_manifest_runbook_results_binding", manifest.get("runbook_results_hash") == runbook_results.get("integrity_hash"), "Manifest binds runbook results."),
-        _check("release_audio_command_center_source_hash_binding", source_hash and manifest.get("source_hash") == source_hash and command_center.get("source_hash") == source_hash and inventory.get("source_hash") == source_hash and readiness.get("source_hash") == source_hash and gap_plan.get("source_hash") == source_hash and runbook.get("source_hash") == source_hash, "Command Center documents bind the same source hash."),
+        _check("release_audio_command_center_source_hash_binding", bool(source_hash and manifest.get("source_hash") == source_hash and command_center.get("source_hash") == source_hash and inventory.get("source_hash") == source_hash and readiness.get("source_hash") == source_hash and gap_plan.get("source_hash") == source_hash and runbook.get("source_hash") == source_hash), "Command Center documents bind the same source hash."),
         _check("release_audio_command_center_report_document_hashes", doc_hashes.get("command_center") == command_center.get("integrity_hash") and doc_hashes.get("evidence_inventory") == inventory.get("integrity_hash") and doc_hashes.get("readiness_matrix") == readiness.get("integrity_hash") and doc_hashes.get("gap_plan") == gap_plan.get("integrity_hash") and doc_hashes.get("runbook") == runbook.get("integrity_hash") and doc_hashes.get("runbook_results") == runbook_results.get("integrity_hash"), "Report binds all Command Center documents."),
     ]
     for key in COMPONENT_KEYS:
@@ -506,7 +506,7 @@ def _document_binding_checks(
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
@@ -570,7 +570,7 @@ def _component_status(inventory: ImplementationDocument, key: str) -> str:
 
 
 def _public_verification_summary(component_key: str, report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     public = {
         "component_key": component_key,
         "package_type": report.get("package_type"),

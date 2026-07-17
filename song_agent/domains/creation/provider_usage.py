@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import json as json
 from pathlib import Path as Path
@@ -149,8 +149,8 @@ def usage_record_from_file(
 
 
 def normalize_provider_usage_record(record: dict[str, Any], *, pricing: dict[str, Any] | None = None) -> dict[str, Any]:
-    usage = record.get("usage") if isinstance(record.get("usage"), dict) else record
-    nested_usage = usage.get("usage") if isinstance(usage.get("usage"), dict) else {}
+    usage = _document_or(record.get("usage"), record)
+    nested_usage = _as_document(usage.get("usage"))
     prompt_tokens = _usage_int(usage, "prompt_tokens") or _usage_int(nested_usage, "prompt_tokens")
     completion_tokens = _usage_int(usage, "completion_tokens") or _usage_int(nested_usage, "completion_tokens")
     total_tokens = _usage_int(usage, "total_tokens") or _usage_int(nested_usage, "total_tokens") or prompt_tokens + completion_tokens
@@ -220,7 +220,7 @@ def load_provider_pricing(path: Path = PRICING_PATH) -> dict[str, Any]:
     if int(data.get("schema_version", 1) or 1) != 1:
         return {}
     models = data.get("models")
-    return models if isinstance(models, dict) else {}
+    return _as_document(models)
 
 
 def estimate_provider_cost(

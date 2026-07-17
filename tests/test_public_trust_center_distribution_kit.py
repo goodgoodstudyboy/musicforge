@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import hashlib
-import shutil
 import zipfile
 from pathlib import Path
 
 import pytest
 
-from tests.test_public_trust_center import _backslash_zip, _duplicate_zip, _rewrite_zip, _sync_manifest_file
+from tests.test_public_trust_center import _backslash_zip, _duplicate_zip, _rewrite_zip
 from tests.test_public_trust_center_anchor_registry import _doc_bytes, _read_doc
 from tests.test_public_trust_center_anchor_transparency import _anchor_transparency_fixture
 

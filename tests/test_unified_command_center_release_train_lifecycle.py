@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from song_agent.projectio import read_json
 from tests.zip_helpers import _v76_rewrite_zip
 from song_agent.releases import stable_hash
 from song_agent.unified_command_center_release_train_change_control import UnifiedCommandCenterReleaseTrainChangeControlStore

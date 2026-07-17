@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import hashlib as hashlib
@@ -564,7 +564,7 @@ def _provider_edit_response_parts(response: Any) -> tuple[ImplementationDocument
     if isinstance(response, ProviderEditResponse):
         return response.data, dict(response.usage or {}), response.request_id
     if isinstance(response, dict) and "data" in response and isinstance(response.get("data"), dict):
-        usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+        usage = _as_document(response.get("usage"))
         request_id = response.get("request_id")
         return response["data"], dict(usage), None if request_id is None else str(request_id)
     if isinstance(response, dict):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -108,8 +108,8 @@ def release_source_hash_from_state(source: dict[str, Any]) -> str:
 
 
 def release_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or summary.get("status") or "missing",
@@ -182,7 +182,7 @@ def build_release_signoff_record(
 
 
 def release_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
-    data = record if isinstance(record, dict) else {}
+    data = _as_document(record)
     return sanitize_metadata(
         {
             "status": data.get("status") or "not_signed",
@@ -192,7 +192,7 @@ def release_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
             "qa_source_hash": data.get("qa_source_hash"),
             "export_manifest_hash": data.get("export_manifest_hash"),
             "forced": bool(data.get("forced", False)),
-            "acceptance_gate": data.get("acceptance_gate") if isinstance(data.get("acceptance_gate"), dict) else {},
+            "acceptance_gate": _as_document(data.get("acceptance_gate")),
         },
         blocked_keys=BLOCKED_RELEASE_KEYS,
     )
@@ -433,7 +433,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         data = read_json(path)
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
-    return data if isinstance(data, dict) else {}
+    return _as_document(data)
 
 
 def _raw_release_document(release_store: ReleaseStore, release_id: str) -> ImplementationDocument:

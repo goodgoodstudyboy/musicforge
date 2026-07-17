@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -63,7 +63,7 @@ def read_audio_artifact_manifest(path: Path, *, default: dict[str, Any] | None =
     if not path.exists():
         return default if default is not None else {}
     data = read_json(path)
-    return sanitize_metadata(data if isinstance(data, dict) else {})
+    return sanitize_metadata(_as_document(data))
 
 
 def audio_artifact_source_hash(manifest: dict[str, Any]) -> str:
@@ -72,8 +72,8 @@ def audio_artifact_source_hash(manifest: dict[str, Any]) -> str:
             "wav": _state_for_source(manifest.get("wav")),
             "midi": _state_for_source(manifest.get("midi")),
             "song_plan": _state_for_source(manifest.get("song_plan")),
-            "renderer": manifest.get("renderer") if isinstance(manifest.get("renderer"), dict) else {},
-            "source": manifest.get("source") if isinstance(manifest.get("source"), dict) else {},
+            "renderer": _as_document(manifest.get("renderer")),
+            "source": _as_document(manifest.get("source")),
         }
     )
 
@@ -130,8 +130,8 @@ def audio_artifact_summary(manifest: dict[str, Any], *, wav_path: Path | None = 
     if manifest and wav_path is not None and midi_path is not None and song_plan_path is not None:
         stale_reasons = audio_artifact_stale_reasons(manifest, wav_path=wav_path, midi_path=midi_path, song_plan_path=song_plan_path)
         current = not stale_reasons
-    wav = manifest.get("wav") if isinstance(manifest.get("wav"), dict) else {}
-    renderer = manifest.get("renderer") if isinstance(manifest.get("renderer"), dict) else {}
+    wav = _as_document(manifest.get("wav"))
+    renderer = _as_document(manifest.get("renderer"))
     return sanitize_metadata(
         {
             "artifact_id": manifest.get("artifact_id"),
@@ -200,12 +200,12 @@ def _json_file_state(path: Path) -> ImplementationDocument:
         payload = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         payload = {}
-    state["payload_hash"] = stable_hash(payload if isinstance(payload, dict) else {})
+    state["payload_hash"] = stable_hash(_as_document(payload))
     return state
 
 
 def _state_for_source(value: Any) -> ImplementationDocument:
-    data = value if isinstance(value, dict) else {}
+    data = _as_document(value)
     return {
         "exists": bool(data.get("exists", False)),
         "size_bytes": data.get("size_bytes"),

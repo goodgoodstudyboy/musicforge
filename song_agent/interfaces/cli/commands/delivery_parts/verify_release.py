@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
 from . import dependencies as _commands_delivery_parts_dependencies
 
 from .verify_release_and_adapters import build_release_operations_parser, build_verify_distribution_parser, build_verify_release_operations_archive_parser, build_verify_release_operations_audit_parser, build_verify_release_operations_parser, build_verify_release_operations_reviewer_pack_parser, build_verify_release_operations_runbook_parser, build_verify_release_parser, build_verify_submission_evidence_parser, build_verify_submission_parser
@@ -306,7 +308,7 @@ def _execute_release_operations(argv: list[str]) -> None:
         submission_store=submission_store,
         submission_evidence_store=SubmissionEvidenceStore(submission_store),
     )
-    result: dict[str, Any] = {"ok": True, "release_id": args.release_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "release_id": args.release_id}
     if args.refresh:
         report = store.refresh(args.release_id)
         result.update({"report": report, "summary": operations_report_summary(report)})

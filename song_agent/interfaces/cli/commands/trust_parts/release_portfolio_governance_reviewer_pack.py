@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
 from . import dependencies as _commands_trust_parts_dependencies
 
 from .portfolio_parsers_and_cross_domain_adapters import build_release_portfolio_governance_evidence_vault_parser, build_release_portfolio_governance_final_board_parser, build_release_portfolio_governance_reviewer_pack_parser
@@ -40,13 +42,13 @@ def _execute_release_portfolio_governance_reviewer_pack(argv: list[str]) -> None
     audit_store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=signoff_store)
     store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=audit_store)
     portfolio_id = args.portfolio_id
-    result: dict[str, Any] = {"ok": True, "portfolio_id": portfolio_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id}
     if args.refresh:
         report = store.refresh(portfolio_id)
         result.update({"report": report, "summary": portfolio_governance_reviewer_pack_summary(report), "stale": store.report_is_stale(portfolio_id, report)})
     else:
         report = store.read_report(portfolio_id, default={})
-        summary = portfolio_governance_reviewer_pack_summary(report) if report else {"status": "missing"}
+        summary: dict[str, _InterfaceType] = portfolio_governance_reviewer_pack_summary(report) if report else {"status": "missing"}
         if report:
             summary["stale"] = store.report_is_stale(portfolio_id, report)
         result.update({"report": report, "summary": summary, "stale": summary.get("stale", False)})
@@ -116,7 +118,7 @@ def _execute_release_portfolio_governance_final_board(argv: list[str]) -> None:
     governance_reviewer_store = ReleasePortfolioGovernanceReviewerPackStore(audit_store=governance_audit_store)
     store = ReleasePortfolioGovernanceFinalBoardStore(portfolio_store=portfolio_store, audit_store=governance_audit_store, reviewer_pack_store=governance_reviewer_store)
     portfolio_id = args.portfolio_id
-    result: dict[str, Any] = {"ok": True, "portfolio_id": portfolio_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id}
     if args.import_reviewer_response is not None:
         response_payload = read_json(args.import_reviewer_response)
         response = store.import_reviewer_response(portfolio_id, response_payload)
@@ -127,7 +129,7 @@ def _execute_release_portfolio_governance_final_board(argv: list[str]) -> None:
         result.update({"report": report, "summary": portfolio_governance_final_board_summary(report), "stale": store.report_is_stale(portfolio_id, report)})
     else:
         report = store.read_report(portfolio_id, default={})
-        summary = portfolio_governance_final_board_summary(report) if report else {"status": "missing"}
+        summary: dict[str, _InterfaceType] = portfolio_governance_final_board_summary(report) if report else {"status": "missing"}
         if report:
             summary["stale"] = store.report_is_stale(portfolio_id, report)
         result.update({"report": report, "summary": summary, "stale": summary.get("stale", False)})
@@ -232,7 +234,7 @@ def _execute_release_portfolio_governance_evidence_vault(argv: list[str]) -> Non
         final_board_store=final_board_store,
     )
     portfolio_id = args.portfolio_id
-    result: dict[str, Any] = {"ok": True, "portfolio_id": portfolio_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id}
     refresh_payload = {
         "require_final_board": True,
         "require_reviewer_pack": True,
@@ -245,7 +247,7 @@ def _execute_release_portfolio_governance_evidence_vault(argv: list[str]) -> Non
         result.update({"report": report, "summary": portfolio_governance_evidence_vault_summary(report), "stale": store.report_is_stale(portfolio_id, report)})
     else:
         report = store.read_report(portfolio_id, default={})
-        summary = portfolio_governance_evidence_vault_summary(report) if report else {"status": "missing"}
+        summary: dict[str, _InterfaceType] = portfolio_governance_evidence_vault_summary(report) if report else {"status": "missing"}
         if report:
             summary["stale"] = store.report_is_stale(portfolio_id, report)
         result.update({"report": report, "summary": summary, "stale": summary.get("stale", False)})

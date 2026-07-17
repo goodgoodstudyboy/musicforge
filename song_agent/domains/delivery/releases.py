@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -720,7 +720,7 @@ def _track_title(document: ProjectDocument, version: ProjectVersion, manifest: I
 
 
 def _duration_beats(plan: ImplementationDocument) -> float | None:
-    sections = plan.get("sections") if isinstance(plan.get("sections"), list) else []
+    sections = _as_list(plan.get("sections"))
     try:
         return max((float(section.get("start_beat", 0) or 0) + float(section.get("length_bars", 0) or 0) * 4 for section in sections if isinstance(section, dict)), default=None)
     except (TypeError, ValueError):
@@ -741,7 +741,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         data = read_json(path)
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
-    return data if isinstance(data, dict) else {}
+    return _as_document(data)
 
 
 def _file_sha256(path: Path) -> str | None:

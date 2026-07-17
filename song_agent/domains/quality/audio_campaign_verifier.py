@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -128,7 +128,7 @@ def audio_campaign_verification_exit_code(report: dict[str, Any]) -> int:
 
 def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, strict: bool) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     checks.append(_check("audio_campaign_manifest_files_present", bool(files), "Manifest declares package files."))
     effective_names = names - {"manifest.json"}
@@ -179,7 +179,7 @@ def _requirement_checks(
     require_no_open_high: bool,
     require_no_open_critical: bool,
 ) -> list[ImplementationDocument]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     case_count = int(summary.get("case_count") or 0)
     checks: list[dict[str, Any]] = []
     checks.append(_check("audio_campaign_report_status", report.get("status") == "passed", "Campaign report status is passed."))

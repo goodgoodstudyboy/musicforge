@@ -4,7 +4,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from song_agent.projectio import read_json, write_json
+from song_agent.projectio import write_json
 from song_agent.release_operations import ReleaseOperationsStore, operations_report_integrity_hash
 from song_agent.release_operations_audit import ReleaseOperationsAuditStore, audit_ledger_integrity_ok, audit_report_integrity_ok
 from song_agent.release_operations_audit_verifier import verify_release_operations_audit_package

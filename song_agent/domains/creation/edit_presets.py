@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, document_or as _document_or
 
 import json as json
 import re as re
@@ -190,8 +190,8 @@ class EditPresetStore:
 
 def merge_preset_intent(preset: EditPreset, payload: dict[str, Any], plan: SongPlan) -> dict[str, Any]:
     explicit_intent = payload.get("intent")
-    source = explicit_intent if isinstance(explicit_intent, dict) else payload
-    merged = {
+    source = _document_or(explicit_intent, payload)
+    merged: dict[str, Any] = {
         "edit_type": preset.edit_type,
         "target": resolve_target_defaults(preset, plan),
         "instruction": preset.description,

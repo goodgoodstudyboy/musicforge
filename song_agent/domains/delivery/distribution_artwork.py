@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import base64 as base64
 import hashlib as hashlib
@@ -85,7 +85,7 @@ def read_distribution_artwork(store: DistributionStore, release_id: str, artwork
     if not path.exists():
         raise FileNotFoundError("Distribution artwork does not exist.")
     value = read_json(path)
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def latest_distribution_artwork(store: DistributionStore, release_id: str) -> dict[str, Any]:
@@ -118,7 +118,7 @@ def delete_distribution_artwork(store: DistributionStore, release_id: str, artwo
 
 
 def distribution_artwork_summary(record: dict[str, Any] | None) -> dict[str, Any]:
-    data = record if isinstance(record, dict) else {}
+    data = _as_document(record)
     return sanitize_metadata(
         {
             "exists": bool(data),

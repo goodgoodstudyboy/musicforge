@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -114,7 +114,7 @@ def verify_unified_command_center_archive_package(
             checks.extend(_signoff_binding_checks(signoff_binding, signoff, history, verification))
             if signoff_binding_path:
                 checks.extend(_external_signoff_binding_checks(signoff_binding_path, signoff_binding))
-            source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+            source = _as_document(manifest.get("source"))
             checks.extend(
                 [
                     _check("ucc_archive_signoff_status", signoff.get("status") == "signed" or not require_signed, "Signoff is signed when required."),
@@ -226,7 +226,7 @@ def _external_signoff_binding_checks(binding_path: Path | str, packaged_binding:
 
 def _signoff_binding_checks(binding: ImplementationDocument, signoff: ImplementationDocument, history: list[ImplementationDocument], verification: ImplementationDocument) -> list[ImplementationDocument]:
     created_event = next((event for event in history if event.get("event_type") == "ucc_signoff_created"), None)
-    source = binding.get("source") if isinstance(binding.get("source"), dict) else {}
+    source = _as_document(binding.get("source"))
     checks = [
         _check("ucc_archive_signoff_binding_package_type", binding.get("package_type") == "musicforge_unified_command_center_signoff_binding", "Signoff binding package type is valid."),
         _check("ucc_archive_signoff_binding_signoff_hash", binding.get("signoff_hash") == signoff.get("integrity_hash"), "Signoff binding matches signoff hash."),
@@ -257,7 +257,7 @@ def _signoff_binding_checks(binding: ImplementationDocument, signoff: Implementa
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
     effective = names - {"manifest.json"}

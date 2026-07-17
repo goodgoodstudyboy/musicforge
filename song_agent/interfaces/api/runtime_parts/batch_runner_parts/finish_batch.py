@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.runtime_parts.batch_runner_context import BatchRunnerContext
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import BatchDocument
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProviderError, RendererError, load_provider_config, load_renderer_config
 
-class BatchRunnerFinishBatch:
+class BatchRunnerFinishBatch(BatchRunnerContext):
     def _finish_batch(self, document: BatchDocument) -> None:
         if document.state.failed_count or document.state.cancelled_count:
             document.state.status = "completed_with_errors"

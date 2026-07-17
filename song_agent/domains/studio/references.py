@@ -448,7 +448,7 @@ def reference_to_asset_payload(reference: ReferenceItem, payload: dict[str, Any]
         if asset_type not in {"lyric_hook", "section_template", "arrangement_template"}:
             raise ValueError("Text references can create lyric_hook, section_template, or arrangement_template assets.")
         text = _read_text_excerpt(reference, payload)
-        content = {
+        content: dict[str, Any] = {
             "kind": asset_type,
             "reference_id": reference.reference_id,
             "text": text,

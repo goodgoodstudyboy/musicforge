@@ -244,11 +244,11 @@ def _execute_acceptance_fix_plan(argv: list[str]) -> None:
     elif args.action == "review":
         review_store = AcceptanceFixPlanReviewStore(plan_store=store, fix_sprint_store=store.fix_sprint_store, kb_store=store.kb_store, project_store=store.project_store)
         if args.refresh:
-            review = review_store.refresh_for_plan(args.plan_id)
-            result = {"ok": True, "outcome_review": review.to_dict(), "summary": fix_plan_review_summary(review)}
+            outcome_review = review_store.refresh_for_plan(args.plan_id)
+            result = {"ok": True, "outcome_review": outcome_review.to_dict(), "summary": fix_plan_review_summary(outcome_review)}
         else:
-            review = review_store.get_or_missing_for_plan(args.plan_id)
-            result = {"ok": True, "outcome_review": review, "summary": fix_plan_review_summary(review)}
+            outcome_document = review_store.get_or_missing_for_plan(args.plan_id)
+            result = {"ok": True, "outcome_review": outcome_document, "summary": fix_plan_review_summary(outcome_document)}
     elif args.action == "recommend":
         preview = store.preview({"analytics_report_id": args.analytics_report_id, "kb_report_id": args.kb_report_id, "max_items": args.max_items, "include_hidden_kb": args.include_hidden_kb})
         result = {"ok": True, "fix_plan_preview": preview, "summary": fix_plan_summary(preview)}

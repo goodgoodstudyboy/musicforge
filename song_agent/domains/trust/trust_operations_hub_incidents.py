@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, list_or as _list_or
 
 import base64 as base64
 import hashlib as hashlib
@@ -227,7 +227,7 @@ class TrustOperationsIncidentStore:
                     self._write_incident(hub_id, incident, event_type="incident_marked_stale", now=now)
                 incident_ids.append(str(incident.get("incident_id") or ""))
             board_id = str(existing_board.get("board_id") or "tohi-board-000001")
-            board = {
+            board: ImplementationDocument = {
                 "schema_version": TRUST_OPERATIONS_INCIDENT_SCHEMA_VERSION,
                 "package_type": TRUST_OPERATIONS_INCIDENT_BOARD_PACKAGE_TYPE,
                 "hub_id": hub_id,
@@ -239,7 +239,8 @@ class TrustOperationsIncidentStore:
                 "incident_ids": sorted(set(item for item in incident_ids if item)),
             }
             board["summary"] = _board_summary(self.list_incidents(hub_id, include_archived=False))
-            if board["summary"]["open_count"] == 0 and board["summary"]["stale_count"] == 0:
+            board_summary = _as_document(board.get("summary"))
+            if board_summary.get("open_count") == 0 and board_summary.get("stale_count") == 0:
                 board["status"] = "ready_for_closeout"
             board["integrity_hash"] = incident_hash(board)
             _write_json(self.board_path(hub_id), board)
@@ -297,7 +298,7 @@ class TrustOperationsIncidentStore:
             payload = payload or {}
             incident = self._mutable_incident(hub_id, incident_id)
             plan_id = _safe_id(str(payload.get("plan_id") or "rp-000001"))
-            steps = payload.get("steps") if isinstance(payload.get("steps"), list) else _default_plan_steps(incident)
+            steps = _list_or(payload.get("steps"), _default_plan_steps(incident))
             normalized = []
             for index, step in enumerate(steps, start=1):
                 if not isinstance(step, dict):
@@ -393,7 +394,7 @@ class TrustOperationsIncidentStore:
                 "expected_status": binding.get("expected_status"),
                 "created_at": now,
                 "redaction_status": "passed",
-                "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
+                "summary": _as_document(report.get("summary")),
             }
             evidence["integrity_hash"] = incident_hash(evidence)
             _write_json(self.evidence_path(hub_id, incident_id, evidence_id), evidence)
@@ -860,7 +861,7 @@ def _board_summary(incidents: list[ImplementationDocument]) -> ImplementationDoc
 
 
 def _evidence_summary(index: ImplementationDocument) -> dict[str, int]:
-    rows = index.get("evidence") if isinstance(index.get("evidence"), list) else []
+    rows = _as_list(index.get("evidence"))
     return {
         "evidence_count": len(rows),
         "passed_count": sum(1 for row in rows if isinstance(row, dict) and _evidence_binding_valid(row) and row.get("status") == "passed"),
@@ -872,9 +873,9 @@ def _evidence_summary(index: ImplementationDocument) -> dict[str, int]:
 def _expected_evidence_rows_for_component(docs: dict[str, ImplementationDocument], component_type: str) -> list[ImplementationDocument]:
     delivery_types = {str(spec.get("component_type") or "") for spec in DELIVERY_VERIFICATION_COMPONENTS}
     if component_type in delivery_types:
-        source = docs.get("delivery_evidence_index") if isinstance(docs.get("delivery_evidence_index"), dict) else {}
+        source = _as_document(docs.get("delivery_evidence_index"))
     else:
-        source = docs.get("evidence_binding_index") if isinstance(docs.get("evidence_binding_index"), dict) else {}
+        source = _as_document(docs.get("evidence_binding_index"))
     return [row for row in source.get("evidence", []) if isinstance(row, dict) and row.get("component_type") == component_type]
 
 
@@ -946,12 +947,12 @@ def _evidence_binding_valid(evidence: ImplementationDocument) -> bool:
         expected_key = "expected_" + key
         if evidence.get(expected_key) is not None and evidence.get(key) != evidence.get(expected_key):
             return False
-    checks = evidence.get("binding_checks") if isinstance(evidence.get("binding_checks"), list) else []
+    checks = _as_list(evidence.get("binding_checks"))
     return bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
 
 
 def _valid_passed_evidence_for_incident(index: ImplementationDocument, incident: ImplementationDocument) -> list[ImplementationDocument]:
-    detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+    detected = _as_document(incident.get("detected_from"))
     incident_component_type = str(detected.get("component_type") or "")
     incident_component_id = str(detected.get("component_id") or "")
     rows = []

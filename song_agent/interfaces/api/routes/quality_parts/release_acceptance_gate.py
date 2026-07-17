@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 from typing import Any
 
 from song_agent.domains.creation.redaction import sanitize_sensitive_text
@@ -9,7 +15,7 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesReleaseAcceptanceGate:
+class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
     def _release_acceptance_gate_part_01(self, payload: ImplementationDocument, _split_state):
         _split_state['suite_id'] = str(payload.get('acceptance_suite_id') or '').strip()
         _split_state['analytics_evidence'] = self._release_acceptance_analytics_gate(payload)
@@ -101,7 +107,7 @@ class QualityRoutesReleaseAcceptanceGate:
         acceptance_status = str(summary.get('acceptance_status') or '')
         release_ready = bool(summary.get('release_ready', False))
         coverage_status = str(summary.get('songbook_coverage_status') or 'not_applicable')
-        human_review_pack = summary.get('human_review_pack') if isinstance(summary.get('human_review_pack'), dict) else {}
+        human_review_pack = _as_document(summary.get('human_review_pack'))
         require_release_ready = bool(payload.get('require_acceptance_release_ready', False)) or str(summary.get('profile_id') or '') in {'release_candidate', 'audio_required'}
         if require_release_ready:
             ok = report.get('status') == 'passed' and release_ready and (acceptance_status == 'release_ready_passed') and (coverage_status in {'complete', 'not_applicable'})
@@ -151,7 +157,7 @@ class QualityRoutesReleaseAcceptanceGate:
         return (False, None)
 
     def _release_acceptance_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._release_acceptance_gate_part_01(payload, _split_state)
         if _split_result[0]:
             return _split_result[1]
@@ -161,6 +167,7 @@ class QualityRoutesReleaseAcceptanceGate:
         _split_result = self._release_acceptance_gate_part_03(payload, _split_state)
         if _split_result[0]:
             return _split_result[1]
+        raise RuntimeError("_release_acceptance_gate did not produce a result.")
 
     def _release_audio_campaign_gate(self, release_id: str, payload: ImplementationDocument, *, required: bool) -> ImplementationDocument:
         campaign_id = str(payload.get("audio_campaign_id") or payload.get("campaign_id") or "").strip()
@@ -178,7 +185,7 @@ class QualityRoutesReleaseAcceptanceGate:
         except Exception:
             release = None
             track_count = 0
-        summary = gate.get("summary") if isinstance(gate.get("summary"), dict) else {}
+        summary = _as_document(gate.get("summary"))
         case_count = int(summary.get("case_count") or 0)
         gate = {**gate, "release_id": release_id, "track_count": track_count, "case_count": case_count}
         if required and gate.get("status") == "passed" and track_count > 0 and case_count < track_count:
@@ -296,7 +303,7 @@ class QualityRoutesReleaseAcceptanceGate:
                 return {**evidence, "status": "failed", "hard_block": True, "message": str(per_track_gate.get("message") or "Per-track audio review gate failed.")}
         if require_human:
             if require_per_track_review:
-                per_track = evidence.get("per_track_review") if isinstance(evidence.get("per_track_review"), dict) else {}
+                per_track = _as_document(evidence.get("per_track_review"))
                 evidence["manual_audio_accepted_count"] = per_track.get("manual_accepted_track_count", 0)
             else:
                 suite_id = str(payload.get("acceptance_suite_id") or "").strip()

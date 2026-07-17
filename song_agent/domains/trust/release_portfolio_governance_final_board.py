@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -196,12 +196,12 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                 "governance_reviewer_pack_zip_sha256": _sha256(reviewer_zip_path) if reviewer_zip_path.exists() else None,
                 "governance_reviewer_pack_zip_size_bytes": reviewer_zip_path.stat().st_size if reviewer_zip_path.exists() else None,
                 "governance_reviewer_pack_manifest_hash": reviewer_manifest.get("integrity_hash") if reviewer_manifest else None,
-                "queue_count": int((governance_audit_report.get("coverage") if isinstance(governance_audit_report.get("coverage"), dict) else {}).get("queue_count") or 0),
-                "signed_queue_count": int((governance_audit_report.get("coverage") if isinstance(governance_audit_report.get("coverage"), dict) else {}).get("signed_queue_count") or 0),
-                "archive_verified_count": int((governance_audit_report.get("coverage") if isinstance(governance_audit_report.get("coverage"), dict) else {}).get("archive_verified_count") or 0),
-                "force_signed_queue_count": int((governance_audit_report.get("coverage") if isinstance(governance_audit_report.get("coverage"), dict) else {}).get("force_signed_count") or 0),
-                "reset_count": int((governance_audit_report.get("coverage") if isinstance(governance_audit_report.get("coverage"), dict) else {}).get("reset_count") or 0),
-                "applied_change_request_count": int((governance_audit_report.get("coverage") if isinstance(governance_audit_report.get("coverage"), dict) else {}).get("applied_change_request_count") or 0),
+                "queue_count": int((_as_document(governance_audit_report.get("coverage"))).get("queue_count") or 0),
+                "signed_queue_count": int((_as_document(governance_audit_report.get("coverage"))).get("signed_queue_count") or 0),
+                "archive_verified_count": int((_as_document(governance_audit_report.get("coverage"))).get("archive_verified_count") or 0),
+                "force_signed_queue_count": int((_as_document(governance_audit_report.get("coverage"))).get("force_signed_count") or 0),
+                "reset_count": int((_as_document(governance_audit_report.get("coverage"))).get("reset_count") or 0),
+                "applied_change_request_count": int((_as_document(governance_audit_report.get("coverage"))).get("applied_change_request_count") or 0),
             },
             blocked_keys=FINAL_BOARD_BLOCKED_KEYS,
         )
@@ -215,7 +215,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
         return sanitize_metadata(source, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
     def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None) -> bool:
-        data = report if isinstance(report, dict) else self.read_report(portfolio_id, default={})
+        data = _document_or(report, self.read_report(portfolio_id, default={}))
         if not data:
             return False
         try:
@@ -242,7 +242,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                 "response_id": response_id,
                 "portfolio_id": portfolio_id,
                 "imported_at": now,
-                "reviewer": sanitize_metadata(payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS),
+                "reviewer": sanitize_metadata(_as_document(payload.get("reviewer")), blocked_keys=FINAL_BOARD_BLOCKED_KEYS),
                 "source": {
                     "reviewer_pack_source_hash": source.get("governance_reviewer_report_hash"),
                     "reviewer_pack_zip_sha256": source.get("governance_reviewer_pack_zip_sha256"),
@@ -279,17 +279,17 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                 raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Report integrity failed. Refresh before signoff.")
             force = bool(payload.get("force", False))
             override_reason = sanitize_sensitive_text(str(payload.get("override_reason") or "").strip())
-            blockers = report.get("blockers") if isinstance(report.get("blockers"), list) else []
-            warnings = report.get("warnings") if isinstance(report.get("warnings"), list) else []
+            blockers = _as_list(report.get("blockers"))
+            warnings = _as_list(report.get("warnings"))
             if blockers:
-                detail = str((blockers[0] if isinstance(blockers[0], dict) else {}).get("message") or "Final Board gate failed.")
+                detail = str((_as_document(blockers[0])).get("message") or "Final Board gate failed.")
                 raise ReleasePortfolioGovernanceFinalBoardStateError(f"Final Board Signoff gate failed: {detail}")
             if warnings and not force and not bool(payload.get("allow_warning_signoff", False)):
                 raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Report has warnings. Use force with override_reason or allow_warning_signoff.")
             if force and len(override_reason) < 20:
                 raise ReleasePortfolioGovernanceFinalBoardStateError("override_reason must be at least 20 characters for force Final Board Signoff.")
             status = "force_signed" if force and warnings else "signed"
-            source = report.get("source") if isinstance(report.get("source"), dict) else {}
+            source = _as_document(report.get("source"))
             signoff = {
                 "schema_version": FINAL_BOARD_SCHEMA_VERSION,
                 "signoff_id": self._reserve_signoff_id(portfolio_id),
@@ -475,7 +475,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             (export_dir / "reviewer-response-summary.md").write_text(_reviewer_response_markdown(responses), encoding="utf-8")
             _write_readme(export_dir, report, signoff)
             files = [_file_record(export_dir, path) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
-            source = report.get("source") if isinstance(report.get("source"), dict) else {}
+            source = _as_document(report.get("source"))
             manifest = {
                 "schema_version": FINAL_BOARD_ARCHIVE_SCHEMA_VERSION,
                 "package_type": "release_portfolio_governance_final_board_archive",
@@ -546,12 +546,12 @@ class ReleasePortfolioGovernanceFinalBoardStore:
             return sanitize_metadata(info, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
     def signoff_summary(self, portfolio_id: str, *, signoff: dict[str, Any] | None = None) -> dict[str, Any]:
-        data = signoff if isinstance(signoff, dict) else self.read_signoff(portfolio_id, default={})
+        data = _document_or(signoff, self.read_signoff(portfolio_id, default={}))
         stale = False
         if data and data.get("status") in SIGNED_STATUSES:
             try:
                 report = self.read_report(portfolio_id, default={})
-                source = data.get("source") if isinstance(data.get("source"), dict) else {}
+                source = _as_document(data.get("source"))
                 stale = (
                     self.report_is_stale(portfolio_id, report)
                     or source.get("final_board_report_hash") != report.get("integrity_hash")
@@ -658,7 +658,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                signoff_id = str((event.get("summary") if isinstance(event.get("summary"), dict) else {}).get("signoff_id") or "")
+                signoff_id = str((_as_document(event.get("summary"))).get("signoff_id") or "")
                 if signoff_id.startswith("fgs-"):
                     try:
                         used.append(int(signoff_id.split("-")[-1]))
@@ -702,7 +702,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
                 continue
             if not isinstance(event, dict):
                 continue
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             event_name = str(event.get("type") or "")
             if event_name == "signed":
                 active_signoff_id = str(summary.get("signoff_id") or "") or None
@@ -742,7 +742,7 @@ class ReleasePortfolioGovernanceFinalBoardStore:
 
 
 def final_board_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_report_integrity_hash(data)
 
 
@@ -750,7 +750,7 @@ def final_board_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def final_board_response_integrity_ok(response: dict[str, Any] | None) -> bool:
-    data = response if isinstance(response, dict) else {}
+    data = _as_document(response)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_response_integrity_hash(data)
 
 
@@ -758,12 +758,12 @@ def final_board_response_integrity_ok(response: dict[str, Any] | None) -> bool:
 
 
 def final_board_signoff_integrity_ok(signoff: dict[str, Any] | None) -> bool:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_signoff_hash(data)
 
 
 def final_board_signoff_summary(signoff: dict[str, Any] | None, *, stale: bool = False) -> dict[str, Any]:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     if not data:
         return {"status": "not_signed", "integrity_ok": False, "stale": False}
     integrity_ok = final_board_signoff_integrity_ok(data)
@@ -780,15 +780,15 @@ def final_board_signoff_summary(signoff: dict[str, Any] | None, *, stale: bool =
 
 
 def final_board_archive_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_archive_manifest_hash(data)
 
 
 def final_board_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     if not data:
         return {"status": "missing", "integrity_ok": False}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata({"status": data.get("status"), "readiness": data.get("readiness"), "portfolio_id": data.get("portfolio_id"), "source_hash": data.get("source_hash"), "integrity_hash": data.get("integrity_hash"), "integrity_ok": final_board_report_integrity_ok(data), **summary}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
 
@@ -818,7 +818,7 @@ def _reviewer_response_status(responses: list[ImplementationDocument], source: I
     for item in responses:
         if not final_board_response_integrity_ok(item):
             return "invalid"
-        response_source = item.get("source") if isinstance(item.get("source"), dict) else {}
+        response_source = _as_document(item.get("source"))
         current = (
             response_source.get("reviewer_pack_source_hash") == source.get("governance_reviewer_report_hash")
             and response_source.get("reviewer_pack_zip_sha256") == source.get("governance_reviewer_pack_zip_sha256")
@@ -844,7 +844,7 @@ def _reviewer_response_bundle(portfolio_id: str, responses: list[ImplementationD
 
 
 def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return {"status": report.get("status") or "missing", "zip_sha256": report.get("zip_sha256"), "zip_size_bytes": report.get("zip_size_bytes"), "manifest_hash": report.get("manifest_hash"), "summary": summary}
 
 
@@ -884,7 +884,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except Exception:
         return default if default is not None else {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
 
 def _read_zip_json(path: Path, name: str) -> ImplementationDocument:
@@ -893,7 +893,7 @@ def _read_zip_json(path: Path, name: str) -> ImplementationDocument:
             value = json.loads(archive.read(name).decode("utf-8"))
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, data: ImplementationDocument) -> Path:
@@ -959,14 +959,14 @@ def _redaction_summary(value: Any) -> ImplementationDocument:
 
 
 def _final_board_markdown(report: ImplementationDocument, signoff: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return "\n".join(["# Portfolio Governance Final Board", "", f"Portfolio: {report.get('portfolio_id')}", f"Report status: {report.get('status')}", f"Signoff status: {signoff.get('status')}", f"Queues: {summary.get('signed_queue_count', 0)}/{summary.get('queue_count', 0)}", f"Archives: {summary.get('archive_verified_count', 0)}", ""])
 
 
 def _reviewer_response_markdown(responses: list[ImplementationDocument]) -> str:
     lines = ["# Reviewer Responses", ""]
     for item in responses:
-        reviewer = item.get("reviewer") if isinstance(item.get("reviewer"), dict) else {}
+        reviewer = _as_document(item.get("reviewer"))
         lines.append(f"- {item.get('response_id')}: {item.get('decision')} by {reviewer.get('name') or 'reviewer'}")
     lines.append("")
     return "\n".join(lines)

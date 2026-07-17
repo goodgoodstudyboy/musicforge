@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_list as _as_list
+
+from typing import Any as _InferenceType
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json as json
@@ -170,7 +174,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             external_evidence_manifest_path=payload.get("external_evidence_manifest") or payload.get("external_evidence_manifest_path") or self._saved_input(train_id, "external_evidence_manifest"),
             change_control_zip_path=payload.get("change_control_zip") or payload.get("change_control_zip_path") or self.change_control_store.zip_path(train_id),
             change_control_verification_report_path=payload.get("change_control_verification_report") or payload.get("change_control_verification_report_path") or self.change_control_store.verification_report_path(train_id),
-            reset_proof_paths=_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id)),
+            reset_proof_paths=_as_list(_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id))),
         )
         write_unified_command_center_release_train_lifecycle_verification_report(report, self.verification_report_path(train_id))
         return report
@@ -205,7 +209,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
                 external_evidence_manifest_path=payload.get("external_evidence_manifest_path") or payload.get("external_evidence_manifest") or self._saved_input(train_id, "external_evidence_manifest"),
                 change_control_zip_path=payload.get("change_control_zip_path") or payload.get("change_control_zip") or self.change_control_store.zip_path(train_id),
                 change_control_verification_report_path=payload.get("change_control_verification_report_path") or payload.get("change_control_verification_report") or self.change_control_store.verification_report_path(train_id),
-                reset_proof_paths=_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id)),
+                reset_proof_paths=_as_list(_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id))),
             )
             if not _integrity_ok(external):
                 return _gate_failed("Release Train Lifecycle verification integrity failed.")
@@ -350,6 +354,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
         external = read_json(report_path) if report_path.exists() else {}
         if not zip_path.exists() and not report_path.exists() and not require:
             return {"configured": False, "runtime_status": "not_configured", "applied_reset_count": 0}
+        reset_proof_paths = _reset_proof_paths(payload)
         runtime = verify_unified_command_center_release_train_change_control_package(
             zip_path,
             strict=True,
@@ -359,7 +364,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             train_archive_verification_report_path=payload.get("train_archive_verification_report") or payload.get("train_archive_verification_report_path") or self.train_store.verification_report_path(train_id),
             train_signoff_binding_path=payload.get("train_signoff_binding") or payload.get("train_signoff_binding_path") or self.train_store.signoff_binding_path(train_id),
             external_evidence_manifest_path=payload.get("external_evidence_manifest") or payload.get("external_evidence_manifest_path"),
-            reset_proof_path=(_reset_proof_paths(payload) or [None])[-1],
+            reset_proof_path=reset_proof_paths[-1] if reset_proof_paths else None,
         )
         return {
             "configured": True,
@@ -399,7 +404,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
         return items
 
     def _lifecycle_ledger(self, train_id: str, train_history: list[ImplementationDocument]) -> list[ImplementationDocument]:
-        source_rows = []
+        source_rows: list[ImplementationDocument] = []
         for event in train_history:
             source_rows.append({"source": "release_train_history", "event": event})
         base = self.change_control_store.change_dir(train_id) / "change-requests"
@@ -408,7 +413,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
                 for line in path.read_text(encoding="utf-8").splitlines():
                     if line.strip():
                         source_rows.append({"source": "change_request_history", "event": json.loads(line)})
-        rows = []
+        rows: list[ImplementationDocument] = []
         previous = ""
         for index, source in enumerate(source_rows, start=1):
             raw = source["event"]
@@ -465,7 +470,7 @@ def _path_text(value: Any) -> str | None:
 
 def _reset_proof_paths(payload: ImplementationDocument) -> list[str]:
     value = payload.get("reset_proofs") or payload.get("reset_proof_paths")
-    rows = []
+    rows: list[_InferenceType] = []
     if isinstance(value, list):
         rows.extend(str(item) for item in value if item)
     elif value:

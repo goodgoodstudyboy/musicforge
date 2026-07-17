@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
@@ -42,20 +44,20 @@ def ack_evidence_hash(evidence: dict[str, Any]) -> str:
 
 
 def acknowledgement_summary(evidence: dict[str, Any] | None) -> dict[str, Any]:
-    data = evidence if isinstance(evidence, dict) else {}
-    public = data.get("public_summary") if isinstance(data.get("public_summary"), dict) else {}
+    data = _as_document(evidence)
+    public = _as_document(data.get("public_summary"))
     return {
         "status": data.get("status") or "missing",
         "external_review_status": data.get("external_review_status") or "missing",
         "acknowledgement_id": data.get("acknowledgement_id"),
-        "response_id": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("response_id"),
+        "response_id": (_as_document(data.get("source"))).get("response_id"),
         "reviewer_name": public.get("reviewer_name"),
         "reviewed_notice_count": public.get("reviewed_notice_count", 0),
     }
 
 
 def response_template(pack: dict[str, Any]) -> dict[str, Any]:
-    source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+    source = _as_document(pack.get("source"))
     return {
         "schema_version": ACK_SCHEMA_VERSION,
         "package_type": ACK_RESPONSE_PACKAGE_TYPE,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import re as re
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
@@ -167,11 +167,11 @@ def _node_order(node_name: str) -> tuple[int, str]:
 
 
 def _dict_or_empty(value: Any) -> ImplementationDocument:
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _list_or_empty(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+    return _as_list(value)
 
 
 def _utc_now() -> str:

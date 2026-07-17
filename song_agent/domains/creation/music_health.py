@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import math as math
 import wave as wave
@@ -156,8 +156,8 @@ def analyze_music_health(
 
 
 def music_health_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -174,8 +174,8 @@ def music_health_summary(report: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def music_health_allows_review(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return data.get("status") in {"passed", "warning"} and int(summary.get("blocking_failed", 0) or 0) == 0
 
 

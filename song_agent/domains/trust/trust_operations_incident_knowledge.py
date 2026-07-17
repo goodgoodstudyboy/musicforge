@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import hashlib as hashlib
 import json as json
@@ -200,7 +200,7 @@ class TrustOperationsIncidentKnowledgeStore:
             entry = self.read_entry(hub_id, entry_id)
             if entry.get("status") == "hidden":
                 raise TrustOperationsKnowledgeStateError("Hidden Knowledge Entry cannot create regression guard.")
-            recommended = entry.get("recommended_guard") if isinstance(entry.get("recommended_guard"), dict) else {}
+            recommended = _as_document(entry.get("recommended_guard"))
             guard_type = str(payload.get("guard_type") or recommended.get("guard_type") or "manual_required")
             if guard_type not in {"external_report_coverage", "external_report_binding", "redaction_regression", "zip_safety_regression", "stale_guard_regression", "manual_required"}:
                 raise TrustOperationsKnowledgeStateError("Unsupported regression guard type.")
@@ -246,7 +246,7 @@ class TrustOperationsIncidentKnowledgeStore:
             guard = self.read_guard(hub_id, guard_id)
             checks = self._guard_checks(hub_id, guard)
             status = "manual_required" if guard.get("guard_type") == "manual_required" else ("passed" if all(item.get("status") == "passed" for item in checks) else "failed")
-            run = {
+            run: ImplementationDocument = {
                 "schema_version": TRUST_OPERATIONS_KNOWLEDGE_SCHEMA_VERSION,
                 "hub_id": hub_id,
                 "guard_id": guard_id,
@@ -261,7 +261,7 @@ class TrustOperationsIncidentKnowledgeStore:
             }
             run["integrity_hash"] = knowledge_hash(run)
             guard["status"] = status if status != "passed" else "active"
-            guard["last_run"] = {"status": status, "run_at": now, "guard_run_hash": run["integrity_hash"], "guard_hash_before_run": run["source"]["guard_hash"]}
+            guard["last_run"] = {"status": status, "run_at": now, "guard_run_hash": run["integrity_hash"], "guard_hash_before_run": _as_document(run.get("source")).get("guard_hash")}
             guard["updated_at"] = now
             guard["integrity_hash"] = knowledge_hash(guard)
             _write_json(self.guard_path(hub_id, guard_id), guard)
@@ -314,7 +314,7 @@ class TrustOperationsIncidentKnowledgeStore:
             guards = self.list_guards(hub_id, include_archived=True)
             runs = self._latest_guard_runs(hub_id, guards)
             recurrence = _read_json_default(self.recurrence_path(hub_id), default=self.refresh_recurrence(hub_id, now=now, write=False))
-            source = _read_json_default(self.source_snapshot_path(hub_id), default=base.get("source") if isinstance(base.get("source"), dict) else {})
+            source = _read_json_default(self.source_snapshot_path(hub_id), default=_as_document(base.get("source")))
             export_dir = self.export_dir(hub_id)
             if export_dir.exists():
                 shutil.rmtree(_fs_path(export_dir), ignore_errors=True)
@@ -423,8 +423,8 @@ class TrustOperationsIncidentKnowledgeStore:
             return _sanitize(entry)
 
     def _source_summary(self, hub_id: str, payload: ImplementationDocument) -> ImplementationDocument:
-        incident_report = _read_json_default(Path(payload.get("incident_board_verification_report_path")) if payload.get("incident_board_verification_report_path") else self.incident_store.verification_report_path(hub_id), default={})
-        hub_report = _read_json_default(Path(payload.get("hub_verification_report_path")) if payload.get("hub_verification_report_path") else self._hub_verification_path_from_incident(hub_id, incident_report), default={})
+        incident_report = _read_json_default(_as_path(payload.get("incident_board_verification_report_path")) if payload.get("incident_board_verification_report_path") else self.incident_store.verification_report_path(hub_id), default={})
+        hub_report = _read_json_default(_as_path(payload.get("hub_verification_report_path")) if payload.get("hub_verification_report_path") else self._hub_verification_path_from_incident(hub_id, incident_report), default={})
         board = _read_json_default(self.incident_store.board_path(hub_id), default={})
         source = {
             "hub_id": hub_id,
@@ -458,7 +458,7 @@ class TrustOperationsIncidentKnowledgeStore:
         return closeout.get("status") == "passed" and closeout.get("integrity_hash") == incident_hash(closeout)
 
     def _entry_from_incident(self, hub_id: str, entry_id: str, incident: ImplementationDocument, source: ImplementationDocument, existing: ImplementationDocument | None, now: str) -> ImplementationDocument:
-        detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+        detected = _as_document(incident.get("detected_from"))
         closeout = _read_json_default(self.incident_store.closeout_path(hub_id, str(incident.get("incident_id") or "")), default={})
         classification = _classify_incident(incident)
         status = str(existing.get("status") or "active") if existing else "active"
@@ -502,7 +502,7 @@ class TrustOperationsIncidentKnowledgeStore:
         guard_type = str(guard.get("guard_type") or "manual_required")
         if guard_type == "manual_required":
             return [{"check_id": "guard_manual_required", "status": "manual_required", "severity": "manual", "message": "Manual regression guard requires human execution."}]
-        scope = guard.get("scope") if isinstance(guard.get("scope"), dict) else {}
+        scope = _as_document(guard.get("scope"))
         component_type = str(scope.get("component_type") or "")
         current_report_id = str(_read_json_default(self.hub_store.current_report_path(hub_id), default={}).get("report_id") or "")
         docs: dict[str, dict[str, Any]] = {}
@@ -513,7 +513,7 @@ class TrustOperationsIncidentKnowledgeStore:
         except Exception:
             docs = {}
         evidence_rows = []
-        delivery_doc = docs.get("delivery_evidence_index") if isinstance(docs.get("delivery_evidence_index"), dict) else {}
+        delivery_doc = _as_document(docs.get("delivery_evidence_index"))
         for row in delivery_doc.get("evidence", []) if isinstance(delivery_doc.get("evidence"), list) else []:
             if isinstance(row, dict) and (not component_type or row.get("component_type") == component_type):
                 evidence_rows.append(row)
@@ -544,7 +544,7 @@ class TrustOperationsIncidentKnowledgeStore:
 
     def _assert_source_current(self, hub_id: str, base: ImplementationDocument) -> None:
         current = self._source_summary(hub_id, {})
-        expected = base.get("source") if isinstance(base.get("source"), dict) else {}
+        expected = _as_document(base.get("source"))
         for key in ("incident_verification_report_hash", "incident_zip_sha256", "incident_manifest_hash", "hub_verification_report_hash"):
             if expected.get(key) != current.get(key):
                 raise TrustOperationsKnowledgeStateError("Trust Operations Knowledge source is stale. Refresh before export.")
@@ -571,8 +571,8 @@ class TrustOperationsIncidentKnowledgeStore:
 
 def _knowledge_report_status(base: ImplementationDocument, guards_doc: ImplementationDocument, runs_doc: ImplementationDocument, recurrence: ImplementationDocument) -> str:
     del base
-    guards = guards_doc.get("guards") if isinstance(guards_doc.get("guards"), list) else []
-    runs = runs_doc.get("runs") if isinstance(runs_doc.get("runs"), list) else []
+    guards = _as_list(guards_doc.get("guards"))
+    runs = _as_list(runs_doc.get("runs"))
     active_guard_count = sum(1 for guard in guards if isinstance(guard, dict) and guard.get("status") not in {"archived", "manual_required"})
     failed_run_count = sum(1 for run in runs if isinstance(run, dict) and run.get("status") == "failed")
     if recurrence.get("status") == "failed" or failed_run_count:
@@ -595,7 +595,7 @@ def _knowledge_summary(entries: list[ImplementationDocument], guards: list[Imple
         "guards_passed_count": sum(1 for item in runs if item.get("status") == "passed"),
         "guards_failed_count": sum(1 for item in runs if item.get("status") == "failed"),
         "manual_required_guard_count": sum(1 for item in guards if item.get("status") == "manual_required"),
-        "recurrence_count": int((recurrence.get("summary") if isinstance(recurrence.get("summary"), dict) else {}).get("recurrence_count") or 0),
+        "recurrence_count": int((_as_document(recurrence.get("summary"))).get("recurrence_count") or 0),
     }
 
 
@@ -622,7 +622,7 @@ def _guard_run_summary(runs: list[ImplementationDocument]) -> ImplementationDocu
 
 
 def _incident_matches_entry(incident: ImplementationDocument, entry: ImplementationDocument) -> bool:
-    detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+    detected = _as_document(incident.get("detected_from"))
     return (
         str(detected.get("component_type") or "") == str(entry.get("component_type") or "")
         and str(incident.get("category") or "") == str(entry.get("category") or "")

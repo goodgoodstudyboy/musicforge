@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
 
 import json as json
 import os as os
@@ -136,7 +136,7 @@ class LTSMaintenanceStore:
             state = read_json(path)
         except Exception as exc:
             return {"package_type": MIGRATION_STATE_PACKAGE_TYPE, "schema_version": 1, "status": "corrupted", "error": str(exc), "applied": []}
-        applied = state.get("applied") if isinstance(state.get("applied"), list) else []
+        applied = _as_list(state.get("applied"))
         state["status"] = "ready"
         state["pending"] = [item for item in self.migration_plan()["pending"] if item["migration_id"] not in {row.get("migration_id") for row in applied}]
         return state

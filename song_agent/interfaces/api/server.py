@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -172,7 +174,7 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         return (False, None)
 
     def __init__(self, server_address: tuple[str, int], auth_config: AuthConfig | None=None) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self.__init___part_01(server_address, auth_config, _split_state)
         if _split_result[0]:
             return _split_result[1]

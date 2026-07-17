@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.application.interface_persistence import persist_interface_job, write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesAuditionContextPack:
+class CreationRoutesAuditionContextPack(CreationRouteContext):
     def _handle_audition_context_pack(self, project_id: str, preview_id: str, audition_id: str, payload: ImplementationDocument) -> None:
         project_dir = self.project_store.project_dir(project_id)
         self.project_store.get_project(project_id)
         audition = _interfaces_api_runtime.EditorAuditionStore(project_dir).read_audition(preview_id, audition_id)
-        review = audition.review if isinstance(audition.review, dict) else {}
+        review = _as_document(audition.review)
         asset_id = str(payload.get("asset_id") or review.get("last_asset_id") or "").strip()
         if not asset_id:
             raise _interfaces_api_runtime.ReviewEditUnavailableError("No audition asset is available for context pack creation.")
@@ -235,7 +241,7 @@ class CreationRoutesAuditionContextPack:
         return (False, None)
 
     def _handle_project_editor_preview_apply(self, project_id: str, preview_id: str, payload: ImplementationDocument) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InterfaceType] = {}
         _split_state['store'] = _interfaces_api_runtime.EditorPreviewStore(self.project_store.project_dir(project_id))
         with self.project_store.lock, _split_state['store'].lock:
             _split_result = self._handle_project_editor_preview_apply_part_01(project_id, preview_id, payload, _split_state)

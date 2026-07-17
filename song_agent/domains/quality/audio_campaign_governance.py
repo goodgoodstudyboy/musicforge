@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import threading as threading
@@ -86,7 +86,7 @@ class AudioCampaignGovernanceStore:
         payload = payload or {}
         with self.lock:
             source = self._source_state(campaign_id, ensure_zip=False, ensure_verification=False)
-            signoff = source.get("signoff") if isinstance(source.get("signoff"), dict) else {}
+            signoff = _as_document(source.get("signoff"))
             if signoff.get("status") != "signed":
                 raise AudioCampaignGovernanceStateError("Audio Campaign must be signed before creating a reset Change Request.")
             cr_id = self._next_change_request_id(campaign_id)
@@ -144,7 +144,7 @@ class AudioCampaignGovernanceStore:
     def reset_signoff(self, campaign_id: str, change_request_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
-            campaign = self.campaign_store._read_raw_campaign(campaign_id)  # type: ignore[attr-defined]
+            campaign = self.campaign_store._read_raw_campaign(campaign_id)
             signoff_path = self.campaign_store.signoff_path(campaign_id)
             if not signoff_path.exists():
                 raise AudioCampaignGovernanceStateError("Audio Campaign signoff does not exist.")
@@ -177,7 +177,7 @@ class AudioCampaignGovernanceStore:
             campaign.pop("signed_at", None)
             campaign["updated_at"] = now_iso()
             campaign["integrity_hash"] = _integrity_hash(campaign)
-            self.campaign_store._write_campaign(campaign)  # type: ignore[attr-defined]
+            self.campaign_store._write_campaign(campaign)
             cr["status"] = "applied"
             cr["applied"] = {"applied_at": event["created_at"], "reset_event_hash": event["event_hash"]}
             cr["integrity_hash"] = _integrity_hash(cr)
@@ -303,7 +303,7 @@ class AudioCampaignGovernanceStore:
                 return _gate_failed(required, "Audio Campaign Archive verification failed.", campaign_id=campaign_id, verification_status=archive_verification.get("status"), current_status=current_verification.get("status"))
             if archive_verification.get("summary", {}).get("zip_sha256") != current_verification.get("summary", {}).get("zip_sha256"):
                 return _gate_failed(required, "Audio Campaign Archive verification does not match current ZIP.", campaign_id=campaign_id)
-            summary = source["report"].get("summary") if isinstance(source["report"].get("summary"), dict) else {}
+            summary = _as_document(source["report"].get("summary"))
             blockers: list[str] = []
             case_count = _safe_int(summary.get("case_count"))
             if source["signoff"].get("status") != "signed":
@@ -417,10 +417,10 @@ class AudioCampaignGovernanceStore:
 
 
 def _build_governance_report(campaign_id: str, source: ImplementationDocument) -> ImplementationDocument:
-    report = source.get("report") if isinstance(source.get("report"), dict) else {}
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    verification = source.get("verification") if isinstance(source.get("verification"), dict) else {}
-    signoff = source.get("signoff") if isinstance(source.get("signoff"), dict) else {}
+    report = _as_document(source.get("report"))
+    summary = _as_document(report.get("summary"))
+    verification = _as_document(source.get("verification"))
+    signoff = _as_document(source.get("signoff"))
     blockers: list[dict[str, Any]] = []
     checks = [
         _check("audio_campaign_governance.signed", signoff.get("status") == "signed"),
@@ -503,7 +503,7 @@ def _public_campaign(campaign: ImplementationDocument) -> ImplementationDocument
 
 
 def _public_verification(verification: ImplementationDocument) -> ImplementationDocument:
-    summary = verification.get("summary") if isinstance(verification.get("summary"), dict) else {}
+    summary = _as_document(verification.get("summary"))
     public = sanitize_metadata(
         {
             "package_type": verification.get("package_type"),

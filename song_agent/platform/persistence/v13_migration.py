@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import shutil
@@ -276,12 +276,12 @@ def _migration_anchor_checks(
     if exists:
         try:
             value = json.loads(anchor_path.read_text(encoding="utf-8"))
-            anchor = value if isinstance(value, dict) else {}
+            anchor = _as_document(value)
             readable = isinstance(value, dict)
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             readable = False
     summary_value = envelope.get("summary")
-    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+    summary: dict[str, Any] = _as_document(summary_value)
     return [
         build_check("v13_migration_anchor_exists", exists, "External migration anchor exists."),
         build_check("v13_migration_anchor_readable", readable, "External migration anchor is a JSON object."),

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_text as _as_text
+
+from typing import Any as _InterfaceType
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_program_parts_dependencies
@@ -135,18 +139,18 @@ def _run_unified_command_center_release_train_handoff_command(args: argparse.Nam
         detail = store.create_handoff(args.train_id, payload)
         return {"ok": detail.get("report", {}).get("status") in {"ready", "manual_required"}, **detail, "summary": detail.get("report", {}).get("summary", {}), "status": detail.get("report", {}).get("status")}
     if args.action in {"refresh", "board"}:
-        report = store.refresh_report(args.train_id, handoff_id, payload)
+        report = store.refresh_report(args.train_id, _as_text(handoff_id), payload)
         return {"ok": report.get("status") == "ready", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
     if args.action == "export":
-        manifest = store.export_handoff(args.train_id, handoff_id)
+        manifest = store.export_handoff(args.train_id, _as_text(handoff_id))
         return {"ok": True, "manifest": manifest, "summary": manifest.get("summary", {}), "status": "passed"}
     if args.action == "zip":
-        result = store.build_zip(args.train_id, handoff_id)
+        result = store.build_zip(args.train_id, _as_text(handoff_id))
         return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
     if args.action == "verify":
         report = store.verify_package(
             args.train_id,
-            handoff_id,
+            _as_text(handoff_id),
             {
                 **payload,
                 "strict": args.strict,
@@ -168,7 +172,7 @@ def _run_unified_command_center_release_train_handoff_command(args: argparse.Nam
         evidence = store.create_accepted_evidence(args.train_id, args.handoff_id, args.response_id)
         return {"ok": True, "accepted_evidence": evidence, "summary": evidence.get("public_summary", {}), "status": "passed"}
     if args.action == "signoff":
-        signoff = store.signoff(args.train_id, handoff_id, {**payload, "signed_by": args.signed_by, "role": args.role, "reason": args.reason})
+        signoff = store.signoff(args.train_id, _as_text(handoff_id), {**payload, "signed_by": args.signed_by, "role": args.role, "reason": args.reason})
         return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signed_by": signoff.get("signed_by")}, "status": signoff.get("status")}
     raise ValueError("Unsupported unified-command-center-release-train-handoff command.")
 
@@ -236,7 +240,7 @@ def _run_unified_release_program_command(args: argparse.Namespace) -> Implementa
     raise ValueError("Unsupported unified-release-program command.")
 
 def _unified_release_program_operations_payload_from_args(args: argparse.Namespace) -> ImplementationDocument:
-    payload: dict[str, Any] = {
+    payload: dict[str, _InterfaceType] = {
         "program_zip": getattr(args, "program_zip", None),
         "program_verification_report": getattr(args, "program_verification_report", None),
         "program_signoff_binding": getattr(args, "program_signoff_binding", None),

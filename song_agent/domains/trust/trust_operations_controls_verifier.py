@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -73,13 +73,13 @@ def write_trust_operations_control_verification_report(report: dict[str, Any], p
 
 
 def print_trust_operations_control_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Control verification")
     print(f"status: {report.get('status')}")
     print(f"hub: {summary.get('hub_id') or '-'}")
     print(f"controls: {summary.get('control_count') or 0}")
     print(f"required failed: {summary.get('required_failed_count') or 0}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def trust_operations_control_verification_exit_code(report: dict[str, Any]) -> int:
@@ -217,7 +217,7 @@ class _ControlVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "tohc_manifest_integrity", self.manifest.get("integrity_hash"), control_manifest_hash(self.manifest), "Control manifest integrity")
         self._add_exact_check("manifest", "tohc_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_CONTROL_MANIFEST_PACKAGE_TYPE, "Control manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "tohc_manifest_files_match_entries", sorted(manifest_paths), sorted(CONTROL_EXPORT_ENTRIES - {"trust-operations-controls-manifest.json"}), "Manifest file list matches fixed Control structure")
         mismatches: list[str] = []
@@ -235,7 +235,7 @@ class _ControlVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "tohc_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "tohc_manifest_zip_summary", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files." if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
@@ -252,7 +252,7 @@ class _ControlVerifier:
         for label, (doc, package_type) in docs.items():
             self._add_hash_check(label, f"tohc_{label}_integrity", doc.get("integrity_hash"), control_hash(doc), f"{label} integrity")
             self._add_exact_check(label, f"tohc_{label}_package_type", doc.get("package_type"), package_type, f"{label} package_type")
-        source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        source = _as_document(self.manifest.get("source"))
         expected_source = {
             "catalog_hash": self.catalog.get("integrity_hash"),
             "policy_hash": self.policy.get("integrity_hash"),
@@ -264,7 +264,7 @@ class _ControlVerifier:
         }
         for key, value in expected_source.items():
             self._add_exact_check("manifest", "tohc_manifest_source_" + key, source.get(key), value, f"Manifest source {key}")
-        report_source = self.assessment.get("source") if isinstance(self.assessment.get("source"), dict) else {}
+        report_source = _as_document(self.assessment.get("source"))
         self._add_exact_check("assessment", "tohc_assessment_results_hash", report_source.get("control_results_hash"), self.results_doc.get("integrity_hash"), "Assessment results hash")
         self._add_exact_check("assessment", "tohc_assessment_bindings_hash", report_source.get("evidence_bindings_hash"), self.bindings_doc.get("integrity_hash"), "Assessment evidence bindings hash")
         self._add_exact_check("assessment", "tohc_assessment_blockers_hash", report_source.get("blocker_summary_hash"), self.blockers_doc.get("integrity_hash"), "Assessment blocker summary hash")
@@ -352,22 +352,22 @@ class _ControlVerifier:
         self._add_exact_check("catalog", "tohc_catalog_summary_matches_controls", self.catalog.get("summary"), expected_catalog_summary, "Catalog summary")
         required = {str(item.get("control_id") or ""): bool(item.get("required")) for item in self.policy.get("requirements", []) if isinstance(item, dict)}
         expected_results = [_evaluate_control(controls_by_id[control_id], self._assessment_external_source(), required=required.get(control_id, False)) for control_id in policy_ids if control_id in controls_by_id]
-        actual_results = self.results_doc.get("results") if isinstance(self.results_doc.get("results"), list) else []
+        actual_results = _as_list(self.results_doc.get("results"))
         self._add_exact_check("results", "tohc_control_results_semantics_match", _result_projection(actual_results), _result_projection(expected_results), "Control results match external evidence semantics")
         self._add_exact_check("results", "tohc_results_summary_matches_rows", self.results_doc.get("summary"), _results_summary(actual_results), "Control results summary")
         expected_blockers = _blockers_from_results(actual_results, required)
-        actual_blockers = self.blockers_doc.get("blockers") if isinstance(self.blockers_doc.get("blockers"), list) else []
+        actual_blockers = _as_list(self.blockers_doc.get("blockers"))
         self._add_exact_check("blockers", "tohc_blocker_summary_semantics_match", _blocker_projection(actual_blockers), _blocker_projection(expected_blockers), "Blocker summary matches required failed controls")
         self._add_exact_check("blockers", "tohc_blocker_summary_counts", self.blockers_doc.get("summary"), _blocker_summary(actual_blockers), "Blocker summary counts")
         expected_actions = _manual_actions_from_blockers(actual_blockers)
-        actual_actions = self.actions_doc.get("actions") if isinstance(self.actions_doc.get("actions"), list) else []
+        actual_actions = _as_list(self.actions_doc.get("actions"))
         self._add_exact_check("actions", "tohc_manual_actions_match_blockers", _action_projection(actual_actions), _action_projection(expected_actions), "Manual actions match blockers")
         expected_status = "passed" if not actual_blockers else "failed"
         self._add_exact_check("assessment", "tohc_assessment_status_matches_blockers", self.assessment.get("status"), expected_status, "Assessment status")
         self._add_exact_check("assessment", "tohc_assessment_summary_matches_results", {key: self.assessment.get("summary", {}).get(key) for key in ("result_count", "passed_count", "failed_count", "required_failed_count", "blocker_count", "manual_action_count")}, {**_results_summary(actual_results), "blocker_count": len(actual_blockers), "manual_action_count": len(actual_actions)}, "Assessment summary")
 
     def _assessment_external_source(self) -> ImplementationDocument:
-        source = dict(self.assessment.get("source") if isinstance(self.assessment.get("source"), dict) else {})
+        source = dict(_as_document(self.assessment.get("source")))
         for kind, report in self.external_reports.items():
             if report:
                 source[f"{kind}_verification_status"] = report.get("status")
@@ -376,11 +376,11 @@ class _ControlVerifier:
                 source[f"{kind}_zip_size_bytes"] = report.get("zip_size_bytes")
                 source[f"{kind}_manifest_hash"] = report.get("manifest_hash")
                 source[f"{kind}_source_hash"] = report.get("source_hash")
-                source[f"{kind}_summary"] = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+                source[f"{kind}_summary"] = _as_document(report.get("summary"))
         return source
 
     def _verify_external_bindings(self) -> None:
-        source = self.assessment.get("source") if isinstance(self.assessment.get("source"), dict) else {}
+        source = _as_document(self.assessment.get("source"))
         bindings = {str(item.get("evidence_type") or ""): item for item in self.bindings_doc.get("bindings", []) if isinstance(item, dict)}
         for kind, report in self.external_reports.items():
             if not report:
@@ -409,14 +409,14 @@ class _ControlVerifier:
             return
         facts = self._external_incident_facts()
         external_entries = {str(entry.get("integrity_hash") or ""): entry for entry in self.external_knowledge_entries_doc.get("entries", []) if isinstance(entry, dict)}
-        external_guards = self.external_knowledge_guards_doc.get("guards") if isinstance(self.external_knowledge_guards_doc.get("guards"), list) else []
+        external_guards = _as_list(self.external_knowledge_guards_doc.get("guards"))
         guard_by_entry_hash = {str(guard.get("source", {}).get("knowledge_entry_hash") or ""): guard for guard in external_guards if isinstance(guard, dict) and guard.get("status") not in {"archived", "manual_required"}}
         mismatches: list[str] = []
         missing_controls: list[str] = []
         for control in self.catalog.get("controls", []) if isinstance(self.catalog.get("controls"), list) else []:
             if not isinstance(control, dict) or control.get("source", {}).get("source_type") != "knowledge_entry":
                 continue
-            source = control.get("source") if isinstance(control.get("source"), dict) else {}
+            source = _as_document(control.get("source"))
             entry_hash = str(source.get("knowledge_entry_hash") or "")
             entry = external_entries.get(entry_hash)
             fact = facts.get(str(source.get("incident_hash") or ""))
@@ -437,8 +437,8 @@ class _ControlVerifier:
         self._add_check("external", "tohc_external_high_knowledge_control_coverage", "failed" if high_missing else "passed", "blocking", "External high Knowledge entries missing controls: " + ", ".join(high_missing[:5]) if high_missing else "External high Knowledge entries have derived controls.")
 
     def _external_incident_facts(self) -> dict[str, ImplementationDocument]:
-        incidents = self.external_incidents_doc.get("incidents") if isinstance(self.external_incidents_doc.get("incidents"), list) else []
-        closeouts = self.external_closeouts_doc.get("closeouts") if isinstance(self.external_closeouts_doc.get("closeouts"), list) else []
+        incidents = _as_list(self.external_incidents_doc.get("incidents"))
+        closeouts = _as_list(self.external_closeouts_doc.get("closeouts"))
         closeout_by_id = {str(closeout.get("incident_id") or ""): closeout for closeout in closeouts if isinstance(closeout, dict)}
         facts: dict[str, dict[str, Any]] = {}
         for incident in incidents:
@@ -452,7 +452,7 @@ class _ControlVerifier:
             closeout_hash = str(closeout.get("integrity_hash") or "")
             if closeout.get("status") != "passed" or closeout_hash != incident_hash(closeout):
                 continue
-            detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+            detected = _as_document(incident.get("detected_from"))
             classification = _classify_incident(incident)
             facts[incident_integrity] = {
                 "incident_id": incident_id,
@@ -469,7 +469,7 @@ class _ControlVerifier:
         return facts
 
     def _verify_requirements(self) -> None:
-        required_failed = int((self.results_doc.get("summary") if isinstance(self.results_doc.get("summary"), dict) else {}).get("required_failed_count") or 0)
+        required_failed = int((_as_document(self.results_doc.get("summary"))).get("required_failed_count") or 0)
         assessment_passed = self.assessment.get("status") == "passed"
         self._add_check("requirements", "tohc_require_policy_passed", "passed" if (not self.require_policy_passed or (required_failed == 0 and assessment_passed)) else "failed", "blocking", "Control policy assessment passed." if required_failed == 0 and assessment_passed else "Required controls failed.")
 
@@ -504,13 +504,13 @@ class _ControlVerifier:
     def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
-        source = self.assessment.get("source") if isinstance(self.assessment.get("source"), dict) else {}
+        source = _as_document(self.assessment.get("source"))
         summary = {
             "hub_id": self.assessment.get("hub_id"),
             "assessment_id": self.assessment.get("assessment_id"),
             "policy_id": self.assessment.get("policy_id"),
-            "control_count": int((self.catalog.get("summary") if isinstance(self.catalog.get("summary"), dict) else {}).get("control_count") or 0),
-            "required_failed_count": int((self.results_doc.get("summary") if isinstance(self.results_doc.get("summary"), dict) else {}).get("required_failed_count") or 0),
+            "control_count": int((_as_document(self.catalog.get("summary"))).get("control_count") or 0),
+            "required_failed_count": int((_as_document(self.results_doc.get("summary"))).get("required_failed_count") or 0),
             "blocker_count": len(blockers),
             "warning_count": len(warnings),
             "zip_size_bytes": self.zip_size_bytes,
@@ -564,7 +564,7 @@ class _ControlVerifier:
             value = json.loads(archive.read(name).decode("utf-8"))
         except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError):
             return {}
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _add_hash_check(self, scope: str, check_id: str, actual: Any, expected: Any, label: str) -> None:
         self._add_check(scope, check_id, "passed" if actual == expected and actual else "failed", "blocking", f"{label} matches." if actual == expected and actual else f"{label} mismatch.")
@@ -577,9 +577,9 @@ class _ControlVerifier:
 
 
 def _control_matches_external_entry(control: ImplementationDocument, entry: ImplementationDocument, fact: ImplementationDocument, guard: ImplementationDocument | None, knowledge_report: ImplementationDocument, incident_report: ImplementationDocument) -> bool:
-    source = control.get("source") if isinstance(control.get("source"), dict) else {}
-    scope = control.get("scope") if isinstance(control.get("scope"), dict) else {}
-    recommended = entry.get("recommended_guard") if isinstance(entry.get("recommended_guard"), dict) else {}
+    source = _as_document(control.get("source"))
+    scope = _as_document(control.get("scope"))
+    recommended = _as_document(entry.get("recommended_guard"))
     guard = guard or {}
     expected_source = {
         "source_type": "knowledge_entry",
@@ -641,7 +641,7 @@ def _read_json_file(path: Path) -> ImplementationDocument:
             value = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:

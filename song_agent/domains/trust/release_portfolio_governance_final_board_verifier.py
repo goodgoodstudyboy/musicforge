@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -81,7 +81,7 @@ def verify_release_portfolio_governance_final_board_package(
 
 
 def release_portfolio_governance_final_board_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -114,7 +114,7 @@ def print_release_portfolio_governance_final_board_verification_report(report: d
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -239,7 +239,7 @@ class _FinalBoardArchiveVerifier:
         self._add_check("manifest", "final_board_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Final Board manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Final Board manifest integrity hash does not match.")
         package_type_ok = self.manifest.get("package_type") == "release_portfolio_governance_final_board_archive"
         self._add_check("manifest", "final_board_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is release_portfolio_governance_final_board_archive." if package_type_ok else "Manifest package_type is not release_portfolio_governance_final_board_archive.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -292,16 +292,16 @@ class _FinalBoardArchiveVerifier:
     def _verify_documents(self) -> None:
         if self.report_doc:
             self._add_hash_check("report", "final_board_report_integrity", self.report_doc.get("integrity_hash"), final_board_report_integrity_hash(self.report_doc), "Final Board Report integrity")
-            row = self.manifest.get("final_board_report") if isinstance(self.manifest.get("final_board_report"), dict) else {}
+            row = _as_document(self.manifest.get("final_board_report"))
             self._add_hash_check("report", "final_board_manifest_report_hash", row.get("integrity_hash"), self.report_doc.get("integrity_hash"), "Manifest report hash")
         if self.signoff:
             self._add_hash_check("signoff", "final_board_signoff_integrity", self.signoff.get("integrity_hash"), final_board_signoff_hash(self.signoff), "Final Board Signoff integrity")
-            row = self.manifest.get("final_board_signoff") if isinstance(self.manifest.get("final_board_signoff"), dict) else {}
+            row = _as_document(self.manifest.get("final_board_signoff"))
             self._add_hash_check("signoff", "final_board_manifest_signoff_hash", row.get("integrity_hash"), self.signoff.get("integrity_hash"), "Manifest signoff hash")
-            source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
+            source = _as_document(self.signoff.get("source"))
             self._add_hash_check("signoff", "final_board_signoff_report_hash", source.get("final_board_report_hash"), self.report_doc.get("integrity_hash"), "Signoff report evidence hash")
-            reviewer_evidence = self.manifest.get("reviewer_pack_evidence") if isinstance(self.manifest.get("reviewer_pack_evidence"), dict) else {}
-            audit_evidence = self.manifest.get("audit_evidence") if isinstance(self.manifest.get("audit_evidence"), dict) else {}
+            reviewer_evidence = _as_document(self.manifest.get("reviewer_pack_evidence"))
+            audit_evidence = _as_document(self.manifest.get("audit_evidence"))
             self._add_hash_check("signoff", "final_board_signoff_reviewer_pack_verification_hash", source.get("reviewer_pack_verification_hash"), reviewer_evidence.get("verification_hash"), "Signoff Reviewer Pack verification hash")
             self._add_hash_check("signoff", "final_board_signoff_audit_verification_hash", source.get("governance_audit_verification_hash"), audit_evidence.get("verification_hash"), "Signoff Audit verification hash")
         if self.response_summary:
@@ -314,7 +314,7 @@ class _FinalBoardArchiveVerifier:
             self._add_check("change_requests", "final_board_change_request_integrity", "failed" if invalid else "passed", "blocking", "Change Request integrity failed: " + ", ".join(invalid[:5]) if invalid else "All Change Requests have valid integrity hashes.")
 
     def _verify_requirements(self) -> None:
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
         signoff_status = str(self.signoff.get("status") or "")
         if self.require_signed:
             self._add_check("requirements", "final_board_require_signed", "passed" if signoff_status in {"signed", "force_signed"} else "failed", "blocking", "Final Board Signoff is signed." if signoff_status in {"signed", "force_signed"} else "Signed Final Board Signoff is required.")
@@ -379,7 +379,7 @@ class _FinalBoardArchiveVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)

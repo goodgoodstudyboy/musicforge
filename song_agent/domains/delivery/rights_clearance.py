@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_float as _as_float, as_list as _as_list, document_or as _document_or
 
 import json as json
 import re as re
@@ -77,14 +77,14 @@ class RightsClearanceStore:
     def list_parties(self, release_id: str) -> list[dict[str, Any]]:
         self.release_store.get_release(release_id)
         data = _read_json_default(self.parties_path(release_id), {"parties": []})
-        parties = data.get("parties") if isinstance(data.get("parties"), list) else []
+        parties = _as_list(data.get("parties"))
         return [sanitize_metadata(item, blocked_keys=RIGHTS_BLOCKED_KEYS) for item in parties if isinstance(item, dict)]
 
     def upsert_party(self, release_id: str, payload: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
         self._ensure_mutable(release_id)
         data = _read_json_default(self.parties_path(release_id), {"schema_version": RIGHTS_SCHEMA_VERSION, "release_id": release_id, "parties": []})
-        parties = data.get("parties") if isinstance(data.get("parties"), list) else []
+        parties = _as_list(data.get("parties"))
         party_id = _safe_id(str(payload.get("party_id") or ""), "party") if str(payload.get("party_id") or "").strip() else _next_id(parties, "rparty", "party_id")
         party = sanitize_metadata(
             {
@@ -240,9 +240,9 @@ class RightsClearanceStore:
         for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
             record = self.read_track(release_id, track.track_id, default={})
             if not record:
-                row = {"track_id": track.track_id, "status": "failed", "failures": ["missing_track_rights_record"], "warnings": []}
+                missing_row = {"track_id": track.track_id, "status": "failed", "failures": ["missing_track_rights_record"], "warnings": []}
                 failures.append(f"{track.track_id}:missing_track_rights_record")
-                rows.append(row)
+                rows.append(missing_row)
                 continue
             metadata_track = _metadata_track_from_doc(metadata, track.track_id)
             required_sources = self._required_source_usages(track)
@@ -256,7 +256,7 @@ class RightsClearanceStore:
             if stale_reasons:
                 track_failures.extend(stale_reasons)
             row_status = "failed" if track_failures else "warning" if track_warnings else "passed"
-            row = {
+            row: ImplementationDocument = {
                 "track_id": track.track_id,
                 "disc_number": track.disc_number,
                 "track_number": track.track_number,
@@ -653,10 +653,10 @@ def required_source_usages_for_track(
     for ref in _list(final_manifest.get("reference_refs")):
         if isinstance(ref, dict):
             add(_reference_required_source(ref, reference_store=reference_store, detected_in="final_export.reference_refs", version_id=version_id))
-    context_pack = final_manifest.get("context_pack") if isinstance(final_manifest.get("context_pack"), dict) else {}
+    context_pack = _as_document(final_manifest.get("context_pack"))
     if context_pack and context_pack.get("pack_id"):
         add(_context_pack_required_source(context_pack, context_pack_store=context_pack_store, detected_in="final_export.context_pack", version_id=version_id))
-    edit = final_manifest.get("edit") if isinstance(final_manifest.get("edit"), dict) else {}
+    edit = _as_document(final_manifest.get("edit"))
     for item in _list(edit.get("clip_inserts")):
         if isinstance(item, dict):
             add(_metadata_required_source(item, source_type="editor_clip", detected_in="final_export.edit.clip_inserts", version_id=version_id))
@@ -680,7 +680,7 @@ def required_source_usages_for_track(
     for exported_version in _list(project_export.get("versions")):
         if not isinstance(exported_version, dict) or str(exported_version.get("version_id") or "") != version_id:
             continue
-        exported_edit = exported_version.get("edit") if isinstance(exported_version.get("edit"), dict) else {}
+        exported_edit = _as_document(exported_version.get("edit"))
         for item in _list(exported_edit.get("clip_inserts")):
             if isinstance(item, dict):
                 add(_metadata_required_source(item, source_type="editor_clip", detected_in="project_export.version.edit.clip_inserts", version_id=version_id))
@@ -780,7 +780,7 @@ def _evaluate_track(record: ImplementationDocument, *, party_map: dict[str, Impl
         declared_status = str(declared.get("status") or "unknown").strip().lower()
         if declared_status not in SOURCE_COVERAGE_SAFE_STATUSES:
             failures.append(f"required_source_uncleared:{source_type}:{source_id or 'source'}")
-    manual = record.get("manual_clearance") if isinstance(record.get("manual_clearance"), dict) else {}
+    manual = _as_document(record.get("manual_clearance"))
     if manual.get("status") not in {"accepted", "waived"}:
         failures.append("manual_clearance_missing")
     if manual.get("review_mode") != "manual":
@@ -828,7 +828,7 @@ def _final_export_manifest(release_store: ReleaseStore, project_id: str) -> Impl
         path = project_dir / "final-export" / "manifest.json"
         if path.exists():
             data = read_json(path)
-            return data if isinstance(data, dict) else {}
+            return _as_document(data)
     except (OSError, ValueError, TypeError, FileNotFoundError):
         return {}
     return {}
@@ -976,11 +976,11 @@ def _used_by_version(ref: ImplementationDocument, version_id: str) -> bool:
 
 
 def _normalize_contributor(item: Any) -> ImplementationDocument:
-    data = item if isinstance(item, dict) else {}
+    data = _as_document(item)
     role = str(data.get("role") or "composer").strip().lower()
     share = data.get("share") if data.get("share") is not None else data.get("split_percent")
     try:
-        share_value = round(float(share), 4)
+        share_value = round(_as_float(share), 4)
     except (TypeError, ValueError):
         share_value = 0.0
     return sanitize_metadata(
@@ -997,7 +997,7 @@ def _normalize_contributor(item: Any) -> ImplementationDocument:
 
 
 def _normalize_source_usage(item: Any) -> ImplementationDocument:
-    data = item if isinstance(item, dict) else {}
+    data = _as_document(item)
     return sanitize_metadata(
         {
             "source_id": _safe_id(str(data.get("source_id") or ""), "source") if str(data.get("source_id") or "").strip() else "",
@@ -1076,7 +1076,7 @@ def _read_json_default(path: Path, default: ImplementationDocument) -> Implement
     if not path.exists():
         return dict(default)
     value = read_json(path)
-    return value if isinstance(value, dict) else dict(default)
+    return _document_or(value, dict(default))
 
 
 def _safe_id(value: str, prefix: str) -> str:
@@ -1102,11 +1102,11 @@ def _norm_name(value: Any) -> str:
 
 
 def _list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+    return _as_list(value)
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=RIGHTS_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=RIGHTS_BLOCKED_KEYS)
 
 
 def _looks_like_local_path(value: str) -> bool:

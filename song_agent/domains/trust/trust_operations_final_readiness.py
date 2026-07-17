@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -134,7 +136,7 @@ class TrustOperationsFinalReadinessStore:
             evidence_index, summaries = self._build_evidence_index(payload, now)
             rows = evidence_index.get("items", []) if isinstance(evidence_index.get("items"), list) else []
             blockers = []
-            warnings = []
+            warnings: list[_InferenceType] = []
             for row in rows:
                 if row.get("required") and row.get("status") != "passed":
                     blockers.append(_blocker(str(row.get("component_type") or "evidence"), f"Required evidence is not passed: {row.get('component_type')} {row.get('component_id')}"))
@@ -192,7 +194,7 @@ class TrustOperationsFinalReadinessStore:
                     "ready": True,
                     "required_evidence_count": report.get("summary", {}).get("required_evidence_count") if isinstance(report.get("summary"), dict) else None,
                     "passed_evidence_count": report.get("summary", {}).get("passed_evidence_count") if isinstance(report.get("summary"), dict) else None,
-                    "blocking_findings": len(report.get("blockers") if isinstance(report.get("blockers"), list) else []),
+                    "blocking_findings": len(_as_list(report.get("blockers"))),
                 },
                 "public_summary": {
                     "statement": "Trust Operations evidence is final-ready for handoff.",
@@ -311,10 +313,10 @@ class TrustOperationsFinalReadinessStore:
                 raise TrustOperationsFinalReadinessStateError("Final Handoff is not signed.")
             cr = self._read_change_request(change_request_id)
             self._ensure_change_request_integrity(cr)
-            applied = cr.get("applied") if isinstance(cr.get("applied"), dict) else {}
+            applied = _as_document(cr.get("applied"))
             if cr.get("status") != "approved" or applied.get("applied_at"):
                 raise TrustOperationsFinalReadinessStateError("Approved unused Final Handoff change request is required.")
-            source = cr.get("source") if isinstance(cr.get("source"), dict) else {}
+            source = _as_document(cr.get("source"))
             if source.get("target_signoff_hash") and source.get("target_signoff_hash") != state.get("signoff_hash"):
                 raise TrustOperationsFinalReadinessStateError("Final Handoff change request does not target the current signoff.")
             applied["applied_at"] = now
@@ -487,7 +489,7 @@ class TrustOperationsFinalReadinessStore:
             "verification_report_hash": row.get("verification_report_hash"),
             "verification_status": row.get("verification_status"),
             "source_hash": report.get("source_hash"),
-            "component_summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
+            "component_summary": _as_document(report.get("summary")),
         }
         summary["integrity_hash"] = final_readiness_hash(summary)
         return row, summary
@@ -507,7 +509,7 @@ class TrustOperationsFinalReadinessStore:
         return source
 
     def _signoff_source(self, report: ImplementationDocument, certificate: ImplementationDocument, index: ImplementationDocument) -> ImplementationDocument:
-        source = report.get("source") if isinstance(report.get("source"), dict) else {}
+        source = _as_document(report.get("source"))
         return {
             "final_readiness_report_hash": report.get("integrity_hash"),
             "final_readiness_certificate_hash": certificate.get("integrity_hash"),
@@ -530,7 +532,7 @@ class TrustOperationsFinalReadinessStore:
     def _ensure_certificate_current(self, certificate: ImplementationDocument, report: ImplementationDocument, index: ImplementationDocument) -> None:
         if certificate.get("integrity_hash") != final_readiness_hash(certificate):
             raise TrustOperationsFinalReadinessStateError("Final Readiness certificate integrity failed.")
-        source = certificate.get("source") if isinstance(certificate.get("source"), dict) else {}
+        source = _as_document(certificate.get("source"))
         if source.get("report_hash") != report.get("integrity_hash") or source.get("evidence_index_hash") != index.get("integrity_hash"):
             raise TrustOperationsFinalReadinessStateError("Final Readiness certificate is stale.")
 
@@ -559,7 +561,7 @@ class TrustOperationsFinalReadinessStore:
 
     def _read_verification_summaries(self) -> dict[str, ImplementationDocument]:
         doc = _read_json_default(self.root / "verification-summaries.json", default={})
-        summaries = doc.get("summaries") if isinstance(doc.get("summaries"), dict) else {}
+        summaries = _as_document(doc.get("summaries"))
         return {str(key): value for key, value in summaries.items() if isinstance(value, dict)}
 
     def _read_change_request(self, change_request_id: str) -> ImplementationDocument:
@@ -590,7 +592,7 @@ class TrustOperationsFinalReadinessStore:
         active_id: str | None = None
         for event in self._history_events():
             event_type = event.get("event_type")
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             signoff_hash = str(payload.get("signoff_hash") or "")
             if event_type == "final_handoff_signed" and signoff_hash:
                 active_hash = signoff_hash
@@ -606,7 +608,7 @@ class TrustOperationsFinalReadinessStore:
 
     def _history_has_event(self, event_type: str, signoff_hash: str) -> bool:
         for event in self._history_events():
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             if event.get("event_type") == event_type and payload.get("signoff_hash") == signoff_hash:
                 return True
         return False
@@ -725,7 +727,7 @@ def _row_from_verification_report(
         "verification_package_type": report.get("package_type") if report else None,
         "verification_report_hash": report_hash,
         "verification_status": report.get("status") if report else None,
-        "blocker_count": len(report.get("blockers") if isinstance(report.get("blockers"), list) else []),
+        "blocker_count": len(_as_list(report.get("blockers"))),
         "mismatch_reasons": sorted(set(mismatch_reasons)),
     }
 
@@ -734,16 +736,20 @@ def _payload_paths(payload: ImplementationDocument, plural_key: str, singular_ke
     values = payload.get(plural_key)
     paths: list[Path] = []
     if isinstance(values, (list, tuple)):
-        paths.extend(_path_or_none(item) for item in values)
+        paths.extend(path for item in values if (path := _path_or_none(item)) is not None)
     elif values:
-        paths.append(_path_or_none(values))
+        path = _path_or_none(values)
+        if path is not None:
+            paths.append(path)
     if payload.get(singular_key):
-        paths.append(_path_or_none(payload.get(singular_key)))
-    return [path for path in paths if path is not None]
+        path = _path_or_none(payload.get(singular_key))
+        if path is not None:
+            paths.append(path)
+    return paths
 
 
 def _component_id_from_report(report: ImplementationDocument, prefix: str, index: int) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     for key in ("component_id", "target_id", "submission_id", "release_id", "operations_id", "package_id"):
         if report.get(key):
             return _safe_id(str(report.get(key)))
@@ -779,7 +785,7 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

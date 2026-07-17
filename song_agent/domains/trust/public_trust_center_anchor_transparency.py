@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -131,7 +131,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             existing = self.read_checkpoint(center_id, default={})
             if existing.get("latest_event_hash") == latest.get("event_hash") and anchor_checkpoint_integrity_ok(existing) and anchor_checkpoint_signature_ok(existing):
                 return sanitize_metadata(existing, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
-            state = latest.get("state") if isinstance(latest.get("state"), dict) else {}
+            state = _as_document(latest.get("state"))
             sequence = int(latest.get("sequence") or len(events))
             checkpoint = {
                 "schema_version": ANCHOR_TRANSPARENCY_SCHEMA_VERSION,
@@ -220,7 +220,7 @@ class PublicTrustCenterAnchorTransparencyStore:
                 "registry_hash": registry.get("integrity_hash"),
                 "summary": anchor_registry_summary(registry),
                 "current_entry": _current_entry_summary(current),
-                "current_anchor": current.get("anchor") if isinstance(current.get("anchor"), dict) else {},
+                "current_anchor": _as_document(current.get("anchor")),
             }
             verification_summary = _registry_verification_summary(registry_verification)
             chain = {
@@ -248,7 +248,7 @@ class PublicTrustCenterAnchorTransparencyStore:
                 "ledger": {"hash": source_or_none(report, "ledger_hash"), "latest_event_hash": source_or_none(report, "latest_event_hash")},
                 "checkpoint": {"integrity_hash": checkpoint.get("integrity_hash"), "checkpoint_id": checkpoint.get("checkpoint_id"), "sequence": checkpoint.get("sequence")},
                 "registry_verification_summary": {"hash": stable_hash(verification_summary), "status": verification_summary.get("status")},
-                "current_anchor_registry_summary": {"hash": stable_hash(registry_summary), "current_entry_id": registry_summary.get("summary", {}).get("current_entry_id")},
+                "current_anchor_registry_summary": {"hash": stable_hash(registry_summary), "current_entry_id": _as_document(registry_summary.get("summary", {})).get("current_entry_id")},
                 "chain_of_custody": {"integrity_hash": chain.get("integrity_hash"), "source_hash": chain.get("source_hash")},
                 "files": sorted(files, key=lambda item: item["path"]),
                 "zip": {},
@@ -314,7 +314,7 @@ class PublicTrustCenterAnchorTransparencyStore:
         if not registry:
             raise PublicTrustCenterAnchorTransparencyNotFoundError("Public Trust Center Anchor Registry does not exist.")
         current = _current_entry(registry)
-        anchor = current.get("anchor") if isinstance(current.get("anchor"), dict) else {}
+        anchor = _as_document(current.get("anchor"))
         verification = _read_json_default(self.anchor_registry_store.verification_report_path(center_id), default={})
         registry_zip = self.anchor_registry_store.zip_path(center_id)
         registry_manifest = _read_zip_json(registry_zip, "anchor-registry-manifest.json") if registry_zip.exists() else _read_json_default(self.anchor_registry_store.export_dir(center_id) / "anchor-registry-manifest.json", default={})
@@ -371,7 +371,7 @@ class PublicTrustCenterAnchorTransparencyStore:
 
     def _source_from_current(self, center_id: str, events: list[ImplementationDocument], checkpoint: ImplementationDocument) -> ImplementationDocument:
         latest = events[-1] if events else {}
-        state = latest.get("state") if isinstance(latest.get("state"), dict) else {}
+        state = _as_document(latest.get("state"))
         source = {
             "center_id": center_id,
             "registry_hash": state.get("registry_hash"),
@@ -427,13 +427,13 @@ class PublicTrustCenterAnchorTransparencyStore:
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency ledger is empty.")
         if not anchor_transparency_report_integrity_ok(report):
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report integrity failed.")
-        if report.get("source_hash") != stable_hash(report.get("source") if isinstance(report.get("source"), dict) else {}):
+        if report.get("source_hash") != stable_hash(_as_document(report.get("source"))):
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report source hash failed.")
         current_source = self._source_from_current(center_id, events, checkpoint)
         if report.get("source") != current_source:
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report is stale. Refresh before export.")
         latest = events[-1] if events else {}
-        latest_state = latest.get("state") if isinstance(latest.get("state"), dict) else {}
+        latest_state = _as_document(latest.get("state"))
         registry_state = self._current_registry_state(center_id)
         if latest_state.get("state_hash") != registry_state.get("state_hash"):
             raise PublicTrustCenterAnchorTransparencyStateError("Anchor Transparency Report is stale. Refresh before export.")
@@ -454,7 +454,7 @@ class PublicTrustCenterAnchorTransparencyStore:
         for event in history.get("events", []) if isinstance(history.get("events"), list) else []:
             if not isinstance(event, dict) or str(event.get("event_type") or "") != event_type:
                 continue
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             if all(str(payload.get(key) or "") == str(value or "") for key, value in state.items()):
                 return True
         return False
@@ -479,7 +479,7 @@ class PublicTrustCenterAnchorTransparencyStore:
 
 
 def anchor_transparency_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_transparency_report_hash(data)
 
 
@@ -487,7 +487,7 @@ def anchor_transparency_report_integrity_ok(report: dict[str, Any] | None) -> bo
 
 
 def anchor_transparency_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_transparency_manifest_hash(data)
 
 
@@ -535,7 +535,7 @@ def _summary_from_source(source: ImplementationDocument, blockers: list[Implemen
 
 
 def _registry_verification_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = anchor_registry_verification_summary(report if isinstance(report, dict) else {})
+    summary = anchor_registry_verification_summary(_as_document(report))
     return sanitize_metadata(
         {
             "status": report.get("status") if isinstance(report, dict) else "missing",
@@ -550,7 +550,7 @@ def _registry_verification_summary(report: ImplementationDocument) -> Implementa
 
 
 def _current_entry_summary(entry: ImplementationDocument) -> ImplementationDocument:
-    anchor = entry.get("anchor") if isinstance(entry.get("anchor"), dict) else {}
+    anchor = _as_document(entry.get("anchor"))
     return {
         "entry_id": entry.get("entry_id"),
         "status": entry.get("status"),
@@ -586,7 +586,7 @@ def _event_chain_ok(events: list[ImplementationDocument]) -> bool:
 
 
 def source_or_none(report: dict[str, Any], key: str) -> Any:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    source = _as_document(report.get("source"))
     return source.get(key)
 
 
@@ -600,9 +600,9 @@ def _state_row(report: ImplementationDocument) -> dict[str, str]:
 
 
 def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
-    report = manifest.get("report") if isinstance(manifest.get("report"), dict) else {}
-    ledger = manifest.get("ledger") if isinstance(manifest.get("ledger"), dict) else {}
-    checkpoint = manifest.get("checkpoint") if isinstance(manifest.get("checkpoint"), dict) else {}
+    report = _as_document(manifest.get("report"))
+    ledger = _as_document(manifest.get("ledger"))
+    checkpoint = _as_document(manifest.get("checkpoint"))
     return {
         "source_hash": str(manifest.get("source_hash") or ""),
         "report_hash": str(report.get("integrity_hash") or ""),
@@ -630,14 +630,14 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except Exception:
         return {}
 

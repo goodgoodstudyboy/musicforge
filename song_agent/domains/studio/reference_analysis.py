@@ -208,7 +208,7 @@ def create_asset_from_slice(store: Any, reference_id: str, slice_id: str, payloa
     duration_beats = float(slice_item.get("duration_beats") or max(note["start_beat"] + note["duration_beats"] for note in notes))
     midi_path = slice_midi_path(context.reference_dir, slice_id)
     midi_sha = hashlib.sha256(midi_path.read_bytes()).hexdigest() if midi_path.exists() else context.reference.sha256
-    asset_payload = {
+    asset_payload: ImplementationDocument = {
         "asset_type": asset_type,
         "name": _bounded_text(payload.get("name"), 120) or f"{context.reference.title} {slice_id}",
         "description": _bounded_text(payload.get("description"), 1000) or f"Created from MIDI reference {context.reference.reference_id} {slice_id}.",

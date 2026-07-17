@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustRoutesTrustOperationsKnowledge:
+class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
     def _handle_trust_operations_knowledge_part_01(self, method: str, hub_id: str, tail: str, _split_state):
         if tail in {'', '/'}:
             if method != 'GET':
@@ -109,7 +113,7 @@ class TrustRoutesTrustOperationsKnowledge:
         return (False, None)
 
     def _handle_trust_operations_knowledge(self, method: str, hub_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_trust_operations_knowledge_part_01(method, hub_id, tail, _split_state)
             if _split_result[0]:
@@ -230,7 +234,7 @@ class TrustRoutesTrustOperationsKnowledge:
         return (False, None)
 
     def _handle_trust_operations_control_signoff(self, method: str, hub_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_trust_operations_control_signoff_part_01(method, hub_id, tail, _split_state)
             if _split_result[0]:

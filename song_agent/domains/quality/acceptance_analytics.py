@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -220,7 +220,7 @@ class AcceptanceAnalyticsStore:
     def source_state(self, scope: AnalyticsScope | None = None) -> dict[str, Any]:
         scope = scope or AnalyticsScope()
         suite_ids = self._suite_ids_for_scope(scope)
-        suites = []
+        suites: list[ImplementationDocument] = []
         for suite_id in suite_ids:
             try:
                 suite = self.acceptance_store.get_suite(suite_id)
@@ -275,7 +275,7 @@ class AcceptanceAnalyticsStore:
             raise AcceptanceAnalyticsNotFoundError(recommendation_id)
         if recommendation.get("type") != "create_review_task":
             raise AcceptanceAnalyticsStateError("Recommendation does not support ReviewTask creation.")
-        target = recommendation.get("target") if isinstance(recommendation.get("target"), dict) else {}
+        target = _as_document(recommendation.get("target"))
         project_id = str(target.get("project_id") or payload.get("project_id") or "").strip()
         if not project_id:
             raise AcceptanceAnalyticsStateError("Recommendation cannot create ReviewTask without project_id.")
@@ -364,7 +364,7 @@ class AcceptanceAnalyticsStore:
                     "status": data.get("status"),
                     "source_hash": data.get("source_hash"),
                     "case_count": data.get("case_count", 0),
-                    "latest_import_summary": data.get("latest_import_summary") if isinstance(data.get("latest_import_summary"), dict) else {},
+                    "latest_import_summary": _as_document(data.get("latest_import_summary")),
                     "updated_at": data.get("updated_at"),
                 }
             )
@@ -374,7 +374,7 @@ class AcceptanceAnalyticsStore:
                 data = read_json(path)
             except Exception:
                 continue
-            summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+            summary = _as_document(data.get("summary"))
             imports.append(
                 {
                     "import_id": data.get("import_id"),
@@ -398,7 +398,7 @@ class AcceptanceAnalyticsStore:
                 continue
             store = ReviewTaskStore(self.project_store.project_dir(project_id))
             for task in store.list_tasks(include_archived=True):
-                source = task.source if isinstance(task.source, dict) else {}
+                source = _as_document(task.source)
                 if source.get("source_type") == "acceptance_fix_sprint":
                     continue
                 if scope.type == "suite" and source.get("suite_id") != scope.suite_id:
@@ -463,15 +463,15 @@ def build_acceptance_analytics_report(source: dict[str, Any], *, scope: Analytic
 
 
 def acceptance_analytics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    weaknesses = data.get("weakness_ranking") if isinstance(data.get("weakness_ranking"), list) else []
-    issues = data.get("issue_taxonomy") if isinstance(data.get("issue_taxonomy"), list) else []
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
+    weaknesses = _as_list(data.get("weakness_ranking"))
+    issues = _as_list(data.get("issue_taxonomy"))
     return sanitize_metadata(
         {
             "status": "generated" if data else "missing",
             "report_id": data.get("report_id"),
-            "scope": data.get("scope") if isinstance(data.get("scope"), dict) else {},
+            "scope": _as_document(data.get("scope")),
             "source_hash": data.get("source_hash"),
             "stale": bool(data.get("stale", False)),
             "readiness_status": summary.get("readiness_status") or "missing",
@@ -514,15 +514,15 @@ def _case_facts(source: ImplementationDocument) -> list[CaseFact]:
     for suite_row in source.get("suites", []):
         if not isinstance(suite_row, dict):
             continue
-        suite = suite_row.get("suite") if isinstance(suite_row.get("suite"), dict) else {}
+        suite = _as_document(suite_row.get("suite"))
         for case_row in suite_row.get("cases", []):
             if not isinstance(case_row, dict):
                 continue
-            case = case_row.get("case") if isinstance(case_row.get("case"), dict) else {}
-            review = case_row.get("review") if isinstance(case_row.get("review"), dict) else {}
-            health = case_row.get("health") if isinstance(case_row.get("health"), dict) else {}
-            request = case.get("request_summary") if isinstance(case.get("request_summary"), dict) else {}
-            health_summary = health.get("summary") if isinstance(health.get("summary"), dict) else {}
+            case = _as_document(case_row.get("case"))
+            review = _as_document(case_row.get("review"))
+            health = _as_document(case_row.get("health"))
+            request = _as_document(case.get("request_summary"))
+            health_summary = _as_document(health.get("summary"))
             facts.append(
                 CaseFact(
                     suite_id=str(suite.get("suite_id") or ""),
@@ -621,9 +621,9 @@ def _style_breakdown(heatmap: list[ImplementationDocument]) -> list[Implementati
     groups: dict[str, list[dict[str, Any]]] = {}
     for row in heatmap:
         groups.setdefault(str(row.get("style") or "unknown"), []).append(row)
-    output = []
+    output: list[ImplementationDocument] = []
     for style, rows in groups.items():
-        ratings = [row.get("average_rating") for row in rows if isinstance(row.get("average_rating"), (int, float))]
+        ratings: list[float] = [float(value) for row in rows if isinstance((value := row.get("average_rating")), (int, float))]
         case_count = sum(int(row.get("case_count") or 0) for row in rows)
         manual_count = sum(int(row.get("manual_review_count") or 0) for row in rows)
         accepted = sum(int(row.get("accepted_count") or 0) for row in rows)
@@ -856,7 +856,7 @@ def _summary(facts: list[CaseFact], tasks: list[ImplementationDocument], taxonom
 
 
 def _source_summary(source: ImplementationDocument, facts: list[CaseFact], tasks: list[ImplementationDocument]) -> ImplementationDocument:
-    suites = source.get("suites") if isinstance(source.get("suites"), list) else []
+    suites = _as_list(source.get("suites"))
     pack_count = 0
     import_count = 0
     for suite in suites:
@@ -1049,9 +1049,9 @@ def _review_source(data: ImplementationDocument) -> ImplementationDocument:
 def _health_source(data: ImplementationDocument) -> ImplementationDocument:
     return {
         "status": data.get("status"),
-        "summary": data.get("summary") if isinstance(data.get("summary"), dict) else {},
-        "warnings": data.get("warnings") if isinstance(data.get("warnings"), list) else [],
-        "blockers": data.get("blockers") if isinstance(data.get("blockers"), list) else [],
+        "summary": _as_document(data.get("summary")),
+        "warnings": _as_list(data.get("warnings")),
+        "blockers": _as_list(data.get("blockers")),
     }
 
 
@@ -1063,8 +1063,8 @@ def _report_source(data: ImplementationDocument) -> ImplementationDocument:
         "profile_id": data.get("profile_id"),
         "songbook_id": data.get("songbook_id"),
         "songbook_version": data.get("songbook_version"),
-        "summary": data.get("summary") if isinstance(data.get("summary"), dict) else {},
-        "blockers": data.get("blockers") if isinstance(data.get("blockers"), list) else [],
+        "summary": _as_document(data.get("summary")),
+        "blockers": _as_list(data.get("blockers")),
     }
 
 
@@ -1090,7 +1090,7 @@ def _suite_matches_release(suite_id: str, project_ids: set[str], store: Acceptan
 
 
 def _release_acceptance_suite_id(signoff: ImplementationDocument) -> str:
-    gate = signoff.get("acceptance_gate") if isinstance(signoff.get("acceptance_gate"), dict) else {}
+    gate = _as_document(signoff.get("acceptance_gate"))
     return str(gate.get("suite_id") or "")
 
 
@@ -1103,7 +1103,7 @@ def _release_ids_for_project(project_id: str, release_store: ReleaseStore) -> li
 
 
 def _scope_from_report(report: ImplementationDocument) -> AnalyticsScope:
-    scope = report.get("scope") if isinstance(report.get("scope"), dict) else {}
+    scope = _as_document(report.get("scope"))
     return AnalyticsScope.from_values(
         scope_type=str(scope.get("type") or "global"),
         suite_id=scope.get("suite_id"),
@@ -1156,7 +1156,7 @@ def _matching_open_review_task(project_dir: Path, song_id: str, issue_types: lis
     for task in store.list_tasks(include_archived=True):
         if task.status not in OPEN_TASK_STATUSES:
             continue
-        source = task.source if isinstance(task.source, dict) else {}
+        source = _as_document(task.source)
         if source.get("source_type") != "acceptance_analytics":
             continue
         if song_id and source.get("song_id") != song_id:

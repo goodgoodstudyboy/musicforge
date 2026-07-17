@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from pathlib import Path as Path
 from typing import Any as Any
@@ -236,7 +236,7 @@ def _normalize_check(check: Any, fallback_status: str) -> dict[str, str]:
 
 
 def _audio_view(value: Any) -> ImplementationDocument:
-    audio = value if isinstance(value, dict) else {}
+    audio = _as_document(value)
     return {
         "exists": bool(audio.get("exists", False)),
         "path": str(audio.get("path", "") or ""),
@@ -299,7 +299,7 @@ def _section_intents_by_name(plan_data: ImplementationDocument) -> dict[str, Imp
 
 
 def _as_dict_or_empty(value: Any) -> ImplementationDocument:
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _quality_warnings(plan: Any) -> list[str]:

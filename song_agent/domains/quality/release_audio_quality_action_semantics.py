@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import zipfile
@@ -215,7 +215,7 @@ def _action_selection(*, include_risks: bool, include_recommendations: bool, sev
 
 
 def _selection_from_documents(queue: ImplementationDocument, source_binding: ImplementationDocument) -> ImplementationDocument:
-    selection = source_binding.get("action_selection") if isinstance(source_binding.get("action_selection"), dict) else {}
+    selection = _as_document(source_binding.get("action_selection"))
     if not selection and isinstance(queue.get("action_selection"), dict):
         selection = queue.get("action_selection") or {}
     return _action_selection(

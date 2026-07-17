@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, datetime, hashlib, re, read_release_export_manifest, threading, timezone
 
@@ -101,7 +101,7 @@ def _content_disposition_filename(filename: str) -> str:
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{_rfc5987_quote(utf8_name)}"
 
 def _dict_or_empty(value: Any) -> ImplementationDocument:
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 def _server_file_sha256(path: Path) -> str | None:
     if not path.exists() or not path.is_file():

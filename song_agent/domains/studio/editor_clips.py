@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_int as _as_int, document_or as _document_or, list_or as _list_or
 
 import hashlib as hashlib
 import json as json
@@ -64,7 +64,7 @@ class ClipNote:
         if not isinstance(data, dict):
             raise EditorClipError("clip note must be an object.")
         try:
-            pitch = int(data.get("pitch"))
+            pitch = _as_int(data.get("pitch"))
             start = round(float(data.get("start_beat") or 0), 6)
             duration = round(float(data.get("duration_beats") or 0), 6)
             velocity = int(data.get("velocity", 90) or 90)
@@ -221,7 +221,7 @@ def build_clip_insert_patch(
     if not isinstance(options, dict):
         raise EditorClipError("options must be an object.")
     base_state = build_editor_state(parent_plan)
-    state = draft_state if isinstance(draft_state, dict) else build_editor_state(draft_plan or parent_plan)
+    state = _document_or(draft_state, build_editor_state(draft_plan or parent_plan))
     track_id = _target_track_id(target, state)
     section = _target_section(target, state)
     start_beat = _target_start_beat(target, section)
@@ -599,7 +599,7 @@ def _fallback_asset_notes(asset: CreativeAsset) -> list[NoteEvent]:
             cursor += duration
         return notes
     if asset.asset_type in {"chord_progression", "section_template"}:
-        chords = asset.content.get("chords") if isinstance(asset.content.get("chords"), list) else ["Cmaj7"]
+        chords = _list_or(asset.content.get("chords"), ["Cmaj7"])
         notes = []
         for index, _chord in enumerate(chords[:16]):
             for pitch in (60, 64, 67):

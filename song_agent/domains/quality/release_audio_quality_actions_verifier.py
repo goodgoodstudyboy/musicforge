@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -199,7 +199,7 @@ def _document_binding_checks(documents: dict[str, ImplementationDocument]) -> li
     manual_actions = documents["manual_actions"]
     queue_summary = documents["summary"]
     source_hash = source_binding.get("source_hash")
-    doc_hashes = queue_summary.get("document_hashes") if isinstance(queue_summary.get("document_hashes"), dict) else {}
+    doc_hashes = _as_document(queue_summary.get("document_hashes"))
     same_source = all(doc.get("source_hash") == source_hash for doc in (queue, items, results, manual_actions, queue_summary) if doc.get("source_hash") is not None)
     return [
         _check("release_audio_quality_action_queue_manifest_queue_binding", manifest.get("action_queue_hash") == queue.get("integrity_hash"), "Manifest binds action queue."),
@@ -220,7 +220,7 @@ def _action_semantics_checks(items: ImplementationDocument, results: Implementat
     item_ids = {str(row.get("item_id")) for row in item_rows}
     result_ids = {str(row.get("item_id")) for row in result_rows}
     manual_ids = {str(row.get("item_id")) for row in manual_rows}
-    data = summary.get("summary") if isinstance(summary.get("summary"), dict) else {}
+    data = _as_document(summary.get("summary"))
     completed = sum(1 for row in result_rows if row.get("status") == "completed")
     blocked = sum(1 for row in result_rows if row.get("status") == "blocked")
     failed = sum(1 for row in result_rows if row.get("status") == "failed")
@@ -258,7 +258,7 @@ def _history_checks(history_rows: list[ImplementationDocument]) -> list[Implemen
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = expected_entries - {"manifest.json"}

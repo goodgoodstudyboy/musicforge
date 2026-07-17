@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -80,7 +80,7 @@ class ReleasePortfolioGovernanceSignoffStore:
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
 
     def get_signoff(self, queue_id: str) -> dict[str, Any]:
         signoff = self.read_signoff(queue_id, default={})
@@ -97,7 +97,7 @@ class ReleasePortfolioGovernanceSignoffStore:
                 queue = self.governance_store.get_queue(queue_id)
                 current = self.governance_store._current_source(str(queue.get("portfolio_id") or ""))  # noqa: SLF001
                 current_source_hash = stable_hash(current)
-                source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+                source = _as_document(signoff.get("source"))
                 stale = bool(source.get("current_source_hash") and current_source_hash and str(source.get("current_source_hash")) != current_source_hash)
             except Exception:
                 stale = False
@@ -133,7 +133,7 @@ class ReleasePortfolioGovernanceSignoffStore:
         zip_info = self._zip_evidence(queue_id, queue, blockers)
         verification = self._read_queue_verification(queue_id, zip_info, export_manifest, blockers, warnings)
 
-        summary = execution.get("summary") if isinstance(execution.get("summary"), dict) else {}
+        summary = _as_document(execution.get("summary"))
         failed = int(summary.get("failed") or 0)
         blocked = int(summary.get("blocked") or 0)
         if failed:
@@ -197,7 +197,7 @@ class ReleasePortfolioGovernanceSignoffStore:
                 raise ReleasePortfolioGovernanceSignoffStateError("Portfolio Governance Queue is already signed off. Reset Governance Signoff before signing again.")
             gate = self.gate(queue_id, payload, now=now)
             if not gate.get("signable"):
-                blockers = gate.get("blockers") if isinstance(gate.get("blockers"), list) else []
+                blockers = _as_list(gate.get("blockers"))
                 detail = str((blockers[0] if blockers and isinstance(blockers[0], dict) else {}).get("message") or "Portfolio Governance Signoff gate failed.")
                 raise ReleasePortfolioGovernanceSignoffStateError(f"Portfolio Governance Signoff gate failed: {detail}")
             force = bool(payload.get("force", False))
@@ -378,7 +378,7 @@ class ReleasePortfolioGovernanceSignoffStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceSignoffNotFoundError("Portfolio Governance Archive export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
 
     def archive_summary(self, queue_id: str) -> dict[str, Any]:
         manifest = self.read_archive_manifest(queue_id) if (self.archive_export_dir(queue_id) / "manifest.json").exists() else {}
@@ -415,7 +415,7 @@ class ReleasePortfolioGovernanceSignoffStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceSignoffNotFoundError("Portfolio Governance Change Request does not exist.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
 
     def create_change_request(self, queue_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
@@ -499,7 +499,7 @@ class ReleasePortfolioGovernanceSignoffStore:
     def _source_state(self, queue: ImplementationDocument, execution: ImplementationDocument) -> ImplementationDocument:
         current = self.governance_store._current_source(str(queue.get("portfolio_id") or ""))  # noqa: SLF001
         current_hash = stable_hash(current)
-        post = execution.get("post_conditions") if isinstance(execution.get("post_conditions"), dict) else {}
+        post = _as_document(execution.get("post_conditions"))
         queue_source_hash = str(queue.get("source_hash") or "")
         source_current = not bool(current.get("stale")) and current_hash == queue_source_hash
         documented_run_drift = (
@@ -556,7 +556,7 @@ class ReleasePortfolioGovernanceSignoffStore:
         elif status != "passed":
             blockers.append(_blocker("queue_verification_status", f"Governance Queue verification status is {status or 'missing'}."))
         expected_zip_sha = str(zip_info.get("sha256") or "")
-        report_zip_sha = str(report.get("zip_sha256") or (report.get("zip") if isinstance(report.get("zip"), dict) else {}).get("sha256") or "")
+        report_zip_sha = str(report.get("zip_sha256") or (_as_document(report.get("zip"))).get("sha256") or "")
         if not report_zip_sha:
             blockers.append(_blocker("queue_verification_zip_sha256_missing", "Governance Queue verification report does not record the verified ZIP sha256. Re-run queue verification."))
         elif expected_zip_sha and report_zip_sha != expected_zip_sha:
@@ -592,7 +592,7 @@ class ReleasePortfolioGovernanceSignoffStore:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                signoff_id = str((event.get("summary") if isinstance(event.get("summary"), dict) else {}).get("signoff_id") or "")
+                signoff_id = str((_as_document(event.get("summary"))).get("signoff_id") or "")
                 if signoff_id.startswith("pgs-"):
                     try:
                         used.add(int(signoff_id.split("-")[-1]))
@@ -632,12 +632,12 @@ class ReleasePortfolioGovernanceSignoffStore:
 
 
 def governance_signoff_integrity_ok(signoff: dict[str, Any] | None) -> bool:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == governance_signoff_hash(data)
 
 
 def governance_signoff_summary(signoff: dict[str, Any] | None, *, current_source_hash: str | None = None, stale: bool = False) -> dict[str, Any]:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     if not data:
         return {"status": "not_signed", "integrity_ok": False, "stale": False}
     integrity_ok = governance_signoff_integrity_ok(data)
@@ -672,12 +672,12 @@ def governance_signoff_summary(signoff: dict[str, Any] | None, *, current_source
 
 
 def governance_archive_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == governance_archive_manifest_hash(data)
 
 
 def _requirements(payload: ImplementationDocument) -> dict[str, bool]:
-    raw = payload.get("requirements") if isinstance(payload.get("requirements"), dict) else {}
+    raw = _as_document(payload.get("requirements"))
     return {
         "require_queue_verified": bool(raw.get("require_queue_verified", True)),
         "require_no_failed_actions": bool(raw.get("require_no_failed_actions", True)),
@@ -718,7 +718,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
     if not path.exists():
         return default if default is not None else {}
     value = read_json(path)
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_SIGNOFF_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, value: ImplementationDocument) -> Path:
@@ -799,7 +799,7 @@ def _warning(check_id: str, message: str) -> ImplementationDocument:
 
 
 def _write_closeout(export_dir: Path, signoff: ImplementationDocument, execution: ImplementationDocument, change_requests: ImplementationDocument) -> None:
-    summary = execution.get("summary") if isinstance(execution.get("summary"), dict) else {}
+    summary = _as_document(execution.get("summary"))
     lines = [
         "MusicForge Portfolio Governance Closeout",
         "",

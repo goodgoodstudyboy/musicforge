@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from typing import Any as _InterfaceType
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_quality_parts_dependencies
@@ -103,7 +107,7 @@ def _print_audio_fix_sprint_result(result: ImplementationDocument, *, json_outpu
     status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
     print("MusicForge Audio Fix Sprint")
     print(f"status: {status}")
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    summary = _as_document(result.get("summary"))
     if summary:
         details = []
         for key in ("issue_count", "candidate_count", "selected_count", "resolved_count", "manual_recheck_count", "test_fake_count"):
@@ -126,7 +130,7 @@ def _print_audio_campaign_result(result: ImplementationDocument, *, json_output:
     status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
     print("MusicForge Audio Campaign")
     print(f"status: {status}")
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    summary = _as_document(result.get("summary"))
     details = []
     for key in ("case_count", "manual_review_count", "real_audio_count", "test_fake_count", "open_fix_sprint_count"):
         if key in summary:
@@ -147,7 +151,7 @@ def _print_release_audio_certification_result(result: ImplementationDocument, *,
     status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
     print("MusicForge Release Audio Certification")
     print(f"status: {status}")
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    summary = _as_document(result.get("summary"))
     details = []
     for key in ("track_count", "manual_accepted_track_count", "real_audio_track_count", "blocker_count", "remediation_status"):
         if key in summary:
@@ -160,14 +164,14 @@ def _print_release_audio_certification_result(result: ImplementationDocument, *,
 
 def run_acceptance_check(
     *,
-    out_dir: Path,
+    out_dir: _InterfaceType,
     profile_id: str,
     cases: int,
     render_audio_mode: str,
     auto_review: bool,
     min_rating: int,
     manual_required: bool = False,
-) -> dict[str, Any]:
+) -> dict[str, _InterfaceType]:
     pass
     pass
     pass
@@ -231,8 +235,8 @@ def run_acceptance_check(
         report = store.read_report(suite.suite_id)
     return report
 
-def print_acceptance_check_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+def print_acceptance_check_report(report: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(report.get("summary"))
     print("MusicForge acceptance-check")
     print(f"status: {report.get('status')}")
     print(f"suite: {report.get('suite_id')}")
@@ -242,8 +246,8 @@ def print_acceptance_check_report(report: dict[str, Any]) -> None:
     print(f"renderer: {summary.get('renderer_status')}")
     print(f"acceptance_status: {summary.get('acceptance_status')}")
 
-def print_acceptance_diff_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+def print_acceptance_diff_report(report: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(report.get("summary"))
     print("MusicForge acceptance-diff")
     print(f"status: {report.get('status')}")
     print(f"left: {report.get('left_suite_id')}")
@@ -252,9 +256,9 @@ def print_acceptance_diff_report(report: dict[str, Any]) -> None:
     print(f"new_blockers: {summary.get('new_blocker_count', 0)}")
     print(f"rating_regressions: {summary.get('rating_regression_count', 0)}")
 
-def print_release_audio_review_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    review = result.get("review") if isinstance(result.get("review"), dict) else {}
+def print_release_audio_review_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    review = _as_document(result.get("review"))
     print("MusicForge release-audio-review")
     print(f"release: {result.get('release_id') or summary.get('release_id') or '-'}")
     print(f"status: {summary.get('status') or review.get('status') or result.get('status') or '-'}")
@@ -270,9 +274,9 @@ def print_release_audio_review_result(result: dict[str, Any]) -> None:
     if result.get("reviews") is not None:
         print(f"reviews: {len(result.get('reviews') or [])}")
 
-def print_acceptance_analytics_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    source = report.get("source_summary") if isinstance(report.get("source_summary"), dict) else {}
+def print_acceptance_analytics_report(report: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(report.get("summary"))
+    source = _as_document(report.get("source_summary"))
     print("MusicForge acceptance-analytics")
     print(f"readiness: {summary.get('readiness_status')}")
     print(f"scope: {(report.get('scope') or {}).get('type') if isinstance(report.get('scope'), dict) else 'global'}")
@@ -284,11 +288,11 @@ def print_acceptance_analytics_report(report: dict[str, Any]) -> None:
     print(f"issues: {summary.get('issue_count', 0)}")
     print(f"recommendations: {summary.get('recommendation_count', 0)}")
 
-def print_acceptance_fix_sprint_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    sprint = result.get("fix_sprint") if isinstance(result.get("fix_sprint"), dict) else {}
-    delta = result.get("delta_report") if isinstance(result.get("delta_report"), dict) else {}
-    closeout = result.get("closeout_report") if isinstance(result.get("closeout_report"), dict) else {}
+def print_acceptance_fix_sprint_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    sprint = _as_document(result.get("fix_sprint"))
+    delta = _as_document(result.get("delta_report"))
+    closeout = _as_document(result.get("closeout_report"))
     print("MusicForge acceptance-fix-sprint")
     print(f"fix_sprint: {summary.get('fix_sprint_id') or sprint.get('fix_sprint_id') or delta.get('fix_sprint_id') or closeout.get('fix_sprint_id') or '-'}")
     print(f"status: {summary.get('status') or sprint.get('status') or closeout.get('status') or '-'}")
@@ -302,11 +306,11 @@ def print_acceptance_fix_sprint_result(result: dict[str, Any]) -> None:
     if closeout:
         print(f"closeout_status: {closeout.get('status')}")
 
-def print_acceptance_fix_plan_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+def print_acceptance_fix_plan_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
     plan = result.get("fix_plan") or result.get("fix_plan_preview")
-    plan = plan if isinstance(plan, dict) else {}
-    review = result.get("outcome_review") if isinstance(result.get("outcome_review"), dict) else {}
+    plan = _as_document(plan)
+    review = _as_document(result.get("outcome_review"))
     if review:
         print("MusicForge acceptance-fix-plan review")
         print(f"review: {summary.get('review_id') or review.get('review_id') or '-'}")

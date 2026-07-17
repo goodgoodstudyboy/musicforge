@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -54,7 +54,7 @@ def verify_human_review_pack(
 
 
 def human_review_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -86,7 +86,7 @@ def print_human_review_verification_report(report: dict[str, Any]) -> None:
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -206,7 +206,7 @@ class _HumanReviewPackVerifier:
         if not isinstance(self.manifest.get("cases"), list):
             missing_fields.append("cases")
         self._add_check("manifest", "human_review_manifest_schema", "failed" if missing_fields else "passed", "blocking", "Missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Human review manifest schema has required fields.", count=len(missing_fields))
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid_rows: list[dict[str, Any]] = []
         shape_errors: list[str] = []
         for index, item in enumerate(rows):
@@ -255,7 +255,7 @@ class _HumanReviewPackVerifier:
         suite_match = self.pack.get("suite_id") == self.manifest.get("suite_id")
         pack_match = self.pack.get("pack_id") == self.manifest.get("pack_id")
         source_match = self.pack.get("source_hash") == self.manifest.get("source_hash")
-        cases = self.pack.get("cases") if isinstance(self.pack.get("cases"), list) else []
+        cases = _as_list(self.pack.get("cases"))
         self._add_check("pack", "human_review_pack_manifest_match", "passed" if suite_match and pack_match and source_match else "failed", "blocking", "Pack identity matches manifest." if suite_match and pack_match and source_match else "Pack identity does not match manifest.")
         self._add_check("pack", "human_review_pack_cases", "passed" if cases else "failed", "blocking", f"Pack includes {len(cases)} review case(s)." if cases else "Pack includes no review cases.", count=len(cases))
         case_ids = [str(item.get("case_id") or "") for item in cases if isinstance(item, dict)]
@@ -263,7 +263,7 @@ class _HumanReviewPackVerifier:
         self._add_check("pack", "human_review_pack_duplicate_cases", "failed" if duplicates else "passed", "blocking", "Duplicate case ids: " + ", ".join(duplicates[:5]) if duplicates else "No duplicate case ids.", count=len(duplicates))
 
     def _verify_assets(self, archive: zipfile.ZipFile) -> None:
-        cases = self.pack.get("cases") if isinstance(self.pack.get("cases"), list) else []
+        cases = _as_list(self.pack.get("cases"))
         for item in cases:
             if not isinstance(item, dict):
                 continue
@@ -298,7 +298,7 @@ class _HumanReviewPackVerifier:
         template = self.response_template
         if not template:
             return
-        reviews = template.get("reviews") if isinstance(template.get("reviews"), list) else []
+        reviews = _as_list(template.get("reviews"))
         status = "passed" if template.get("suite_id") == self.manifest.get("suite_id") and template.get("pack_id") == self.manifest.get("pack_id") and reviews else "failed"
         self._add_check("response_template", "human_review_response_template_schema", status, "blocking", f"Response template includes {len(reviews)} review row(s)." if status == "passed" else "Response template does not match manifest or has no reviews.", count=len(reviews))
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
@@ -355,7 +355,7 @@ class _HumanReviewPackVerifier:
         blockers = [item for item in [*self.checks, *self.case_checks] if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in [*self.checks, *self.case_checks] if item.get("status") == "warning"]
         status = "failed" if blockers else "warning" if warnings else "passed"
-        cases = self.pack.get("cases") if isinstance(self.pack.get("cases"), list) else []
+        cases = _as_list(self.pack.get("cases"))
         report = {
             "schema_version": HUMAN_REVIEW_VERIFICATION_SCHEMA_VERSION,
             "generated_at": self.generated_at,

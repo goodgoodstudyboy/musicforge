@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -136,7 +138,7 @@ class ReleasePortfolioAuditStore:
         if not path.exists():
             raise ReleasePortfolioAuditNotFoundError("Release Portfolio Audit does not exist.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
 
     def save_portfolio(self, portfolio: dict[str, Any]) -> dict[str, Any]:
         portfolio_id = _validate_portfolio_id(str(portfolio.get("portfolio_id") or ""))
@@ -159,14 +161,14 @@ class ReleasePortfolioAuditStore:
         return _read_json_default(path, default={})
 
     def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None, *, now: str | None = None) -> bool:
-        report_data = report if isinstance(report, dict) else self.read_report(portfolio_id, default={})
+        report_data = _document_or(report, self.read_report(portfolio_id, default={}))
         if not report_data:
             return False
-        source = report_data.get("source") if isinstance(report_data.get("source"), dict) else {}
+        source = _as_document(report_data.get("source"))
         selection = source.get("selection") if isinstance(source.get("selection"), dict) else None
         if selection is None:
             portfolio = self.get_portfolio(portfolio_id)
-            selection = portfolio.get("selection") if isinstance(portfolio.get("selection"), dict) else {}
+            selection = _as_document(portfolio.get("selection"))
         release_ids, duplicate_ids = self._selected_release_ids(_selection_from_payload(selection))
         snapshots = [self._build_release_snapshot(release_id, now=now or now_iso()) for release_id in release_ids]
         current_source = {"selection": _selection_from_payload(selection), "snapshots": [_snapshot_source(item) for item in snapshots]}
@@ -180,7 +182,7 @@ class ReleasePortfolioAuditStore:
             portfolio = self.get_portfolio(portfolio_id)
             if portfolio.get("status") == "archived":
                 raise ReleasePortfolioAuditStateError("Archived Portfolio Audit cannot be refreshed.")
-            selection = {**_selection_from_payload(portfolio.get("selection") if isinstance(portfolio.get("selection"), dict) else {}), **_selection_patch(payload)}
+            selection = {**_selection_from_payload(_as_document(portfolio.get("selection"))), **_selection_patch(payload)}
             portfolio["selection"] = selection
             release_ids, duplicate_ids = self._selected_release_ids(selection)
             snapshots = [self._build_release_snapshot(release_id, now=now) for release_id in release_ids]
@@ -253,7 +255,7 @@ class ReleasePortfolioAuditStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            release_summaries = report.get("release_summaries") if isinstance(report.get("release_summaries"), list) else []
+            release_summaries = _as_list(report.get("release_summaries"))
             _write_json(export_dir / "portfolio-audit-report.json", report)
             _write_json(export_dir / "portfolio-trend-report.json", trend)
             _write_json(export_dir / "portfolio-risks.json", risks)
@@ -374,7 +376,7 @@ class ReleasePortfolioAuditStore:
         change_requests = self.signoff_store.list_change_requests(release_id)
         runbooks = self.runbook_store.list_runbooks(release_id, include_archived=True)
         latest_runbook = runbooks[0] if runbooks else {}
-        snapshot = {
+        snapshot: _InferenceType = {
             "schema_version": 1,
             "release_id": release_id,
             "release_name": release.name,
@@ -446,7 +448,7 @@ def release_snapshot_integrity_hash(snapshot: dict[str, Any]) -> str:
 
 
 def release_snapshot_integrity_ok(snapshot: dict[str, Any] | None) -> bool:
-    data = snapshot if isinstance(snapshot, dict) else {}
+    data = _as_document(snapshot)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == release_snapshot_integrity_hash(data)
 
 
@@ -454,7 +456,7 @@ def release_snapshot_integrity_ok(snapshot: dict[str, Any] | None) -> bool:
 
 
 def portfolio_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == portfolio_report_integrity_hash(data)
 
 
@@ -462,7 +464,7 @@ def portfolio_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def portfolio_trend_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == portfolio_trend_integrity_hash(data)
 
 
@@ -470,7 +472,7 @@ def portfolio_trend_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def portfolio_risk_register_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == portfolio_risk_register_integrity_hash(data)
 
 
@@ -478,14 +480,14 @@ def portfolio_risk_register_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def portfolio_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == portfolio_manifest_integrity_hash(data)
 
 
 def portfolio_audit_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    score = data.get("risk_score") if isinstance(data.get("risk_score"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
+    score = _as_document(data.get("risk_score"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -509,7 +511,7 @@ def _portfolio_findings(snapshots: list[ImplementationDocument], duplicates: lis
     if not snapshots:
         blockers.append(_blocker("portfolio_empty", "Portfolio Audit has no included releases."))
     for snapshot in snapshots:
-        release_id = snapshot.get("release_id")
+        release_id = str(snapshot.get("release_id") or "")
         if not release_snapshot_integrity_ok(snapshot):
             blockers.append(_blocker("release_snapshot_integrity", f"Release snapshot integrity failed for {release_id}."))
         if not snapshot.get("operations_report_integrity_ok") and snapshot.get("operations_summary", {}).get("status") != "missing":
@@ -605,7 +607,7 @@ def _build_recommendations(snapshots: list[ImplementationDocument], risks: list[
 
 
 def _release_readiness_ranking(snapshots: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    rows = []
+    rows: list[ImplementationDocument] = []
     for snapshot in snapshots:
         blocker_count = 0
         warning_count = 0
@@ -626,7 +628,7 @@ def _release_readiness_ranking(snapshots: list[ImplementationDocument]) -> list[
             warning_count += 1
         risk = blocker_count * 30 + warning_count * 8
         rows.append({"release_id": snapshot.get("release_id"), "release_name": snapshot.get("release_name"), "readiness_status": "blocked" if blocker_count else "review_needed" if warning_count else "ready", "risk_score": min(100, risk), "coverage_score": coverage, "blocker_count": blocker_count, "warning_count": warning_count, "recommendation": "ready_for_external_review" if not blocker_count and not warning_count else "review_evidence"})
-    rows.sort(key=lambda item: (item["blocker_count"], item["risk_score"], -item["coverage_score"], str(item["release_id"])))
+    rows.sort(key=lambda item: (int(item.get("blocker_count") or 0), int(item.get("risk_score") or 0), -int(item.get("coverage_score") or 0), str(item.get("release_id") or "")))
     for index, row in enumerate(rows, start=1):
         row["readiness_rank"] = index
     return rows
@@ -732,7 +734,7 @@ def _snapshot_source(snapshot: ImplementationDocument) -> ImplementationDocument
 
 
 def _selection_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
-    data = payload if isinstance(payload, dict) else {}
+    data = _as_document(payload)
     return {
         "release_ids": [str(item).strip() for item in data.get("release_ids", []) if str(item).strip()] if isinstance(data.get("release_ids"), list) else [],
         "include_hidden": bool(data.get("include_hidden", False)),
@@ -768,7 +770,7 @@ def _rate(value: int, total: int) -> float:
 
 
 def _portfolio_review_markdown(portfolio: ImplementationDocument, report: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     lines = [
         "# MusicForge Release Portfolio Audit",
         "",
@@ -784,7 +786,7 @@ def _portfolio_review_markdown(portfolio: ImplementationDocument, report: Implem
             lines.append(f"- {item.get('release_id')} | {item.get('release_name')} | audit={item.get('audit_verification_status')} | reviewer={item.get('reviewer_pack_verification_status')} | archive={item.get('archive_summary', {}).get('verification_status')}")
     lines.append("")
     lines.append("## Recommendations")
-    recommendations = report.get("recommendations") if isinstance(report.get("recommendations"), list) else []
+    recommendations = _as_list(report.get("recommendations"))
     lines.extend([f"- {item.get('recommendation_id')}: {item.get('suggested_action')}" for item in recommendations if isinstance(item, dict)] or ["- None"])
     return "\n".join(lines) + "\n"
 
@@ -796,14 +798,14 @@ def _portfolio_retrospective_markdown(report: ImplementationDocument) -> str:
             lines.append(f"- {item.get('window_id')}: releases={item.get('release_count')}, change_request_rate={item.get('change_request_rate')}, audit_failure_rate={item.get('audit_failure_rate')}")
     lines.append("")
     lines.append("## Findings")
-    findings = report.get("trend_findings") if isinstance(report.get("trend_findings"), list) else []
+    findings = _as_list(report.get("trend_findings"))
     lines.extend([f"- {item.get('category')}: {item.get('message')}" for item in findings if isinstance(item, dict)] or ["- None"])
     return "\n".join(lines) + "\n"
 
 
 def _risk_register_markdown(report: ImplementationDocument) -> str:
     lines = ["# MusicForge Portfolio Risk Register", ""]
-    risks = report.get("risks") if isinstance(report.get("risks"), list) else []
+    risks = _as_list(report.get("risks"))
     for item in risks:
         if isinstance(item, dict):
             lines.append(f"- {item.get('risk_id')} | {item.get('severity')} | {item.get('category')} | {item.get('title')} | releases={', '.join(item.get('release_ids', []))}")
@@ -879,7 +881,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
 
 
 def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
@@ -889,7 +891,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except Exception:
         return default if default is not None else {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_AUDIT_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, data: ImplementationDocument) -> Path:

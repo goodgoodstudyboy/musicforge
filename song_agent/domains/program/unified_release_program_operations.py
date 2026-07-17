@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -213,7 +213,7 @@ class UnifiedReleaseProgramOperationsStore:
             if approval.get("target") != request.get("target") or approval.get("source") != request.get("source"):
                 raise UnifiedReleaseProgramOperationsStateError("Program Change Request approval binding does not match request.")
             self._assert_request_current(program_id, request, payload)
-            current = request.get("source") if isinstance(request.get("source"), dict) else {}
+            current = _as_document(request.get("source"))
             previous_signoff_hash = str(current.get("signoff_hash") or "")
             if not previous_signoff_hash:
                 raise UnifiedReleaseProgramOperationsStateError("Program Change Request does not bind a signed Program.")
@@ -618,7 +618,7 @@ class UnifiedReleaseProgramOperationsStore:
 
     def _assert_request_current(self, program_id: str, request: ImplementationDocument, payload: ImplementationDocument) -> None:
         current = self._current_program_binding(program_id, payload)
-        expected = request.get("source") if isinstance(request.get("source"), dict) else {}
+        expected = _as_document(request.get("source"))
         fields = ("signoff_hash", "signoff_binding_hash", "program_zip_sha256", "program_manifest_hash", "verification_report_hash", "external_evidence_manifest_hash", "source_hash")
         mismatched = [field for field in fields if current.get(field) != expected.get(field)]
         if mismatched:

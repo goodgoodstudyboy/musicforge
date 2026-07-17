@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from typing import Any as _InterfaceType
+
 from . import dependencies as _commands_release_check_parts_dependencies
 
 from .release_check_commands_and_presenter_adapters import _warn_legacy_ga_flags, build_release_check_parser, build_verify_ga_readiness_parser
@@ -32,7 +36,7 @@ def _execute_verify_ga_readiness_report_part_03(argv: list[str], _split_state):
     return (False, None)
 
 def _execute_verify_ga_readiness_report(argv: list[str]) -> None:
-    _split_state = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _execute_verify_ga_readiness_report_part_01(argv, _split_state)
     if _split_result[0]:
         return _split_result[1]
@@ -67,7 +71,7 @@ def _execute_release_check(argv: list[str]) -> None:
             for item in rows:
                 print(f"{item['check_id']}\t{item['group']}\t{item.get('version') or '-'}\t{item['name']}")
         return
-    def _progress(definition: Any) -> None:
+    def _progress(definition: _InterfaceType) -> None:
         print(f"[release-check] running {definition.check_id} ...", file=sys.stderr, flush=True)
     report = run_release_check_matrix(
         profile=args.profile,

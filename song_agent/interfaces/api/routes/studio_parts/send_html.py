@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio import StudioRouteContext
+
 from http import HTTPStatus
 from pathlib import Path
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioRoutesSendHtml:
+class StudioRoutesSendHtml(StudioRouteContext):
     def _send_html(self, html: str) -> None:
         body = html.encode("utf-8")
         self.send_response(_interfaces_api_runtime.HTTPStatus.OK.value)

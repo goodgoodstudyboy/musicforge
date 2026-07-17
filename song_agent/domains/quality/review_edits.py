@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -149,7 +149,7 @@ def build_review_edit(
     payload: dict[str, Any] | None = None,
     now: str | None = None,
 ) -> ReviewEditIntent:
-    payload = payload if isinstance(payload, dict) else {}
+    payload = _as_document(payload)
     mode = _mode(payload.get("mode"))
     source = build_review_edit_source(project_id=project_id, parent_version_id=parent_version_id, audition=audition, audition_plan=audition_plan)
     overrides = payload.get("intent_overrides")
@@ -189,7 +189,7 @@ def build_review_edit_source(
     audition: EditorAuditionManifest,
     audition_plan: SongPlan,
 ) -> dict[str, Any]:
-    review = audition.review if isinstance(audition.review, dict) else {}
+    review = _as_document(audition.review)
     markers = [
         {
             "marker_id": marker.get("marker_id"),
@@ -228,7 +228,7 @@ def build_review_edit_source(
 
 
 def infer_review_edit_intents(parent_plan: SongPlan, audition: EditorAuditionManifest, audition_plan: SongPlan) -> tuple[list[EditIntent], list[str]]:
-    review = audition.review if isinstance(audition.review, dict) else {}
+    review = _as_document(audition.review)
     rating = int(review.get("rating") or 0)
     status = str(review.get("status") or "unreviewed")
     warnings: list[str] = []
@@ -442,7 +442,7 @@ def _override_intents(parent_plan: SongPlan, raw: Any) -> tuple[list[EditIntent]
 
 
 def _review_text(audition: EditorAuditionManifest) -> str:
-    review = audition.review if isinstance(audition.review, dict) else {}
+    review = _as_document(audition.review)
     parts = [
         str(review.get("notes") or ""),
         " ".join(str(tag) for tag in review.get("tags", [])),
@@ -469,7 +469,7 @@ def _confidence_for_source(source: ImplementationDocument, intents: list[EditInt
 
 
 def _target_section(parent_plan: SongPlan, audition: EditorAuditionManifest, markers: list[ImplementationDocument]) -> SongSection:
-    range_data = audition.range if isinstance(audition.range, dict) else {}
+    range_data = _as_document(audition.range)
     if range_data.get("mode") == "section":
         section_name = str(range_data.get("section_name") or "")
         section = _find_section(parent_plan, section_name)

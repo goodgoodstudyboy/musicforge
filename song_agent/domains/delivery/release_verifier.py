@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -120,7 +120,7 @@ def verify_release_zip(
 
 
 def verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -154,7 +154,7 @@ def print_verification_report(report: dict[str, Any]) -> None:
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -355,7 +355,7 @@ class _ReleaseZipVerifier:
             "Invalid or missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Manifest schema has required fields.",
             count=len(missing_fields),
         )
-        manifest_files = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        manifest_files = _as_list(self.manifest.get("files"))
         valid_file_rows: list[dict[str, Any]] = []
         shape_errors: list[str] = []
         for index, item in enumerate(manifest_files):
@@ -451,7 +451,7 @@ class _ReleaseZipVerifier:
                 release_errors.append("release_type is missing")
         self._add_check("release", "release_json", "failed" if release_errors else "passed", "blocking", "; ".join(release_errors) if release_errors else "release.json is consistent.")
 
-        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        tracks = _as_list(self.tracklist.get("tracks"))
         tracklist_errors: list[str] = []
         if not self.tracklist:
             tracklist_errors.append("tracklist.json is missing or invalid")
@@ -477,8 +477,8 @@ class _ReleaseZipVerifier:
         status = "failed" if order_warnings and self.strict else "warning" if order_warnings else "passed"
         self._add_check("tracklist", "track_order", status, "blocking" if status == "failed" else "warning", "; ".join(order_warnings) if order_warnings else "Track ordering identifiers are unique.", count=len(order_warnings))
 
-        manifest_tracks = self.manifest.get("tracks") if isinstance(self.manifest.get("tracks"), list) else []
-        summary = self.manifest.get("summary") if isinstance(self.manifest.get("summary"), dict) else {}
+        manifest_tracks = _as_list(self.manifest.get("tracks"))
+        summary = _as_document(self.manifest.get("summary"))
         expected_counts = {
             "manifest.summary.track_count": summary.get("track_count"),
             "manifest.tracks": len(manifest_tracks),
@@ -490,7 +490,7 @@ class _ReleaseZipVerifier:
         self._add_check("tracklist", "track_count_consistency", "failed" if bad_count else "passed", "blocking", f"Track count values: {expected_counts}.")
 
     def _verify_tracks(self, archive: zipfile.ZipFile) -> None:
-        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        tracks = _as_list(self.tracklist.get("tracks"))
         for item in tracks:
             if not isinstance(item, dict):
                 continue
@@ -578,7 +578,7 @@ class _ReleaseZipVerifier:
                 reasons.append("base_song_plan_hash")
             if mix_state.get("base_midi_hash") != midi_sha:
                 reasons.append("base_midi_hash")
-        source = mix_state.get("source") if isinstance(mix_state.get("source"), dict) else {}
+        source = _as_document(mix_state.get("source"))
         if plan is not None:
             expected_source = _mix_source_state_for_zip(plan=plan, midi_sha=midi_sha, project_id=str(mix_state.get("project_id") or ""), version_id=str(mix_state.get("version_id") or ""))
             if any(source.get(key) != value for key, value in expected_source.items()):
@@ -618,8 +618,8 @@ class _ReleaseZipVerifier:
             "blocking",
             "Signoff export_manifest_hash matches manifest without zip." if signoff_hash == manifest_hash else "Signoff export_manifest_hash does not match manifest without zip.",
         )
-        sidecars = self.manifest.get("sidecars") if isinstance(self.manifest.get("sidecars"), dict) else {}
-        release_signoff = sidecars.get("release_signoff") if isinstance(sidecars.get("release_signoff"), dict) else {}
+        sidecars = _as_document(self.manifest.get("sidecars"))
+        release_signoff = _as_document(sidecars.get("release_signoff"))
         expected_payload_hash = release_signoff.get("payload_hash")
         payload_hash = stable_hash(_release_signoff_hash_payload(self.signoff))
         self._add_check(
@@ -639,9 +639,9 @@ class _ReleaseZipVerifier:
             "Signoff qa_source_hash matches manifest." if qa_source and qa_source == manifest_qa_source else "Signoff qa_source_hash is missing or does not match manifest.",
         )
         if self.require_human_review:
-            gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-            audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
-            per_track = audio_gate.get("per_track_review") if isinstance(audio_gate.get("per_track_review"), dict) else {}
+            gate = _as_document(self.signoff.get("acceptance_gate"))
+            audio_gate = _as_document(gate.get("audio"))
+            per_track = _as_document(audio_gate.get("per_track_review"))
             manual_audio_count = int(per_track.get("manual_accepted_track_count", audio_gate.get("manual_audio_accepted_count", 0)) or 0)
             require_per_track = bool(audio_gate.get("require_per_track_audio_review") or per_track.get("require_per_track_audio_review"))
             message = "Release signoff contains manual WAV review evidence."
@@ -659,7 +659,7 @@ class _ReleaseZipVerifier:
 
     def _verify_audio_reviews(self, archive: zipfile.ZipFile) -> None:
         enforce_per_track = self._requires_per_track_audio_review()
-        manifest_summary = self.manifest.get("audio_reviews") if isinstance(self.manifest.get("audio_reviews"), dict) else {}
+        manifest_summary = _as_document(self.manifest.get("audio_reviews"))
         summary_path = str(manifest_summary.get("summary_path") or "audio-reviews/summary.json")
         if summary_path not in self.entry_map:
             status = "failed" if enforce_per_track else "warning"
@@ -679,7 +679,7 @@ class _ReleaseZipVerifier:
         if not enforce_per_track and not reviews:
             self._add_check("audio_reviews", "audio_review_files_present", "passed", "warning", "No per-track audio review files are required for this release.")
             return
-        tracklist_tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        tracklist_tracks = _as_list(self.tracklist.get("tracks"))
         accepted_by_track: dict[str, dict[str, Any]] = {}
         duplicate_tracks: list[str] = []
         for path, review in reviews:
@@ -698,13 +698,13 @@ class _ReleaseZipVerifier:
         missing_track_ids: list[str] = []
         mismatches: list[str] = []
         marker_errors: list[str] = []
-        redaction_errors: list[str] = []
+        redaction_errors: list[ImplementationDocument] = []
         for item in tracklist_tracks:
             if not isinstance(item, dict):
                 continue
             track_id = str(item.get("track_id") or "")
             directory = str(item.get("directory") or "").strip("/")
-            review = accepted_by_track.get(track_id)
+            review = _as_document(accepted_by_track.get(track_id))
             if not review:
                 missing_track_ids.append(track_id)
                 continue
@@ -714,7 +714,7 @@ class _ReleaseZipVerifier:
                 mismatches.append(f"{track_id}: song.wav missing")
                 continue
             actual_wav_sha = _sha256_entry(archive, info)
-            evidence = review.get("audio_evidence") if isinstance(review.get("audio_evidence"), dict) else {}
+            evidence = _as_document(review.get("audio_evidence"))
             if evidence.get("wav_sha256") != actual_wav_sha:
                 mismatches.append(f"{track_id}: wav sha mismatch")
             duration = _wav_duration(archive, info)
@@ -739,7 +739,7 @@ class _ReleaseZipVerifier:
         )
 
     def _verify_metadata(self, archive: zipfile.ZipFile) -> None:
-        metadata_summary = self.manifest.get("metadata") if isinstance(self.manifest.get("metadata"), dict) else {}
+        metadata_summary = _as_document(self.manifest.get("metadata"))
         if not metadata_summary:
             self._add_check("metadata", "metadata_manifest_summary", "warning", "warning", "Release metadata summary is not present; treating this as a pre-v3.9 ZIP.")
             return
@@ -748,7 +748,7 @@ class _ReleaseZipVerifier:
         required = {"release-metadata.json", "platform-metadata.csv", "credits.csv"}
         missing_declared = sorted(required - set(declared))
         missing_entries = sorted(path for path in declared if path not in self.entry_map)
-        file_rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        file_rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path")) for item in file_rows if isinstance(item, dict)}
         unprotected = sorted(path for path in declared if path not in manifest_paths)
         failures = [*missing_declared, *missing_entries, *[f"{path} not protected by manifest.files" for path in unprotected]]
@@ -766,8 +766,8 @@ class _ReleaseZipVerifier:
         credits_ok = self._read_csv_entry(archive, "credits.csv", "metadata_credits_csv")
         self._add_check("metadata", "metadata_csv_utf8", "passed" if platform_ok and credits_ok else "failed", "blocking", "Metadata CSV files are UTF-8 readable." if platform_ok and credits_ok else "Metadata CSV files must be valid UTF-8 CSV.")
         if self.release_metadata:
-            meta_tracks = self.release_metadata.get("tracks") if isinstance(self.release_metadata.get("tracks"), list) else []
-            tracklist_tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+            meta_tracks = _as_list(self.release_metadata.get("tracks"))
+            tracklist_tracks = _as_list(self.tracklist.get("tracks"))
             meta_ids = {str(item.get("track_id")) for item in meta_tracks if isinstance(item, dict)}
             tracklist_ids = {str(item.get("track_id")) for item in tracklist_tracks if isinstance(item, dict)}
             count_match = len(meta_tracks) == len(tracklist_tracks)
@@ -791,7 +791,7 @@ class _ReleaseZipVerifier:
                 )
 
     def _read_audio_review_files(self, archive: zipfile.ZipFile, manifest_summary: ImplementationDocument, *, enforce_per_track: bool) -> list[tuple[str, ImplementationDocument]]:
-        declared = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
+        declared = _as_list(manifest_summary.get("review_hashes"))
         paths = [str(item.get("path") or "") for item in declared if isinstance(item, dict) and str(item.get("path") or "").strip()]
         if not paths:
             paths = sorted(name for name in self.entry_names if name.startswith("audio-reviews/reviews/") and name.endswith(".json"))
@@ -813,37 +813,37 @@ class _ReleaseZipVerifier:
         return [(path, review) for path, review in reviews if review]
 
     def _requires_per_track_audio_review(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
-        per_track = audio_gate.get("per_track_review") if isinstance(audio_gate.get("per_track_review"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        audio_gate = _as_document(gate.get("audio"))
+        per_track = _as_document(audio_gate.get("per_track_review"))
         return bool(audio_gate.get("require_per_track_audio_review") or per_track.get("require_per_track_audio_review"))
 
     def _requires_stem_audio_health(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
-        mix_gate = audio_gate.get("mix") if isinstance(audio_gate.get("mix"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        audio_gate = _as_document(gate.get("audio"))
+        mix_gate = _as_document(audio_gate.get("mix"))
         return bool(audio_gate.get("require_stem_audio_health") or mix_gate.get("require_stem_audio_health"))
 
     def _requires_current_mix_state(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
-        mix_gate = audio_gate.get("mix") if isinstance(audio_gate.get("mix"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        audio_gate = _as_document(gate.get("audio"))
+        mix_gate = _as_document(audio_gate.get("mix"))
         return bool(audio_gate.get("require_current_mix_state") or mix_gate.get("require_current_mix_state"))
 
     def _requires_audio_revisions(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        audio_gate = gate.get("audio") if isinstance(gate.get("audio"), dict) else {}
-        revision_gate = audio_gate.get("audio_revision") if isinstance(audio_gate.get("audio_revision"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        audio_gate = _as_document(gate.get("audio"))
+        revision_gate = _as_document(audio_gate.get("audio_revision"))
         return bool(self.require_audio_revisions or audio_gate.get("require_audio_revision_closeout") or revision_gate.get("session_count"))
 
     def _requires_mastering(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        mastering_gate = gate.get("mastering") if isinstance(gate.get("mastering"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        mastering_gate = _as_document(gate.get("mastering"))
         return bool(self.require_mastering or mastering_gate.get("require_mastering_qa"))
 
     def _verify_mastering(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_mastering()
-        manifest_summary = self.manifest.get("mastering") if isinstance(self.manifest.get("mastering"), dict) else {}
+        manifest_summary = _as_document(self.manifest.get("mastering"))
         summary_path = str(manifest_summary.get("summary_path") or "mastering/summary.json")
         if summary_path not in self.entry_map:
             status = "failed" if required else "warning"
@@ -874,10 +874,10 @@ class _ReleaseZipVerifier:
         if selected:
             if not mastering_candidate_integrity_ok(selected):
                 failures.append("selected_candidate_integrity")
-            review = selected.get("review") if isinstance(selected.get("review"), dict) else {}
+            review = _as_document(selected.get("review"))
             if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
                 failures.append("manual_review_missing")
-            tracks = selected.get("tracks") if isinstance(selected.get("tracks"), list) else []
+            tracks = _as_list(selected.get("tracks"))
             by_track = {str(item.get("track_id") or ""): item for item in tracks if isinstance(item, dict)}
             for item in self.tracklist.get("tracks", []) if isinstance(self.tracklist.get("tracks"), list) else []:
                 if not isinstance(item, dict):
@@ -910,14 +910,14 @@ class _ReleaseZipVerifier:
         )
 
     def _requires_encoded_audio(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        encoded_gate = gate.get("encoded_audio") if isinstance(gate.get("encoded_audio"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        encoded_gate = _as_document(gate.get("encoded_audio"))
         return bool(self.require_encoded_audio or encoded_gate.get("require_encoded_audio"))
 
     def _encoded_audio_required_profiles(self) -> list[str]:
         result = list(self.required_audio_format_profiles)
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        encoded_gate = gate.get("encoded_audio") if isinstance(gate.get("encoded_audio"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        encoded_gate = _as_document(gate.get("encoded_audio"))
         for value in encoded_gate.get("required_audio_format_profiles", []) if isinstance(encoded_gate.get("required_audio_format_profiles"), list) else []:
             text = str(value or "")
             if text and text not in result:
@@ -925,15 +925,15 @@ class _ReleaseZipVerifier:
         return result
 
     def _requires_encoded_audio_review(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        review_gate = gate.get("encoded_audio_acceptance") if isinstance(gate.get("encoded_audio_acceptance"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        review_gate = _as_document(gate.get("encoded_audio_acceptance"))
         return bool(self.require_encoded_audio_review or review_gate.get("require_encoded_audio_review"))
 
     def _encoded_audio_review_required_profiles(self) -> list[str]:
         result = self._encoded_audio_required_profiles()
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        review_gate = gate.get("encoded_audio_acceptance") if isinstance(gate.get("encoded_audio_acceptance"), dict) else {}
-        manifest_summary = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        review_gate = _as_document(gate.get("encoded_audio_acceptance"))
+        manifest_summary = _as_document(self.manifest.get("encoded_audio_acceptance"))
         sources = (review_gate,) if result else (review_gate, manifest_summary)
         for source in sources:
             for value in source.get("required_profiles", []) if isinstance(source.get("required_profiles"), list) else []:
@@ -943,13 +943,13 @@ class _ReleaseZipVerifier:
         return result
 
     def _requires_format_decision(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        decision_gate = gate.get("format_decision") if isinstance(gate.get("format_decision"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        decision_gate = _as_document(gate.get("format_decision"))
         return bool(self.require_format_decision or decision_gate.get("require_format_decision"))
 
     def _verify_encoded_audio(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_encoded_audio()
-        manifest_summary = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        manifest_summary = _as_document(self.manifest.get("encoded_audio"))
         summary_path = str(manifest_summary.get("summary_path") or "encoded-audio-summary.json")
         if summary_path not in self.entry_map:
             status = "failed" if required else "warning"
@@ -970,7 +970,7 @@ class _ReleaseZipVerifier:
             failures.append("summary_integrity")
         if summary and encoded_audio_summary_uses_fake(summary):
             failures.append("fake_encoder_evidence")
-        profiles = summary.get("profiles") if isinstance(summary.get("profiles"), list) else []
+        profiles = _as_list(summary.get("profiles"))
         by_profile = {str(row.get("profile_id") or ""): row for row in profiles if isinstance(row, dict)}
         for profile_id in self._encoded_audio_required_profiles():
             row = by_profile.get(profile_id)
@@ -994,7 +994,7 @@ class _ReleaseZipVerifier:
 
     def _verify_encoded_audio_acceptance(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_encoded_audio_review()
-        manifest_summary = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
+        manifest_summary = _as_document(self.manifest.get("encoded_audio_acceptance"))
         if not required and str(manifest_summary.get("status") or "") in {"", "missing", "not_required"}:
             self._add_check("encoded_audio_acceptance", "encoded_audio_acceptance_optional", "passed", "warning", "Encoded audio acceptance is not required.")
             return
@@ -1031,7 +1031,7 @@ class _ReleaseZipVerifier:
                 for row in profile_rows:
                     if row.get("status") != "accepted":
                         failures.append(f"{profile_id}/{row.get('track_id')}:status:{row.get('status')}")
-        exported_reviews = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
+        exported_reviews = _as_list(manifest_summary.get("review_hashes"))
         for row in exported_reviews:
             if not isinstance(row, dict):
                 continue
@@ -1068,7 +1068,7 @@ class _ReleaseZipVerifier:
 
     def _verify_format_decision(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_format_decision()
-        manifest_summary = self.manifest.get("format_decision") if isinstance(self.manifest.get("format_decision"), dict) else {}
+        manifest_summary = _as_document(self.manifest.get("format_decision"))
         if not required and str(manifest_summary.get("status") or "") in {"", "missing", "not_required"}:
             self._add_check("format_decision", "format_decision_optional", "passed", "warning", "Format decision evidence is not required.")
             return
@@ -1097,7 +1097,7 @@ class _ReleaseZipVerifier:
             expected_recommendation_hash = str(report.get("recommendation_hash") or manifest_summary.get("recommendation_hash") or "")
             if expected_recommendation_hash != str(recommendation.get("integrity_hash") or "") or not format_recommendation_integrity_ok(recommendation):
                 failures.append("recommendation_hash")
-        decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
+        decision = _as_document(report.get("decision"))
         selected = set(decision.get("selected_profiles", []) if isinstance(decision.get("selected_profiles"), list) else [])
         archive_profiles = set(decision.get("archive_profiles", []) if isinstance(decision.get("archive_profiles"), list) else [])
         rejected = set(decision.get("rejected_profiles", []) if isinstance(decision.get("rejected_profiles"), list) else [])
@@ -1107,11 +1107,11 @@ class _ReleaseZipVerifier:
             failures.append("archive_rejected_overlap")
         required_profiles = set(self.required_audio_format_profiles or [])
         failures.extend(f"{profile}:not_selected" for profile in sorted(required_profiles - selected))
-        encoded_summary = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        encoded_summary = _as_document(self.manifest.get("encoded_audio"))
         encoded_profiles = {str(row.get("profile_id") or "") for row in encoded_summary.get("profiles", []) if isinstance(row, dict)}
         failures.extend(f"{profile}:encoded_summary_missing" for profile in sorted((selected | archive_profiles) - encoded_profiles))
         if self._requires_encoded_audio_review():
-            acceptance = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
+            acceptance = _as_document(self.manifest.get("encoded_audio_acceptance"))
             accepted_profiles = set(acceptance.get("required_profiles", []) if isinstance(acceptance.get("required_profiles"), list) else [])
             failures.extend(f"{profile}:acceptance_missing" for profile in sorted(selected - accepted_profiles))
         if report.get("status") == "failed":
@@ -1126,13 +1126,13 @@ class _ReleaseZipVerifier:
         )
 
     def _requires_rights_clearance(self) -> bool:
-        gate = self.signoff.get("acceptance_gate") if isinstance(self.signoff.get("acceptance_gate"), dict) else {}
-        rights_gate = gate.get("rights_clearance") if isinstance(gate.get("rights_clearance"), dict) else {}
+        gate = _as_document(self.signoff.get("acceptance_gate"))
+        rights_gate = _as_document(gate.get("rights_clearance"))
         return bool(self.require_rights_clearance or rights_gate.get("require_rights_clearance"))
 
     def _verify_rights_clearance(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_rights_clearance()
-        manifest_summary = self.manifest.get("rights_clearance") if isinstance(self.manifest.get("rights_clearance"), dict) else {}
+        manifest_summary = _as_document(self.manifest.get("rights_clearance"))
         if not required and str(manifest_summary.get("status") or "") in {"", "missing", "not_required"}:
             self._add_check("rights_clearance", "rights_clearance_optional", "passed", "warning", "Rights clearance evidence is not required.")
             return
@@ -1170,7 +1170,7 @@ class _ReleaseZipVerifier:
 
     def _verify_audio_revisions(self, archive: zipfile.ZipFile) -> None:
         required = self._requires_audio_revisions()
-        manifest_summary = self.manifest.get("audio_revisions") if isinstance(self.manifest.get("audio_revisions"), dict) else {}
+        manifest_summary = _as_document(self.manifest.get("audio_revisions"))
         summary_path = str(manifest_summary.get("summary_path") or "audio-revisions/summary.json")
         if summary_path not in self.entry_map:
             status = "failed" if required else "warning"
@@ -1186,7 +1186,7 @@ class _ReleaseZipVerifier:
             "blocking",
             "Audio revision summary hash and integrity match manifest." if expected_hash == actual_hash and audio_revision_summary_integrity_ok(summary) else "Audio revision summary hash or integrity failed.",
         )
-        file_rows = manifest_summary.get("files") if isinstance(manifest_summary.get("files"), list) else []
+        file_rows = _as_list(manifest_summary.get("files"))
         paths = [str(item.get("path") or "") for item in file_rows if isinstance(item, dict) and str(item.get("path") or "").startswith("audio-revisions/") and str(item.get("path") or "").endswith(".json")]
         if not paths:
             paths = sorted(name for name in self.entry_names if name.startswith("audio-revisions/") and name.endswith(".json"))
@@ -1290,7 +1290,7 @@ class _ReleaseZipVerifier:
 
     def _verify_stems_manifest(self, archive: zipfile.ZipFile, track_id: str, path: str, directory: str) -> None:
         manifest = self._read_json_entry(archive, path, "track", "track_stems_manifest_parse", track_id=track_id)
-        stems = manifest.get("stems") if isinstance(manifest.get("stems"), list) else []
+        stems = _as_list(manifest.get("stems"))
         missing: list[str] = []
         for stem in stems:
             if not isinstance(stem, dict):
@@ -1395,7 +1395,7 @@ class _ReleaseZipVerifier:
         blockers = [item for item in [*self.checks, *self.track_checks] if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in [*self.checks, *self.track_checks] if item.get("status") == "warning"]
         status = "failed" if blockers else "warning" if warnings else "passed"
-        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        tracks = _as_list(self.tracklist.get("tracks"))
         report = {
             "schema_version": REPORT_SCHEMA_VERSION,
             "package_type": RELEASE_VERIFICATION_PACKAGE_TYPE,
@@ -1467,7 +1467,7 @@ def _mix_source_state_for_zip(*, plan: SongPlan, midi_sha: str, project_id: str,
 
 
 def _manifest_review_hash(manifest_summary: ImplementationDocument, path: str, review_id: Any) -> str | None:
-    rows = manifest_summary.get("review_hashes") if isinstance(manifest_summary.get("review_hashes"), list) else []
+    rows = _as_list(manifest_summary.get("review_hashes"))
     for row in rows:
         if not isinstance(row, dict):
             continue

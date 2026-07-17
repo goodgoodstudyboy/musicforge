@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_path as _as_path
 
 import hashlib as hashlib
 import json as json
@@ -247,7 +247,7 @@ class TrustOperationsControlStore:
             bindings_doc = self._evidence_bindings_doc(hub_id, policy_id, source)
             assessment_id = _safe_id(str(payload.get("assessment_id") or _next_id(self.assessments_dir(hub_id), "toc-assess")))
             status = "passed" if not blockers else "failed"
-            report = {
+            report: ImplementationDocument = {
                 "schema_version": TRUST_OPERATIONS_CONTROL_SCHEMA_VERSION,
                 "package_type": TRUST_OPERATIONS_CONTROL_ASSESSMENT_PACKAGE_TYPE,
                 "hub_id": hub_id,
@@ -266,7 +266,7 @@ class TrustOperationsControlStore:
                     "manual_actions_hash": actions_doc.get("integrity_hash"),
                 },
                 "summary": {
-                    **results_doc["summary"],
+                    **_as_document(results_doc.get("summary")),
                     "blocker_count": len(blockers),
                     "manual_action_count": len(manual_actions),
                 },
@@ -371,9 +371,9 @@ class TrustOperationsControlStore:
         return report
 
     def _catalog_source(self, hub_id: str, payload: ImplementationDocument) -> ImplementationDocument:
-        hub_report = _read_json_default(Path(payload.get("hub_verification_report_path")) if payload.get("hub_verification_report_path") else _current_hub_verification_path(self.hub_store, hub_id), default={})
-        incident_report = _read_json_default(Path(payload.get("incident_board_verification_report_path")) if payload.get("incident_board_verification_report_path") else self.incident_store.verification_report_path(hub_id), default={})
-        knowledge_report = _read_json_default(Path(payload.get("incident_knowledge_verification_report_path")) if payload.get("incident_knowledge_verification_report_path") else self.knowledge_store.verification_report_path(hub_id), default={})
+        hub_report = _read_json_default(_as_path(payload.get("hub_verification_report_path")) if payload.get("hub_verification_report_path") else _current_hub_verification_path(self.hub_store, hub_id), default={})
+        incident_report = _read_json_default(_as_path(payload.get("incident_board_verification_report_path")) if payload.get("incident_board_verification_report_path") else self.incident_store.verification_report_path(hub_id), default={})
+        knowledge_report = _read_json_default(_as_path(payload.get("incident_knowledge_verification_report_path")) if payload.get("incident_knowledge_verification_report_path") else self.knowledge_store.verification_report_path(hub_id), default={})
         source = {
             "hub_id": hub_id,
             "hub_verification_status": hub_report.get("status"),
@@ -393,7 +393,7 @@ class TrustOperationsControlStore:
         return source
 
     def _assessment_source(self, hub_id: str, payload: ImplementationDocument) -> ImplementationDocument:
-        paths = {
+        paths: dict[str, Any] = {
             "hub_package_path": _optional_path(payload.get("hub_package_path")),
             "hub_verification_report_path": _optional_path(payload.get("hub_verification_report_path") or _current_hub_verification_path(self.hub_store, hub_id)),
             "incident_board_package_path": _optional_path(payload.get("incident_board_package_path") or self.incident_store.zip_path(hub_id)),
@@ -421,7 +421,7 @@ class TrustOperationsControlStore:
             source[f"{key}_zip_size_bytes"] = report.get("zip_size_bytes")
             source[f"{key}_manifest_hash"] = report.get("manifest_hash")
             source[f"{key}_source_hash"] = report.get("source_hash")
-            source[f"{key}_summary"] = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+            source[f"{key}_summary"] = _as_document(report.get("summary"))
         source["source_hash"] = stable_hash(source)
         return source
 
@@ -452,7 +452,7 @@ class TrustOperationsControlStore:
         control_id = "toc-derived-" + _safe_id(str(entry.get("entry_id") or "knowledge-entry"))
         existing_control = _existing_control(existing, control_id)
         guard = next((item for item in guards if item.get("source", {}).get("knowledge_entry_hash") == entry.get("integrity_hash") and item.get("status") not in {"archived", "manual_required"}), {})
-        recommended = entry.get("recommended_guard") if isinstance(entry.get("recommended_guard"), dict) else {}
+        recommended = _as_document(entry.get("recommended_guard"))
         control = {
             "schema_version": TRUST_OPERATIONS_CONTROL_SCHEMA_VERSION,
             "package_type": "musicforge_trust_operations_control",

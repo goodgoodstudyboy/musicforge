@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -218,8 +218,8 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
     runtime_items = {(_item_key(row)): row for row in runtime_index.get("items") or []}
     checks.append(_check("urpccc_external_manifest_integrity_runtime", _integrity_ok(local_manifest), "External evidence manifest integrity is valid."))
     checks.append(_check("urpccc_external_manifest_items_match", set(local_items) == set(public_items), "External evidence manifest item identities match package manifest.", {"missing": sorted(set(public_items) - set(local_items)), "extra": sorted(set(local_items) - set(public_items))}))
-    public_state = public_manifest.get("current_state") if isinstance(public_manifest.get("current_state"), dict) else {}
-    local_state = local_manifest.get("current_state") if isinstance(local_manifest.get("current_state"), dict) else {}
+    public_state = _as_document(public_manifest.get("current_state"))
+    local_state = _as_document(local_manifest.get("current_state"))
     state_fields = (
         "generation",
         "generation_hash",
@@ -335,13 +335,13 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
 def runtime_verify_continuity_command_center_component(component_type: str, row: dict[str, Any], rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
     package = row.get("package_path")
     if component_type == "evidence_vault":
-        return verify_unified_release_program_vault_package(package, strict=True, deep=True, require_anchor=True, vault_anchor_path=row.get("anchor_path"))
+        return verify_unified_release_program_vault_package(_as_path(package), strict=True, deep=True, require_anchor=True, vault_anchor_path=row.get("anchor_path"))
     if component_type == "vault_operations":
-        return verify_unified_release_program_vault_operations_package(package, strict=True, deep=True, require_signed=True, require_current_vault=True, signoff_binding_path=row.get("signoff_binding_path"))
+        return verify_unified_release_program_vault_operations_package(_as_path(package), strict=True, deep=True, require_signed=True, require_current_vault=True, signoff_binding_path=row.get("signoff_binding_path"))
     if component_type == "continuity_recovery":
         ops = _first_component(rows, "vault_operations")
         return verify_unified_release_program_continuity_package(
-            package,
+            _as_path(package),
             strict=True,
             deep_restore=True,
             require_signed=True,
@@ -352,11 +352,11 @@ def runtime_verify_continuity_command_center_component(component_type: str, row:
             vault_operations_signoff_binding_path=ops.get("signoff_binding_path"),
         )
     if component_type == "continuity_distribution_kit":
-        return verify_unified_release_program_continuity_distribution_package(package, strict=True, deep=True)
+        return verify_unified_release_program_continuity_distribution_package(_as_path(package), strict=True, deep=True)
     if component_type == "continuity_acceptance_board":
         kit = _first_component(rows, "continuity_distribution_kit")
         return verify_unified_release_program_continuity_acceptance_package(
-            package,
+            _as_path(package),
             strict=True,
             require_current_kit=True,
             require_signed=True,
@@ -368,7 +368,7 @@ def runtime_verify_continuity_command_center_component(component_type: str, row:
     if component_type == "continuity_acceptance_change_control":
         acceptance = _first_component(rows, "continuity_acceptance_board")
         return verify_unified_release_program_continuity_acceptance_change_package(
-            package,
+            _as_path(package),
             strict=True,
             require_current_acceptance=True,
             acceptance_archive_path=acceptance.get("package_path"),
@@ -406,7 +406,7 @@ def _acceptance_history_state(path: Path) -> ImplementationDocument:
 
 
 def _document_binding_checks(manifest: ImplementationDocument, report: ImplementationDocument, inventory: ImplementationDocument, readiness: ImplementationDocument, runtime_index: ImplementationDocument, gap_plan: ImplementationDocument, runbook: ImplementationDocument, external_manifest: ImplementationDocument) -> list[ImplementationDocument]:
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     return [
         _check("urpccc_report_inventory_hash", report.get("evidence_inventory_hash") == inventory.get("integrity_hash"), "Report binds evidence inventory."),
         _check("urpccc_report_readiness_hash", report.get("readiness_matrix_hash") == readiness.get("integrity_hash"), "Report binds readiness matrix."),
@@ -455,7 +455,7 @@ def _index_binding_checks(inventory: ImplementationDocument, readiness: Implemen
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     paths = {str(row.get("path") or "") for row in files}
     expected = name_set - {"manifest.json"}
     checks = [

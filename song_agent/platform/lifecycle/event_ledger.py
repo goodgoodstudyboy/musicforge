@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import shutil
@@ -128,7 +128,7 @@ class HistoryChain:
 
     def _payload_hash(self, event: ImplementationDocument) -> str:
         if self.hash_mode == "payload":
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             return stable_hash(payload)
         return stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
 

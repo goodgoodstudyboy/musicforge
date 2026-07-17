@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -156,8 +156,8 @@ def release_audio_regression_response_verification_exit_code(report: dict[str, A
 
 
 def _semantic_checks(plan: ImplementationDocument, actions: ImplementationDocument, waivers: ImplementationDocument, closeout: ImplementationDocument, *, require_closed: bool) -> list[ImplementationDocument]:
-    action_rows = actions.get("actions") if isinstance(actions.get("actions"), list) else []
-    waiver_rows = waivers.get("waivers") if isinstance(waivers.get("waivers"), list) else []
+    action_rows = _as_list(actions.get("actions"))
+    waiver_rows = _as_list(waivers.get("waivers"))
     high_or_critical_waivers = [row.get("action_id") for row in waiver_rows if str(row.get("severity") or "").lower() in {"high", "critical", "blocking"}]
     unsafe_actions = [row.get("action_id") for row in action_rows if row.get("execution_mode") not in {"draft_only", "manual_required"}]
     closed_ok = closeout.get("status") == "closed" and closeout.get("regression_status_after_recheck") == "passed"
@@ -254,7 +254,7 @@ def _signoff_checks(signoff: ImplementationDocument | None, history: list[Implem
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = expected_entries - {"manifest.json"}
@@ -349,7 +349,7 @@ def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> Implementati
 def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("previous_event_hash") != previous:
             return False
         if event.get("payload_hash") != stable_hash(payload):

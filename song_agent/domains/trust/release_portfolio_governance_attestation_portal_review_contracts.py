@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
 from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
@@ -51,7 +53,7 @@ def response_integrity_hash(response: dict[str, Any]) -> str:
 
 
 def review_pack_summary(pack: dict[str, Any]) -> dict[str, Any]:
-    source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+    source = _as_document(pack.get("source"))
     return {
         "status": pack.get("status") or "missing",
         "portfolio_id": pack.get("portfolio_id"),
@@ -60,8 +62,8 @@ def review_pack_summary(pack: dict[str, Any]) -> dict[str, Any]:
         "portal_verification_status": source.get("portal_verification_status"),
         "current_entry_id": source.get("registry_current_entry_id"),
         "current_certificate_id": source.get("current_certificate_id"),
-        "blocker_count": len(pack.get("blockers") if isinstance(pack.get("blockers"), list) else []),
-        "warning_count": len(pack.get("warnings") if isinstance(pack.get("warnings"), list) else []),
+        "blocker_count": len(_as_list(pack.get("blockers"))),
+        "warning_count": len(_as_list(pack.get("warnings"))),
     }
 
 

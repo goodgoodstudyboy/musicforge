@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import shutil as shutil
@@ -486,7 +488,7 @@ class ReleaseAudioTimelineStore:
         events = []
         previous_hash = None
         for index, event in enumerate(docs["events"], start=1):
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             rebuilt = _event(release_id, timeline_id, index, event.get("track_identity") or {}, str(event.get("event_type") or ""), str(event.get("status") or ""), str(event.get("severity") or "info"), payload, previous_hash)
             previous_hash = rebuilt["event_hash"]
             events.append(rebuilt)
@@ -529,17 +531,17 @@ class ReleaseAudioTimelineStore:
         wav_sha = _sha256_path(wav_path)
         final_export_hash = str(getattr(track, "final_export_hash", "") or "")
         identity_key = _identity_key(project_id, version_id, final_export_hash)
-        cases = case_index.get("cases") if isinstance(case_index.get("cases"), list) else []
+        cases = _as_list(case_index.get("cases"))
         case = next((item for item in cases if isinstance(item, dict) and _case_identity_key(item) == identity_key), {})
-        report_cases = campaign_report.get("cases") if isinstance(campaign_report.get("cases"), list) else []
-        report_case = next((item for item in report_cases if str(item.get("case_id") or "") == str(case.get("case_id") or "")), {})
-        review = report_case.get("review") if isinstance(report_case.get("review"), dict) else {}
+        report_cases = _as_list(campaign_report.get("cases"))
+        report_case: _InferenceType = next((item for item in report_cases if str(item.get("case_id") or "") == str(case.get("case_id") or "")), {})
+        review = _as_document(report_case.get("review"))
         blockers = [str(item) for item in (report_case.get("blockers") or []) if isinstance(item, str)]
         review_status = str(review.get("status") or report_case.get("review_status") or report_case.get("status") or "missing")
         if review_status == "passed":
             review_status = str(case.get("review_status") or "accepted")
         manual_review = review.get("review_mode") == "manual" and review.get("playback_confirmed") is True and review_status == "accepted"
-        real_audio = _renderer_release_ready(report_case.get("renderer") if isinstance(report_case.get("renderer"), dict) else {})
+        real_audio = _renderer_release_ready(_as_document(report_case.get("renderer")))
         open_issues = 1 if review_status in {"needs_fix", "rejected"} else 0
         if final_export_hash and current_manifest_hash and final_export_hash != current_manifest_hash:
             blockers.append("release_track_final_export_stale")
@@ -573,7 +575,7 @@ class ReleaseAudioTimelineStore:
             }
         )
         issues = [{"issue_key": item, "label": item.replace("_", " ").title(), "severity": "blocking", "status": "open"} for item in sorted(set(blockers))]
-        risks = [
+        risks: _InferenceType = [
             {
                 "risk_id": f"ratl-risk-{str(getattr(track, 'track_id', 'track')).replace('_', '-')}-{index:03d}",
                 "severity": "blocking",
@@ -650,7 +652,7 @@ class ReleaseAudioTimelineStore:
 
 
 def _checks(track_index: ImplementationDocument, trend: ImplementationDocument, risks: ImplementationDocument, cert_binding: ImplementationDocument) -> list[ImplementationDocument]:
-    summary = track_index.get("summary") if isinstance(track_index.get("summary"), dict) else {}
+    summary = _as_document(track_index.get("summary"))
     track_count = int(summary.get("track_count") or 0)
     return [
         {"check_id": "release_audio_timeline_tracks_present", "status": "passed" if track_count > 0 else "failed", "message": "Release timeline has tracks."},
@@ -740,7 +742,7 @@ def _event_ledger_hash(events: list[ImplementationDocument]) -> str:
 
 
 def _readme(report: ImplementationDocument, track_index: ImplementationDocument, trend: ImplementationDocument, risks: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return "\n".join(
         [
             "MusicForge Release Audio Timeline",

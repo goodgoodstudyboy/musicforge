@@ -1,15 +1,27 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any as Any, Protocol as Protocol
 
 
 class SongPlanLike(Protocol):
-    title: str
-    key: str
-    tempo_bpm: int
-    meter: str
-    sections: list[Any]
-    tracks: list[Any]
+    @property
+    def title(self) -> str: ...
+
+    @property
+    def key(self) -> str: ...
+
+    @property
+    def tempo_bpm(self) -> int: ...
+
+    @property
+    def meter(self) -> str: ...
+
+    @property
+    def sections(self) -> Sequence[Any]: ...
+
+    @property
+    def tracks(self) -> Sequence[Any]: ...
 
 
 REQUIRED_TRACKS = {"melody", "chords", "bass", "drums"}

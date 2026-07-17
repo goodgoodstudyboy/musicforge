@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -72,7 +72,7 @@ def verify_release_portfolio_governance_audit_package(
 
 
 def release_portfolio_governance_audit_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -101,7 +101,7 @@ def print_release_portfolio_governance_audit_verification_report(report: dict[st
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -219,7 +219,7 @@ class _PortfolioGovernanceAuditVerifier:
         self._add_check("manifest", "portfolio_governance_audit_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Portfolio Governance Audit manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Portfolio Governance Audit manifest integrity hash does not match.")
         package_type_ok = self.manifest.get("package_type") == "release_portfolio_governance_audit"
         self._add_check("manifest", "portfolio_governance_audit_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is release_portfolio_governance_audit." if package_type_ok else "Manifest package_type is not release_portfolio_governance_audit.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -272,7 +272,7 @@ class _PortfolioGovernanceAuditVerifier:
         if self.report_doc:
             actual = audit_report_integrity_hash(self.report_doc)
             self._add_check("audit_report", "portfolio_governance_audit_report_integrity", "passed" if self.report_doc.get("integrity_hash") == actual else "failed", "blocking", "Portfolio Governance Audit Report integrity hash matches." if self.report_doc.get("integrity_hash") == actual else "Portfolio Governance Audit Report integrity hash does not match.")
-            manifest_row = self.manifest.get("audit_report") if isinstance(self.manifest.get("audit_report"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("audit_report"))
             ok = manifest_row.get("integrity_hash") == self.report_doc.get("integrity_hash") and manifest_row.get("source_hash") == self.report_doc.get("source_hash")
             self._add_check("audit_report", "portfolio_governance_audit_manifest_report_hash", "passed" if ok else "failed", "blocking", "Manifest Audit Report reference matches report." if ok else "Manifest Audit Report reference does not match report.")
         if self.ledger_entries:
@@ -295,7 +295,7 @@ class _PortfolioGovernanceAuditVerifier:
         for item in self.ledger_entries:
             if item.get("event_type") != "governance_change_request_applied":
                 continue
-            source = item.get("source") if isinstance(item.get("source"), dict) else {}
+            source = _as_document(item.get("source"))
             entry_id = str(item.get("entry_id") or "")
             request_id = str(source.get("id") or "")
             if request_id:
@@ -305,7 +305,7 @@ class _PortfolioGovernanceAuditVerifier:
         reset_entries = [item for item in self.ledger_entries if item.get("event_type") in {"governance_signoff_reset", "governance_signoff_history_reset", "governance_queue_governance_signoff_reset"}]
         errors: list[str] = []
         for entry in reset_entries:
-            refs = entry.get("causal_refs") if isinstance(entry.get("causal_refs"), list) else []
+            refs = _as_list(entry.get("causal_refs"))
             request_id = ""
             request_entry_id = ""
             for ref in refs:
@@ -320,15 +320,15 @@ class _PortfolioGovernanceAuditVerifier:
             if not request_entry:
                 errors.append(f"{entry.get('entry_id')} missing applied change request {request_id}")
                 continue
-            reset_hash = str((entry.get("source") if isinstance(entry.get("source"), dict) else {}).get("payload_hash") or "")
-            applied_refs = request_entry.get("causal_refs") if isinstance(request_entry.get("causal_refs"), list) else []
+            reset_hash = str((_as_document(entry.get("source"))).get("payload_hash") or "")
+            applied_refs = _as_list(request_entry.get("causal_refs"))
             applied_reset_hashes = {str(ref.get("payload_hash") or "") for ref in applied_refs if isinstance(ref, dict) and ref.get("type") == "governance_signoff_reset"}
             if reset_hash and reset_hash not in applied_reset_hashes:
                 errors.append(f"{request_id} reset hash mismatch")
         self._add_check("change_requests", "portfolio_governance_audit_change_request_reset_causality", "failed" if errors else "passed", "blocking", "Invalid reset causality: " + "; ".join(errors[:5]) if errors else "Governance reset entries are bound to applied Change Requests.")
 
     def _verify_requirements(self) -> None:
-        coverage = self.report_doc.get("coverage") if isinstance(self.report_doc.get("coverage"), dict) else {}
+        coverage = _as_document(self.report_doc.get("coverage"))
         if self.require_signed:
             signed = int(coverage.get("signed_queue_count") or 0)
             queues = int(coverage.get("queue_count") or 0)
@@ -384,7 +384,7 @@ class _PortfolioGovernanceAuditVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)

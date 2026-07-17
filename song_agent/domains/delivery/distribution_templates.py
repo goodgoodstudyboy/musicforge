@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import copy as copy
 import json as json
@@ -357,11 +357,11 @@ def validate_template_pack(template: dict[str, Any], *, existing_slugs: set[str]
 
 
 def template_content_hash(template: dict[str, Any], *, include_identity: bool = True) -> str:
-    payload = {
-        "rules": template.get("rules") if isinstance(template.get("rules"), dict) else {},
-        "metadata_mapping": template.get("metadata_mapping") if isinstance(template.get("metadata_mapping"), dict) else {},
-        "file_naming": template.get("file_naming") if isinstance(template.get("file_naming"), dict) else {},
-        "checklist": template.get("checklist") if isinstance(template.get("checklist"), list) else [],
+    payload: ImplementationDocument = {
+        "rules": _as_document(template.get("rules")),
+        "metadata_mapping": _as_document(template.get("metadata_mapping")),
+        "file_naming": _as_document(template.get("file_naming")),
+        "checklist": _as_list(template.get("checklist")),
     }
     if include_identity:
         payload = {
@@ -374,8 +374,8 @@ def template_content_hash(template: dict[str, Any], *, include_identity: bool = 
 
 
 def template_summary(template: dict[str, Any] | None) -> dict[str, Any]:
-    data = template if isinstance(template, dict) else {}
-    rules = data.get("rules") if isinstance(data.get("rules"), dict) else {}
+    data = _as_document(template)
+    rules = _as_document(data.get("rules"))
     return sanitize_metadata(
         {
             "template_pack_id": data.get("template_pack_id"),
@@ -385,7 +385,7 @@ def template_summary(template: dict[str, Any] | None) -> dict[str, Any]:
             "template_hash": data.get("template_hash") or template_content_hash(data),
             "content_hash": data.get("content_hash") or template_content_hash(data, include_identity=False),
             "rules_summary": {key: rules.get(key) for key in sorted(rules)},
-            "checklist_item_count": len(data.get("checklist") if isinstance(data.get("checklist"), list) else []),
+            "checklist_item_count": len(_as_list(data.get("checklist"))),
             "payload_hash": stable_hash(
                 {
                     "template_pack_id": data.get("template_pack_id"),
@@ -571,7 +571,7 @@ def _builtin_template_by_id(template_pack_id: str) -> TemplatePack | None:
 def _template_payload(payload: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(payload, dict):
         raise DistributionTemplateError("Template payload must be a JSON object.")
-    data = payload.get("template") if isinstance(payload.get("template"), dict) else payload
+    data = _document_or(payload.get("template"), payload)
     data = {key: copy.deepcopy(value) for key, value in data.items() if key not in {"template_hash"}}
     return data
 
@@ -612,7 +612,7 @@ def _safe_mapping(value: Any) -> ImplementationDocument:
         return {}
     if not isinstance(value, dict):
         raise DistributionTemplateError("metadata_mapping must be an object.")
-    rows = value.get("platform_csv") if isinstance(value.get("platform_csv"), list) else []
+    rows = _as_list(value.get("platform_csv"))
     result_rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     for index, row in enumerate(rows):
@@ -761,7 +761,7 @@ def _validation_report(errors: list[tuple[str, str]], *, redaction_findings: lis
 
 
 def _first_validation_error(report: ImplementationDocument) -> str:
-    blockers = report.get("blockers") if isinstance(report.get("blockers"), list) else []
+    blockers = _as_list(report.get("blockers"))
     if blockers:
         return str(blockers[0].get("message") or "Distribution template validation failed.")
     return "Distribution template validation failed."

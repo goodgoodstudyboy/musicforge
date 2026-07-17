@@ -4,6 +4,22 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.1.0 - 2026-07-17
+
+- Closed TYPE-002 by migrating the complete active source tree from 12,885
+  measured mypy errors to a zero-error hard gate, with typed composition
+  contexts and fail-closed JSON boundary coercions.
+- Expanded Ruff enforcement to `song_agent`, `tests`, and `tools`; documented
+  the two static public-facade exceptions and removed the remaining repository
+  lint debt.
+- Reduced registered oversized-module lines from 124,211 to 124,043 and added
+  hard aggregate complexity limits. ADR-015 explicitly retains ARCH-014 for
+  bounded-context extraction in v14.2 rather than claiming it is closed.
+- Ratcheted CI security/latest/GA profile budgets down by ten percent and made
+  further increases require measured final-SHA evidence.
+- Added `v141.quality_debt_closure_smoke` and CI checks that cover the complete
+  active mypy roots and full repository lint surface.
+
 ## v14.0.1 - 2026-07-15
 
 - Made v14 facade, source-tree, and tracked coverage hashes independent of

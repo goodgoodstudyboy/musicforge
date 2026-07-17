@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import json as json
 import re as re
@@ -69,7 +69,7 @@ class ReviewSprint:
             status=status,
             parent_version_id=_optional_str(data.get("parent_version_id")),
             task_refs=[_task_ref_from_dict(item) for item in data.get("task_refs", []) if isinstance(item, dict)],
-            settings=_settings_from_dict(data.get("settings") if isinstance(data.get("settings"), dict) else {}),
+            settings=_settings_from_dict(_as_document(data.get("settings"))),
             counts={str(key): _safe_int(value) for key, value in dict(data.get("counts") or {}).items()},
             selected_task_id=None if not data.get("selected_task_id") else validate_review_task_id(str(data.get("selected_task_id"))),
             created_at=str(data.get("created_at") or ""),
@@ -95,7 +95,7 @@ class ReviewSprintStore:
         payload: dict[str, Any] | None = None,
         now: str | None = None,
     ) -> ReviewSprint:
-        payload = payload if isinstance(payload, dict) else {}
+        payload = _as_document(payload)
         now = now or now_iso()
         task_ids = _task_ids(payload.get("task_ids"))
         tasks = _read_project_tasks(task_store, project_id, task_ids)
@@ -113,7 +113,7 @@ class ReviewSprintStore:
                     "status": "open",
                     "parent_version_id": parent_version_id,
                     "task_refs": [_task_ref(task, index + 1, lane=str(payload.get("lane") or ""), notes=str(payload.get("notes") or ""), now=now) for index, task in enumerate(tasks)],
-                    "settings": payload.get("settings") if isinstance(payload.get("settings"), dict) else {},
+                    "settings": _as_document(payload.get("settings")),
                     "counts": {},
                     "selected_task_id": tasks[0].task_id if tasks else None,
                     "created_at": now,
@@ -302,7 +302,7 @@ class ReviewSprintStore:
                 return default
             raise FileNotFoundError(sprint_id)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def read_conflict_report(self, sprint_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.sprint_dir(sprint_id) / "conflict-report.json"
@@ -311,7 +311,7 @@ class ReviewSprintStore:
                 return default
             raise FileNotFoundError(sprint_id)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def recommendation_report_path(self, sprint_id: str) -> Path:
         return self.sprint_dir(sprint_id) / "recommendation-report.json"
@@ -323,11 +323,11 @@ class ReviewSprintStore:
                 return default
             raise FileNotFoundError(sprint_id)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def write_recommendation_report(self, sprint: ReviewSprint, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
-        clean_report = sanitize_metadata({**(report if isinstance(report, dict) else {}), "schema_version": REVIEW_SPRINT_RECOMMENDATION_SCHEMA_VERSION})
+        clean_report = sanitize_metadata({**(_as_document(report)), "schema_version": REVIEW_SPRINT_RECOMMENDATION_SCHEMA_VERSION})
         with self.lock:
             write_json(self.recommendation_report_path(sprint.sprint_id), clean_report)
             _append_event(
@@ -351,11 +351,11 @@ class ReviewSprintStore:
                 return default
             raise FileNotFoundError(sprint_id)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def write_judge_summary(self, sprint: ReviewSprint, summary: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
-        clean_summary = sanitize_metadata(summary if isinstance(summary, dict) else {})
+        clean_summary = sanitize_metadata(_as_document(summary))
         with self.lock:
             write_json(self.judge_summary_path(sprint.sprint_id), clean_summary)
             _append_event(
@@ -376,11 +376,11 @@ class ReviewSprintStore:
                 return default
             raise FileNotFoundError(sprint_id)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def write_closeout_report(self, sprint: ReviewSprint, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
-        clean_report = sanitize_metadata(report if isinstance(report, dict) else {})
+        clean_report = sanitize_metadata(_as_document(report))
         with self.lock:
             write_json(self.closeout_report_path(sprint.sprint_id), clean_report)
             _append_event(
@@ -401,11 +401,11 @@ class ReviewSprintStore:
                 return default
             raise FileNotFoundError(sprint_id)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def write_signoff(self, sprint: ReviewSprint, record: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
-        clean_record = sanitize_metadata(record if isinstance(record, dict) else {})
+        clean_record = sanitize_metadata(_as_document(record))
         with self.lock:
             write_json(self.signoff_path(sprint.sprint_id), clean_record)
             _append_event(
@@ -485,14 +485,14 @@ def review_sprint_export_summary(
     closeout_summary: dict[str, Any] | None = None,
     signoff_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    summary = summary if isinstance(summary, dict) else {}
-    conflict_report = conflict_report if isinstance(conflict_report, dict) else {}
-    action_queue_summary = action_queue_summary if isinstance(action_queue_summary, dict) else {}
-    judge_summary = judge_summary if isinstance(judge_summary, dict) else {}
-    closeout_summary = closeout_summary if isinstance(closeout_summary, dict) else {}
-    signoff_summary = signoff_summary if isinstance(signoff_summary, dict) else {}
+    summary = _as_document(summary)
+    conflict_report = _as_document(conflict_report)
+    action_queue_summary = _as_document(action_queue_summary)
+    judge_summary = _as_document(judge_summary)
+    closeout_summary = _as_document(closeout_summary)
+    signoff_summary = _as_document(signoff_summary)
     recommendation_summary = _recommendation_summary_for_export(recommendation_report)
-    counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else sprint.counts
+    counts = _document_or(summary.get("counts"), sprint.counts)
     return sanitize_metadata(
         {
             "sprint_id": sprint.sprint_id,
@@ -552,7 +552,7 @@ def _recommendation_summary_for_export(report: ImplementationDocument | None) ->
     if not isinstance(report, dict) or not report:
         return {}
     actions = [item for item in report.get("recommended_actions", []) if isinstance(item, dict)]
-    sprint_level = report.get("sprint_level_recommendation") if isinstance(report.get("sprint_level_recommendation"), dict) else {}
+    sprint_level = _as_document(report.get("sprint_level_recommendation"))
     top = actions[0] if actions else {}
     return sanitize_metadata(
         {
@@ -586,7 +586,7 @@ def _judge_summary_for_export(summary: ImplementationDocument | None) -> Impleme
             "recommended_candidate_count": summary.get("recommended_candidate_count", 0),
             "judge_provider_tokens": summary.get("judge_provider_tokens", 0),
             "high_risk_candidate_count": summary.get("high_risk_candidate_count", 0),
-            "risk_flags": summary.get("risk_flags") if isinstance(summary.get("risk_flags"), list) else [],
+            "risk_flags": _as_list(summary.get("risk_flags")),
         }
     )
 

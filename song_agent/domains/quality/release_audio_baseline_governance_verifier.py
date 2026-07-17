@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -167,9 +167,9 @@ def _baseline_checks(baselines: list[ImplementationDocument], evidence: dict[str
         baseline_id = str(baseline.get("baseline_id") or "")
         checks.append(_check(f"audio_baseline_{baseline_id}_integrity", _integrity_ok(baseline), f"Baseline {baseline_id} integrity is valid."))
         checks.append(_check(f"audio_baseline_{baseline_id}_status_valid", baseline.get("status") in {"draft", "approved", "active", "superseded", "revoked"}, f"Baseline {baseline_id} status is valid."))
-        checks.append(_check(f"audio_baseline_{baseline_id}_approval_history", _history_chain_ok(baseline.get("approval_history") if isinstance(baseline.get("approval_history"), list) else []), f"Baseline {baseline_id} approval history chain is valid."))
+        checks.append(_check(f"audio_baseline_{baseline_id}_approval_history", _history_chain_ok(_as_list(baseline.get("approval_history"))), f"Baseline {baseline_id} approval history chain is valid."))
         if baseline.get("status") in {"approved", "active"}:
-            approval = baseline.get("approval") if isinstance(baseline.get("approval"), dict) else {}
+            approval = _as_document(baseline.get("approval"))
             checks.append(_check(f"audio_baseline_{baseline_id}_approval_present", bool(approval.get("approved_by") and approval.get("reason")), f"Baseline {baseline_id} approval is present."))
         if baseline.get("status") == "active":
             checks.append(_check(f"audio_baseline_{baseline_id}_active_not_revoked", baseline.get("status") not in {"revoked", "superseded"}, f"Baseline {baseline_id} active status is usable."))
@@ -179,7 +179,7 @@ def _baseline_checks(baselines: list[ImplementationDocument], evidence: dict[str
             active_keys.add(scope_hash)
         expected = evidence.get(baseline_id)
         if expected:
-            actual_binding = baseline.get("source_binding") if isinstance(baseline.get("source_binding"), dict) else {}
+            actual_binding = _as_document(baseline.get("source_binding"))
             checks.append(_check(f"audio_baseline_{baseline_id}_external_binding", stable_hash(_strip_integrity(actual_binding)) == stable_hash(_strip_integrity(expected)), f"Baseline {baseline_id} binds external Timeline/Certification evidence."))
     return checks
 
@@ -197,7 +197,7 @@ def _document_binding_checks(manifest: ImplementationDocument, registry: Impleme
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, strict: bool) -> list[ImplementationDocument]:
     del archive
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     manifest_paths = {item.get("path") for item in files if isinstance(item, dict)}
     expected_files = names - {"manifest.json"}
     checks = [

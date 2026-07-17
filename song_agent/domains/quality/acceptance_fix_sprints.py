@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -212,7 +212,7 @@ class AcceptanceFixSprintStore:
         if not path.exists():
             return []
         data = read_json(path)
-        rows = data.get("items") if isinstance(data.get("items"), list) else []
+        rows = _as_list(data.get("items"))
         return [AcceptanceFixItem.from_dict(item) for item in rows if isinstance(item, dict)]
 
     def create_from_analytics(self, payload: dict[str, Any] | None = None, *, now: str | None = None) -> AcceptanceFixSprint:
@@ -241,7 +241,7 @@ class AcceptanceFixSprintStore:
                     "source_type": "acceptance_analytics",
                     "report_id": report_id,
                     "source_hash": source_hash,
-                    "readiness_status": (report.get("summary") if isinstance(report.get("summary"), dict) else {}).get("readiness_status"),
+                    "readiness_status": (_as_document(report.get("summary"))).get("readiness_status"),
                     "recommendation_ids": [item.source.get("recommendation_id") for item in items],
                     "recommendation_payload_hashes": {str(item.source.get("recommendation_id")): item.source.get("recommendation_hash") for item in items},
                 },
@@ -384,7 +384,7 @@ class AcceptanceFixSprintStore:
         for song_id in song_ids:
             source_item = next((item for item in items if str(item.target.get("song_id") or "") == song_id), None)
             target = source_item.target if source_item else {}
-            case_payload = {
+            case_payload: ImplementationDocument = {
                 "name": f"Recheck {song_id}",
                 "song_id": song_id,
                 "request": _request_for_recheck(source_report, song_id),
@@ -473,13 +473,13 @@ class AcceptanceFixSprintStore:
                     str(sprint.source.get("fix_plan_id") or ""),
                     analytics_store=self.analytics_store,
                 )
-                plan = state.get("plan") if isinstance(state.get("plan"), dict) else {}
+                plan = _as_document(state.get("plan"))
                 if state.get("stale"):
                     return True
-                source = plan.get("source") if isinstance(plan.get("source"), dict) else {}
+                source = _as_document(plan.get("source"))
                 if str(source.get("source_hash") or "") != str(sprint.source.get("fix_plan_source_hash") or ""):
                     return True
-                expected = sprint.source.get("planned_item_hashes") if isinstance(sprint.source.get("planned_item_hashes"), dict) else {}
+                expected = _as_document(sprint.source.get("planned_item_hashes"))
                 current = {str(item.get("planned_item_id") or ""): item for item in plan.get("planned_items", []) if isinstance(item, dict)}
                 for planned_item_id, expected_hash in expected.items():
                     if planned_item_id not in current:
@@ -495,7 +495,7 @@ class AcceptanceFixSprintStore:
         if str(report.get("source_hash") or "") != str(sprint.source.get("source_hash") or ""):
             return True
         current = {str(item.get("recommendation_id") or ""): item for item in report.get("recommendations", []) if isinstance(item, dict)}
-        expected = sprint.source.get("recommendation_payload_hashes") if isinstance(sprint.source.get("recommendation_payload_hashes"), dict) else {}
+        expected = _as_document(sprint.source.get("recommendation_payload_hashes"))
         for recommendation_id, expected_hash in expected.items():
             if recommendation_id not in current:
                 return True
@@ -625,8 +625,8 @@ class AcceptanceFixSprintStore:
 def build_delta_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], source_report: dict[str, Any], recheck_report: dict[str, Any], *, now: str | None = None, project_store: ProjectStore | None = None) -> dict[str, Any]:
     before = acceptance_analytics_summary(source_report)
     after = acceptance_analytics_summary(recheck_report)
-    before_summary = source_report.get("summary") if isinstance(source_report.get("summary"), dict) else {}
-    after_summary = recheck_report.get("summary") if isinstance(recheck_report.get("summary"), dict) else {}
+    before_summary = _as_document(source_report.get("summary"))
+    after_summary = _as_document(recheck_report.get("summary"))
     before_rating = before.get("average_rating")
     after_rating = after.get("average_rating")
     rating_delta = round(float(after_rating or 0) - float(before_rating or 0), 2) if before_rating is not None and after_rating is not None else None
@@ -676,7 +676,7 @@ def build_delta_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFixIte
 def build_closeout_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: dict[str, Any], *, force: bool = False, override_reason: str = "", now: str | None = None) -> dict[str, Any]:
     active = [item for item in items if item.status not in {"waived", "fixed", "closed"}]
     waived_without_reason = [item.item_id for item in items if item.status == "waived" and not str((item.resolution or {}).get("notes") or "").strip()]
-    after_readiness = (delta.get("summary") if isinstance(delta.get("summary"), dict) else {}).get("after_readiness")
+    after_readiness = (_as_document(delta.get("summary"))).get("after_readiness")
     checks = [
         _close_check("items_closed", not active, "blocking", "All non-waived fix items are closed or fixed.", [item.item_id for item in active]),
         _close_check("recheck_suite_exists", bool(sprint.recheck.get("suite_id")), "blocking", "Recheck suite exists.", [] if sprint.recheck.get("suite_id") else ["missing_recheck_suite"]),
@@ -704,11 +704,11 @@ def build_closeout_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFix
 
 
 def fix_sprint_summary(sprint: AcceptanceFixSprint | dict[str, Any] | None, items: list[AcceptanceFixItem] | None = None) -> dict[str, Any]:
-    data = sprint.to_dict() if isinstance(sprint, AcceptanceFixSprint) else sprint if isinstance(sprint, dict) else {}
-    counts = data.get("counts") if isinstance(data.get("counts"), dict) else {}
-    recheck = data.get("recheck") if isinstance(data.get("recheck"), dict) else {}
-    delta = data.get("delta_summary") if isinstance(data.get("delta_summary"), dict) else {}
-    closeout = data.get("closeout_summary") if isinstance(data.get("closeout_summary"), dict) else {}
+    data = sprint.to_dict() if isinstance(sprint, AcceptanceFixSprint) else _as_document(sprint)
+    counts = _as_document(data.get("counts"))
+    recheck = _as_document(data.get("recheck"))
+    delta = _as_document(data.get("delta_summary"))
+    closeout = _as_document(data.get("closeout_summary"))
     delta_status = delta.get("status")
     if not delta_status and isinstance(delta.get("summary"), dict):
         delta_status = delta["summary"].get("status")
@@ -716,8 +716,8 @@ def fix_sprint_summary(sprint: AcceptanceFixSprint | dict[str, Any] | None, item
         {
             "fix_sprint_id": data.get("fix_sprint_id"),
             "status": data.get("status") or "missing",
-            "source_report_id": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("report_id") or (data.get("source") if isinstance(data.get("source"), dict) else {}).get("analytics_report_id"),
-            "source_hash": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("source_hash"),
+            "source_report_id": (_as_document(data.get("source"))).get("report_id") or (_as_document(data.get("source"))).get("analytics_report_id"),
+            "source_hash": (_as_document(data.get("source"))).get("source_hash"),
             "item_count": counts.get("item_count", len(items or [])),
             "open_item_count": counts.get("open_item_count", 0),
             "linked_review_task_count": counts.get("linked_review_task_count", 0),
@@ -731,14 +731,14 @@ def fix_sprint_summary(sprint: AcceptanceFixSprint | dict[str, Any] | None, item
 
 
 def acceptance_fix_closeout_summary(closeout: dict[str, Any] | None) -> dict[str, Any]:
-    data = closeout if isinstance(closeout, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(closeout)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata({"status": data.get("status") or "missing", "forced": bool(data.get("forced", False)), "delta_status": summary.get("delta_status"), "after_readiness": summary.get("after_readiness")})
 
 
 def latest_fix_sprint_summary(store: AcceptanceFixSprintStore, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
     for sprint in store.list_sprints(include_archived=True):
-        scope = sprint.scope if isinstance(sprint.scope, dict) else {}
+        scope = _as_document(sprint.scope)
         if release_id and scope.get("release_id") != release_id:
             continue
         items = store.read_items(sprint.fix_sprint_id)
@@ -843,12 +843,12 @@ def _issue_types_from_blob(blob: str) -> list[str]:
 
 
 def _request_for_recheck(report: ImplementationDocument, song_id: str) -> ImplementationDocument:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    source = _as_document(report.get("source"))
     for suite_row in source.get("suites", []) if isinstance(source.get("suites"), list) else []:
         for case_row in suite_row.get("cases", []) if isinstance(suite_row.get("cases"), list) else []:
-            case = case_row.get("case") if isinstance(case_row.get("case"), dict) else {}
+            case = _as_document(case_row.get("case"))
             if case.get("song_id") == song_id:
-                summary = case.get("request_summary") if isinstance(case.get("request_summary"), dict) else {}
+                summary = _as_document(case.get("request_summary"))
                 return {"title": summary.get("title") or song_id, "language": summary.get("language") or "English", "style": summary.get("style") or "pop", "theme": summary.get("theme") or "acceptance fix recheck", "duration_seconds": 90}
     return {"title": song_id, "language": "English", "style": "pop", "theme": "acceptance fix recheck", "duration_seconds": 90}
 
@@ -892,7 +892,7 @@ def _review_task_close_rate(items: list[AcceptanceFixItem], project_store: Proje
 
 
 def _accepted_count(report: ImplementationDocument, *, mode: str) -> int:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     key = f"{mode}_accepted_count"
     if key in summary:
         return _int(summary.get(key), 0)
@@ -900,7 +900,7 @@ def _accepted_count(report: ImplementationDocument, *, mode: str) -> int:
 
 
 def _review_count(report: ImplementationDocument, *, mode: str) -> int:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     key = f"{mode}_review_count"
     if key in summary:
         return _int(summary.get(key), 0)
@@ -912,7 +912,7 @@ def _close_check(check_id: str, passed: bool, severity: str, message: str, detai
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _bounded(value: Any, limit: int) -> str:

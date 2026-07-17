@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import os
@@ -39,7 +39,7 @@ class WorkspaceLock:
         operation: str = "workflow-write",
         timeout_seconds: float = 30.0,
         lease_seconds: int = 300,
-        on_commit: Callable[[], None] | None = None,
+        on_commit: Callable[[], object] | None = None,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.lock_path = self.workspace_root / "state" / "locks" / "workspace-write.lock"
@@ -160,7 +160,7 @@ def _read_lock(path: Path) -> ImplementationDocument:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _pid_exists(pid: int) -> bool:

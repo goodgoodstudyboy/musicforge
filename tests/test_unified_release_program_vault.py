@@ -6,7 +6,6 @@ from pathlib import Path
 from song_agent.projectio import read_json, write_json
 from tests.zip_helpers import _v76_rewrite_zip
 from song_agent.releases import stable_hash
-from song_agent.unified_release_program_handoff import UnifiedReleaseProgramHandoffStore
 from song_agent.unified_release_program_vault import UnifiedReleaseProgramVaultStore
 from song_agent.unified_release_program_vault_verifier import verify_unified_release_program_vault_package
 from tests.test_unified_release_program_handoff import _accepted_manifest_row, _program_ops_handoff, _review_response, _write_handoff_manifest

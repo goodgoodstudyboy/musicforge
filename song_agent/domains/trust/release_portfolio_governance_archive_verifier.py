@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -72,7 +72,7 @@ def verify_release_portfolio_governance_archive_package(
 
 
 def release_portfolio_governance_archive_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -105,7 +105,7 @@ def print_release_portfolio_governance_archive_verification_report(report: dict[
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -208,7 +208,7 @@ class _PortfolioGovernanceArchiveVerifier:
         self._add_check("manifest", "portfolio_governance_archive_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Governance Archive manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Governance Archive manifest integrity hash does not match.")
         if self.manifest.get("package_type") != "release_portfolio_governance_archive":
             self._add_check("manifest", "portfolio_governance_archive_manifest_package_type", "failed", "blocking", "Manifest package_type is not release_portfolio_governance_archive.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -279,8 +279,8 @@ class _PortfolioGovernanceArchiveVerifier:
             self._add_sidecar_check("queue_verification", "queue_verification_report", actual)
             ok = self.queue_verification.get("status") in {"passed", "warning"}
             self._add_check("queue_verification", "portfolio_governance_archive_queue_verification_status", "passed" if ok else "failed", "blocking", "Governance Queue verification report is usable." if ok else "Governance Queue verification report failed or is missing.")
-            report_zip_sha = str(self.queue_verification.get("zip_sha256") or (self.queue_verification.get("zip") if isinstance(self.queue_verification.get("zip"), dict) else {}).get("sha256") or "")
-            evidence = self.signoff.get("evidence") if isinstance(self.signoff.get("evidence"), dict) else {}
+            report_zip_sha = str(self.queue_verification.get("zip_sha256") or (_as_document(self.queue_verification.get("zip"))).get("sha256") or "")
+            evidence = _as_document(self.signoff.get("evidence"))
             self._add_hash_check("queue_verification", "portfolio_governance_archive_queue_verification_zip_sha256", report_zip_sha, evidence.get("queue_zip_sha256"), "Queue verification ZIP sha256 evidence")
             report_zip_size = self.queue_verification.get("zip_size_bytes")
             if report_zip_size is None and isinstance(self.queue_verification.get("zip"), dict):
@@ -292,7 +292,7 @@ class _PortfolioGovernanceArchiveVerifier:
             actual = governance_signoff_hash(self.signoff)
             self._add_hash_check("signoff", "portfolio_governance_archive_signoff_integrity", self.signoff.get("integrity_hash"), actual, "Governance Signoff integrity hash")
             self._add_sidecar_check("signoff", "governance_signoff", self.signoff.get("integrity_hash"))
-            evidence = self.signoff.get("evidence") if isinstance(self.signoff.get("evidence"), dict) else {}
+            evidence = _as_document(self.signoff.get("evidence"))
             self._add_hash_check("signoff", "portfolio_governance_archive_signoff_queue_hash", evidence.get("queue_integrity_hash"), self.queue.get("integrity_hash"), "Signoff queue evidence hash")
             self._add_hash_check("signoff", "portfolio_governance_archive_signoff_action_plan_hash", evidence.get("action_plan_integrity_hash"), self.action_plan.get("integrity_hash"), "Signoff action plan evidence hash")
             self._add_hash_check("signoff", "portfolio_governance_archive_signoff_execution_hash", evidence.get("execution_report_integrity_hash"), self.execution_report.get("integrity_hash"), "Signoff execution report evidence hash")
@@ -354,7 +354,7 @@ class _PortfolioGovernanceArchiveVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]

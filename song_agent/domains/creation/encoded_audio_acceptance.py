@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -96,7 +98,7 @@ class EncodedAudioAcceptanceStore:
                 return default
             raise EncodedAudioAcceptanceNotFoundError(f"Encoded audio health report not found: {profile_id}.")
         data = read_json(path)
-        return self.with_current_health_state(data if isinstance(data, dict) else {})
+        return self.with_current_health_state(_as_document(data))
 
     def refresh_health(self, release_id: str, profile_ids: list[str] | None = None, *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
@@ -138,7 +140,7 @@ class EncodedAudioAcceptanceStore:
             if isinstance(row, dict):
                 tracks.append(self._health_track(release_id, manifest, row))
         failures = []
-        warnings = []
+        warnings: list[_InferenceType] = []
         if manifest.get("stale") or not encoded_manifest_integrity_ok(manifest):
             failures.append("manifest_stale_or_tampered")
         if encoded_manifest_uses_fake(manifest):
@@ -171,7 +173,7 @@ class EncodedAudioAcceptanceStore:
         return sanitize_metadata(report, blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
 
     def with_current_health_state(self, report: dict[str, Any]) -> dict[str, Any]:
-        clean = sanitize_metadata(report if isinstance(report, dict) else {}, blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
+        clean = sanitize_metadata(_as_document(report), blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
         reasons: list[str] = []
         current_source_hash = ""
         try:
@@ -270,7 +272,7 @@ class EncodedAudioAcceptanceStore:
                 return default
             raise EncodedAudioAcceptanceNotFoundError("Encoded audio acceptance summary does not exist.")
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {}, blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(data), blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
 
     def build_summary(self, release_id: str, *, required_profiles: list[str] | None = None, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
@@ -300,7 +302,7 @@ class EncodedAudioAcceptanceStore:
                 profile_blockers.append("health_failed")
             elif health_status == "warning":
                 warnings.append(f"{profile_id}:health_warning")
-            tracks = manifest.get("tracks") if isinstance(manifest.get("tracks"), list) else []
+            tracks = _as_list(manifest.get("tracks"))
             for track in tracks:
                 if not isinstance(track, dict):
                     continue
@@ -446,7 +448,7 @@ class EncodedAudioAcceptanceStore:
         }
 
     def with_current_review_state(self, review: dict[str, Any]) -> dict[str, Any]:
-        clean = sanitize_metadata(review if isinstance(review, dict) else {}, blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
+        clean = sanitize_metadata(_as_document(review), blocked_keys=ENCODED_AUDIO_ACCEPTANCE_BLOCKED_KEYS)
         reasons: list[str] = []
         current_source_hash = ""
         try:
@@ -461,8 +463,8 @@ class EncodedAudioAcceptanceStore:
                 reasons.append("track_identity_changed")
             if str(clean.get("source_hash") or "") != current_source_hash:
                 reasons.append("source_changed")
-            evidence = clean.get("encoded_audio_evidence") if isinstance(clean.get("encoded_audio_evidence"), dict) else {}
-            current_evidence = context.get("encoded_audio_evidence") if isinstance(context.get("encoded_audio_evidence"), dict) else {}
+            evidence = _as_document(clean.get("encoded_audio_evidence"))
+            current_evidence = _as_document(context.get("encoded_audio_evidence"))
             for field in ("manifest_hash", "encoded_track_hash", "health_hash", "profile_hash"):
                 if str(evidence.get(field) or "") != str(current_evidence.get(field) or ""):
                     reasons.append(field.replace("_hash", "_changed"))
@@ -556,7 +558,7 @@ class EncodedAudioAcceptanceStore:
             if rating < 1:
                 raise EncodedAudioAcceptanceError("rating is required for accepted encoded audio reviews.")
         context = self.encoded_track_context(release_id, profile_id, track_id, require_reviewable=True)
-        reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
+        reviewer = _as_document(payload.get("reviewer"))
         if review_mode in {"manual", "external_import"} and not str(reviewer.get("name") or payload.get("reviewer_name") or "").strip():
             raise EncodedAudioAcceptanceError("reviewer.name is required for manual encoded audio reviews.")
         review = {
@@ -719,10 +721,10 @@ def encoded_audio_health_integrity_ok(report: dict[str, Any]) -> bool:
 
 
 def encoded_audio_review_source_hash(context: dict[str, Any]) -> str:
-    track = context.get("track") if isinstance(context.get("track"), dict) else {}
-    profile = context.get("profile") if isinstance(context.get("profile"), dict) else {}
-    evidence = context.get("encoded_audio_evidence") if isinstance(context.get("encoded_audio_evidence"), dict) else {}
-    health = context.get("health") if isinstance(context.get("health"), dict) else {}
+    track = _as_document(context.get("track"))
+    profile = _as_document(context.get("profile"))
+    evidence = _as_document(context.get("encoded_audio_evidence"))
+    health = _as_document(context.get("health"))
     return stable_hash(
         sanitize_metadata(
             {
@@ -850,7 +852,7 @@ def encoded_audio_acceptance_allows_signoff(summary: dict[str, Any]) -> bool:
 
 
 def encoded_audio_acceptance_summary_public(summary: dict[str, Any] | None) -> dict[str, Any]:
-    data = summary if isinstance(summary, dict) else {}
+    data = _as_document(summary)
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -1007,7 +1009,7 @@ def export_distribution_encoded_audio_acceptance(
 
 
 def _normalize_markers(value: Any) -> list[ImplementationDocument]:
-    markers = value if isinstance(value, list) else []
+    markers = _as_list(value)
     result = []
     for index, item in enumerate(markers, start=1):
         if not isinstance(item, dict):

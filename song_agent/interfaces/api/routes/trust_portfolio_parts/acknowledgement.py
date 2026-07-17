@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustPortfolioAcknowledgementRoutes:
+class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
     def _dispatch_portfolio_acknowledgement_part_01_actions_01(self, method, parts, portfolio_id, action, _split_state, query_profile, subaction):
         if subaction == 'pack' and len(parts) >= 4:
             pack_action = parts[3]
@@ -166,10 +170,11 @@ class TrustPortfolioAcknowledgementRoutes:
         return (False, None)
 
     def _dispatch_portfolio_acknowledgement(self, method, parts, portfolio_id, action) -> bool:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._dispatch_portfolio_acknowledgement_part_01(method, parts, portfolio_id, action, _split_state)
         if _split_result[0]:
             return _split_result[1]
         _split_result = self._dispatch_portfolio_acknowledgement_part_02(method, parts, portfolio_id, action, _split_state)
         if _split_result[0]:
             return _split_result[1]
+        raise RuntimeError("_dispatch_portfolio_acknowledgement did not produce a result.")

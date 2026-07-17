@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from song_agent.acceptance_fix_planning import AcceptanceFixPlanStateError, AcceptanceFixPlanningStore
-from song_agent.acceptance_kb import AcceptanceKnowledgeBaseStore
 from tests.test_acceptance_fix_sprints import _suite_with_review
 from tests.test_acceptance_kb import _closed_fix_sprint
 

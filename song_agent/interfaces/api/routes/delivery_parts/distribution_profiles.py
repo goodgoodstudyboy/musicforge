@@ -1,48 +1,52 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class DeliveryRoutesDistributionProfiles:
+class DeliveryRoutesDistributionProfiles(DeliveryRouteContext):
     @property
-    def release_store(self) -> _interfaces_api_runtime.ReleaseStore:
-        return self.server.release_store  # type: ignore[attr-defined]
+    def release_store(self) -> _InterfaceType:
+        return self.server.release_store
 
     @property
-    def release_operations_store(self) -> _interfaces_api_runtime.ReleaseOperationsStore:
-        return self.server.release_operations_store  # type: ignore[attr-defined]
+    def release_operations_store(self) -> _InterfaceType:
+        return self.server.release_operations_store
 
     @property
-    def release_operations_runbook_store(self) -> _interfaces_api_runtime.ReleaseOperationsRunbookStore:
-        return self.server.release_operations_runbook_store  # type: ignore[attr-defined]
+    def release_operations_runbook_store(self) -> _InterfaceType:
+        return self.server.release_operations_runbook_store
 
     @property
-    def release_operations_signoff_store(self) -> _interfaces_api_runtime.ReleaseOperationsSignoffStore:
-        return self.server.release_operations_signoff_store  # type: ignore[attr-defined]
+    def release_operations_signoff_store(self) -> _InterfaceType:
+        return self.server.release_operations_signoff_store
 
     @property
-    def release_operations_audit_store(self) -> _interfaces_api_runtime.ReleaseOperationsAuditStore:
-        return self.server.release_operations_audit_store  # type: ignore[attr-defined]
+    def release_operations_audit_store(self) -> _InterfaceType:
+        return self.server.release_operations_audit_store
 
     @property
-    def release_operations_reviewer_pack_store(self) -> _interfaces_api_runtime.ReleaseOperationsReviewerPackStore:
-        return self.server.release_operations_reviewer_pack_store  # type: ignore[attr-defined]
+    def release_operations_reviewer_pack_store(self) -> _InterfaceType:
+        return self.server.release_operations_reviewer_pack_store
 
     @property
-    def distribution_store(self) -> _interfaces_api_runtime.DistributionStore:
-        return self.server.distribution_store  # type: ignore[attr-defined]
+    def distribution_store(self) -> _InterfaceType:
+        return self.server.distribution_store
 
     @property
-    def submission_store(self) -> _interfaces_api_runtime.SubmissionStore:
-        return self.server.submission_store  # type: ignore[attr-defined]
+    def submission_store(self) -> _InterfaceType:
+        return self.server.submission_store
 
     @property
-    def submission_evidence_store(self) -> _interfaces_api_runtime.SubmissionEvidenceStore:
-        return self.server.submission_evidence_store  # type: ignore[attr-defined]
+    def submission_evidence_store(self) -> _InterfaceType:
+        return self.server.submission_evidence_store
 
     @property
-    def distribution_template_store(self) -> _interfaces_api_runtime.TemplatePackStore:
-        return self.server.distribution_template_store  # type: ignore[attr-defined]
+    def distribution_template_store(self) -> _InterfaceType:
+        return self.server.distribution_template_store
 
     def _handle_distribution_profiles_root(self, method: str) -> None:
         if method != "GET":

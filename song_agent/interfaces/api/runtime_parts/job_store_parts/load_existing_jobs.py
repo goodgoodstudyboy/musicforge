@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_list as _as_list
+
+from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies as core_dependencies
@@ -16,7 +22,7 @@ from song_agent.interfaces.api.runtime_parts.helpers.api_info import _utc_now
 
 from song_agent.interfaces.api.runtime_parts.core import RUNS_DIR
 
-class JobStoreLoadExistingJobs:
+class JobStoreLoadExistingJobs(JobStoreContext):
     def __init__(
         self,
         runs_dir: Path = RUNS_DIR,
@@ -68,8 +74,8 @@ class JobStoreLoadExistingJobs:
 
     def create_job(self, payload: dict[str, Any], start_immediately: bool = True) -> JobState:
         request = SongRequest.from_dict(payload)
-        asset_refs = payload.get("asset_refs") if isinstance(payload.get("asset_refs"), list) else []
-        reference_refs = payload.get("reference_refs") if isinstance(payload.get("reference_refs"), list) else []
+        asset_refs = _as_list(payload.get("asset_refs"))
+        reference_refs = _as_list(payload.get("reference_refs"))
         context_pack = payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None
         generation_mode = _generation_mode(payload)
         pipeline_mode = _pipeline_mode(payload)
@@ -168,7 +174,7 @@ class JobStoreLoadExistingJobs:
         return (False, None)
 
     def create_edit_job(self, *, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: dict[str, Any] | None=None, name: str='', start_immediately: bool=True, provider_patch: dict[str, Any] | None=None, provider_usage: dict[str, Any] | None=None, provider_snapshot: dict[str, Any] | None=None, template_id: str | None=None, preview_id: str | None=None, candidate_group_id: str | None=None, candidate_id: str | None=None, candidate: dict[str, Any] | None=None, asset_refs: list[dict[str, Any]] | None=None, reference_refs: list[dict[str, Any]] | None=None, context_pack: dict[str, Any] | None=None) -> JobState:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._create_edit_job_part_01(project_id, parent_version_id, parent_job, parent_plan, intent, preset, name, start_immediately, provider_patch, provider_usage, provider_snapshot, template_id, preview_id, candidate_group_id, candidate_id, candidate, asset_refs, reference_refs, context_pack, _split_state)
         if _split_result[0]:
             return _split_result[1]
@@ -178,6 +184,7 @@ class JobStoreLoadExistingJobs:
         _split_result = self._create_edit_job_part_03(project_id, parent_version_id, parent_job, parent_plan, intent, preset, name, start_immediately, provider_patch, provider_usage, provider_snapshot, template_id, preview_id, candidate_group_id, candidate_id, candidate, asset_refs, reference_refs, context_pack, _split_state)
         if _split_result[0]:
             return _split_result[1]
+        raise RuntimeError("create_edit_job did not produce a result.")
 
     def start_job(self, job_id: str) -> bool:
         job = self.get_job(job_id)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -144,7 +144,7 @@ def build_judge_report(
     if missing_ids:
         warnings.append(f"Provider judge omitted scores for: {', '.join(missing_ids[:6])}.")
     comparison = _comparison_summary(provider_output.get("comparison_summary"), ready_ids, recommended_id)
-    usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+    usage = _as_document(provider_snapshot.get("usage"))
     report = {
         "schema_version": REVIEW_JUDGE_SCHEMA_VERSION,
         "project_id": project_id,
@@ -262,7 +262,7 @@ def mark_judge_report_stale(report: dict[str, Any] | None, *, stale: bool) -> di
 def judge_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {"status": "not_started", "manual_review_required": True}
-    scores = report.get("candidate_scores") if isinstance(report.get("candidate_scores"), list) else []
+    scores = _as_list(report.get("candidate_scores"))
     top = _top_score(scores, str(report.get("recommended_candidate_id") or ""))
     return sanitize_metadata(
         {
@@ -276,9 +276,9 @@ def judge_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "top_confidence": top.get("confidence"),
             "top_risk": top.get("risk"),
             "manual_review_required": bool(report.get("manual_review_required", True)),
-            "risk_flags": report.get("risk_flags") if isinstance(report.get("risk_flags"), list) else [],
+            "risk_flags": _as_list(report.get("risk_flags")),
             "warning_count": len(report.get("warnings", [])) if isinstance(report.get("warnings"), list) else 0,
-            "provider_usage": _usage_summary(report.get("provider_usage") if isinstance(report.get("provider_usage"), dict) else {}),
+            "provider_usage": _usage_summary(_as_document(report.get("provider_usage"))),
         }
     )
 
@@ -304,7 +304,7 @@ def sprint_judge_summary(
     risk_flags: list[str] = []
     tokens = 0
     for report in reports:
-        usage = report.get("provider_usage") if isinstance(report.get("provider_usage"), dict) else {}
+        usage = _as_document(report.get("provider_usage"))
         tokens += int(usage.get("total_tokens") or 0)
         for flag in report.get("risk_flags", []) if isinstance(report.get("risk_flags"), list) else []:
             risk_flags.append(str(flag))
@@ -351,10 +351,10 @@ def _ready_candidates(candidates: list[ReviewCandidate]) -> list[ReviewCandidate
 
 
 def _candidate_prompt_summary(candidate: ReviewCandidate) -> ImplementationDocument:
-    scores = candidate.scores if isinstance(candidate.scores, dict) else {}
-    validator = candidate.validator if isinstance(candidate.validator, dict) else {}
-    patch = candidate.patch if isinstance(candidate.patch, dict) else {}
-    operations = patch.get("operations") if isinstance(patch.get("operations"), list) else []
+    scores = _as_document(candidate.scores)
+    validator = _as_document(candidate.validator)
+    patch = _as_document(candidate.patch)
+    operations = _as_list(patch.get("operations"))
     return sanitize_metadata(
         {
             "candidate_id": candidate.candidate_id,
@@ -367,8 +367,8 @@ def _candidate_prompt_summary(candidate: ReviewCandidate) -> ImplementationDocum
             "scores": {key: scores.get(key) for key in ("combined", "review_fit", "target_precision", "quality_delta", "quality_overall", "novelty", "safety", "risk")},
             "validator": {
                 "status": validator.get("status"),
-                "errors": validator.get("errors") if isinstance(validator.get("errors"), list) else [],
-                "warnings": validator.get("warnings") if isinstance(validator.get("warnings"), list) else [],
+                "errors": _as_list(validator.get("errors")),
+                "warnings": _as_list(validator.get("warnings")),
             },
             "changed_sections": _changed_values(candidate.intents, "section_name"),
             "changed_tracks": _changed_values(candidate.intents, "track_name"),
@@ -387,14 +387,14 @@ def _candidate_prompt_summary(candidate: ReviewCandidate) -> ImplementationDocum
 
 def _parent_song_summary(parent_plan: SongPlan) -> ImplementationDocument:
     plan = parent_plan.to_dict()
-    quality = plan.get("quality") if isinstance(plan.get("quality"), dict) else {}
+    quality = _as_document(plan.get("quality"))
     return sanitize_metadata(
         {
             "title": plan.get("title"),
             "style": plan.get("style"),
             "tempo_bpm": plan.get("tempo_bpm"),
             "key": plan.get("key"),
-            "quality": quality.get("scores") if isinstance(quality.get("scores"), dict) else quality,
+            "quality": _document_or(quality.get("scores"), quality),
             "sections": [
                 {
                     "name": section.get("name"),
@@ -420,8 +420,8 @@ def _decision_prompt_summary(report: ImplementationDocument | None) -> Implement
     return sanitize_metadata(
         {
             "recommended_candidate_id": report.get("recommended_candidate_id"),
-            "risk_flags": report.get("risk_flags") if isinstance(report.get("risk_flags"), list) else [],
-            "source_breakdown": report.get("source_breakdown") if isinstance(report.get("source_breakdown"), dict) else {},
+            "risk_flags": _as_list(report.get("risk_flags")),
+            "source_breakdown": _as_document(report.get("source_breakdown")),
             "ranking": [
                 {
                     "candidate_id": item.get("candidate_id"),
@@ -470,7 +470,7 @@ def _candidate_scores(value: Any, ready_ids: list[str]) -> list[ImplementationDo
         if candidate_id in seen:
             raise ReviewJudgeError(f"duplicate judge score for candidate: {candidate_id}.")
         seen.add(candidate_id)
-        score = {"candidate_id": candidate_id}
+        score: ImplementationDocument = {"candidate_id": candidate_id}
         for field_name in JUDGE_SCORE_FIELDS:
             score[field_name] = _score_0_100(item.get(field_name), field_name)
         score["confidence"] = _confidence(item.get("confidence"))
@@ -481,7 +481,7 @@ def _candidate_scores(value: Any, ready_ids: list[str]) -> list[ImplementationDo
 
 
 def _comparison_summary(value: Any, ready_ids: list[str], recommended_id: str) -> ImplementationDocument:
-    value = value if isinstance(value, dict) else {}
+    value = _as_document(value)
     best_id = value.get("best_candidate_id") or recommended_id
     return sanitize_metadata(
         {
@@ -555,7 +555,7 @@ def _provider_response_parts(response: Any) -> tuple[ImplementationDocument, Imp
     if isinstance(response, ProviderEditResponse):
         return response.data, dict(response.usage or {}), response.request_id
     if isinstance(response, dict) and "data" in response and isinstance(response.get("data"), dict):
-        usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+        usage = _as_document(response.get("usage"))
         request_id = response.get("request_id")
         return response["data"], dict(usage), None if request_id is None else str(request_id)
     if isinstance(response, dict):
@@ -588,7 +588,7 @@ def _changed_values(intents: list[ImplementationDocument], field_name: str) -> l
     for intent in intents[:20]:
         if not isinstance(intent, dict):
             continue
-        target = intent.get("target") if isinstance(intent.get("target"), dict) else {}
+        target = _as_document(intent.get("target"))
         value = target.get(field_name)
         if value and str(value) not in values:
             values.append(str(value))

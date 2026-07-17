@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -7,7 +9,7 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProjectFinalExport:
+class CreationRoutesProjectFinalExport(CreationRouteContext):
     def _handle_project_final_export(self, method: str, project_id: str) -> None:
         if method == "GET":
             try:

@@ -8,6 +8,7 @@ from song_agent.platform.verification.hashing import stable_hash
 from song_agent.release_check.v14_quality import (
     active_source_tree_hash,
     build_v14_quality_policy,
+    collect_complexity_metrics,
     collect_mypy_metrics,
     collect_typing_metrics,
     coverage_semantic_hash,
@@ -23,6 +24,7 @@ def main() -> int:
     parser.add_argument("--refresh-baseline", action="store_true")
     parser.add_argument("--ratchet-mypy", action="store_true")
     parser.add_argument("--ratchet-typing", action="store_true")
+    parser.add_argument("--ratchet-complexity", action="store_true")
     args = parser.parse_args()
     root = Path(args.repo_root).resolve()
     report = Path(args.coverage_report).resolve() if args.coverage_report else None
@@ -37,6 +39,9 @@ def main() -> int:
         _ratchet_mypy_policy(document, collect_mypy_metrics(root))
     if args.ratchet_typing:
         _ratchet_typing_policy(document, collect_typing_metrics(root))
+    if args.ratchet_complexity:
+        _ratchet_complexity_policy(document, root)
+    document["release_version"] = "14.1.0"
     if report is not None:
         output = (root / args.tracked_coverage_output).resolve()
         _write_compact_coverage(report, output, root)
@@ -102,6 +107,45 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         )
     policy["raw_dict_str_any_max_count"] = raw
     policy["implementation_document_max_count"] = implementation
+
+
+def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
+    rows = document.get("module_size_debt")
+    complexity = document.get("complexity")
+    if not isinstance(rows, list) or not isinstance(complexity, dict):
+        raise RuntimeError("Existing v14 complexity policy is invalid.")
+    previous = {
+        str(row["path"]): int(row["max_lines"])
+        for row in rows
+        if isinstance(row, dict) and row.get("path")
+    }
+    metrics = collect_complexity_metrics(root, document)
+    current = {str(row["path"]): int(row["lines"]) for row in metrics["oversized_modules"]}
+    added = sorted(set(current) - set(previous))
+    if added:
+        raise RuntimeError(f"Complexity debt cannot add oversized modules: {added}.")
+    previous_total = sum(previous.values())
+    current_total = sum(current.values())
+    if len(current) > len(previous):
+        raise RuntimeError(f"Oversized module count cannot grow: {len(current)}>{len(previous)}.")
+    if current_total >= previous_total:
+        raise RuntimeError(f"Oversized module lines must decrease: {current_total}>={previous_total}.")
+    document["module_size_debt"] = [
+        {"path": path, "max_lines": lines, "expires_version": "14.2.0"}
+        for path, lines in sorted(current.items())
+    ]
+    aggregate = dict(metrics["aggregate"])
+    complexity["aggregate_debt"] = {
+        "architecture_decision": "docs/architecture/ADR-015-v141-complexity-ratchet.md",
+        "expires_version": "14.2.0",
+        "previous_oversized_module_count": len(previous),
+        "previous_total_oversized_module_lines": previous_total,
+        "required_total_line_reduction": previous_total - current_total,
+        "max_oversized_module_count": aggregate["oversized_module_count"],
+        "max_modules_over_1000_lines": aggregate["modules_over_1000_lines"],
+        "max_largest_module_lines": aggregate["largest_module_lines"],
+        "max_total_oversized_module_lines": aggregate["total_oversized_module_lines"],
+    }
 
 
 def _write_compact_coverage(source: Path, target: Path, root: Path) -> None:

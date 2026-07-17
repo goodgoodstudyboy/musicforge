@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from typing import Any as _InterfaceType
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_delivery_parts_dependencies
@@ -19,10 +23,10 @@ def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> Implem
         "lifecycle_verification_report": getattr(args, "lifecycle_verification_report", None),
     }
 
-def print_release_operations_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    report = result.get("report") if isinstance(result.get("report"), dict) else {}
-    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+def print_release_operations_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    report = _as_document(result.get("report"))
+    verification = _as_document(result.get("verification_summary"))
     print("MusicForge release-operations")
     print(f"release: {result.get('release_id') or report.get('release_id') or '-'}")
     print(f"status: {summary.get('status') or report.get('status') or '-'}")
@@ -33,14 +37,14 @@ def print_release_operations_result(result: dict[str, Any]) -> None:
         print(f"zip: {(result.get('zip') or {}).get('filename')}")
     if verification:
         print(f"verify: {verification.get('status')}")
-    board_summary = result.get("acceptance_board_summary") if isinstance(result.get("acceptance_board_summary"), dict) else {}
-    board_verification = result.get("acceptance_board_verification") if isinstance(result.get("acceptance_board_verification"), dict) else {}
+    board_summary = _as_document(result.get("acceptance_board_summary"))
+    board_verification = _as_document(result.get("acceptance_board_verification"))
     if board_summary:
         print(f"acceptance board: {board_summary.get('readiness') or '-'} / accepted={board_summary.get('accepted_count', 0)}")
     if board_verification:
         print(f"acceptance board verify: {board_verification.get('status')}")
-    signoff = result.get("acceptance_board_signoff") if isinstance(result.get("acceptance_board_signoff"), dict) else {}
-    archive_verification = result.get("acceptance_board_signoff_archive_verification") if isinstance(result.get("acceptance_board_signoff_archive_verification"), dict) else {}
+    signoff = _as_document(result.get("acceptance_board_signoff"))
+    archive_verification = _as_document(result.get("acceptance_board_signoff_archive_verification"))
     if signoff:
         print(f"acceptance board signoff: {signoff.get('status')}")
     if result.get("acceptance_board_signoff_archive_zip"):
@@ -48,10 +52,10 @@ def print_release_operations_result(result: dict[str, Any]) -> None:
     if archive_verification:
         print(f"acceptance board signoff archive verify: {archive_verification.get('status')}")
 
-def print_release_operations_runbook_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
-    manifest = result.get("manifest") if isinstance(result.get("manifest"), dict) else {}
+def print_release_operations_runbook_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    verification = _as_document(result.get("verification_summary"))
+    manifest = _as_document(result.get("manifest"))
     print("MusicForge release-operations-runbook")
     print(f"release: {result.get('release_id') or summary.get('release_id') or '-'}")
     print(f"runbook: {summary.get('runbook_id') or '-'}")
@@ -66,9 +70,9 @@ def print_release_operations_runbook_result(result: dict[str, Any]) -> None:
     if verification:
         print(f"verify: {verification.get('status')}")
 
-def print_release_operations_signoff_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    gate = result.get("gate") if isinstance(result.get("gate"), dict) else {}
+def print_release_operations_signoff_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    gate = _as_document(result.get("gate"))
     print("MusicForge release-operations-signoff")
     print(f"release: {result.get('release_id') or summary.get('release_id') or '-'}")
     print(f"status: {summary.get('status') or '-'}")
@@ -77,9 +81,9 @@ def print_release_operations_signoff_result(result: dict[str, Any]) -> None:
     if gate:
         print(f"gate: {gate.get('status')} signable={gate.get('signable')}")
 
-def print_release_operations_archive_result(result: dict[str, Any]) -> None:
-    manifest = result.get("manifest") if isinstance(result.get("manifest"), dict) else {}
-    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+def print_release_operations_archive_result(result: dict[str, _InterfaceType]) -> None:
+    manifest = _as_document(result.get("manifest"))
+    verification = _as_document(result.get("verification_summary"))
     print("MusicForge release-operations-archive")
     print(f"release: {result.get('release_id') or manifest.get('release_id') or '-'}")
     if manifest:
@@ -89,9 +93,9 @@ def print_release_operations_archive_result(result: dict[str, Any]) -> None:
     if verification:
         print(f"verify: {verification.get('status')}")
 
-def print_release_operations_audit_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+def print_release_operations_audit_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    verification = _as_document(result.get("verification_summary"))
     print("MusicForge release-operations-audit")
     print(f"release: {result.get('release_id') or '-'}")
     print(f"status: {summary.get('status') or '-'}")
@@ -103,9 +107,9 @@ def print_release_operations_audit_result(result: dict[str, Any]) -> None:
     if verification:
         print(f"verify: {verification.get('status')}")
 
-def print_release_operations_reviewer_pack_result(result: dict[str, Any]) -> None:
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    verification = result.get("verification_summary") if isinstance(result.get("verification_summary"), dict) else {}
+def print_release_operations_reviewer_pack_result(result: dict[str, _InterfaceType]) -> None:
+    summary = _as_document(result.get("summary"))
+    verification = _as_document(result.get("verification_summary"))
     print("MusicForge release-operations-reviewer-pack")
     print(f"release: {result.get('release_id') or '-'}")
     print(f"status: {summary.get('status') or '-'}")

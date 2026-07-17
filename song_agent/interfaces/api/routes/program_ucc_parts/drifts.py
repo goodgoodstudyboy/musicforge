@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.program_ucc import ProgramUccRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class ProgramUccDriftsRoutes:
+class ProgramUccDriftsRoutes(ProgramUccRouteContext):
     def _dispatch_ucc_drifts(self, method, center_id, tail) -> bool:
         if tail == '/drift-responses':
             if method == 'GET':

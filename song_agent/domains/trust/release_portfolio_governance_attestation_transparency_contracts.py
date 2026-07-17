@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -48,8 +50,8 @@ def transparency_notice_hash(notice: dict[str, Any]) -> str:
 
 
 def transparency_summary(feed: dict[str, Any] | None) -> dict[str, Any]:
-    data = feed if isinstance(feed, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(feed)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -68,10 +70,10 @@ def transparency_summary(feed: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _build_events(portfolio_id: str, profile: str, public_state: ImplementationDocument, source: ImplementationDocument, *, now: str) -> list[ImplementationDocument]:
-    registry = public_state.get("registry") if isinstance(public_state.get("registry"), dict) else {}
-    attestation = public_state.get("public_attestation") if isinstance(public_state.get("public_attestation"), dict) else {}
-    portal = public_state.get("portal") if isinstance(public_state.get("portal"), dict) else {}
-    accepted = public_state.get("accepted_evidence") if isinstance(public_state.get("accepted_evidence"), dict) else {}
+    registry = _as_document(public_state.get("registry"))
+    attestation = _as_document(public_state.get("public_attestation"))
+    portal = _as_document(public_state.get("portal"))
+    accepted = _as_document(public_state.get("accepted_evidence"))
     definitions: list[tuple[str, str, str, str, dict[str, Any]]] = []
     current_id = registry.get("current_entry_id")
     current_status = registry.get("current_entry_status")
@@ -95,7 +97,7 @@ def _build_events(portfolio_id: str, profile: str, public_state: ImplementationD
     events: list[dict[str, Any]] = []
     previous_hash = ""
     for index, (event_type, severity, title, message, refs) in enumerate(definitions, start=1):
-        event = {
+        event: ImplementationDocument = {
             "event_id": f"att-trans-event-{index:06d}",
             "event_type": event_type,
             "severity": severity,
@@ -113,7 +115,7 @@ def _build_events(portfolio_id: str, profile: str, public_state: ImplementationD
             "previous_event_hash": previous_hash,
         }
         event["event_hash"] = transparency_event_hash(event)
-        previous_hash = event["event_hash"]
+        previous_hash = str(event["event_hash"])
         events.append(sanitize_metadata(event, blocked_keys=TRANSPARENCY_BLOCKED_KEYS))
     return events
 
@@ -128,10 +130,10 @@ def _build_notices(
     *,
     now: str,
 ) -> list[ImplementationDocument]:
-    registry = public_state.get("registry") if isinstance(public_state.get("registry"), dict) else {}
-    portal = public_state.get("portal") if isinstance(public_state.get("portal"), dict) else {}
-    accepted = public_state.get("accepted_evidence") if isinstance(public_state.get("accepted_evidence"), dict) else {}
-    previous_source = previous_feed.get("source") if isinstance(previous_feed.get("source"), dict) else {}
+    registry = _as_document(public_state.get("registry"))
+    portal = _as_document(public_state.get("portal"))
+    accepted = _as_document(public_state.get("accepted_evidence"))
+    previous_source = _as_document(previous_feed.get("source"))
     previous_state_hash = (previous_source.get("public_state_hash") or previous_feed.get("source_hash")) if isinstance(previous_feed, dict) else None
     event_by_type = {str(event.get("event_type")): str(event.get("event_id")) for event in events if isinstance(event, dict)}
     rows: list[tuple[str, str, str, str, list[str], dict[str, Any]]] = []

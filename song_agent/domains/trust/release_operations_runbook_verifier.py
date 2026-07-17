@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -59,7 +59,7 @@ def verify_release_operations_runbook_package(
 
 
 def release_operations_runbook_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -89,7 +89,7 @@ def print_release_operations_runbook_verification_report(report: dict[str, Any])
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -185,7 +185,7 @@ class _RunbookVerifier:
             self._add_check("manifest", "runbook_manifest_exists", "failed", "blocking", "runbook-manifest.json is missing or invalid.")
             return
         self._add_check("manifest", "runbook_manifest_exists", "passed", "blocking", "runbook-manifest.json exists.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -235,7 +235,7 @@ class _RunbookVerifier:
         if self.runbook:
             actual = runbook_integrity_hash(self.runbook)
             self._add_check("runbook", "runbook_integrity", "passed" if self.runbook.get("integrity_hash") == actual else "failed", "blocking", "Runbook integrity hash matches content." if self.runbook.get("integrity_hash") == actual else "Runbook integrity hash does not match content.")
-            manifest_row = self.manifest.get("runbook") if isinstance(self.manifest.get("runbook"), dict) else {}
+            manifest_row = _as_document(self.manifest.get("runbook"))
             self._add_check("runbook", "runbook_manifest_hash", "passed" if manifest_row.get("runbook_hash") == actual else "failed", "blocking", "Manifest runbook hash matches." if manifest_row.get("runbook_hash") == actual else "Manifest runbook hash does not match.")
         if self.execution:
             actual = execution_report_integrity_hash(self.execution)

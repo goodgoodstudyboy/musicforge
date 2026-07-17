@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
@@ -27,7 +29,7 @@ def governance_change_request_hash(item: dict[str, Any]) -> str:
 
 
 def governance_change_request_integrity_ok(item: dict[str, Any] | None) -> bool:
-    data = item if isinstance(item, dict) else {}
+    data = _as_document(item)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == governance_change_request_hash(data)
 
 

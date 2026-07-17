@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import base64 as base64
 import hashlib as hashlib
@@ -133,7 +133,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
             self.portal_store.verification_report_path(portfolio_id, profile),
         )
         portal_report = self.portal_store.read_report(portfolio_id, profile=profile, default={})
-        portal_source = portal_report.get("source") if isinstance(portal_report.get("source"), dict) else {}
+        portal_source = _as_document(portal_report.get("source"))
         portal_manifest = _read_json_default(self.portal_store.export_dir(portfolio_id, profile) / "portal-manifest.json", default={})
         source = {
             "portfolio_id": portfolio_id,
@@ -164,7 +164,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
         return sanitize_metadata(source, blocked_keys=PORTAL_REVIEW_BLOCKED_KEYS)
 
     def pack_is_stale(self, portfolio_id: str, pack: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
-        data = pack if isinstance(pack, dict) else self.read_pack(portfolio_id, profile=profile, default={})
+        data = _document_or(pack, self.read_pack(portfolio_id, profile=profile, default={}))
         if not data:
             return False
         try:
@@ -211,7 +211,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
                 "created_at": now,
                 "review_pack": {"review_pack_id": pack.get("review_pack_id"), "integrity_hash": pack.get("integrity_hash"), "source_hash": pack.get("source_hash")},
                 "source_hash": pack.get("source_hash"),
-                "portal": _portal_binding(pack.get("source") if isinstance(pack.get("source"), dict) else {}),
+                "portal": _portal_binding(_as_document(pack.get("source"))),
                 "files": sorted(files, key=lambda item: item["path"]),
                 "zip": {},
                 "redaction_summary": redaction_summary({"pack": pack, "data": data_docs, "form": form}),
@@ -328,7 +328,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
         _write_json(work_dir / "review-response.json", response)
         (work_dir / "review-response.md").write_text(_response_markdown(response), encoding="utf-8")
         _write_json(work_dir / "data" / "review-pack-source.json", {"source_hash": pack.get("source_hash"), "source": pack.get("source"), "review_pack_id": pack.get("review_pack_id")})
-        _write_json(work_dir / "data" / "portal-binding-summary.json", _portal_binding(pack.get("source") if isinstance(pack.get("source"), dict) else {}))
+        _write_json(work_dir / "data" / "portal-binding-summary.json", _portal_binding(_as_document(pack.get("source"))))
         (work_dir / "README.txt").write_text("MusicForge Portal Review Response. Verify before import.\n", encoding="utf-8")
         files = [_file_record(work_dir, path) for path in sorted(work_dir.rglob("*")) if path.is_file() and path.name != "response-manifest.json"]
         manifest = {
@@ -342,7 +342,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
             "review_pack_source_hash": pack.get("source_hash"),
             "payload_hash": response.get("payload_hash"),
             "source_hash": pack.get("source_hash"),
-            "portal": _portal_binding(pack.get("source") if isinstance(pack.get("source"), dict) else {}),
+            "portal": _portal_binding(_as_document(pack.get("source"))),
             "files": sorted(files, key=lambda item: item["path"]),
             "zip": {},
         }
@@ -410,7 +410,7 @@ class ReleasePortfolioGovernanceAttestationPortalReviewStore:
             "review_pack_source_hash": response.get("review_pack_source_hash"),
             "decision": response.get("decision"),
             "reason": str((payload or {}).get("reason") or response.get("notes") or "External portal review requested changes.")[:2000],
-            "findings": response.get("findings") if isinstance(response.get("findings"), list) else [],
+            "findings": _as_list(response.get("findings")),
         }
         request["integrity_hash"] = stable_hash({key: value for key, value in request.items() if key != "integrity_hash"})
         _write_json(root / f"{change_request_id}.json", request)
@@ -547,7 +547,7 @@ def _pack_summary(source: ImplementationDocument, blockers: list[ImplementationD
 
 
 def _pack_data_documents(pack: ImplementationDocument) -> dict[str, ImplementationDocument]:
-    source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+    source = _as_document(pack.get("source"))
     return {
         "portal-summary.json": {"source_hash": pack.get("source_hash"), "summary": pack.get("summary"), "portal": _portal_binding(source)},
         "registry-verification-summary.json": {"source_hash": pack.get("source_hash"), "status": source.get("registry_verification_status"), "zip_sha256": source.get("registry_zip_sha256"), "manifest_hash": source.get("registry_manifest_hash"), "verification_hash": source.get("registry_verification_hash"), "current_entry_id": source.get("registry_current_entry_id"), "current_entry_hash": source.get("registry_current_entry_hash")},
@@ -604,7 +604,7 @@ def _portal_binding(source: ImplementationDocument) -> ImplementationDocument:
 
 
 def _reviewer_guide(pack: ImplementationDocument) -> str:
-    summary = pack.get("summary") if isinstance(pack.get("summary"), dict) else {}
+    summary = _as_document(pack.get("summary"))
     return "\n".join(
         [
             "# MusicForge Portal Review Pack",
@@ -650,7 +650,7 @@ def _pack_readme(pack: ImplementationDocument) -> str:
 
 
 def _response_markdown(response: ImplementationDocument) -> str:
-    reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
+    reviewer = _as_document(response.get("reviewer"))
     return "\n".join(
         [
             "# Portal Review Response",
@@ -676,7 +676,7 @@ def redaction_summary(value: Any) -> dict[str, Any]:
 
 
 def _state_tuple(pack: ImplementationDocument) -> dict[str, str]:
-    source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+    source = _as_document(pack.get("source"))
     return {"source_hash": str(pack.get("source_hash") or ""), "portal_zip_sha256": str(source.get("portal_zip_sha256") or ""), "portal_verification_hash": str(source.get("portal_verification_hash") or "")}
 
 
@@ -696,7 +696,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _write_json(path: Path, payload: ImplementationDocument) -> Path:

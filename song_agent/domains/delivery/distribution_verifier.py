@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -79,7 +79,7 @@ def verify_distribution_package(
 
 
 def distribution_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -113,7 +113,7 @@ def print_distribution_verification_report(report: dict[str, Any]) -> None:
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -254,7 +254,7 @@ class _DistributionPackageVerifier:
         if not isinstance(self.manifest.get("summary"), dict):
             missing_fields.append("summary")
         self._add_check("manifest", "distribution_manifest_schema", "failed" if missing_fields else "passed", "blocking", "Missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Distribution manifest schema has required fields.", count=len(missing_fields))
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid_rows: list[dict[str, Any]] = []
         shape_errors: list[str] = []
         for index, item in enumerate(rows):
@@ -323,7 +323,7 @@ class _DistributionPackageVerifier:
             self.encoded_audio_acceptance_summary = self._read_json_entry(archive, "encoded-audio-acceptance/summary.json", "encoded_audio_acceptance", "distribution_encoded_audio_acceptance_summary_parse")
         if "format-decision/target-decision-summary.json" in self.entry_map:
             self.format_decision_summary = self._read_json_entry(archive, "format-decision/target-decision-summary.json", "format_decision", "distribution_format_decision_summary_parse")
-        encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        encoded = _as_document(self.manifest.get("encoded_audio"))
         for row in encoded.get("profiles", []) if isinstance(encoded.get("profiles"), list) else []:
             if not isinstance(row, dict):
                 continue
@@ -331,7 +331,7 @@ class _DistributionPackageVerifier:
             path = str(row.get("manifest_path") or f"encoded-audio/manifests/{profile_id}.json")
             if path in self.entry_map:
                 self.encoded_audio_manifests[profile_id] = self._read_json_entry(archive, path, "encoded_audio", "distribution_encoded_audio_manifest_parse")
-        acceptance = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
+        acceptance = _as_document(self.manifest.get("encoded_audio_acceptance"))
         for row in acceptance.get("review_hashes", []) if isinstance(acceptance.get("review_hashes"), list) else []:
             if not isinstance(row, dict):
                 continue
@@ -346,7 +346,7 @@ class _DistributionPackageVerifier:
                 errors.append(f"package.{field} does not match manifest")
         if self.release.get("release_id") != self.manifest.get("release_id"):
             errors.append("release.json release_id does not match manifest")
-        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        tracks = _as_list(self.tracklist.get("tracks"))
         if not tracks:
             errors.append("tracklist has no tracks")
         self._add_check("package", "distribution_package_consistency", "failed" if errors else "passed", "blocking", "; ".join(errors) if errors else "Package, release, and tracklist are consistent.", count=len(errors))
@@ -361,8 +361,8 @@ class _DistributionPackageVerifier:
         manifest_hash = stable_hash({key: value for key, value in self.manifest.items() if key != "zip"})
         signoff_hash = self.signoff.get("export_manifest_hash")
         self._add_check("signoff", "distribution_signoff_manifest_hash", "passed" if signoff_hash == manifest_hash else "failed", "blocking", "Distribution signoff export_manifest_hash matches manifest without zip." if signoff_hash == manifest_hash else "Distribution signoff export_manifest_hash does not match manifest without zip.")
-        sidecars = self.manifest.get("sidecars") if isinstance(self.manifest.get("sidecars"), dict) else {}
-        signoff_sidecar = sidecars.get("distribution_signoff") if isinstance(sidecars.get("distribution_signoff"), dict) else {}
+        sidecars = _as_document(self.manifest.get("sidecars"))
+        signoff_sidecar = _as_document(sidecars.get("distribution_signoff"))
         expected_payload_hash = signoff_sidecar.get("payload_hash")
         payload_hash = stable_hash(_distribution_signoff_hash_payload(self.signoff))
         self._add_check("signoff", "distribution_signoff_sidecar_payload_hash", "passed" if expected_payload_hash == payload_hash else "failed", "blocking", "distribution-signoff.json payload hash matches manifest sidecar record." if expected_payload_hash == payload_hash else "distribution-signoff.json payload hash does not match manifest sidecar record.")
@@ -371,7 +371,7 @@ class _DistributionPackageVerifier:
         self._add_check("signoff", "distribution_signoff_qa_source", "passed" if qa_source and qa_source == manifest_qa_source else "failed", "blocking", "Distribution signoff qa_source_hash matches manifest." if qa_source and qa_source == manifest_qa_source else "Distribution signoff qa_source_hash is missing or does not match manifest.")
 
     def _verify_template_and_checklist(self) -> None:
-        manifest_template = self.manifest.get("template") if isinstance(self.manifest.get("template"), dict) else {}
+        manifest_template = _as_document(self.manifest.get("template"))
         if not manifest_template:
             self._add_check("template", "distribution_template_optional", "passed", "blocking", "No distribution template is declared.")
             return
@@ -387,7 +387,7 @@ class _DistributionPackageVerifier:
         validation = validate_template_pack(self.template) if self.template else {"status": "failed"}
         self._add_check("template", "distribution_template_valid", "passed" if validation.get("status") == "passed" else "failed", "blocking", "template-pack.json is valid." if validation.get("status") == "passed" else "template-pack.json failed validation.")
 
-        manifest_checklist = self.manifest.get("checklist") if isinstance(self.manifest.get("checklist"), dict) else {}
+        manifest_checklist = _as_document(self.manifest.get("checklist"))
         self._add_check("checklist", "distribution_checklist_exists", "passed" if self.checklist else "failed", "blocking", "docs/checklist.json exists." if self.checklist else "docs/checklist.json is missing.")
         expected_payload_hash = manifest_checklist.get("payload_hash")
         actual_payload_hash = checklist_payload_hash(self.checklist) if self.checklist else None
@@ -397,7 +397,7 @@ class _DistributionPackageVerifier:
         self._add_check("checklist", "distribution_checklist_status", "passed" if checklist_status in {"passed", "warning"} else "failed", "blocking", f"Checklist status is {checklist_status}.")
 
     def _verify_layout(self, archive: zipfile.ZipFile) -> None:
-        manifest_layout = self.manifest.get("layout") if isinstance(self.manifest.get("layout"), dict) else {}
+        manifest_layout = _as_document(self.manifest.get("layout"))
         generated_version = str((self.manifest.get("tool") or {}).get("version") or self.manifest.get("generated_by_version") or "").strip()
         legacy = not manifest_layout
         if legacy:
@@ -414,8 +414,8 @@ class _DistributionPackageVerifier:
         sidecar_payload_hash = self.layout.get("payload_hash")
         hash_ok = bool(manifest_payload_hash and manifest_payload_hash == manifest_hash == sidecar_payload_hash == sidecar_hash)
         self._add_check("layout", "distribution_layout_hash_match", "passed" if hash_ok else "failed", "blocking", "Layout sidecar hash matches manifest." if hash_ok else "Layout sidecar hash does not match manifest.")
-        manifest_entries = manifest_layout.get("entries") if isinstance(manifest_layout.get("entries"), list) else []
-        sidecar_entries = self.layout.get("entries") if isinstance(self.layout.get("entries"), list) else []
+        manifest_entries = _as_list(manifest_layout.get("entries"))
+        sidecar_entries = _as_list(self.layout.get("entries"))
         entries_match = layout_payload_hash({"entries": manifest_entries}) == layout_payload_hash({"entries": sidecar_entries})
         self._add_check("layout", "distribution_layout_entries_declared", "passed" if entries_match else "failed", "blocking", "Layout entries match sidecar." if entries_match else "Layout entries differ between manifest and sidecar.")
         manifest_files = {str(item.get("path") or ""): item for item in self.manifest.get("files", []) if isinstance(item, dict)}
@@ -456,9 +456,9 @@ class _DistributionPackageVerifier:
             expected_naming = {}
             template_pattern_ok = False
             self._add_check("layout", "distribution_layout_template_pattern_parse", "failed", "blocking", f"Template file_naming could not be parsed: {exc}")
-        naming = manifest_layout.get("naming") if isinstance(manifest_layout.get("naming"), dict) else {}
+        naming = _as_document(manifest_layout.get("naming"))
         self._add_check("layout", "distribution_layout_template_patterns_match", "passed" if template_pattern_ok and naming == expected_naming else "failed", "blocking", "Layout naming patterns match template-pack.json." if template_pattern_ok and naming == expected_naming else "Layout naming patterns do not match template-pack.json.")
-        artwork = self.manifest.get("artwork") if isinstance(self.manifest.get("artwork"), dict) else {}
+        artwork = _as_document(self.manifest.get("artwork"))
         artwork_path = str(artwork.get("package_path") or "")
         artwork_entries = {str(entry.get("path") or "") for entry in manifest_entries if isinstance(entry, dict) and entry.get("kind") == "artwork"}
         self._add_check("layout", "distribution_artwork_package_path_match", "passed" if not artwork or artwork_path in artwork_entries and artwork_path in self.entry_map else "failed", "blocking", "Artwork package_path points to layout artwork entry." if not artwork or artwork_path in artwork_entries and artwork_path in self.entry_map else "Artwork package_path does not point to a real layout artwork entry.")
@@ -503,11 +503,11 @@ class _DistributionPackageVerifier:
             missing_audio = [name for name in audio_entries if name not in self.entry_map]
             bad_audio = []
             for name in audio_entries:
-                info = self.entry_map.get(name)
-                if info is None:
+                audio_info = self.entry_map.get(name)
+                if audio_info is None:
                     continue
                 suffix = Path(name).suffix.lower()
-                data = archive.read(info)[:14]
+                data = archive.read(audio_info)[:14]
                 if suffix == ".wav" and (len(data) < 12 or not data.startswith(b"RIFF") or data[8:12] != b"WAVE"):
                     bad_audio.append(name)
                 elif suffix in {".mid", ".midi"} and (len(data) < 14 or not data.startswith(b"MThd")):
@@ -534,7 +534,7 @@ class _DistributionPackageVerifier:
         required_profiles = self._required_encoded_profile_ids(encoded_entries)
         entries_by_profile_track: set[tuple[str, str]] = set()
         for entry in encoded_entries:
-            audio_format = entry.get("audio_format") if isinstance(entry.get("audio_format"), dict) else {}
+            audio_format = _as_document(entry.get("audio_format"))
             profile_id = str(audio_format.get("profile_id") or "")
             track_id = str(entry.get("track_id") or "")
             if profile_id and track_id:
@@ -583,9 +583,9 @@ class _DistributionPackageVerifier:
         )
 
     def _verify_encoded_audio_acceptance(self, archive: zipfile.ZipFile) -> None:
-        encoded_acceptance = self.manifest.get("encoded_audio_acceptance") if isinstance(self.manifest.get("encoded_audio_acceptance"), dict) else {}
-        target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
-        options = target.get("options") if isinstance(target.get("options"), dict) else {}
+        encoded_acceptance = _as_document(self.manifest.get("encoded_audio_acceptance"))
+        target = _as_document(self.manifest.get("target"))
+        options = _as_document(target.get("options"))
         required = self.require_encoded_audio_review or bool(options.get("require_encoded_audio_review")) or bool(encoded_acceptance.get("review_count"))
         if not required and str(encoded_acceptance.get("status") or "") in {"", "missing", "not_required"}:
             self._add_check("encoded_audio_acceptance", "distribution_encoded_audio_acceptance_optional", "passed", "warning", "Encoded audio acceptance is not required.")
@@ -605,8 +605,8 @@ class _DistributionPackageVerifier:
                 failures.append(f"summary_status:{self.encoded_audio_acceptance_summary.get('status')}")
         layout_entries = self.manifest.get("layout", {}).get("entries") if isinstance(self.manifest.get("layout"), dict) else []
         encoded_entries = [entry for entry in layout_entries if isinstance(entry, dict) and entry.get("kind") == "audio" and entry.get("source_kind") == "encoded_audio"]
-        review_rows = encoded_acceptance.get("review_hashes") if isinstance(encoded_acceptance.get("review_hashes"), list) else []
-        summary_tracks = self.encoded_audio_acceptance_summary.get("tracks") if isinstance(self.encoded_audio_acceptance_summary.get("tracks"), list) else []
+        review_rows = _as_list(encoded_acceptance.get("review_hashes"))
+        summary_tracks = _as_list(self.encoded_audio_acceptance_summary.get("tracks"))
         accepted_review_ids = {str(row.get("accepted_review_id") or "") for row in summary_tracks if isinstance(row, dict) and str(row.get("accepted_review_id") or "")}
         reviews_by_profile_track: dict[tuple[str, str], dict[str, Any]] = {}
         for row in review_rows:
@@ -631,14 +631,14 @@ class _DistributionPackageVerifier:
                 failures.append(f"{path}:stale")
             reviews_by_profile_track[(str(review.get("profile_id") or ""), str(review.get("track_id") or ""))] = review
         for entry in encoded_entries:
-            audio_format = entry.get("audio_format") if isinstance(entry.get("audio_format"), dict) else {}
+            audio_format = _as_document(entry.get("audio_format"))
             profile_id = str(audio_format.get("profile_id") or "")
             track_id = str(entry.get("track_id") or "")
             review = reviews_by_profile_track.get((profile_id, track_id))
             if not review:
                 failures.append(f"{profile_id}:{track_id}:review_missing")
                 continue
-            evidence = review.get("encoded_audio_evidence") if isinstance(review.get("encoded_audio_evidence"), dict) else {}
+            evidence = _as_document(review.get("encoded_audio_evidence"))
             path = str(entry.get("path") or "")
             info = self.entry_map.get(path)
             if info is None:
@@ -659,9 +659,9 @@ class _DistributionPackageVerifier:
         )
 
     def _verify_format_decision(self, archive: zipfile.ZipFile) -> None:
-        manifest_decision = self.manifest.get("format_decision") if isinstance(self.manifest.get("format_decision"), dict) else {}
-        target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
-        options = target.get("options") if isinstance(target.get("options"), dict) else {}
+        manifest_decision = _as_document(self.manifest.get("format_decision"))
+        target = _as_document(self.manifest.get("target"))
+        options = _as_document(target.get("options"))
         required = self.require_format_decision or bool(options.get("require_format_decision")) or bool(manifest_decision.get("report_hash"))
         if not required and str(manifest_decision.get("status") or "") in {"", "missing", "not_required"}:
             self._add_check("format_decision", "distribution_format_decision_optional", "passed", "warning", "Format decision evidence is not required.")
@@ -694,7 +694,7 @@ class _DistributionPackageVerifier:
                 failures.append("covered_profiles_role_policy")
             if self.format_decision_summary.get("allowed_roles") and list(self.format_decision_summary.get("allowed_roles") or []) != list(coverage.get("allowed_roles", [])):
                 failures.append("allowed_roles")
-        signoff_decision = self.signoff.get("format_decision") if isinstance(self.signoff.get("format_decision"), dict) else {}
+        signoff_decision = _as_document(self.signoff.get("format_decision"))
         if signoff_decision and str(signoff_decision.get("report_hash") or "") != str(manifest_decision.get("report_hash") or ""):
             failures.append("signoff_report_hash")
         self._add_check(
@@ -707,8 +707,8 @@ class _DistributionPackageVerifier:
         )
 
     def _verify_rights_clearance(self, archive: zipfile.ZipFile) -> None:
-        manifest_rights = self.manifest.get("rights_clearance") if isinstance(self.manifest.get("rights_clearance"), dict) else {}
-        signoff_rights = self.signoff.get("rights_clearance") if isinstance(self.signoff.get("rights_clearance"), dict) else {}
+        manifest_rights = _as_document(self.manifest.get("rights_clearance"))
+        signoff_rights = _as_document(self.signoff.get("rights_clearance"))
         required = bool(self.require_rights_clearance or signoff_rights.get("require_rights_clearance") or manifest_rights.get("report_hash"))
         if not required and str(manifest_rights.get("status") or "") in {"", "missing", "not_required"}:
             self._add_check("rights_clearance", "distribution_rights_clearance_optional", "passed", "warning", "Rights clearance evidence is not required.")
@@ -732,8 +732,8 @@ class _DistributionPackageVerifier:
         )
 
     def _required_encoded_profile_ids(self, encoded_entries: list[ImplementationDocument]) -> list[str]:
-        target = self.manifest.get("target") if isinstance(self.manifest.get("target"), dict) else {}
-        options = target.get("options") if isinstance(target.get("options"), dict) else {}
+        target = _as_document(self.manifest.get("target"))
+        options = _as_document(target.get("options"))
         raw = options.get("audio_format_profiles")
         if isinstance(raw, str):
             profiles = [item.strip() for item in raw.split(",")]
@@ -752,7 +752,7 @@ class _DistributionPackageVerifier:
         for profile_id in profiles:
             if profile_id and profile_id != "wav_master" and profile_id not in result:
                 result.append(profile_id)
-        encoded = self.manifest.get("encoded_audio") if isinstance(self.manifest.get("encoded_audio"), dict) else {}
+        encoded = _as_document(self.manifest.get("encoded_audio"))
         for row in encoded.get("profiles", []) if isinstance(encoded.get("profiles"), list) else []:
             profile_id = str(row.get("profile_id") or "")
             if profile_id and profile_id != "wav_master" and profile_id not in result and self.require_encoded_audio:
@@ -760,7 +760,7 @@ class _DistributionPackageVerifier:
         return result
 
     def _track_ids(self) -> list[str]:
-        tracks = self.tracklist.get("tracks") if isinstance(self.tracklist.get("tracks"), list) else []
+        tracks = _as_list(self.tracklist.get("tracks"))
         result: list[str] = []
         for row in tracks:
             if not isinstance(row, dict):

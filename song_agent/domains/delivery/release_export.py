@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -207,7 +209,7 @@ def build_release_export_bundle(
     ]
     if (export_dir / "encoded-audio-acceptance-summary.json").exists():
         copied_files.append(_file_record(export_dir, export_dir / "encoded-audio-acceptance-summary.json"))
-    encoded_acceptance_files = []
+    encoded_acceptance_files: list[_InferenceType] = []
     if (export_dir / "encoded-audio-health").exists():
         encoded_acceptance_files.extend((export_dir / "encoded-audio-health").glob("*.json"))
     if (export_dir / "encoded-audio-reviews").exists():
@@ -216,7 +218,7 @@ def build_release_export_bundle(
         copied_files.append(_file_record(export_dir, encoded_acceptance_file))
     manifest["encoded_audio_acceptance"] = encoded_audio_acceptance_summary
     manifest["files"] = sorted(copied_files, key=lambda item: item["path"])
-    summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+    summary = _as_document(manifest.get("summary"))
     summary["file_count"] = len(copied_files)
     summary["total_bytes"] = sum(int(item.get("size_bytes") or 0) for item in copied_files)
     manifest["summary"] = summary
@@ -232,7 +234,7 @@ def build_release_export_bundle(
         copied_files.append(_file_record(export_dir, decision_file))
     manifest["format_decision"] = format_decision_summary
     manifest["files"] = sorted(copied_files, key=lambda item: item["path"])
-    summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+    summary = _as_document(manifest.get("summary"))
     summary["file_count"] = len(copied_files)
     summary["total_bytes"] = sum(int(item.get("size_bytes") or 0) for item in copied_files)
     manifest["summary"] = summary
@@ -309,10 +311,10 @@ def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_
     signoff_public = _release_signoff_export_summary(signoff)
     write_json(export_dir / "release-signoff.json", signoff_public)
     manifest = read_release_export_manifest(release_store, release_id)
-    summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+    summary = _as_document(manifest.get("summary"))
     summary["signoff_status"] = signoff_public.get("status")
     manifest["summary"] = summary
-    sidecars = manifest.get("sidecars") if isinstance(manifest.get("sidecars"), dict) else {}
+    sidecars = _as_document(manifest.get("sidecars"))
     sidecars["release_signoff"] = _release_signoff_sidecar_record(signoff_public)
     manifest["sidecars"] = sidecars
     files = [item for item in manifest.get("files", []) if isinstance(item, dict) and item.get("path") != "release-signoff.json"]
@@ -322,9 +324,9 @@ def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_
 
 
 def release_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
-    data = manifest if isinstance(manifest, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    zip_info = data.get("zip") if isinstance(data.get("zip"), dict) else {}
+    data = _as_document(manifest)
+    summary = _as_document(data.get("summary"))
+    zip_info = _as_document(data.get("zip"))
     return sanitize_metadata(
         {
             "status": "exported" if data else "missing",
@@ -483,7 +485,7 @@ def _release_signoff_export_summary(signoff: ImplementationDocument) -> Implemen
             "forced": bool(signoff.get("forced", False)),
             "qa_source_hash": signoff.get("qa_source_hash"),
             "export_manifest_hash": signoff.get("export_manifest_hash"),
-            "acceptance_gate": signoff.get("acceptance_gate") if isinstance(signoff.get("acceptance_gate"), dict) else {},
+            "acceptance_gate": _as_document(signoff.get("acceptance_gate")),
         },
         blocked_keys=BLOCKED_RELEASE_KEYS,
     )

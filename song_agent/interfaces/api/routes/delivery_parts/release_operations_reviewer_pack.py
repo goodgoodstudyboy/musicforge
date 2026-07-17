@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
+
 from typing import Any
 
 from song_agent.domains.creation.redaction import sanitize_sensitive_text
@@ -9,7 +13,7 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class DeliveryRoutesReleaseOperationsReviewerPack:
+class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
     def _handle_release_operations_reviewer_pack(self, method: str, release_id: str, tail: str) -> None:
         try:
             if tail in {"", "/"}:
@@ -267,7 +271,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack:
             stem_report = _interfaces_api_runtime.read_json(stem_health_path) if stem_health_path.exists() else {}
             mix_ok = bool(mix_state) and _interfaces_api_runtime.mix_state_integrity_ok(mix_state)
             mix_stale_reasons: list[str] = []
-            plan: _interfaces_api_runtime.SongPlan | None = None
+            plan: _InterfaceType | None = None
             try:
                 plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(song_plan_path))
             except Exception:

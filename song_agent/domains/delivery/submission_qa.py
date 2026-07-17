@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 from typing import Any as Any
@@ -98,8 +98,8 @@ def submission_source_state(*, store: SubmissionStore, release_id: str, submissi
 
 
 def submission_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or summary.get("status") or "missing",
@@ -132,7 +132,7 @@ def mark_submission_qa_stale(report: dict[str, Any] | None, *, current_source_ha
     data["stale"] = True
     if current_source_hash:
         data["current_source_hash"] = current_source_hash
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    summary = _as_document(data.get("summary"))
     summary["status"] = "stale"
     if current_source_hash:
         summary["current_source_hash"] = current_source_hash
@@ -155,7 +155,7 @@ def _checks(store: SubmissionStore, release_id: str, submission: SubmissionBatch
         current = submission_item_current_snapshot(store, item)
         exists = bool(current.get("exists"))
         stale = bool(current.get("stale"))
-        verify = current.get("distribution_verify_summary") if isinstance(current.get("distribution_verify_summary"), dict) else {}
+        verify = _as_document(current.get("distribution_verify_summary"))
         checks.append(_check("target_exists", not exists, "blocking", f"Distribution target {item.target_id} exists.", extra={"item_id": item.item_id, "target_id": item.target_id}))
         checks.append(_check("target_snapshot_current", stale, "blocking", f"Distribution target {item.target_id} snapshot is current.", extra={"item_id": item.item_id, "target_id": item.target_id}))
         checks.append(_check("target_signed", item.status == "pending" and "signoff" in " ".join(item.warnings).lower(), "blocking", f"Distribution target {item.target_id} is signed.", extra={"item_id": item.item_id, "target_id": item.target_id}))

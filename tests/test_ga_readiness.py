@@ -4,7 +4,7 @@ from song_agent import __version__
 from song_agent.ga_readiness import REQUIRED_DOCS, build_ga_readiness_report, ga_readiness_integrity_hash, ga_readiness_integrity_ok, write_ga_readiness_report
 from song_agent.ga_readiness_verifier import verify_ga_readiness_report
 from song_agent.music_acceptance import AcceptanceStore
-from song_agent.projectio import read_json, write_json
+from song_agent.projectio import write_json
 from tests.test_audio_campaign_remediation import _complete_first_fix_sprint, _needs_fix_release_campaign
 from tests.test_trust_operations_final_readiness import _final_fixture
 from tests.test_server_releases import start_test_server, stop_test_server

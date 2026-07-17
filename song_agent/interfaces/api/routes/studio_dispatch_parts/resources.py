@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioResourcesDispatch:
+class StudioResourcesDispatch(StudioDispatchRouteContext):
     def _dispatch_studio_resources(self, method, path, parsed) -> bool:
         if path == '/api/releases':
             self._handle_releases_root(method, parsed.query)

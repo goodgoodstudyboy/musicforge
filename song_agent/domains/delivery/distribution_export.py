@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import csv as csv
 import hashlib as hashlib
@@ -85,7 +85,7 @@ def build_distribution_export_package(
         encoded_audio_root=store.release_store.release_dir(release_id) / "encoded-audio",
     )
     if layout_plan.get("summary", {}).get("status") == "failed":
-        errors = layout_plan.get("errors") if isinstance(layout_plan.get("errors"), list) else []
+        errors = _as_list(layout_plan.get("errors"))
         message = str(errors[0].get("message") if errors and isinstance(errors[0], dict) else "Distribution layout plan failed.")
         raise DistributionExportError(message)
     _write_package_json(export_dir, release, target, package_id, qa_report, now)
@@ -271,13 +271,13 @@ def refresh_distribution_export_signoff_summary(store: DistributionStore, releas
         raise FileNotFoundError("Distribution export has not been generated.")
     signoff_path = store.signoff_path(release_id, package_id)
     signoff = read_json(signoff_path) if signoff_path.exists() else {}
-    signoff_public = _distribution_signoff_export_summary(signoff if isinstance(signoff, dict) else {})
+    signoff_public = _distribution_signoff_export_summary(_as_document(signoff))
     _write_json(export_dir / "distribution-signoff.json", signoff_public)
     manifest = read_distribution_export_manifest(store, release_id, package_id)
-    summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+    summary = _as_document(manifest.get("summary"))
     summary["signoff_status"] = signoff_public.get("status")
     manifest["summary"] = summary
-    sidecars = manifest.get("sidecars") if isinstance(manifest.get("sidecars"), dict) else {}
+    sidecars = _as_document(manifest.get("sidecars"))
     sidecars["distribution_signoff"] = _distribution_signoff_sidecar_record(signoff_public)
     manifest["sidecars"] = sidecars
     manifest["files"] = sorted([item for item in manifest.get("files", []) if isinstance(item, dict) and item.get("path") != "distribution-signoff.json"], key=lambda item: item["path"])
@@ -290,13 +290,13 @@ def read_distribution_export_manifest(store: DistributionStore, release_id: str,
     if not path.exists():
         raise FileNotFoundError("Distribution export has not been generated.")
     value = read_json(path)
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def distribution_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
-    data = manifest if isinstance(manifest, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    zip_info = data.get("zip") if isinstance(data.get("zip"), dict) else {}
+    data = _as_document(manifest)
+    summary = _as_document(data.get("summary"))
+    zip_info = _as_document(data.get("zip"))
     return sanitize_metadata(
         {
             "status": "exported" if data else "missing",
@@ -331,7 +331,7 @@ def _write_package_json(export_dir: Path, release: Any, target: DistributionTarg
                 "profile_id": target.profile_id,
                 "name": target.name,
                 "created_at": now,
-                "qa_summary": qa_report.get("summary") if isinstance(qa_report.get("summary"), dict) else {},
+                "qa_summary": _as_document(qa_report.get("summary")),
             },
             blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
         ),
@@ -350,7 +350,7 @@ def _copy_release_file(source_root: Path, export_dir: Path, rel: str, records: l
         target.write_text(_escape_csv_formulas(source.read_text(encoding="utf-8")), encoding="utf-8")
     elif source.suffix.lower() == ".json":
         value = read_json(source)
-        _write_json(target, sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
+        _write_json(target, sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
     elif source.suffix.lower() == ".txt":
         target.write_text(sanitize_sensitive_text(source.read_text(encoding="utf-8")), encoding="utf-8")
     else:
@@ -361,7 +361,7 @@ def _copy_release_file(source_root: Path, export_dir: Path, rel: str, records: l
 def _selected_artwork(store: DistributionStore, release_id: str, target: DistributionTarget) -> ImplementationDocument:
     artwork_id = str((target.options or {}).get("artwork_id") or "").strip()
     artwork = read_distribution_artwork(store, release_id, artwork_id) if artwork_id else latest_distribution_artwork(store, release_id)
-    return artwork if isinstance(artwork, dict) else {}
+    return _as_document(artwork)
 
 
 def _copy_layout_entries(store: DistributionStore, release_id: str, release_export_dir: Path, export_dir: Path, layout_plan: ImplementationDocument, *, artwork: ImplementationDocument) -> list[ImplementationDocument]:
@@ -468,7 +468,7 @@ def _write_rights_clearance_sidecars(store: DistributionStore, release_id: str, 
 def _artwork_record(artwork: ImplementationDocument, layout_plan: ImplementationDocument) -> ImplementationDocument:
     if not artwork:
         return {}
-    entries = layout_plan.get("entries") if isinstance(layout_plan.get("entries"), list) else []
+    entries = _as_list(layout_plan.get("entries"))
     package_path = next((entry.get("path") for entry in entries if isinstance(entry, dict) and entry.get("kind") == "artwork"), None)
     return sanitize_metadata({**artwork, "package_path": package_path}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
@@ -482,7 +482,7 @@ def _write_docs(export_dir: Path, release: Any, target: DistributionTarget, pack
         "qa_status": qa_report.get("status"),
         "artwork": bool(artwork),
         "metadata": True,
-        **(checklist if isinstance(checklist, dict) else {}),
+        **(_as_document(checklist)),
     }
     if write_checklist:
         _write_json(export_dir / "docs" / "checklist.json", sanitize_metadata(checklist, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
@@ -515,13 +515,13 @@ def _write_template_files(export_dir: Path, template: ImplementationDocument, ch
 
 def _write_template_platform_csv(export_dir: Path, store: DistributionStore, release_id: str, template: ImplementationDocument) -> Path | None:
     mapping = template_mapping(template)
-    rows = mapping.get("platform_csv") if isinstance(mapping.get("platform_csv"), list) else []
+    rows = _as_list(mapping.get("platform_csv"))
     if not rows:
         return None
     from song_agent.domains.delivery.release_metadata import read_release_metadata
 
     metadata = read_release_metadata(store.release_store, release_id, default={})
-    tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
+    tracks = _as_list(metadata.get("tracks"))
     headers = [str(row.get("column") or "") for row in rows if isinstance(row, dict) and row.get("column")]
     if not headers:
         return None

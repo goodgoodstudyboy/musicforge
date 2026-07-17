@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -168,9 +168,9 @@ def build_library_index(asset_store: AssetStore, reference_store: ReferenceStore
 
 def extract_asset_item(asset: CreativeAsset) -> LibraryItem:
     content_summary = asset_content_summary(asset)
-    notes = asset.content.get("notes") if isinstance(asset.content.get("notes"), list) else []
+    notes = _as_list(asset.content.get("notes"))
     pitches = [
-        int(note.get("pitch"))
+        _as_int(note.get("pitch"))
         for note in notes
         if isinstance(note, dict) and isinstance(note.get("pitch"), int)
     ]
@@ -379,7 +379,7 @@ def recommend_library_context(index: LibraryIndex, request: dict[str, Any]) -> d
 def recommendation_query(request: dict[str, Any]) -> dict[str, Any]:
     source = str(request.get("source") or "song_request")
     goal = str(request.get("goal") or "generate")
-    song_request = request.get("song_request") if isinstance(request.get("song_request"), dict) else {}
+    song_request = _as_document(request.get("song_request"))
     text_parts = [
         str(song_request.get("title") or ""),
         str(song_request.get("style") or ""),
@@ -693,7 +693,7 @@ def _reference_analysis_features(reference_type: str, summary: ImplementationDoc
             }
         )
     elif reference_type == "midi":
-        track_summaries = summary.get("track_summaries") if isinstance(summary.get("track_summaries"), list) else []
+        track_summaries = _as_list(summary.get("track_summaries"))
         note_counts = [int(track.get("note_count") or 0) for track in track_summaries if isinstance(track, dict)]
         pitch_values = [
             int(track[key])
@@ -721,7 +721,7 @@ def _reference_analysis_features(reference_type: str, summary: ImplementationDoc
 
 
 def _compact_analysis_for_index(summary: ImplementationDocument) -> ImplementationDocument:
-    compact = {
+    compact: ImplementationDocument = {
         key: summary.get(key)
         for key in ("duration_seconds", "sample_rate", "channels", "track_count", "tempo_bpm", "meter", "line_count", "keywords", "safe_excerpt")
         if key in summary

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
 from pathlib import Path as Path
 from typing import Any as Any
 
-from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality
+from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality, score_song_plan as score_song_plan
 from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
 from song_agent.domains.studio.project_repository import ProjectDocument as ProjectDocument, now_iso as now_iso
 from song_agent.domains.creation.provider_usage import build_provider_usage_report as build_provider_usage_report
@@ -40,12 +40,12 @@ class ReviewMetricsStore:
                 return default
             raise FileNotFoundError(sprint_id)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def write_sprint_metrics(self, sprint_id: str, report: dict[str, Any]) -> dict[str, Any]:
         path = self.sprint_metrics_path(sprint_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        clean = sanitize_metadata(report if isinstance(report, dict) else {})
+        clean = sanitize_metadata(_as_document(report))
         write_json(path, clean)
         return clean
 
@@ -59,10 +59,10 @@ class ReviewMetricsStore:
                 return default
             raise FileNotFoundError(path)
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {})
+        return sanitize_metadata(_as_document(data))
 
     def write_project_metrics(self, report: dict[str, Any]) -> dict[str, Any]:
-        clean = sanitize_metadata(report if isinstance(report, dict) else {})
+        clean = sanitize_metadata(_as_document(report))
         write_json(self.project_metrics_path(), clean)
         return clean
 
@@ -184,13 +184,14 @@ def build_project_review_metrics(
     quality_trend = _project_quality_trend(getattr(project_document, "versions", []))
     summaries = [sprint_metrics_summary(report) for report in sprint_reports]
     closeout_summary = _project_closeout_summary(sprint_store, sprints)
+    project_state: Any = getattr(project_document, "state", {})
     report = {
         "schema_version": PROJECT_REVIEW_METRICS_SCHEMA_VERSION,
         "project_id": project_id,
         "created_at": now,
         "source_hash": _source_hash(
             {
-                "project": getattr(project_document, "state", {}).to_dict() if hasattr(getattr(project_document, "state", {}), "to_dict") else {},
+                "project": project_state.to_dict() if hasattr(project_state, "to_dict") else {},
                 "versions": [_version_source_summary(version) for version in getattr(project_document, "versions", [])],
                 "sprint_summaries": summaries,
                 "provider_usage": _provider_usage_public(provider_report),
@@ -216,13 +217,13 @@ def build_project_review_metrics(
 def sprint_metrics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
-    overview = report.get("overview") if isinstance(report.get("overview"), dict) else {}
-    candidate = report.get("candidate_funnel") if isinstance(report.get("candidate_funnel"), dict) else {}
-    queue = report.get("action_queue_execution") if isinstance(report.get("action_queue_execution"), dict) else {}
-    provider = report.get("provider_usage") if isinstance(report.get("provider_usage"), dict) else {}
-    quality = report.get("quality_delta") if isinstance(report.get("quality_delta"), dict) else {}
-    readiness = report.get("risk_readiness") if isinstance(report.get("risk_readiness"), dict) else {}
-    warnings = report.get("warnings") if isinstance(report.get("warnings"), list) else []
+    overview = _as_document(report.get("overview"))
+    candidate = _as_document(report.get("candidate_funnel"))
+    queue = _as_document(report.get("action_queue_execution"))
+    provider = _as_document(report.get("provider_usage"))
+    quality = _as_document(report.get("quality_delta"))
+    readiness = _as_document(report.get("risk_readiness"))
+    warnings = _as_list(report.get("warnings"))
     return sanitize_metadata(
         {
             "schema_version": report.get("schema_version"),
@@ -247,8 +248,8 @@ def sprint_metrics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
             "quality_status": quality.get("status"),
             "warning_count": len(warnings),
             "warnings": [sanitize_sensitive_text(str(item))[:200] for item in warnings[:8]],
-            "judge_metrics": report.get("judge_metrics") if isinstance(report.get("judge_metrics"), dict) else {},
-            "closeout": report.get("closeout") if isinstance(report.get("closeout"), dict) else {},
+            "judge_metrics": _as_document(report.get("judge_metrics")),
+            "closeout": _as_document(report.get("closeout")),
         }
     )
 
@@ -256,7 +257,7 @@ def sprint_metrics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
 def project_review_metrics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
-    quality_trend = report.get("quality_trend") if isinstance(report.get("quality_trend"), dict) else {}
+    quality_trend = _as_document(report.get("quality_trend"))
     return sanitize_metadata(
         {
             "schema_version": report.get("schema_version"),
@@ -273,8 +274,8 @@ def project_review_metrics_summary(report: dict[str, Any] | None) -> dict[str, A
             "latest_sprint_id": report.get("latest_sprint_id"),
             "latest_readiness": report.get("latest_readiness") or "no_data",
             "quality_trend": quality_trend,
-            "judge_summary": report.get("judge_summary") if isinstance(report.get("judge_summary"), dict) else {},
-            "closeout_summary": report.get("closeout_summary") if isinstance(report.get("closeout_summary"), dict) else {},
+            "judge_summary": _as_document(report.get("judge_summary")),
+            "closeout_summary": _as_document(report.get("closeout_summary")),
         }
     )
 
@@ -621,7 +622,7 @@ def _project_judge_summary(summaries: list[ImplementationDocument]) -> Implement
     high_risk = 0
     judged_sprint_count = 0
     for summary in summaries:
-        metrics = summary.get("judge_metrics") if isinstance(summary.get("judge_metrics"), dict) else {}
+        metrics = _as_document(summary.get("judge_metrics"))
         if not metrics:
             continue
         if int(metrics.get("judged_task_count") or 0) > 0:
@@ -879,7 +880,7 @@ def _version_quality(version: Any | None) -> ImplementationDocument | None:
         quality = plan.quality or analyze_song_quality(plan)
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return None
-    scores = quality.scores
+    scores = quality.scores or score_song_plan(plan)
     return {
         "overall": scores.overall,
         "dimensions": {

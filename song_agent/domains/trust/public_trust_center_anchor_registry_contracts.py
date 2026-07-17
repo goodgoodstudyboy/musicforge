@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -57,12 +59,12 @@ def anchor_event_hash(event: dict[str, Any]) -> str:
 
 
 def anchor_entry_signature_ok(entry: dict[str, Any] | None) -> bool:
-    data = entry if isinstance(entry, dict) else {}
-    signature = data.get("signature") if isinstance(data.get("signature"), dict) else {}
+    data = _as_document(entry)
+    signature = _as_document(data.get("signature"))
     payload = {
         "anchor_hash": data.get("anchor_hash"),
-        "zip_fingerprint": data.get("zip_fingerprint") if isinstance(data.get("zip_fingerprint"), dict) else {},
-        "delivery_fingerprint_summary": data.get("delivery_fingerprint_summary") if isinstance(data.get("delivery_fingerprint_summary"), dict) else {},
+        "zip_fingerprint": _as_document(data.get("zip_fingerprint")),
+        "delivery_fingerprint_summary": _as_document(data.get("delivery_fingerprint_summary")),
     }
     expected_payload_hash = stable_hash(payload)
     expected_key = stable_hash({"key_id": signature.get("key_id"), "mode": signature.get("mode")})
@@ -77,8 +79,8 @@ def anchor_entry_signature_ok(entry: dict[str, Any] | None) -> bool:
 
 
 def anchor_registry_summary(registry: dict[str, Any] | None) -> dict[str, Any]:
-    data = registry if isinstance(registry, dict) else {}
-    entries = data.get("entries") if isinstance(data.get("entries"), list) else []
+    data = _as_document(registry)
+    entries = _as_list(data.get("entries"))
     current = _current_entry(data)
     return sanitize_metadata(
         {
@@ -97,7 +99,7 @@ def anchor_registry_summary(registry: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def anchor_registry_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata({"status": report.get("status"), "center_id": summary.get("center_id"), "current_entry_id": summary.get("current_entry_id"), "current_anchor_hash": summary.get("current_anchor_hash"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash")}, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
 
 

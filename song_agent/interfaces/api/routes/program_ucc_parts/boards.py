@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.program_ucc import ProgramUccRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class ProgramUccBoardsRoutes:
+class ProgramUccBoardsRoutes(ProgramUccRouteContext):
     def _dispatch_ucc_boards(self, method, center_id, tail) -> bool:
         if tail == '/reviewer-decision-boards':
             if method == 'GET':

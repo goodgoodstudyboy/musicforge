@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import shutil as shutil
 from pathlib import Path as Path
@@ -758,7 +758,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
         current = self._current_generation(registry)
         if not current:
             raise UnifiedReleaseProgramVaultOperationsStateError("A current Vault generation is required.")
-        vault = current.get("vault") if isinstance(current.get("vault"), dict) else {}
+        vault = _as_document(current.get("vault"))
         if not vault:
             raise UnifiedReleaseProgramVaultOperationsStateError("Current Vault generation binding is missing.")
         vault_zip, vault_anchor, vault_verification = self._vault_evidence_paths(program_id, vault)
@@ -842,7 +842,7 @@ class UnifiedReleaseProgramVaultOperationsStore:
 
 def _signoff_binding_document(program_id: str, signoff: ImplementationDocument, event: ImplementationDocument, report: ImplementationDocument, registry: ImplementationDocument, policy: ImplementationDocument, review: ImplementationDocument, transfer: ImplementationDocument) -> ImplementationDocument:
     current = next((row for row in registry.get("generations", []) if isinstance(row, dict) and row.get("generation_id") == registry.get("current_generation_id")), {})
-    vault = current.get("vault") if isinstance(current.get("vault"), dict) else {}
+    vault = _as_document(current.get("vault"))
     return _with_integrity(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_VAULT_OPERATIONS_SCHEMA_VERSION,

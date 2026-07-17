@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -122,7 +122,7 @@ def verify_unified_command_center_continuous_review_package(
             ):
                 checks.append(_check(check_id, _integrity_ok(doc), f"{check_id} hash is valid."))
 
-            manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+            manifest_source = _as_document(manifest.get("source"))
             checks.extend(
                 [
                     _check("ucc_review_source_hash_binding", source.get("source_hash") == drift.get("source_hash") == incidents.get("source_hash") == drill.get("source_hash") == runbook.get("source_hash"), "Review documents bind the same source hash."),
@@ -189,12 +189,12 @@ def _current_review_checks(
     require_handoff: bool,
 ) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    inputs = source.get("inputs") if isinstance(source.get("inputs"), dict) else {}
-    archive_input = inputs.get("archive") if isinstance(inputs.get("archive"), dict) else {}
-    handoff_input = inputs.get("handoff") if isinstance(inputs.get("handoff"), dict) else {}
-    ucc_input = inputs.get("ucc") if isinstance(inputs.get("ucc"), dict) else {}
-    ga_input = inputs.get("ga") if isinstance(inputs.get("ga"), dict) else {}
-    release_check_input = inputs.get("release_check") if isinstance(inputs.get("release_check"), dict) else {}
+    inputs = _as_document(source.get("inputs"))
+    archive_input = _as_document(inputs.get("archive"))
+    handoff_input = _as_document(inputs.get("handoff"))
+    ucc_input = _as_document(inputs.get("ucc"))
+    ga_input = _as_document(inputs.get("ga"))
+    release_check_input = _as_document(inputs.get("release_check"))
     fp_items = {str(row.get("component")): row for row in fingerprints.get("items", []) if isinstance(row, dict)}
 
     if not archive_zip_path:
@@ -214,7 +214,7 @@ def _current_review_checks(
 
     archive_external = _read_json_file(Path(archive_verification_report_path)) if archive_verification_report_path else {}
     archive_runtime = verify_unified_command_center_archive_package(
-        archive_zip_path,
+        _as_path(archive_zip_path),
         strict=True,
         require_signed=True,
         require_current_ucc=bool(command_center_zip_path and command_center_verification_report_path),
@@ -252,7 +252,7 @@ def _current_review_checks(
     if require_handoff:
         handoff_external = _read_json_file(Path(handoff_verification_report_path)) if handoff_verification_report_path else {}
         handoff_runtime = verify_unified_command_center_handoff_package(
-            handoff_zip_path,
+            _as_path(handoff_zip_path),
             strict=True,
             require_archive=True,
             archive_zip_path=archive_zip_path,
@@ -313,11 +313,11 @@ def _status_is_passing_or_absent(status: Any) -> bool:
 
 def _external_status_checks(inputs: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    ga = inputs.get("ga") if isinstance(inputs.get("ga"), dict) else {}
-    release_check = inputs.get("release_check") if isinstance(inputs.get("release_check"), dict) else {}
+    ga = _as_document(inputs.get("ga"))
+    release_check = _as_document(inputs.get("release_check"))
     checks.append(_check("ucc_review_ga_status", _status_is_passing_or_absent(ga.get("status")), "Packaged GA readiness evidence is passing or absent.", {"status": ga.get("status")}))
     checks.append(_check("ucc_review_release_check_status", _status_is_passing_or_absent(release_check.get("status")), "Packaged release-check evidence is passing or absent.", {"status": release_check.get("status")}))
-    external = inputs.get("external_evidence") if isinstance(inputs.get("external_evidence"), list) else []
+    external = _as_list(inputs.get("external_evidence"))
     failed = [
         {
             "component": row.get("component") or row.get("component_type") or row.get("evidence_type"),
@@ -346,7 +346,7 @@ def _report_binding_from_path(path: Path) -> ImplementationDocument:
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
     effective = names - {"manifest.json"}
@@ -383,14 +383,14 @@ def _ucc_zip_summary(zip_path: Path | str) -> ImplementationDocument:
 
 def _drift_summary_ok(drift: ImplementationDocument) -> bool:
     rows = [row for row in drift.get("drifts", []) if isinstance(row, dict)]
-    summary = drift.get("summary") if isinstance(drift.get("summary"), dict) else {}
+    summary = _as_document(drift.get("summary"))
     blocking = sum(1 for row in rows if row.get("severity") in {"critical", "high"} and row.get("status") == "open")
     return int(summary.get("drift_count") or 0) == len(rows) and int(summary.get("blocking_drift_count") or 0) == blocking
 
 
 def _incident_summary_ok(board: ImplementationDocument) -> bool:
     rows = [row for row in board.get("incidents", []) if isinstance(row, dict)]
-    summary = board.get("summary") if isinstance(board.get("summary"), dict) else {}
+    summary = _as_document(board.get("summary"))
     open_count = sum(1 for row in rows if row.get("status") == "open")
     critical = sum(1 for row in rows if row.get("status") == "open" and row.get("severity") == "critical")
     return int(summary.get("open_count") or 0) == open_count and int(summary.get("critical_count") or 0) == critical
@@ -398,7 +398,7 @@ def _incident_summary_ok(board: ImplementationDocument) -> bool:
 
 def _recovery_summary_ok(drill: ImplementationDocument) -> bool:
     steps = [row for row in drill.get("steps", []) if isinstance(row, dict)]
-    summary = drill.get("summary") if isinstance(drill.get("summary"), dict) else {}
+    summary = _as_document(drill.get("summary"))
     failed = sum(1 for row in steps if row.get("status") == "failed")
     return int(summary.get("failed_count") or 0) == failed
 

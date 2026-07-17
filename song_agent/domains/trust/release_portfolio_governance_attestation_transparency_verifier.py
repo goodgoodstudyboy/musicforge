@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -77,15 +77,15 @@ def write_release_portfolio_governance_attestation_transparency_verification_rep
 
 
 def print_release_portfolio_governance_attestation_transparency_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge release portfolio governance attestation transparency verification")
     print(f"status: {report.get('status')}")
     print(f"portfolio: {summary.get('portfolio_id') or 'unknown'}")
     print(f"current entry: {summary.get('current_entry_id') or 'none'}")
     print(f"events: {summary.get('event_count', 0)}")
     print(f"notices: {summary.get('notice_count', 0)}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def release_portfolio_governance_attestation_transparency_verification_exit_code(report: dict[str, Any]) -> int:
@@ -194,7 +194,7 @@ class _TransparencyVerifier:
             return
         self._add_hash_check("manifest", "transparency_manifest_integrity", self.manifest.get("integrity_hash"), transparency_manifest_hash(self.manifest), "Attestation Transparency manifest integrity")
         self._add_check("manifest", "transparency_manifest_package_type", "passed" if self.manifest.get("package_type") == TRANSPARENCY_PACKAGE_TYPE else "failed", "blocking", "Manifest package_type is valid." if self.manifest.get("package_type") == TRANSPARENCY_PACKAGE_TYPE else "Manifest package_type is invalid.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -259,8 +259,8 @@ class _TransparencyVerifier:
             self._add_check("report", "transparency_report_exists", "failed", "blocking", "transparency-report.json must contain a JSON object.")
             return
         self._add_hash_check("feed", "transparency_feed_integrity", self.feed_doc.get("integrity_hash"), transparency_feed_hash(self.feed_doc), "Attestation Transparency Feed integrity")
-        source = self.feed_doc.get("source") if isinstance(self.feed_doc.get("source"), dict) else {}
-        current_state = self.feed_doc.get("current_public_state") if isinstance(self.feed_doc.get("current_public_state"), dict) else {}
+        source = _as_document(self.feed_doc.get("source"))
+        current_state = _as_document(self.feed_doc.get("current_public_state"))
         self._add_hash_check("feed", "transparency_feed_source_hash", self.feed_doc.get("source_hash"), stable_hash(source), "Feed source hash")
         self._add_hash_check("feed", "transparency_feed_public_state_hash", source.get("public_state_hash"), stable_hash(current_state), "Feed public state hash")
         self._add_check("feed", "transparency_feed_package_type", "passed" if self.feed_doc.get("package_type") == TRANSPARENCY_FEED_PACKAGE_TYPE else "failed", "blocking", "Feed package_type is valid." if self.feed_doc.get("package_type") == TRANSPARENCY_FEED_PACKAGE_TYPE else "Feed package_type is invalid.")
@@ -270,15 +270,15 @@ class _TransparencyVerifier:
         self._verify_notice_semantics(source, current_state)
 
         self._add_hash_check("report", "transparency_report_integrity", self.report_doc.get("integrity_hash"), _transparency_report_hash(self.report_doc), "Attestation Transparency Report integrity")
-        report_source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        report_source = _as_document(self.report_doc.get("source"))
         self._add_hash_check("report", "transparency_report_source_hash", self.report_doc.get("source_hash"), stable_hash(report_source), "Report source hash")
         self._add_check("report", "transparency_report_package_type", "passed" if self.report_doc.get("package_type") == TRANSPARENCY_REPORT_PACKAGE_TYPE else "failed", "blocking", "Report package_type is valid." if self.report_doc.get("package_type") == TRANSPARENCY_REPORT_PACKAGE_TYPE else "Report package_type is invalid.")
         self._add_exact_check("report", "transparency_report_feed_hash", report_source.get("feed_hash"), self.feed_doc.get("integrity_hash"), "Report feed_hash")
         self._add_exact_check("report", "transparency_report_feed_source_hash", report_source.get("feed_source_hash"), self.feed_doc.get("source_hash"), "Report feed_source_hash")
         self._add_exact_check("report", "transparency_report_public_state_hash", report_source.get("public_state_hash"), source.get("public_state_hash"), "Report public_state_hash")
 
-        feed_row = self.manifest.get("feed") if isinstance(self.manifest.get("feed"), dict) else {}
-        report_row = self.manifest.get("report") if isinstance(self.manifest.get("report"), dict) else {}
+        feed_row = _as_document(self.manifest.get("feed"))
+        report_row = _as_document(self.manifest.get("report"))
         self._add_exact_check("manifest", "transparency_manifest_source_hash", self.manifest.get("source_hash"), self.feed_doc.get("source_hash"), "Manifest source_hash")
         self._add_exact_check("manifest", "transparency_manifest_feed_integrity", feed_row.get("integrity_hash"), self.feed_doc.get("integrity_hash"), "Manifest feed integrity hash")
         self._add_exact_check("manifest", "transparency_manifest_feed_source_hash", feed_row.get("source_hash"), self.feed_doc.get("source_hash"), "Manifest feed source hash")
@@ -287,7 +287,7 @@ class _TransparencyVerifier:
         self._verify_data_bindings(source, current_state)
 
     def _verify_event_chain(self) -> None:
-        events = self.feed_doc.get("events") if isinstance(self.feed_doc.get("events"), list) else []
+        events = _as_list(self.feed_doc.get("events"))
         previous = ""
         ids: set[str] = set()
         problems: list[str] = []
@@ -308,9 +308,9 @@ class _TransparencyVerifier:
         self._add_check("feed", "transparency_event_chain_contiguous", "failed" if problems else "passed", severity, "Event chain problems: " + "; ".join(problems[:5]) if problems else "Transparency event chain is contiguous.")
 
     def _verify_notices(self) -> None:
-        events = self.feed_doc.get("events") if isinstance(self.feed_doc.get("events"), list) else []
+        events = _as_list(self.feed_doc.get("events"))
         event_ids = {str(event.get("event_id") or "") for event in events if isinstance(event, dict)}
-        feed_notices = self.feed_doc.get("notices") if isinstance(self.feed_doc.get("notices"), list) else []
+        feed_notices = _as_list(self.feed_doc.get("notices"))
         by_id = {str(item.get("notice_id") or ""): item for item in feed_notices if isinstance(item, dict)}
         problems: list[str] = []
         for notice_id, notice in by_id.items():
@@ -327,7 +327,7 @@ class _TransparencyVerifier:
         self._add_check("feed", "transparency_notices_integrity", "failed" if problems else "passed", "blocking", "Notice problems: " + "; ".join(problems[:5]) if problems else "Transparency notices are bound to feed events.")
 
     def _verify_event_semantics(self, source: ImplementationDocument, current_state: ImplementationDocument) -> None:
-        actual_events = self.feed_doc.get("events") if isinstance(self.feed_doc.get("events"), list) else []
+        actual_events = _as_list(self.feed_doc.get("events"))
         expected_events = _build_events(
             str(self.feed_doc.get("portfolio_id") or ""),
             str(self.feed_doc.get("attestation_profile") or "public_summary"),
@@ -347,7 +347,7 @@ class _TransparencyVerifier:
         )
 
     def _verify_notice_semantics(self, source: ImplementationDocument, current_state: ImplementationDocument) -> None:
-        actual_notices = self.feed_doc.get("notices") if isinstance(self.feed_doc.get("notices"), list) else []
+        actual_notices = _as_list(self.feed_doc.get("notices"))
         expected_events = _build_events(
             str(self.feed_doc.get("portfolio_id") or ""),
             str(self.feed_doc.get("attestation_profile") or "public_summary"),
@@ -385,14 +385,14 @@ class _TransparencyVerifier:
         for name, doc in self.data_docs.items():
             source_key = "feed_source_hash" if name == "accepted-evidence-binding-summary.json" else "source_hash"
             self._add_exact_check("data", f"transparency_data_{name.replace('-', '_').replace('.', '_')}_source_hash", doc.get(source_key), self.feed_doc.get("source_hash"), f"{name} {source_key}")
-        self._add_hash_check("data", "transparency_data_current_public_state_hash", current.get("public_state_hash"), stable_hash(current.get("current_public_state") if isinstance(current.get("current_public_state"), dict) else {}), "Current public state data hash")
+        self._add_hash_check("data", "transparency_data_current_public_state_hash", current.get("public_state_hash"), stable_hash(_as_document(current.get("current_public_state"))), "Current public state data hash")
         self._add_exact_check("data", "transparency_data_current_public_state_value", current.get("current_public_state"), current_state, "Current public state data")
         for key, value in source.items():
             self._add_exact_check("data", f"transparency_data_package_{key}", package.get(key), value, f"Package fingerprint {key}")
-        registry_state = current_state.get("registry") if isinstance(current_state.get("registry"), dict) else {}
-        portal_state = current_state.get("portal") if isinstance(current_state.get("portal"), dict) else {}
-        attestation_state = current_state.get("public_attestation") if isinstance(current_state.get("public_attestation"), dict) else {}
-        accepted_state = current_state.get("accepted_evidence") if isinstance(current_state.get("accepted_evidence"), dict) else {}
+        registry_state = _as_document(current_state.get("registry"))
+        portal_state = _as_document(current_state.get("portal"))
+        attestation_state = _as_document(current_state.get("public_attestation"))
+        accepted_state = _as_document(current_state.get("accepted_evidence"))
         for key, value in registry_state.items():
             self._add_exact_check("data", f"transparency_data_registry_{key}", registry.get(key), value, f"Registry binding {key}")
         for key, value in portal_state.items():
@@ -415,7 +415,7 @@ class _TransparencyVerifier:
                 self._add_exact_check("data", f"transparency_data_accepted_source_{key}", accepted.get(key), source.get(source_key), f"Accepted Evidence source binding {key}")
 
     def _verify_requirements(self) -> None:
-        source = self.feed_doc.get("source") if isinstance(self.feed_doc.get("source"), dict) else {}
+        source = _as_document(self.feed_doc.get("source"))
         self._add_check("requirements", "transparency_registry_verification_passed", "passed" if source.get("registry_verification_status") == "passed" else "failed", "blocking", "Registry verification is passed." if source.get("registry_verification_status") == "passed" else "Registry verification must be passed.")
         self._add_check("requirements", "transparency_attestation_verification_passed", "passed" if source.get("attestation_verification_status") == "passed" else "failed", "blocking", "Public Attestation verification is passed." if source.get("attestation_verification_status") == "passed" else "Public Attestation verification must be passed.")
         self._add_check("requirements", "transparency_portal_verification_passed", "passed" if source.get("portal_verification_status") == "passed" else "failed", "blocking", "Portal verification is passed." if source.get("portal_verification_status") == "passed" else "Portal verification must be passed.")
@@ -467,7 +467,7 @@ class _TransparencyVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
@@ -511,8 +511,8 @@ def _transparency_report_hash(report: ImplementationDocument) -> str:
 
 
 def _event_semantics(event: ImplementationDocument) -> ImplementationDocument:
-    source = event.get("source") if isinstance(event.get("source"), dict) else {}
-    summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+    source = _as_document(event.get("source"))
+    summary = _as_document(event.get("summary"))
     return {
         "event_id": event.get("event_id"),
         "event_type": event.get("event_type"),
@@ -526,7 +526,7 @@ def _event_semantics(event: ImplementationDocument) -> ImplementationDocument:
             "portal_manifest_hash": source.get("portal_manifest_hash"),
             "accepted_evidence_id": source.get("accepted_evidence_id"),
         },
-        "public_references": summary.get("public_references") if isinstance(summary.get("public_references"), dict) else {},
+        "public_references": _as_document(summary.get("public_references")),
     }
 
 
@@ -538,7 +538,7 @@ def _notice_semantics(notice: ImplementationDocument) -> ImplementationDocument:
         "portfolio_id": notice.get("portfolio_id"),
         "attestation_profile": notice.get("attestation_profile"),
         "source_event_ids": list(notice.get("source_event_ids") or []) if isinstance(notice.get("source_event_ids"), list) else [],
-        "public_references": notice.get("public_references") if isinstance(notice.get("public_references"), dict) else {},
+        "public_references": _as_document(notice.get("public_references")),
     }
 
 
@@ -563,8 +563,8 @@ def _semantic_mismatches(kind: str, expected: list[ImplementationDocument], actu
 
 
 def _reference_subset_matches(expected: Any, actual: Any, *, notice_type: str) -> bool:
-    expected_refs = expected if isinstance(expected, dict) else {}
-    actual_refs = actual if isinstance(actual, dict) else {}
+    expected_refs = _as_document(expected)
+    actual_refs = _as_document(actual)
     for key, value in expected_refs.items():
         if actual_refs.get(key) != value:
             return False

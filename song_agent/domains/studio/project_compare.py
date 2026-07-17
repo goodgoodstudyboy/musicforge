@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 from pathlib import Path as Path
@@ -103,7 +103,7 @@ def _edit_view(version: ProjectVersion) -> ImplementationDocument | None:
         "preserve": metadata.get("preserve") or [],
         "strength": metadata.get("strength"),
         "provider_mode": metadata.get("provider_mode") or "local",
-        "provider": metadata.get("provider") if isinstance(metadata.get("provider"), dict) else {},
+        "provider": _as_document(metadata.get("provider")),
         "template_id": metadata.get("template_id"),
         "preview_id": metadata.get("preview_id"),
         "operation_count": metadata.get("operation_count"),
@@ -111,18 +111,18 @@ def _edit_view(version: ProjectVersion) -> ImplementationDocument | None:
         "changed_tracks": metadata.get("changed_tracks") or [],
         "clip_inserts": metadata.get("clip_inserts") or [],
         "template_inserts": metadata.get("template_inserts") or [],
-        "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
-        "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
-        "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
-        "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
-        "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
-        "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
+        "audition_summary": _as_document(metadata.get("audition_summary")),
+        "review_edit": _as_document(metadata.get("review_edit")),
+        "review_summary": _as_document(metadata.get("review_summary")),
+        "review_task": _as_document(metadata.get("review_task")),
+        "review_candidate": _as_document(metadata.get("review_candidate")),
+        "review_candidate_source": _as_document(metadata.get("review_candidate_source")),
         "review_provider_patch": _provider_patch_view(metadata.get("review_provider_patch") or metadata.get("provider_patch")),
-        "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
-        "review_judge": metadata.get("review_judge") if isinstance(metadata.get("review_judge"), dict) else {},
-        "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
-        "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
-        "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
+        "review_decision": _as_document(metadata.get("review_decision")),
+        "review_judge": _as_document(metadata.get("review_judge")),
+        "review_sprint": _as_document(metadata.get("review_sprint")),
+        "review_sprint_recommendation": _as_document(metadata.get("review_sprint_recommendation")),
+        "review_sprint_action_queue": _as_document(metadata.get("review_sprint_action_queue")),
         "provider_patch": _provider_patch_view(metadata.get("provider_patch")),
         "preset": preset,
         "preset_id": preset.get("preset_id") if preset else None,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import base64 as base64
 import hashlib as hashlib
@@ -84,7 +84,7 @@ class HumanReviewPack:
             raise HumanReviewPackValidationError("Human review pack must be an object.")
         pack_id = validate_pack_id(str(data.get("pack_id") or "hrpack-000001"))
         suite_id = _validate_suite_id(str(data.get("suite_id") or "suite-000001"))
-        cases = data.get("cases") if isinstance(data.get("cases"), list) else []
+        cases = _as_list(data.get("cases"))
         return cls(
             schema_version=int(data.get("schema_version") or HUMAN_REVIEW_PACK_SCHEMA_VERSION),
             pack_id=pack_id,
@@ -321,7 +321,7 @@ class HumanReviewPackStore:
             verification = verify_human_review_pack(self.zip_path(suite_id, pack_id), strict=True)
             if verification.get("status") != "passed":
                 raise HumanReviewPackStateError("Human review pack ZIP verification failed; rebuild before importing responses.")
-        reviews = response.get("reviews") if isinstance(response.get("reviews"), list) else []
+        reviews = _as_list(response.get("reviews"))
         if not reviews:
             raise HumanReviewPackValidationError("Human review response must contain reviews.")
         case_by_id = {case.case_id: case for case in self.acceptance_store.list_cases(suite_id)}
@@ -340,7 +340,7 @@ class HumanReviewPackStore:
         needs_fix_count = 0
         rejected_count = 0
         waived_count = 0
-        reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
+        reviewer = _as_document(response.get("reviewer"))
         listened_by = _safe_text(reviewer.get("name") or response.get("reviewer_name"), 120) or "human-reviewer"
         for review in reviews:
             if not isinstance(review, dict):
@@ -537,7 +537,7 @@ class HumanReviewPackStore:
                             "status": review.get("status"),
                             "rating": review.get("rating"),
                             "notes": review.get("notes"),
-                            "markers": review.get("markers") if isinstance(review.get("markers"), list) else [],
+                            "markers": _as_list(review.get("markers")),
                         },
                         "target": {"scope": "project_version", "version_id": case.version_id, "case_id": case_id},
                         "hashes": {"case_source_hash": stable_hash(_case_source_state(self.acceptance_store, suite_id, case_id))},
@@ -562,7 +562,7 @@ def human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> dict
         return {"status": "missing", "pack_count": 0, "import_count": 0}
     latest_pack = packs[0] if packs else {}
     latest_import = imports[0] if imports else {}
-    summary = latest_import.get("summary") if isinstance(latest_import.get("summary"), dict) else {}
+    summary = _as_document(latest_import.get("summary"))
     return sanitize_metadata(
         {
             "status": "imported" if latest_import else "packaged" if latest_pack else "missing",
@@ -580,7 +580,7 @@ def human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> dict
 
 
 def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),

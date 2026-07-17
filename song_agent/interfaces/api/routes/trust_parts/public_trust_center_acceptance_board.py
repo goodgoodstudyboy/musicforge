@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_list as _as_list
+
+from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustRoutesPublicTrustCenterAcceptanceBoard:
+class TrustRoutesPublicTrustCenterAcceptanceBoard(TrustRouteContext):
     def _handle_public_trust_center_acceptance_board_part_01(self, method: str, center_id: str, parts: list[str], _split_state):
         if len(parts) == 2:
             if method != 'GET':
@@ -55,7 +61,7 @@ class TrustRoutesPublicTrustCenterAcceptanceBoard:
 
     def _handle_public_trust_center_acceptance_board_part_02(self, method: str, center_id: str, parts: list[str], _split_state):
         if _split_state['subaction'] == 'verify' and len(parts) == 3:
-            _split_state['report'] = self.public_trust_center_acceptance_board_store.verify_zip(center_id, {'strict': bool(_split_state['payload'].get('strict', True)), 'require_ready': bool(_split_state['payload'].get('require_ready', False)), 'require_quorum': bool(_split_state['payload'].get('require_quorum', False)), 'require_no_conflicts': bool(_split_state['payload'].get('require_no_conflicts', False)), 'min_accepted_count': int(_split_state['payload'].get('min_accepted_count') or 0), 'min_accepted_organizations': int(_split_state['payload'].get('min_accepted_organizations') or 0), 'required_roles': _split_state['payload'].get('required_roles') if isinstance(_split_state['payload'].get('required_roles'), list) else [], 'use_distribution_kit': bool(_split_state['payload'].get('use_distribution_kit', True))})
+            _split_state['report'] = self.public_trust_center_acceptance_board_store.verify_zip(center_id, {'strict': bool(_split_state['payload'].get('strict', True)), 'require_ready': bool(_split_state['payload'].get('require_ready', False)), 'require_quorum': bool(_split_state['payload'].get('require_quorum', False)), 'require_no_conflicts': bool(_split_state['payload'].get('require_no_conflicts', False)), 'min_accepted_count': int(_split_state['payload'].get('min_accepted_count') or 0), 'min_accepted_organizations': int(_split_state['payload'].get('min_accepted_organizations') or 0), 'required_roles': _as_list(_split_state['payload'].get('required_roles')), 'use_distribution_kit': bool(_split_state['payload'].get('use_distribution_kit', True))})
             self._send_json({'ok': True, 'center_id': center_id, 'verification': _split_state['report'], 'summary': _split_state['report'].get('summary', {})})
             return (True, None)
         if _split_state['subaction'] == 'signoff-draft' and len(parts) == 3:
@@ -96,7 +102,7 @@ class TrustRoutesPublicTrustCenterAcceptanceBoard:
         return (False, None)
 
     def _handle_public_trust_center_acceptance_board(self, method: str, center_id: str, parts: list[str]) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_public_trust_center_acceptance_board_part_01(method, center_id, parts, _split_state)
             if _split_result[0]:

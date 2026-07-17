@@ -1,124 +1,128 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustRoutesTrustOperations:
+class TrustRoutesTrustOperations(TrustRouteContext):
     @property
-    def trust_operations_hub_store(self) -> _interfaces_api_runtime.TrustOperationsHubStore:
-        return self.server.trust_operations_hub_store  # type: ignore[attr-defined]
+    def trust_operations_hub_store(self) -> _InterfaceType:
+        return self.server.trust_operations_hub_store
 
     @property
-    def trust_operations_incident_store(self) -> _interfaces_api_runtime.TrustOperationsIncidentStore:
-        return self.server.trust_operations_incident_store  # type: ignore[attr-defined]
+    def trust_operations_incident_store(self) -> _InterfaceType:
+        return self.server.trust_operations_incident_store
 
     @property
-    def trust_operations_incident_knowledge_store(self) -> _interfaces_api_runtime.TrustOperationsIncidentKnowledgeStore:
-        return self.server.trust_operations_incident_knowledge_store  # type: ignore[attr-defined]
+    def trust_operations_incident_knowledge_store(self) -> _InterfaceType:
+        return self.server.trust_operations_incident_knowledge_store
 
     @property
-    def trust_operations_control_store(self) -> _interfaces_api_runtime.TrustOperationsControlStore:
-        return self.server.trust_operations_control_store  # type: ignore[attr-defined]
+    def trust_operations_control_store(self) -> _InterfaceType:
+        return self.server.trust_operations_control_store
 
     @property
-    def trust_operations_control_signoff_store(self) -> _interfaces_api_runtime.TrustOperationsControlSignoffStore:
-        return self.server.trust_operations_control_signoff_store  # type: ignore[attr-defined]
+    def trust_operations_control_signoff_store(self) -> _InterfaceType:
+        return self.server.trust_operations_control_signoff_store
 
     @property
-    def trust_operations_assurance_store(self) -> _interfaces_api_runtime.TrustOperationsAssuranceStore:
-        return self.server.trust_operations_assurance_store  # type: ignore[attr-defined]
+    def trust_operations_assurance_store(self) -> _InterfaceType:
+        return self.server.trust_operations_assurance_store
 
     @property
-    def trust_operations_assurance_watch_store(self) -> _interfaces_api_runtime.TrustOperationsAssuranceWatchStore:
-        return self.server.trust_operations_assurance_watch_store  # type: ignore[attr-defined]
+    def trust_operations_assurance_watch_store(self) -> _InterfaceType:
+        return self.server.trust_operations_assurance_watch_store
 
     @property
-    def trust_operations_assurance_watch_signoff_store(self) -> _interfaces_api_runtime.TrustOperationsAssuranceWatchSignoffStore:
-        return self.server.trust_operations_assurance_watch_signoff_store  # type: ignore[attr-defined]
+    def trust_operations_assurance_watch_signoff_store(self) -> _InterfaceType:
+        return self.server.trust_operations_assurance_watch_signoff_store
 
     @property
-    def trust_operations_final_readiness_store(self) -> _interfaces_api_runtime.TrustOperationsFinalReadinessStore:
-        return self.server.trust_operations_final_readiness_store  # type: ignore[attr-defined]
+    def trust_operations_final_readiness_store(self) -> _InterfaceType:
+        return self.server.trust_operations_final_readiness_store
 
     @property
-    def release_portfolio_audit_store(self) -> _interfaces_api_runtime.ReleasePortfolioAuditStore:
-        return self.server.release_portfolio_audit_store  # type: ignore[attr-defined]
+    def release_portfolio_audit_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_audit_store
 
     @property
-    def release_portfolio_governance_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceStore:
-        return self.server.release_portfolio_governance_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_store
 
     @property
-    def release_portfolio_governance_signoff_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceSignoffStore:
-        return self.server.release_portfolio_governance_signoff_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_signoff_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_signoff_store
 
     @property
-    def release_portfolio_governance_audit_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAuditStore:
-        return self.server.release_portfolio_governance_audit_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_audit_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_audit_store
 
     @property
-    def release_portfolio_governance_reviewer_pack_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceReviewerPackStore:
-        return self.server.release_portfolio_governance_reviewer_pack_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_reviewer_pack_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_reviewer_pack_store
 
     @property
-    def release_portfolio_governance_final_board_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceFinalBoardStore:
-        return self.server.release_portfolio_governance_final_board_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_final_board_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_final_board_store
 
     @property
-    def release_portfolio_governance_evidence_vault_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceEvidenceVaultStore:
-        return self.server.release_portfolio_governance_evidence_vault_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_evidence_vault_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_evidence_vault_store
 
     @property
-    def release_portfolio_governance_attestation_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationStore:
-        return self.server.release_portfolio_governance_attestation_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_attestation_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_attestation_store
 
     @property
-    def release_portfolio_governance_attestation_registry_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationRegistryStore:
-        return self.server.release_portfolio_governance_attestation_registry_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_attestation_registry_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_attestation_registry_store
 
     @property
-    def release_portfolio_governance_attestation_portal_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalStore:
-        return self.server.release_portfolio_governance_attestation_portal_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_attestation_portal_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_attestation_portal_store
 
     @property
-    def release_portfolio_governance_attestation_portal_review_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationPortalReviewStore:
-        return self.server.release_portfolio_governance_attestation_portal_review_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_attestation_portal_review_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_attestation_portal_review_store
 
     @property
-    def release_portfolio_governance_attestation_accepted_evidence_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
-        return self.server.release_portfolio_governance_attestation_accepted_evidence_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_attestation_accepted_evidence_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_attestation_accepted_evidence_store
 
     @property
-    def release_portfolio_governance_attestation_transparency_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyStore:
-        return self.server.release_portfolio_governance_attestation_transparency_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_attestation_transparency_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_attestation_transparency_store
 
     @property
-    def release_portfolio_governance_attestation_transparency_acknowledgement_store(self) -> _interfaces_api_runtime.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
-        return self.server.release_portfolio_governance_attestation_transparency_acknowledgement_store  # type: ignore[attr-defined]
+    def release_portfolio_governance_attestation_transparency_acknowledgement_store(self) -> _InterfaceType:
+        return self.server.release_portfolio_governance_attestation_transparency_acknowledgement_store
 
     @property
-    def public_trust_center_store(self) -> _interfaces_api_runtime.PublicTrustCenterStore:
-        return self.server.public_trust_center_store  # type: ignore[attr-defined]
+    def public_trust_center_store(self) -> _InterfaceType:
+        return self.server.public_trust_center_store
 
     @property
-    def public_trust_center_anchor_registry_store(self) -> _interfaces_api_runtime.PublicTrustCenterAnchorRegistryStore:
-        return self.server.public_trust_center_anchor_registry_store  # type: ignore[attr-defined]
+    def public_trust_center_anchor_registry_store(self) -> _InterfaceType:
+        return self.server.public_trust_center_anchor_registry_store
 
     @property
-    def public_trust_center_anchor_transparency_store(self) -> _interfaces_api_runtime.PublicTrustCenterAnchorTransparencyStore:
-        return self.server.public_trust_center_anchor_transparency_store  # type: ignore[attr-defined]
+    def public_trust_center_anchor_transparency_store(self) -> _InterfaceType:
+        return self.server.public_trust_center_anchor_transparency_store
 
     @property
-    def public_trust_center_distribution_kit_store(self) -> _interfaces_api_runtime.PublicTrustCenterDistributionKitStore:
-        return self.server.public_trust_center_distribution_kit_store  # type: ignore[attr-defined]
+    def public_trust_center_distribution_kit_store(self) -> _InterfaceType:
+        return self.server.public_trust_center_distribution_kit_store
 
     @property
-    def public_trust_center_distribution_kit_acceptance_store(self) -> _interfaces_api_runtime.PublicTrustCenterDistributionKitAcceptanceStore:
-        return self.server.public_trust_center_distribution_kit_acceptance_store  # type: ignore[attr-defined]
+    def public_trust_center_distribution_kit_acceptance_store(self) -> _InterfaceType:
+        return self.server.public_trust_center_distribution_kit_acceptance_store
 
     @property
-    def public_trust_center_acceptance_board_store(self) -> _interfaces_api_runtime.PublicTrustCenterAcceptanceBoardStore:
-        return self.server.public_trust_center_acceptance_board_store  # type: ignore[attr-defined]
+    def public_trust_center_acceptance_board_store(self) -> _InterfaceType:
+        return self.server.public_trust_center_acceptance_board_store
 
     def _handle_trust_operations(self, method: str, path: str) -> None:
         final_prefix = "/api/trust-operations/final-readiness"

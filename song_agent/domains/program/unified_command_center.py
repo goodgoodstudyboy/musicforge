@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import shutil as shutil
 import threading as threading
@@ -121,7 +123,7 @@ class UnifiedCommandCenterStore:
                 "profile": str(payload.get("profile") or "ga"),
                 "primary_release_id": str(payload.get("primary_release_id") or ""),
                 "release_ids": [str(item) for item in payload.get("release_ids", []) if str(item)],
-                "requirements": _requirements(payload.get("requirements") if isinstance(payload.get("requirements"), dict) else payload),
+                "requirements": _requirements(_document_or(payload.get("requirements"), payload)),
                 "status": "draft",
                 "created_at": now,
                 "updated_at": now,
@@ -382,7 +384,7 @@ class UnifiedCommandCenterStore:
 
     def _build_documents(self, center_id: str, evidence: ImplementationDocument) -> dict[str, ImplementationDocument]:
         center = self.read_center(center_id)
-        requirements = _requirements(center.get("requirements", {}), evidence.get("requirements") if isinstance(evidence.get("requirements"), dict) else {})
+        requirements = _requirements(center.get("requirements", {}), _as_document(evidence.get("requirements")))
         component_rows = [_component_row(defn, evidence, requirements) for defn in COMPONENT_DEFS]
         now = now_iso()
         source = {
@@ -454,7 +456,7 @@ def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
     }
     kwargs: dict[str, Any] = {}
     for key, (zip_arg, report_arg) in mapping.items():
-        paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
+        paths = _as_document(evidence.get(key))
         zip_value = paths.get("zip") or paths.get("zip_path") or evidence.get(zip_arg) or evidence.get(zip_arg.replace("_path", ""))
         report_value = paths.get("verification_report") or paths.get("verification_report_path") or evidence.get(report_arg) or evidence.get(report_arg.replace("_path", ""))
         if zip_value:
@@ -465,19 +467,19 @@ def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
         ("distribution", "distribution_zip_paths", "distribution_verification_report_paths"),
         ("submission", "submission_zip_paths", "submission_verification_report_paths"),
     ):
-        paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
+        paths = _as_document(evidence.get(key))
         zips = _path_list(paths.get("zips") or paths.get("zip_paths") or paths.get("zip") or evidence.get(zip_arg))
         reports = _path_list(paths.get("verification_reports") or paths.get("verification_report_paths") or paths.get("verification_report") or evidence.get(report_arg))
         if zips:
             kwargs[zip_arg] = zips
         if reports:
             kwargs[report_arg] = reports
-    ga = evidence.get("ga-readiness") if isinstance(evidence.get("ga-readiness"), dict) else {}
+    ga = _as_document(evidence.get("ga-readiness"))
     if ga.get("report") or evidence.get("ga_readiness_report_path"):
         kwargs["ga_readiness_report_path"] = ga.get("report") or evidence.get("ga_readiness_report_path")
     if ga.get("verification_report") or evidence.get("ga_readiness_verification_report_path"):
         kwargs["ga_readiness_verification_report_path"] = ga.get("verification_report") or evidence.get("ga_readiness_verification_report_path")
-    release_check = evidence.get("release-check") if isinstance(evidence.get("release-check"), dict) else {}
+    release_check = _as_document(evidence.get("release-check"))
     if release_check.get("report") or evidence.get("release_check_report_path"):
         kwargs["release_check_report_path"] = release_check.get("report") or evidence.get("release_check_report_path")
     if isinstance(evidence.get("audio_evidence"), dict):
@@ -517,7 +519,7 @@ def _requirements(*sources: ImplementationDocument) -> dict[str, bool]:
 def _component_row(defn: dict[str, str], evidence: ImplementationDocument, requirements: dict[str, bool]) -> ImplementationDocument:
     key = defn["key"]
     required = bool(requirements.get(key, False))
-    paths = evidence.get(key) if isinstance(evidence.get(key), dict) else {}
+    paths = _as_document(evidence.get(key))
     if key in {"distribution", "submission"}:
         component = _multi_component_result(key, paths)
     else:
@@ -526,9 +528,9 @@ def _component_row(defn: dict[str, str], evidence: ImplementationDocument, requi
             zip_path=paths.get("zip") or paths.get("zip_path"),
             verification_report_path=paths.get("verification_report") or paths.get("verification_report_path"),
             report_path=paths.get("report") or paths.get("report_path"),
-            audio_evidence=evidence.get("audio_evidence") if isinstance(evidence.get("audio_evidence"), dict) else {},
-            trust_evidence=evidence.get("trust_evidence") if isinstance(evidence.get("trust_evidence"), dict) else {},
-            public_trust_evidence=evidence.get("public_trust_evidence") if isinstance(evidence.get("public_trust_evidence"), dict) else {},
+            audio_evidence=_as_document(evidence.get("audio_evidence")),
+            trust_evidence=_as_document(evidence.get("trust_evidence")),
+            public_trust_evidence=_as_document(evidence.get("public_trust_evidence")),
         )
     readiness = component.get("readiness") if required else "not_required" if component.get("readiness") == "missing" else component.get("readiness")
     return sanitize_metadata(
@@ -566,7 +568,7 @@ def _component_id(key: str, evidence: ImplementationDocument) -> str:
 
 
 def _empty_fingerprint(key: str) -> ImplementationDocument:
-    doc = {"component_key": key, "status": "not_configured", "items": [], "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
+    doc: _InferenceType = {"component_key": key, "status": "not_configured", "items": [], "zip_sha256": None, "zip_size_bytes": None, "manifest_hash": None, "verification_report_hash": None, "verification_status": None, "runtime_status": None, "runtime_manifest_hash": None, "runtime_failed_count": 0, "runtime_blockers": []}
     doc["integrity_hash"] = _integrity_hash(doc)
     return doc
 
@@ -766,7 +768,7 @@ def _multi_component_result(key: str, paths: ImplementationDocument) -> Implemen
         return _component_finish_for_store(key, fingerprint, checks)
     for index, (zip_path, report_path) in enumerate(zip(zips, reports), start=1):
         component = verify_unified_command_center_component(key, zip_path=zip_path, verification_report_path=report_path)
-        fp = component.get("fingerprint") if isinstance(component.get("fingerprint"), dict) else {}
+        fp = _as_document(component.get("fingerprint"))
         component_id = _component_instance_id(key, component, index)
         fingerprint["items"].append(
             {
@@ -803,8 +805,8 @@ def _component_finish_for_store(key: str, fingerprint: ImplementationDocument, c
 
 def _component_instance_id(key: str, component: ImplementationDocument, index: int) -> str:
     for report_key in ("external_report", "runtime_report"):
-        report = component.get(report_key) if isinstance(component.get(report_key), dict) else {}
-        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        report = _as_document(component.get(report_key))
+        summary = _as_document(report.get("summary"))
         prefix = {"distribution": "distribution", "submission": "submission"}.get(key, key)
         for field in ("release_id", "target_id", "submission_id", "package_id"):
             value = report.get(field) or summary.get(field)

@@ -66,7 +66,7 @@ def slugify(value: str) -> str:
     return slug or "song-run"
 
 
-def write_json(path: Path, data: dict[str, Any]) -> Path:
+def write_json(path: Path, data: Any) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f".tmp-{os.getpid()}-{threading.get_ident()}.json")
     tmp_path.write_text(

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProjectSectionTemplateCreate:
+class CreationRoutesProjectSectionTemplateCreate(CreationRouteContext):
     def _handle_project_section_template_create(self, method: str, project_id: str, version_id: str) -> None:
         if method != "POST":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramOperationsHttpRoutes:
+class ProgramOperationsHttpRoutes(ProgramHttpContext):
     def _dispatch_operations(self, method, program_id, tail) -> bool:
         if tail == '/operations/change-requests':
             if method != 'POST':

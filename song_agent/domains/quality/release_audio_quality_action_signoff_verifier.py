@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -255,16 +255,16 @@ def _document_binding_checks(documents: dict[str, ImplementationDocument], histo
     queue_verification = documents["queue_verification"]
     closeout = documents["closeout"]
     signoff = documents["signoff"]
-    manual_summary = resolutions.get("summary") if isinstance(resolutions.get("summary"), dict) else {}
-    closeout_source = closeout.get("source") if isinstance(closeout.get("source"), dict) else {}
-    signoff_source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+    manual_summary = _as_document(resolutions.get("summary"))
+    closeout_source = _as_document(closeout.get("source"))
+    signoff_source = _as_document(signoff.get("source"))
     signoff_event: dict[str, Any] = {}
     for row in reversed(history):
-        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        payload = _as_document(row.get("payload"))
         if row.get("event_type") == "action_queue_signoff_created" and payload.get("signoff_hash") == signoff.get("integrity_hash"):
             signoff_event = row
             break
-    signoff_payload = signoff_event.get("payload") if isinstance(signoff_event.get("payload"), dict) else {}
+    signoff_payload = _as_document(signoff_event.get("payload"))
     checks = [
         _check("release_audio_quality_action_queue_signoff_archive_manifest_queue_binding", manifest.get("signoff_hash") == signoff.get("integrity_hash"), "Manifest binds signoff hash."),
         _check("release_audio_quality_action_queue_signoff_archive_manifest_closeout_binding", manifest.get("closeout_hash") == closeout.get("integrity_hash"), "Manifest binds closeout hash."),
@@ -287,7 +287,7 @@ def _document_binding_checks(documents: dict[str, ImplementationDocument], histo
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
@@ -356,7 +356,7 @@ def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[Implementatio
 def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("previous_event_hash") != previous:
             return False
         if event.get("payload_hash") != stable_hash(payload):
@@ -392,7 +392,7 @@ def _public_queue_verification_report(report: ImplementationDocument) -> Impleme
         for key, value in report.items()
         if key not in {"summary", "checks", "integrity_hash"}
     }
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     public["summary"] = {key: value for key, value in summary.items() if key != "zip_path"}
     public["original_integrity_hash"] = report.get("integrity_hash")
     public["integrity_hash"] = _integrity_hash(public)

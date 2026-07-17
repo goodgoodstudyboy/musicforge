@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -154,7 +154,7 @@ class SprintActionQueue:
             created_at=str(data.get("created_at") or ""),
             updated_at=str(data.get("updated_at") or data.get("created_at") or ""),
             created_from=sanitize_metadata(dict(data.get("created_from") or {})) if isinstance(data.get("created_from"), dict) else {},
-            settings=_queue_settings(data.get("settings") if isinstance(data.get("settings"), dict) else {}),
+            settings=_queue_settings(_as_document(data.get("settings"))),
             items=items,
             summary=_queue_summary(items),
             archived_at=_optional_str(data.get("archived_at")),
@@ -242,7 +242,7 @@ class ReviewSprintActionQueueStore:
         event_data = {
             "timestamp": now or now_iso(),
             "event": sanitize_sensitive_text(str(event or ""))[:120],
-            "payload": sanitize_metadata(payload if isinstance(payload, dict) else {}),
+            "payload": sanitize_metadata(_as_document(payload)),
         }
         queue_dir = self.queue_dir(queue_id)
         queue_dir.mkdir(parents=True, exist_ok=True)
@@ -304,10 +304,10 @@ def build_action_queue_from_recommendation_report(
         queue_action = RECOMMENDATION_ACTION_MAP.get(str(action.get("action") or ""), "no_action")
         items.append(_queue_item_from_recommendation(action, queue_action, report_hash, report_created_at, sprint))
         if clean_settings.get("include_judge_actions", True) and queue_action in {"manual_apply_candidate", "refresh_decision_report"}:
-            candidate_summary = action.get("candidate_summary") if isinstance(action.get("candidate_summary"), dict) else {}
+            candidate_summary = _as_document(action.get("candidate_summary"))
             if int(candidate_summary.get("ready_candidate_count") or 0) > 0:
                 items.append(_queue_item_from_recommendation(action, "refresh_judge_report", report_hash, report_created_at, sprint))
-        preview = action.get("context_pack_preview") if isinstance(action.get("context_pack_preview"), dict) else {}
+        preview = _as_document(action.get("context_pack_preview"))
         if clean_settings.get("run_context_pack_actions", True) and _context_ref_count(preview) > 0:
             items.append(_context_pack_queue_item(action, report_hash, report_created_at, preview))
     queue = SprintActionQueue.from_dict(
@@ -334,7 +334,7 @@ def build_action_queue_from_recommendation_report(
 
 
 def recommendation_report_hash(report: dict[str, Any]) -> str:
-    clean = sanitize_metadata(report if isinstance(report, dict) else {})
+    clean = sanitize_metadata(_as_document(report))
     payload = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -456,9 +456,9 @@ def _context_pack_queue_item(action: ImplementationDocument, report_hash: str, r
             "input": {
                 "name": f"Recommendation Context {action.get('task_id') or ''}".strip(),
                 "context_pack_preview": {
-                    "query": preview.get("query") if isinstance(preview.get("query"), dict) else {},
-                    "asset_refs": preview.get("asset_refs") if isinstance(preview.get("asset_refs"), list) else [],
-                    "reference_refs": preview.get("reference_refs") if isinstance(preview.get("reference_refs"), list) else [],
+                    "query": _as_document(preview.get("query")),
+                    "asset_refs": _as_list(preview.get("asset_refs")),
+                    "reference_refs": _as_list(preview.get("reference_refs")),
                 },
             },
         }
@@ -472,7 +472,7 @@ def _recommendation_snapshot(action: ImplementationDocument, report_hash: str, r
             "report_hash": report_hash,
             "action": action.get("action"),
             "score": action.get("score"),
-            "score_breakdown": action.get("score_breakdown") if isinstance(action.get("score_breakdown"), dict) else {},
+            "score_breakdown": _as_document(action.get("score_breakdown")),
             "recommended_candidate_id": (action.get("candidate_summary") or {}).get("recommended_candidate_id") if isinstance(action.get("candidate_summary"), dict) else None,
         }
     )

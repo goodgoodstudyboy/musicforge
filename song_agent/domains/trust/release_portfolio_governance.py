@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -216,8 +218,8 @@ class ReleasePortfolioGovernanceStore:
             max_items = int(payload.get("max_items") or 500)
             max_items = max(1, min(500, max_items))
             queue["status"] = "running"
-            previous_run_count = int((queue.get("execution") if isinstance(queue.get("execution"), dict) else {}).get("run_count") or 0)
-            queue["execution"] = {**(queue.get("execution") if isinstance(queue.get("execution"), dict) else {}), "started_at": now, "run_count": previous_run_count + 1}
+            previous_run_count = int((_as_document(queue.get("execution"))).get("run_count") or 0)
+            queue["execution"] = {**(_as_document(queue.get("execution"))), "started_at": now, "run_count": previous_run_count + 1}
             queue["updated_at"] = now
             queue["integrity_hash"] = queue_integrity_hash(queue)
             _write_json(self.queue_path(queue_id), queue)
@@ -417,7 +419,7 @@ class ReleasePortfolioGovernanceStore:
         action_type = str(item.get("action_type") or "")
         release_id = str(item.get("release_id") or "")
         queue_id = str(queue.get("queue_id") or "")
-        result = {
+        result: _InferenceType = {
             "schema_version": PORTFOLIO_GOVERNANCE_SCHEMA_VERSION,
             "queue_id": queue_id,
             "item_id": item.get("item_id"),
@@ -544,7 +546,7 @@ class ReleasePortfolioGovernanceStore:
         current_hash = stable_hash(current)
         if not bool(current.get("stale")) and current_hash == str(queue.get("source_hash") or ""):
             return
-        post = execution.get("post_conditions") if isinstance(execution.get("post_conditions"), dict) else {}
+        post = _as_document(execution.get("post_conditions"))
         documented_run_drift = (
             execution_report_integrity_ok(execution)
             and str(execution.get("integrity_hash") or "") == str(queue.get("latest_execution_report_hash") or "")
@@ -594,7 +596,7 @@ class ReleasePortfolioGovernanceStore:
 
 
 def queue_integrity_ok(queue: dict[str, Any] | None) -> bool:
-    data = queue if isinstance(queue, dict) else {}
+    data = _as_document(queue)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == queue_integrity_hash(data)
 
 
@@ -602,7 +604,7 @@ def queue_integrity_ok(queue: dict[str, Any] | None) -> bool:
 
 
 def action_plan_integrity_ok(plan: dict[str, Any] | None) -> bool:
-    data = plan if isinstance(plan, dict) else {}
+    data = _as_document(plan)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == action_plan_integrity_hash(data)
 
 
@@ -610,7 +612,7 @@ def action_plan_integrity_ok(plan: dict[str, Any] | None) -> bool:
 
 
 def execution_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == execution_report_integrity_hash(data)
 
 
@@ -618,7 +620,7 @@ def execution_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def manual_action_list_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == manual_action_list_integrity_hash(data)
 
 
@@ -630,14 +632,14 @@ def item_result_integrity_hash(report: dict[str, Any]) -> str:
 
 
 def governance_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == governance_manifest_integrity_hash(data)
 
 
 def queue_summary(queue: dict[str, Any] | None, execution: dict[str, Any] | None = None) -> dict[str, Any]:
-    q = queue if isinstance(queue, dict) else {}
-    e = execution if isinstance(execution, dict) else {}
-    summary = e.get("summary") if isinstance(e.get("summary"), dict) else q.get("execution") if isinstance(q.get("execution"), dict) else {}
+    q = _as_document(queue)
+    e = _as_document(execution)
+    summary = _document_or(e.get("summary"), _as_document(q.get("execution")))
     return sanitize_metadata(
         {
             "status": q.get("status") or e.get("status") or "missing",
@@ -648,7 +650,7 @@ def queue_summary(queue: dict[str, Any] | None, execution: dict[str, Any] | None
             "manual_required": summary.get("manual_required", 0),
             "blocked": summary.get("blocked", 0),
             "failed": summary.get("failed", 0),
-            "post_portfolio_refresh_required": bool((q.get("execution") if isinstance(q.get("execution"), dict) else {}).get("post_portfolio_refresh_required")),
+            "post_portfolio_refresh_required": bool((_as_document(q.get("execution"))).get("post_portfolio_refresh_required")),
             "integrity_ok": queue_integrity_ok(q),
         },
         blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS,
@@ -659,7 +661,7 @@ def _build_action_plan(queue_id: str, source: ImplementationDocument, report: Im
     items: list[dict[str, Any]] = []
     risks_by_category = _ids_by_category(risks.get("risks", []) if isinstance(risks.get("risks"), list) else [])
     recs_by_category = _ids_by_category(report.get("recommendations", []) if isinstance(report.get("recommendations"), list) else [], key_name="recommendation_id")
-    release_summaries = report.get("release_summaries") if isinstance(report.get("release_summaries"), list) else []
+    release_summaries = _as_list(report.get("release_summaries"))
     for release in release_summaries:
         if not isinstance(release, dict):
             continue
@@ -669,11 +671,11 @@ def _build_action_plan(queue_id: str, source: ImplementationDocument, report: Im
         if release.get("reviewer_pack_verification_status") != "passed":
             for action in ("reviewer_pack.refresh", "reviewer_pack.export", "reviewer_pack.zip", "reviewer_pack.verify"):
                 _add_item(items, action, release_id, "reviewer_pack", "high", "Reviewer Pack evidence is missing or not verified.", risks_by_category, recs_by_category)
-        audit_summary = release.get("audit_summary") if isinstance(release.get("audit_summary"), dict) else {}
+        audit_summary = _as_document(release.get("audit_summary"))
         if release.get("audit_verification_status") != "passed" or audit_summary.get("status") == "failed":
             for action in ("operations_audit.refresh", "operations_audit.export", "operations_audit.zip", "operations_audit.verify"):
                 _add_item(items, action, release_id, "audit", "high", "Operations Audit evidence is missing or not verified.", risks_by_category, recs_by_category)
-        archive = release.get("archive_summary") if isinstance(release.get("archive_summary"), dict) else {}
+        archive = _as_document(release.get("archive_summary"))
         if archive.get("verification_status") != "passed":
             if archive.get("manifest_hash"):
                 _add_item(items, "operations_archive.verify", release_id, "archive", "medium", "Operations Archive verification is missing or failed.", risks_by_category, recs_by_category)
@@ -682,7 +684,7 @@ def _build_action_plan(queue_id: str, source: ImplementationDocument, report: Im
         if int(release.get("applied_change_request_count") or 0) > 0:
             _add_manual(items, "change_request.review", release_id, "change_control", "medium", "Review recurring Change Request cause.", risks_by_category, recs_by_category)
             _add_manual(items, "process_rule_candidate.review", release_id, "change_control", "medium", "Decide whether a process rule should be updated.", risks_by_category, recs_by_category)
-        reviewer_summary = release.get("reviewer_pack_summary") if isinstance(release.get("reviewer_pack_summary"), dict) else {}
+        reviewer_summary = _as_document(release.get("reviewer_pack_summary"))
         if int(reviewer_summary.get("manual_required_count") or 0) > 0:
             _add_manual(items, "runbook_policy.review", release_id, "manual_bottleneck", "low", "Review recurring manual-required runbook items.", risks_by_category, recs_by_category)
         if release.get("integrity_ok") is False or (audit_summary.get("status") == "failed"):
@@ -807,7 +809,7 @@ def _manual_action_list(queue_id: str, plan: ImplementationDocument, *, generate
 
 
 def _execution_report(queue_id: str, *, source_hash: str, plan: ImplementationDocument, generated_at: str, item_results: list[ImplementationDocument], post_conditions: ImplementationDocument) -> ImplementationDocument:
-    items = plan.get("items") if isinstance(plan.get("items"), list) else []
+    items = _as_list(plan.get("items"))
     summary = {
         "total_items": len(items),
         "safe_completed": sum(1 for item in items if isinstance(item, dict) and item.get("safety") == "safe" and item.get("status") == "completed"),
@@ -850,8 +852,8 @@ def _execution_report(queue_id: str, *, source_hash: str, plan: ImplementationDo
 
 
 def _queue_execution_summary(execution: ImplementationDocument) -> ImplementationDocument:
-    summary = execution.get("summary") if isinstance(execution.get("summary"), dict) else {}
-    post = execution.get("post_conditions") if isinstance(execution.get("post_conditions"), dict) else {}
+    summary = _as_document(execution.get("summary"))
+    post = _as_document(execution.get("post_conditions"))
     return {
         "started_at": None,
         "completed_at": execution.get("generated_at"),
@@ -867,7 +869,7 @@ def _queue_execution_summary(execution: ImplementationDocument) -> Implementatio
 
 
 def _queue_status_from_plan(plan: ImplementationDocument) -> str:
-    items = plan.get("items") if isinstance(plan.get("items"), list) else []
+    items = _as_list(plan.get("items"))
     return "planned" if items else "safe_completed"
 
 
@@ -907,7 +909,7 @@ def _governance_actions_markdown(queue: ImplementationDocument, plan: Implementa
 
 def _manual_actions_markdown(manual: ImplementationDocument) -> str:
     lines = ["# Manual Governance Actions", ""]
-    items = manual.get("items") if isinstance(manual.get("items"), list) else []
+    items = _as_list(manual.get("items"))
     if not items:
         lines.append("- None")
     for item in items:
@@ -980,7 +982,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
     if not path.exists():
         return default if default is not None else {}
     value = read_json(path)
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, value: ImplementationDocument) -> Path:

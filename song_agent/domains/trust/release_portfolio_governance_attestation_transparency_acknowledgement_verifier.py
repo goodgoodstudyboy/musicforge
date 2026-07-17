@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -87,13 +87,13 @@ def write_release_portfolio_governance_attestation_transparency_acknowledgement_
 
 
 def print_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge release portfolio governance attestation transparency acknowledgement verification")
     print(f"status: {report.get('status')}")
     print(f"package: {report.get('detected_package_type') or 'unknown'}")
     print(f"portfolio: {summary.get('portfolio_id') or 'unknown'}")
     print(f"acknowledgement: {summary.get('acknowledgement_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def release_portfolio_governance_attestation_transparency_acknowledgement_verification_exit_code(report: dict[str, Any]) -> int:
@@ -222,7 +222,7 @@ class _AckVerifier:
         expected_type = ACK_PACK_PACKAGE_TYPE if self.manifest_name == "acknowledgement-pack-manifest.json" else ACK_EVIDENCE_PACKAGE_TYPE
         self._add_hash_check("manifest", f"{self.check_prefix}_manifest_integrity", self.manifest.get("integrity_hash"), ack_manifest_hash(self.manifest), "Acknowledgement manifest integrity")
         self._add_check("manifest", f"{self.check_prefix}_manifest_package_type", "passed" if self.manifest.get("package_type") == expected_type else "failed", "blocking", "Manifest package_type is valid." if self.manifest.get("package_type") == expected_type else "Manifest package_type is invalid.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -288,10 +288,10 @@ class _AckVerifier:
 
     def _verify_pack_document(self) -> None:
         self._add_hash_check("pack", "ack_pack_integrity", self.main_doc.get("integrity_hash"), ack_pack_hash(self.main_doc), "Pack integrity")
-        source = self.main_doc.get("source") if isinstance(self.main_doc.get("source"), dict) else {}
+        source = _as_document(self.main_doc.get("source"))
         self._add_hash_check("pack", "ack_pack_source_hash", self.main_doc.get("source_hash"), stable_hash(source), "Pack source hash")
         self._add_exact_check("manifest", "ack_manifest_source_hash", self.manifest.get("source_hash"), self.main_doc.get("source_hash"), "Manifest source_hash")
-        row = self.manifest.get("pack") if isinstance(self.manifest.get("pack"), dict) else {}
+        row = _as_document(self.manifest.get("pack"))
         self._add_exact_check("manifest", "ack_manifest_pack_integrity", row.get("integrity_hash"), self.main_doc.get("integrity_hash"), "Manifest pack integrity")
         verification = self.data_docs.get("transparency-verification-summary.json", {})
         feed_summary = self.data_docs.get("transparency-feed-summary.json", {})
@@ -310,9 +310,9 @@ class _AckVerifier:
         self._add_exact_check("data", "ack_pack_current_entry_id", public_state.get("current_entry_id"), source.get("current_entry_id"), "Current entry id")
         self._add_exact_check("data", "ack_pack_current_certificate_id", public_state.get("current_certificate_id"), source.get("current_certificate_id"), "Current certificate id")
         expected_events = [{"event_id": item, "event_type": None, "severity": None} for item in source.get("event_ids", []) if item]
-        actual_events = events_summary.get("events") if isinstance(events_summary.get("events"), list) else []
+        actual_events = _as_list(events_summary.get("events"))
         self._add_exact_check("data", "ack_pack_event_ids_match", [item.get("event_id") for item in actual_events if isinstance(item, dict)], [item["event_id"] for item in expected_events], "Event summary ids")
-        actual_notices = notices_summary.get("notices") if isinstance(notices_summary.get("notices"), list) else []
+        actual_notices = _as_list(notices_summary.get("notices"))
         self._add_exact_check("data", "ack_pack_notice_ids_match", [item.get("notice_id") for item in actual_notices if isinstance(item, dict)], list(source.get("notice_ids", []) if isinstance(source.get("notice_ids"), list) else []), "Notice summary ids")
         for key, value in source.items():
             self._add_exact_check("data", f"ack_pack_data_package_{key}", package.get(key), value, f"Package fingerprint {key}")
@@ -325,10 +325,10 @@ class _AckVerifier:
 
     def _verify_evidence_document(self) -> None:
         self._add_hash_check("evidence", "ack_evidence_integrity", self.main_doc.get("integrity_hash"), ack_evidence_hash(self.main_doc), "Evidence integrity")
-        source = self.main_doc.get("source") if isinstance(self.main_doc.get("source"), dict) else {}
+        source = _as_document(self.main_doc.get("source"))
         self._add_hash_check("evidence", "ack_evidence_source_hash", self.main_doc.get("source_hash"), stable_hash(source), "Evidence source hash")
         self._add_exact_check("manifest", "ack_manifest_source_hash", self.manifest.get("source_hash"), self.main_doc.get("source_hash"), "Manifest source_hash")
-        row = self.manifest.get("acknowledgement") if isinstance(self.manifest.get("acknowledgement"), dict) else {}
+        row = _as_document(self.manifest.get("acknowledgement"))
         self._add_exact_check("manifest", "ack_evidence_manifest_integrity", row.get("integrity_hash"), self.main_doc.get("integrity_hash"), "Manifest evidence integrity")
         response_binding = self.data_docs.get("response-binding-summary.json", {})
         response_verification = self.data_docs.get("response-verification-summary.json", {})
@@ -336,7 +336,7 @@ class _AckVerifier:
         public_summary_doc = self.data_docs.get("public-summary.json", {})
         for key, value in source.items():
             self._add_exact_check("data", f"ack_evidence_data_response_{key}", response_binding.get(key), value, f"Response binding {key}")
-        public = self.main_doc.get("public_summary") if isinstance(self.main_doc.get("public_summary"), dict) else {}
+        public = _as_document(self.main_doc.get("public_summary"))
         self._add_exact_check("data", "ack_evidence_data_public_summary", public_summary_doc.get("public_summary"), public, "Public summary data")
         self._add_exact_check("evidence", "ack_evidence_semantics_match", source.get("response_public_summary_hash"), stable_hash(public), "Evidence public summary response binding")
         self._add_exact_check("data", "ack_evidence_response_verification_status", response_verification.get("status"), source.get("response_verification_status"), "Response verification status sidecar")
@@ -367,7 +367,7 @@ class _AckVerifier:
             accepted = self.package_type == ACK_EVIDENCE_PACKAGE_TYPE and self.main_doc.get("external_review_status") == "accepted" and self.main_doc.get("status") == "current"
             self._add_check("requirements", "ack_require_accepted", "passed" if accepted else "failed", "blocking", "Accepted acknowledgement evidence is present." if accepted else "Accepted acknowledgement evidence is required.")
         if self.require_transparency and self.package_type == ACK_PACK_PACKAGE_TYPE:
-            source = self.main_doc.get("source") if isinstance(self.main_doc.get("source"), dict) else {}
+            source = _as_document(self.main_doc.get("source"))
             ok = source.get("transparency_verification_status") == "passed" and source.get("transparency_event_semantics_status") == "passed" and source.get("transparency_notice_semantics_status") == "passed"
             self._add_check("requirements", "ack_require_transparency", "passed" if ok else "failed", "blocking", "Transparency verification and semantics are passed." if ok else "Current verified Transparency evidence is required.")
 
@@ -396,11 +396,11 @@ class _AckVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _read_schema_doc(self) -> ImplementationDocument:
         value = self.data_docs.get("response-schema.json")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]

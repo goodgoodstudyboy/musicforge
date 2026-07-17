@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -87,8 +87,8 @@ def verify_unified_command_center_handoff_package(
             checks.append(_check("ucc_handoff_report_integrity", _integrity_ok(report), "Handoff report integrity hash is valid."))
             checks.append(_check("ucc_handoff_package_index_integrity", _integrity_ok(package_index), "Package index integrity hash is valid."))
             checks.append(_check("ucc_handoff_archive_verification_integrity", _integrity_ok(archive_verification), "Archive verification report integrity hash is valid."))
-            source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
-            report_source = report.get("source") if isinstance(report.get("source"), dict) else {}
+            source = _as_document(manifest.get("source"))
+            report_source = _as_document(report.get("source"))
             checks.extend(
                 [
                     _check("ucc_handoff_source_hash_binding", source.get("source_hash") == report.get("source_hash") == package_index.get("source_hash"), "Handoff docs bind the same source hash."),
@@ -145,7 +145,7 @@ def _current_archive_checks(archive_zip_path: Path | str | None, archive_verific
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
     effective = names - {"manifest.json"}

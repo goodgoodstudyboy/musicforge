@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesAcceptance:
+class QualityRoutesAcceptance(QualityRouteContext):
     def _handle_acceptance_route_part_01(self, method: str, suite_id: str, tail: str, _split_state):
         _split_state['parts'] = [part for part in tail.strip('/').split('/') if part]
         if not _split_state['parts']:
@@ -221,7 +225,7 @@ class QualityRoutesAcceptance:
         return (False, None)
 
     def _handle_acceptance_route(self, method: str, suite_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_acceptance_route_part_01(method, suite_id, tail, _split_state)
             if _split_result[0]:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -103,7 +103,7 @@ def verify_audio_campaign_archive_package(
             checks.append(_check("audio_campaign_archive_governance_integrity", _integrity_ok(governance), "Governance report integrity hash is valid."))
             checks.append(_check("audio_campaign_archive_analytics_integrity", _integrity_ok(analytics), "Analytics summary integrity hash is valid."))
 
-            source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+            source = _as_document(manifest.get("source"))
             checks.append(_check("audio_campaign_archive_report_binding", source.get("campaign_report_hash") == report.get("integrity_hash") == signoff.get("campaign_report_hash"), "Archive binds signed campaign report hash."))
             checks.append(_check("audio_campaign_archive_case_index_binding", source.get("case_index_hash") == case_index.get("integrity_hash") == signoff.get("case_index_hash"), "Archive binds signed case-index hash."))
             checks.append(_check("audio_campaign_archive_signoff_binding", source.get("campaign_signoff_hash") == signoff.get("integrity_hash"), "Archive binds campaign signoff hash."))
@@ -130,7 +130,7 @@ def audio_campaign_archive_verification_exit_code(report: dict[str, Any]) -> int
 
 def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, strict: bool) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = names - {"manifest.json"}
     undeclared = sorted(expected - declared)

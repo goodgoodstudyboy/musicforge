@@ -624,6 +624,8 @@ def _run_schema_node(
     def produce() -> Any:
         if provider_config is None or node_name not in PROVIDER_BACKED_NODES:
             return deterministic()
+        if client is None:
+            raise ProviderOutputError("Provider client is required for provider-backed nodes.")
         try:
             data = client.generate_node_json(
                 node_name,

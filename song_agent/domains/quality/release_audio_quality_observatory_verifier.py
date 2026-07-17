@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -181,7 +181,7 @@ def _document_binding_checks(documents: dict[str, ImplementationDocument]) -> li
     manifest = documents["manifest"]
     source_hash = documents["summary"].get("source_hash")
     same_source = all(doc.get("source_hash") == source_hash for key, doc in documents.items() if key not in {"manifest", "config"})
-    doc_hashes = documents["summary"].get("document_hashes") if isinstance(documents["summary"].get("document_hashes"), dict) else {}
+    doc_hashes = _as_document(documents["summary"].get("document_hashes"))
     return [
         _check("release_audio_quality_observatory_manifest_config_binding", manifest.get("config_hash") == documents["config"].get("integrity_hash"), "Manifest binds config."),
         _check("release_audio_quality_observatory_manifest_source_index_binding", manifest.get("source_index_hash") == documents["source_index"].get("integrity_hash"), "Manifest binds source index."),
@@ -199,7 +199,7 @@ def _document_binding_checks(documents: dict[str, ImplementationDocument]) -> li
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = expected_entries - {"manifest.json"}

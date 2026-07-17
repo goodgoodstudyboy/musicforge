@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesAudioQualityActions:
+class QualityRoutesAudioQualityActions(QualityRouteContext):
     def _handle_audio_quality_actions_route_part_01(self, method: str, path: str, _split_state):
         if path == '/api/audio-quality-actions':
             if method == 'GET':
@@ -12,7 +18,7 @@ class QualityRoutesAudioQualityActions:
                 return (True, None)
             if method == 'POST':
                 _split_state['payload'] = self._read_json_body()
-                queue = self.release_audio_quality_action_queue_store.create_from_observatory(_split_state['payload'].get('observatory_id', ''), name=_split_state['payload'].get('name'), include_risks=bool(_split_state['payload'].get('include_risks', True)), include_recommendations=bool(_split_state['payload'].get('include_recommendations', True)), severity_floor=str(_split_state['payload'].get('severity_floor') or 'warning'), policy=_split_state['payload'].get('policy') if isinstance(_split_state['payload'].get('policy'), dict) else {})
+                queue = self.release_audio_quality_action_queue_store.create_from_observatory(_split_state['payload'].get('observatory_id', ''), name=_split_state['payload'].get('name'), include_risks=bool(_split_state['payload'].get('include_risks', True)), include_recommendations=bool(_split_state['payload'].get('include_recommendations', True)), severity_floor=str(_split_state['payload'].get('severity_floor') or 'warning'), policy=_as_document(_split_state['payload'].get('policy')))
                 self._send_json({'ok': True, 'queue': queue, 'summary': queue.get('summary', {})}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return (True, None)
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -107,7 +113,7 @@ class QualityRoutesAudioQualityActions:
         return (False, None)
 
     def _handle_audio_quality_actions_route(self, method: str, path: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_audio_quality_actions_route_part_01(method, path, _split_state)
             if _split_result[0]:

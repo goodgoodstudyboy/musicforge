@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import threading as threading
@@ -426,7 +426,7 @@ class PlanningRuleGovernanceStore:
         return sanitize_metadata(read_json(path))
 
     def promotion_is_stale(self, promotion: PlanningRulePromotion | dict[str, Any]) -> bool:
-        data = promotion.to_dict() if isinstance(promotion, PlanningRulePromotion) else promotion if isinstance(promotion, dict) else {}
+        data = promotion.to_dict() if isinstance(promotion, PlanningRulePromotion) else _as_document(promotion)
         if data.get("status") in {"rejected", "promoted", "archived"}:
             return False
         try:
@@ -434,7 +434,7 @@ class PlanningRuleGovernanceStore:
             ruleset = self.simulation_store.read_ruleset(str(data.get("ruleset_id") or ""))
         except (PlanningRuleSimulationError, PlanningRuleSimulationNotFoundError):
             return True
-        evidence = data.get("evidence") if isinstance(data.get("evidence"), dict) else {}
+        evidence = _as_document(data.get("evidence"))
         return (
             self.simulation_store.simulation_is_stale(simulation)
             or simulation.status not in READY_SIMULATION_STATUSES
@@ -443,8 +443,8 @@ class PlanningRuleGovernanceStore:
         )
 
     def version_evidence_is_stale(self, version: PlanningRuleVersion | dict[str, Any]) -> bool:
-        data = version.to_dict() if isinstance(version, PlanningRuleVersion) else version if isinstance(version, dict) else {}
-        promoted_from = data.get("promoted_from") if isinstance(data.get("promoted_from"), dict) else {}
+        data = version.to_dict() if isinstance(version, PlanningRuleVersion) else _as_document(version)
+        promoted_from = _as_document(data.get("promoted_from"))
         simulation_id = str(promoted_from.get("simulation_id") or "").strip()
         if not simulation_id:
             return True
@@ -459,13 +459,13 @@ class PlanningRuleGovernanceStore:
                 review = self.simulation_store.review_store.read_review(str(review_id))
             except Exception:
                 return True
-            expected = (simulation.source.get("review_hashes") if isinstance(simulation.source.get("review_hashes"), dict) else {}).get(str(review_id))
+            expected = (_as_document(simulation.source.get("review_hashes"))).get(str(review_id))
             if review.status == "archived" or self.simulation_store.review_store.review_is_stale(review) or stable_hash(_review_source_core(review)) != str(expected or ""):
                 return True
         return False
 
     def frozen_ruleset_integrity_ok(self, version: PlanningRuleVersion | dict[str, Any]) -> bool:
-        data = version.to_dict() if isinstance(version, PlanningRuleVersion) else version if isinstance(version, dict) else {}
+        data = version.to_dict() if isinstance(version, PlanningRuleVersion) else _as_document(version)
         try:
             frozen = self.frozen_ruleset(str(data.get("version_id") or ""))
         except PlanningRuleGovernanceError:
@@ -473,13 +473,13 @@ class PlanningRuleGovernanceStore:
         return stable_hash(frozen) == str(data.get("ruleset_hash") or "")
 
     def version_source_integrity_ok(self, version: PlanningRuleVersion | dict[str, Any]) -> bool:
-        data = version.to_dict() if isinstance(version, PlanningRuleVersion) else version if isinstance(version, dict) else {}
+        data = version.to_dict() if isinstance(version, PlanningRuleVersion) else _as_document(version)
         try:
             frozen = self.frozen_ruleset(str(data.get("version_id") or ""))
         except PlanningRuleGovernanceError:
             return False
-        promoted_from = data.get("promoted_from") if isinstance(data.get("promoted_from"), dict) else {}
-        approval = data.get("approval") if isinstance(data.get("approval"), dict) else {}
+        promoted_from = _as_document(data.get("promoted_from"))
+        approval = _as_document(data.get("approval"))
         expected = stable_hash({"ruleset": frozen, "promotion": promoted_from, "approval": approval})
         return expected == str(data.get("source_hash") or "")
 
@@ -559,11 +559,11 @@ class PlanningRuleGovernanceStore:
 
 
 def governance_summary(version: PlanningRuleVersion | dict[str, Any] | None, *, active: dict[str, Any] | None = None, evidence_stale: bool = False) -> dict[str, Any]:
-    data = version.to_dict() if isinstance(version, PlanningRuleVersion) else version if isinstance(version, dict) else {}
+    data = version.to_dict() if isinstance(version, PlanningRuleVersion) else _as_document(version)
     if not data:
         return {"status": "missing", "governance_status": "legacy_default", "active_version_id": None}
-    promoted = data.get("promoted_from") if isinstance(data.get("promoted_from"), dict) else {}
-    active = active if isinstance(active, dict) else {}
+    promoted = _as_document(data.get("promoted_from"))
+    active = _as_document(active)
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -590,9 +590,9 @@ def governance_summary(version: PlanningRuleVersion | dict[str, Any] | None, *, 
 
 
 def promotion_summary(promotion: PlanningRulePromotion | dict[str, Any] | None) -> dict[str, Any]:
-    data = promotion.to_dict() if isinstance(promotion, PlanningRulePromotion) else promotion if isinstance(promotion, dict) else {}
-    evidence = data.get("evidence") if isinstance(data.get("evidence"), dict) else {}
-    risk = data.get("risk_assessment") if isinstance(data.get("risk_assessment"), dict) else {}
+    data = promotion.to_dict() if isinstance(promotion, PlanningRulePromotion) else _as_document(promotion)
+    evidence = _as_document(data.get("evidence"))
+    risk = _as_document(data.get("risk_assessment"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -667,7 +667,7 @@ def _review_source_core(review: Any) -> ImplementationDocument:
 
 
 def _scope(value: Any) -> ImplementationDocument:
-    raw = value if isinstance(value, dict) else {}
+    raw = _as_document(value)
     scope_type = str(raw.get("type") or ("release" if raw.get("release_id") else "project" if raw.get("project_id") else "global"))
     if scope_type not in {"global", "release", "project"}:
         scope_type = "global"
@@ -675,7 +675,7 @@ def _scope(value: Any) -> ImplementationDocument:
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _bounded(value: Any, limit: int) -> str:

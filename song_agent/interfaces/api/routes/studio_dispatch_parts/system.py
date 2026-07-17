@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
+
 
 
 from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 
-class StudioSystemDispatch:
+class StudioSystemDispatch(StudioDispatchRouteContext):
     def _dispatch_studio_system(self, method, path, parsed) -> bool:
         if path == '/api/ga':
             self._handle_ga_route(method)

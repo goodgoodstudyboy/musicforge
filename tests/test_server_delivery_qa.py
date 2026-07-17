@@ -6,7 +6,6 @@ from pathlib import Path
 
 from song_agent.auth import AuthConfig
 from song_agent.projectio import read_json
-from song_agent.server import create_server
 from tests.test_server_auth import TOKEN, request_json as auth_request_json, start_test_server as start_auth_server, stop_test_server as stop_auth_server
 from tests.test_server_edits import request_json, start_test_server, stop_test_server, wait_for_job, request_payload
 

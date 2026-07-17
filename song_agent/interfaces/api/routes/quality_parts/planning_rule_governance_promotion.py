@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesPlanningRuleGovernancePromotion:
+class QualityRoutesPlanningRuleGovernancePromotion(QualityRouteContext):
     def _handle_planning_rule_governance_promotion_route(self, method: str, route: tuple[str, str]) -> None:
         promotion_id, action = route
         try:

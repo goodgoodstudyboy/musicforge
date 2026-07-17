@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -7,7 +11,7 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesReleaseAcceptanceFixSprintGate:
+class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
     def _release_acceptance_fix_sprint_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
         fix_sprint_id = str(payload.get("acceptance_fix_sprint_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
@@ -83,7 +87,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
             else:
                 return {}
             stale = self.acceptance_fix_plan_review_store.review_is_stale(review)
-            scope = review.scope if isinstance(review.scope, dict) else {}
+            scope = _as_document(review.scope)
             scope_ok = not release_id or scope.get("release_id") == release_id
             evidence = {**summary, "stale": stale}
             if stale:
@@ -125,7 +129,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
             else:
                 return {}
             stale = self.planning_rule_simulation_store.simulation_is_stale(simulation)
-            scope = simulation.scope if isinstance(simulation.scope, dict) else {}
+            scope = _as_document(simulation.scope)
             scope_ok = not release_id or scope.get("release_id") == release_id or self._planning_simulation_reviews_match_release(simulation, release_id)
             evidence = {**summary, "stale": stale}
             if stale:
@@ -214,7 +218,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact report is stale. Refresh impact monitoring before signoff."}
             if active_id and summary.get("active_version_id") != active_id:
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact report does not match the current active Planning Rule Version."}
-            active_report_version = report.active_version if isinstance(report.active_version, dict) else {}
+            active_report_version = _as_document(report.active_version)
             if active_report_version.get("integrity_ok") is False:
                 return {**evidence, "status": "failed", "hard_block": True, "message": "Planning Rule Impact active version integrity failed."}
             if raw_status in {"archived", "stale"}:
@@ -241,7 +245,7 @@ class QualityRoutesReleaseAcceptanceFixSprintGate:
 
     def _planning_simulation_reviews_match_release(self, simulation: Any, release_id: str) -> bool:
         source = simulation.source if hasattr(simulation, "source") and isinstance(simulation.source, dict) else {}
-        review_ids = source.get("review_ids") if isinstance(source.get("review_ids"), list) else []
+        review_ids = _as_list(source.get("review_ids"))
         if not review_ids:
             return False
         for review_id in review_ids:

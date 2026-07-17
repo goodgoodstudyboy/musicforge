@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import base64 as base64
 import json as json
@@ -273,7 +273,7 @@ class UnifiedCommandCenterReleaseTrainHandoffStore:
             train_signoff_binding_path=inputs.get("train_signoff_binding"),
             change_control_zip_path=inputs.get("change_control_zip"),
             change_control_verification_report_path=inputs.get("change_control_verification_report"),
-            reset_proof_paths=_reset_proof_paths(inputs),
+            reset_proof_paths=_as_list(_reset_proof_paths(inputs)),
             lifecycle_zip_path=inputs.get("lifecycle_zip"),
             lifecycle_verification_report_path=inputs.get("lifecycle_verification_report"),
             handoff_signoff_binding_path=payload.get("handoff_signoff_binding") or self.signoff_binding_path(train_id, handoff_id),
@@ -567,7 +567,7 @@ class UnifiedCommandCenterReleaseTrainHandoffStore:
             external_evidence_manifest_path=inputs.get("external_evidence_manifest"),
             change_control_zip_path=inputs.get("change_control_zip"),
             change_control_verification_report_path=inputs.get("change_control_verification_report"),
-            reset_proof_paths=_reset_proof_paths(inputs),
+            reset_proof_paths=_as_list(_reset_proof_paths(inputs)),
         )
         return {"evidence_type": "release_train_lifecycle_audit", "required": True, "status": "passed" if runtime.get("status") == "passed" and external.get("status") == "passed" else "failed", "runtime_status": runtime.get("status"), "external_status": external.get("status"), "zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": runtime.get("manifest_hash"), "verification_report_hash": _integrity_hash(external), "summary": runtime.get("summary", {})}
 
@@ -660,7 +660,7 @@ class UnifiedCommandCenterReleaseTrainHandoffStore:
 
 def _source_inputs(payload: ImplementationDocument) -> ImplementationDocument:
     keys = ["external_evidence_manifest", "train_archive", "train_verification_report", "train_signoff_binding", "change_control_zip", "change_control_verification_report", "lifecycle_zip", "lifecycle_verification_report"]
-    doc = {key: str(payload[key]) for key in keys if payload.get(key)}
+    doc: ImplementationDocument = {key: str(payload[key]) for key in keys if payload.get(key)}
     if payload.get("train_archive_verification_report") and not doc.get("train_verification_report"):
         doc["train_verification_report"] = str(payload["train_archive_verification_report"])
     proofs = payload.get("reset_proofs") or payload.get("reset_proof_paths") or payload.get("reset_proof") or []
@@ -813,7 +813,7 @@ def _response_from_payload(payload: ImplementationDocument) -> ImplementationDoc
 
 
 def _response_public_summary(response: ImplementationDocument) -> ImplementationDocument:
-    reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
+    reviewer = _as_document(response.get("reviewer"))
     return sanitize_metadata({"reviewer_id": reviewer.get("reviewer_id"), "reviewer_name": reviewer.get("name"), "organization": reviewer.get("organization"), "reviewer_role": reviewer.get("role"), "decision": response.get("decision"), "reviewed_at": response.get("reviewed_at")})
 
 
@@ -830,7 +830,7 @@ def _accepted_evidence_row_from_dir(response_dir: Path) -> ImplementationDocumen
     binding = _read_optional_json(response_dir / "response-binding-summary.json")
     response_public = _response_public_summary(response) if response else {}
     expected_binding = _response_binding_summary(response, verification) if response and verification else {}
-    evidence_binding = accepted.get("response_binding") if isinstance(accepted.get("response_binding"), dict) else {}
+    evidence_binding = _as_document(accepted.get("response_binding"))
     failures: list[str] = []
 
     def require(check_id: str, passed: bool) -> None:

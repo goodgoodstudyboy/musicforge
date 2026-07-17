@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from typing import Any as _InferenceType
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json as json
@@ -504,7 +504,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
         return [stable_hash(item) for item in self._archive_history_items(train_id)]
 
     def _combined_history_text(self, train_id: str) -> str:
-        rows = []
+        rows: list[_InferenceType] = []
         base = self.change_dir(train_id) / "change-requests"
         if base.exists():
             for path in sorted(base.glob("*/change-request-history.jsonl")):

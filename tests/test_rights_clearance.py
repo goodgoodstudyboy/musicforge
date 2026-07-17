@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import zipfile
 
 from song_agent.distribution_verifier import verify_distribution_package
 from song_agent.release_verifier import verify_release_zip

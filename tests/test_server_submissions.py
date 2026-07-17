@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-from pathlib import Path
 
 from tests.test_distribution import _png
 from tests.test_server_distribution import _signed_release

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import os as os
@@ -264,7 +264,7 @@ class AudioReviewEvidenceStore:
                 return default
             raise AudioReviewEvidenceNotFoundError("Release audio review summary does not exist.")
         data = read_json(path)
-        return sanitize_metadata(data if isinstance(data, dict) else {}, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
+        return sanitize_metadata(_as_document(data), blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
     def create_review_task_from_marker(self, release_id: str, review_id: str, marker_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
@@ -273,7 +273,7 @@ class AudioReviewEvidenceStore:
         review = self.read_review(release_id, review_id)
         if review.get("stale") or not review_integrity_ok(review):
             raise AudioReviewEvidenceStateError("Audio review is stale or tampered. Refresh review before creating ReviewTasks.")
-        markers = review.get("markers") if isinstance(review.get("markers"), list) else []
+        markers = _as_list(review.get("markers"))
         marker = next((item for item in markers if isinstance(item, dict) and item.get("marker_id") == marker_id), None)
         if not marker:
             raise AudioReviewEvidenceNotFoundError(marker_id)
@@ -319,7 +319,7 @@ class AudioReviewEvidenceStore:
                         "review_id": review_id,
                         "marker_id": marker_id,
                         "time_seconds": marker.get("time_seconds"),
-                        "mapped": marker.get("mapped") if isinstance(marker.get("mapped"), dict) else {},
+                        "mapped": _as_document(marker.get("mapped")),
                         "audio_evidence": {
                             "wav_sha256": (review.get("audio_evidence") or {}).get("wav_sha256") if isinstance(review.get("audio_evidence"), dict) else None,
                             "audio_health_hash": (review.get("audio_evidence") or {}).get("audio_health_hash") if isinstance(review.get("audio_evidence"), dict) else None,
@@ -354,7 +354,7 @@ class AudioReviewEvidenceStore:
         if not isinstance(payload, dict):
             raise AudioReviewEvidenceError("Import payload must be an object.")
         suite_id = str(payload.get("suite_id") or "").strip()
-        mapping = payload.get("mapping") if isinstance(payload.get("mapping"), list) else []
+        mapping = _as_list(payload.get("mapping"))
         if not suite_id:
             raise AudioReviewEvidenceError("suite_id is required.")
         if not mapping:
@@ -431,7 +431,7 @@ class AudioReviewEvidenceStore:
                 reasons.append("track_identity_changed")
             if str(review.get("source_hash") or "") != current_source_hash:
                 reasons.append("source_changed")
-            evidence = review.get("audio_evidence") if isinstance(review.get("audio_evidence"), dict) else {}
+            evidence = _as_document(review.get("audio_evidence"))
             current_evidence = context["audio_evidence"]
             if evidence.get("wav_sha256") != current_evidence.get("wav_sha256"):
                 reasons.append("wav_changed")
@@ -474,8 +474,8 @@ class AudioReviewEvidenceStore:
             raise AudioReviewEvidenceStateError("Track audio artifact is stale or missing.")
         song_plan = read_json(song_plan_path) if song_plan_path.exists() else {}
         qa_track = _current_audio_qa_track(self.release_store, self.project_store, release, release_id, track.track_id)
-        health_report = qa_track.get("health_report") if isinstance(qa_track.get("health_report"), dict) else {}
-        health_summary = qa_track.get("health") if isinstance(qa_track.get("health"), dict) else {}
+        health_report = _as_document(qa_track.get("health_report"))
+        health_summary = _as_document(qa_track.get("health"))
         if not health_summary:
             if require_reviewable:
                 health_report = analyze_wav_health(wav_path, source={"release_id": release_id, "track_id": track.track_id, "project_id": track.project_id, "version_id": track.version_id}, report_id=f"ahr-{release_id}-{track.track_id}", now=now_iso())
@@ -507,7 +507,7 @@ class AudioReviewEvidenceStore:
             "release": release.to_dict(),
             "track": track.to_dict(),
             "export_dir": export_dir,
-            "song_plan": song_plan if isinstance(song_plan, dict) else {},
+            "song_plan": _as_document(song_plan),
             "audio_evidence": audio_evidence,
             "health_report": health_report,
             "artifact": artifact,
@@ -519,7 +519,7 @@ class AudioReviewEvidenceStore:
             raise AudioReviewEvidenceError("track_id is required.")
         context = self.track_audio_context(release_id, track_id, require_reviewable=True)
         track = context["track"]
-        reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
+        reviewer = _as_document(payload.get("reviewer"))
         status = str(payload.get("status") or "accepted").strip()
         if status not in REVIEW_STATUSES:
             raise AudioReviewEvidenceError(f"status must be one of: {', '.join(sorted(REVIEW_STATUSES))}.")
@@ -562,7 +562,7 @@ class AudioReviewEvidenceStore:
         return sanitize_metadata(review, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
     def _normalize_markers(self, value: Any, *, context: ImplementationDocument) -> list[ImplementationDocument]:
-        markers = value if isinstance(value, list) else []
+        markers = _as_list(value)
         result: list[dict[str, Any]] = []
         duration = float((context.get("audio_evidence") or {}).get("duration_seconds") or 0.0)
         for index, item in enumerate(markers, start=1):
@@ -587,7 +587,7 @@ class AudioReviewEvidenceStore:
                     "severity": severity,
                     "category": category,
                     "message": sanitize_sensitive_text(str(item.get("message") or ""))[:800],
-                    "mapped": map_marker_to_song_plan(seconds, context.get("song_plan") if isinstance(context.get("song_plan"), dict) else {}),
+                    "mapped": map_marker_to_song_plan(seconds, _as_document(context.get("song_plan"))),
                     "review_task_id": str(item.get("review_task_id") or "") or None,
                     "mix_patch_id": str(item.get("mix_patch_id") or "") or None,
                 }
@@ -658,11 +658,11 @@ def audio_health_content_hash(report: dict[str, Any]) -> str:
         {
             "status": report.get("status"),
             "wav_sha256": report.get("wav_sha256"),
-            "format": report.get("format") if isinstance(report.get("format"), dict) else {},
-            "metrics": report.get("metrics") if isinstance(report.get("metrics"), dict) else {},
-            "checks": report.get("checks") if isinstance(report.get("checks"), list) else [],
-            "warnings": report.get("warnings") if isinstance(report.get("warnings"), list) else [],
-            "failures": report.get("failures") if isinstance(report.get("failures"), list) else [],
+            "format": _as_document(report.get("format")),
+            "metrics": _as_document(report.get("metrics")),
+            "checks": _as_list(report.get("checks")),
+            "warnings": _as_list(report.get("warnings")),
+            "failures": _as_list(report.get("failures")),
         }
     )
 
@@ -729,7 +729,7 @@ def audio_review_summary_allows_signoff(summary: dict[str, Any]) -> bool:
 
 
 def audio_review_summary_public(summary: dict[str, Any] | None) -> dict[str, Any]:
-    data = summary if isinstance(summary, dict) else {}
+    data = _as_document(summary)
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -769,7 +769,7 @@ def review_public_summary(review: dict[str, Any]) -> dict[str, Any]:
             "stale": bool(review.get("stale", False)),
             "stale_reasons": review.get("stale_reasons", []),
             "integrity_ok": review_integrity_ok(review),
-            "audio_evidence": review.get("audio_evidence") if isinstance(review.get("audio_evidence"), dict) else {},
+            "audio_evidence": _as_document(review.get("audio_evidence")),
         },
         blocked_keys=BLOCKED_RELEASE_KEYS - {"path"},
     )
@@ -849,7 +849,7 @@ def _current_audio_qa_track(release_store: ReleaseStore, project_store: ProjectS
 
 def _song_plan_identity(song_plan: ImplementationDocument) -> ImplementationDocument:
     return {
-        "payload_hash": stable_hash(song_plan if isinstance(song_plan, dict) else {}),
+        "payload_hash": stable_hash(_as_document(song_plan)),
         "tempo_bpm": _tempo(song_plan),
         "duration_seconds": song_plan.get("duration_seconds") if isinstance(song_plan, dict) else None,
         "sections": _section_ranges(song_plan),
@@ -866,7 +866,7 @@ def _tempo(song_plan: ImplementationDocument) -> float:
                 return float(value)
             except ValueError:
                 pass
-    request = song_plan.get("request") if isinstance(song_plan.get("request"), dict) else {}
+    request = _as_document(song_plan.get("request"))
     value = request.get("tempo_bpm")
     try:
         return float(value or 0.0)
@@ -875,7 +875,7 @@ def _tempo(song_plan: ImplementationDocument) -> float:
 
 
 def _section_ranges(song_plan: ImplementationDocument) -> list[ImplementationDocument]:
-    sections = song_plan.get("sections") if isinstance(song_plan, dict) and isinstance(song_plan.get("sections"), list) else []
+    sections = _as_list(song_plan.get("sections"))
     result: list[dict[str, Any]] = []
     cursor = 0.0
     for index, section in enumerate(sections, start=1):
@@ -905,7 +905,7 @@ def _float(value: Any) -> float:
 
 
 def _artifact_stale_reasons(artifact: ImplementationDocument, *, wav_path: Path, midi_path: Path, song_plan_path: Path, project_store: ProjectStore) -> list[str]:
-    renderer = artifact.get("renderer") if isinstance(artifact.get("renderer"), dict) else {}
+    renderer = _as_document(artifact.get("renderer"))
     profile_id = str(renderer.get("profile_id") or "")
     profile = None
     if profile_id.startswith("arp-"):
@@ -957,7 +957,7 @@ def _review_redaction_findings(review: ImplementationDocument) -> list[Implement
 
 
 def _markers_from_human_review(review: ImplementationDocument) -> list[ImplementationDocument]:
-    source = review.get("markers") if isinstance(review.get("markers"), list) else []
+    source = _as_list(review.get("markers"))
     result: list[dict[str, Any]] = []
     for item in source:
         if not isinstance(item, dict):
@@ -979,7 +979,7 @@ def _markers_from_human_review(review: ImplementationDocument) -> list[Implement
 def _matching_open_marker_task(project_dir: Path, release_id: str, review_id: str, marker_id: str) -> ReviewTask | None:
     store = ReviewTaskStore(project_dir)
     for task in store.list_tasks(include_archived=False):
-        source = task.source if isinstance(task.source, dict) else {}
+        source = _as_document(task.source)
         if (
             source.get("source_type") == "release_audio_review_marker"
             and source.get("release_id") == release_id
@@ -992,7 +992,7 @@ def _matching_open_marker_task(project_dir: Path, release_id: str, review_id: st
 
 
 def _marker_task_title(marker: ImplementationDocument, review: ImplementationDocument) -> str:
-    mapped = marker.get("mapped") if isinstance(marker.get("mapped"), dict) else {}
+    mapped = _as_document(marker.get("mapped"))
     section = mapped.get("section_role") or mapped.get("section_id") or f"{marker.get('time_seconds')}s"
     return f"Fix audio review marker: {marker.get('category') or 'issue'} at {section}"
 
@@ -1000,7 +1000,7 @@ def _marker_task_title(marker: ImplementationDocument, review: ImplementationDoc
 def _marker_task_instruction(marker: ImplementationDocument) -> str:
     category = str(marker.get("category") or "other")
     message = str(marker.get("message") or "").strip()
-    mapped = marker.get("mapped") if isinstance(marker.get("mapped"), dict) else {}
+    mapped = _as_document(marker.get("mapped"))
     section = mapped.get("section_role") or mapped.get("section_id") or "the marked section"
     base = {
         "mix_balance": "Adjust arrangement density, velocities, or register balance around the marked section.",

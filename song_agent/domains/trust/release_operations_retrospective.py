@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 from datetime import datetime as datetime
 from typing import Any as Any
@@ -62,20 +62,20 @@ def build_operations_retrospective_report(
 
 
 def operations_retrospective_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == operations_retrospective_integrity_hash(data)
 
 
 def retrospective_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
             "source_hash": data.get("source_hash"),
             "integrity_ok": operations_retrospective_integrity_ok(data),
-            "timeline_count": len(data.get("timeline") if isinstance(data.get("timeline"), list) else []),
-            "recommendation_count": len(data.get("recommendations") if isinstance(data.get("recommendations"), list) else []),
-            "risk_hotspot_count": len(data.get("risk_hotspots") if isinstance(data.get("risk_hotspots"), list) else []),
+            "timeline_count": len(_as_list(data.get("timeline"))),
+            "recommendation_count": len(_as_list(data.get("recommendations"))),
+            "risk_hotspot_count": len(_as_list(data.get("risk_hotspots"))),
         },
         blocked_keys=RETROSPECTIVE_BLOCKED_KEYS,
     )
@@ -142,11 +142,11 @@ def _risk_hotspots(audit_report: ImplementationDocument, entries: list[Implement
         hotspots.append({"risk": "applied_change_request", "count": sum(1 for item in entries if item.get("event_type") == "operations_change_request_applied"), "severity": "warning"})
     if any(item.get("event_type") == "operations_signoff_signed" and "force" in str((item.get("source_ref") or {}).get("source_id") or "") for item in entries):
         hotspots.append({"risk": "force_signoff", "count": 1, "severity": "warning"})
-    verifier_summary = audit_report.get("package_verifiers") if isinstance(audit_report.get("package_verifiers"), dict) else {}
+    verifier_summary = _as_document(audit_report.get("package_verifiers"))
     failed_count = int(verifier_summary.get("failed_count") or 0)
     if failed_count:
         hotspots.append({"risk": "failed_package_verifier", "count": failed_count, "severity": "blocking"})
-    warning_count = len(audit_report.get("warnings") if isinstance(audit_report.get("warnings"), list) else [])
+    warning_count = len(_as_list(audit_report.get("warnings")))
     if warning_count:
         hotspots.append({"risk": "audit_warnings", "count": warning_count, "severity": "warning"})
     manual_count = sum(1 for item in entries if item.get("risk") == "manual_required")
@@ -163,7 +163,7 @@ def _manual_action_summary(entries: list[ImplementationDocument]) -> Implementat
 def _verifier_outcomes(audit_report: ImplementationDocument, entries: list[ImplementationDocument]) -> ImplementationDocument:
     verifier_entries = [item for item in entries if str(item.get("event_type") or "").endswith("_verified") or str(item.get("event_type") or "").startswith("package_verifier_")]
     failed = [item for item in verifier_entries if (item.get("evidence_ref") or {}).get("integrity_ok") is False]
-    return {"count": len(verifier_entries), "failed_count": len(failed), "audit_package_verifier_summary": audit_report.get("package_verifiers") if isinstance(audit_report.get("package_verifiers"), dict) else {}}
+    return {"count": len(verifier_entries), "failed_count": len(failed), "audit_package_verifier_summary": _as_document(audit_report.get("package_verifiers"))}
 
 
 def _change_request_summary(entries: list[ImplementationDocument]) -> ImplementationDocument:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.runtime_parts.batch_runner_context import BatchRunnerContext
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, BatchDocument, HTTPStatus, JobState, Path, now_iso, threading
 
-class BatchRunnerSyncRunningItems:
+class BatchRunnerSyncRunningItems(BatchRunnerContext):
     def _sync_running_items(self, batch_id: str) -> BatchDocument | None:
         with self.lock:
             try:

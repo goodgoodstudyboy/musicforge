@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -222,12 +222,12 @@ class PlanningRuleImpactStore:
         return planning_rule_impact_summary(reports[0])
 
     def report_is_stale(self, report: PlanningRuleImpactReport | dict[str, Any]) -> bool:
-        data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else report if isinstance(report, dict) else {}
+        data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else _as_document(report)
         if data.get("status") == "archived":
             return False
         if data.get("status") == "stale":
             return True
-        source = data.get("source") if isinstance(data.get("source"), dict) else {}
+        source = _as_document(data.get("source"))
         scope = _scope(data.get("scope"))
         current = self._source_state(
             {
@@ -240,13 +240,13 @@ class PlanningRuleImpactStore:
         return any(str(current.get(key) or "") != str(source.get(key) or "") for key in keys) or current.get("plan_hashes") != source.get("plan_hashes") or current.get("review_hashes") != source.get("review_hashes") or current.get("version_hashes") != source.get("version_hashes") or bool(current.get("source_stale", False))
 
     def report_integrity_ok(self, report: PlanningRuleImpactReport | dict[str, Any]) -> bool:
-        data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else report if isinstance(report, dict) else {}
+        data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else _as_document(report)
         expected = str(data.get("integrity_hash") or data.get("report_hash") or "")
         return bool(expected and expected == planning_rule_impact_report_hash(data))
 
     def _build_report(self, report_id: str, payload: ImplementationDocument, *, created_at: str, now: str) -> PlanningRuleImpactReport:
         state = self._source_state(payload)
-        active = state.get("active_version") if isinstance(state.get("active_version"), dict) else {}
+        active = _as_document(state.get("active_version"))
         plan_samples = state["plan_samples"]
         review_samples = state["review_samples"]
         version_metrics = _version_metrics(plan_samples, review_samples)
@@ -380,7 +380,7 @@ class PlanningRuleImpactStore:
             if not _plan_matches_scope(plan, scope):
                 continue
             summary = fix_plan_summary(plan)
-            governance = plan.source.get("planning_rule_governance") if isinstance(plan.source.get("planning_rule_governance"), dict) else {}
+            governance = _as_document(plan.source.get("planning_rule_governance"))
             version_id = str(governance.get("planning_rule_version_id") or governance.get("version_id") or "legacy_default")
             if version_id == "legacy_default" and not include_legacy:
                 continue
@@ -470,9 +470,9 @@ class PlanningRuleImpactStore:
 
 
 def planning_rule_impact_summary(report: PlanningRuleImpactReport | dict[str, Any] | None) -> dict[str, Any]:
-    data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    risk = data.get("risk_drift") if isinstance(data.get("risk_drift"), dict) else {}
+    data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else _as_document(report)
+    summary = _as_document(data.get("summary"))
+    risk = _as_document(data.get("risk_drift"))
     integrity_hash = str(data.get("integrity_hash") or data.get("report_hash") or "")
     return sanitize_metadata(
         {
@@ -494,7 +494,7 @@ def planning_rule_impact_summary(report: PlanningRuleImpactReport | dict[str, An
             "force_close_rate": risk.get("force_close_rate"),
             "stale": data.get("status") == "stale" or bool(summary.get("stale", False)),
             "warnings": data.get("warnings", []) if isinstance(data.get("warnings"), list) else [],
-            "source_hash": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("source_hash"),
+            "source_hash": (_as_document(data.get("source"))).get("source_hash"),
             "integrity_hash": integrity_hash,
             "integrity_ok": bool(integrity_hash and integrity_hash == planning_rule_impact_report_hash(data)),
         }
@@ -515,7 +515,7 @@ def planning_rule_impact_report_hash(report: PlanningRuleImpactReport | dict[str
     if isinstance(report, PlanningRuleImpactReport):
         data = {key: getattr(report, key) for key in IMPACT_REPORT_INTEGRITY_FIELDS}
     else:
-        data = report if isinstance(report, dict) else {}
+        data = _as_document(report)
     payload = {key: data.get(key) for key in IMPACT_REPORT_INTEGRITY_FIELDS}
     return stable_hash(payload)
 
@@ -624,8 +624,8 @@ def _risk_drift_metrics(version_metrics: list[ImplementationDocument], active_ve
 
 
 def _impact_warnings(state: ImplementationDocument, adoption: ImplementationDocument, risk: ImplementationDocument) -> list[str]:
-    warnings = list(risk.get("warnings") if isinstance(risk.get("warnings"), list) else [])
-    active = state.get("active_version") if isinstance(state.get("active_version"), dict) else {}
+    warnings = list(_as_list(risk.get("warnings")))
+    active = _as_document(state.get("active_version"))
     if active.get("status") == "missing":
         warnings.append("missing_active_rule_version")
     if active.get("evidence_stale") or active.get("integrity_ok") is False:
@@ -696,7 +696,7 @@ def _plan_matches_scope(plan: AcceptanceFixPlan, scope: ImplementationDocument) 
         project_id = str(scope.get("project_id") or "")
         if plan.scope.get("project_id") == project_id:
             return True
-        return any(str((item.get("target") if isinstance(item.get("target"), dict) else {}).get("project_id") or "") == project_id for item in plan.planned_items)
+        return any(str((_as_document(item.get("target"))).get("project_id") or "") == project_id for item in plan.planned_items)
     return True
 
 
@@ -705,7 +705,7 @@ def _plan_project_ids(plan: AcceptanceFixPlan) -> list[str]:
     if plan.scope.get("project_id"):
         ids.add(str(plan.scope["project_id"]))
     for item in plan.planned_items:
-        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        target = _as_document(item.get("target"))
         if target.get("project_id"):
             ids.add(str(target["project_id"]))
     return sorted(ids)
@@ -723,13 +723,13 @@ def _report_project_ids(report: PlanningRuleImpactReport) -> set[str]:
 def _review_observed_effectiveness(review: AcceptanceFixPlanReview) -> int:
     values = []
     for item in review.item_outcomes:
-        outcome = item.get("outcome") if isinstance(item.get("outcome"), dict) else {}
+        outcome = _as_document(item.get("outcome"))
         values.append(outcome.get("observed_effectiveness_score"))
     return _mean(values)
 
 
 def _scope(value: Any) -> ImplementationDocument:
-    raw = value if isinstance(value, dict) else {}
+    raw = _as_document(value)
     scope_type = str(raw.get("type") or ("release" if raw.get("release_id") else "project" if raw.get("project_id") else "global"))
     if scope_type not in {"global", "release", "project"}:
         scope_type = "global"
@@ -745,7 +745,7 @@ def _scope_key(scope: ImplementationDocument) -> str:
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _bounded(value: Any, limit: int) -> str:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -121,13 +121,13 @@ def write_trust_operations_final_handoff_verification_report(report: dict[str, A
 
 
 def print_trust_operations_final_handoff_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Final Handoff verification")
     print(f"status: {report.get('status')}")
     print(f"certificate: {summary.get('certificate_id') or '-'}")
     print(f"signoff: {summary.get('signoff_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def trust_operations_final_handoff_verification_exit_code(report: dict[str, Any]) -> int:
@@ -267,7 +267,7 @@ class _FinalHandoffVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_exact_check("manifest", "tofr_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_FINAL_READINESS_MANIFEST_PACKAGE_TYPE, "Manifest package_type")
         self._add_hash_check("manifest", "tofr_manifest_integrity", self.manifest.get("integrity_hash"), final_readiness_manifest_hash(self.manifest), "Manifest integrity")
-        file_rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        file_rows = _as_list(self.manifest.get("files"))
         expected_paths = sorted(FINAL_READINESS_EXPORT_ENTRIES - {"trust-operations-final-readiness-manifest.json"})
         manifest_paths = sorted(str(row.get("path") or "") for row in file_rows if isinstance(row, dict))
         self._add_exact_check("manifest", "tofr_manifest_fixed_file_list", manifest_paths, expected_paths, "Manifest file list matches fixed entries")
@@ -298,13 +298,13 @@ class _FinalHandoffVerifier:
         self._add_exact_check("evidence", "tofr_evidence_index_package_type", self.evidence_index.get("package_type"), TRUST_OPERATIONS_FINAL_EVIDENCE_INDEX_PACKAGE_TYPE, "Evidence index package_type")
         self._add_hash_check("evidence", "tofr_evidence_index_integrity", self.evidence_index.get("integrity_hash"), final_readiness_hash(self.evidence_index), "Evidence index integrity")
         self._add_exact_check("evidence", "tofr_report_rows_match_evidence", self.report.get("rows"), self.evidence_index.get("items"), "Report rows match evidence index")
-        cert_source = self.certificate.get("source") if isinstance(self.certificate.get("source"), dict) else {}
+        cert_source = _as_document(self.certificate.get("source"))
         self._add_exact_check("certificate", "tofr_certificate_report_hash", cert_source.get("report_hash"), self.report.get("integrity_hash"), "Certificate report hash")
         self._add_exact_check("certificate", "tofr_certificate_evidence_hash", cert_source.get("evidence_index_hash"), self.evidence_index.get("integrity_hash"), "Certificate evidence index hash")
         self._verify_signoff()
         self._add_exact_check("change_requests", "tofr_change_requests_package_type", self.change_requests.get("package_type"), TRUST_OPERATIONS_FINAL_HANDOFF_CHANGE_REQUESTS_PACKAGE_TYPE, "Change requests package_type")
         self._add_hash_check("change_requests", "tofr_change_requests_integrity", self.change_requests.get("integrity_hash"), final_readiness_hash(self.change_requests), "Change requests integrity")
-        manifest_source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        manifest_source = _as_document(self.manifest.get("source"))
         expected_source = {
             "report_hash": self.report.get("integrity_hash"),
             "certificate_hash": self.certificate.get("integrity_hash"),
@@ -321,14 +321,14 @@ class _FinalHandoffVerifier:
         self._add_exact_check("signoff", "tofr_signoff_package_type", self.signoff.get("package_type"), TRUST_OPERATIONS_FINAL_HANDOFF_SIGNOFF_PACKAGE_TYPE, "Signoff package_type")
         self._add_hash_check("signoff", "tofr_signoff_integrity", self.signoff.get("integrity_hash"), final_readiness_hash(self.signoff), "Signoff integrity")
         self._add_exact_check("signoff", "tofr_signoff_status", self.signoff.get("status"), "signed", "Signoff status")
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
         expected_source = {
             "final_readiness_report_hash": self.report.get("integrity_hash"),
             "final_readiness_certificate_hash": self.certificate.get("integrity_hash"),
             "final_evidence_index_hash": self.evidence_index.get("integrity_hash"),
-            "hub_verification_report_hash": (self.report.get("source") if isinstance(self.report.get("source"), dict) else {}).get("hub_verification_report_hash"),
-            "assurance_watch_signoff_verification_report_hash": (self.report.get("source") if isinstance(self.report.get("source"), dict) else {}).get("assurance_watch_signoff_verification_report_hash"),
-            "delivery_verification_set_hash": (self.report.get("source") if isinstance(self.report.get("source"), dict) else {}).get("delivery_verification_set_hash"),
+            "hub_verification_report_hash": (_as_document(self.report.get("source"))).get("hub_verification_report_hash"),
+            "assurance_watch_signoff_verification_report_hash": (_as_document(self.report.get("source"))).get("assurance_watch_signoff_verification_report_hash"),
+            "delivery_verification_set_hash": (_as_document(self.report.get("source"))).get("delivery_verification_set_hash"),
         }
         self._add_exact_check("signoff", "tofr_signoff_source", source, expected_source, "Signoff source")
         expected_payload_hash = stable_hash(
@@ -383,35 +383,35 @@ class _FinalHandoffVerifier:
         mismatches = [key for key, expected in expected_fields.items() if signoff_event_payload.get(key) != expected]
         self._add_check("history", "tofr_history_signoff_payload_binding", "failed" if mismatches else "passed", "blocking", "Signoff history payload mismatch: " + ", ".join(mismatches) if mismatches else "Signoff history payload matches current signoff.")
         reset_events = [item for item in self.history_events if item.get("event_type") == "final_handoff_reset"]
-        change_requests = self.change_requests.get("change_requests") if isinstance(self.change_requests.get("change_requests"), list) else []
+        change_requests = _as_list(self.change_requests.get("change_requests"))
         by_id = {str(item.get("change_request_id") or ""): item for item in change_requests if isinstance(item, dict)}
         bad_resets: list[str] = []
         for event in reset_events:
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             cr = by_id.get(str(payload.get("change_request_id") or ""))
             applied = cr.get("applied") if isinstance(cr, dict) and isinstance(cr.get("applied"), dict) else {}
-            if not cr or cr.get("status") != "applied" or cr.get("integrity_hash") != payload.get("change_request_hash") or applied.get("applied_reset_hash") != payload.get("signoff_hash"):
+            if not cr or cr.get("status") != "applied" or cr.get("integrity_hash") != payload.get("change_request_hash") or _as_document(applied).get("applied_reset_hash") != payload.get("signoff_hash"):
                 bad_resets.append(str(payload.get("change_request_id") or "unknown"))
         self._add_check("history", "tofr_history_reset_cr_causality", "failed" if bad_resets else "passed", "blocking", "Reset events without applied CR: " + ", ".join(bad_resets[:5]) if bad_resets else "Reset events are bound to applied change requests.")
 
     def _verify_summaries(self) -> None:
         for entry, summary in self.summaries.items():
             self._add_hash_check("summaries", "tofr_summary_integrity_" + _safe_check_id(entry), summary.get("integrity_hash"), final_readiness_hash(summary), f"{entry} integrity")
-        rows = self.evidence_index.get("items") if isinstance(self.evidence_index.get("items"), list) else []
+        rows = _as_list(self.evidence_index.get("items"))
         by_key = {(row.get("component_type"), row.get("component_id")): row for row in rows if isinstance(row, dict)}
         for spec in FINAL_READINESS_SINGLE_SPECS:
             summary = self.summaries.get(str(spec["summary_path"]), {})
             row = by_key.get((spec["component_type"], spec["component_id"]), {})
             self._add_exact_check("summaries", "tofr_summary_row_binding_" + spec["component_type"], _summary_projection(summary), _row_summary_projection(row), f"{spec['component_type']} summary binds evidence row")
         delivery_summary = self.summaries.get("verification-summaries/delivery-verification-summary.json", {})
-        delivery_items = delivery_summary.get("items") if isinstance(delivery_summary.get("items"), list) else []
+        delivery_items = _as_list(delivery_summary.get("items"))
         delivery_rows = [row for row in rows if isinstance(row, dict) and row.get("component_type") in {spec["component_type"] for spec in DELIVERY_VERIFICATION_COMPONENTS}]
         self._add_exact_check("summaries", "tofr_delivery_summary_rows", sorted(delivery_items, key=_row_key), sorted(delivery_rows, key=_row_key), "Delivery summary rows match evidence index.")
 
     def _verify_current_external_sources(self) -> None:
         if not self.require_current:
             return
-        rows = self.evidence_index.get("items") if isinstance(self.evidence_index.get("items"), list) else []
+        rows = _as_list(self.evidence_index.get("items"))
         by_key = {(str(row.get("component_type") or ""), str(row.get("component_id") or "")): row for row in rows if isinstance(row, dict)}
         for spec in FINAL_READINESS_SINGLE_SPECS:
             row = by_key.get((str(spec["component_type"]), str(spec["component_id"])), {})
@@ -514,16 +514,16 @@ class _FinalHandoffVerifier:
                 "zip_sha256": self.zip_sha256,
                 "zip_size_bytes": self.zip_size_bytes,
                 "manifest_hash": self.manifest.get("integrity_hash"),
-                "source_hash": stable_hash(self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}),
+                "source_hash": stable_hash(_as_document(self.signoff.get("source"))),
                 "final_readiness_report_hash": self.report.get("integrity_hash"),
                 "final_readiness_certificate_hash": self.certificate.get("integrity_hash"),
                 "final_evidence_index_hash": self.evidence_index.get("integrity_hash"),
                 "signoff_hash": self.signoff.get("integrity_hash"),
-                "hub_verification_report_hash": (self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}).get("hub_verification_report_hash"),
+                "hub_verification_report_hash": (_as_document(self.signoff.get("source"))).get("hub_verification_report_hash"),
                 "hub_zip_sha256": _row_by_type(self.evidence_index, "hub").get("package_sha256"),
                 "hub_manifest_hash": _row_by_type(self.evidence_index, "hub").get("manifest_hash"),
-                "assurance_watch_signoff_verification_report_hash": (self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}).get("assurance_watch_signoff_verification_report_hash"),
-                "delivery_verification_set_hash": (self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}).get("delivery_verification_set_hash"),
+                "assurance_watch_signoff_verification_report_hash": (_as_document(self.signoff.get("source"))).get("assurance_watch_signoff_verification_report_hash"),
+                "delivery_verification_set_hash": (_as_document(self.signoff.get("source"))).get("delivery_verification_set_hash"),
                 "summary": summary,
                 "checks": self.checks,
                 "blockers": blockers,
@@ -614,7 +614,7 @@ def _first_path(*values: Path | str | None) -> Path | None:
 
 
 def _component_id_from_report(report: ImplementationDocument, prefix: str, index: int) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     for key in ("component_id", "target_id", "submission_id", "release_id", "operations_id", "package_id"):
         value = report.get(key) or summary.get(key)
         if value:
@@ -627,7 +627,7 @@ def _read_json_file(path: Path | None) -> ImplementationDocument:
         return {}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 
@@ -638,7 +638,7 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

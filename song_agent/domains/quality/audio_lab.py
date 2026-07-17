@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_text as _as_text
 
 import hashlib as hashlib
 import math as math
@@ -148,7 +150,7 @@ class AudioLabStore:
     def test_profile(self, profile_id: str | None = None) -> dict[str, Any]:
         target = _default_profile_id(profile_id)
         try:
-            result = self.audio_profile_store.test_profile(target)
+            result = self.audio_profile_store.test_profile(_as_text(target))
         except AudioProfileNotFoundError:
             result = {"status": "failed", "message": "Audio profile is not configured.", "profile": None}
         result = sanitize_metadata({**result, "tested_at": now_iso(), "profile_id": target or "default"})
@@ -243,11 +245,11 @@ class AudioLabStore:
         smoke_report = self.read_smoke_report(smoke_run_id)
         with self.lock:
             session_id = self._next_id(self.sessions_dir, "als")
-            items = []
+            items: list[_InferenceType] = []
             for smoke_item in smoke_report.get("items", []):
                 if not isinstance(smoke_item, dict):
                     continue
-                item = {
+                item: _InferenceType = {
                     "item_id": str(smoke_item.get("item_id") or f"item-{len(items)+1:03d}"),
                     "song_id": smoke_item.get("song_id"),
                     "title": smoke_item.get("title"),
@@ -304,7 +306,7 @@ class AudioLabStore:
                         "updated_at": str(raw_item.get("updated_at") or now),
                     }
                 )
-                source_abspaths = raw_item.get("source_abspaths") if isinstance(raw_item.get("source_abspaths"), dict) else {}
+                source_abspaths = _as_document(raw_item.get("source_abspaths"))
                 wav_source = Path(str(source_abspaths.get("wav") or "")) if source_abspaths.get("wav") else None
                 if wav_source and wav_source.exists():
                     target = session_dir / "items" / item_id / "song.wav"
@@ -692,8 +694,8 @@ class AudioLabStore:
 
     def _item_stale_reasons(self, item: ImplementationDocument) -> list[str]:
         reasons = []
-        relpaths = item.get("artifact_relpaths") if isinstance(item.get("artifact_relpaths"), dict) else {}
-        hashes = item.get("artifact_hashes") if isinstance(item.get("artifact_hashes"), dict) else {}
+        relpaths = _as_document(item.get("artifact_relpaths"))
+        hashes = _as_document(item.get("artifact_hashes"))
         for key, hash_key in (("song_plan", "song_plan_hash"), ("midi", "midi_sha256"), ("wav", "wav_sha256")):
             relpath = str(relpaths.get(key) or "")
             expected = hashes.get(hash_key)
@@ -715,7 +717,7 @@ class AudioLabStore:
     def _with_comparison_stale(self, comparison: ImplementationDocument) -> ImplementationDocument:
         reasons = []
         for side in ("left", "right"):
-            artifact = comparison.get(side) if isinstance(comparison.get(side), dict) else {}
+            artifact = _as_document(comparison.get(side))
             path_text = str(artifact.get("source_abspath") or "")
             expected = str(artifact.get("artifact_hash") or "")
             if not path_text or not expected:
@@ -801,7 +803,7 @@ def _review_payload(payload: ImplementationDocument) -> ImplementationDocument:
         raise AudioLabValidationError("playback_confirmed=true is required for manual Audio Lab review.")
     if str(payload.get("review_mode") or "manual") != "manual":
         raise AudioLabValidationError("Audio Lab session review must use review_mode=manual.")
-    reviewer_payload = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
+    reviewer_payload = _as_document(payload.get("reviewer"))
     reviewer_name = payload.get("reviewer_name") or reviewer_payload.get("name") or (payload.get("reviewer") if isinstance(payload.get("reviewer"), str) else "")
     reviewer_role = payload.get("reviewer_role") or reviewer_payload.get("role") or payload.get("role")
     reviewer = {"name": _bounded(reviewer_name, 120), "role": _bounded(reviewer_role, 120)}
@@ -922,9 +924,9 @@ def _session_status(items: list[ImplementationDocument]) -> str:
     reviews = [item.get("review") for item in items if isinstance(item.get("review"), dict) and item.get("review")]
     if len(reviews) < len(items):
         return "needs_review"
-    if any(review.get("status") == "rejected" for review in reviews):
+    if any(_as_document(review).get("status") == "rejected" for review in reviews):
         return "failed"
-    if any(review.get("status") == "needs_fix" for review in reviews):
+    if any(_as_document(review).get("status") == "needs_fix" for review in reviews):
         return "needs_fix"
     return "passed"
 
@@ -934,10 +936,10 @@ def _session_summary(items: list[ImplementationDocument], status: str) -> Implem
     return {
         "status": status,
         "item_count": len(items),
-        "manual_review_count": sum(1 for review in reviews if review.get("review_mode") == "manual"),
-        "accepted_count": sum(1 for review in reviews if review.get("status") == "accepted"),
-        "needs_fix_count": sum(1 for review in reviews if review.get("status") == "needs_fix"),
-        "rejected_count": sum(1 for review in reviews if review.get("status") == "rejected"),
+        "manual_review_count": sum(1 for review in reviews if _as_document(review).get("review_mode") == "manual"),
+        "accepted_count": sum(1 for review in reviews if _as_document(review).get("status") == "accepted"),
+        "needs_fix_count": sum(1 for review in reviews if _as_document(review).get("status") == "needs_fix"),
+        "rejected_count": sum(1 for review in reviews if _as_document(review).get("status") == "rejected"),
         "marker_count": sum(len(item.get("markers") or []) for item in items),
         "stale_count": sum(1 for item in items if item.get("stale")),
         "rendered_wav_count": sum(1 for item in items if item.get("audio_status") == "rendered"),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import re
@@ -37,8 +37,8 @@ def collect_planning_rule_governance_summary(project_id: str) -> dict[str, Any]:
     for plan in _read_rows(FIX_PLAN_ROOT, "afp-*/fix-plan.json"):
         if plan.get("status") == "archived" or not _plan_matches_project(plan, project_id):
             continue
-        source = plan.get("source") if isinstance(plan.get("source"), dict) else {}
-        governance = source.get("planning_rule_governance") if isinstance(source.get("planning_rule_governance"), dict) else {}
+        source = _as_document(plan.get("source"))
+        governance = _as_document(source.get("planning_rule_governance"))
         used_id = str(governance.get("planning_rule_version_id") or governance.get("version_id") or "legacy_default")
         used[used_id] = used.get(used_id, 0) + 1
     summary["used_rule_versions"] = [
@@ -79,7 +79,7 @@ def _read_optional(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _latest(rows: list[ImplementationDocument]) -> ImplementationDocument:
@@ -87,30 +87,30 @@ def _latest(rows: list[ImplementationDocument]) -> ImplementationDocument:
 
 
 def _simulation_matches_project(report: ImplementationDocument, project_id: str) -> bool:
-    scope = report.get("scope") if isinstance(report.get("scope"), dict) else {}
+    scope = _as_document(report.get("scope"))
     if scope.get("project_id") == project_id:
         return True
     for review in report.get("review_results", []) if isinstance(report.get("review_results"), list) else []:
         for item in review.get("item_results", []) if isinstance(review, dict) and isinstance(review.get("item_results"), list) else []:
             target = item.get("target") if isinstance(item, dict) and isinstance(item.get("target"), dict) else {}
-            if target.get("project_id") == project_id:
+            if _as_document(target).get("project_id") == project_id:
                 return True
     return False
 
 
 def _plan_matches_project(plan: ImplementationDocument, project_id: str) -> bool:
-    scope = plan.get("scope") if isinstance(plan.get("scope"), dict) else {}
+    scope = _as_document(plan.get("scope"))
     if scope.get("project_id") == project_id:
         return True
     for item in plan.get("planned_items", []) if isinstance(plan.get("planned_items"), list) else []:
         target = item.get("target") if isinstance(item, dict) and isinstance(item.get("target"), dict) else {}
-        if target.get("project_id") == project_id:
+        if _as_document(target).get("project_id") == project_id:
             return True
     return False
 
 
 def _impact_matches_project(report: ImplementationDocument, project_id: str) -> bool:
-    scope = report.get("scope") if isinstance(report.get("scope"), dict) else {}
+    scope = _as_document(report.get("scope"))
     if scope.get("project_id") == project_id:
         return True
     for sample in report.get("plan_samples", []) if isinstance(report.get("plan_samples"), list) else []:
@@ -121,7 +121,7 @@ def _impact_matches_project(report: ImplementationDocument, project_id: str) -> 
 
 
 def _governance_evidence_stale(version: ImplementationDocument) -> bool:
-    promoted = version.get("promoted_from") if isinstance(version.get("promoted_from"), dict) else {}
+    promoted = _as_document(version.get("promoted_from"))
     simulation_id = str(promoted.get("simulation_id") or "")
     if not simulation_id:
         return True
@@ -130,7 +130,7 @@ def _governance_evidence_stale(version: ImplementationDocument) -> bool:
     )
     if not simulation:
         return True
-    source = simulation.get("source") if isinstance(simulation.get("source"), dict) else {}
+    source = _as_document(simulation.get("source"))
     return (
         simulation.get("status") not in {"ready", "warning"}
         or str(source.get("source_hash") or "") != str(promoted.get("simulation_source_hash") or "")

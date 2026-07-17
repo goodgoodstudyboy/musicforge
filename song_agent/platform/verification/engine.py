@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import re
@@ -113,7 +113,7 @@ def _read_and_check_manifest(
         return manifest, checks
     try:
         value = json.loads(archive.read(spec.manifest_entry).decode("utf-8"))
-        manifest = value if isinstance(value, dict) else {}
+        manifest = _as_document(value)
     except (UnicodeDecodeError, json.JSONDecodeError, KeyError) as exc:
         checks.append(build_check(f"{spec.check_prefix}_manifest_json", False, "Manifest is valid JSON.", {"error_type": type(exc).__name__}))
     checks.extend([

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import AUDIO_ARTIFACT_FILENAME, Any, HTTPStatus, JobState, Path, audio_artifact_summary, build_audio_artifact_manifest, datetime, shutil, threading, timezone, write_audio_artifact_manifest
 
 import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
@@ -9,7 +11,7 @@ from song_agent.interfaces.api.runtime_parts.helpers.api_info import _artifact_d
 
 from song_agent.interfaces.api.runtime_parts.helpers.generation_mode import _parse_iso_datetime
 
-class JobStoreRetryJob:
+class JobStoreRetryJob(JobStoreContext):
     def retry_job(self, job_id: str) -> tuple[JobState | None, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:

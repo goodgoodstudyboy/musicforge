@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, json, unquote
 
@@ -79,7 +79,7 @@ def _optional_positive_int(value: Any) -> int | None:
         return None
 
 def _candidate_source_summary(value: Any) -> ImplementationDocument:
-    data = value if isinstance(value, dict) else {}
+    data = _as_document(value)
     return {
         "candidate_group_id": str(data.get("candidate_group_id") or ""),
         "candidate_id": str(data.get("candidate_id") or ""),

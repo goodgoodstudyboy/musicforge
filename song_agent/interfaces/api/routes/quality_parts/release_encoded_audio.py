@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesReleaseEncodedAudio:
+class QualityRoutesReleaseEncodedAudio(QualityRouteContext):
     def _handle_release_encoded_audio_part_01(self, method: str, release_id: str, tail: str, _split_state):
         if tail in {'', '/'}:
             if method != 'GET':
@@ -92,7 +96,7 @@ class QualityRoutesReleaseEncodedAudio:
             return (True, None)
         if len(_split_state['parts']) == 1 and _split_state['parts'][0] == 'acceptance':
             if method == 'GET':
-                payload_profiles = []
+                payload_profiles: list[_InferenceType] = []
                 summary = self.encoded_audio_acceptance_store.build_summary(release_id, required_profiles=payload_profiles, now=_interfaces_api_runtime._utc_now())
                 self._send_json({'ok': True, 'release_id': release_id, 'summary': summary})
                 return (True, None)
@@ -123,7 +127,7 @@ class QualityRoutesReleaseEncodedAudio:
         return (False, None)
 
     def _handle_release_encoded_audio(self, method: str, release_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_release_encoded_audio_part_01(method, release_id, tail, _split_state)
             if _split_result[0]:
@@ -343,7 +347,7 @@ class QualityRoutesReleaseEncodedAudio:
         return (False, None)
 
     def _handle_audio_lab_route(self, method: str, path: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_audio_lab_route_part_01(method, path, _split_state)
             if _split_result[0]:

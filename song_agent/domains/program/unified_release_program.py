@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -186,7 +188,7 @@ class UnifiedReleaseProgramStore:
             item_type = str(payload.get("type") or payload.get("item_type") or "required")
             if item_type not in {"required", "optional", "advisory", "deferred"}:
                 raise UnifiedReleaseProgramStateError("Program item type must be required, optional, advisory, or deferred.")
-            external = payload.get("external_evidence") if isinstance(payload.get("external_evidence"), dict) else {}
+            external = _as_document(payload.get("external_evidence"))
             row = sanitize_metadata(
                 {
                     "item_id": item_id,
@@ -634,7 +636,7 @@ class UnifiedReleaseProgramStore:
                         "item_id": row.get("item_id"),
                         "train_id": row.get("train_id"),
                         "handoff_id": row.get("handoff_id"),
-                        **(row.get("fingerprint") if isinstance(row.get("fingerprint"), dict) else {}),
+                        **(_as_document(row.get("fingerprint"))),
                     }
                     for row in docs["items"].get("items", [])
                 ],
@@ -674,7 +676,7 @@ def _external_manifest(program_id: str, items_doc: ImplementationDocument, input
     if rows is None:
         rows = []
         for item in items_doc.get("items", []):
-            external = item.get("external_evidence") if isinstance(item.get("external_evidence"), dict) else {}
+            external = _as_document(item.get("external_evidence"))
             rows.append(
                 {
                     "item_id": item.get("item_id"),
@@ -721,7 +723,7 @@ def _external_manifest_from_rows(program_id: str, rows: list[ImplementationDocum
 def _public_external_manifest(program_id: str, item_rows: list[ImplementationDocument]) -> ImplementationDocument:
     normalized = []
     for row in item_rows:
-        fingerprint = row.get("fingerprint") if isinstance(row.get("fingerprint"), dict) else {}
+        fingerprint = _as_document(row.get("fingerprint"))
         normalized.append(
             {
                 "item_id": row.get("item_id"),
@@ -930,7 +932,7 @@ def _readiness_matrix(program_id: str, source_hash: str, items: list[Implementat
 
 
 def _risk_register(program_id: str, source_hash: str, readiness: ImplementationDocument, dependency: ImplementationDocument, items: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
-    risks = []
+    risks: list[_InferenceType] = []
     for row in readiness.get("rows", []):
         if row.get("status") == "passed":
             continue
@@ -1086,7 +1088,7 @@ def _json_safe_input(value: Any) -> Any:
 
 
 def _policy(payload: Any) -> ImplementationDocument:
-    data = dict(DEFAULT_POLICY)
+    data: ImplementationDocument = dict(DEFAULT_POLICY)
     if isinstance(payload, dict):
         for key in data:
             if key in payload:
@@ -1133,12 +1135,12 @@ def _sha256_or_integrity(path: Path) -> str:
 
 
 def _verification_zip_sha256(report: ImplementationDocument) -> str | None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return report.get("zip_sha256") or summary.get("zip_sha256")
 
 
 def _verification_manifest_hash(report: ImplementationDocument) -> str | None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return report.get("manifest_hash") or summary.get("manifest_hash")
 
 

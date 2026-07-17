@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -233,7 +233,7 @@ class _ReviewZipVerifier:
         self._add_hash_check("manifest", f"{self.check_prefix}_manifest_integrity", self.manifest.get("integrity_hash"), review_manifest_hash(self.manifest), "Manifest integrity")
         package_type_ok = self.manifest.get("package_type") == self.expected_package_type
         self._add_check("manifest", f"{self.check_prefix}_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is valid." if package_type_ok else "Manifest package_type is invalid.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -301,16 +301,16 @@ class _ReviewZipVerifier:
             self._add_check("document", "portal_review_pack_document_exists", "failed", "blocking", "review-pack.json must contain a JSON object.")
             return
         self._add_hash_check("document", "portal_review_pack_integrity", pack.get("integrity_hash"), review_pack_hash(pack), "Review Pack integrity")
-        source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+        source = _as_document(pack.get("source"))
         self._add_hash_check("document", "portal_review_pack_source_hash", pack.get("source_hash"), stable_hash(source), "Review Pack source hash")
-        row = self.manifest.get("review_pack") if isinstance(self.manifest.get("review_pack"), dict) else {}
+        row = _as_document(self.manifest.get("review_pack"))
         for label, expected, actual in (
             ("integrity_hash", row.get("integrity_hash"), pack.get("integrity_hash")),
             ("source_hash", row.get("source_hash"), pack.get("source_hash")),
             ("manifest_source_hash", self.manifest.get("source_hash"), pack.get("source_hash")),
         ):
             self._add_exact_check("manifest", f"portal_review_pack_manifest_{label}", expected, actual, f"Manifest {label}")
-        portal_row = self.manifest.get("portal") if isinstance(self.manifest.get("portal"), dict) else {}
+        portal_row = _as_document(self.manifest.get("portal"))
         for key in (
             "portal_zip_sha256",
             "portal_zip_size_bytes",
@@ -380,7 +380,7 @@ class _ReviewZipVerifier:
         source_doc = self.data_docs.get("review-pack-source.json", {})
         binding = self.data_docs.get("portal-binding-summary.json", {})
         self._add_exact_check("data", "portal_review_response_data_pack_source_hash", source_doc.get("source_hash"), response.get("review_pack_source_hash"), "Response pack source hash")
-        source = source_doc.get("source") if isinstance(source_doc.get("source"), dict) else {}
+        source = _as_document(source_doc.get("source"))
         for key in (
             "portal_zip_sha256",
             "portal_zip_size_bytes",
@@ -398,7 +398,7 @@ class _ReviewZipVerifier:
             "final_board_signoff_hash",
         ):
             self._add_exact_check("data", f"portal_review_response_data_binding_{key}", binding.get(key), source.get(key), f"Portal binding {key}")
-            manifest_portal = self.manifest.get("portal") if isinstance(self.manifest.get("portal"), dict) else {}
+            manifest_portal = _as_document(self.manifest.get("portal"))
             self._add_exact_check("manifest", f"portal_review_response_manifest_portal_{key}", manifest_portal.get(key), binding.get(key), f"Manifest portal binding {key}")
         decision_ok = response.get("decision") in {"accepted", "needs_changes", "rejected"}
         self._add_check("document", "portal_review_response_decision", "passed" if decision_ok else "failed", "blocking", "Response decision is valid." if decision_ok else "Response decision is invalid.")
@@ -410,7 +410,7 @@ class _ReviewZipVerifier:
 
     def _verify_requirements(self) -> None:
         if self.package_kind == "pack":
-            source = self.main_doc.get("source") if isinstance(self.main_doc.get("source"), dict) else {}
+            source = _as_document(self.main_doc.get("source"))
             if self.require_current:
                 ok = bool(source.get("registry_current_entry_id")) and source.get("portal_verification_status") == "passed"
                 self._add_check("requirements", "portal_review_pack_require_current", "passed" if ok else "failed", "blocking", "Current verified Portal Review Pack is present." if ok else "Current verified Portal Review Pack is required.")
@@ -455,7 +455,7 @@ class _ReviewZipVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
@@ -548,15 +548,15 @@ class _ResponseDocumentVerifier:
 def _print_report(title: str, report: ImplementationDocument) -> None:
     print(title)
     print(f"status: {report.get('status')}")
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     if summary.get("portfolio_id"):
         print(f"portfolio: {summary.get('portfolio_id')}")
     if summary.get("review_pack_id"):
         print(f"review pack: {summary.get('review_pack_id')}")
     if summary.get("response_id"):
         print(f"response: {summary.get('response_id')}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def _is_forbidden_entry(name: str) -> bool:

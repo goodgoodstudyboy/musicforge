@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -79,12 +79,12 @@ def write_trust_operations_control_signoff_verification_report(report: dict[str,
 
 
 def print_trust_operations_control_signoff_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Control Signoff Archive verification")
     print(f"status: {report.get('status')}")
     print(f"hub: {summary.get('hub_id') or '-'}")
     print(f"signoff: {summary.get('signoff_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def trust_operations_control_signoff_verification_exit_code(report: dict[str, Any]) -> int:
@@ -225,7 +225,7 @@ class _ControlSignoffVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "tocs_manifest_integrity", self.manifest.get("integrity_hash"), control_signoff_manifest_hash(self.manifest), "Control Signoff manifest integrity")
         self._add_exact_check("manifest", "tocs_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_CONTROL_SIGNOFF_MANIFEST_PACKAGE_TYPE, "Control Signoff manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid_rows = [item for item in rows if isinstance(item, dict)]
         manifest_paths = {str(item.get("path") or "") for item in valid_rows}
         self._add_exact_check("manifest", "tocs_manifest_files_match_entries", sorted(manifest_paths), sorted(CONTROL_SIGNOFF_ARCHIVE_ENTRIES - {"trust-operations-control-signoff-manifest.json"}), "Manifest file list matches fixed Control Signoff structure")
@@ -242,12 +242,12 @@ class _ControlSignoffVerifier:
             if actual_sha != item.get("sha256") or actual_size != item.get("size_bytes"):
                 mismatches.append(path)
         self._add_check("manifest", "tocs_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "tocs_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files." if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
     def _verify_documents(self) -> None:
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
         self._add_exact_check("signoff", "tocs_signoff_package_type", self.signoff.get("package_type"), TRUST_OPERATIONS_CONTROL_SIGNOFF_PACKAGE_TYPE, "Signoff package_type")
         self._add_hash_check("signoff", "tocs_signoff_integrity", self.signoff.get("integrity_hash"), control_signoff_hash(self.signoff), "Signoff integrity")
         self._add_hash_check("signoff", "tocs_signoff_source_hash", self.signoff.get("source_hash"), stable_hash(source), "Signoff source hash")
@@ -262,7 +262,7 @@ class _ControlSignoffVerifier:
         self._add_hash_check("exceptions", "tocs_exceptions_integrity", self.exceptions_doc.get("integrity_hash"), control_signoff_hash(self.exceptions_doc), "Exceptions integrity")
         self._add_exact_check("change_requests", "tocs_change_requests_package_type", self.change_requests_doc.get("package_type"), TRUST_OPERATIONS_CONTROL_SIGNOFF_CHANGE_REQUESTS_PACKAGE_TYPE, "Change Requests package_type")
         self._add_hash_check("change_requests", "tocs_change_requests_integrity", self.change_requests_doc.get("integrity_hash"), control_signoff_hash(self.change_requests_doc), "Change Requests integrity")
-        manifest_source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        manifest_source = _as_document(self.manifest.get("source"))
         self._add_exact_check("manifest", "tocs_manifest_signoff_hash", manifest_source.get("signoff_hash"), self.signoff.get("integrity_hash"), "Manifest signoff hash")
         self._add_exact_check("manifest", "tocs_manifest_history_hash", manifest_source.get("history_hash"), stable_hash({"events": self.history_events}), "Manifest history hash")
         self._add_exact_check("manifest", "tocs_manifest_exceptions_hash", manifest_source.get("exceptions_hash"), self.exceptions_doc.get("integrity_hash"), "Manifest exceptions hash")
@@ -275,18 +275,18 @@ class _ControlSignoffVerifier:
         signed_events = [item for item in self.history_events if item.get("event_type") == "control_signoff_signed" and item.get("signoff_hash") == signoff_hash]
         self._add_check("history", "tocs_history_signed_event", "passed" if signed_events else "failed", "blocking", "Signed history contains the current signoff hash." if signed_events else "Signed history is missing the current signoff hash.")
         reset_events = [item for item in self.history_events if item.get("event_type") == "control_signoff_reset"]
-        change_requests = self.change_requests_doc.get("change_requests") if isinstance(self.change_requests_doc.get("change_requests"), list) else []
+        change_requests = _as_list(self.change_requests_doc.get("change_requests"))
         by_id = {str(item.get("change_request_id") or ""): item for item in change_requests if isinstance(item, dict)}
         bad_resets: list[str] = []
         for event in reset_events:
             cr = by_id.get(str(event.get("change_request_id") or ""))
             applied = cr.get("applied") if isinstance(cr, dict) and isinstance(cr.get("applied"), dict) else {}
-            if not cr or cr.get("status") != "applied" or cr.get("integrity_hash") != event.get("change_request_hash") or applied.get("applied_signoff_reset_hash") != event.get("signoff_hash"):
+            if not cr or cr.get("status") != "applied" or cr.get("integrity_hash") != event.get("change_request_hash") or _as_document(applied).get("applied_signoff_reset_hash") != event.get("signoff_hash"):
                 bad_resets.append(str(event.get("change_request_id") or "unknown"))
         self._add_check("history", "tocs_history_reset_cr_causality", "failed" if bad_resets else "passed", "blocking", "Reset events without applied CR: " + ", ".join(bad_resets[:5]) if bad_resets else "Reset events are bound to applied change requests.")
 
     def _verify_exceptions(self) -> None:
-        exceptions = self.exceptions_doc.get("exceptions") if isinstance(self.exceptions_doc.get("exceptions"), list) else []
+        exceptions = _as_list(self.exceptions_doc.get("exceptions"))
         bad_integrity = [str(item.get("exception_id") or "unknown") for item in exceptions if isinstance(item, dict) and item.get("integrity_hash") != control_signoff_hash(item)]
         self._add_check("exceptions", "tocs_exception_integrity_rows", "failed" if bad_integrity else "passed", "blocking", "Exception row integrity failed: " + ", ".join(bad_integrity[:5]) if bad_integrity else "Exception rows have valid integrity.")
         forbidden: list[str] = []
@@ -294,7 +294,7 @@ class _ControlSignoffVerifier:
         for item in exceptions:
             if not isinstance(item, dict) or item.get("status") != "approved":
                 continue
-            risk = item.get("risk") if isinstance(item.get("risk"), dict) else {}
+            risk = _as_document(item.get("risk"))
             if risk.get("severity") in {"critical", "high"} or risk.get("required"):
                 forbidden.append(str(item.get("exception_id") or "unknown"))
             expires_at = risk.get("expires_at")
@@ -317,12 +317,12 @@ class _ControlSignoffVerifier:
                 self._add_check("external", f"tocs_{kind}_verification_required", "failed", "blocking", f"External {kind} verification report is required.")
             if zip_path:
                 self.external_manifests[kind] = _read_zip_json(zip_path, manifest_entry)
-                self._add_exact_check("external", f"tocs_{kind}_zip_sha256", _sha256_file(zip_path), (self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}).get(f"{kind}_zip_sha256"), f"External {kind} ZIP sha256")
+                self._add_exact_check("external", f"tocs_{kind}_zip_sha256", _sha256_file(zip_path), (_as_document(self.signoff.get("source"))).get(f"{kind}_zip_sha256"), f"External {kind} ZIP sha256")
             elif self.require_current:
                 self._add_check("external", f"tocs_{kind}_package_required", "failed", "blocking", f"External {kind} package is required.")
 
     def _verify_external_bindings(self) -> None:
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
         control_report = self.external_reports.get("control", {})
         if control_report:
             self._add_exact_check("external", "tocs_control_verification_package_type", control_report.get("package_type"), "musicforge_trust_operations_control_verification", "Control verification package_type")
@@ -335,9 +335,9 @@ class _ControlSignoffVerifier:
                 self._add_exact_check("external", f"tocs_control_{kind}_verification_hash", control_report.get(f"{kind}_verification_report_hash"), source.get(f"{kind}_verification_report_hash"), f"Control report {kind} verification hash")
                 self._add_exact_check("external", f"tocs_control_{kind}_zip_sha256", control_report.get(f"{kind}_zip_sha256"), source.get(f"{kind}_zip_sha256"), f"Control report {kind} ZIP sha256")
                 self._add_exact_check("external", f"tocs_control_{kind}_manifest_hash", control_report.get(f"{kind}_manifest_hash"), source.get(f"{kind}_manifest_hash"), f"Control report {kind} manifest hash")
-            summary = control_report.get("summary") if isinstance(control_report.get("summary"), dict) else {}
+            summary = _as_document(control_report.get("summary"))
             self._add_check("external", "tocs_control_required_controls_passed", "passed" if int(summary.get("required_failed_count") or 0) == 0 else "failed", "blocking", "Control verification has no failed required controls." if int(summary.get("required_failed_count") or 0) == 0 else "Control verification has failed required controls.")
-            self._add_exact_check("summary", "tocs_signoff_summary_required_failed", (self.signoff.get("summary") if isinstance(self.signoff.get("summary"), dict) else {}).get("required_failed_count"), int(summary.get("required_failed_count") or 0), "Signoff summary required failed count")
+            self._add_exact_check("summary", "tocs_signoff_summary_required_failed", (_as_document(self.signoff.get("summary"))).get("required_failed_count"), int(summary.get("required_failed_count") or 0), "Signoff summary required failed count")
         for kind in ("hub", "incident", "knowledge"):
             report = self.external_reports.get(kind, {})
             if report:
@@ -377,8 +377,8 @@ class _ControlSignoffVerifier:
     def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check["status"] == "failed" and check["severity"] == "blocking"]
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
-        summary = self.signoff.get("summary") if isinstance(self.signoff.get("summary"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
+        summary = _as_document(self.signoff.get("summary"))
         return sanitize_metadata(
             {
                 "schema_version": TRUST_OPERATIONS_CONTROL_SIGNOFF_VERIFICATION_SCHEMA_VERSION,
@@ -457,7 +457,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_list as _as_list
+
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.studio import StudioRouteContext
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from typing import Any
@@ -8,7 +14,7 @@ from typing import Any
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioRoutesEditPresets:
+class StudioRoutesEditPresets(StudioRouteContext):
     def do_GET(self) -> None:
         self._handle_request("GET")
 
@@ -22,20 +28,20 @@ class StudioRoutesEditPresets:
         return
 
     @property
-    def store(self) -> _interfaces_api_runtime.JobStore:
-        return self.server.job_store  # type: ignore[attr-defined]
+    def store(self) -> _InterfaceType:
+        return self.server.job_store
 
     @property
-    def human_review_pack_store(self) -> _interfaces_api_runtime.HumanReviewPackStore:
-        return self.server.human_review_pack_store  # type: ignore[attr-defined]
+    def human_review_pack_store(self) -> _InterfaceType:
+        return self.server.human_review_pack_store
 
     @property
-    def edit_preset_store(self) -> _interfaces_api_runtime.EditPresetStore:
-        return self.server.edit_preset_store  # type: ignore[attr-defined]
+    def edit_preset_store(self) -> _InterfaceType:
+        return self.server.edit_preset_store
 
     @property
-    def auth_config(self) -> _interfaces_api_runtime.AuthConfig:
-        return self.server.auth_config  # type: ignore[attr-defined]
+    def auth_config(self) -> _InterfaceType:
+        return self.server.auth_config
 
     def _handle_edit_presets_root(self, method: str) -> None:
         if method == "GET":
@@ -163,8 +169,8 @@ class StudioRoutesEditPresets:
 
     def _review_sprint_response(
         self,
-        sprint_store: _interfaces_api_runtime.ReviewSprintStore,
-        task_store: _interfaces_api_runtime.ReviewTaskStore,
+        sprint_store: _InterfaceType,
+        task_store: _InterfaceType,
         sprint: Any,
         *,
         include_events: bool = False,
@@ -197,7 +203,7 @@ class StudioRoutesEditPresets:
             response["events"] = sprint_store.read_events(sprint.sprint_id)
         return response
 
-    def _review_sprint_public_payload(self, sprint_store: _interfaces_api_runtime.ReviewSprintStore, sprint: Any) -> ImplementationDocument:
+    def _review_sprint_public_payload(self, sprint_store: _InterfaceType, sprint: Any) -> ImplementationDocument:
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
@@ -219,25 +225,25 @@ class StudioRoutesEditPresets:
             "export_summary": _interfaces_api_runtime.review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data),
         }
 
-    def _review_sprint_metrics_summary(self, sprint_store: _interfaces_api_runtime.ReviewSprintStore, sprint: Any) -> ImplementationDocument:
+    def _review_sprint_metrics_summary(self, sprint_store: _InterfaceType, sprint: Any) -> ImplementationDocument:
         try:
             metrics_store = _interfaces_api_runtime.ReviewMetricsStore(sprint_store.project_dir)
             return _interfaces_api_runtime.sprint_metrics_summary(metrics_store.read_sprint_metrics(sprint.sprint_id, default={}))
         except (OSError, ValueError, TypeError, FileNotFoundError, _interfaces_api_runtime.json.JSONDecodeError):
             return {}
 
-    def _review_sprint_action_queue_summary(self, sprint_store: _interfaces_api_runtime.ReviewSprintStore, sprint: Any) -> ImplementationDocument:
+    def _review_sprint_action_queue_summary(self, sprint_store: _InterfaceType, sprint: Any) -> ImplementationDocument:
         try:
             queue_store = _interfaces_api_runtime.ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
-            return _interfaces_api_runtime.action_queue_collection_summary(queue_store.list_queues(include_archived=True))
+            return _interfaces_api_runtime.action_queue_collection_summary(_as_list(queue_store.list_queues(include_archived=True)))
         except (OSError, ValueError, TypeError, FileNotFoundError, _interfaces_api_runtime.json.JSONDecodeError):
             return {}
 
     def _get_or_refresh_sprint_closeout(
         self,
         project_id: str,
-        sprint_store: _interfaces_api_runtime.ReviewSprintStore,
-        task_store: _interfaces_api_runtime.ReviewTaskStore,
+        sprint_store: _InterfaceType,
+        task_store: _InterfaceType,
         sprint: Any,
         *,
         refresh: bool,
@@ -289,8 +295,8 @@ class StudioRoutesEditPresets:
     def _get_or_refresh_sprint_metrics(
         self,
         project_id: str,
-        sprint_store: _interfaces_api_runtime.ReviewSprintStore,
-        task_store: _interfaces_api_runtime.ReviewTaskStore,
+        sprint_store: _InterfaceType,
+        task_store: _InterfaceType,
         sprint: Any,
         *,
         refresh: bool,

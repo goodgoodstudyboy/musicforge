@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -8,7 +14,7 @@ from song_agent.application.interface_persistence import write_interface_documen
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProjectCandidateGroupsList:
+class CreationRoutesProjectCandidateGroupsList(CreationRouteContext):
     def _create_project_candidate_group_part_01(self, project_id: str, version_id: str, payload: ImplementationDocument, mark_asset_usage: bool, _split_state):
         _document, _split_state['parent'], parent_job, _split_state['parent_plan'] = self._project_edit_parent(project_id, version_id)
         instruction = str(payload.get('instruction') or '').strip()
@@ -25,7 +31,7 @@ class CreationRoutesProjectCandidateGroupsList:
         _split_state['reference_snapshot'] = _interfaces_api_runtime.reference_refs_snapshot(self.reference_store, payload.get('reference_refs'), captured_at=_interfaces_api_runtime._utc_now())
         reference_prompt_refs = _interfaces_api_runtime.reference_prompt_summaries(self.reference_store, payload.get('reference_refs'))
         _split_state['patches'], provider_snapshot = _interfaces_api_runtime.generate_provider_edit_candidates(parent_plan=_split_state['parent_plan'], instruction=instruction, template=_split_state['template'], config=config, candidate_count=candidate_count, asset_references=asset_prompt_refs, reference_references=reference_prompt_refs)
-        provider_usage = provider_snapshot.get('usage') if isinstance(provider_snapshot.get('usage'), dict) else {}
+        provider_usage = _as_document(provider_snapshot.get('usage'))
         project_dir = self.project_store.project_dir(project_id)
         _split_state['group_store'] = _interfaces_api_runtime.CandidateGroupStore(project_dir)
         _split_state['group'] = _split_state['group_store'].create_group(project_id=project_id, parent_version_id=_split_state['parent'].version_id, parent_job_id=parent_job.job_id, instruction=instruction, template_id=_split_state['template'].template_id, candidate_count=len(_split_state['patches']), source={'parent_version_id': _split_state['parent'].version_id, 'parent_job_id': parent_job.job_id, 'song_plan_sha256': _interfaces_api_runtime.song_plan_hash(_split_state['parent_plan']), 'asset_refs': list(_split_state['asset_snapshot']['asset_refs']), 'reference_refs': list(_split_state['reference_snapshot']['reference_refs']), **({'context_pack': dict(payload['context_pack'])} if isinstance(payload.get('context_pack'), dict) else {})}, provider_usage=provider_usage, provider_request_id=None if provider_snapshot.get('request_id') is None else str(provider_snapshot.get('request_id')), now=_interfaces_api_runtime._utc_now())
@@ -55,7 +61,7 @@ class CreationRoutesProjectCandidateGroupsList:
         return (False, None)
 
     def _create_project_candidate_group(self, project_id: str, version_id: str, payload: ImplementationDocument, *, mark_asset_usage: bool=True) -> Any:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._create_project_candidate_group_part_01(project_id, version_id, payload, mark_asset_usage, _split_state)
         if _split_result[0]:
             return _split_result[1]

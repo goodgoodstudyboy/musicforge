@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
 
 import json as json
 import re as re
@@ -216,7 +218,7 @@ def prepare_context_pack_refs(payload: dict[str, Any], asset_store: AssetStore, 
 def apply_context_pack(pack: ContextPack, *, asset_store: AssetStore, reference_store: ReferenceStore, captured_at: str | None = None) -> dict[str, Any]:
     if pack.hidden:
         raise ContextPackStaleError("Context pack is hidden.")
-    warnings = []
+    warnings: list[_InferenceType] = []
     raw_asset_refs = []
     raw_reference_refs = []
     for ref in pack.asset_refs:
@@ -251,7 +253,7 @@ def apply_context_pack(pack: ContextPack, *, asset_store: AssetStore, reference_
 def merge_context_refs(explicit_refs: Any, pack_refs: list[dict[str, Any]], id_key: str, limit: int) -> list[dict[str, Any]]:
     merged = []
     seen = set()
-    for source in (explicit_refs if isinstance(explicit_refs, list) else [], pack_refs):
+    for source in (_as_list(explicit_refs), pack_refs):
         if not isinstance(source, list):
             continue
         for ref in source:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -142,13 +142,13 @@ def write_trust_operations_hub_verification_report(report: dict[str, Any], path:
 
 
 def print_trust_operations_hub_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Hub verification")
     print(f"status: {report.get('status')}")
     print(f"hub: {summary.get('hub_id') or '-'}")
     print(f"readiness: {summary.get('readiness') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def trust_operations_hub_verification_exit_code(report: dict[str, Any]) -> int:
@@ -373,7 +373,7 @@ class _HubVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "toh_manifest_integrity", self.manifest.get("integrity_hash"), hub_manifest_hash(self.manifest), "Hub manifest integrity")
         self._add_exact_check("manifest", "toh_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_HUB_PACKAGE_TYPE, "Hub manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "toh_manifest_allowed_files", sorted(manifest_paths), sorted(HUB_EXPORT_ENTRIES - {"trust-operations-hub-manifest.json"}), "Manifest file list matches fixed Hub structure")
         mismatches: list[str] = []
@@ -391,7 +391,7 @@ class _HubVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "toh_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "toh_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
@@ -414,7 +414,7 @@ class _HubVerifier:
         for label, doc in docs.items():
             expected = hub_hash(doc)
             self._add_hash_check(label, f"toh_{label}_integrity", doc.get("integrity_hash"), expected, f"{label} integrity")
-        source = self.report.get("source") if isinstance(self.report.get("source"), dict) else {}
+        source = _as_document(self.report.get("source"))
         expected_source = {
             "source_state_hash": self.source_state.get("integrity_hash"),
             "readiness_matrix_hash": self.matrix.get("integrity_hash"),
@@ -429,13 +429,13 @@ class _HubVerifier:
         }
         for key, value in expected_source.items():
             self._add_exact_check("hub_report", "toh_report_source_" + key, source.get(key), value, f"Hub report source {key}")
-        manifest_source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        manifest_source = _as_document(self.manifest.get("source"))
         manifest_expected = {"hub_report_hash": self.report.get("integrity_hash"), **expected_source, "signoff_summary_hash": self.signoff_summary.get("integrity_hash")}
         for key, value in manifest_expected.items():
             self._add_exact_check("manifest", "toh_manifest_source_" + key, manifest_source.get(key), value, f"Manifest source {key}")
 
     def _verify_checksums(self, archive: zipfile.ZipFile) -> None:
-        rows = self.checksum_json.get("files") if isinstance(self.checksum_json.get("files"), list) else []
+        rows = _as_list(self.checksum_json.get("files"))
         row_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         expected_paths = HUB_EXPORT_ENTRIES - {"trust-operations-hub-manifest.json", "checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt"}
         self._add_exact_check("checksum", "toh_checksum_allowed_files", sorted(row_paths), sorted(expected_paths), "Checksum file list matches fixed Hub payload files")
@@ -457,9 +457,9 @@ class _HubVerifier:
         expected_summary = _readiness_summary(rows)
         self._add_exact_check("readiness", "toh_readiness_summary_matches_rows", self.matrix.get("summary"), expected_summary, "Readiness summary matches matrix rows")
         expected_blockers = _expected_blockers(rows)
-        actual_blockers = _normalize_blockers(self.blockers_doc.get("blockers") if isinstance(self.blockers_doc.get("blockers"), list) else [])
+        actual_blockers = _normalize_blockers(_as_list(self.blockers_doc.get("blockers")))
         self._add_exact_check("blockers", "toh_blocker_register_matches_readiness", actual_blockers, expected_blockers, "Blocker register matches blocking readiness rows")
-        actions = self.actions.get("actions") if isinstance(self.actions.get("actions"), list) else []
+        actions = _as_list(self.actions.get("actions"))
         actual_action_ids = sorted(str(item.get("action_id") or "") for item in actions if isinstance(item, dict))
         expected_action_ids = sorted(str(item.get("manual_action_id") or "") for item in self.blockers_doc.get("blockers", []) if isinstance(item, dict))
         self._add_exact_check("actions", "toh_manual_actions_match_blockers", actual_action_ids, expected_action_ids, "Manual action queue matches blockers")
@@ -492,16 +492,16 @@ class _HubVerifier:
         delivery_actual_rows = sorted((_matrix_projection(row) for row in delivery_rows), key=lambda item: (str(item.get("component_id") or ""), str(item.get("requirement") or "")))
         self._add_exact_check("delivery", "toh_delivery_readiness_semantics_match", delivery_actual_rows, delivery_expected_rows, "Delivery readiness matrix matches delivery evidence")
         delivery_expected_blockers = _expected_blockers(delivery_rows)
-        delivery_actual_blockers = _normalize_blockers(self.delivery_blockers.get("blockers") if isinstance(self.delivery_blockers.get("blockers"), list) else [])
+        delivery_actual_blockers = _normalize_blockers(_as_list(self.delivery_blockers.get("blockers")))
         self._add_exact_check("delivery", "toh_delivery_blockers_match_readiness", delivery_actual_blockers, delivery_expected_blockers, "Delivery blocker register matches delivery readiness")
-        delivery_actions = self.delivery_actions.get("actions") if isinstance(self.delivery_actions.get("actions"), list) else []
+        delivery_actions = _as_list(self.delivery_actions.get("actions"))
         delivery_action_ids = sorted(str(item.get("action_id") or "") for item in delivery_actions if isinstance(item, dict))
         delivery_expected_action_ids = sorted(str(item.get("manual_action_id") or "") for item in self.delivery_blockers.get("blockers", []) if isinstance(item, dict))
         self._add_exact_check("delivery", "toh_delivery_actions_match_blockers", delivery_action_ids, delivery_expected_action_ids, "Delivery manual actions match delivery blockers")
         combined_summary = _combine_readiness_summaries(expected_summary, delivery_expected_summary)
         expected_status = "ready" if combined_summary.get("blocked_count") == 0 and combined_summary.get("stale_count") == 0 and combined_summary.get("missing_count") == 0 and len(expected_blockers) == 0 and len(delivery_expected_blockers) == 0 else "blocked"
         self._add_exact_check("hub_report", "toh_report_status_matches_readiness", self.report.get("status"), expected_status, "Hub report status matches readiness")
-        report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
+        report_readiness = _as_document(self.report.get("readiness"))
         self._add_exact_check("hub_report", "toh_report_readiness_matches_matrix", {key: report_readiness.get(key) for key in ["row_count", "ready_count", "blocked_count", "warning_count", "stale_count", "missing_count"]}, combined_summary, "Hub report readiness summary matches matrix")
 
     def _verify_external_bindings(self) -> None:
@@ -523,7 +523,7 @@ class _HubVerifier:
             state_hashes = {str(item.get("state_hash") or "") for item in states}
             self._add_check("external", "toh_external_channel_state_integrity", "passed" if self.external_channel_state else "failed", "blocking", "External publication channel state is readable." if self.external_channel_state else "External publication channel state is missing.")
             self._add_check("external", "toh_external_channel_state_hash", "passed" if expected_hash in state_hashes else "failed", "blocking", "External channel state matches Hub source state." if expected_hash in state_hashes else "External channel state does not match Hub source state.")
-            current = self.external_channel_state.get("current_publication") if isinstance(self.external_channel_state.get("current_publication"), dict) else {}
+            current = _as_document(self.external_channel_state.get("current_publication"))
             current_status = str(current.get("status") or "")
             bad = current_status in {"revoked", "superseded"} or not current
             self._add_check("external", "toh_external_channel_state_current", "failed" if bad else "passed", "blocking", "External publication channel state is current." if not bad else "External publication channel is missing, revoked, or superseded.")
@@ -567,7 +567,7 @@ class _HubVerifier:
         self._add_check("external", check_prefix + "_hash", status, "blocking", f"External {component_type} report matches Hub evidence." if status == "passed" else f"External {component_type} report does not match Hub evidence.")
         self._add_exact_check("external", check_prefix + "_status", report.get("status"), expected.get("status"), f"External {component_type} status")
         if component_type == "publication_monitoring_verification":
-            summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+            summary = _as_document(report.get("summary"))
             critical = int(summary.get("critical_incidents") or summary.get("open_critical_incidents") or 0)
             self._add_check("external", "toh_external_monitoring_no_open_critical_incidents", "passed" if critical == 0 else "failed", "blocking", "External monitoring report has no open critical incidents." if critical == 0 else "External monitoring report has open critical incidents.")
 
@@ -601,7 +601,7 @@ class _HubVerifier:
         self._add_exact_check("external", "toh_hub_signoff_package_type", signoff.get("package_type"), TRUST_OPERATIONS_HUB_SIGNOFF_PACKAGE_TYPE, "Hub signoff package_type")
         self._add_exact_check("external", "toh_hub_signoff_status", signoff.get("status"), "signed", "Hub signoff status")
         self._add_hash_check("external", "toh_hub_signoff_integrity", signoff.get("integrity_hash"), hub_hash(signoff), "Hub signoff integrity")
-        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        source = _as_document(signoff.get("source"))
         self._add_exact_check("external", "toh_hub_signoff_zip_sha256", source.get("zip_sha256"), self.zip_sha256, "Hub signoff ZIP sha256")
         self._add_exact_check("external", "toh_hub_signoff_zip_size_bytes", source.get("zip_size_bytes"), self.zip_size_bytes, "Hub signoff ZIP size")
         self._add_exact_check("external", "toh_hub_signoff_manifest_hash", source.get("manifest_hash"), self.manifest.get("integrity_hash"), "Hub signoff manifest hash")
@@ -641,7 +641,7 @@ class _HubVerifier:
             if self.external_hub_verification_report:
                 hub_report_hash = verification_hash(self.external_hub_verification_report)
             self._add_exact_check("external", "toh_incident_verification_hub_verification_hash", report.get("hub_verification_report_hash"), hub_report_hash, "Incident package Hub verification hash")
-            summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+            summary = _as_document(report.get("summary"))
             self._add_check("external", "toh_incident_verification_no_open_blocking", "passed" if int(summary.get("blocking_open_count") or 0) == 0 else "failed", "blocking", "Incident package has no open blocking incidents." if int(summary.get("blocking_open_count") or 0) == 0 else "Incident package has open blocking incidents.")
             self._add_check("external", "toh_incident_verification_no_stale", "passed" if int(summary.get("stale_count") or 0) == 0 else "failed", "blocking", "Incident package has no stale incidents." if int(summary.get("stale_count") or 0) == 0 else "Incident package has stale incidents.")
         if not (self.require_incident_regression_guards or self.incident_knowledge_package_path or self.incident_knowledge_verification_report_path):
@@ -669,7 +669,7 @@ class _HubVerifier:
             self._add_check("external", "toh_incident_knowledge_incident_verification_required", "failed", "blocking", "Knowledge gate requires the current Incident verification report.")
         if self.external_hub_verification_report:
             self._add_exact_check("external", "toh_incident_knowledge_hub_verification_hash", knowledge_report.get("hub_verification_report_hash"), verification_hash(self.external_hub_verification_report), "Knowledge Hub verification report hash")
-        summary = knowledge_report.get("summary") if isinstance(knowledge_report.get("summary"), dict) else {}
+        summary = _as_document(knowledge_report.get("summary"))
         self._add_check("external", "toh_incident_knowledge_guards_passed", "passed" if int(summary.get("guard_failed_count") or 0) == 0 and int(summary.get("guards_passed_count") or 0) > 0 else "failed", "blocking", "Knowledge regression guards passed." if int(summary.get("guard_failed_count") or 0) == 0 and int(summary.get("guards_passed_count") or 0) > 0 else "Knowledge regression guards are missing or failed.")
         self._add_check("external", "toh_incident_knowledge_no_recurrence", "passed" if int(summary.get("recurrence_count") or 0) == 0 else "failed", "blocking", "Knowledge recurrence report has no open recurrence." if int(summary.get("recurrence_count") or 0) == 0 else "Knowledge recurrence report has open recurrence.")
 
@@ -710,7 +710,7 @@ class _HubVerifier:
             self._add_exact_check("external", "toh_trust_control_knowledge_manifest_hash", report.get("knowledge_manifest_hash"), self.external_incident_knowledge_verification_report.get("manifest_hash"), "Control Knowledge manifest hash")
         elif self.require_trust_controls:
             self._add_check("external", "toh_trust_control_knowledge_verification_required", "failed", "blocking", "Trust control gate requires the current Knowledge verification report.")
-        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        summary = _as_document(report.get("summary"))
         self._add_check("external", "toh_trust_control_required_controls_passed", "passed" if int(summary.get("required_failed_count") or 0) == 0 else "failed", "blocking", "Trust control policy passed." if int(summary.get("required_failed_count") or 0) == 0 else "Trust control policy has failed required controls.")
 
     def _verify_external_trust_control_signoff(self) -> None:
@@ -882,28 +882,28 @@ class _HubVerifier:
             self._add_check("external", "toh_final_readiness_watch_signoff_required", "failed", "blocking", "Final Readiness gate requires the current Assurance Watch Signoff verification report.")
 
     def _verify_requirements(self) -> None:
-        report_readiness = self.report.get("readiness") if isinstance(self.report.get("readiness"), dict) else {}
+        report_readiness = _as_document(self.report.get("readiness"))
         ready = self.report.get("status") == "ready" and report_readiness.get("blocked_count") == 0 and report_readiness.get("stale_count") == 0 and report_readiness.get("missing_count") == 0
         self._add_check("requirements", "toh_require_ready", "passed" if ready or not self.require_ready else "failed", "blocking", "Hub is ready." if ready else "Hub is not ready.")
         signed = self.external_hub_signoff.get("status") == "signed"
         self._add_check("requirements", "toh_require_signed", "passed" if signed or not self.require_signed else "failed", "blocking", "Hub is signed." if signed else "Hub is not signed.")
-        critical = int((self.blockers_doc.get("summary") if isinstance(self.blockers_doc.get("summary"), dict) else {}).get("critical_count") or 0)
+        critical = int((_as_document(self.blockers_doc.get("summary"))).get("critical_count") or 0)
         self._add_check("requirements", "toh_require_no_critical_blockers", "passed" if critical == 0 or not self.require_no_critical_blockers else "failed", "blocking", "No critical Hub blockers." if critical == 0 else "Hub has critical blockers.")
         monitoring_row = next((row for row in self.matrix.get("rows", []) if isinstance(row, dict) and row.get("requirement") == "publication_monitoring_clean"), {})
         monitoring_ready = monitoring_row.get("status") == "ready"
         self._add_check("requirements", "toh_require_publication_monitoring_clean", "passed" if monitoring_ready or not self.require_publication_monitoring_clean else "failed", "blocking", "Publication monitoring is clean." if monitoring_ready else "Publication monitoring is not clean.")
-        delivery_summary = self.delivery_matrix.get("summary") if isinstance(self.delivery_matrix.get("summary"), dict) else {}
-        delivery_rows = self.delivery_matrix.get("rows") if isinstance(self.delivery_matrix.get("rows"), list) else []
+        delivery_summary = _as_document(self.delivery_matrix.get("summary"))
+        delivery_rows = _as_list(self.delivery_matrix.get("rows"))
         present_types = {str(row.get("component_type") or "") for row in delivery_rows if isinstance(row, dict)}
         expected_types = {str(spec["component_type"]) for spec in DELIVERY_VERIFICATION_COMPONENTS}
         delivery_ready = bool(delivery_rows) and expected_types.issubset(present_types) and delivery_summary.get("blocked_count") == 0 and delivery_summary.get("stale_count") == 0 and delivery_summary.get("missing_count") == 0
         self._add_check("requirements", "toh_require_delivery_ready", "passed" if delivery_ready or not self.require_delivery_ready else "failed", "blocking", "Delivery evidence is ready." if delivery_ready else "Delivery evidence is not ready.")
         incident_ready = self.external_incident_verification_report.get("status") == "passed"
         self._add_check("requirements", "toh_require_incident_closeout", "passed" if incident_ready or not self.require_incident_closeout else "failed", "blocking", "Incident closeout evidence is passed." if incident_ready else "Incident closeout evidence is missing or failed.")
-        knowledge_summary = self.external_incident_knowledge_verification_report.get("summary") if isinstance(self.external_incident_knowledge_verification_report.get("summary"), dict) else {}
+        knowledge_summary = _as_document(self.external_incident_knowledge_verification_report.get("summary"))
         knowledge_ready = self.external_incident_knowledge_verification_report.get("status") == "passed" and int(knowledge_summary.get("guards_passed_count") or 0) > 0 and int(knowledge_summary.get("guard_failed_count") or 0) == 0 and int(knowledge_summary.get("recurrence_count") or 0) == 0
         self._add_check("requirements", "toh_require_incident_regression_guards", "passed" if knowledge_ready or not self.require_incident_regression_guards else "failed", "blocking", "Incident regression guards are passed." if knowledge_ready else "Incident regression guard evidence is missing or failed.")
-        controls_summary = self.external_trust_control_verification_report.get("summary") if isinstance(self.external_trust_control_verification_report.get("summary"), dict) else {}
+        controls_summary = _as_document(self.external_trust_control_verification_report.get("summary"))
         controls_ready = self.external_trust_control_verification_report.get("status") == "passed" and int(controls_summary.get("required_failed_count") or 0) == 0
         self._add_check("requirements", "toh_require_trust_controls", "passed" if controls_ready or not self.require_trust_controls else "failed", "blocking", "Trust controls are passed." if controls_ready else "Trust control evidence is missing or failed.")
         control_signoff_ready = self.external_trust_control_signoff_verification_report.get("status") == "passed"
@@ -1017,7 +1017,7 @@ def _expected_matrix_rows(source_state: ImplementationDocument, evidence: Implem
     rows.append(_matrix_row_projection("publication-channel:" + str(state.get("channel_id") or "missing"), "publication_channel", "publication_current", publication_status))
     monitoring = _evidence_by_type(evidence, "publication_monitoring_verification")
     rows.append(_matrix_row_projection("publication-monitoring:public-release", "publication_monitoring", "publication_monitoring_clean", _status_from_evidence(monitoring)))
-    summary = monitoring.get("summary") if isinstance(monitoring.get("summary"), dict) else {}
+    summary = _as_document(monitoring.get("summary"))
     critical = int(summary.get("critical_incidents") or summary.get("open_critical_incidents") or 0)
     if monitoring and critical > 0:
         rows.append(_matrix_row_projection("publication-monitoring:public-release", "publication_monitoring", "no_open_critical_incidents", "blocked"))
@@ -1166,7 +1166,7 @@ def _combine_paths(paths: list[Path | str] | tuple[Path | str, ...] | None, path
 
 
 def _external_delivery_component_id(component_type: str, report: ImplementationDocument, index: int) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     prefix = {
         "release_verification": "release",
         "distribution_verification": "distribution",
@@ -1192,7 +1192,7 @@ def _check_safe_id(value: str) -> str:
 
 
 def _source_publication_states(source_state: ImplementationDocument) -> list[ImplementationDocument]:
-    sources = source_state.get("sources") if isinstance(source_state.get("sources"), dict) else {}
+    sources = _as_document(source_state.get("sources"))
     return [row for row in sources.get("publication_channel_states", []) if isinstance(row, dict)]
 
 
@@ -1206,14 +1206,14 @@ def _read_json_file(path: Path) -> ImplementationDocument:
             value = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

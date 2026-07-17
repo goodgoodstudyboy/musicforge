@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
@@ -29,9 +31,9 @@ def accepted_evidence_manifest_hash(manifest: dict[str, Any]) -> str:
 
 
 def accepted_evidence_summary(evidence: dict[str, Any] | None) -> dict[str, Any]:
-    data = evidence if isinstance(evidence, dict) else {}
-    public = data.get("public_summary") if isinstance(data.get("public_summary"), dict) else {}
-    source = data.get("source") if isinstance(data.get("source"), dict) else {}
+    data = _as_document(evidence)
+    public = _as_document(data.get("public_summary"))
+    source = _as_document(data.get("source"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",

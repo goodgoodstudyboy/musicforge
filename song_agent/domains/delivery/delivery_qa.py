@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -167,9 +167,9 @@ def mark_delivery_qa_stale(report: dict[str, Any] | None, *, current_source_hash
 def delivery_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
-    final_version = report.get("final_version") if isinstance(report.get("final_version"), dict) else {}
-    zip_summary = report.get("zip") if isinstance(report.get("zip"), dict) else {}
-    artifact = report.get("artifact_integrity") if isinstance(report.get("artifact_integrity"), dict) else {}
+    final_version = _as_document(report.get("final_version"))
+    zip_summary = _as_document(report.get("zip"))
+    artifact = _as_document(report.get("artifact_integrity"))
     return sanitize_metadata(
         {
             "schema_version": report.get("schema_version"),
@@ -203,15 +203,15 @@ def build_delivery_signoff_record(
     payload: dict[str, Any] | None = None,
     now: str | None = None,
 ) -> dict[str, Any]:
-    payload = payload if isinstance(payload, dict) else {}
+    payload = _as_document(payload)
     now = now or now_iso()
     force = bool(payload.get("force", False))
     override_reason = sanitize_sensitive_text(str(payload.get("override_reason") or "")).strip()[:1000]
     if force and not override_reason:
         raise ValueError("override_reason is required when force=true.")
-    final_version = report.get("final_version") if isinstance(report.get("final_version"), dict) else {}
-    final_export = report.get("final_export") if isinstance(report.get("final_export"), dict) else {}
-    zip_summary = report.get("zip") if isinstance(report.get("zip"), dict) else {}
+    final_version = _as_document(report.get("final_version"))
+    final_export = _as_document(report.get("final_export"))
+    zip_summary = _as_document(report.get("zip"))
     blockers = [sanitize_sensitive_text(str(item))[:240] for item in report.get("blockers", []) if str(item).strip()]
     warnings = [sanitize_sensitive_text(str(item))[:240] for item in report.get("warnings", []) if str(item).strip()]
     record = {
@@ -265,7 +265,7 @@ def signoff_history_event(event: str, previous_signoff: dict[str, Any], reason: 
             "event": event,
             "created_at": now or now_iso(),
             "reason": sanitize_sensitive_text(str(reason or ""))[:1000],
-            "previous_signoff": previous_signoff if isinstance(previous_signoff, dict) else {},
+            "previous_signoff": _as_document(previous_signoff),
         },
         blocked_keys=BLOCKED_DELIVERY_KEYS,
     )
@@ -332,7 +332,7 @@ def _read_manifest(project_dir: Path, provided: ImplementationDocument | None) -
         return {}, {}, False, ""
     try:
         data = read_json(path)
-        raw = data if isinstance(data, dict) else {}
+        raw = _as_document(data)
         return sanitize_metadata(raw, blocked_keys=BLOCKED_DELIVERY_KEYS), dict(raw), True, ""
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         return {}, {}, False, f"Final Export manifest is invalid. Rebuild final export. {exc}"
@@ -377,7 +377,7 @@ def _manifest_source(manifest: ImplementationDocument) -> ImplementationDocument
             "project_id": clean.get("project_id"),
             "version_id": clean.get("version_id"),
             "generated_at": clean.get("generated_at"),
-            "quality_gate": clean.get("quality_gate") if isinstance(clean.get("quality_gate"), dict) else {},
+            "quality_gate": _as_document(clean.get("quality_gate")),
             "files": [
                 {
                     "kind": item.get("kind"),
@@ -391,9 +391,9 @@ def _manifest_source(manifest: ImplementationDocument) -> ImplementationDocument
             ]
             if isinstance(clean.get("files"), list)
             else [],
-            "review_sprint_closeout": clean.get("review_sprint_closeout") if isinstance(clean.get("review_sprint_closeout"), dict) else {},
-            "review_metrics": clean.get("review_metrics") if isinstance(clean.get("review_metrics"), dict) else {},
-            "review_judge": clean.get("review_judge") if isinstance(clean.get("review_judge"), dict) else {},
+            "review_sprint_closeout": _as_document(clean.get("review_sprint_closeout")),
+            "review_metrics": _as_document(clean.get("review_metrics")),
+            "review_judge": _as_document(clean.get("review_judge")),
             "zip": {key: value for key, value in (clean.get("zip") or {}).items() if key in {"filename", "size_bytes", "sha256", "entry_count", "entries"}} if isinstance(clean.get("zip"), dict) else {},
         },
         blocked_keys=BLOCKED_DELIVERY_KEYS,
@@ -509,11 +509,11 @@ def _expected_file_row(
 
 
 def _quality_gate_requires_stems(manifest: ImplementationDocument) -> bool:
-    gate = manifest.get("quality_gate") if isinstance(manifest.get("quality_gate"), dict) else {}
-    config = gate.get("config") if isinstance(gate.get("config"), dict) else {}
+    gate = _as_document(manifest.get("quality_gate"))
+    config = _as_document(gate.get("config"))
     if config.get("require_stems"):
         return True
-    checks = gate.get("checks") if isinstance(gate.get("checks"), list) else []
+    checks = _as_list(gate.get("checks"))
     return any(isinstance(check, dict) and check.get("name") == "stems" for check in checks)
 
 
@@ -685,7 +685,7 @@ def _final_export_summary(manifest: ImplementationDocument, manifest_exists: boo
 
 
 def _zip_summary(zip_info: ImplementationDocument, actual_files: list[ImplementationDocument], manifest: ImplementationDocument) -> ImplementationDocument:
-    manifest_zip = manifest.get("zip") if isinstance(manifest.get("zip"), dict) else {}
+    manifest_zip = _as_document(manifest.get("zip"))
     matches_manifest = bool(
         zip_info.get("exists")
         and zip_info.get("valid")
@@ -719,13 +719,13 @@ def _zip_summary(zip_info: ImplementationDocument, actual_files: list[Implementa
 
 
 def _quality_gate_summary(manifest: ImplementationDocument, final_version: ImplementationDocument) -> ImplementationDocument:
-    gate = manifest.get("quality_gate") if isinstance(manifest.get("quality_gate"), dict) else {}
+    gate = _as_document(manifest.get("quality_gate"))
     return sanitize_metadata(
         {
             "status": gate.get("status") or final_version.get("quality_gate_status"),
             "overall_score": gate.get("score", final_version.get("quality_gate_score") or final_version.get("quality_score")),
             "require_stems": _quality_gate_requires_stems(manifest),
-            "warnings": gate.get("warnings") if isinstance(gate.get("warnings"), list) else [],
+            "warnings": _as_list(gate.get("warnings")),
         },
         blocked_keys=BLOCKED_DELIVERY_KEYS,
     )
@@ -735,7 +735,7 @@ def _review_sprint_summary(project_export: ImplementationDocument | None) -> Imp
     if not isinstance(project_export, dict):
         return {"sprint_count": 0}
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
-    metrics = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
+    metrics = _as_document(project_export.get("review_metrics_summary"))
     latest_id = str(metrics.get("latest_sprint_id") or "")
     latest = next((sprint for sprint in sprints if str(sprint.get("sprint_id") or "") == latest_id), None) if latest_id else None
     if latest is None and sprints:
@@ -749,14 +749,14 @@ def _review_sprint_summary(project_export: ImplementationDocument | None) -> Imp
         {
             "sprint_count": len(sprints),
             "latest_sprint_id": latest_id or None,
-            "latest_closeout_status": closeout.get("status"),
-            "latest_closeout_readiness": closeout.get("readiness"),
-            "latest_signoff_status": signoff.get("status"),
+            "latest_closeout_status": _as_document(closeout).get("status"),
+            "latest_closeout_readiness": _as_document(closeout).get("readiness"),
+            "latest_signoff_status": _as_document(signoff).get("status"),
             "signed_sprint_count": len([item for item in signoffs if item.get("status") == "signed"]),
             "forced_close_count": len([item for item in signoffs if item.get("forced")]) or len([item for item in closeouts if item.get("forced")]),
-            "selected_version_id": signoff.get("selected_version_id") or closeout.get("recommended_final_version_id"),
-            "warning_count": closeout.get("warning_count", 0),
-            "blocker_count": closeout.get("blocker_count", 0),
+            "selected_version_id": _as_document(signoff).get("selected_version_id") or _as_document(closeout).get("recommended_final_version_id"),
+            "warning_count": _as_document(closeout).get("warning_count", 0),
+            "blocker_count": _as_document(closeout).get("blocker_count", 0),
         },
         blocked_keys=BLOCKED_DELIVERY_KEYS,
     )
@@ -848,8 +848,8 @@ def _project_export_delivery_probe(project_export: ImplementationDocument | None
     if not isinstance(project_export, dict):
         return {}
     return {
-        "delivery_qa_summary": project_export.get("delivery_qa_summary") if isinstance(project_export.get("delivery_qa_summary"), dict) else {},
-        "delivery_signoff_summary": project_export.get("delivery_signoff_summary") if isinstance(project_export.get("delivery_signoff_summary"), dict) else {},
+        "delivery_qa_summary": _as_document(project_export.get("delivery_qa_summary")),
+        "delivery_signoff_summary": _as_document(project_export.get("delivery_signoff_summary")),
     }
 
 

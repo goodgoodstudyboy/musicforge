@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProjectEditorAuditionNextAction:
+class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
     def _handle_project_editor_audition_next_action(self, method: str, project_id: str, preview_id: str, audition_id: str, action: str) -> None:
         if method != "POST":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -81,7 +85,7 @@ class CreationRoutesProjectEditorAuditionNextAction:
         except _interfaces_api_runtime.ProviderError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
 
-    def _review_edit_context(self, project_id: str, preview_id: str, audition_id: str) -> tuple[Any, Any, _interfaces_api_runtime.JobState, _interfaces_api_runtime.SongPlan, Any, Any, _interfaces_api_runtime.SongPlan]:
+    def _review_edit_context(self, project_id: str, preview_id: str, audition_id: str) -> tuple[Any, Any, _InterfaceType, _InterfaceType, Any, Any, _InterfaceType]:
         project_dir = self.project_store.project_dir(project_id)
         self.project_store.get_project(project_id)
         preview_store = _interfaces_api_runtime.EditorPreviewStore(project_dir)

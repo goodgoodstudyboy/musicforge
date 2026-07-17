@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -8,7 +16,7 @@ from song_agent.application.interface_persistence import persist_interface_job, 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProjectReviewTask:
+class CreationRoutesProjectReviewTask(CreationRouteContext):
     def _handle_project_review_task_route_part_01(self, method: str, project_id: str, task_id: str, action: str, _split_state):
         self.project_store.get_project(project_id)
         _split_state['task_store'] = _interfaces_api_runtime.ReviewTaskStore(self.project_store.project_dir(project_id))
@@ -72,7 +80,7 @@ class CreationRoutesProjectReviewTask:
                 _split_state['generated'].append(_split_state['stored'])
             _split_state['ranked'] = _split_state['task_store'].rank_candidates(_split_state['task'])
             _split_state['task'] = _split_state['task_store'].update_counts(_split_state['task'], now=_interfaces_api_runtime._utc_now())
-            provider_usage = provider_snapshot.get('usage') if isinstance(provider_snapshot.get('usage'), dict) else {}
+            provider_usage = _as_document(provider_snapshot.get('usage'))
             usage_record = _interfaces_api_runtime._provider_usage_record(config_snapshot=provider_snapshot, operation='provider_review_candidates', template_id=template.template_id, started_at=_interfaces_api_runtime._utc_now(), status='completed', provider_usage=provider_usage, request_id=provider_snapshot.get('request_id'))
             write_interface_document(_split_state['task_store'].task_dir(_split_state['task'].task_id) / 'provider-usage.json', usage_record)
             _split_state['decision_report'] = _split_state['task_store'].write_decision_report(_split_state['task'], _interfaces_api_runtime.build_review_decision_report(task=_split_state['task'], candidates=_split_state['ranked'], parent_plan=_split_state['parent_plan'], now=_interfaces_api_runtime._utc_now(), notes=str(_split_state['payload'].get('decision_note') or '')), now=_interfaces_api_runtime._utc_now())
@@ -156,7 +164,7 @@ class CreationRoutesProjectReviewTask:
         return (False, None)
 
     def _handle_project_review_task_route(self, method: str, project_id: str, task_id: str, action: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_project_review_task_route_part_01(method, project_id, task_id, action, _split_state)
             if _split_result[0]:
@@ -236,12 +244,12 @@ class CreationRoutesProjectReviewTask:
         *,
         project_id: str,
         parent: Any,
-        parent_job: _interfaces_api_runtime.JobState,
-        parent_plan: _interfaces_api_runtime.SongPlan,
+        parent_job: _InterfaceType,
+        parent_plan: _InterfaceType,
         review_edit: Any,
         result: Any,
         payload: ImplementationDocument,
-    ) -> _interfaces_api_runtime.JobState:
+    ) -> _InterfaceType:
         primary_intent = _interfaces_api_runtime.EditIntent.from_dict(review_edit.intents[0])
         job = self.store.create_edit_job(
             project_id=project_id,
@@ -272,7 +280,7 @@ class CreationRoutesProjectReviewTask:
         self.store.start_job(job.job_id)
         return job
 
-    def _handle_provider_review_edit_preview(self, project_id: str, parent: Any, parent_job: _interfaces_api_runtime.JobState, parent_plan: _interfaces_api_runtime.SongPlan, review_edit: Any, payload: ImplementationDocument) -> None:
+    def _handle_provider_review_edit_preview(self, project_id: str, parent: Any, parent_job: _InterfaceType, parent_plan: _InterfaceType, review_edit: Any, payload: ImplementationDocument) -> None:
         template_id = str(payload.get("template_id") or "provider-review-edit-intent").strip()
         template = self.prompt_template_store.get_template(template_id)
         if not template.enabled:
@@ -288,7 +296,7 @@ class CreationRoutesProjectReviewTask:
             asset_references=[],
             reference_references=[],
         )
-        provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+        provider_usage = _as_document(provider_snapshot.get("usage"))
         preview = _interfaces_api_runtime.create_provider_edit_preview(
             project_dir=self.project_store.project_dir(project_id),
             project_id=project_id,

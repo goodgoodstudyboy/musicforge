@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramReceiverAcceptanceChangeHttpRoutes:
+class ProgramReceiverAcceptanceChangeHttpRoutes(ProgramHttpContext):
     def _dispatch_receiver_acceptance_change(self, method, program_id, tail) -> bool:
         change_roots = {'/continuity-command-center-acceptance/change-control', '/continuity-command-center/acceptance/change'}
         if tail in change_roots:

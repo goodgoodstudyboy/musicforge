@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -87,8 +87,8 @@ class DistributionTarget:
         template_pack_id = _optional_id(data.get("template_pack_id"))
         template_hash = _optional_text(data.get("template_hash"), 128)
         template_source = _optional_text(data.get("template_source"), 80)
-        rules = data.get("template_rules") if isinstance(data.get("template_rules"), dict) else {}
-        options = _merge_target_options(profile, rules, data.get("options") if isinstance(data.get("options"), dict) else {})
+        rules = _as_document(data.get("template_rules"))
+        options = _merge_target_options(profile, rules, _as_document(data.get("options")))
         status = str(data.get("status") or "draft")
         if status not in DISTRIBUTION_TARGET_STATUSES:
             status = "draft"
@@ -190,7 +190,7 @@ class DistributionStore:
                 template_pack_id=template.get("template_pack_id") if template else None,
                 template_hash=template.get("template_hash") if template else None,
                 template_source=template.get("source") if template else None,
-                options=_merge_target_options(profile, rules, payload.get("options") if isinstance(payload.get("options"), dict) else {}),
+                options=_merge_target_options(profile, rules, _as_document(payload.get("options"))),
                 created_at=now,
                 updated_at=now,
             )
@@ -272,7 +272,7 @@ class DistributionStore:
                 return default
             raise DistributionNotFoundError("Distribution QA does not exist.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
     def write_qa(self, release_id: str, target_id: str, report: dict[str, Any]) -> dict[str, Any]:
         self.get_target(release_id, target_id)
@@ -287,7 +287,7 @@ class DistributionStore:
                 return default
             raise DistributionNotFoundError("Distribution layout does not exist.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
     def write_layout(self, release_id: str, target_id: str, layout: dict[str, Any]) -> dict[str, Any]:
         self.get_target(release_id, target_id)
@@ -372,7 +372,7 @@ class DistributionStore:
         return stale_targets
 
     def latest_package_id(self, target: DistributionTarget) -> str | None:
-        summary = target.latest_export_summary if isinstance(target.latest_export_summary, dict) else {}
+        summary = _as_document(target.latest_export_summary)
         package_id = str(summary.get("package_id") or "").strip()
         return _validate_package_id(package_id) if package_id else None
 
@@ -401,7 +401,7 @@ class DistributionStore:
                 return default
             raise DistributionNotFoundError("Distribution signoff does not exist.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
     def write_signoff(self, release_id: str, package_id: str, record: dict[str, Any]) -> dict[str, Any]:
         clean = sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
@@ -506,7 +506,7 @@ class DistributionStore:
 
 
 def distribution_target_summary(target: DistributionTarget | dict[str, Any] | None) -> dict[str, Any]:
-    data = target.to_dict() if isinstance(target, DistributionTarget) else target if isinstance(target, dict) else {}
+    data = target.to_dict() if isinstance(target, DistributionTarget) else _as_document(target)
     return sanitize_metadata(
         {
             "target_id": data.get("target_id"),
@@ -528,7 +528,7 @@ def distribution_target_summary(target: DistributionTarget | dict[str, Any] | No
 
 
 def distribution_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
-    data = record if isinstance(record, dict) else {}
+    data = _as_document(record)
     return sanitize_metadata(
         {
             "status": data.get("status") or "not_signed",
@@ -540,9 +540,9 @@ def distribution_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any
             "qa_source_hash": data.get("qa_source_hash"),
             "export_manifest_hash": data.get("export_manifest_hash"),
             "forced": bool(data.get("forced", False)),
-            "encoded_audio_acceptance": data.get("encoded_audio_acceptance") if isinstance(data.get("encoded_audio_acceptance"), dict) else {},
-            "format_decision": data.get("format_decision") if isinstance(data.get("format_decision"), dict) else {},
-            "rights_clearance": data.get("rights_clearance") if isinstance(data.get("rights_clearance"), dict) else {},
+            "encoded_audio_acceptance": _as_document(data.get("encoded_audio_acceptance")),
+            "format_decision": _as_document(data.get("format_decision")),
+            "rights_clearance": _as_document(data.get("rights_clearance")),
         },
         blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
     )
@@ -583,9 +583,9 @@ def build_distribution_signoff_record(
         "override_reason": _safe_text(payload.get("override_reason"), 500) if force else None,
         "acknowledged_blockers": blockers if force else [],
         "acknowledged_warnings": warnings,
-        "encoded_audio_acceptance": payload.get("encoded_audio_acceptance") if isinstance(payload.get("encoded_audio_acceptance"), dict) else {},
-        "format_decision": payload.get("format_decision") if isinstance(payload.get("format_decision"), dict) else {},
-        "rights_clearance": payload.get("rights_clearance") if isinstance(payload.get("rights_clearance"), dict) else {},
+        "encoded_audio_acceptance": _as_document(payload.get("encoded_audio_acceptance")),
+        "format_decision": _as_document(payload.get("format_decision")),
+        "rights_clearance": _as_document(payload.get("rights_clearance")),
         "notes": _safe_text(payload.get("notes"), 2000),
     }
     return sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
@@ -624,7 +624,7 @@ def _stale_summary(summary: ImplementationDocument | None, reason: str) -> Imple
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def _safe_text(value: Any, limit: int) -> str:
@@ -656,7 +656,7 @@ def _optional_text(value: Any, limit: int) -> str | None:
 
 def _merge_target_options(profile: ImplementationDocument, rules: ImplementationDocument, overrides: ImplementationDocument | None = None) -> ImplementationDocument:
     base = merge_profile_options(profile, rules)
-    overrides = overrides if isinstance(overrides, dict) else {}
+    overrides = _as_document(overrides)
     allowed = set(base) | {"artwork_id", "submission_note"}
     for key, value in overrides.items():
         if key not in allowed:

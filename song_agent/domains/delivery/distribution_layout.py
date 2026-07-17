@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 from pathlib import Path as Path, PurePosixPath as PurePosixPath
 from typing import Any as Any
@@ -77,7 +77,7 @@ def build_distribution_layout_plan(
     encoded_audio_summary: dict[str, Any] | None = None,
     encoded_audio_root: Path | None = None,
 ) -> dict[str, Any]:
-    release_metadata = release_metadata if isinstance(release_metadata, dict) else {}
+    release_metadata = _as_document(release_metadata)
     release_info = _release_info(release, release_metadata)
     target_info = _target_info(target)
     naming_errors: list[dict[str, Any]] = []
@@ -85,10 +85,10 @@ def build_distribution_layout_plan(
         naming = effective_file_naming(template)
     except DistributionTemplateError as exc:
         raw = dict(DEFAULT_FILE_NAMING)
-        raw.update(template.get("file_naming") if isinstance(template, dict) and isinstance(template.get("file_naming"), dict) else {})
+        raw.update(_as_document(template.get("file_naming")) if isinstance(template, dict) else {})
         naming = normalize_file_naming({key: str(raw.get(key) or DEFAULT_FILE_NAMING[key]) for key in DEFAULT_FILE_NAMING})
         naming_errors.append({"check_id": "file_naming_shape", "message": str(exc)})
-    rules = template.get("rules") if isinstance(template, dict) and isinstance(template.get("rules"), dict) else {}
+    rules = _as_document(template.get("rules")) if isinstance(template, dict) else {}
     entries: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = list(naming_errors)
@@ -98,8 +98,8 @@ def build_distribution_layout_plan(
     for kind, pattern in naming.items():
         errors.extend(_pattern_errors(kind, pattern))
 
-    tracks = release_manifest.get("tracks") if isinstance(release_manifest.get("tracks"), list) else []
-    audio_profile_ids = _target_audio_profile_ids(target_info, rules)
+    tracks = _as_list(release_manifest.get("tracks"))
+    audio_profile_ids = _target_audio_profile_ids(target_info, _as_document(rules))
     for track in tracks:
         if not isinstance(track, dict):
             continue
@@ -109,7 +109,7 @@ def build_distribution_layout_plan(
             audio_rel, audio_ext, audio_source_kind, audio_format = _audio_source_rel(release_export_dir, track, target_info=target_info, encoded_audio_summary=encoded_audio_summary, encoded_audio_root=encoded_audio_root, profile_id=profile_id)
             audio_root = encoded_audio_root if audio_source_kind == "encoded_audio" else release_export_dir
             audio_exists = _source_exists(audio_root, audio_rel)
-            audio_required = bool(rules.get("require_audio")) or bool(target_info["options"].get("require_audio", False)) or bool(target_info["options"].get("require_encoded_audio", False)) or profile_id != "wav_master"
+            audio_required = bool(_as_document(rules).get("require_audio")) or bool(target_info["options"].get("require_audio", False)) or bool(target_info["options"].get("require_encoded_audio", False)) or profile_id != "wav_master"
             if not (audio_exists or audio_required):
                 continue
             entry = _entry(
@@ -130,7 +130,7 @@ def build_distribution_layout_plan(
         lyrics_rel = _lyrics_source_rel(context)
         lyrics_exists = _source_exists(release_export_dir, lyrics_rel)
         has_lyrics = bool(str(context.get("lyrics") or "").strip())
-        if lyrics_exists or has_lyrics or bool(rules.get("require_lyrics")):
+        if lyrics_exists or has_lyrics or bool(_as_document(rules).get("require_lyrics")):
             entry = _entry(
                 kind="lyrics",
                 track=context,
@@ -139,7 +139,7 @@ def build_distribution_layout_plan(
                 source_kind="release_export",
                 ext="txt",
                 audio_format={},
-                required=bool(rules.get("require_lyrics")),
+                required=bool(_as_document(rules).get("require_lyrics")),
                 exists=lyrics_exists or (has_lyrics and release_export_dir is None),
                 release_info=release_info,
                 target_info=target_info,
@@ -147,7 +147,7 @@ def build_distribution_layout_plan(
             _add_entry(entries, warnings, errors, used_paths, entry)
 
     artwork_exists = bool(artwork)
-    if artwork_exists or bool(rules.get("require_artwork")) or bool(target_info["options"].get("require_artwork", False)):
+    if artwork_exists or bool(_as_document(rules).get("require_artwork")) or bool(target_info["options"].get("require_artwork", False)):
         suffix = Path(str((artwork or {}).get("stored_filename") or (artwork or {}).get("filename") or "cover.png")).suffix.lower().lstrip(".") or "png"
         entry = _entry(
             kind="artwork",
@@ -157,7 +157,7 @@ def build_distribution_layout_plan(
             source_kind="artwork",
             ext=suffix,
             audio_format={},
-            required=bool(rules.get("require_artwork")) or bool(target_info["options"].get("require_artwork", False)),
+            required=bool(_as_document(rules).get("require_artwork")) or bool(target_info["options"].get("require_artwork", False)),
             exists=artwork_exists,
             release_info=release_info,
             target_info=target_info,
@@ -206,10 +206,10 @@ def build_distribution_layout_plan(
 
 
 def layout_summary(plan: dict[str, Any] | None) -> dict[str, Any]:
-    data = plan if isinstance(plan, dict) else {}
-    entries = data.get("entries") if isinstance(data.get("entries"), list) else []
-    warnings = data.get("warnings") if isinstance(data.get("warnings"), list) else []
-    errors = data.get("errors") if isinstance(data.get("errors"), list) else []
+    data = _as_document(plan)
+    entries = _as_list(data.get("entries"))
+    warnings = _as_list(data.get("warnings"))
+    errors = _as_list(data.get("errors"))
     return sanitize_metadata(
         {
             "status": "failed" if errors else "warning" if warnings else "passed",
@@ -247,7 +247,7 @@ def layout_manifest_payload(plan: dict[str, Any], file_records: list[dict[str, A
             "collision": bool(entry.get("collision", False)),
             "collision_index": entry.get("collision_index"),
             "ext": entry.get("ext"),
-            "audio_format": entry.get("audio_format") if isinstance(entry.get("audio_format"), dict) else {},
+            "audio_format": _as_document(entry.get("audio_format")),
             "required": bool(entry.get("required", False)),
             "exists": bool(entry.get("exists", False)),
             "status": entry.get("status") or "planned",
@@ -264,11 +264,11 @@ def layout_manifest_payload(plan: dict[str, Any], file_records: list[dict[str, A
         "template_pack_id": plan.get("template_pack_id"),
         "template_hash": plan.get("template_hash"),
         "collision_strategy": plan.get("collision_strategy") or DISTRIBUTION_LAYOUT_COLLISION_STRATEGY,
-        "naming": plan.get("naming") if isinstance(plan.get("naming"), dict) else {},
+        "naming": _as_document(plan.get("naming")),
         "entries": entries,
-        "warnings": plan.get("warnings") if isinstance(plan.get("warnings"), list) else [],
-        "errors": plan.get("errors") if isinstance(plan.get("errors"), list) else [],
-        "summary": plan.get("summary") if isinstance(plan.get("summary"), dict) else layout_summary(plan),
+        "warnings": _as_list(plan.get("warnings")),
+        "errors": _as_list(plan.get("errors")),
+        "summary": _document_or(plan.get("summary"), layout_summary(plan)),
     }
     layout["payload_hash"] = layout_payload_hash(layout)
     return sanitize_metadata(layout, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
@@ -302,8 +302,8 @@ def layout_file_tree_text(paths: list[str]) -> str:
 
 def layout_check_items(plan: dict[str, Any]) -> list[dict[str, Any]]:
     summary = layout_summary(plan)
-    errors = plan.get("errors") if isinstance(plan.get("errors"), list) else []
-    warnings = plan.get("warnings") if isinstance(plan.get("warnings"), list) else []
+    errors = _as_list(plan.get("errors"))
+    warnings = _as_list(plan.get("warnings"))
     return [
         _check("layout_plan_valid", summary.get("status") != "failed", "blocking", "Distribution layout plan is valid." if summary.get("status") != "failed" else "Distribution layout plan has blocking errors.", count=len(errors)),
         _check("template_file_naming_valid", not any(str(item.get("check_id") or "").startswith("file_naming_") for item in errors), "blocking", "Template file_naming variables are valid."),
@@ -392,7 +392,7 @@ def _add_entry(entries: list[ImplementationDocument], warnings: list[Implementat
 
 def _render_pattern(kind: str, pattern: str, *, track: ImplementationDocument | None, release_info: ImplementationDocument, target_info: ImplementationDocument, ext: str, audio_format: ImplementationDocument | None = None) -> str:
     _ensure_variables_allowed(kind, pattern)
-    audio_format = audio_format if isinstance(audio_format, dict) else {}
+    audio_format = _as_document(audio_format)
     values: dict[str, Any] = {
         "ext": ext.strip(".").lower(),
         "format": _slug_value(audio_format.get("format"), ext.strip(".").lower() or "audio"),
@@ -487,7 +487,7 @@ def _with_default_prefix(pattern: str, prefix: str) -> str:
 
 
 def _release_info(release: Any | ImplementationDocument, metadata: ImplementationDocument) -> ImplementationDocument:
-    meta_release = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
+    meta_release = _as_document(metadata.get("release"))
     return {
         "release_id": _attr(release, "release_id") or (release.get("release_id") if isinstance(release, dict) else None),
         "name": _attr(release, "name") or (release.get("name") if isinstance(release, dict) else None) or meta_release.get("title"),
@@ -501,17 +501,17 @@ def _target_info(target: Any) -> ImplementationDocument:
     return {
         "target_id": _attr(target, "target_id") or (target.get("target_id") if isinstance(target, dict) else None),
         "profile_id": _attr(target, "profile_id") or (target.get("profile_id") if isinstance(target, dict) else None),
-        "options": options if isinstance(options, dict) else {},
+        "options": _as_document(options),
     }
 
 
 def _metadata_tracks_by_id(metadata: ImplementationDocument) -> dict[str, ImplementationDocument]:
-    tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
+    tracks = _as_list(metadata.get("tracks"))
     return {str(item.get("track_id") or ""): item for item in tracks if isinstance(item, dict) and item.get("track_id")}
 
 
 def _track_context(track: ImplementationDocument, metadata: ImplementationDocument | None, release_info: ImplementationDocument) -> ImplementationDocument:
-    metadata = metadata if isinstance(metadata, dict) else {}
+    metadata = _as_document(metadata)
     merged = {**track, **{key: value for key, value in metadata.items() if value not in (None, "", [])}}
     merged["language"] = merged.get("language") or release_info.get("language")
     return merged
@@ -537,14 +537,14 @@ def _audio_source_rel(root: Path | None, track: ImplementationDocument, *, targe
 
 def _encoded_profile_summary(summary: ImplementationDocument | None, profile_id: str) -> ImplementationDocument:
     profiles = summary.get("profiles") if isinstance(summary, dict) and isinstance(summary.get("profiles"), list) else []
-    for row in profiles:
+    for row in _as_list(profiles):
         if isinstance(row, dict) and row.get("profile_id") == profile_id:
             return row
     return {"profile_id": profile_id, "format": profile_id.split("_", 1)[0], "extension": profile_id.split("_", 1)[0], "codec": ""}
 
 
 def _target_audio_profile_ids(target_info: ImplementationDocument, rules: ImplementationDocument) -> list[str]:
-    options = target_info.get("options") if isinstance(target_info.get("options"), dict) else {}
+    options = _as_document(target_info.get("options"))
     profiles = _normalize_profile_ids(options.get("audio_format_profiles"))
     if not profiles:
         profiles = _normalize_profile_ids(rules.get("required_audio_formats"))

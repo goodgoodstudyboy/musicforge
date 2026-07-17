@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -211,12 +213,12 @@ class AcceptanceFixPlanReviewStore:
             return updated
 
     def review_is_stale(self, review: AcceptanceFixPlanReview | dict[str, Any]) -> bool:
-        data = review.to_dict() if isinstance(review, AcceptanceFixPlanReview) else review if isinstance(review, dict) else {}
+        data = review.to_dict() if isinstance(review, AcceptanceFixPlanReview) else _as_document(review)
         try:
             current = self._source_state(str(data.get("plan_id") or ""))
         except AcceptanceFixPlanReviewError:
             return True
-        stored = data.get("source") if isinstance(data.get("source"), dict) else {}
+        stored = _as_document(data.get("source"))
         keys = ("plan_hash", "plan_source_hash", "fix_sprint_hash", "fix_items_hash", "delta_hash", "closeout_hash", "source_hash")
         return any(str(current.get(key) or "") != str(stored.get(key) or "") for key in keys) or current.get("kb_entry_hashes") != stored.get("kb_entry_hashes")
 
@@ -309,16 +311,16 @@ class AcceptanceFixPlanReviewStore:
 
     def _kb_summaries(self, plan: AcceptanceFixPlan, items: list[AcceptanceFixItem]) -> dict[str, ImplementationDocument]:
         ids: set[str] = set()
-        for item in plan.planned_items:
-            knowledge = item.get("knowledge") if isinstance(item.get("knowledge"), dict) else {}
+        for planned_item in plan.planned_items:
+            knowledge = _as_document(planned_item.get("knowledge"))
             ids.update(str(value) for value in knowledge.get("top_entry_ids", []) if str(value).strip())
-            source = item.get("source") if isinstance(item.get("source"), dict) else {}
+            source = _as_document(planned_item.get("source"))
             ids.update(str(value) for value in source.get("kb_entry_ids", []) if str(value).strip())
-        for item in items:
-            source = item.source if isinstance(item.source, dict) else {}
+        for fix_item in items:
+            source = _as_document(fix_item.source)
             ids.update(str(value) for value in source.get("kb_entry_ids", []) if str(value).strip())
-            planning = item.evidence.get("planning") if isinstance(item.evidence, dict) and isinstance(item.evidence.get("planning"), dict) else {}
-            knowledge = planning.get("knowledge") if isinstance(planning.get("knowledge"), dict) else {}
+            planning = fix_item.evidence.get("planning") if isinstance(fix_item.evidence, dict) and isinstance(fix_item.evidence.get("planning"), dict) else {}
+            knowledge = _as_document(_as_document(planning).get("knowledge"))
             ids.update(str(value) for value in knowledge.get("top_entry_ids", []) if str(value).strip())
         summaries: dict[str, dict[str, Any]] = {}
         for entry_id in sorted(ids):
@@ -349,9 +351,9 @@ class AcceptanceFixPlanReviewStore:
 
 
 def fix_plan_review_summary(review: AcceptanceFixPlanReview | dict[str, Any] | None) -> dict[str, Any]:
-    data = review.to_dict() if isinstance(review, AcceptanceFixPlanReview) else review if isinstance(review, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    source = data.get("source") if isinstance(data.get("source"), dict) else {}
+    data = review.to_dict() if isinstance(review, AcceptanceFixPlanReview) else _as_document(review)
+    summary = _as_document(data.get("summary"))
+    source = _as_document(data.get("source"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -359,7 +361,7 @@ def fix_plan_review_summary(review: AcceptanceFixPlanReview | dict[str, Any] | N
             "review_id": data.get("review_id"),
             "plan_id": data.get("plan_id"),
             "fix_sprint_id": data.get("fix_sprint_id"),
-            "scope": data.get("scope") if isinstance(data.get("scope"), dict) else {},
+            "scope": _as_document(data.get("scope")),
             "planned_item_count": summary.get("planned_item_count", 0),
             "executed_item_count": summary.get("executed_item_count", 0),
             "resolved_item_count": summary.get("resolved_item_count", 0),
@@ -398,14 +400,14 @@ def write_acceptance_fix_plan_review_summary(path: Path, store: AcceptanceFixPla
 def _item_outcomes(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: ImplementationDocument, closeout: ImplementationDocument, kb_summaries: dict[str, ImplementationDocument], *, project_store: ProjectStore) -> list[ImplementationDocument]:
     planned_by_id = {str(item.get("planned_item_id") or ""): item for item in plan.planned_items}
     items_by_planned = {str(item.source.get("planned_item_id") or ""): item for item in items}
-    delta_summary = delta.get("summary") if isinstance(delta.get("summary"), dict) else {}
+    delta_summary = _as_document(delta.get("summary"))
     closeout_forced = bool(closeout.get("forced", False))
     rows = []
     for index, planned in enumerate(plan.planned_items, start=1):
         planned_id = str(planned.get("planned_item_id") or "")
         item = items_by_planned.get(planned_id)
         task_statuses = _task_statuses(item, project_store) if item else []
-        kb_ids = [str(value) for value in (planned.get("knowledge") if isinstance(planned.get("knowledge"), dict) else {}).get("top_entry_ids", []) if str(value).strip()]
+        kb_ids = [str(value) for value in (_as_document(planned.get("knowledge"))).get("top_entry_ids", []) if str(value).strip()]
         warnings = []
         if item is None:
             warnings.append("planned_item_not_executed")
@@ -426,10 +428,10 @@ def _item_outcomes(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: 
                     "severity": planned.get("severity"),
                     "target": _safe_dict(planned.get("target")),
                     "planned_knowledge": {
-                        "match_count": (planned.get("knowledge") if isinstance(planned.get("knowledge"), dict) else {}).get("match_count", len(kb_ids)),
+                        "match_count": (_as_document(planned.get("knowledge"))).get("match_count", len(kb_ids)),
                         "top_entry_ids": kb_ids,
-                        "risk": (planned.get("knowledge") if isinstance(planned.get("knowledge"), dict) else {}).get("risk"),
-                        "warnings": (planned.get("knowledge") if isinstance(planned.get("knowledge"), dict) else {}).get("warnings", []),
+                        "risk": (_as_document(planned.get("knowledge"))).get("risk"),
+                        "warnings": (_as_document(planned.get("knowledge"))).get("warnings", []),
                     },
                     "execution": {
                         "fix_item_status": item.status if item else "missing",
@@ -481,7 +483,7 @@ def _item_outcomes(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: 
 
 
 def _review_summary(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: ImplementationDocument, closeout: ImplementationDocument, item_outcomes: list[ImplementationDocument]) -> ImplementationDocument:
-    delta_summary = delta.get("summary") if isinstance(delta.get("summary"), dict) else {}
+    delta_summary = _as_document(delta.get("summary"))
     statuses = [str(item.get("outcome", {}).get("evidence_status") or "") for item in item_outcomes if isinstance(item.get("outcome"), dict)]
     warnings = []
     open_items = [item for item in items if item.status not in {"fixed", "closed", "waived"}]
@@ -532,9 +534,9 @@ def _review_summary(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items:
 
 
 def _calibration_hints(plan: AcceptanceFixPlan, item_outcomes: list[ImplementationDocument], summary: ImplementationDocument) -> list[ImplementationDocument]:
-    hints = []
+    hints: list[_InferenceType] = []
     for item in item_outcomes:
-        outcome = item.get("outcome") if isinstance(item.get("outcome"), dict) else {}
+        outcome = _as_document(item.get("outcome"))
         planning_score = _int(item.get("planning_score"), 0)
         if planning_score >= 80 and outcome.get("evidence_status") in {"unsupported", "unknown", "not_executed"}:
             hints.append({"hint_id": f"hint-{len(hints)+1:03d}", "type": "deprioritize_pattern", "severity": "warning", "planned_item_id": item.get("planned_item_id"), "reason": "High-score planned item did not produce supported evidence.", "suggestion": "Review issue weighting and KB match quality before using similar high-score items again."})
@@ -596,7 +598,7 @@ def _ranking_alignment_score(planned_items: list[ImplementationDocument], item_o
     for planned in planned_items:
         planned_id = str(planned.get("planned_item_id") or "")
         outcome = outcome_by_id.get(planned_id, {})
-        outcome_data = outcome.get("outcome") if isinstance(outcome.get("outcome"), dict) else {}
+        outcome_data = _as_document(outcome.get("outcome"))
         pairs.append((_int(planned.get("planning_score"), 0), _int(outcome_data.get("observed_effectiveness_score"), 0)))
     inversions = 0
     total = 0
@@ -681,7 +683,7 @@ def _kb_helpfulness(evidence_status: str, kb_ids: list[str]) -> str:
 
 
 def _overall_kb_helpfulness(item_outcomes: list[ImplementationDocument]) -> str:
-    values = [str((item.get("outcome") if isinstance(item.get("outcome"), dict) else {}).get("kb_evidence_helpfulness") or "missing") for item in item_outcomes]
+    values = [str((_as_document(item.get("outcome"))).get("kb_evidence_helpfulness") or "missing") for item in item_outcomes]
     if not values or all(value == "missing" for value in values):
         return "missing"
     helpful = values.count("helpful")
@@ -705,7 +707,7 @@ def _task_statuses(item: AcceptanceFixItem | None, project_store: ProjectStore) 
 
 
 def _song_delta_status(delta: ImplementationDocument, planned_or_item: ImplementationDocument) -> str:
-    target = planned_or_item.get("target") if isinstance(planned_or_item.get("target"), dict) else {}
+    target = _as_document(planned_or_item.get("target"))
     song_id = str(target.get("song_id") or "")
     for row in delta.get("song_deltas", []) if isinstance(delta.get("song_deltas"), list) else []:
         if str(row.get("song_id") or "") != song_id:
@@ -722,7 +724,7 @@ def _song_delta_status(delta: ImplementationDocument, planned_or_item: Implement
         if issue_delta > 0:
             return "regressed"
         return "unchanged"
-    summary = delta.get("summary") if isinstance(delta.get("summary"), dict) else {}
+    summary = _as_document(delta.get("summary"))
     return str(summary.get("status") or "unknown")
 
 
@@ -739,25 +741,25 @@ def _item_source(item: AcceptanceFixItem) -> ImplementationDocument:
 
 
 def _delta_source(delta: ImplementationDocument) -> ImplementationDocument:
-    return sanitize_metadata({"source": delta.get("source") if isinstance(delta.get("source"), dict) else {}, "recheck": delta.get("recheck") if isinstance(delta.get("recheck"), dict) else {}, "summary": delta.get("summary") if isinstance(delta.get("summary"), dict) else {}, "song_deltas": delta.get("song_deltas") if isinstance(delta.get("song_deltas"), list) else [], "issue_deltas": delta.get("issue_deltas") if isinstance(delta.get("issue_deltas"), list) else []})
+    return sanitize_metadata({"source": _as_document(delta.get("source")), "recheck": _as_document(delta.get("recheck")), "summary": _as_document(delta.get("summary")), "song_deltas": _as_list(delta.get("song_deltas")), "issue_deltas": _as_list(delta.get("issue_deltas"))})
 
 
 def _closeout_source(closeout: ImplementationDocument) -> ImplementationDocument:
-    return sanitize_metadata({"status": closeout.get("status"), "forced": bool(closeout.get("forced", False)), "summary": closeout.get("summary") if isinstance(closeout.get("summary"), dict) else {}, "checks": closeout.get("checks") if isinstance(closeout.get("checks"), list) else []})
+    return sanitize_metadata({"status": closeout.get("status"), "forced": bool(closeout.get("forced", False)), "summary": _as_document(closeout.get("summary")), "checks": _as_list(closeout.get("checks"))})
 
 
 def _review_matches_project(review: AcceptanceFixPlanReview, project_id: str) -> bool:
     if review.scope.get("project_id") == project_id:
         return True
     for item in review.item_outcomes:
-        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        target = _as_document(item.get("target"))
         if target.get("project_id") == project_id:
             return True
     return False
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _bounded(value: Any, limit: int = 300) -> str:

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustRoutesTrustOperationsIncidents:
+class TrustRoutesTrustOperationsIncidents(TrustRouteContext):
     def _handle_trust_operations_incidents(self, method: str, hub_id: str, tail: str) -> None:
         try:
             if tail in {"", "/"}:

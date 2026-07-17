@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -72,7 +72,7 @@ def print_public_trust_center_anchor_registry_verification_report(report: dict[s
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -185,7 +185,7 @@ class _AnchorRegistryVerifier:
             return
         self._add_hash_check("manifest", "ptcar_manifest_integrity", self.manifest.get("integrity_hash"), anchor_registry_manifest_hash(self.manifest), "Anchor Registry manifest integrity")
         self._add_exact_check("manifest", "ptcar_manifest_package_type", self.manifest.get("package_type"), ANCHOR_REGISTRY_PACKAGE_TYPE, "Manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -238,7 +238,7 @@ class _AnchorRegistryVerifier:
     def _verify_documents(self) -> None:
         if self.registry:
             self._add_hash_check("registry", "ptcar_registry_integrity", self.registry.get("integrity_hash"), anchor_registry_hash(self.registry), "Registry integrity")
-            row = self.manifest.get("registry") if isinstance(self.manifest.get("registry"), dict) else {}
+            row = _as_document(self.manifest.get("registry"))
             self._add_hash_check("registry", "ptcar_manifest_registry_hash", row.get("integrity_hash"), self.registry.get("integrity_hash"), "Manifest registry hash")
             self._verify_registry_entries()
             self._verify_event_chain()
@@ -246,16 +246,16 @@ class _AnchorRegistryVerifier:
             self._add_check("registry", "ptcar_registry_exists", "failed", "blocking", "registry.json must contain a JSON object.")
         if self.report_doc:
             self._add_hash_check("report", "ptcar_report_integrity", self.report_doc.get("integrity_hash"), anchor_registry_report_hash(self.report_doc), "Report integrity")
-            report_row = self.manifest.get("registry_report") if isinstance(self.manifest.get("registry_report"), dict) else {}
+            report_row = _as_document(self.manifest.get("registry_report"))
             self._add_hash_check("report", "ptcar_manifest_report_hash", report_row.get("integrity_hash"), self.report_doc.get("integrity_hash"), "Manifest report hash")
             self._add_hash_check("report", "ptcar_manifest_report_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest report source hash")
             expected_source = _report_source_from_registry(self.registry)
-            source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+            source = _as_document(self.report_doc.get("source"))
             self._add_hash_check("report", "ptcar_report_source_hash", self.report_doc.get("source_hash"), stable_hash(source), "Report source hash")
             for key, expected in expected_source.items():
                 self._add_exact_check("report", f"ptcar_report_source_{key}", source.get(key), expected, f"Report source {key}")
             expected_summary = anchor_registry_summary(self.registry)
-            summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+            summary = _as_document(self.report_doc.get("summary"))
             for key in ("current_entry_id", "current_anchor_hash", "entry_count", "published_count", "revoked_count", "superseded_count"):
                 self._add_exact_check("report", f"ptcar_report_summary_{key}", summary.get(key), expected_summary.get(key), f"Report summary {key}")
         else:
@@ -263,10 +263,10 @@ class _AnchorRegistryVerifier:
         if self.chain:
             self._add_hash_check("chain", "ptcar_chain_integrity", self.chain.get("integrity_hash"), stable_hash({key: value for key, value in self.chain.items() if key != "integrity_hash"}), "Chain of custody integrity")
             self._add_hash_check("chain", "ptcar_chain_source_hash", self.chain.get("source_hash"), self.report_doc.get("source_hash"), "Chain source hash")
-            expected_events = self.registry.get("events") if isinstance(self.registry.get("events"), list) else []
-            actual_events = self.chain.get("events") if isinstance(self.chain.get("events"), list) else []
+            expected_events = _as_list(self.registry.get("events"))
+            actual_events = _as_list(self.chain.get("events"))
             self._add_exact_check("chain", "ptcar_chain_events_match_registry", actual_events, expected_events, "Chain events derive from registry")
-            chain_summary = self.chain.get("summary") if isinstance(self.chain.get("summary"), dict) else {}
+            chain_summary = _as_document(self.chain.get("summary"))
             self._add_exact_check("chain", "ptcar_chain_summary_current_entry_id", chain_summary.get("current_entry_id"), self.registry.get("current_entry_id"), "Chain current entry")
             self._add_exact_check("chain", "ptcar_chain_summary_event_count", chain_summary.get("event_count"), len(expected_events), "Chain event count")
         else:
@@ -276,7 +276,7 @@ class _AnchorRegistryVerifier:
         self._add_exact_check("anchor", "ptcar_current_anchor_matches_entry", self.current_anchor, expected_anchor, "current-anchor.json matches current entry")
 
     def _verify_registry_entries(self) -> None:
-        entries = self.registry.get("entries") if isinstance(self.registry.get("entries"), list) else []
+        entries = _as_list(self.registry.get("entries"))
         ids = [str(item.get("entry_id") or "") for item in entries if isinstance(item, dict)]
         self._add_check("registry", "ptcar_entry_ids_unique", "passed" if len(ids) == len(set(ids)) else "failed", "blocking", "Entry ids are unique." if len(ids) == len(set(ids)) else "Entry ids are duplicated.")
         expected_entry_docs = {f"entries/{_safe_id(str(item.get('entry_id') or 'entry'))}.json": item for item in entries if isinstance(item, dict)}
@@ -289,7 +289,7 @@ class _AnchorRegistryVerifier:
             self._add_hash_check("registry", f"{entry_id}_integrity", entry.get("integrity_hash"), anchor_entry_hash(entry), f"Entry {entry_id} integrity")
             self._add_check("registry", f"{entry_id}_status", "passed" if entry.get("status") in ANCHOR_ENTRY_STATUSES else "failed", "blocking", f"Entry {entry_id} status is valid." if entry.get("status") in ANCHOR_ENTRY_STATUSES else f"Entry {entry_id} status is invalid.")
             self._add_check("registry", f"{entry_id}_signature", "passed" if anchor_entry_signature_ok(entry) else "failed", "blocking", f"Entry {entry_id} signature envelope is valid." if anchor_entry_signature_ok(entry) else f"Entry {entry_id} signature envelope is invalid.")
-            anchor = entry.get("anchor") if isinstance(entry.get("anchor"), dict) else {}
+            anchor = _as_document(entry.get("anchor"))
             self._add_hash_check("registry", f"{entry_id}_anchor_hash", entry.get("anchor_hash"), anchor.get("anchor_hash"), f"Entry {entry_id} anchor hash")
             self._add_hash_check("registry", f"{entry_id}_anchor_payload_hash", anchor.get("anchor_hash"), stable_hash({key: val for key, val in anchor.items() if key != "anchor_hash"}), f"Entry {entry_id} anchor payload hash")
             if entry.get("status") == "superseded":
@@ -354,7 +354,7 @@ class _AnchorRegistryVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
@@ -398,9 +398,9 @@ def _report_source_from_registry(registry: ImplementationDocument) -> Implementa
         "current_entry_id": registry.get("current_entry_id"),
         "current_entry_hash": current.get("integrity_hash") if current else None,
         "current_anchor_hash": current.get("anchor_hash") if current else None,
-        "current_zip_sha256": zip_fingerprint.get("zip_sha256") if current else None,
-        "current_manifest_hash": zip_fingerprint.get("manifest_hash") if current else None,
-        "current_source_hash": zip_fingerprint.get("source_hash") if current else None,
+        "current_zip_sha256": _as_document(zip_fingerprint).get("zip_sha256") if current else None,
+        "current_manifest_hash": _as_document(zip_fingerprint).get("manifest_hash") if current else None,
+        "current_source_hash": _as_document(zip_fingerprint).get("source_hash") if current else None,
     }
 
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesReleaseAudioCampaignPlan:
+class QualityRoutesReleaseAudioCampaignPlan(QualityRouteContext):
     def _handle_release_audio_campaign_plan(self, method: str, release_id: str, tail: str) -> None:
         try:
             self.audio_campaign_planner_store.release_store = self.release_store

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from song_agent.audio_encoding import AudioEncoderConfig, AudioEncodingStore
+from song_agent.audio_encoding import AudioEncoderConfig
 from song_agent.encoded_audio_acceptance import EncodedAudioAcceptanceStore, encoded_audio_acceptance_allows_signoff
 from tests.test_mastering_qa import _signed_project
 from tests.test_release_audio import _add_final_export_audio

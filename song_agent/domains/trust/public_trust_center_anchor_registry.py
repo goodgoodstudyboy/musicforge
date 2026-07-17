@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -107,7 +107,7 @@ class PublicTrustCenterAnchorRegistryStore:
             entry = _find_entry_mut(registry, entry_id)
             if entry.get("status") == "revoked":
                 raise PublicTrustCenterAnchorRegistryStateError("Revoked anchor entries cannot be published.")
-            self._ensure_anchor_matches_current_ptc(center_id, entry.get("anchor") if isinstance(entry.get("anchor"), dict) else {})
+            self._ensure_anchor_matches_current_ptc(center_id, _as_document(entry.get("anchor")))
             current_id = str(registry.get("current_entry_id") or "")
             if current_id and current_id != entry_id:
                 if not bool(payload.get("supersede_current", False)):
@@ -172,9 +172,9 @@ class PublicTrustCenterAnchorRegistryStore:
                 "current_entry_id": registry.get("current_entry_id"),
                 "current_entry_hash": current.get("integrity_hash") if current else None,
                 "current_anchor_hash": current.get("anchor_hash") if current else None,
-                "current_zip_sha256": (current.get("zip_fingerprint") if isinstance(current.get("zip_fingerprint"), dict) else {}).get("zip_sha256") if current else None,
-                "current_manifest_hash": (current.get("zip_fingerprint") if isinstance(current.get("zip_fingerprint"), dict) else {}).get("manifest_hash") if current else None,
-                "current_source_hash": (current.get("zip_fingerprint") if isinstance(current.get("zip_fingerprint"), dict) else {}).get("source_hash") if current else None,
+                "current_zip_sha256": (_as_document(current.get("zip_fingerprint"))).get("zip_sha256") if current else None,
+                "current_manifest_hash": (_as_document(current.get("zip_fingerprint"))).get("manifest_hash") if current else None,
+                "current_source_hash": (_as_document(current.get("zip_fingerprint"))).get("source_hash") if current else None,
             }
             report = {
                 "schema_version": ANCHOR_REGISTRY_SCHEMA_VERSION,
@@ -219,7 +219,7 @@ class PublicTrustCenterAnchorRegistryStore:
             _write_json(export_dir / "registry.json", registry)
             _write_json(export_dir / "anchor-registry-report.json", report)
             _write_json(export_dir / "chain-of-custody.json", chain)
-            _write_json(export_dir / "current-anchor.json", current.get("anchor") if current else {})
+            _write_json(export_dir / "current-anchor.json", _as_document(current.get("anchor") if current else {}))
             for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
                 if isinstance(entry, dict):
                     _write_json(export_dir / "entries" / f"{_safe_id(str(entry.get('entry_id') or 'entry'))}.json", entry)
@@ -305,7 +305,7 @@ class PublicTrustCenterAnchorRegistryStore:
         if not anchor_path.exists() or not anchor_path.is_file() or anchor_path.is_symlink():
             raise PublicTrustCenterAnchorRegistryStateError("Public Trust Center delivery anchor does not exist. Build the Trust Center ZIP first.")
         value = read_json(anchor_path)
-        anchor = value if isinstance(value, dict) else {}
+        anchor = _as_document(value)
         if anchor.get("package_type") != ANCHOR_DELIVERY_PACKAGE_TYPE:
             raise PublicTrustCenterAnchorRegistryStateError("Public Trust Center delivery anchor package_type is invalid.")
         expected_hash = stable_hash({key: val for key, val in anchor.items() if key != "anchor_hash"})
@@ -332,7 +332,7 @@ class PublicTrustCenterAnchorRegistryStore:
 
     def _build_entry(self, registry: ImplementationDocument, center_id: str, anchor: ImplementationDocument, payload: ImplementationDocument, *, status: str, now: str) -> ImplementationDocument:
         anchor_hash = str(anchor.get("anchor_hash") or "")
-        sidecars = anchor.get("fingerprint_sidecars") if isinstance(anchor.get("fingerprint_sidecars"), list) else []
+        sidecars = _as_list(anchor.get("fingerprint_sidecars"))
         zip_fingerprint = {"zip_sha256": anchor.get("zip_sha256"), "zip_size_bytes": anchor.get("zip_size_bytes"), "manifest_hash": anchor.get("manifest_hash"), "source_hash": anchor.get("source_hash")}
         delivery_summary = {"count": len(sidecars), "fingerprint_sidecars_hash": stable_hash(sidecars)}
         signature_payload = {"anchor_hash": anchor_hash, "zip_fingerprint": zip_fingerprint, "delivery_fingerprint_summary": delivery_summary}
@@ -398,7 +398,7 @@ class PublicTrustCenterAnchorRegistryStore:
         _write_json(self.registry_path(center_id), registry)
 
     def _finalize_registry(self, registry: ImplementationDocument, *, now: str) -> None:
-        entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
+        entries = _as_list(registry.get("entries"))
         registry["entry_count"] = len(entries)
         registry["published_count"] = sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "published")
         registry["revoked_count"] = sum(1 for item in entries if isinstance(item, dict) and item.get("status") == "revoked")
@@ -410,7 +410,7 @@ class PublicTrustCenterAnchorRegistryStore:
     def _append_event(self, registry: ImplementationDocument, event_type: str, entry_id: str, payload: ImplementationDocument, *, now: str) -> None:
         events = registry.setdefault("events", [])
         previous = events[-1].get("event_hash") if events and isinstance(events[-1], dict) else None
-        clean_payload = sanitize_metadata(payload if isinstance(payload, dict) else {}, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
+        clean_payload = sanitize_metadata(_as_document(payload), blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
         event = {
             "event_id": f"ptcar-event-{len(events) + 1:06d}",
             "event_type": event_type,
@@ -435,7 +435,7 @@ class PublicTrustCenterAnchorRegistryStore:
                 return
             (warnings if warning else blockers).append({"check_id": check_id, "severity": row["severity"], "message": message})
 
-        entries = registry.get("entries") if isinstance(registry.get("entries"), list) else []
+        entries = _as_list(registry.get("entries"))
         check("anchor_registry_integrity", anchor_registry_integrity_ok(registry), "Anchor Registry integrity hash is valid.")
         ids = [str(item.get("entry_id") or "") for item in entries if isinstance(item, dict)]
         check("anchor_entry_ids_unique", len(ids) == len(set(ids)), "Anchor entry ids are unique.")
@@ -447,7 +447,7 @@ class PublicTrustCenterAnchorRegistryStore:
             check(f"{entry_id}_integrity", anchor_entry_integrity_ok(entry), f"Anchor entry {entry_id} integrity is valid.")
             check(f"{entry_id}_status", entry.get("status") in ANCHOR_ENTRY_STATUSES, f"Anchor entry {entry_id} status is valid.")
             check(f"{entry_id}_signature", anchor_entry_signature_ok(entry), f"Anchor entry {entry_id} signature envelope is valid.")
-            anchor = entry.get("anchor") if isinstance(entry.get("anchor"), dict) else {}
+            anchor = _as_document(entry.get("anchor"))
             check(f"{entry_id}_anchor_hash", anchor.get("anchor_hash") == entry.get("anchor_hash") == stable_hash({key: val for key, val in anchor.items() if key != "anchor_hash"}), f"Anchor entry {entry_id} anchor hash is valid.")
             if entry.get("status") == "superseded":
                 target = str(entry.get("superseded_by_entry_id") or "")
@@ -458,7 +458,7 @@ class PublicTrustCenterAnchorRegistryStore:
         check("anchor_current_entry_published", not current_id or current.get("status") == "published", "Current anchor entry is published.")
         if current:
             try:
-                self._ensure_anchor_matches_current_ptc(center_id, current.get("anchor") if isinstance(current.get("anchor"), dict) else {})
+                self._ensure_anchor_matches_current_ptc(center_id, _as_document(current.get("anchor")))
                 current_ok = True
             except PublicTrustCenterAnchorRegistryStateError:
                 current_ok = False
@@ -471,7 +471,7 @@ class PublicTrustCenterAnchorRegistryStore:
             raise PublicTrustCenterAnchorRegistryStateError("Anchor Registry integrity failed.")
         if not anchor_registry_report_integrity_ok(report):
             raise PublicTrustCenterAnchorRegistryStateError("Anchor Registry Report integrity failed.")
-        source = report.get("source") if isinstance(report.get("source"), dict) else {}
+        source = _as_document(report.get("source"))
         if source.get("registry_hash") != registry.get("integrity_hash") or report.get("source_hash") != stable_hash(source):
             raise PublicTrustCenterAnchorRegistryStateError("Anchor Registry Report is stale. Refresh before export.")
         blockers, _warnings, _checks = self._findings(center_id, registry)
@@ -490,7 +490,7 @@ class PublicTrustCenterAnchorRegistryStore:
         for event in registry.get("events", []) if isinstance(registry.get("events"), list) else []:
             if not isinstance(event, dict) or str(event.get("event_type") or "") != event_type:
                 continue
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             if all(str(payload.get(key) or "") == str(value or "") for key, value in state.items()):
                 return True
         return False
@@ -500,7 +500,7 @@ class PublicTrustCenterAnchorRegistryStore:
 
 
 def anchor_registry_integrity_ok(registry: dict[str, Any] | None) -> bool:
-    data = registry if isinstance(registry, dict) else {}
+    data = _as_document(registry)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_registry_hash(data)
 
 
@@ -508,7 +508,7 @@ def anchor_registry_integrity_ok(registry: dict[str, Any] | None) -> bool:
 
 
 def anchor_entry_integrity_ok(entry: dict[str, Any] | None) -> bool:
-    data = entry if isinstance(entry, dict) else {}
+    data = _as_document(entry)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_entry_hash(data)
 
 
@@ -516,7 +516,7 @@ def anchor_entry_integrity_ok(entry: dict[str, Any] | None) -> bool:
 
 
 def anchor_registry_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_registry_report_hash(data)
 
 
@@ -524,7 +524,7 @@ def anchor_registry_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def anchor_registry_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_registry_manifest_hash(data)
 
 
@@ -553,8 +553,8 @@ def _state_tuple(registry: ImplementationDocument, report: ImplementationDocumen
 
 
 def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
-    row = manifest.get("registry") if isinstance(manifest.get("registry"), dict) else {}
-    report = manifest.get("registry_report") if isinstance(manifest.get("registry_report"), dict) else {}
+    row = _as_document(manifest.get("registry"))
+    report = _as_document(manifest.get("registry_report"))
     return {"registry_hash": str(row.get("integrity_hash") or ""), "report_hash": str(report.get("integrity_hash") or ""), "current_entry_id": str(row.get("current_entry_id") or ""), "current_entry_hash": str(row.get("current_entry_hash") or "")}
 
 
@@ -599,14 +599,14 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except Exception:
         return {}
 

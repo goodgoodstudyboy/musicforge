@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustRoutesReleasePortfolioGovernanceQueues:
+class TrustRoutesReleasePortfolioGovernanceQueues(TrustRouteContext):
     def _handle_release_portfolio_governance_queues_part_01(self, method: str, path: str, _split_state):
         if _split_state['tail'] in {'', '/'}:
             if method != 'GET':

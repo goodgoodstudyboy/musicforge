@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_text as _as_text
 
 import hashlib as hashlib
 import json as json
@@ -100,7 +100,7 @@ class TrustOperationsHubRunbookStore:
                 "summary": _action_summary(actions),
             }
             runbook["integrity_hash"] = runbook_hash(runbook)
-            result = _empty_result(hub_id, report_id, runbook_id, runbook["integrity_hash"], now)
+            result = _empty_result(hub_id, report_id, runbook_id, _as_text(runbook["integrity_hash"]), now)
             _write_json(self.runbook_path(hub_id, runbook_id), runbook)
             _write_json(self.result_path(hub_id, runbook_id), result)
             write_json(self.source_paths_path(hub_id, runbook_id), source_paths)

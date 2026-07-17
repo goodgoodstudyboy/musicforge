@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -403,7 +403,7 @@ class SubmissionStore:
                 return default
             raise SubmissionNotFoundError("Submission QA does not exist.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
     def write_qa(self, release_id: str, submission_id: str, report: dict[str, Any]) -> dict[str, Any]:
         self.get_submission(release_id, submission_id)
@@ -439,7 +439,7 @@ class SubmissionStore:
                 return default
             raise SubmissionNotFoundError("Submission signoff does not exist.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
     def write_signoff(self, release_id: str, submission_id: str, record: dict[str, Any]) -> dict[str, Any]:
         self.get_submission(release_id, submission_id)
@@ -632,8 +632,8 @@ class SubmissionStore:
 
 
 def submission_batch_summary(batch: SubmissionBatch | dict[str, Any] | None) -> dict[str, Any]:
-    data = batch.to_dict() if isinstance(batch, SubmissionBatch) else batch if isinstance(batch, dict) else {}
-    items = data.get("items") if isinstance(data.get("items"), list) else []
+    data = batch.to_dict() if isinstance(batch, SubmissionBatch) else _as_document(batch)
+    items = _as_list(data.get("items"))
     status_counts: dict[str, int] = {}
     for item in items:
         if isinstance(item, dict):
@@ -662,7 +662,7 @@ def submission_batch_summary(batch: SubmissionBatch | dict[str, Any] | None) -> 
 
 
 def submission_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
-    data = record if isinstance(record, dict) else {}
+    data = _as_document(record)
     return sanitize_metadata(
         {
             "status": data.get("status") or "not_signed",
@@ -673,7 +673,7 @@ def submission_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
             "qa_source_hash": data.get("qa_source_hash"),
             "export_manifest_hash": data.get("export_manifest_hash"),
             "forced": bool(data.get("forced", False)),
-            "rights_clearance": data.get("rights_clearance") if isinstance(data.get("rights_clearance"), dict) else {},
+            "rights_clearance": _as_document(data.get("rights_clearance")),
         },
         blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
     )
@@ -710,7 +710,7 @@ def build_submission_signoff_record(
         "override_reason": _safe_text(payload.get("override_reason"), 500) if force else None,
         "acknowledged_blockers": blockers if force else [],
         "acknowledged_warnings": warnings,
-        "rights_clearance": payload.get("rights_clearance") if isinstance(payload.get("rights_clearance"), dict) else {},
+        "rights_clearance": _as_document(payload.get("rights_clearance")),
         "notes": _safe_text(payload.get("notes"), 2000),
     }
     return sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
@@ -809,7 +809,7 @@ def _preserve_external_status(old: str, new: str) -> str:
 def _target_ids_from_payload(payload: ImplementationDocument) -> list[str]:
     raw = payload.get("target_ids")
     if not isinstance(raw, list):
-        raw = payload.get("targets") if isinstance(payload.get("targets"), list) else []
+        raw = _as_list(payload.get("targets"))
     ids: list[str] = []
     for value in raw:
         text = str(value.get("target_id") if isinstance(value, dict) else value or "").strip()
@@ -828,7 +828,7 @@ def _stale_summary(summary: ImplementationDocument | None, reason: str) -> Imple
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
 def _safe_text(value: Any, limit: int) -> str:

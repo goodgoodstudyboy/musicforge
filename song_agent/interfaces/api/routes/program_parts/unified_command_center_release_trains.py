@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.interfaces.api.route_contexts.program import ProgramRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class ProgramRoutesUnifiedCommandCenterReleaseTrains:
+class ProgramRoutesUnifiedCommandCenterReleaseTrains(ProgramRouteContext):
     def _handle_unified_command_center_release_trains_route_part_01(self, method: str, path: str, _split_state):
         if path == '/api/unified-command-center-release-trains':
             if method == 'GET':
@@ -303,7 +307,7 @@ class ProgramRoutesUnifiedCommandCenterReleaseTrains:
         return (False, None)
 
     def _handle_unified_command_center_release_trains_route(self, method: str, path: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_unified_command_center_release_trains_route_part_01(method, path, _split_state)
             if _split_result[0]:

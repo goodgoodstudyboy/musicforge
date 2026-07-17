@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioAcceptance_ItemsDispatch:
+class StudioAcceptance_ItemsDispatch(StudioDispatchRouteContext):
     def _dispatch_studio_acceptance_items(self, method, path, parsed) -> bool:
         fix_plan_review_route = _interfaces_api_runtime._match_acceptance_fix_plan_review_route(path)
         if fix_plan_review_route is not None:

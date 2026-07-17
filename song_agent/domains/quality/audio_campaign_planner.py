@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import json as json
 import threading as threading
@@ -376,7 +376,7 @@ def _renderer_summary(manifest: ImplementationDocument) -> ImplementationDocumen
     for key in ("audio_artifact", "audio", "renderer", "audio_health"):
         value = manifest.get(key) if isinstance(manifest, dict) else None
         if isinstance(value, dict):
-            renderer = value.get("renderer") if isinstance(value.get("renderer"), dict) else value
+            renderer = _document_or(value.get("renderer"), value)
             if isinstance(renderer, dict) and renderer:
                 result = dict(renderer)
                 result.setdefault("runner_kind", "real")
@@ -386,7 +386,7 @@ def _renderer_summary(manifest: ImplementationDocument) -> ImplementationDocumen
 
 
 def _renderer_release_ready(row: ImplementationDocument) -> bool:
-    renderer = row.get("renderer") if isinstance(row.get("renderer"), dict) else {}
+    renderer = _as_document(row.get("renderer"))
     return renderer.get("runner_kind") == "real" and renderer.get("release_ready") is not False
 
 

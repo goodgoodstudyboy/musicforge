@@ -48,6 +48,19 @@ ignored `.musicforge/` configuration files. Never commit those files.
 Synthetic/test audio is never release-ready and cannot replace manual
 listening acceptance.
 
+## Quality Gates
+
+v14.1 checks the complete active modular-monolith tree with mypy and checks the
+entire repository with Ruff. ARCH-014 module-size debt remains explicitly
+tracked under ADR-015 and cannot grow in count, maximum size, or aggregate
+lines.
+
+```powershell
+python -m mypy --no-incremental
+python -m ruff check song_agent tests tools
+python -m pytest tests/test_v14_quality_ratchets.py -q
+```
+
 ## Common Commands
 
 ```powershell

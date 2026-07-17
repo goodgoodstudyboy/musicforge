@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
 
 import json as json
 from pathlib import Path as Path
@@ -100,7 +100,7 @@ def _collect_project_review_sprints(project_dir: Path) -> list[ImplementationDoc
         recommendation_report = store.read_recommendation_report(sprint.sprint_id, default={})
         judge_summary = store.read_judge_summary(sprint.sprint_id, default={})
         queue_store = ReviewSprintActionQueueStore(store.sprint_dir(sprint.sprint_id))
-        queue_summary = action_queue_collection_summary(queue_store.list_queues(include_archived=True))
+        queue_summary = action_queue_collection_summary(_as_list(queue_store.list_queues(include_archived=True)))
         closeout_summary = closeout_report_summary(store.read_closeout_report(sprint.sprint_id, default={}))
         signoff = signoff_summary(store.read_signoff(sprint.sprint_id, default={}))
         payload = review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary, judge_summary, closeout_summary, signoff)

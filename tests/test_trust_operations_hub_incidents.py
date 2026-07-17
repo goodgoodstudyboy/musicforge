@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from song_agent.projectio import read_json, write_json
-from song_agent.trust_operations_hub import TrustOperationsHubStore, hub_hash
+from song_agent.projectio import read_json
+from song_agent.trust_operations_hub import TrustOperationsHubStore
 from song_agent.trust_operations_hub_incident_verifier import verify_trust_operations_hub_incident_package
 from song_agent.trust_operations_hub_incidents import TrustOperationsIncidentStateError, TrustOperationsIncidentStore, incident_hash, incident_manifest_hash
 from song_agent.trust_operations_hub_verifier import verify_trust_operations_hub_package

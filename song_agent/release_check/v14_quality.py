@@ -102,6 +102,7 @@ def collect_mypy_metrics(root: Path) -> dict[str, Any]:
         "mypy",
         *MYPY_ROOTS,
         "--follow-imports=skip",
+        "--no-incremental",
         "--show-error-codes",
         "--no-error-summary",
         "--no-pretty",
@@ -121,7 +122,7 @@ def collect_mypy_metrics(root: Path) -> dict[str, Any]:
             pass
         budgets[f"{path}|{match.group(2)}"] += 1
     strict = subprocess.run(
-        [sys.executable, "-m", "mypy", "--no-pretty", "--no-color-output"],
+        [sys.executable, "-m", "mypy", "--no-incremental", "--no-pretty", "--no-color-output"],
         cwd=root,
         capture_output=True,
         text=True,
@@ -165,6 +166,27 @@ def collect_complexity_metrics(root: Path, policy: dict[str, Any]) -> dict[str, 
                     {"path": relative, "name": node.name, "line": node.lineno, "lines": lines, "limit": limit, "layer": layer}
                 )
                 blockers.append(f"v14_quality_function_size:{relative}:{node.name}:{lines}>{limit}")
+    aggregate = {
+        "oversized_module_count": len(oversized_modules),
+        "modules_over_1000_lines": sum(1 for row in oversized_modules if int(row["lines"]) > 1000),
+        "largest_module_lines": max((int(row["lines"]) for row in oversized_modules), default=0),
+        "total_oversized_module_lines": sum(int(row["lines"]) for row in oversized_modules),
+    }
+    aggregate_policy = policy.get("complexity", {}).get("aggregate_debt") or {}
+    aggregate_limits = (
+        ("oversized_module_count", "max_oversized_module_count"),
+        ("modules_over_1000_lines", "max_modules_over_1000_lines"),
+        ("largest_module_lines", "max_largest_module_lines"),
+        ("total_oversized_module_lines", "max_total_oversized_module_lines"),
+    )
+    for metric, maximum in aggregate_limits:
+        if maximum in aggregate_policy and int(aggregate[metric]) > int(aggregate_policy[maximum]):
+            blockers.append(
+                f"v14_quality_complexity_{metric}:{aggregate[metric]}>{aggregate_policy[maximum]}"
+            )
+    decision = str(aggregate_policy.get("architecture_decision") or "")
+    if aggregate_policy and (not decision or not (root / decision).is_file()):
+        blockers.append("v14_quality_complexity_architecture_decision_missing")
     return {
         "status": "passed" if not blockers else "failed",
         "blockers": blockers,
@@ -172,6 +194,7 @@ def collect_complexity_metrics(root: Path, policy: dict[str, Any]) -> dict[str, 
         "oversized_functions": oversized_functions,
         "registered_oversized_module_count": len(oversized_modules),
         "oversized_modules": oversized_modules,
+        "aggregate": aggregate,
     }
 
 
@@ -249,14 +272,14 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
         lines = len(path.read_text(encoding="utf-8").splitlines())
         if lines > maximum:
             module_debt.append(
-                {"path": path.relative_to(root).as_posix(), "max_lines": lines, "expires_version": "14.1.0"}
+                {"path": path.relative_to(root).as_posix(), "max_lines": lines, "expires_version": "14.2.0"}
             )
     report = coverage_report or root / "runs/v14-quality/coverage.json"
     coverage_bound = coverage_report is not None and report.is_file()
     document: dict[str, Any] = {
         "schema_version": 1,
         "package_type": "musicforge_v14_quality_policy",
-        "release_version": "14.0.0",
+        "release_version": "14.1.0",
         "typing": {
             "activation_baseline_dict_str_any_count": 12535,
             "raw_dict_str_any_max_count": 8774,
@@ -328,6 +351,43 @@ def run_v14_typing_coverage_ratchet_smoke(root: Path) -> tuple[bool, str]:
     return report["status"] == "passed", json.dumps(detail, sort_keys=True)
 
 
+def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
+    report = evaluate_v14_quality(root, run_mypy=False, require_coverage=False)
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    ruff = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "song_agent", "tests", "tools"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    from song_agent.release_check.performance import (
+        CI_PROFILE_DURATION_BUDGET_SECONDS,
+        CI_PROFILE_DURATION_PREVIOUS_BUDGET_SECONDS,
+    )
+
+    details = {
+        "quality_status": report["status"],
+        "mypy_budget": int((policy.get("mypy") or {}).get("max_total_errors") or 0),
+        "mypy_roots": list((policy.get("mypy") or {}).get("active_roots") or []),
+        "ruff_status": "passed" if ruff.returncode == 0 else "failed",
+        "complexity": report["complexity"]["aggregate"],
+        "ci_budget_ratchet": all(
+            CI_PROFILE_DURATION_BUDGET_SECONDS[profile] < previous
+            for profile, previous in CI_PROFILE_DURATION_PREVIOUS_BUDGET_SECONDS.items()
+        ),
+        "blockers": report["blockers"],
+    }
+    passed = (
+        report["status"] == "passed"
+        and details["mypy_budget"] == 0
+        and details["mypy_roots"] == list(MYPY_ROOTS)
+        and ruff.returncode == 0
+        and details["ci_budget_ratchet"]
+    )
+    return passed, json.dumps(details, sort_keys=True)
+
+
 def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
     limits = policy.get("typing") or {}
     fields = (
@@ -373,10 +433,12 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         blockers.append("v14_quality_policy_integrity")
     if policy.get("package_type") != "musicforge_v14_quality_policy":
         blockers.append("v14_quality_policy_type")
-    if policy.get("release_version") != "14.0.0":
+    if policy.get("release_version") != "14.1.0":
         blockers.append("v14_quality_policy_version")
     if int((policy.get("typing") or {}).get("raw_dict_str_any_max_count") or 0) > 8774:
         blockers.append("v14_quality_policy_typing_loosened")
+    if int((policy.get("mypy") or {}).get("max_total_errors") or 0) != 0:
+        blockers.append("v14_quality_policy_mypy_debt_not_closed")
     return blockers
 
 

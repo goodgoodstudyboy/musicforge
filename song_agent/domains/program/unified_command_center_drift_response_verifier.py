@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -127,7 +127,7 @@ def verify_unified_command_center_drift_response_package(
                 checks.append(_check(check_id, _integrity_ok(doc), f"{check_id} hash is valid."))
             checks.append(_check("ucc_drift_response_events_chain", _events_chain_ok(events), "Events form a valid hash chain."))
 
-            manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+            manifest_source = _as_document(manifest.get("source"))
             checks.extend(
                 [
                     _check("ucc_drift_response_id_binding", manifest.get("response_id") == case.get("response_id") == source.get("response_id") == plan.get("response_id") == queue.get("response_id") == closeout.get("response_id"), "Response documents bind the same response id."),
@@ -199,8 +199,8 @@ def _current_review_checks(
     signoff_binding_path: Path | str | None,
 ) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    source_binding = source.get("source_review") if isinstance(source.get("source_review"), dict) else {}
-    recheck_binding = recheck.get("review") if isinstance(recheck.get("review"), dict) else {}
+    source_binding = _as_document(source.get("source_review"))
+    recheck_binding = _as_document(recheck.get("review"))
     if not source_review_zip_path:
         checks.append(_check("ucc_drift_response_source_review_zip_required", False, "Source Continuous Review ZIP is required."))
     if not source_review_verification_report_path:
@@ -214,7 +214,7 @@ def _current_review_checks(
 
     source_external = _read_json_file(Path(source_review_verification_report_path)) if source_review_verification_report_path else {}
     source_runtime = verify_unified_command_center_continuous_review_package(
-        source_review_zip_path,
+        _as_path(source_review_zip_path),
         strict=True,
         require_clear=False,
         require_recovery_drill=False,
@@ -240,7 +240,7 @@ def _current_review_checks(
 
     recheck_external = _read_json_file(Path(recheck_review_verification_report_path)) if recheck_review_verification_report_path else {}
     recheck_runtime = verify_unified_command_center_continuous_review_package(
-        recheck_review_zip_path,
+        _as_path(recheck_review_zip_path),
         strict=True,
         require_clear=True,
         require_recovery_drill=True,
@@ -268,7 +268,7 @@ def _current_review_checks(
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("entry") or row.get("path")) for row in files if isinstance(row, dict) and (row.get("entry") or row.get("path"))}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
     checks.append(_check("ucc_drift_response_manifest_files_fixed", declared == expected, "Manifest files match fixed Drift Response structure.", {"extra": sorted(declared - expected), "missing": sorted(expected - declared)}))
@@ -288,9 +288,9 @@ def _action_summary_ok(queue: ImplementationDocument, results: ImplementationDoc
     items = [row for row in queue.get("items", []) if isinstance(row, dict)]
     result_rows = [row for row in results.get("results", []) if isinstance(row, dict)]
     cr_rows = [row for row in cr_bindings.get("items", []) if isinstance(row, dict)]
-    q_summary = queue.get("summary") if isinstance(queue.get("summary"), dict) else {}
-    r_summary = results.get("summary") if isinstance(results.get("summary"), dict) else {}
-    c_summary = cr_bindings.get("summary") if isinstance(cr_bindings.get("summary"), dict) else {}
+    q_summary = _as_document(queue.get("summary"))
+    r_summary = _as_document(results.get("summary"))
+    c_summary = _as_document(cr_bindings.get("summary"))
     return (
         int(q_summary.get("action_count") or 0) == len(items)
         and int(q_summary.get("manual_required_count") or 0) == sum(1 for row in items if row.get("status") == "manual_required")
@@ -374,8 +374,8 @@ def _approval_hash(binding: ImplementationDocument) -> str:
 
 
 def _closeout_summary_ok(closeout: ImplementationDocument) -> bool:
-    blockers = closeout.get("blockers") if isinstance(closeout.get("blockers"), list) else []
-    summary = closeout.get("summary") if isinstance(closeout.get("summary"), dict) else {}
+    blockers = _as_list(closeout.get("blockers"))
+    summary = _as_document(closeout.get("summary"))
     return int(summary.get("blocker_count") or 0) == len(blockers)
 
 

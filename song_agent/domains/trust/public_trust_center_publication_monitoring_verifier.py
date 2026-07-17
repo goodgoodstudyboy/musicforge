@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -86,13 +86,13 @@ def write_public_trust_center_publication_monitoring_verification_report(report:
 
 
 def print_public_trust_center_publication_monitoring_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Publication Monitoring verification")
     print(f"status: {report.get('status')}")
     print(f"run: {summary.get('run_id') or '-'}")
     print(f"publication: {summary.get('publication_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def public_trust_center_publication_monitoring_verification_exit_code(report: dict[str, Any]) -> int:
@@ -230,7 +230,7 @@ class _MonitoringVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "ptcpm_manifest_integrity", self.manifest.get("integrity_hash"), monitoring_manifest_hash(self.manifest), "Monitoring manifest integrity")
         self._add_exact_check("manifest", "ptcpm_manifest_package_type", self.manifest.get("package_type"), PUBLICATION_MONITORING_PACKAGE_TYPE, "Monitoring manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "ptcpm_manifest_allowed_files", sorted(manifest_paths), sorted(REQUIRED_ENTRIES - {"monitoring-manifest.json"}), "Manifest file list matches fixed monitoring structure")
         mismatches: list[str] = []
@@ -248,7 +248,7 @@ class _MonitoringVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "ptcpm_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "ptcpm_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
@@ -276,13 +276,13 @@ class _MonitoringVerifier:
         self._verify_probe_semantics()
 
     def _verify_incident_semantics(self) -> None:
-        incidents = self.incident_report.get("incidents") if isinstance(self.incident_report.get("incidents"), list) else []
+        incidents = _as_list(self.incident_report.get("incidents"))
         open_count = sum(1 for item in incidents if isinstance(item, dict) and item.get("status") == "open")
         critical_count = sum(1 for item in incidents if isinstance(item, dict) and item.get("status") == "open" and item.get("severity") == "critical")
         waived_count = sum(1 for item in incidents if isinstance(item, dict) and item.get("status") == "waived")
         resolved_count = sum(1 for item in incidents if isinstance(item, dict) and item.get("status") == "resolved")
         expected_summary = {"incident_count": len(incidents), "open_count": open_count, "critical_count": critical_count, "waived_count": waived_count, "resolved_count": resolved_count}
-        summary = self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {}
+        summary = _as_document(self.incident_report.get("summary"))
         actual = {key: summary.get(key) for key in expected_summary}
         self._add_exact_check("incident_report", "ptcpm_incident_summary_matches_incidents", actual, expected_summary, "Incident summary derives from incident rows")
         rebuilt_rows, rebuilt_summary, invalid = _rebuild_incidents_from_events(
@@ -325,7 +325,7 @@ class _MonitoringVerifier:
 
     def _verify_checksums(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("checksum", "ptcpm_checksum_json_integrity", self.checksum_json.get("integrity_hash"), monitoring_hash(self.checksum_json), "Checksum JSON integrity")
-        rows = self.checksum_json.get("files") if isinstance(self.checksum_json.get("files"), list) else []
+        rows = _as_list(self.checksum_json.get("files"))
         mismatches: list[str] = []
         for item in rows:
             if not isinstance(item, dict):
@@ -340,8 +340,8 @@ class _MonitoringVerifier:
         self._add_check("checksum", "ptcpm_checksum_hashes", "failed" if mismatches else "passed", "blocking", "Checksum mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Checksum hashes match ZIP entries.")
 
     def _verify_requirements(self) -> None:
-        drift_summary = self.drift_report.get("summary") if isinstance(self.drift_report.get("summary"), dict) else {}
-        incident_summary = self.rebuilt_incident_summary or (self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {})
+        drift_summary = _as_document(self.drift_report.get("summary"))
+        incident_summary = self.rebuilt_incident_summary or (_as_document(self.incident_report.get("summary")))
         if self.require_ready:
             self._add_exact_check("requirements", "ptcpm_require_ready", [self.run_doc.get("status"), self.drift_report.get("status"), self.publication_verification.get("status")], ["passed", "passed", "passed"], "Monitoring ready state")
         if self.require_no_drift:
@@ -369,7 +369,7 @@ class _MonitoringVerifier:
             self._add_check("requirements", "ptcpm_channel_state_publication_present", "failed", "blocking", "Publication is missing from external channel state.")
             return
         self._add_check("requirements", "ptcpm_channel_state_publication_present", "passed", "blocking", "Publication is present in external channel state.")
-        manifest_source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        manifest_source = _as_document(self.manifest.get("source"))
         self._add_exact_check("requirements", "ptcpm_channel_state_zip_sha256", row.get("zip_sha256"), manifest_source.get("publication_zip_sha256"), "External channel state publication ZIP sha256")
         self._add_exact_check("requirements", "ptcpm_channel_state_manifest_hash", row.get("manifest_hash"), manifest_source.get("publication_manifest_hash"), "External channel state manifest hash")
         self._add_exact_check("requirements", "ptcpm_channel_state_source_hash", row.get("source_hash"), manifest_source.get("publication_source_hash"), "External channel state source hash")
@@ -413,7 +413,7 @@ class _MonitoringVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _read_jsonl_entry(self, archive: zipfile.ZipFile, name: str, scope: str, check_id: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)
@@ -445,7 +445,7 @@ class _MonitoringVerifier:
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        incident_summary = self.rebuilt_incident_summary or (self.incident_report.get("summary") if isinstance(self.incident_report.get("summary"), dict) else {})
+        incident_summary = self.rebuilt_incident_summary or (_as_document(self.incident_report.get("summary")))
         summary = {
             "run_id": self.run_doc.get("run_id") or self.manifest.get("run_id"),
             "monitor_id": self.run_doc.get("monitor_id") or self.manifest.get("monitor_id"),
@@ -530,7 +530,7 @@ def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, inci
     if not events:
         return {}
     opened = next((event for event in events if event.get("event_type") == "opened"), events[0])
-    payload = opened.get("payload") if isinstance(opened.get("payload"), dict) else {}
+    payload = _as_document(opened.get("payload"))
     status = "open"
     evidence = {
         "drift_report_hash": payload.get("drift_report_hash"),
@@ -540,7 +540,7 @@ def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, inci
     latest_run_id = payload.get("run_id")
     for event in events:
         event_type = str(event.get("event_type") or "")
-        epayload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        epayload = _as_document(event.get("payload"))
         if epayload.get("run_id"):
             latest_run_id = epayload.get("run_id")
         if event_type in {"opened", "reopened"}:
@@ -621,7 +621,7 @@ def _incident_event_chain_valid(events: list[ImplementationDocument]) -> bool:
             return False
         if event.get("previous_event_hash") != previous:
             return False
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("payload_hash") != stable_hash(payload):
             return False
         expected = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
@@ -679,19 +679,7 @@ def _read_json_file(path: Path | None) -> ImplementationDocument:
             value = json.load(handle)
     except (OSError, ValueError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
-
-
-def _fs_path(path: Path) -> str:
-    value = os.fspath(path)
-    if os.name == "nt":
-        absolute = os.path.abspath(value)
-        if absolute.startswith("\\\\?\\"):
-            return absolute
-        if absolute.startswith("\\\\"):
-            return "\\\\?\\UNC\\" + absolute[2:]
-        return "\\\\?\\" + absolute
-    return value
+    return _as_document(value)
 
 
 def _counts(values: list[str]) -> dict[str, int]:

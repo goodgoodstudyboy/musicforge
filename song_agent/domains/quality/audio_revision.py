@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -128,7 +130,7 @@ class AudioRevisionStore:
         if not path.exists():
             raise AudioRevisionNotFoundError(session_id)
         session = read_json(path)
-        return self._with_session_current_state(session if isinstance(session, dict) else {})
+        return self._with_session_current_state(_as_document(session))
 
     def list_issues(self, release_id: str, session_id: str) -> list[dict[str, Any]]:
         self.read_session(release_id, session_id)
@@ -142,7 +144,7 @@ class AudioRevisionStore:
 
     def _list_raw_issues(self, release_id: str, session_id: str) -> list[ImplementationDocument]:
         issues_dir = self.session_dir(release_id, session_id) / "issues"
-        issues = []
+        issues: list[_InferenceType] = []
         if not issues_dir.exists():
             return issues
         for path in sorted(issues_dir.glob("ari-*.json")):
@@ -159,7 +161,7 @@ class AudioRevisionStore:
         if not path.exists():
             raise AudioRevisionNotFoundError(issue_id)
         issue = read_json(path)
-        return self._with_issue_current_state(issue if isinstance(issue, dict) else {})
+        return self._with_issue_current_state(_as_document(issue))
 
     def create_issue(self, release_id: str, session_id: str, payload: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
@@ -177,7 +179,7 @@ class AudioRevisionStore:
                 "category": payload.get("category") or "other",
                 "severity": payload.get("severity") or "medium",
                 "message": payload.get("summary") or payload.get("message") or "",
-                "mapped": payload.get("mapped") if isinstance(payload.get("mapped"), dict) else {},
+                "mapped": _as_document(payload.get("mapped")),
                 "time_seconds": payload.get("time_seconds"),
             },
             now=now,
@@ -271,7 +273,7 @@ class AudioRevisionStore:
             write_json(preview_dir / "audio-health.json", audio_health)
             stem_health = _candidate_stem_health(project_id=str(issue["project_id"]), version_id=str(issue["version_id"]), plan=result.plan, midi_path=preview_dir / "song.mid", mix_state=result.state.to_dict(), candidate_dir=candidate_dir, now=now)
             candidate_source = self._candidate_source(release_id, issue, state.to_dict(), context, review_id=str(issue.get("source_review_id") or ""), marker_id=str(issue.get("source_marker_id") or ""))
-            review = {"status": "pending", "review_mode": None, "reviewer": None, "rating": None, "notes": "", "markers": []}
+            review: _InferenceType = {"status": "pending", "review_mode": None, "reviewer": None, "rating": None, "notes": "", "markers": []}
             candidate = {
                 "schema_version": AUDIO_REVISION_SCHEMA_VERSION,
                 "candidate_id": candidate_id,
@@ -342,7 +344,7 @@ class AudioRevisionStore:
         if not path.exists():
             raise AudioRevisionNotFoundError(candidate_id)
         candidate = read_json(path)
-        return self._with_candidate_current_state(candidate if isinstance(candidate, dict) else {})
+        return self._with_candidate_current_state(_as_document(candidate))
 
     def review_candidate(self, release_id: str, session_id: str, candidate_id: str, payload: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
@@ -350,8 +352,8 @@ class AudioRevisionStore:
         candidate = self.read_candidate(release_id, session_id, candidate_id)
         if candidate.get("stale") or not candidate_integrity_ok(candidate):
             raise AudioRevisionStateError("Audio revision candidate is stale or tampered.")
-        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
-        health = candidate.get("health") if isinstance(candidate.get("health"), dict) else {}
+        preview = _as_document(candidate.get("preview"))
+        health = _as_document(candidate.get("health"))
         if preview.get("audio_status") != "completed" or health.get("audio_health_status") not in {"passed", "warning"}:
             raise AudioRevisionStateError("Candidate audio preview must be rendered and pass audio health before manual review.")
         status = str(payload.get("status") or payload.get("review_status") or "accepted")
@@ -366,7 +368,7 @@ class AudioRevisionStore:
             "reviewer": sanitize_sensitive_text(str(payload.get("reviewer") or payload.get("reviewed_by") or "reviewer"))[:120],
             "rating": max(0, min(5, int(payload.get("rating") or 0))),
             "notes": sanitize_sensitive_text(str(payload.get("notes") or ""))[:4000],
-            "markers": sanitize_metadata(payload.get("markers") if isinstance(payload.get("markers"), list) else [], blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})[:64],
+            "markers": sanitize_metadata(_as_list(payload.get("markers")), blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})[:64],
             "playback_confirmed": bool(payload.get("playback_confirmed", False)),
             "reviewed_at": now,
             "candidate_wav_sha256": (candidate.get("preview") or {}).get("wav_sha256"),
@@ -387,11 +389,11 @@ class AudioRevisionStore:
         candidate = self.read_candidate(release_id, session_id, candidate_id)
         if candidate.get("stale") or not candidate_integrity_ok(candidate):
             raise AudioRevisionStateError("Audio revision candidate is stale or tampered.")
-        review = candidate.get("review") if isinstance(candidate.get("review"), dict) else {}
+        review = _as_document(candidate.get("review"))
         if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
             raise AudioRevisionStateError("Only manually accepted and playback-confirmed candidates can be selected.")
-        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
-        health = candidate.get("health") if isinstance(candidate.get("health"), dict) else {}
+        preview = _as_document(candidate.get("preview"))
+        health = _as_document(candidate.get("health"))
         if preview.get("audio_status") != "completed" or health.get("audio_health_status") not in {"passed", "warning"}:
             raise AudioRevisionStateError("Only candidates with rendered passing audio can be selected.")
         issue = self.read_issue(release_id, session_id, str(candidate["issue_id"]))
@@ -420,11 +422,11 @@ class AudioRevisionStore:
             raise AudioRevisionStateError("Audio revision candidate is stale or tampered.")
         if not candidate.get("selected"):
             raise AudioRevisionStateError("Candidate must be selected before apply.")
-        review = candidate.get("review") if isinstance(candidate.get("review"), dict) else {}
+        review = _as_document(candidate.get("review"))
         if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
             raise AudioRevisionStateError("Candidate must have a manual accepted review before apply.")
-        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
-        health = candidate.get("health") if isinstance(candidate.get("health"), dict) else {}
+        preview = _as_document(candidate.get("preview"))
+        health = _as_document(candidate.get("health"))
         if preview.get("audio_status") != "completed" or health.get("audio_health_status") not in {"passed", "warning"}:
             raise AudioRevisionStateError("Candidate audio preview must be rendered and pass audio health before apply.")
         issue = self.read_issue(release_id, session_id, str(candidate["issue_id"]))
@@ -718,7 +720,7 @@ class AudioRevisionStore:
                 return default
             raise AudioRevisionNotFoundError("Audio revision closeout is missing.")
         closeout = read_json(path)
-        return sanitize_metadata(closeout if isinstance(closeout, dict) else {}, blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
+        return sanitize_metadata(_as_document(closeout), blocked_keys=BLOCKED_RELEASE_KEYS - {"path"})
 
     def archive_session(self, release_id: str, session_id: str, *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
@@ -735,7 +737,7 @@ class AudioRevisionStore:
         candidate = self.read_candidate(release_id, session_id, candidate_id)
         if candidate.get("stale") or not candidate_integrity_ok(candidate):
             raise AudioRevisionStateError("Audio revision candidate is stale or tampered.")
-        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
+        preview = _as_document(candidate.get("preview"))
         key = "midi_path" if artifact == "midi" else "wav_path"
         rel = _safe_relative_path(str(preview.get(key) or ""))
         root = self.candidate_dir(release_id, session_id, candidate_id).resolve()
@@ -907,14 +909,14 @@ class AudioRevisionStore:
 
     def _candidate_stale_reasons(self, candidate: ImplementationDocument, *, context: ImplementationDocument) -> list[str]:
         reasons: list[str] = []
-        patch_payload = candidate.get("patch") if isinstance(candidate.get("patch"), dict) else {}
+        patch_payload = _as_document(candidate.get("patch"))
         try:
             patch = MixPatch.from_dict(patch_payload)
             if not mix_patch_integrity_ok(patch):
                 reasons.append("patch_integrity")
         except Exception:
             reasons.append("patch_invalid")
-        source = candidate.get("source") if isinstance(candidate.get("source"), dict) else {}
+        source = _as_document(candidate.get("source"))
         current_state = MixControlStore(self.project_store.project_dir(str(candidate.get("project_id") or ""))).read_state(str(candidate.get("version_id") or ""))
         if source.get("parent_song_plan_hash") != song_plan_hash(context["plan"]):
             reasons.append("parent_song_plan_hash")
@@ -924,7 +926,7 @@ class AudioRevisionStore:
             reasons.append("mix_state_hash")
         if candidate.get("source_hash") != stable_hash(source):
             reasons.append("source_hash")
-        preview = candidate.get("preview") if isinstance(candidate.get("preview"), dict) else {}
+        preview = _as_document(candidate.get("preview"))
         root = self.candidate_dir(str(candidate.get("release_id") or ""), str(candidate.get("session_id") or ""), str(candidate.get("candidate_id") or ""))
         for key, hash_key, reason in (("midi_path", "midi_sha256", "preview_midi_hash"), ("wav_path", "wav_sha256", "preview_wav_hash")):
             if key == "wav_path" and preview.get("audio_status") != "completed" and not preview.get(hash_key):
@@ -941,7 +943,7 @@ class AudioRevisionStore:
 
     def _candidate_source(self, release_id: str, issue: ImplementationDocument, mix_state: ImplementationDocument, context: ImplementationDocument, *, review_id: str, marker_id: str) -> ImplementationDocument:
         audio_context = self.audio_review_store.track_audio_context(release_id, str(issue.get("track_id") or ""), require_reviewable=False)
-        evidence = audio_context.get("audio_evidence") if isinstance(audio_context.get("audio_evidence"), dict) else {}
+        evidence = _as_document(audio_context.get("audio_evidence"))
         return {
             "release_id": release_id,
             "session_id": issue.get("session_id"),
@@ -1038,7 +1040,7 @@ class AudioRevisionStore:
             project_document=self.project_store.get_project(project_id),
             project_dir=project_dir,
             project_export=self.project_store.project_export_snapshot(project_id),
-            final_export_manifest=manifest if isinstance(manifest, dict) else {},
+            final_export_manifest=_as_document(manifest),
             now=now,
         )
         return self.project_store.write_delivery_qa(project_id, report, now=now)
@@ -1299,7 +1301,7 @@ def read_audio_revision_summary_from_export(export_dir: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     data = read_json(path)
-    return data if isinstance(data, dict) else {}
+    return _as_document(data)
 
 
 def _revision_marker_count(store: AudioRevisionStore, release_id: str) -> int:
@@ -1368,7 +1370,7 @@ def _track_by_role(plan: SongPlan, role: str) -> str:
 
 
 def _candidate_score(strategy: ImplementationDocument, audio_health: ImplementationDocument, stem_health: ImplementationDocument) -> ImplementationDocument:
-    operations = strategy.get("operations") if isinstance(strategy.get("operations"), list) else []
+    operations = _as_list(strategy.get("operations"))
     score = 65
     if audio_health.get("status") == "passed":
         score += 15

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -533,7 +533,7 @@ class ReleaseOperationsRunbookStore:
 
 
 def runbook_integrity_ok(runbook: dict[str, Any] | None) -> bool:
-    data = runbook if isinstance(runbook, dict) else {}
+    data = _as_document(runbook)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == runbook_integrity_hash(data)
 
 
@@ -541,13 +541,13 @@ def runbook_integrity_ok(runbook: dict[str, Any] | None) -> bool:
 
 
 def execution_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == execution_report_integrity_hash(data)
 
 
 def runbook_summary(runbook: dict[str, Any]) -> dict[str, Any]:
-    data = runbook if isinstance(runbook, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(runbook)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "runbook_id": data.get("runbook_id"),
@@ -576,9 +576,9 @@ def _runbook_item(action: ImplementationDocument, *, index: int, source_hash: st
             "risk": risk,
             "status": status,
             "priority": int(action.get("priority") or 100),
-            "depends_on": action.get("depends_on") if isinstance(action.get("depends_on"), list) else [],
-            "blocked_by": action.get("blocked_by") if isinstance(action.get("blocked_by"), list) else [],
-            "unblocks": action.get("unblocks") if isinstance(action.get("unblocks"), list) else [],
+            "depends_on": _as_list(action.get("depends_on")),
+            "blocked_by": _as_list(action.get("blocked_by")),
+            "unblocks": _as_list(action.get("unblocks")),
             "source_hash": source_hash,
             "attempt": 0,
             "retry_count": 0,

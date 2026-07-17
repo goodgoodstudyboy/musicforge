@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -72,13 +72,13 @@ def write_trust_operations_assurance_watch_signoff_verification_report(report: d
 
 
 def print_trust_operations_assurance_watch_signoff_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Assurance Watch Signoff Archive verification")
     print(f"status: {report.get('status')}")
     print(f"queue: {summary.get('queue_id') or '-'}")
     print(f"signoff: {summary.get('signoff_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
 def trust_operations_assurance_watch_signoff_verification_exit_code(report: dict[str, Any]) -> int:
@@ -228,7 +228,7 @@ class _WatchSignoffVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_exact_check("manifest", "toaws_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_MANIFEST_PACKAGE_TYPE, "Manifest package_type")
         self._add_hash_check("manifest", "toaws_manifest_integrity", self.manifest.get("integrity_hash"), watch_signoff_manifest_hash(self.manifest), "Manifest integrity")
-        file_rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        file_rows = _as_list(self.manifest.get("files"))
         expected_paths = sorted(ASSURANCE_WATCH_SIGNOFF_ARCHIVE_ENTRIES - {"trust-operations-assurance-watch-signoff-manifest.json"})
         manifest_paths = sorted(str(row.get("path") or "") for row in file_rows if isinstance(row, dict))
         self._add_exact_check("manifest", "toaws_manifest_fixed_file_list", manifest_paths, expected_paths, "Manifest file list matches fixed entries")
@@ -246,13 +246,13 @@ class _WatchSignoffVerifier:
             if row.get("sha256") != actual_sha or row.get("size_bytes") != actual_size:
                 mismatches.append(path)
         self._add_check("manifest", "toaws_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        zip_meta = self.manifest.get("zip") if isinstance(self.manifest.get("zip"), dict) else {}
+        zip_meta = _as_document(self.manifest.get("zip"))
         if zip_meta:
             self._add_exact_check("manifest", "toaws_manifest_zip_entries_reference_only", sorted(zip_meta.get("entries") or []), sorted(self.entry_names), "manifest.zip.entries mirrors actual entries")
 
     def _verify_documents(self) -> None:
-        closeout_source = self.closeout.get("source") if isinstance(self.closeout.get("source"), dict) else {}
-        signoff_source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
+        closeout_source = _as_document(self.closeout.get("source"))
+        signoff_source = _as_document(self.signoff.get("source"))
         self._add_exact_check("closeout", "toaws_closeout_package_type", self.closeout.get("package_type"), TRUST_OPERATIONS_ASSURANCE_WATCH_CLOSEOUT_PACKAGE_TYPE, "Closeout package_type")
         self._add_hash_check("closeout", "toaws_closeout_integrity", self.closeout.get("integrity_hash"), watch_signoff_hash(self.closeout), "Closeout integrity")
         self._add_exact_check("closeout", "toaws_closeout_status", self.closeout.get("status"), "passed", "Closeout status")
@@ -279,7 +279,7 @@ class _WatchSignoffVerifier:
         self._add_exact_check("external", "toaws_external_summary_integrity", self.external_summary.get("integrity_hash"), watch_signoff_hash(self.external_summary), "External summary integrity")
         self._add_exact_check("change_requests", "toaws_change_requests_package_type", self.change_requests_doc.get("package_type"), TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_CHANGE_REQUESTS_PACKAGE_TYPE, "Change Requests package_type")
         self._add_hash_check("change_requests", "toaws_change_requests_integrity", self.change_requests_doc.get("integrity_hash"), watch_signoff_hash(self.change_requests_doc), "Change Requests integrity")
-        manifest_source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        manifest_source = _as_document(self.manifest.get("source"))
         self._add_exact_check("manifest", "toaws_manifest_closeout_hash", manifest_source.get("closeout_hash"), self.closeout.get("integrity_hash"), "Manifest closeout hash")
         self._add_exact_check("manifest", "toaws_manifest_signoff_hash", manifest_source.get("signoff_hash"), self.signoff.get("integrity_hash"), "Manifest signoff hash")
         self._add_exact_check("manifest", "toaws_manifest_history_hash", manifest_source.get("history_hash"), stable_hash({"events": self.history_events}), "Manifest history hash")
@@ -337,13 +337,13 @@ class _WatchSignoffVerifier:
             "Signoff history payload does not match current signoff: " + ", ".join(mismatched_event_fields) if mismatched_event_fields else "Signoff history payload matches current signoff.",
         )
         reset_events = [item for item in self.history_events if item.get("event_type") == "watch_signoff_reset"]
-        change_requests = self.change_requests_doc.get("change_requests") if isinstance(self.change_requests_doc.get("change_requests"), list) else []
+        change_requests = _as_list(self.change_requests_doc.get("change_requests"))
         by_id = {str(item.get("change_request_id") or ""): item for item in change_requests if isinstance(item, dict)}
         bad_resets: list[str] = []
         for event in reset_events:
             cr = by_id.get(str(event.get("change_request_id") or ""))
             applied = cr.get("applied") if isinstance(cr, dict) and isinstance(cr.get("applied"), dict) else {}
-            if not cr or cr.get("status") != "applied" or cr.get("integrity_hash") != event.get("change_request_hash") or applied.get("applied_signoff_reset_hash") != event.get("signoff_hash"):
+            if not cr or cr.get("status") != "applied" or cr.get("integrity_hash") != event.get("change_request_hash") or _as_document(applied).get("applied_signoff_reset_hash") != event.get("signoff_hash"):
                 bad_resets.append(str(event.get("change_request_id") or "unknown"))
         self._add_check("history", "toaws_history_reset_cr_causality", "failed" if bad_resets else "passed", "blocking", "Reset events without applied CR: " + ", ".join(bad_resets[:5]) if bad_resets else "Reset events are bound to applied change requests.")
 
@@ -368,8 +368,8 @@ class _WatchSignoffVerifier:
             self._add_check("external", "toaws_continuous_assurance_verification_required", "failed", "blocking", "Continuous Assurance verification report is required.")
 
     def _verify_external_bindings(self) -> None:
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
-        closeout_source = self.closeout.get("source") if isinstance(self.closeout.get("source"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
+        closeout_source = _as_document(self.closeout.get("source"))
         if self.watch_report:
             watch_sha = _sha256_file(self.watch_package_path) if self.watch_package_path else None
             watch_size = os.stat(_fs_path(self.watch_package_path)).st_size if self.watch_package_path and self.watch_package_path.exists() else None
@@ -423,8 +423,8 @@ class _WatchSignoffVerifier:
     def _build_report(self) -> ImplementationDocument:
         blockers = [check for check in self.checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
         warnings = [check for check in self.checks if check.get("status") in {"failed", "warning"} and check.get("severity") != "blocking"]
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
-        closeout_summary = self.closeout.get("summary") if isinstance(self.closeout.get("summary"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
+        closeout_summary = _as_document(self.closeout.get("summary"))
         return sanitize_metadata(
             {
                 "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_VERIFICATION_SCHEMA_VERSION,
@@ -479,7 +479,7 @@ def _read_json_file(path: Path | None) -> ImplementationDocument:
         return {}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return {}
 
@@ -490,7 +490,7 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

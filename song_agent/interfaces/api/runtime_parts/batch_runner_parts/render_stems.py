@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.runtime_parts.batch_runner_context import BatchRunnerContext
+
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import BatchDocument, HTTPStatus, now_iso, threading, time
 
-class BatchRunnerRenderStems:
+class BatchRunnerRenderStems(BatchRunnerContext):
     def render_stems(
         self,
         batch_id: str,

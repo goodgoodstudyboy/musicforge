@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, JobState, Path, rerun_multinode_from_node
@@ -13,7 +15,7 @@ from song_agent.interfaces.api.runtime_parts.helpers.job_artifacts import _job_a
 
 from song_agent.interfaces.api.runtime_parts.core import JobCancelled
 
-class JobStoreNodeRetry:
+class JobStoreNodeRetry(JobStoreContext):
     def _run_node_retry(
         self,
         job_id: str,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_text as _as_text
 
 import hashlib as hashlib
 import json as json
@@ -275,7 +275,7 @@ class TrustOperationsAssuranceStore:
 
         payload = payload or {}
         stored = _read_json_default(self.source_paths_path(run_id), default={}).get("paths")
-        source_paths = _source_paths(payload) if payload else (stored if isinstance(stored, dict) else {})
+        source_paths = _source_paths(payload) if payload else (_as_document(stored))
         report = verify_trust_operations_assurance_package(
             self.archive_zip_path(run_id),
             strict=bool(payload.get("strict", False)),
@@ -290,17 +290,19 @@ class TrustOperationsAssuranceStore:
         external_rows: list[dict[str, Any]] = []
         evidence_rows: list[dict[str, Any]] = []
         for evidence_type, spec in CORE_EVIDENCE_SPECS.items():
-            archive_path = _first_path(source_paths.get(spec["archive_key"]))
-            report_path = _first_path(source_paths.get(spec["report_key"]))
-            row = _external_row(evidence_type, archive_path, report_path, spec["manifest_entry"], component_id=evidence_type)
+            archive_key = str(spec["archive_key"])
+            report_key = str(spec["report_key"])
+            archive_path = _first_path(source_paths.get(archive_key))
+            report_path = _first_path(source_paths.get(report_key))
+            row = _external_row(evidence_type, archive_path, report_path, _as_text(spec["manifest_entry"]), component_id=evidence_type)
             external_rows.append(row)
             evidence_rows.append(_evidence_row_from_external(row, required=bool(spec.get("required"))))
-        for spec in DELIVERY_VERIFICATION_COMPONENTS:
-            component_type = str(spec["component_type"])
-            paths = _path_list(source_paths.get(str(spec["payload_keys"])))
+        for delivery_spec in DELIVERY_VERIFICATION_COMPONENTS:
+            component_type = str(delivery_spec["component_type"])
+            paths = _path_list(source_paths.get(str(delivery_spec["payload_keys"])))
             for index, report_path in enumerate(paths, start=1):
                 report = _read_json_default(report_path, default={})
-                component_id = _delivery_component_id(spec, report, index)
+                component_id = _delivery_component_id(delivery_spec, report, index)
                 row = _external_row(component_type, None, report_path, "", component_id=component_id)
                 external_rows.append(row)
                 evidence_rows.append(_evidence_row_from_external(row, required=False))
@@ -359,7 +361,7 @@ class TrustOperationsAssuranceStore:
         checks: list[dict[str, Any]] = []
         for evidence_type, spec in CORE_EVIDENCE_SPECS.items():
             row = by_type.get(evidence_type, {})
-            required = bool((policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}).get(f"require_{evidence_type}", spec.get("required")))
+            required = bool((_as_document(policy.get("requirements"))).get(f"require_{evidence_type}", spec.get("required")))
             status = "passed" if row.get("status") == "passed" else "failed" if required else "warning"
             checks.append(_check(f"toa_{evidence_type}_verification_current", status, "blocking" if required else "warning", f"{evidence_type} external verification is current.", evidence_ref=evidence_type, details=_fingerprint_projection(row)))
             if required:
@@ -373,7 +375,7 @@ class TrustOperationsAssuranceStore:
         return checks
 
     def _delivery_checks(self, policy: ImplementationDocument, rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
-        requirements = policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}
+        requirements = _as_document(policy.get("requirements"))
         require_delivery = bool(requirements.get("require_delivery_ready", False))
         checks: list[dict[str, Any]] = []
         for spec in DELIVERY_VERIFICATION_COMPONENTS:
@@ -402,7 +404,7 @@ class TrustOperationsAssuranceStore:
             for exception in exceptions.get("exceptions", []) if isinstance(exceptions.get("exceptions"), list) else []:
                 if not isinstance(exception, dict) or exception.get("status") != "approved":
                     continue
-                risk = exception.get("risk") if isinstance(exception.get("risk"), dict) else {}
+                risk = _as_document(exception.get("risk"))
                 expires_at = risk.get("expires_at")
                 if expires_at and str(expires_at) < str(now):
                     expired.append(str(exception.get("exception_id") or "unknown"))
@@ -428,7 +430,7 @@ class TrustOperationsAssuranceStore:
 
     def _knowledge_guard_checks(self, rows: list[Any]) -> list[ImplementationDocument]:
         knowledge = next((row for row in rows if isinstance(row, dict) and row.get("evidence_type") == "knowledge"), {})
-        summary = knowledge.get("summary") if isinstance(knowledge.get("summary"), dict) else {}
+        summary = _as_document(knowledge.get("summary"))
         guards_ok = knowledge.get("status") == "passed" and int(summary.get("guards_passed_count") or 0) > 0 and int(summary.get("guard_failed_count") or 0) == 0
         recurrence_ok = int(summary.get("recurrence_count") or 0) == 0
         return [
@@ -452,7 +454,7 @@ class TrustOperationsAssuranceStore:
                 "evidence_index_hash": evidence_index.get("integrity_hash"),
                 "external_verification_summary_hash": external_summary.get("integrity_hash"),
             },
-            "summary": run.get("summary") if isinstance(run.get("summary"), dict) else {},
+            "summary": _as_document(run.get("summary")),
             "warnings": [check for check in run.get("checks", []) if isinstance(check, dict) and check.get("severity") != "blocking" and check.get("status") in {"failed", "warning"}],
         }
         report["integrity_hash"] = assurance_hash(report)
@@ -462,7 +464,7 @@ class TrustOperationsAssuranceStore:
         if run.get("integrity_hash") != assurance_hash(run):
             raise TrustOperationsAssuranceStateError("Assurance run integrity failed.")
         stored = _read_json_default(self.source_paths_path(str(run.get("run_id") or "")), default={}).get("paths")
-        source_paths = _source_paths(payload) if payload else (stored if isinstance(stored, dict) else {})
+        source_paths = _source_paths(payload) if payload else (_as_document(stored))
         current_source, _external, _evidence, _raw = self._build_source(str(run.get("hub_id") or ""), source_paths)
         if stable_hash(current_source) != run.get("source_hash"):
             raise TrustOperationsAssuranceStateError("Assurance run source is stale. Refresh before export.")
@@ -532,7 +534,7 @@ def _external_row(evidence_type: str, archive_path: Path | None, report_path: Pa
         "verification_report_hash": verification_hash(report) if report else None,
         "verification_status": status,
         "source_hash": report.get("source_hash"),
-        "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
+        "summary": _as_document(report.get("summary")),
         "_archive_path": str(archive_path) if archive_path else None,
         "_report_path": str(report_path) if report_path else None,
     }
@@ -562,7 +564,7 @@ def _evidence_row_from_external(row: ImplementationDocument, *, required: bool) 
         "manifest_hash": row.get("manifest_hash"),
         "verification_report_hash": row.get("verification_report_hash"),
         "source_hash": row.get("source_hash"),
-        "summary": row.get("summary") if isinstance(row.get("summary"), dict) else {},
+        "summary": _as_document(row.get("summary")),
     }
 
 
@@ -599,11 +601,13 @@ def _fingerprint_projection(row: ImplementationDocument) -> ImplementationDocume
 def _source_paths(payload: ImplementationDocument) -> ImplementationDocument:
     paths: dict[str, Any] = {}
     for spec in CORE_EVIDENCE_SPECS.values():
-        paths[spec["archive_key"]] = [str(path) for path in _paths(payload.get(spec["archive_key"]))]
-        paths[spec["report_key"]] = [str(path) for path in _paths(payload.get(spec["report_key"]))]
-    for spec in DELIVERY_VERIFICATION_COMPONENTS:
-        key = str(spec["payload_keys"])
-        singular = str(spec["payload_key"])
+        archive_key = str(spec["archive_key"])
+        report_key = str(spec["report_key"])
+        paths[archive_key] = [str(path) for path in _paths(payload.get(archive_key))]
+        paths[report_key] = [str(path) for path in _paths(payload.get(report_key))]
+    for delivery_spec in DELIVERY_VERIFICATION_COMPONENTS:
+        key = str(delivery_spec["payload_keys"])
+        singular = str(delivery_spec["payload_key"])
         paths[key] = [str(path) for path in _paths(payload.get(key) or payload.get(singular))]
     return paths
 
@@ -611,15 +615,17 @@ def _source_paths(payload: ImplementationDocument) -> ImplementationDocument:
 def _verifier_kwargs_from_source_paths(source_paths: ImplementationDocument) -> ImplementationDocument:
     kwargs: dict[str, Any] = {}
     for spec in CORE_EVIDENCE_SPECS.values():
-        kwargs[spec["archive_key"]] = _first_path(source_paths.get(spec["archive_key"]))
-        kwargs[spec["report_key"]] = _first_path(source_paths.get(spec["report_key"]))
-    for spec in DELIVERY_VERIFICATION_COMPONENTS:
-        kwargs[str(spec["payload_keys"])] = _path_list(source_paths.get(str(spec["payload_keys"])))
+        archive_key = str(spec["archive_key"])
+        report_key = str(spec["report_key"])
+        kwargs[archive_key] = _first_path(source_paths.get(archive_key))
+        kwargs[report_key] = _first_path(source_paths.get(report_key))
+    for delivery_spec in DELIVERY_VERIFICATION_COMPONENTS:
+        kwargs[str(delivery_spec["payload_keys"])] = _path_list(source_paths.get(str(delivery_spec["payload_keys"])))
     return kwargs
 
 
 def _delivery_component_id(spec: ImplementationDocument, report: ImplementationDocument, index: int) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     for key in ("release_id", "target_id", "submission_id", "evidence_id", "operations_id", "package_id"):
         value = report.get(key) or summary.get(key)
         if value:
@@ -668,7 +674,7 @@ def _read_zip_json_optional(zip_path: Path | None, entry: str) -> Implementation
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import io as io
@@ -176,8 +176,8 @@ def analyze_wav_bytes(
 
 
 def audio_health_summary(report: dict[str, Any]) -> dict[str, Any]:
-    fmt = report.get("format") if isinstance(report.get("format"), dict) else {}
-    metrics = report.get("metrics") if isinstance(report.get("metrics"), dict) else {}
+    fmt = _as_document(report.get("format"))
+    metrics = _as_document(report.get("metrics"))
     return sanitize_metadata(
         {
             "status": report.get("status") or "missing",
@@ -306,11 +306,11 @@ def _check_expected(checks: list[ImplementationDocument], warnings: list[str], f
 
 
 def _finalize_report(report: ImplementationDocument) -> ImplementationDocument:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    source = _as_document(report.get("source"))
     source_payload = {
         "source": source,
         "wav_sha256": report.get("wav_sha256"),
-        "format": report.get("format") if isinstance(report.get("format"), dict) else {},
+        "format": _as_document(report.get("format")),
     }
     report["source_hash"] = stable_hash(sanitize_metadata(source_payload))
     report["integrity_hash"] = audio_health_integrity_hash(report)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
 import hashlib
 import json
 import os
@@ -70,7 +72,7 @@ class FileArtifactStore:
         if not path.is_file():
             return {}
         value = json.loads(path.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def write_pointer_atomic(self, namespace: str, value: dict[str, Any]) -> Path:
         path = self.current_pointer_path(namespace)

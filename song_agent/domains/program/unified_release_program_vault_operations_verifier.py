@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -200,10 +200,10 @@ def unified_release_program_vault_operations_verification_exit_code(report: dict
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     file_paths = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
-    zip_meta = manifest.get("zip") if isinstance(manifest.get("zip"), dict) else {}
+    zip_meta = _as_document(manifest.get("zip"))
     checks.extend(
         [
             _check("urpvo_manifest_files_exact", file_paths == expected_files, "Manifest files match fixed archive entries.", {"missing": sorted(expected_files - file_paths), "extra": sorted(file_paths - expected_files)}),
@@ -269,8 +269,8 @@ def _binding_checks(
 ) -> list[ImplementationDocument]:
     latest_signoff_event = next((row for row in reversed(history) if row.get("event_type") == "vault_operations_signoff_created"), {})
     current = _current_generation(registry)
-    vault = current.get("vault") if isinstance(current.get("vault"), dict) else {}
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    vault = _as_document(current.get("vault"))
+    source = _as_document(manifest.get("source"))
     pairs = {
         "report_hash": report.get("integrity_hash"),
         "registry_hash": registry.get("integrity_hash"),
@@ -335,7 +335,7 @@ def _external_binding_checks(path: Path | str | None, binding: ImplementationDoc
 def _current_vault_checks(archive: zipfile.ZipFile, registry: ImplementationDocument, binding: ImplementationDocument, anchor: ImplementationDocument, vault_verification: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
     data = archive.read("packages/current-vault.zip")
     current = _current_generation(registry)
-    vault = current.get("vault") if isinstance(current.get("vault"), dict) else {}
+    vault = _as_document(current.get("vault"))
     checks = [
         _check("urpvo_current_vault_zip_sha256", _sha256_bytes(data) == vault.get("vault_zip_sha256") == binding.get("vault_zip_sha256") == anchor.get("vault_zip_sha256") == vault_verification.get("zip_sha256"), "Current Vault ZIP hash matches registry, binding, anchor, and verification."),
         _check("urpvo_current_vault_zip_size", len(data) == int(vault.get("vault_zip_size_bytes") or -1) == int(binding.get("vault_zip_size_bytes") or -1) == int(anchor.get("vault_zip_size_bytes") or -1), "Current Vault ZIP size matches registry, binding, and anchor."),

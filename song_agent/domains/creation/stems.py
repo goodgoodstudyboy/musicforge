@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_int as _as_int
+
 import hashlib as hashlib
 import json as json
 import shutil as shutil
@@ -54,7 +56,7 @@ class StemRecord:
             note_count=int(data.get("note_count", 0) or 0),
             duration_beats=float(data.get("duration_beats", 0.0) or 0.0),
             channel=int(data.get("channel", 0) or 0),
-            program=None if data.get("program") is None else int(data.get("program")),
+            program=None if data.get("program") is None else _as_int(data.get("program")),
             updated_at=str(data.get("updated_at") or ""),
         )
 

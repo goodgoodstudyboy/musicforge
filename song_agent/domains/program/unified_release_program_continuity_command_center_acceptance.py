@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list
 
 import base64 as base64
 import hashlib as hashlib
@@ -215,7 +215,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             for rel, value in docs.items():
                 if rel.startswith("packages/") or rel == "README.txt":
                     continue
-                write_json(self.review_pack_dir(program_id) / rel, value)
+                write_json(self.review_pack_dir(program_id) / rel, _as_document(value))
             _build_zip_from_values(zip_path, docs)
             runtime = self._verify_review_pack_runtime(program_id, payload)
             if runtime.get("status") != "passed":
@@ -360,7 +360,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
                 if rel == "README.txt":
                     (evidence_root / rel).write_text(str(value), encoding="utf-8")
                 else:
-                    write_json(evidence_root / rel, value)
+                    write_json(evidence_root / rel, _as_document(value))
             _build_zip_from_values(zip_path, docs)
             runtime = self._verify_accepted_evidence_runtime(program_id, evidence_id, response_id)
             if runtime.get("status") != "passed":
@@ -532,7 +532,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             )
             docs = self._archive_documents(program_id, context, event)
             self._write_export_dir(self.archive_dir(program_id), docs)
-            return docs["manifest.json"]
+            return _as_document(docs["manifest.json"])
 
     def build_archive_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = sanitize_metadata(payload or {})
@@ -976,7 +976,7 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceStore:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver Review Pack verification is stale or failed.")
         with zipfile.ZipFile(review_pack) as archive:
             review_report = json.loads(archive.read("review-pack-report.json").decode("utf-8"))
-        review_source = review_report.get("source") if isinstance(review_report.get("source"), dict) else {}
+        review_source = _as_document(review_report.get("source"))
         return {
             "program_id": program_id,
             "review_pack_id": review_report.get("review_pack_id"),
@@ -1381,7 +1381,7 @@ def _response_payload_documents(payload: ImplementationDocument) -> tuple[Implem
                 expected = {"response.json", "response-verification-report.json", "response-binding-summary.json"}
                 if set(names) != expected or len(names) != len(expected):
                     raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver response ZIP must contain the fixed proof entries.")
-                return tuple(json.loads(archive.read(name).decode("utf-8")) for name in ("response.json", "response-verification-report.json", "response-binding-summary.json"))  # type: ignore[return-value]
+                return tuple(json.loads(archive.read(name).decode("utf-8")) for name in ("response.json", "response-verification-report.json", "response-binding-summary.json"))
         except (ValueError, zipfile.BadZipFile, json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver response ZIP is invalid.") from exc
     if payload.get("response_base64"):
@@ -1389,7 +1389,7 @@ def _response_payload_documents(payload: ImplementationDocument) -> tuple[Implem
             wrapper = json.loads(base64.b64decode(str(payload["response_base64"]), validate=True).decode("utf-8"))
         except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError("Receiver response base64 JSON is invalid.") from exc
-        payload = wrapper if isinstance(wrapper, dict) else {}
+        payload = _as_document(wrapper)
     response = payload.get("response") or payload.get("response_json")
     verification = payload.get("response_verification_report")
     binding = payload.get("response_binding_summary")
@@ -1397,15 +1397,15 @@ def _response_payload_documents(payload: ImplementationDocument) -> tuple[Implem
         raise UnifiedReleaseProgramContinuityCommandCenterAcceptanceStateError(
             "Receiver response requires external response, verification report, and binding summary."
         )
-    return dict(response), dict(verification), dict(binding)
+    return _as_document(response), _as_document(verification), _as_document(binding)
 
 
 def _policy(value: Any) -> ImplementationDocument:
-    incoming = value if isinstance(value, dict) else {}
+    incoming = _as_document(value)
     return {
-        "min_accepted_count": max(1, int(incoming.get("min_accepted_count") or DEFAULT_POLICY["min_accepted_count"])),
-        "min_organization_count": max(1, int(incoming.get("min_organization_count") or DEFAULT_POLICY["min_organization_count"])),
-        "required_roles": sorted({_bounded(role, 80) for role in incoming.get("required_roles") or DEFAULT_POLICY["required_roles"] if str(role).strip()}),
+        "min_accepted_count": max(1, _as_int(incoming.get("min_accepted_count") or DEFAULT_POLICY["min_accepted_count"])),
+        "min_organization_count": max(1, _as_int(incoming.get("min_organization_count") or DEFAULT_POLICY["min_organization_count"])),
+        "required_roles": sorted({_bounded(role, 80) for role in _as_list(incoming.get("required_roles") or DEFAULT_POLICY["required_roles"]) if str(role).strip()}),
         "block_on_rejected": bool(incoming.get("block_on_rejected", DEFAULT_POLICY["block_on_rejected"])),
         "block_on_needs_changes": bool(incoming.get("block_on_needs_changes", DEFAULT_POLICY["block_on_needs_changes"])),
         "block_on_critical_findings": bool(incoming.get("block_on_critical_findings", DEFAULT_POLICY["block_on_critical_findings"])),

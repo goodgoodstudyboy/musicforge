@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class DeliveryRoutesReleaseOperations:
+class DeliveryRoutesReleaseOperations(DeliveryRouteContext):
     def _handle_release_operations(self, method: str, release_id: str, tail: str) -> None:
         if tail == "/runbooks" or tail.startswith("/runbooks/"):
             self._handle_release_operations_runbooks(method, release_id, tail.removeprefix("/runbooks"))

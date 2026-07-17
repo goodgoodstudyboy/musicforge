@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -77,14 +77,14 @@ class ReleaseOperationsReviewerPackStore:
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
     def read_retrospective(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.retrospective_path(release_id)
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
     def refresh(self, release_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
@@ -248,7 +248,7 @@ class ReleaseOperationsReviewerPackStore:
         if not path.exists():
             raise FileNotFoundError("Operations Reviewer Pack export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
     def _reviewer_findings(self, release_id: str, audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument]) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
         blockers: list[dict[str, Any]] = []
@@ -293,7 +293,7 @@ class ReleaseOperationsReviewerPackStore:
         return blockers, warnings
 
     def _current_stage(self, audit_report: ImplementationDocument) -> str:
-        operations = audit_report.get("stage_timeline") if isinstance(audit_report.get("stage_timeline"), list) else []
+        operations = _as_list(audit_report.get("stage_timeline"))
         if operations:
             return str(operations[-1].get("event_type") or audit_report.get("status") or "unknown")
         return str(audit_report.get("status") or "missing")
@@ -303,7 +303,7 @@ class ReleaseOperationsReviewerPackStore:
 
 
 def reviewer_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_report_integrity_hash(data)
 
 
@@ -311,13 +311,13 @@ def reviewer_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def reviewer_pack_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_pack_manifest_integrity_hash(data)
 
 
 def reviewer_pack_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -346,7 +346,7 @@ def _evidence_index(audit_report: ImplementationDocument, ledger_entries: list[I
 
 
 def _reviewer_guide(report: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     lines = [
         "# MusicForge Release Operations Reviewer Guide",
         "",
@@ -369,11 +369,11 @@ def _reviewer_guide(report: ImplementationDocument) -> str:
         "",
         "## Blockers",
     ]
-    blockers = report.get("blockers") if isinstance(report.get("blockers"), list) else []
+    blockers = _as_list(report.get("blockers"))
     lines.extend([f"- {item.get('check_id')}: {item.get('message')}" for item in blockers] or ["- None"])
     lines.append("")
     lines.append("## Warnings")
-    warnings = report.get("warnings") if isinstance(report.get("warnings"), list) else []
+    warnings = _as_list(report.get("warnings"))
     lines.extend([f"- {item.get('check_id')}: {item.get('message')}" for item in warnings] or ["- None"])
     lines.append("")
     lines.append("## Evidence Files")
@@ -400,14 +400,14 @@ def _retrospective_markdown(report: ImplementationDocument) -> str:
             lines.append(f"- {item.get('risk')}: {item.get('count')} ({item.get('severity')})")
     lines.append("")
     lines.append("## Recommendations")
-    recommendations = report.get("recommendations") if isinstance(report.get("recommendations"), list) else []
+    recommendations = _as_list(report.get("recommendations"))
     lines.extend([f"- {item.get('recommendation')}" for item in recommendations if isinstance(item, dict)] or ["- No deterministic recommendations."])
     return "\n".join(lines) + "\n"
 
 
 def _evidence_index_markdown(items: Any) -> str:
     lines = ["# Evidence Index", ""]
-    for item in items if isinstance(items, list) else []:
+    for item in _as_list(items):
         if isinstance(item, dict):
             lines.append(f"- {item.get('name')} | {item.get('type')} | {item.get('status')} | {item.get('hash') or '-'}")
     return "\n".join(lines) + "\n"
@@ -426,7 +426,7 @@ def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
 
 
 def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return {"status": report.get("status") or "missing", "summary": summary}
 
 
@@ -445,7 +445,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, data: ImplementationDocument) -> Path:

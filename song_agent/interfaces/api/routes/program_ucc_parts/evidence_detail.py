@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.program_ucc import ProgramUccRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class ProgramUccEvidence_DetailRoutes:
+class ProgramUccEvidence_DetailRoutes(ProgramUccRouteContext):
     def _dispatch_ucc_evidence_detail(self, method, center_id, tail) -> bool:
         if tail.startswith('/evidence-reviews/'):
             review_tail = tail.removeprefix('/evidence-reviews/')

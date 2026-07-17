@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -131,7 +131,7 @@ def verify_release_audio_timeline_package(
 
             if require_passed:
                 checks.append(_check("release_audio_timeline_report_passed", report.get("status") == "passed", "Timeline report is passed."))
-            matrix_summary = track_index.get("summary") if isinstance(track_index.get("summary"), dict) else {}
+            matrix_summary = _as_document(track_index.get("summary"))
             track_count = int(matrix_summary.get("track_count") or 0)
             if require_real_audio:
                 checks.append(_check("release_audio_timeline_real_audio_complete", track_count > 0 and int(matrix_summary.get("real_audio_review_count") or 0) == track_count and int(matrix_summary.get("test_fake_count") or 0) == 0, "All timeline tracks use release-ready real audio."))
@@ -192,7 +192,7 @@ def _event_chain_checks(events: list[ImplementationDocument]) -> list[Implementa
     for event in events:
         if event.get("previous_event_hash") != previous_hash:
             chain_ok = False
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("payload_hash") != stable_hash(payload):
             payload_ok = False
         expected_hash = _event_hash(event)
@@ -313,7 +313,7 @@ def _signoff_checks(
 
 
 def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = expected_entries - {"manifest.json"}
@@ -348,7 +348,7 @@ def _derive_from_events(release_id: Any, timeline_id: Any, events: list[Implemen
     risks: list[dict[str, Any]] = []
     accepted = needs_fix = rejected = open_markers = 0
     for event in track_events:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         track = dict(payload.get("track") or {})
         event_ids = [event.get("event_id")]
         track["event_ids"] = event_ids

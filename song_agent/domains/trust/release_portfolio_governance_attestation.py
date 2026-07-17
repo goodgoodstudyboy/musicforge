@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -102,7 +104,7 @@ class ReleasePortfolioGovernanceAttestationStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceAttestationNotFoundError("Portfolio Governance Public Attestation export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=ATTESTATION_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
     def refresh_report(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
@@ -150,7 +152,7 @@ class ReleasePortfolioGovernanceAttestationStore:
         vault_manifest = _read_json_default(self.evidence_vault_store.export_dir(portfolio_id) / "manifest.json", default={})
         vault_verification = _read_json_default(self.evidence_vault_store.verification_report_path(portfolio_id), default={})
         vault_zip_path = self.evidence_vault_store.zip_path(portfolio_id)
-        reviewer_status = ((final_report.get("summary") if isinstance(final_report.get("summary"), dict) else {}) or {}).get("reviewer_response_status")
+        reviewer_status = ((_as_document(final_report.get("summary"))) or {}).get("reviewer_response_status")
         source = {
             "portfolio_id": portfolio_id,
             "portfolio_hash": stable_hash(portfolio),
@@ -185,20 +187,20 @@ class ReleasePortfolioGovernanceAttestationStore:
             "evidence_vault_verification_zip_sha256": vault_verification.get("zip_sha256") if vault_verification else None,
             "evidence_vault_verification_zip_size_bytes": vault_verification.get("zip_size_bytes") if vault_verification else None,
             "evidence_vault_verification_manifest_hash": vault_verification.get("manifest_hash") if vault_verification else None,
-            "evidence_vault_deep_verification_status": (vault_verification.get("summary") if isinstance(vault_verification.get("summary"), dict) else {}).get("deep_verification_status") if vault_verification else "missing",
-            "signed_queue_count": int((vault_report.get("summary") if isinstance(vault_report.get("summary"), dict) else {}).get("signed_queue_count") or 0),
-            "force_signed_queue_count": int((vault_report.get("summary") if isinstance(vault_report.get("summary"), dict) else {}).get("force_signed_queue_count") or 0),
+            "evidence_vault_deep_verification_status": (_as_document(vault_verification.get("summary"))).get("deep_verification_status") if vault_verification else "missing",
+            "signed_queue_count": int((_as_document(vault_report.get("summary"))).get("signed_queue_count") or 0),
+            "force_signed_queue_count": int((_as_document(vault_report.get("summary"))).get("force_signed_queue_count") or 0),
             "reviewer_response_status": reviewer_status or "unknown",
             "attestation_profile": profile,
         }
         return sanitize_metadata(source, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
     def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
-        data = report if isinstance(report, dict) else self.read_report(portfolio_id, profile=profile, default={})
+        data = _document_or(report, self.read_report(portfolio_id, profile=profile, default={}))
         if not data:
             return False
         try:
-            source = self.build_source(portfolio_id, profile=str((data.get("source") if isinstance(data.get("source"), dict) else {}).get("attestation_profile") or profile))
+            source = self.build_source(portfolio_id, profile=str((_as_document(data.get("source"))).get("attestation_profile") or profile))
         except Exception:
             return True
         return stable_hash(source) != str(data.get("source_hash") or "")
@@ -374,7 +376,7 @@ class ReleasePortfolioGovernanceAttestationStore:
                 continue
             if not isinstance(event, dict) or str(event.get("type") or "") != event_type:
                 continue
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             if all(str(summary.get(key) or "") == str(value or "") for key, value in triple.items()):
                 return True
         return False
@@ -395,8 +397,8 @@ class ReleasePortfolioGovernanceAttestationStore:
 
 
 def build_certificate(*, report: dict[str, Any], generated_at: str, profile: str) -> dict[str, Any]:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
-    certificate = {
+    source = _as_document(report.get("source"))
+    certificate: _InferenceType = {
         "schema_version": ATTESTATION_SCHEMA_VERSION,
         "certificate_id": "pgc-000001",
         "certificate_type": ATTESTATION_CERTIFICATE_TYPE,
@@ -427,7 +429,7 @@ def build_certificate(*, report: dict[str, Any], generated_at: str, profile: str
 
 
 def attestation_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == attestation_report_integrity_hash(data)
 
 
@@ -435,7 +437,7 @@ def attestation_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def attestation_certificate_integrity_ok(certificate: dict[str, Any] | None) -> bool:
-    data = certificate if isinstance(certificate, dict) else {}
+    data = _as_document(certificate)
     return bool(data.get("payload_hash")) and str(data.get("payload_hash")) == attestation_certificate_hash(data)
 
 
@@ -443,15 +445,15 @@ def attestation_certificate_integrity_ok(certificate: dict[str, Any] | None) -> 
 
 
 def attestation_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == attestation_manifest_hash(data)
 
 
 def attestation_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     if not data:
         return {"status": "missing", "integrity_ok": False}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata({"status": data.get("status"), "readiness": data.get("readiness"), "profile": summary.get("attestation_profile"), "portfolio_id": data.get("portfolio_id"), "source_hash": data.get("source_hash"), "integrity_hash": data.get("integrity_hash"), "integrity_ok": attestation_report_integrity_ok(data), **summary}, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
 
@@ -499,8 +501,8 @@ def _immutability_triple(source: ImplementationDocument) -> dict[str, str]:
 
 
 def _manifest_triple(manifest: ImplementationDocument) -> dict[str, str]:
-    evidence = manifest.get("evidence_vault") if isinstance(manifest.get("evidence_vault"), dict) else {}
-    final_board = manifest.get("final_board") if isinstance(manifest.get("final_board"), dict) else {}
+    evidence = _as_document(manifest.get("evidence_vault"))
+    final_board = _as_document(manifest.get("final_board"))
     return {
         "evidence_vault_zip_sha256": str(evidence.get("zip_sha256") or ""),
         "final_board_signoff_hash": str(final_board.get("signoff_hash") or ""),
@@ -509,9 +511,9 @@ def _manifest_triple(manifest: ImplementationDocument) -> dict[str, str]:
 
 
 def _certificate_markdown(certificate: ImplementationDocument) -> str:
-    final_board = certificate.get("final_board") if isinstance(certificate.get("final_board"), dict) else {}
-    vault = certificate.get("evidence_vault") if isinstance(certificate.get("evidence_vault"), dict) else {}
-    coverage = certificate.get("coverage") if isinstance(certificate.get("coverage"), dict) else {}
+    final_board = _as_document(certificate.get("final_board"))
+    vault = _as_document(certificate.get("evidence_vault"))
+    coverage = _as_document(certificate.get("coverage"))
     return "\n".join(
         [
             "# MusicForge Portfolio Governance Public Attestation",
@@ -588,7 +590,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _write_json(path: Path, payload: ImplementationDocument) -> Path:

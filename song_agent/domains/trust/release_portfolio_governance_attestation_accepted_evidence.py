@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -77,7 +77,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceNotFoundError("Accepted Evidence export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
     def refresh_evidence(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
@@ -130,10 +130,10 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         pack: dict[str, Any] | None = None,
         verification: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        response = response if isinstance(response, dict) else self.review_store.get_response(portfolio_id, response_id, profile=profile)
-        pack = pack if isinstance(pack, dict) else self.review_store.read_pack(portfolio_id, profile=profile, default={})
-        verification = verification if isinstance(verification, dict) else self.review_store.verify_response(portfolio_id, response_id, profile=profile)
-        pack_source = pack.get("source") if isinstance(pack.get("source"), dict) else {}
+        response = _document_or(response, self.review_store.get_response(portfolio_id, response_id, profile=profile))
+        pack = _document_or(pack, self.review_store.read_pack(portfolio_id, profile=profile, default={}))
+        verification = _document_or(verification, self.review_store.verify_response(portfolio_id, response_id, profile=profile))
+        pack_source = _as_document(pack.get("source"))
         source = {
             "portfolio_id": portfolio_id,
             "attestation_profile": profile,
@@ -175,10 +175,10 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         return sanitize_metadata(source, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
     def evidence_is_stale(self, portfolio_id: str, evidence: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
-        data = evidence if isinstance(evidence, dict) else self.read_evidence(portfolio_id, profile=profile, default={})
+        data = _document_or(evidence, self.read_evidence(portfolio_id, profile=profile, default={}))
         if not data:
             return False
-        source = data.get("source") if isinstance(data.get("source"), dict) else {}
+        source = _as_document(data.get("source"))
         response_id = str(source.get("response_id") or "")
         if not response_id:
             return True
@@ -230,7 +230,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
                     "source_hash": evidence.get("source_hash"),
                     "status": evidence.get("status"),
                 },
-                "public_summary": evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {},
+                "public_summary": _as_document(evidence.get("public_summary")),
                 "files": sorted(files, key=lambda item: item["path"]),
                 "zip": {},
                 "redaction_summary": _redaction_summary({"evidence": evidence, "data": data_docs}),
@@ -367,7 +367,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
             raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError("Accepted Evidence must be current before export.")
         if self.evidence_is_stale(portfolio_id, evidence, profile=profile):
             raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError("Accepted Evidence source is stale. Refresh accepted evidence before export.")
-        if (evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}).get("external_review_status") != "accepted":
+        if (_as_document(evidence.get("public_summary"))).get("external_review_status") != "accepted":
             raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceStateError("Accepted Evidence public summary is not accepted.")
 
     def _append_history(self, portfolio_id: str, profile: str, event_type: str, summary: ImplementationDocument, *, now: str) -> None:
@@ -400,7 +400,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
 
 
 def accepted_evidence_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == accepted_evidence_manifest_hash(data)
 
 
@@ -421,8 +421,8 @@ def _accepted_evidence_public_document(evidence: ImplementationDocument) -> Impl
 
 
 def _response_public_summary(response: ImplementationDocument) -> ImplementationDocument:
-    reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
-    findings = response.get("findings") if isinstance(response.get("findings"), list) else []
+    reviewer = _as_document(response.get("reviewer"))
+    findings = _as_list(response.get("findings"))
     high = 0
     for finding in findings:
         if not isinstance(finding, dict):
@@ -466,8 +466,8 @@ def _public_summary(source: ImplementationDocument, response_public: Implementat
 
 
 def _data_documents(evidence: ImplementationDocument) -> dict[str, ImplementationDocument]:
-    source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
-    public = evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}
+    source = _as_document(evidence.get("source"))
+    public = _as_document(evidence.get("public_summary"))
     return {
         "response-verification-summary.json": {"source_hash": evidence.get("source_hash"), "response_id": source.get("response_id"), "decision": source.get("response_decision"), "response_status": source.get("response_status"), "verification_status": source.get("response_verification_status"), "verification_hash": source.get("response_verification_hash"), "payload_hash": source.get("response_payload_hash"), "integrity_hash": source.get("response_integrity_hash")},
         "review-pack-source-summary.json": {"source_hash": evidence.get("source_hash"), "review_pack_id": source.get("review_pack_id"), "review_pack_source_hash": source.get("review_pack_source_hash"), "response_review_pack_id": source.get("response_review_pack_id"), "response_review_pack_source_hash": source.get("response_review_pack_source_hash"), "review_pack_stale": source.get("review_pack_stale")},
@@ -483,7 +483,7 @@ def _state_tuple(evidence: ImplementationDocument) -> dict[str, str]:
 
 
 def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
-    row = manifest.get("accepted_evidence") if isinstance(manifest.get("accepted_evidence"), dict) else {}
+    row = _as_document(manifest.get("accepted_evidence"))
     return {"source_hash": str(manifest.get("source_hash") or ""), "accepted_evidence_id": str(row.get("accepted_evidence_id") or ""), "integrity_hash": str(row.get("integrity_hash") or "")}
 
 
@@ -500,7 +500,7 @@ def _evidence_id(portfolio_id: str, profile: str, source: ImplementationDocument
 
 
 def _readme(evidence: ImplementationDocument) -> str:
-    public = evidence.get("public_summary") if isinstance(evidence.get("public_summary"), dict) else {}
+    public = _as_document(evidence.get("public_summary"))
     return "\n".join(
         [
             "MusicForge Public Attestation Accepted Evidence",

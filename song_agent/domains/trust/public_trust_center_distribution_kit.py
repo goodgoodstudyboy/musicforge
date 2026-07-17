@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -143,7 +143,7 @@ class PublicTrustCenterDistributionKitStore:
                 "tool": {"name": "MusicForge Public Trust Center Distribution Kit", "version": __version__},
                 "center_id": center_id,
                 "created_at": now,
-                "source": report.get("source") if isinstance(report.get("source"), dict) else {},
+                "source": _as_document(report.get("source")),
                 "source_hash": report.get("source_hash"),
                 "requirements": _requirements(),
                 "report": {"integrity_hash": report.get("integrity_hash"), "source_hash": report.get("source_hash")},
@@ -337,7 +337,7 @@ class PublicTrustCenterDistributionKitStore:
         return data
 
     def _verification_index(self, report: ImplementationDocument) -> ImplementationDocument:
-        source = report.get("source") if isinstance(report.get("source"), dict) else {}
+        source = _as_document(report.get("source"))
         rows = [
             {"name": "public_trust_center", "status": source.get("ptc_verification_status"), "verification_hash": source.get("ptc_verification_hash"), "report_path": "verification-reports/public-trust-center-verification-report.json", "package_path": "packages/public-trust-center.zip"},
             {"name": "anchor_registry", "status": source.get("anchor_registry_verification_status"), "verification_hash": source.get("anchor_registry_verification_hash"), "report_path": "verification-reports/anchor-registry-verification-report.json", "package_path": "packages/public-trust-center-anchor-registry.zip"},
@@ -348,7 +348,7 @@ class PublicTrustCenterDistributionKitStore:
         return data
 
     def _chain_of_custody(self, report: ImplementationDocument) -> ImplementationDocument:
-        source = report.get("source") if isinstance(report.get("source"), dict) else {}
+        source = _as_document(report.get("source"))
         data = {
             "schema_version": DISTRIBUTION_KIT_SCHEMA_VERSION,
             "source_hash": report.get("source_hash"),
@@ -409,7 +409,7 @@ class PublicTrustCenterDistributionKitStore:
         for event in history.get("events", []) if isinstance(history.get("events"), list) else []:
             if not isinstance(event, dict) or str(event.get("event_type") or "") != event_type:
                 continue
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             if all(str(payload.get(key) or "") == str(value or "") for key, value in state.items()):
                 return True
         return False
@@ -430,7 +430,7 @@ def distribution_kit_manifest_integrity_ok(manifest: dict[str, Any]) -> bool:
 
 
 def distribution_kit_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return _sanitize({"status": report.get("status"), "center_id": report.get("center_id"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "source_hash": report.get("source_hash")})
 
 
@@ -463,7 +463,7 @@ def _state_row(report: ImplementationDocument) -> dict[str, str]:
 
 
 def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
-    report = manifest.get("report") if isinstance(manifest.get("report"), dict) else {}
+    report = _as_document(manifest.get("report"))
     return {"source_hash": str(manifest.get("source_hash") or ""), "report_hash": str(report.get("integrity_hash") or "")}
 
 
@@ -478,7 +478,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:

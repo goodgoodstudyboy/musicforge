@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -123,7 +123,7 @@ def closeout_source_hash(
 def closeout_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
-    recommended = report.get("recommended_final_version") if isinstance(report.get("recommended_final_version"), dict) else {}
+    recommended = _as_document(report.get("recommended_final_version"))
     return sanitize_metadata(
         {
             "schema_version": report.get("schema_version"),
@@ -177,13 +177,13 @@ def build_signoff_record(
     payload: dict[str, Any] | None = None,
     now: str | None = None,
 ) -> dict[str, Any]:
-    payload = payload if isinstance(payload, dict) else {}
+    payload = _as_document(payload)
     now = now or now_iso()
     forced = bool(payload.get("force", False))
     override_reason = sanitize_sensitive_text(str(payload.get("override_reason") or "")).strip()[:1000]
     if forced and not override_reason:
         raise ValueError("override_reason is required when force=true.")
-    recommended = closeout_report.get("recommended_final_version") if isinstance(closeout_report.get("recommended_final_version"), dict) else {}
+    recommended = _as_document(closeout_report.get("recommended_final_version"))
     selected_version_id = _optional_str(payload.get("selected_version_id")) or _optional_str(recommended.get("version_id"))
     blockers = [sanitize_sensitive_text(str(item))[:240] for item in closeout_report.get("blockers", []) if str(item).strip()]
     warnings = [sanitize_sensitive_text(str(item))[:240] for item in closeout_report.get("warnings", []) if str(item).strip()]
@@ -422,10 +422,10 @@ def _queue_summary(queues: list[SprintActionQueue]) -> ImplementationDocument:
 def _metrics_summary(report: ImplementationDocument) -> ImplementationDocument:
     if not isinstance(report, dict) or not report:
         return {"readiness": "no_data", "completion_rate": None, "quality_delta": None, "provider_tokens": 0}
-    risk = report.get("risk_readiness") if isinstance(report.get("risk_readiness"), dict) else {}
-    overview = report.get("overview") if isinstance(report.get("overview"), dict) else {}
-    quality = report.get("quality_delta") if isinstance(report.get("quality_delta"), dict) else {}
-    provider = report.get("provider_usage") if isinstance(report.get("provider_usage"), dict) else {}
+    risk = _as_document(report.get("risk_readiness"))
+    overview = _as_document(report.get("overview"))
+    quality = _as_document(report.get("quality_delta"))
+    provider = _as_document(report.get("provider_usage"))
     quality_delta = quality.get("overall_delta") if quality else report.get("quality_delta")
     if isinstance(quality_delta, dict):
         quality_delta = None
@@ -435,13 +435,13 @@ def _metrics_summary(report: ImplementationDocument) -> ImplementationDocument:
             "completion_rate": overview.get("completion_rate", report.get("completion_rate")),
             "quality_delta": quality_delta,
             "provider_tokens": provider.get("total_tokens", report.get("provider_tokens", 0)),
-            "warnings": report.get("warnings") if isinstance(report.get("warnings"), list) else [],
+            "warnings": _as_list(report.get("warnings")),
         }
     )
 
 
 def _judge_summary(summary: ImplementationDocument, metrics_report: ImplementationDocument) -> ImplementationDocument:
-    metrics = metrics_report.get("judge_metrics") if isinstance(metrics_report.get("judge_metrics"), dict) else {}
+    metrics = _as_document(metrics_report.get("judge_metrics"))
     return sanitize_metadata(
         {
             "judged_task_count": max(int(summary.get("judged_task_count") or 0), int(metrics.get("judged_task_count") or 0)),
@@ -553,7 +553,7 @@ def _conflict_source_summary(report: ImplementationDocument) -> ImplementationDo
             {
                 "severity": item.get("severity"),
                 "kind": item.get("kind"),
-                "task_ids": item.get("task_ids") if isinstance(item.get("task_ids"), list) else [],
+                "task_ids": _as_list(item.get("task_ids")),
             }
             for item in report.get("conflicts", [])
             if isinstance(item, dict)
@@ -572,8 +572,8 @@ def _recommendation_source_summary(report: ImplementationDocument) -> Implementa
         "created_at": report.get("created_at"),
         "stale": report.get("stale"),
         "status": report.get("status"),
-        "recommended_order": report.get("recommended_order") if isinstance(report.get("recommended_order"), list) else [],
-        "source_summary": report.get("source_summary") if isinstance(report.get("source_summary"), dict) else {},
+        "recommended_order": _as_list(report.get("recommended_order")),
+        "source_summary": _as_document(report.get("source_summary")),
     }
 
 
@@ -584,13 +584,13 @@ def _metrics_source_summary(report: ImplementationDocument) -> ImplementationDoc
         "schema_version": report.get("schema_version"),
         "sprint_id": report.get("sprint_id"),
         "source_hash": report.get("source_hash"),
-        "risk_readiness": report.get("risk_readiness") if isinstance(report.get("risk_readiness"), dict) else {},
-        "overview": report.get("overview") if isinstance(report.get("overview"), dict) else {},
-        "candidate_funnel": report.get("candidate_funnel") if isinstance(report.get("candidate_funnel"), dict) else {},
-        "action_queue_execution": report.get("action_queue_execution") if isinstance(report.get("action_queue_execution"), dict) else {},
-        "quality_delta": report.get("quality_delta") if isinstance(report.get("quality_delta"), dict) else {},
-        "judge_metrics": report.get("judge_metrics") if isinstance(report.get("judge_metrics"), dict) else {},
-        "provider_usage": report.get("provider_usage") if isinstance(report.get("provider_usage"), dict) else {},
+        "risk_readiness": _as_document(report.get("risk_readiness")),
+        "overview": _as_document(report.get("overview")),
+        "candidate_funnel": _as_document(report.get("candidate_funnel")),
+        "action_queue_execution": _as_document(report.get("action_queue_execution")),
+        "quality_delta": _as_document(report.get("quality_delta")),
+        "judge_metrics": _as_document(report.get("judge_metrics")),
+        "provider_usage": _as_document(report.get("provider_usage")),
     }
 
 
@@ -646,7 +646,7 @@ def _stable_hash(value: Any) -> str:
 
 def _blocking_conflict_count(report: ImplementationDocument) -> int:
     conflicts = report.get("conflicts") if isinstance(report, dict) else []
-    return len([item for item in conflicts if isinstance(item, dict) and item.get("severity") == "blocking"])
+    return len([item for item in _as_list(conflicts) if isinstance(item, dict) and item.get("severity") == "blocking"])
 
 
 def _report_stale(report: ImplementationDocument) -> bool:

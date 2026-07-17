@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioDynamicDispatch:
+class StudioDynamicDispatch(StudioDispatchRouteContext):
     def _dispatch_studio_dynamic(self, method, path, parsed) -> bool:
         editor_template_route = _interfaces_api_runtime._match_editor_template_route(path)
         if editor_template_route is not None:

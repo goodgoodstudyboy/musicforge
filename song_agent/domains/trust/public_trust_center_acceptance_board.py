@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -126,7 +128,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             now = now or now_iso()
             payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
             current = self.read_policy(center_id)
-            requirements = _normalize_requirements(payload.get("requirements") if isinstance(payload.get("requirements"), dict) else payload)
+            requirements = _normalize_requirements(_document_or(payload.get("requirements"), payload))
             policy = {
                 "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
                 "package_type": ACCEPTANCE_BOARD_POLICY_PACKAGE_TYPE,
@@ -156,7 +158,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             now = now or now_iso()
             payload = payload or {}
             if payload.get("policy"):
-                self.save_policy(center_id, payload.get("policy") if isinstance(payload.get("policy"), dict) else {}, now=now)
+                self.save_policy(center_id, _as_document(payload.get("policy")), now=now)
             policy = self.read_policy(center_id)
             source, participants, response_index, evidence_index, response_proofs, evidence_summaries = self._build_source(center_id, policy)
             checks, conflicts = _evaluate_board(policy, participants)
@@ -236,8 +238,8 @@ class PublicTrustCenterAcceptanceBoardStore:
                 _write_json(export_dir / "evidence" / f"{_safe_id(str(item.get('evidence_id') or 'evidence'))}-summary.json", item)
             for proof in sidecars["response_proofs"]:
                 response_id = _safe_id(str(proof.get("response_id") or "response"))
-                _write_json(export_dir / "response-proofs" / f"{response_id}-binding-proof.json", proof.get("binding_proof") if isinstance(proof.get("binding_proof"), dict) else {})
-                _write_json(export_dir / "response-proofs" / f"{response_id}-verification-summary.json", proof.get("verification_summary") if isinstance(proof.get("verification_summary"), dict) else {})
+                _write_json(export_dir / "response-proofs" / f"{response_id}-binding-proof.json", _as_document(proof.get("binding_proof")))
+                _write_json(export_dir / "response-proofs" / f"{response_id}-verification-summary.json", _as_document(proof.get("verification_summary")))
             files = [_file_record(export_dir, path) for path in sorted(export_dir.rglob("*")) if _is_file(path) and path.name != "acceptance-board-manifest.json"]
             manifest = {
                 "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
@@ -315,7 +317,7 @@ class PublicTrustCenterAcceptanceBoardStore:
                 "board_report_hash": report.get("integrity_hash"),
                 "board_source_hash": report.get("source_hash"),
                 "readiness": report.get("readiness"),
-                "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
+                "summary": _as_document(report.get("summary")),
                 "payload": payload,
             }
             _write_json(self.signoff_draft_path(center_id), draft)
@@ -332,7 +334,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             payload = sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BOARD_BLOCKED_KEYS)
             self._ensure_board_package_current(center_id)
             policy = self.read_policy(center_id)
-            requirements = policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}
+            requirements = _as_document(policy.get("requirements"))
             verification = self.verify_zip(
                 center_id,
                 {
@@ -342,7 +344,7 @@ class PublicTrustCenterAcceptanceBoardStore:
                     "require_no_conflicts": True,
                     "min_accepted_count": int(requirements.get("min_accepted_count") or 0),
                     "min_accepted_organizations": int(requirements.get("min_accepted_organizations") or 0),
-                    "required_roles": requirements.get("required_roles") if isinstance(requirements.get("required_roles"), list) else [],
+                    "required_roles": _as_list(requirements.get("required_roles")),
                     "use_distribution_kit": True,
                     "use_accepted_evidence": True,
                 },
@@ -354,7 +356,7 @@ class PublicTrustCenterAcceptanceBoardStore:
                 raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board must be ready before signoff.")
             source = self._signoff_source(center_id, verification)
             signoff_sequence = 1 + len([item for item in self._history_events(center_id) if item.get("event_type") == "board_signoff_signed"])
-            signoff = {
+            signoff: _InferenceType = {
                 "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
                 "package_type": ACCEPTANCE_BOARD_SIGNOFF_PACKAGE_TYPE,
                 "signoff_id": "ptcabs-" + stable_hash({"center_id": center_id, "source": source, "sequence": signoff_sequence})[:12],
@@ -484,7 +486,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             docs = self._signoff_archive_documents(center_id, signoff, now)
             for name, doc in docs.items():
                 if name.endswith(".json"):
-                    _write_json(archive_dir / name, doc if isinstance(doc, dict) else {})
+                    _write_json(archive_dir / name, _as_document(doc))
                 else:
                     _write_text(archive_dir / name, str(doc))
             files = [_file_record(archive_dir, path) for path in sorted(archive_dir.rglob("*")) if _is_file(path) and path.name != "board-signoff-archive-manifest.json"]
@@ -549,7 +551,7 @@ class PublicTrustCenterAcceptanceBoardStore:
 
     def summary(self, center_id: str = "ptc-default") -> dict[str, Any]:
         report = self.read_report(center_id, default={})
-        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        summary = _as_document(report.get("summary"))
         signoff = self.read_signoff(center_id, default={})
         return {"center_id": center_id, "readiness": report.get("readiness") or "missing", "status": report.get("status") or "missing", "signoff_status": signoff.get("status") or "unsigned", **summary}
 
@@ -570,7 +572,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             except PublicTrustCenterDistributionKitAcceptanceError:
                 continue
             public_response = _public_response_from_record(response)
-            reviewer = public_response.get("reviewer") if isinstance(public_response.get("reviewer"), dict) else {}
+            reviewer = _as_document(public_response.get("reviewer"))
             response_stale = self.acceptance_store.response_is_stale(center_id, response)
             verification = _read_json_default(self.acceptance_store.response_verification_report_path(center_id, response_id), default={})
             binding = _read_json_default(self.acceptance_store.response_binding_summary_path(center_id, response_id), default={})
@@ -649,8 +651,8 @@ class PublicTrustCenterAcceptanceBoardStore:
                         "response_public_summary_hash": stable_hash(public_response),
                         "public_response": public_response,
                         "kit_binding_status": response.get("kit_binding_status"),
-                        "response_binding": binding.get("response_binding") if isinstance(binding.get("response_binding"), dict) else {},
-                        "current_binding": binding.get("current_binding") if isinstance(binding.get("current_binding"), dict) else {},
+                        "response_binding": _as_document(binding.get("response_binding")),
+                        "current_binding": _as_document(binding.get("current_binding")),
                     },
                     "verification_summary": {
                         "source_hash": None,
@@ -660,8 +662,8 @@ class PublicTrustCenterAcceptanceBoardStore:
                         "raw_response_sha256": response.get("raw_response_sha256"),
                         "response_public_summary_hash": stable_hash(public_response),
                         "response_verification_hash": verification_hash(verification),
-                        "check_count": len(verification.get("checks") if isinstance(verification.get("checks"), list) else []),
-                        "blocker_count": len(verification.get("blockers") if isinstance(verification.get("blockers"), list) else []),
+                        "check_count": len(_as_list(verification.get("checks"))),
+                        "blocker_count": len(_as_list(verification.get("blockers"))),
                     },
                 }
             )
@@ -736,11 +738,11 @@ class PublicTrustCenterAcceptanceBoardStore:
         board_manifest = _read_zip_json(board_zip, "acceptance-board-manifest.json")
         report = self.read_report(center_id, default={})
         policy = self.read_policy(center_id)
-        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-        participants = [item for item in (report.get("participants") if isinstance(report.get("participants"), list) else []) if isinstance(item, dict)]
+        summary = _as_document(report.get("summary"))
+        participants = [item for item in (_as_list(report.get("participants"))) if isinstance(item, dict)]
         counted = [item for item in participants if item.get("counts_for_quorum")]
         accepted_rows = []
-        for row in (report.get("source") if isinstance(report.get("source"), dict) else {}).get("accepted_evidence", []):
+        for row in (_as_document(report.get("source"))).get("accepted_evidence", []):
             if isinstance(row, dict) and any(item.get("evidence_id") == row.get("evidence_id") for item in counted):
                 accepted_rows.append(row)
         return _sanitize(
@@ -762,10 +764,10 @@ class PublicTrustCenterAcceptanceBoardStore:
                     "zip_sha256": verification.get("zip_sha256"),
                     "zip_size_bytes": verification.get("zip_size_bytes"),
                     "manifest_hash": verification.get("manifest_hash"),
-                    "blocker_count": len(verification.get("blockers") if isinstance(verification.get("blockers"), list) else []),
+                    "blocker_count": len(_as_list(verification.get("blockers"))),
                 },
                 "quorum": {
-                    "requirements": policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {},
+                    "requirements": _as_document(policy.get("requirements")),
                     "summary": summary,
                     "participant_count": len(counted),
                     "participants": [
@@ -780,7 +782,7 @@ class PublicTrustCenterAcceptanceBoardStore:
                     ],
                 },
                 "accepted_evidence": sorted(accepted_rows, key=lambda item: str(item.get("evidence_id") or "")),
-                "distribution_kit": (report.get("source") if isinstance(report.get("source"), dict) else {}).get("distribution_kit") if isinstance((report.get("source") if isinstance(report.get("source"), dict) else {}).get("distribution_kit"), dict) else {},
+                "distribution_kit": _as_document((_as_document(report.get("source"))).get("distribution_kit")),
             }
         )
 
@@ -789,7 +791,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff is missing.")
         if signoff.get("integrity_hash") != acceptance_board_signoff_hash(signoff):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff integrity failed.")
-        if signoff.get("source_hash") != stable_hash(signoff.get("source") if isinstance(signoff.get("source"), dict) else {}):
+        if signoff.get("source_hash") != stable_hash(_as_document(signoff.get("source"))):
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board signoff source hash failed.")
 
     def _ensure_signoff_current(self, center_id: str, signoff: ImplementationDocument) -> None:
@@ -841,13 +843,13 @@ class PublicTrustCenterAcceptanceBoardStore:
             raise PublicTrustCenterAcceptanceBoardStateError("Acceptance Board Change Request integrity failed.")
 
     def _signoff_archive_documents(self, center_id: str, signoff: ImplementationDocument, now: str) -> ImplementationDocument:
-        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        source = _as_document(signoff.get("source"))
         verification = _read_json_default(self.verification_report_path(center_id), default={})
         board_fingerprint = {
             "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
             "source_hash": signoff.get("source_hash"),
-            "board": source.get("board") if isinstance(source.get("board"), dict) else {},
-            "verification": source.get("verification") if isinstance(source.get("verification"), dict) else {},
+            "board": _as_document(source.get("board")),
+            "verification": _as_document(source.get("verification")),
         }
         board_fingerprint["integrity_hash"] = sidecar_hash(board_fingerprint)
         verification_summary = {
@@ -858,12 +860,12 @@ class PublicTrustCenterAcceptanceBoardStore:
             "zip_sha256": verification.get("zip_sha256"),
             "zip_size_bytes": verification.get("zip_size_bytes"),
             "manifest_hash": verification.get("manifest_hash"),
-            "summary": verification.get("summary") if isinstance(verification.get("summary"), dict) else {},
+            "summary": _as_document(verification.get("summary")),
         }
         verification_summary["integrity_hash"] = sidecar_hash(verification_summary)
-        quorum = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "quorum": source.get("quorum") if isinstance(source.get("quorum"), dict) else {}}
+        quorum = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "quorum": _as_document(source.get("quorum"))}
         quorum["integrity_hash"] = sidecar_hash(quorum)
-        accepted_index = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "items": source.get("accepted_evidence") if isinstance(source.get("accepted_evidence"), list) else []}
+        accepted_index = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "items": _as_list(source.get("accepted_evidence"))}
         accepted_index["integrity_hash"] = sidecar_hash(accepted_index)
         accepted_verification = {
             "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
@@ -876,19 +878,19 @@ class PublicTrustCenterAcceptanceBoardStore:
                     "verification_report_hash": item.get("verification_report_hash"),
                     "zip_sha256": item.get("zip_sha256"),
                 }
-                for item in accepted_index["items"]
+                for item in _as_list(accepted_index["items"])
                 if isinstance(item, dict)
             ],
         }
         accepted_verification["integrity_hash"] = sidecar_hash(accepted_verification)
-        distribution = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "distribution_kit": source.get("distribution_kit") if isinstance(source.get("distribution_kit"), dict) else {}}
+        distribution = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "distribution_kit": _as_document(source.get("distribution_kit"))}
         distribution["integrity_hash"] = sidecar_hash(distribution)
         latest_cr = _latest_applied_change_request(self.change_requests_dir(center_id), signoff.get("integrity_hash"))
         change = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "latest_applied_change_request": latest_cr}
         change["integrity_hash"] = sidecar_hash(change)
         chain = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": signoff.get("source_hash"), "events": self._history_events(center_id)}
         chain["integrity_hash"] = sidecar_hash(chain)
-        report = {
+        report: _InferenceType = {
             "schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION,
             "package_type": ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_REPORT_PACKAGE_TYPE,
             "center_id": center_id,
@@ -898,9 +900,9 @@ class PublicTrustCenterAcceptanceBoardStore:
             "signoff_hash": signoff.get("integrity_hash"),
             "summary": {
                 "signoff_status": signoff.get("status"),
-                "board_readiness": (source.get("board") if isinstance(source.get("board"), dict) else {}).get("readiness"),
-                "verification_status": (source.get("verification") if isinstance(source.get("verification"), dict) else {}).get("status"),
-                "accepted_evidence_count": len(accepted_index["items"]),
+                "board_readiness": (_as_document(source.get("board"))).get("readiness"),
+                "verification_status": (_as_document(source.get("verification"))).get("status"),
+                "accepted_evidence_count": len(_as_list(accepted_index.get("items"))),
             },
             "warnings": [],
         }
@@ -930,8 +932,8 @@ class PublicTrustCenterAcceptanceBoardStore:
         _write_json(cache_dir / "accepted-evidence-index.json", evidence_index)
         for proof in response_proofs:
             response_id = _safe_id(str(proof.get("response_id") or "response"))
-            binding = proof.get("binding_proof") if isinstance(proof.get("binding_proof"), dict) else {}
-            verification = proof.get("verification_summary") if isinstance(proof.get("verification_summary"), dict) else {}
+            binding = _as_document(proof.get("binding_proof"))
+            verification = _as_document(proof.get("verification_summary"))
             binding["source_hash"] = source_hash
             verification["source_hash"] = source_hash
             _write_json(cache_dir / "response-proofs" / f"{response_id}-binding-proof.json", binding)
@@ -950,7 +952,7 @@ class PublicTrustCenterAcceptanceBoardStore:
             response_id = item.name[: -len("-binding-proof.json")]
             response_proofs.append({"response_id": response_id, "binding_proof": _read_json_default(item, default={}), "verification_summary": _read_json_default(cache_dir / "response-proofs" / f"{response_id}-verification-summary.json", default={})})
         evidence_summaries = [_read_json_default(path, default={}) for path in sorted((cache_dir / "evidence").glob("*-summary.json"))]
-        board_summary = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": source_hash, "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {}, "readiness": report.get("readiness"), "status": report.get("status")}
+        board_summary = {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": source_hash, "summary": _as_document(report.get("summary")), "readiness": report.get("readiness"), "status": report.get("status")}
         board_summary["integrity_hash"] = sidecar_hash(board_summary)
         quorum = _quorum_evidence(report)
         quorum["integrity_hash"] = sidecar_hash(quorum)
@@ -1012,7 +1014,7 @@ def _default_policy(center_id: str, now: str) -> ImplementationDocument:
 
 
 def _normalize_requirements(payload: ImplementationDocument) -> ImplementationDocument:
-    payload = payload if isinstance(payload, dict) else {}
+    payload = _as_document(payload)
     roles = []
     for role in payload.get("required_roles", []) if isinstance(payload.get("required_roles"), list) else []:
         safe = _safe_id(str(role or "")).lower()
@@ -1053,17 +1055,17 @@ def _distribution_kit_state(distribution_kit_store: Any, center_id: str) -> Impl
 
 
 def _public_response_from_record(response: ImplementationDocument) -> ImplementationDocument:
-    payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
-    reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
+    payload = _as_document(response.get("response_payload"))
+    reviewer = _as_document(payload.get("reviewer"))
     findings = []
     for item in payload.get("findings", []) if isinstance(payload.get("findings"), list) else []:
         if isinstance(item, dict):
             findings.append({"severity": item.get("severity"), "code": item.get("code"), "public_message": sanitize_sensitive_text(str(item.get("public_message") or item.get("message") or ""))[:500]})
-    return _sanitize({"response_id": payload.get("response_id"), "result": payload.get("result"), "review_mode": payload.get("review_mode"), "reviewed_at": payload.get("reviewed_at"), "reviewer": {"name": reviewer.get("name"), "organization": reviewer.get("organization"), "role": reviewer.get("role")}, "verification_status": (payload.get("verification") if isinstance(payload.get("verification"), dict) else {}).get("status"), "comments_excerpt": sanitize_sensitive_text(str(payload.get("comments") or ""))[:500], "findings": findings})
+    return _sanitize({"response_id": payload.get("response_id"), "result": payload.get("result"), "review_mode": payload.get("review_mode"), "reviewed_at": payload.get("reviewed_at"), "reviewer": {"name": reviewer.get("name"), "organization": reviewer.get("organization"), "role": reviewer.get("role")}, "verification_status": (_as_document(payload.get("verification"))).get("status"), "comments_excerpt": sanitize_sensitive_text(str(payload.get("comments") or ""))[:500], "findings": findings})
 
 
 def _critical_findings(response: ImplementationDocument) -> list[ImplementationDocument]:
-    payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
+    payload = _as_document(response.get("response_payload"))
     return [item for item in payload.get("findings", []) if isinstance(item, dict) and str(item.get("severity") or "").lower() == "critical"]
 
 
@@ -1085,7 +1087,7 @@ def _participant_warnings(response: ImplementationDocument, response_stale: bool
 
 
 def _evaluate_board(policy: ImplementationDocument, participants: list[ImplementationDocument]) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
-    requirements = policy.get("requirements") if isinstance(policy.get("requirements"), dict) else {}
+    requirements = _as_document(policy.get("requirements"))
     counted = [item for item in participants if item.get("counts_for_quorum")]
     organizations = {str(item.get("organization") or "").strip().lower() for item in counted if str(item.get("organization") or "").strip()}
     roles = {str(item.get("role") or "").strip().lower() for item in counted if str(item.get("role") or "").strip()}
@@ -1160,9 +1162,9 @@ def _accepted_evidence_index(source: ImplementationDocument, rows: list[Implemen
 
 
 def _quorum_evidence(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    policy = report.get("policy") if isinstance(report.get("policy"), dict) else {}
-    participants = report.get("participants") if isinstance(report.get("participants"), list) else []
+    summary = _as_document(report.get("summary"))
+    policy = _as_document(report.get("policy"))
+    participants = _as_list(report.get("participants"))
     counted = [str(item.get("response_id") or "") for item in participants if isinstance(item, dict) and item.get("counts_for_quorum")]
     roles = {str(item.get("role") or "").lower(): "passed" for item in participants if isinstance(item, dict) and item.get("counts_for_quorum") and item.get("role")}
     return {"schema_version": ACCEPTANCE_BOARD_SCHEMA_VERSION, "source_hash": report.get("source_hash"), "policy_hash": policy.get("policy_hash"), "decision": {"readiness": report.get("readiness"), "quorum_status": summary.get("quorum_status"), "required_roles_status": summary.get("required_roles_status"), "conflict_status": summary.get("conflict_status")}, "counted_response_ids": counted, "required_roles": roles}
@@ -1216,7 +1218,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
             value = json.loads(archive.read(entry).decode("utf-8"))
     except Exception:
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
@@ -1226,7 +1228,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = json.loads(_read_text(path))
     except Exception:
         return dict(default or {})
-    return _sanitize(value if isinstance(value, dict) else dict(default or {}))
+    return _sanitize(_document_or(value, dict(default or {})))
 
 
 def _next_change_request_id(root: Path) -> str:

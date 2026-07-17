@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -67,13 +67,13 @@ def write_trust_operations_incident_knowledge_verification_report(report: dict[s
 
 
 def print_trust_operations_incident_knowledge_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Incident Knowledge verification")
     print(f"status: {report.get('status')}")
     print(f"hub: {summary.get('hub_id') or '-'}")
     print(f"entries: {summary.get('entry_count') or 0}")
     print(f"guards: {summary.get('guard_count') or 0}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def trust_operations_incident_knowledge_verification_exit_code(report: dict[str, Any]) -> int:
@@ -205,7 +205,7 @@ class _KnowledgeVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "tohk_manifest_integrity", self.manifest.get("integrity_hash"), knowledge_manifest_hash(self.manifest), "Knowledge manifest integrity")
         self._add_exact_check("manifest", "tohk_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_KNOWLEDGE_MANIFEST_PACKAGE_TYPE, "Knowledge manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "tohk_manifest_files_match_entries", sorted(manifest_paths), sorted(KNOWLEDGE_EXPORT_ENTRIES - {"trust-operations-knowledge-manifest.json"}), "Manifest file list matches fixed Knowledge structure")
         mismatches: list[str] = []
@@ -223,7 +223,7 @@ class _KnowledgeVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "tohk_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "tohk_manifest_zip_summary", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files." if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
@@ -242,7 +242,7 @@ class _KnowledgeVerifier:
         self._add_exact_check("runs", "tohk_runs_package_type", self.runs_doc.get("package_type"), TRUST_OPERATIONS_GUARD_RUN_SUMMARY_PACKAGE_TYPE, "Guard run summary package_type")
         self._add_exact_check("recurrence", "tohk_recurrence_package_type", self.recurrence.get("package_type"), TRUST_OPERATIONS_RECURRENCE_REPORT_PACKAGE_TYPE, "Recurrence package_type")
         self._add_exact_check("source", "tohk_source_package_type", self.source_summary.get("package_type"), TRUST_OPERATIONS_KNOWLEDGE_SOURCE_PACKAGE_TYPE, "Source summary package_type")
-        integrity = self.manifest.get("integrity") if isinstance(self.manifest.get("integrity"), dict) else {}
+        integrity = _as_document(self.manifest.get("integrity"))
         self._add_exact_check("manifest", "tohk_manifest_base_hash", integrity.get("knowledge_base_hash"), self.base.get("integrity_hash"), "Manifest base hash")
         self._add_exact_check("manifest", "tohk_manifest_report_hash", integrity.get("knowledge_report_hash"), self.report.get("integrity_hash"), "Manifest report hash")
         self._add_exact_check("manifest", "tohk_manifest_entries_hash", integrity.get("entries_hash"), self.entries_doc.get("integrity_hash"), "Manifest entries hash")
@@ -252,9 +252,9 @@ class _KnowledgeVerifier:
         self._add_exact_check("manifest", "tohk_manifest_source_hash", integrity.get("source_summary_hash"), self.source_summary.get("integrity_hash"), "Manifest source hash")
 
     def _verify_semantics(self) -> None:
-        entries = self.entries_doc.get("entries") if isinstance(self.entries_doc.get("entries"), list) else []
-        guards = self.guards_doc.get("guards") if isinstance(self.guards_doc.get("guards"), list) else []
-        runs = self.runs_doc.get("runs") if isinstance(self.runs_doc.get("runs"), list) else []
+        entries = _as_list(self.entries_doc.get("entries"))
+        guards = _as_list(self.guards_doc.get("guards"))
+        runs = _as_list(self.runs_doc.get("runs"))
         entry_hashes = {str(entry.get("integrity_hash") or "") for entry in entries if isinstance(entry, dict)}
         guard_by_id = {str(guard.get("guard_id") or ""): guard for guard in guards if isinstance(guard, dict)}
         bad_entries = [str(entry.get("entry_id") or "") for entry in entries if isinstance(entry, dict) and entry.get("integrity_hash") != knowledge_hash(entry)]
@@ -275,14 +275,14 @@ class _KnowledgeVerifier:
                 continue
             guard = guard_by_id.get(str(run.get("guard_id") or ""))
             last_run = guard.get("last_run") if isinstance(guard, dict) and isinstance(guard.get("last_run"), dict) else {}
-            if not guard or last_run.get("guard_run_hash") != run.get("integrity_hash") or last_run.get("guard_hash_before_run") != run.get("source", {}).get("guard_hash"):
+            if not guard or _as_document(last_run).get("guard_run_hash") != run.get("integrity_hash") or _as_document(last_run).get("guard_hash_before_run") != run.get("source", {}).get("guard_hash"):
                 bad_run_source.append(str(run.get("guard_id") or ""))
         self._add_check("runs", "tohk_guard_run_source_binding", "failed" if bad_run_source else "passed", "blocking", "Guard runs reference missing guards: " + ", ".join(bad_run_source[:5]) if bad_run_source else "Guard runs reference package guards.")
         high_entries = [entry for entry in entries if isinstance(entry, dict) and entry.get("status") != "hidden" and entry.get("severity") in {"critical", "high"}]
         covered = {str(guard.get("source", {}).get("knowledge_entry_hash") or "") for guard in guards if isinstance(guard, dict) and guard.get("status") not in {"archived", "manual_required"}}
         missing_guard = [str(entry.get("entry_id") or "") for entry in high_entries if entry.get("integrity_hash") not in covered]
         self._add_check("guards", "tohk_guards_cover_high_severity_entries", "failed" if missing_guard else "passed", "blocking", "High severity entries without active guards: " + ", ".join(missing_guard[:5]) if missing_guard else "High severity entries are covered by active guards.")
-        report_source = self.report.get("source") if isinstance(self.report.get("source"), dict) else {}
+        report_source = _as_document(self.report.get("source"))
         self._add_exact_check("report", "tohk_report_source_base_hash", report_source.get("knowledge_base_hash"), self.base.get("integrity_hash"), "Report base hash")
         self._add_exact_check("report", "tohk_report_source_entries_hash", report_source.get("entries_hash"), self.entries_doc.get("integrity_hash"), "Report entries hash")
         self._add_exact_check("report", "tohk_report_source_guards_hash", report_source.get("guards_hash"), self.guards_doc.get("integrity_hash"), "Report guards hash")
@@ -340,21 +340,21 @@ class _KnowledgeVerifier:
             value = json.loads(archive.read(name).decode("utf-8"))
         except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError):
             return {}
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _verify_external_incident_semantics(self) -> None:
         if not self.external_incidents_doc:
             return
         facts = self._external_incident_facts()
-        entries = self.entries_doc.get("entries") if isinstance(self.entries_doc.get("entries"), list) else []
-        guards = self.guards_doc.get("guards") if isinstance(self.guards_doc.get("guards"), list) else []
+        entries = _as_list(self.entries_doc.get("entries"))
+        guards = _as_list(self.guards_doc.get("guards"))
         entry_by_incident_hash: dict[str, dict[str, Any]] = {}
         duplicate_entries: list[str] = []
         extra_entries: list[str] = []
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            incident_ref = str((entry.get("source") if isinstance(entry.get("source"), dict) else {}).get("incident_hash") or "")
+            incident_ref = str((_as_document(entry.get("source"))).get("incident_hash") or "")
             if not incident_ref:
                 extra_entries.append(str(entry.get("entry_id") or "missing-incident-hash"))
                 continue
@@ -382,12 +382,12 @@ class _KnowledgeVerifier:
         guard_type_mismatches: list[str] = []
         active_guards = [guard for guard in guards if isinstance(guard, dict) and guard.get("status") not in {"archived", "manual_required"}]
         for guard in active_guards:
-            incident_ref = str((guard.get("source") if isinstance(guard.get("source"), dict) else {}).get("incident_hash") or "")
-            fact = facts.get(incident_ref)
+            incident_ref = str((_as_document(guard.get("source"))).get("incident_hash") or "")
+            fact = _as_document(facts.get(incident_ref))
             if fact and guard.get("guard_type") != fact.get("recommended_guard", {}).get("guard_type"):
                 guard_type_mismatches.append(str(guard.get("guard_id") or incident_ref))
         self._add_check("external", "tohk_guard_external_recommended_type_binding", "failed" if guard_type_mismatches else "passed", "blocking", "Regression guards do not match external recommended guard type: " + ", ".join(guard_type_mismatches[:5]) if guard_type_mismatches else "Regression guard types match external Incident recommendations.")
-        covered = {str((guard.get("source") if isinstance(guard.get("source"), dict) else {}).get("knowledge_entry_hash") or "") for guard in active_guards}
+        covered = {str((_as_document(guard.get("source"))).get("knowledge_entry_hash") or "") for guard in active_guards}
         missing_external_guard: list[str] = []
         for incident_hash_value, fact in facts.items():
             if fact.get("severity") not in {"critical", "high"}:
@@ -398,8 +398,8 @@ class _KnowledgeVerifier:
         self._add_check("external", "tohk_external_high_severity_guard_coverage", "failed" if missing_external_guard else "passed", "blocking", "External high severity incidents missing active regression guards: " + ", ".join(missing_external_guard[:5]) if missing_external_guard else "External high severity incidents are covered by active guards.")
 
     def _external_incident_facts(self) -> dict[str, ImplementationDocument]:
-        incidents = self.external_incidents_doc.get("incidents") if isinstance(self.external_incidents_doc.get("incidents"), list) else []
-        closeouts = self.external_closeout_summary.get("closeouts") if isinstance(self.external_closeout_summary.get("closeouts"), list) else []
+        incidents = _as_list(self.external_incidents_doc.get("incidents"))
+        closeouts = _as_list(self.external_closeout_summary.get("closeouts"))
         closeout_by_id = {str(closeout.get("incident_id") or ""): closeout for closeout in closeouts if isinstance(closeout, dict)}
         facts: dict[str, dict[str, Any]] = {}
         for incident in incidents:
@@ -413,7 +413,7 @@ class _KnowledgeVerifier:
             closeout_integrity = str(closeout.get("integrity_hash") or "")
             if closeout.get("status") != "passed" or not closeout_integrity or closeout_integrity != incident_hash(closeout):
                 continue
-            detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+            detected = _as_document(incident.get("detected_from"))
             classification = _classify_incident(incident)
             facts[incident_integrity] = {
                 "incident_id": incident_id,
@@ -435,10 +435,10 @@ class _KnowledgeVerifier:
         return facts
 
     def _verify_requirements(self) -> None:
-        runs_summary = self.runs_doc.get("summary") if isinstance(self.runs_doc.get("summary"), dict) else {}
-        recurrence_summary = self.recurrence.get("summary") if isinstance(self.recurrence.get("summary"), dict) else {}
+        runs_summary = _as_document(self.runs_doc.get("summary"))
+        recurrence_summary = _as_document(self.recurrence.get("summary"))
         failed_runs = int(runs_summary.get("failed_count") or 0)
-        guard_count = int((self.guards_doc.get("summary") if isinstance(self.guards_doc.get("summary"), dict) else {}).get("active_guard_count") or 0)
+        guard_count = int((_as_document(self.guards_doc.get("summary"))).get("active_guard_count") or 0)
         passed_runs = int(runs_summary.get("passed_count") or 0)
         recurrence_count = int(recurrence_summary.get("recurrence_count") or 0)
         self._add_check("requirements", "tohk_require_guards_passed", "passed" if (not self.require_guards_passed or (guard_count > 0 and failed_runs == 0 and passed_runs >= guard_count)) else "failed", "blocking", "Regression guards have passed runs." if failed_runs == 0 and passed_runs >= guard_count else "Regression guards are missing or failed.")
@@ -477,11 +477,11 @@ class _KnowledgeVerifier:
         warnings = [check for check in self.checks if check["status"] in {"failed", "warning"} and check["severity"] != "blocking"]
         summary = {
             "hub_id": self.base.get("hub_id"),
-            "entry_count": int((self.entries_doc.get("summary") if isinstance(self.entries_doc.get("summary"), dict) else {}).get("entry_count") or 0),
-            "guard_count": int((self.guards_doc.get("summary") if isinstance(self.guards_doc.get("summary"), dict) else {}).get("guard_count") or 0),
-            "guards_passed_count": int((self.runs_doc.get("summary") if isinstance(self.runs_doc.get("summary"), dict) else {}).get("passed_count") or 0),
-            "guard_failed_count": int((self.runs_doc.get("summary") if isinstance(self.runs_doc.get("summary"), dict) else {}).get("failed_count") or 0),
-            "recurrence_count": int((self.recurrence.get("summary") if isinstance(self.recurrence.get("summary"), dict) else {}).get("recurrence_count") or 0),
+            "entry_count": int((_as_document(self.entries_doc.get("summary"))).get("entry_count") or 0),
+            "guard_count": int((_as_document(self.guards_doc.get("summary"))).get("guard_count") or 0),
+            "guards_passed_count": int((_as_document(self.runs_doc.get("summary"))).get("passed_count") or 0),
+            "guard_failed_count": int((_as_document(self.runs_doc.get("summary"))).get("failed_count") or 0),
+            "recurrence_count": int((_as_document(self.recurrence.get("summary"))).get("recurrence_count") or 0),
             "blocker_count": len(blockers),
             "warning_count": len(warnings),
             "zip_size_bytes": self.zip_size_bytes,
@@ -539,11 +539,11 @@ def _read_json_file(path: Path) -> ImplementationDocument:
             value = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _entry_matches_external_fact(entry: ImplementationDocument, fact: ImplementationDocument, source_summary: ImplementationDocument) -> bool:
-    source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+    source = _as_document(entry.get("source"))
     expected_source = {
         "incident_hash": source.get("incident_hash"),
         "closeout_hash": source.get("closeout_hash"),
@@ -552,7 +552,7 @@ def _entry_matches_external_fact(entry: ImplementationDocument, fact: Implementa
         "source_fingerprint": source.get("source_fingerprint"),
     }
     expected_source_hash = stable_hash(expected_source)
-    recommended = entry.get("recommended_guard") if isinstance(entry.get("recommended_guard"), dict) else {}
+    recommended = _as_document(entry.get("recommended_guard"))
     return (
         entry.get("incident_id") == fact.get("incident_id")
         and entry.get("severity") == fact.get("severity")

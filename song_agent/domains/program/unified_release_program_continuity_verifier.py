@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -204,10 +204,10 @@ def unified_release_program_continuity_verification_exit_code(report: dict[str, 
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     file_paths = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
-    zip_meta = manifest.get("zip") if isinstance(manifest.get("zip"), dict) else {}
+    zip_meta = _as_document(manifest.get("zip"))
     checks = [
         _check("urpc_manifest_files_exact", file_paths == expected_files, "Manifest files match fixed archive entries.", {"missing": sorted(expected_files - file_paths), "extra": sorted(file_paths - expected_files)}),
         _check("urpc_manifest_entries_exact", name_set == REQUIRED_ENTRIES, "ZIP entries match fixed archive entries.", {"missing": sorted(REQUIRED_ENTRIES - name_set), "extra": sorted(name_set - REQUIRED_ENTRIES)}),
@@ -261,7 +261,7 @@ def _binding_checks(
     history: list[ImplementationDocument],
 ) -> list[ImplementationDocument]:
     latest = next((row for row in reversed(history) if row.get("event_type") == "continuity_signoff_created"), {})
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     pairs = {
         "policy_hash": policy.get("integrity_hash"),
         "recovery_plan_hash": plan.get("integrity_hash"),
@@ -358,7 +358,7 @@ def _external_vault_operations_checks(
             signoff_binding_path=signoff_binding_path,
         )
     external = read_json(verification_report_path)
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     evidence = _evidence_row(evidence_manifest)
     checks.extend(
         [

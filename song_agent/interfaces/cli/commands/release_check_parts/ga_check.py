@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
 from . import dependencies as _commands_release_check_parts_dependencies
 
 from .release_check_commands_and_presenter_adapters import _warn_legacy_ga_flags, build_ga_check_parser, print_ga_readiness_report
@@ -30,7 +32,7 @@ def _execute_ga_check_part_03(argv: list[str], _split_state):
     return (False, None)
 
 def _execute_ga_check(argv: list[str]) -> None:
-    _split_state = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _execute_ga_check_part_01(argv, _split_state)
     if _split_result[0]:
         return _split_result[1]

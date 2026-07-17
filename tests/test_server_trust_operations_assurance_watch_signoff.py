@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from song_agent.trust_operations_assurance_watch import TrustOperationsAssuranceWatchStore
 from song_agent.trust_operations_assurance_watch_signoff import TrustOperationsAssuranceWatchSignoffStore
 from song_agent.trust_operations_continuous_assurance import TrustOperationsAssuranceStore
 from tests.test_server_edits import request_json, start_test_server, stop_test_server

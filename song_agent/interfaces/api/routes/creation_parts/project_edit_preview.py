@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from song_agent.application.interface_persistence import write_interface_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProjectEditPreview:
+class CreationRoutesProjectEditPreview(CreationRouteContext):
     def _handle_project_edit_preview(self, method: str, project_id: str, version_id: str) -> None:
         if method != "POST":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -35,7 +39,7 @@ class CreationRoutesProjectEditPreview:
                 asset_references=asset_prompt_refs,
                 reference_references=reference_prompt_refs,
             )
-            provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+            provider_usage = _as_document(provider_snapshot.get("usage"))
             preview = _interfaces_api_runtime.create_provider_edit_preview(
                 project_dir=self.project_store.project_dir(project_id),
                 project_id=project_id,

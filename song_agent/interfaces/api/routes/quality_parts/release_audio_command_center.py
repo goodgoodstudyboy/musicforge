@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class QualityRoutesReleaseAudioCommandCenter:
+class QualityRoutesReleaseAudioCommandCenter(QualityRouteContext):
     def _handle_release_audio_command_center(self, method: str, release_id: str, tail: str) -> None:
         try:
             if tail in {"", "/"}:

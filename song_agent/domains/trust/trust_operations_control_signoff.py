@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -203,7 +205,7 @@ class TrustOperationsControlSignoffStore:
             self._ensure_exception_integrity(exception)
             if exception.get("status") != "draft":
                 raise TrustOperationsControlSignoffStateError("Only draft Control exceptions can be approved.")
-            risk = exception.get("risk") if isinstance(exception.get("risk"), dict) else {}
+            risk = _as_document(exception.get("risk"))
             severity = str(risk.get("severity") or "")
             if severity in {"critical", "high"} or bool(risk.get("required")):
                 raise TrustOperationsControlSignoffStateError("Critical, high, or required controls cannot be approved as exceptions.")
@@ -294,12 +296,12 @@ class TrustOperationsControlSignoffStore:
                 raise TrustOperationsControlSignoffStateError("Trust Operations Control Signoff is not signed.")
             cr = self._read_change_request(hub_id, change_request_id)
             self._ensure_change_request_integrity(cr)
-            if cr.get("status") != "approved" or (cr.get("applied") if isinstance(cr.get("applied"), dict) else {}).get("applied_at"):
+            if cr.get("status") != "approved" or (_as_document(cr.get("applied"))).get("applied_at"):
                 raise TrustOperationsControlSignoffStateError("Approved unused Control change request is required.")
-            source = cr.get("source") if isinstance(cr.get("source"), dict) else {}
+            source = _as_document(cr.get("source"))
             if source.get("current_signoff_hash") and source.get("current_signoff_hash") != state.get("signoff_hash"):
                 raise TrustOperationsControlSignoffStateError("Control change request does not target the current signoff.")
-            applied = cr.get("applied") if isinstance(cr.get("applied"), dict) else {}
+            applied = _as_document(cr.get("applied"))
             applied["applied_at"] = now
             applied["applied_signoff_reset_hash"] = state.get("signoff_hash")
             cr["applied"] = applied
@@ -394,7 +396,7 @@ class TrustOperationsControlSignoffStore:
 
         payload = payload or {}
         signoff = self.read_signoff(hub_id, default={})
-        assessment_id = str(signoff.get("assessment_id") or (signoff.get("source") if isinstance(signoff.get("source"), dict) else {}).get("assessment_id") or "")
+        assessment_id = str(signoff.get("assessment_id") or (_as_document(signoff.get("source"))).get("assessment_id") or "")
         if assessment_id:
             payload = {
                 **payload,
@@ -474,7 +476,7 @@ class TrustOperationsControlSignoffStore:
             raise TrustOperationsControlSignoffStateError("Trust Operations Control verification failed.")
         if source.get("control_zip_sha256") != control_report.get("zip_sha256") or source.get("control_zip_size_bytes") != control_report.get("zip_size_bytes") or source.get("control_manifest_hash") != control_report.get("manifest_hash"):
             raise TrustOperationsControlSignoffStateError("Trust Operations Control verification report is stale.")
-        summary = control_report.get("summary") if isinstance(control_report.get("summary"), dict) else {}
+        summary = _as_document(control_report.get("summary"))
         if int(summary.get("required_failed_count") or 0) != 0:
             raise TrustOperationsControlSignoffStateError("Trust Operations Control policy has failed required controls.")
         for exception in self.list_exceptions(hub_id):
@@ -482,15 +484,15 @@ class TrustOperationsControlSignoffStore:
                 raise TrustOperationsControlSignoffStateError("Approved Control exception is expired.")
 
     def _signoff_summary(self, hub_id: str, control_report: ImplementationDocument, now: str) -> ImplementationDocument:
-        summary = control_report.get("summary") if isinstance(control_report.get("summary"), dict) else {}
+        summary = _as_document(control_report.get("summary"))
         approved = [item for item in self.list_exceptions(hub_id) if item.get("status") == "approved" and not self._exception_expired(item, now)]
         return {
             "control_count": int(summary.get("control_count") or 0),
             "required_failed_count": int(summary.get("required_failed_count") or 0),
             "exception_count": len(self.list_exceptions(hub_id)),
             "approved_exception_count": len(approved),
-            "critical_exception_count": sum(1 for item in approved if (item.get("risk") if isinstance(item.get("risk"), dict) else {}).get("severity") == "critical"),
-            "high_exception_count": sum(1 for item in approved if (item.get("risk") if isinstance(item.get("risk"), dict) else {}).get("severity") == "high"),
+            "critical_exception_count": sum(1 for item in approved if (_as_document(item.get("risk"))).get("severity") == "critical"),
+            "high_exception_count": sum(1 for item in approved if (_as_document(item.get("risk"))).get("severity") == "high"),
         }
 
     def _control_result(self, hub_id: str, assessment_id: str, control_id: str) -> ImplementationDocument:
@@ -521,20 +523,20 @@ class TrustOperationsControlSignoffStore:
             raise TrustOperationsControlSignoffStateError("Control change request integrity failed.")
 
     def _exception_expired(self, exception: ImplementationDocument, now: str) -> bool:
-        expires_at = (exception.get("risk") if isinstance(exception.get("risk"), dict) else {}).get("expires_at")
+        expires_at = (_as_document(exception.get("risk"))).get("expires_at")
         return bool(expires_at and str(expires_at) < str(now))
 
     def _ensure_signoff_current(self, hub_id: str, signoff: ImplementationDocument, payload: ImplementationDocument) -> None:
         if signoff.get("integrity_hash") != control_signoff_hash(signoff):
             raise TrustOperationsControlSignoffStateError("Trust Operations Control Signoff integrity failed.")
-        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        source = _as_document(signoff.get("source"))
         assessment_id = str(signoff.get("assessment_id") or source.get("assessment_id") or "")
         current_source, _control_report = self._signoff_source(hub_id, assessment_id, payload)
         if stable_hash(current_source) != signoff.get("source_hash"):
             raise TrustOperationsControlSignoffStateError("Trust Operations Control Signoff source is stale. Reset before archiving.")
 
     def _archive_report(self, hub_id: str, signoff: ImplementationDocument, now: str) -> ImplementationDocument:
-        report = {
+        report: _InferenceType = {
             "schema_version": TRUST_OPERATIONS_CONTROL_SIGNOFF_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_CONTROL_SIGNOFF_REPORT_PACKAGE_TYPE,
             "hub_id": hub_id,
@@ -542,7 +544,7 @@ class TrustOperationsControlSignoffStore:
             "status": "passed",
             "signoff_hash": signoff.get("integrity_hash"),
             "source_hash": signoff.get("source_hash"),
-            "summary": signoff.get("summary") if isinstance(signoff.get("summary"), dict) else {},
+            "summary": _as_document(signoff.get("summary")),
             "warnings": [],
         }
         report["integrity_hash"] = control_signoff_hash(report)
@@ -554,7 +556,7 @@ class TrustOperationsControlSignoffStore:
             "package_type": TRUST_OPERATIONS_CONTROL_SIGNOFF_SOURCE_PACKAGE_TYPE,
             "hub_id": signoff.get("hub_id"),
             "source_hash": signoff.get("source_hash"),
-            "source": signoff.get("source") if isinstance(signoff.get("source"), dict) else {},
+            "source": _as_document(signoff.get("source")),
         }
         doc["integrity_hash"] = control_signoff_hash(doc)
         return doc

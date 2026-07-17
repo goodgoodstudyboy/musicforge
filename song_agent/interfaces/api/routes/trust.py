@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.core import CoreRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -33,7 +35,7 @@ from .trust_portfolio_parts.transparency import TrustPortfolioTransparencyRoutes
 from .trust_portfolio_parts.acknowledgement import TrustPortfolioAcknowledgementRoutes
 from .trust_portfolio_parts.final_actions import TrustPortfolioFinalActionsRoutes
 
-class TrustRoutes(TrustRoutesTrustOperations, TrustRoutesTrustOperationsAssuranceWatch, TrustRoutesTrustOperationsKnowledge, TrustRoutesTrustOperationsIncidents, TrustRoutesPublicTrustCenters, TrustRoutesPublicTrustCenterAcceptanceBoard, TrustRoutesReleasePortfolioGovernanceQueues, TrustPortfolioRootRoutes, TrustPortfolioDetailRoutes, TrustPortfolioDownloadsRoutes, TrustPortfolioAuditRoutes, TrustPortfolioReviewerRoutes, TrustPortfolioFinalBoardRoutes, TrustPortfolioVaultRoutes, TrustPortfolioAttestationRoutes, TrustPortfolioRegistryRoutes, TrustPortfolioPortalRoutes, TrustPortfolioPortalReviewRoutes, TrustPortfolioAcceptedEvidenceRoutes, TrustPortfolioTransparencyRoutes, TrustPortfolioAcknowledgementRoutes, TrustPortfolioFinalActionsRoutes):
+class TrustRoutes(TrustRoutesTrustOperations, TrustRoutesTrustOperationsAssuranceWatch, TrustRoutesTrustOperationsKnowledge, TrustRoutesTrustOperationsIncidents, TrustRoutesPublicTrustCenters, TrustRoutesPublicTrustCenterAcceptanceBoard, TrustRoutesReleasePortfolioGovernanceQueues, TrustPortfolioRootRoutes, TrustPortfolioDetailRoutes, TrustPortfolioDownloadsRoutes, TrustPortfolioAuditRoutes, TrustPortfolioReviewerRoutes, TrustPortfolioFinalBoardRoutes, TrustPortfolioVaultRoutes, TrustPortfolioAttestationRoutes, TrustPortfolioRegistryRoutes, TrustPortfolioPortalRoutes, TrustPortfolioPortalReviewRoutes, TrustPortfolioAcceptedEvidenceRoutes, TrustPortfolioTransparencyRoutes, TrustPortfolioAcknowledgementRoutes, TrustPortfolioFinalActionsRoutes, CoreRouteContext):
     def _handle_release_portfolio_audits(self, method: str, path: str) -> None:
         try:
             prefix = '/api/release-portfolio-audits'

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -129,8 +131,8 @@ class TrustOperationsAssuranceWatchSignoffStore:
             blockers = self._closeout_blockers(source, watch_report, hub_report, assurance_report)
             queue = self.watch_store.read_queue(queue_id)
             action_pack = _read_json_default(self.watch_store.action_pack_path(queue_id), default={})
-            queue_summary = queue.get("summary") if isinstance(queue.get("summary"), dict) else {}
-            action_summary = action_pack.get("summary") if isinstance(action_pack.get("summary"), dict) else {}
+            queue_summary = _as_document(queue.get("summary"))
+            action_summary = _as_document(action_pack.get("summary"))
             summary = {
                 "total_watch_items": int(queue_summary.get("hub_count") or len(queue.get("rows", []) if isinstance(queue.get("rows"), list) else [])),
                 "passed_watch_items": int(queue_summary.get("clear_count") or 0),
@@ -278,10 +280,10 @@ class TrustOperationsAssuranceWatchSignoffStore:
                 raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch signoff is not signed.")
             cr = self._read_change_request(queue_id, change_request_id)
             self._ensure_change_request_integrity(cr)
-            applied = cr.get("applied") if isinstance(cr.get("applied"), dict) else {}
+            applied = _as_document(cr.get("applied"))
             if cr.get("status") != "approved" or applied.get("applied_at"):
                 raise TrustOperationsAssuranceWatchSignoffStateError("Approved unused Assurance Watch change request is required.")
-            source = cr.get("source") if isinstance(cr.get("source"), dict) else {}
+            source = _as_document(cr.get("source"))
             if source.get("current_signoff_hash") and source.get("current_signoff_hash") != state.get("signoff_hash"):
                 raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch change request does not target the current signoff.")
             applied["applied_at"] = now
@@ -337,7 +339,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
                     "external_verification_summary_hash": external_summary.get("integrity_hash"),
                     "change_requests_hash": change_requests_doc.get("integrity_hash"),
                     "history_hash": _history_hash(self._history_events(queue_id)),
-                    **(signoff.get("source") if isinstance(signoff.get("source"), dict) else {}),
+                    **(_as_document(signoff.get("source"))),
                 },
                 "summary": {"status": signoff.get("status"), "watch_clear": True, "blocking_drift_count": closeout.get("summary", {}).get("blocking_drift_count") if isinstance(closeout.get("summary"), dict) else None},
                 "files": sorted([_file_record(export_dir, path) for path in _walk_files(export_dir) if path.name != "trust-operations-assurance-watch-signoff-manifest.json"], key=lambda item: str(item.get("path") or "")),
@@ -449,13 +451,13 @@ class TrustOperationsAssuranceWatchSignoffStore:
         if signoff.get("integrity_hash") != watch_signoff_hash(signoff):
             raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch signoff integrity failed.")
         current_source, _watch_report, _hub_report, _assurance_report = self._closeout_source(queue_id, payload)
-        signoff_source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        signoff_source = _as_document(signoff.get("source"))
         for key in ("watch_zip_sha256", "watch_manifest_hash", "watch_verification_report_hash", "hub_zip_sha256", "hub_manifest_hash", "hub_verification_report_hash", "continuous_assurance_report_hash"):
             if signoff_source.get(key) != current_source.get(key):
                 raise TrustOperationsAssuranceWatchSignoffStateError("Assurance Watch signoff source is stale. Reset before archiving.")
 
     def _archive_report(self, queue_id: str, signoff: ImplementationDocument, closeout: ImplementationDocument, now: str) -> ImplementationDocument:
-        report = {
+        report: _InferenceType = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_REPORT_PACKAGE_TYPE,
             "queue_id": queue_id,
@@ -463,8 +465,8 @@ class TrustOperationsAssuranceWatchSignoffStore:
             "status": "passed",
             "signoff_hash": signoff.get("integrity_hash"),
             "closeout_hash": closeout.get("integrity_hash"),
-            "source_hash": stable_hash(signoff.get("source") if isinstance(signoff.get("source"), dict) else {}),
-            "summary": closeout.get("summary") if isinstance(closeout.get("summary"), dict) else {},
+            "source_hash": stable_hash(_as_document(signoff.get("source"))),
+            "summary": _as_document(closeout.get("summary")),
             "warnings": [],
         }
         report["integrity_hash"] = watch_signoff_hash(report)
@@ -475,8 +477,8 @@ class TrustOperationsAssuranceWatchSignoffStore:
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
             "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SOURCE_PACKAGE_TYPE,
             "queue_id": signoff.get("queue_id"),
-            "source_hash": stable_hash(signoff.get("source") if isinstance(signoff.get("source"), dict) else {}),
-            "source": signoff.get("source") if isinstance(signoff.get("source"), dict) else {},
+            "source_hash": stable_hash(_as_document(signoff.get("source"))),
+            "source": _as_document(signoff.get("source")),
         }
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
@@ -491,7 +493,7 @@ class TrustOperationsAssuranceWatchSignoffStore:
             "queue_hash": queue.get("integrity_hash"),
             "source_hash": queue.get("source_hash"),
             "status": queue.get("status"),
-            "summary": queue.get("summary") if isinstance(queue.get("summary"), dict) else {},
+            "summary": _as_document(queue.get("summary")),
         }
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
@@ -505,13 +507,13 @@ class TrustOperationsAssuranceWatchSignoffStore:
             "signoff_hash": signoff.get("integrity_hash"),
             "action_pack_hash": action_pack.get("integrity_hash"),
             "status": action_pack.get("status"),
-            "summary": action_pack.get("summary") if isinstance(action_pack.get("summary"), dict) else {},
+            "summary": _as_document(action_pack.get("summary")),
         }
         doc["integrity_hash"] = watch_signoff_hash(doc)
         return doc
 
     def _external_summary(self, signoff: ImplementationDocument) -> ImplementationDocument:
-        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        source = _as_document(signoff.get("source"))
         doc = {
             "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_SCHEMA_VERSION,
             "package_type": "musicforge_trust_operations_assurance_watch_signoff_external_verification_summary",
@@ -639,7 +641,7 @@ def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise TrustOperationsAssuranceWatchSignoffStateError(f"Required ZIP entry is missing or invalid: {entry}") from exc
 

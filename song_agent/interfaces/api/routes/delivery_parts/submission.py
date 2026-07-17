@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class DeliveryRoutesSubmission:
+class DeliveryRoutesSubmission(DeliveryRouteContext):
     def _handle_submission_route_part_01(self, method: str, release_id: str, tail: str, _split_state):
         if tail in {'', '/'}:
             if method == 'GET':
@@ -325,7 +329,7 @@ class DeliveryRoutesSubmission:
         return (False, None)
 
     def _handle_submission_route(self, method: str, release_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_submission_route_part_01(method, release_id, tail, _split_state)
             if _split_result[0]:

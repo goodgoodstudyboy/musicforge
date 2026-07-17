@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramCommandCenterSignoffHttpRoutes:
+class ProgramCommandCenterSignoffHttpRoutes(ProgramHttpContext):
     def _dispatch_command_center_signoff(self, method, program_id, tail) -> bool:
         return (
             self._dispatch_command_center_signoff_workflow(method, program_id, tail)

@@ -7,9 +7,8 @@ import sys
 from pathlib import Path
 
 from song_agent.trust_operations_assurance_watch import TrustOperationsAssuranceWatchStore
-from song_agent.trust_operations_assurance_watch_signoff import TrustOperationsAssuranceWatchSignoffStore
 from tests.test_trust_operations_assurance_watch import _watch_fixture
-from tests.test_trust_operations_assurance_watch_signoff import _signoff_payload, _signed_fixture
+from tests.test_trust_operations_assurance_watch_signoff import _signed_fixture
 
 
 def test_cli_verifies_trust_operations_assurance_watch_signoff_archive(tmp_path: Path) -> None:

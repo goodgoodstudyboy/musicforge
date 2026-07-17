@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -165,7 +165,7 @@ class ReleaseAudioQualityActionQueueStore:
             stale = self._stale_reasons(docs["source_binding"])
             if stale:
                 raise ReleaseAudioQualityActionQueueStateError("Audio Quality Action Queue source is stale. Refresh Observatory and create a new queue.")
-            items = docs["items"].get("items") if isinstance(docs["items"].get("items"), list) else []
+            items = _as_list(docs["items"].get("items"))
             existing_results = {str(row.get("item_id")): row for row in docs["results"].get("results", []) if isinstance(row, dict)}
             result_rows: list[dict[str, Any]] = []
             manual_rows: list[dict[str, Any]] = []
@@ -216,7 +216,7 @@ class ReleaseAudioQualityActionQueueStore:
                 if isinstance(payload, str):
                     path.write_text(payload, encoding="utf-8")
                 elif rel.endswith(".jsonl"):
-                    rows = payload if isinstance(payload, list) else []
+                    rows = _as_list(payload)
                     path.write_text("\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in rows) + ("\n" if rows else ""), encoding="utf-8")
                 else:
                     write_json(path, payload)
@@ -301,7 +301,7 @@ class ReleaseAudioQualityActionQueueStore:
             if not queue_id:
                 return {"status": "failed", "hard_block": True, "message": "Release Audio Quality Action Queue is missing."}
             report = self.verify_zip(queue_id, strict=True, require_current_observatory=True, require_no_blocking=require_no_blocking)
-            summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+            summary = _as_document(report.get("summary"))
             release_ids = {str(item) for item in summary.get("release_ids", []) if str(item)}
             if release_id not in release_ids:
                 return {"status": "failed", "hard_block": True, "message": "Release Audio Quality Action Queue does not cover this Release.", "verification": report}
@@ -696,7 +696,7 @@ def _read_jsonl(path: Path) -> list[ImplementationDocument]:
 def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("previous_event_hash") != previous:
             return False
         if event.get("payload_hash") != stable_hash(payload):
@@ -718,7 +718,7 @@ def _safe_int(value: Any) -> int:
 
 
 def _readme(queue: ImplementationDocument, summary: ImplementationDocument) -> str:
-    data = summary.get("summary") if isinstance(summary.get("summary"), dict) else {}
+    data = _as_document(summary.get("summary"))
     return "\n".join(
         [
             "MusicForge Release Audio Quality Action Queue",

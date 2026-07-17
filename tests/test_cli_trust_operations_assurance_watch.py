@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.test_trust_operations_assurance_watch import _watch_fixture, _watch_verifier_payload
+from tests.test_trust_operations_assurance_watch import _watch_fixture
 
 
 def test_cli_verifies_trust_operations_assurance_watch_package(tmp_path: Path) -> None:

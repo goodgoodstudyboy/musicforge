@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json as json
@@ -705,7 +707,7 @@ def _build_evidence_rows(items_doc: ImplementationDocument, external_manifest: I
 
 
 def _evidence_row(item: ImplementationDocument, evidence_type: str, external: ImplementationDocument) -> ImplementationDocument:
-    row = {
+    row: _InferenceType = {
         "item_id": item.get("item_id"),
         "center_id": item.get("center_id"),
         "evidence_type": evidence_type,

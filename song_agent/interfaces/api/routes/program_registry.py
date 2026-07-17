@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.core import CoreRouteContext
+
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -17,7 +19,7 @@ class ProgramRouteSpec:
     response_schema: str = "program-result-v1"
 
 
-class ProgramRouteRegistry:
+class ProgramRouteRegistry(CoreRouteContext):
     def __init__(self) -> None:
         self._specs = tuple(
             ProgramRouteSpec(method, f"{PROGRAM_ROOT}/{{path}}")

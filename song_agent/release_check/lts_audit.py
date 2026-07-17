@@ -390,7 +390,10 @@ def _test_layers_separated(root: Path) -> bool:
     return (
         "addopts = \"-m 'not legacy' -n 4 --dist load\"" in project
         and "pytest-xdist" in project
-        and all(f'"song_agent/platform/{name}"' in project for name in ("lifecycle", "persistence", "verification"))
+        and all(
+            f'"song_agent/{name}"' in project
+            for name in ("platform", "application", "domains", "capabilities", "interfaces")
+        )
         and all(marker in project and marker in nightly for marker in markers)
         and all(f"slow_partition_{index}" in project for index in range(2))
         and all(

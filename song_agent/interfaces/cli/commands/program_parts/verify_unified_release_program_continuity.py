@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from . import dependencies as _commands_program_parts_dependencies
 
 from .program_component_and_cross_domain_adapters import _add_command_center_acceptance_source_args

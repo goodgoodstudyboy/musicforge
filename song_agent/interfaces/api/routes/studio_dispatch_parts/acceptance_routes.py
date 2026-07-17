@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioAcceptance_RoutesDispatch:
+class StudioAcceptance_RoutesDispatch(StudioDispatchRouteContext):
     def _dispatch_studio_acceptance_routes(self, method, path, parsed) -> bool:
         planning_ruleset_route = _interfaces_api_runtime._match_planning_ruleset_route(path)
         if planning_ruleset_route is not None:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -286,7 +288,7 @@ class AcceptanceKnowledgeBaseStore:
         existing = existing_by_source.get(source_fingerprint)
         entry_id = existing.entry_id if existing else self._next_entry_id()
         created_at = existing.created_at if existing else now
-        entry = build_entry_from_sources(entry_id=entry_id, sprint=sprint, items=[item.to_dict() for item in items], delta=delta, closeout=closeout, task_sources=source_payload["tasks"], source_fingerprint=source_fingerprint, created_at=created_at, now=now)
+        entry = build_entry_from_sources(entry_id=entry_id, sprint=sprint, items=[item.to_dict() for item in items], delta=delta, closeout=closeout, task_sources=_as_list(source_payload["tasks"]), source_fingerprint=source_fingerprint, created_at=created_at, now=now)
         if existing and existing.status == "hidden":
             entry = KnowledgeEntry.from_dict({**entry.to_dict(), "status": "hidden", "updated_at": now})
         return entry
@@ -294,9 +296,9 @@ class AcceptanceKnowledgeBaseStore:
     def _review_task_sources(self, items: list[Any]) -> list[ImplementationDocument]:
         sources = []
         for item in items:
-            data = item.to_dict() if hasattr(item, "to_dict") else item if isinstance(item, dict) else {}
+            data = item.to_dict() if hasattr(item, "to_dict") else _as_document(item)
             task_id = str(data.get("review_task_id") or "").strip()
-            project_id = str((data.get("target") if isinstance(data.get("target"), dict) else {}).get("project_id") or "").strip()
+            project_id = str((_as_document(data.get("target"))).get("project_id") or "").strip()
             if not task_id or not project_id:
                 continue
             try:
@@ -327,7 +329,7 @@ class AcceptanceKnowledgeBaseStore:
         return f"akbr-{index:06d}"
 
     def _with_stale(self, report: ImplementationDocument) -> ImplementationDocument:
-        entries = self.search_entries(report.get("scope") if isinstance(report.get("scope"), dict) else {})
+        entries = self.search_entries(_as_document(report.get("scope")))
         current_hash = _entries_source_hash(entries)
         stored_hash = str(report.get("source_hash") or "")
         stale = bool(stored_hash and current_hash != stored_hash)
@@ -350,10 +352,10 @@ def build_entry_from_sources(
     created_at: str,
     now: str,
 ) -> KnowledgeEntry:
-    delta_summary = delta.get("summary") if isinstance(delta.get("summary"), dict) else {}
+    delta_summary = _as_document(delta.get("summary"))
     closeout_summary = acceptance_fix_closeout_summary(closeout)
     issue_types = sorted({issue for item in items for issue in _issue_types_from_item(item)})
-    first_target = next((item.get("target") for item in items if isinstance(item.get("target"), dict)), {})
+    first_target: _InferenceType = next((item.get("target") for item in items if isinstance(item.get("target"), dict)), {})
     waived_count = sum(1 for item in items if item.get("status") == "waived")
     open_count = sum(1 for item in items if item.get("status") not in {"waived", "fixed", "closed"})
     task_statuses = [str(item.get("status") or "") for item in task_sources]
@@ -409,8 +411,8 @@ def build_entry_from_sources(
             "closeout_status": closeout_summary.get("status"),
         },
         evidence={
-            "source_report_id": (delta.get("source") if isinstance(delta.get("source"), dict) else {}).get("analytics_report_id") or sprint.source.get("report_id"),
-            "recheck_report_id": (delta.get("recheck") if isinstance(delta.get("recheck"), dict) else {}).get("analytics_report_id"),
+            "source_report_id": (_as_document(delta.get("source"))).get("analytics_report_id") or sprint.source.get("report_id"),
+            "recheck_report_id": (_as_document(delta.get("recheck"))).get("analytics_report_id"),
             "suite_ids": [value for value in [sprint.recheck.get("suite_id") if isinstance(sprint.recheck, dict) else None] if value],
             "case_ids": [],
         },
@@ -495,8 +497,8 @@ def build_knowledge_report(entries: list[KnowledgeEntry], *, scope: dict[str, An
 
 
 def knowledge_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     issue_patterns = [item for item in data.get("issue_patterns", []) if isinstance(item, dict)]
     warnings = [str(item) for item in data.get("warnings", []) if str(item).strip()] if isinstance(data.get("warnings"), list) else []
     return sanitize_metadata(
@@ -525,24 +527,24 @@ def write_acceptance_kb_summary(path: Path, store: AcceptanceKnowledgeBaseStore,
 
 
 def knowledge_entry_summary(entry: KnowledgeEntry | dict[str, Any]) -> dict[str, Any]:
-    data = entry.to_dict() if isinstance(entry, KnowledgeEntry) else entry if isinstance(entry, dict) else {}
-    target = data.get("target") if isinstance(data.get("target"), dict) else {}
-    outcome = data.get("outcome") if isinstance(data.get("outcome"), dict) else {}
-    fix = data.get("fix") if isinstance(data.get("fix"), dict) else {}
+    data = entry.to_dict() if isinstance(entry, KnowledgeEntry) else _as_document(entry)
+    target = _as_document(data.get("target"))
+    outcome = _as_document(data.get("outcome"))
+    fix = _as_document(data.get("fix"))
     return sanitize_metadata(
         {
             "entry_id": data.get("entry_id"),
             "status": data.get("status"),
-            "fix_sprint_id": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("fix_sprint_id"),
+            "fix_sprint_id": (_as_document(data.get("source"))).get("fix_sprint_id"),
             "project_id": target.get("project_id"),
             "release_id": target.get("release_id"),
             "song_id": target.get("song_id"),
             "style": target.get("style"),
-            "issue_types": target.get("issue_types") if isinstance(target.get("issue_types"), list) else [],
+            "issue_types": _as_list(target.get("issue_types")),
             "outcome_status": outcome.get("outcome_status"),
             "effectiveness_score": outcome.get("effectiveness_score"),
             "waived_count": fix.get("waived_count", 0),
-            "warnings": data.get("warnings") if isinstance(data.get("warnings"), list) else [],
+            "warnings": _as_list(data.get("warnings")),
         }
     )
 
@@ -650,10 +652,10 @@ def _closeout_source(closeout: ImplementationDocument) -> ImplementationDocument
 
 
 def _issue_types_from_item(item: ImplementationDocument) -> list[str]:
-    target = item.get("target") if isinstance(item.get("target"), dict) else {}
-    source = item.get("source") if isinstance(item.get("source"), dict) else {}
-    evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
-    values = []
+    target = _as_document(item.get("target"))
+    source = _as_document(item.get("source"))
+    evidence = _as_document(item.get("evidence"))
+    values: list[_InferenceType] = []
     for container in (target, evidence, source):
         raw = container.get("issue_types")
         if isinstance(raw, list):
@@ -689,7 +691,7 @@ def _normalize_issue(value: Any) -> str:
 
 def _style_from_items(items: list[ImplementationDocument]) -> str:
     for item in items:
-        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        target = _as_document(item.get("target"))
         if target.get("style"):
             return str(target.get("style"))
     return "unknown"
@@ -728,7 +730,7 @@ def _normalize_text(value: Any) -> str:
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _float_or_none(value: Any) -> float | None:

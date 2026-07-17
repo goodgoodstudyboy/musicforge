@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -157,7 +157,7 @@ class AcceptanceFixPlanningStore:
         self.fix_sprint_store = fix_sprint_store or AcceptanceFixSprintStore(analytics_store=self.analytics_store, project_store=self.project_store)
         self.kb_store = kb_store or AcceptanceKnowledgeBaseStore(fix_sprint_store=self.fix_sprint_store, project_store=self.project_store)
         self.lock = _lock_for_root(self.root.resolve())
-        self.planning_rule_governance_store = None
+        self.planning_rule_governance_store: Any | None = None
 
     def plan_dir(self, plan_id: str) -> Path:
         base = self.root.resolve()
@@ -297,7 +297,7 @@ class AcceptanceFixPlanningStore:
         }
 
     def plan_is_stale(self, plan: AcceptanceFixPlan | dict[str, Any]) -> bool:
-        data = plan.to_dict() if isinstance(plan, AcceptanceFixPlan) else plan if isinstance(plan, dict) else {}
+        data = plan.to_dict() if isinstance(plan, AcceptanceFixPlan) else _as_document(plan)
         state = self._source_state(data)
         return bool(state.get("analytics_changed") or state.get("kb_entries_changed"))
 
@@ -408,7 +408,7 @@ class AcceptanceFixPlanningStore:
         return [entry for entry in entries if entry.status == "active" or (include_hidden and entry.status == "hidden")]
 
     def _source_state(self, plan_data: ImplementationDocument) -> ImplementationDocument:
-        source = plan_data.get("source") if isinstance(plan_data.get("source"), dict) else {}
+        source = _as_document(plan_data.get("source"))
         state = {"analytics_changed": False, "kb_entries_changed": False, "source_hash": source.get("source_hash")}
         try:
             report = self.analytics_store.get_report(str(source.get("analytics_report_id") or ""))
@@ -417,13 +417,13 @@ class AcceptanceFixPlanningStore:
             return state
         if report.get("stale") is True or str(report.get("source_hash") or "") != str(source.get("analytics_source_hash") or ""):
             state["analytics_changed"] = True
-        expected_recommendations = source.get("recommendation_hashes") if isinstance(source.get("recommendation_hashes"), dict) else {}
+        expected_recommendations = _as_document(source.get("recommendation_hashes"))
         current = {str(item.get("recommendation_id") or ""): item for item in report.get("recommendations", []) if isinstance(item, dict)}
         for recommendation_id, expected_hash in expected_recommendations.items():
             if recommendation_id not in current or stable_hash(current[recommendation_id]) != expected_hash:
                 state["analytics_changed"] = True
         current_entry_hashes = _current_entry_hashes(source.get("kb_entry_hashes"), self.kb_store)
-        if current_entry_hashes != (source.get("kb_entry_hashes") if isinstance(source.get("kb_entry_hashes"), dict) else {}):
+        if current_entry_hashes != (_as_document(source.get("kb_entry_hashes"))):
             state["kb_entries_changed"] = True
         return state
 
@@ -460,15 +460,15 @@ class AcceptanceFixPlanningStore:
 
 
 def fix_plan_summary(plan: AcceptanceFixPlan | dict[str, Any] | None) -> dict[str, Any]:
-    data = plan.to_dict() if isinstance(plan, AcceptanceFixPlan) else plan if isinstance(plan, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    source = data.get("source") if isinstance(data.get("source"), dict) else {}
-    execution = data.get("execution") if isinstance(data.get("execution"), dict) else {}
+    data = plan.to_dict() if isinstance(plan, AcceptanceFixPlan) else _as_document(plan)
+    summary = _as_document(data.get("summary"))
+    source = _as_document(data.get("source"))
+    execution = _as_document(data.get("execution"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
             "plan_id": data.get("plan_id"),
-            "scope": data.get("scope") if isinstance(data.get("scope"), dict) else {},
+            "scope": _as_document(data.get("scope")),
             "planned_item_count": summary.get("planned_item_count", 0),
             "high_priority_count": summary.get("high_priority_count", 0),
             "kb_match_count": summary.get("kb_match_count", 0),
@@ -478,9 +478,9 @@ def fix_plan_summary(plan: AcceptanceFixPlan | dict[str, Any] | None) -> dict[st
             "analytics_source_hash": source.get("analytics_source_hash"),
             "kb_report_id": source.get("kb_report_id"),
             "kb_source_hash": source.get("kb_source_hash"),
-            "planning_rule_governance": source.get("planning_rule_governance") if isinstance(source.get("planning_rule_governance"), dict) else {},
-            "planning_rule_version_id": (source.get("planning_rule_governance") if isinstance(source.get("planning_rule_governance"), dict) else {}).get("planning_rule_version_id"),
-            "governance_status": (source.get("planning_rule_governance") if isinstance(source.get("planning_rule_governance"), dict) else {}).get("governance_status", "legacy_default"),
+            "planning_rule_governance": _as_document(source.get("planning_rule_governance")),
+            "planning_rule_version_id": (_as_document(source.get("planning_rule_governance"))).get("planning_rule_version_id"),
+            "governance_status": (_as_document(source.get("planning_rule_governance"))).get("governance_status", "legacy_default"),
             "source_hash": source.get("source_hash"),
             "stale": data.get("status") == "stale" or bool(summary.get("stale", False)),
             "warnings": data.get("warnings", []) if isinstance(data.get("warnings"), list) else [],
@@ -490,10 +490,10 @@ def fix_plan_summary(plan: AcceptanceFixPlan | dict[str, Any] | None) -> dict[st
 
 def latest_fix_plan_summary(store: AcceptanceFixPlanningStore, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
     for plan in store.list_plans(include_archived=False):
-        scope = plan.scope if isinstance(plan.scope, dict) else {}
+        scope = _as_document(plan.scope)
         if release_id and scope.get("release_id") != release_id:
             continue
-        if project_id and scope.get("project_id") != project_id and not any(str((item.get("target") if isinstance(item.get("target"), dict) else {}).get("project_id") or "") == project_id for item in plan.planned_items):
+        if project_id and scope.get("project_id") != project_id and not any(str((_as_document(item.get("target"))).get("project_id") or "") == project_id for item in plan.planned_items):
             continue
         return fix_plan_summary(plan)
     return {"status": "missing"}
@@ -619,7 +619,7 @@ def _matching_kb_entries(target: ImplementationDocument, issue_types: list[str],
 
 def _fix_item_from_planned(index: int, planned_item: ImplementationDocument, *, plan: AcceptanceFixPlan, now: str) -> AcceptanceFixItem:
     target = _safe_dict(planned_item.get("target"))
-    issue_types = target.get("issue_types") if isinstance(target.get("issue_types"), list) else []
+    issue_types = _as_list(target.get("issue_types"))
     return AcceptanceFixItem(
         item_id=f"afi-{index:06d}",
         status="open",
@@ -631,7 +631,7 @@ def _fix_item_from_planned(index: int, planned_item: ImplementationDocument, *, 
             "planned_item_id": planned_item.get("planned_item_id"),
             "recommendation_id": planned_item.get("recommendation_id"),
             "planning_score": planned_item.get("planning_score"),
-            "kb_entry_ids": (planned_item.get("knowledge") if isinstance(planned_item.get("knowledge"), dict) else {}).get("top_entry_ids", []),
+            "kb_entry_ids": (_as_document(planned_item.get("knowledge"))).get("top_entry_ids", []),
         },
         target=target,
         title=_bounded(planned_item.get("planning_reason"), 180) or "Knowledge-assisted acceptance fix",
@@ -641,7 +641,7 @@ def _fix_item_from_planned(index: int, planned_item: ImplementationDocument, *, 
                 "plan_id": plan.plan_id,
                 "planned_item_id": planned_item.get("planned_item_id"),
                 "planning_score": planned_item.get("planning_score"),
-                "knowledge": planned_item.get("knowledge") if isinstance(planned_item.get("knowledge"), dict) else {},
+                "knowledge": _as_document(planned_item.get("knowledge")),
                 "suggested_actions": planned_item.get("suggested_actions", []),
             },
             "issue_types": issue_types,
@@ -663,7 +663,7 @@ def _fix_item_counts(items: list[AcceptanceFixItem]) -> ImplementationDocument:
 
 
 def _kb_entry_hashes_for_plan(planned_items: list[ImplementationDocument], kb_store: AcceptanceKnowledgeBaseStore) -> dict[str, str]:
-    entry_ids = sorted({str(entry_id) for item in planned_items for entry_id in ((item.get("knowledge") if isinstance(item.get("knowledge"), dict) else {}).get("top_entry_ids") or []) if str(entry_id).strip()})
+    entry_ids = sorted({str(entry_id) for item in planned_items for entry_id in ((_as_document(item.get("knowledge"))).get("top_entry_ids") or []) if str(entry_id).strip()})
     return _current_entry_hashes({entry_id: "" for entry_id in entry_ids}, kb_store)
 
 
@@ -712,13 +712,13 @@ def _selected_planned_items(plan: AcceptanceFixPlan, planned_item_ids: Any) -> l
 
 
 def _planning_reason(recommendation: ImplementationDocument, *, weakness: int, knowledge: ImplementationDocument) -> str:
-    issues = ", ".join((recommendation.get("evidence") if isinstance(recommendation.get("evidence"), dict) else {}).get("issue_types", []) or ["acceptance"])
+    issues = ", ".join((_as_document(recommendation.get("evidence"))).get("issue_types", []) or ["acceptance"])
     return _bounded(f"{recommendation.get('title') or 'Acceptance weakness'} has weakness score {weakness}. Historical {issues} fixes show {knowledge.get('risk')} risk with {knowledge.get('match_count')} KB match(es).", 500)
 
 
 def _suggested_actions(knowledge: ImplementationDocument) -> list[str]:
     actions = ["Create ReviewTask after human review", "Require manual recheck", "Refresh delta before closeout"]
-    warnings = set(knowledge.get("warnings") if isinstance(knowledge.get("warnings"), list) else [])
+    warnings = set(_as_list(knowledge.get("warnings")))
     if "waiver_heavy_history" in warnings or "force_closed_history" in warnings:
         actions.append("Avoid waiver-only closeout")
     if "history_ineffective" in warnings:
@@ -731,13 +731,13 @@ def _recommendation_source(recommendation: ImplementationDocument) -> Implementa
 
 
 def _scope(value: Any) -> ImplementationDocument:
-    data = value if isinstance(value, dict) else {}
+    data = _as_document(value)
     scope_type = str(data.get("type") or data.get("scope") or "global")
     return {"type": scope_type, "project_id": data.get("project_id"), "release_id": data.get("release_id"), "suite_id": data.get("suite_id"), "song_id": data.get("song_id"), "style": data.get("style"), "issue_type": data.get("issue_type")}
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _bounded(value: Any, limit: int = 300) -> str:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import html as html
 import hashlib as hashlib
@@ -131,7 +131,7 @@ class PublicTrustCenterStore:
         if not path.exists():
             raise PublicTrustCenterNotFoundError("Public Trust Center export has not been generated.")
         value = read_json(path)
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def create_or_update_center(self, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
@@ -139,8 +139,8 @@ class PublicTrustCenterStore:
             payload = payload or {}
             center_id = _safe_id(str(payload.get("center_id") or payload.get("id") or "ptc-default"))
             existing = self.read_config(center_id, default={})
-            selection = _normalize_selection(payload.get("selection") if isinstance(payload.get("selection"), dict) else payload)
-            policy = _normalize_policy(payload.get("policy") if isinstance(payload.get("policy"), dict) else payload)
+            selection = _normalize_selection(_document_or(payload.get("selection"), payload))
+            policy = _normalize_policy(_document_or(payload.get("policy"), payload))
             config = {
                 "schema_version": PTC_SCHEMA_VERSION,
                 "package_type": "musicforge_public_trust_center_config",
@@ -162,14 +162,14 @@ class PublicTrustCenterStore:
         if not config:
             raise PublicTrustCenterNotFoundError(f"Public Trust Center not found: {center_id}")
         report = self.read_report(center_id, default={})
-        summary = public_trust_center_summary(report) if report else {"status": "missing", "center_id": center_id}
+        summary: ImplementationDocument = public_trust_center_summary(report) if report else {"status": "missing", "center_id": center_id}
         if report:
             summary["stale"] = self.report_is_stale(center_id, report)
         return {"config": config, "report": report, "summary": summary}
 
     def build_source(self, center_id: str = "ptc-default") -> dict[str, Any]:
         config = self.read_config(center_id, default={}) or self.create_or_update_center({"center_id": center_id})
-        selection = config.get("selection") if isinstance(config.get("selection"), dict) else {}
+        selection = _as_document(config.get("selection"))
         profile = str(selection.get("attestation_profile") or "public_summary")
         releases = self._release_summaries(selection)
         portfolios = self._portfolio_summaries(selection, profile=profile)
@@ -183,7 +183,7 @@ class PublicTrustCenterStore:
             "profile": profile,
             "config_hash": config.get("integrity_hash"),
             "selection": selection,
-            "policy": config.get("policy") if isinstance(config.get("policy"), dict) else {},
+            "policy": _as_document(config.get("policy")),
             "release_count": len(releases),
             "portfolio_count": len(portfolios),
             "releases": releases,
@@ -232,7 +232,7 @@ class PublicTrustCenterStore:
             return _sanitize_public_metadata(report)
 
     def report_is_stale(self, center_id: str = "ptc-default", report: dict[str, Any] | None = None) -> bool:
-        data = report if isinstance(report, dict) else self.read_report(center_id, default={})
+        data = _document_or(report, self.read_report(center_id, default={}))
         if not data:
             return False
         try:
@@ -438,7 +438,7 @@ class PublicTrustCenterStore:
                     "path": path.removeprefix("data/"),
                     "fingerprint_hash": doc.get("fingerprint_hash"),
                     "payload_hash": doc.get("payload_hash"),
-                    "fingerprints_hash": stable_hash(doc.get("fingerprints") if isinstance(doc.get("fingerprints"), dict) else {}),
+                    "fingerprints_hash": stable_hash(_as_document(doc.get("fingerprints"))),
                 }
             )
         anchor = {
@@ -637,7 +637,7 @@ class PublicTrustCenterStore:
             zip_path = self.submission_evidence_store.package_zip_path(release_id, submission_id)
             verification_path = self.submission_store.submission_dir(release_id, submission_id) / "submission-evidence-verification-report.json" if self.submission_store else None
             verification = _read_json_default(verification_path, default={}) if verification_path else {}
-            summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+            summary = _as_document(report.get("summary"))
             row = {
                 "release_id": release_id,
                 "submission_id": submission_id,
@@ -654,7 +654,7 @@ class PublicTrustCenterStore:
                 "verification_report_status": verification.get("status") or "missing",
                 "accepted_evidence_count": summary.get("accepted_count", 0),
                 "attachment_count": summary.get("attachment_count", 0),
-                "redaction_status": (manifest.get("redaction_summary") if isinstance(manifest.get("redaction_summary"), dict) else {}).get("status") or "missing",
+                "redaction_status": (_as_document(manifest.get("redaction_summary"))).get("status") or "missing",
             }
             row["fingerprint_hash"] = stable_hash(row)
             rows.append(_sanitize_public_metadata(row))
@@ -666,10 +666,10 @@ class PublicTrustCenterStore:
         rows: list[dict[str, Any]] = []
         for release_id in release_ids:
             report = self.operations_store.read_report(release_id, default={})
-            report_summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+            report_summary = _as_document(report.get("summary"))
             report_status = report.get("status") or "missing"
             signoff = self.operations_signoff_store.read_signoff(release_id, default={}) if self.operations_signoff_store is not None else {}
-            report_signoff = report_summary.get("operations_signoff") if isinstance(report_summary.get("operations_signoff"), dict) else {}
+            report_signoff = _as_document(report_summary.get("operations_signoff"))
             signoff_status = signoff.get("status") or report_signoff.get("status")
             runbook_summary = self._latest_runbook_summary(release_id)
             packages = self._operations_package_fingerprints(release_id)
@@ -706,7 +706,7 @@ class PublicTrustCenterStore:
         return {
             "runbook_id": latest.get("runbook_id"),
             "status": latest.get("status") or "missing",
-            "source_hash": (latest.get("source") if isinstance(latest.get("source"), dict) else {}).get("operations_source_hash"),
+            "source_hash": (_as_document(latest.get("source"))).get("operations_source_hash"),
             "integrity_hash": latest.get("integrity_hash"),
         }
 
@@ -962,7 +962,7 @@ class PublicTrustCenterStore:
                 continue
             if event.get("event_type") != event_type:
                 continue
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = _as_document(event.get("payload"))
             if all(str(payload.get(key) or "") == str(value or "") for key, value in state.items()):
                 return True
         return False
@@ -993,7 +993,7 @@ def public_trust_center_config_summary(config: dict[str, Any]) -> dict[str, Any]
 def public_trust_center_summary(report: dict[str, Any]) -> dict[str, Any]:
     if not report:
         return {"status": "missing"}
-    summary = dict(report.get("summary") if isinstance(report.get("summary"), dict) else {})
+    summary = dict(_as_document(report.get("summary")))
     summary.update({"center_id": report.get("center_id"), "status": report.get("status"), "readiness": report.get("readiness"), "source_hash": report.get("source_hash"), "integrity_ok": public_trust_center_report_integrity_ok(report)})
     return summary
 
@@ -1070,7 +1070,7 @@ def _findings_from_source(source: ImplementationDocument) -> tuple[list[Implemen
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     checks: list[dict[str, Any]] = []
-    policy = source.get("policy") if isinstance(source.get("policy"), dict) else {}
+    policy = _as_document(source.get("policy"))
     packages = source.get("public_package_fingerprints", []) if isinstance(source.get("public_package_fingerprints"), list) else []
     portfolio_count = int(source.get("portfolio_count") or 0)
     if portfolio_count == 0:
@@ -1356,7 +1356,7 @@ def _delivery_sidecar_evidence(domain: str, item: ImplementationDocument, payloa
         "portfolio_public_proof_status",
         "fingerprint_hash",
     }
-    evidence = {
+    evidence: ImplementationDocument = {
         "domain": domain,
         "payload": payload,
         "payload_hash": stable_hash(payload),
@@ -1639,11 +1639,11 @@ def _package_report_current_status(report: ImplementationDocument, zip_path: Pat
         return "failed"
     if zip_path is not None and zip_path.exists():
         current_sha = _sha256(zip_path)
-        reported_sha = (report.get("input") if isinstance(report.get("input"), dict) else {}).get("sha256") or report.get("zip_sha256")
+        reported_sha = (_as_document(report.get("input"))).get("sha256") or report.get("zip_sha256")
         if reported_sha and current_sha and str(reported_sha) != str(current_sha):
             return "stale"
         current_size = zip_path.stat().st_size
-        reported_size = (report.get("input") if isinstance(report.get("input"), dict) else {}).get("size_bytes") or report.get("zip_size_bytes")
+        reported_size = (_as_document(report.get("input"))).get("size_bytes") or report.get("zip_size_bytes")
         if reported_size is not None and int(reported_size or 0) != int(current_size):
             return "stale"
     elif zip_path is not None:
@@ -1657,12 +1657,12 @@ def _package_report_current_status(report: ImplementationDocument, zip_path: Pat
 
 
 def _state_row(report: ImplementationDocument) -> dict[str, str]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return {"source_hash": str(report.get("source_hash") or ""), "report_integrity_hash": str(report.get("integrity_hash") or ""), "public_package_count": str(summary.get("public_package_count") or 0)}
 
 
 def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
-    return {"source_hash": str(manifest.get("source_hash") or ""), "report_integrity_hash": str((manifest.get("trust_center_report") if isinstance(manifest.get("trust_center_report"), dict) else {}).get("integrity_hash") or ""), "public_package_count": str(manifest.get("public_package_count") or 0)}
+    return {"source_hash": str(manifest.get("source_hash") or ""), "report_integrity_hash": str((_as_document(manifest.get("trust_center_report"))).get("integrity_hash") or ""), "public_package_count": str(manifest.get("public_package_count") or 0)}
 
 
 def _zip_manifest_state(zip_path: Path) -> dict[str, str]:
@@ -1717,14 +1717,14 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except (OSError, ValueError, json.JSONDecodeError):
         return dict(default or {})
-    return value if isinstance(value, dict) else dict(default or {})
+    return _document_or(value, dict(default or {}))
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except Exception:
         return {}
 
@@ -1810,7 +1810,7 @@ def _redaction_summary(value: Any) -> ImplementationDocument:
 
 
 def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     (export_dir / "README.txt").write_text(
         "\n".join(
             [

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -146,7 +148,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
                     "resolved_by": _bounded(payload.get("resolved_by") or payload.get("reviewer") or payload.get("signed_by") or "local-user", 120),
                     "role": _bounded(payload.get("role") or "audio_quality_reviewer", 80),
                     "reason": reason or "Manual action completed.",
-                    "evidence": sanitize_metadata(payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}),
+                    "evidence": sanitize_metadata(_as_document(payload.get("evidence"))),
                     "created_at": now_iso(),
                 }
             )
@@ -285,8 +287,8 @@ class ReleaseAudioQualityActionQueueSignoffStore:
                 self.archive_zip_path(queue_id),
                 queue_zip_path=kwargs.get("queue_zip_path") or self.queue_store.zip_path(queue_id),
                 queue_verification_report_path=kwargs.get("queue_verification_report_path") or self.queue_store.verification_report_path(queue_id),
-                observatory_zip_path=kwargs.get("observatory_zip_path") or self.queue_store._observatory_zip_from_queue(queue_id),  # type: ignore[attr-defined]
-                observatory_verification_report_path=kwargs.get("observatory_verification_report_path") or self.queue_store._observatory_verification_from_queue(queue_id),  # type: ignore[attr-defined]
+                observatory_zip_path=kwargs.get("observatory_zip_path") or self.queue_store._observatory_zip_from_queue(queue_id),
+                observatory_verification_report_path=kwargs.get("observatory_verification_report_path") or self.queue_store._observatory_verification_from_queue(queue_id),
                 evidence_root=kwargs.get("evidence_root") or self.release_store.root,
                 strict=bool(kwargs.get("strict", True)),
                 require_signed=bool(kwargs.get("require_signed", True)),
@@ -325,12 +327,12 @@ class ReleaseAudioQualityActionQueueSignoffStore:
                 require_current_queue=True,
                 queue_zip_path=self.queue_store.zip_path(queue_id),
                 queue_verification_report_path=self.queue_store.verification_report_path(queue_id),
-                observatory_zip_path=self.queue_store._observatory_zip_from_queue(queue_id),  # type: ignore[attr-defined]
-                observatory_verification_report_path=self.queue_store._observatory_verification_from_queue(queue_id),  # type: ignore[attr-defined]
+                observatory_zip_path=self.queue_store._observatory_zip_from_queue(queue_id),
+                observatory_verification_report_path=self.queue_store._observatory_verification_from_queue(queue_id),
                 evidence_root=self.release_store.root,
                 require_no_unresolved_manual=True,
             )
-            summary = runtime.get("summary") if isinstance(runtime.get("summary"), dict) else {}
+            summary = _as_document(runtime.get("summary"))
             release_ids = {str(item) for item in summary.get("release_ids", []) if str(item)}
             if release_id not in release_ids:
                 return _gate_failed("Release Audio Quality Action Queue signoff archive does not cover this Release.", verification=runtime)
@@ -414,7 +416,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
 
     def _empty_resolutions(self, queue_id: str, docs: dict[str, ImplementationDocument]) -> ImplementationDocument:
         manual_count = len(_manual_item_ids(docs["items"], docs["results"], docs["manual_actions"]))
-        doc = {
+        doc: _InferenceType = {
             "schema_version": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION,
             "package_type": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_MANUAL_RESOLUTIONS_PACKAGE_TYPE,
             "queue_id": queue_id,
@@ -452,7 +454,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         resolved = {str(row.get("item_id")): row for row in resolutions.get("resolutions", []) if isinstance(row, dict)}
         result_rows = [row for row in docs["results"].get("results", []) if isinstance(row, dict)]
         item_rows = [row for row in docs["items"].get("items", []) if isinstance(row, dict)]
-        summary_doc = docs["summary"].get("summary") if isinstance(docs["summary"].get("summary"), dict) else {}
+        summary_doc = _as_document(docs["summary"].get("summary"))
         checks: list[dict[str, Any]] = []
 
         def add(check_id: str, passed: bool, message: str, severity: str = "blocking", details: dict[str, Any] | None = None) -> None:
@@ -549,7 +551,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
         )
         if not signoff_event:
             raise ReleaseAudioQualityActionQueueSignoffStateError("Audio Quality Action Queue signoff history does not bind current signoff.")
-        signoff_payload = signoff_event.get("payload") if isinstance(signoff_event.get("payload"), dict) else {}
+        signoff_payload = _as_document(signoff_event.get("payload"))
         if signoff_payload.get("signoff_payload_hash") != signoff.get("payload_hash"):
             raise ReleaseAudioQualityActionQueueSignoffStateError("Audio Quality Action Queue signoff payload history does not match current signoff.")
         bindings = {
@@ -560,7 +562,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
             "queue_zip_size_bytes": self.queue_store.zip_path(queue_id).stat().st_size if self.queue_store.zip_path(queue_id).exists() else None,
             "queue_manifest_hash": verification.get("manifest_hash"),
         }
-        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        source = _as_document(signoff.get("source"))
         for key, value in bindings.items():
             if source.get(key) != value:
                 raise ReleaseAudioQualityActionQueueSignoffStateError(f"Audio Quality Action Queue signoff binding mismatch: {key}.")
@@ -583,7 +585,7 @@ class ReleaseAudioQualityActionQueueSignoffStore:
     def _history_chain_ok(self, rows: list[ImplementationDocument]) -> bool:
         previous = None
         for row in rows:
-            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            payload = _as_document(row.get("payload"))
             if row.get("previous_event_hash") != previous:
                 return False
             if row.get("payload_hash") != stable_hash(payload):
@@ -655,7 +657,7 @@ def _public_queue_verification_report(report: ImplementationDocument) -> Impleme
         for key, value in report.items()
         if key not in {"summary", "checks", "integrity_hash"}
     }
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     public["summary"] = {key: value for key, value in summary.items() if key != "zip_path"}
     public["original_integrity_hash"] = report.get("integrity_hash")
     public["integrity_hash"] = _integrity_hash(public)

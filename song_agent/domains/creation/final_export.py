@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import os as os
@@ -433,7 +433,7 @@ def _final_version_asset_refs(run_dir: Path, version_id: str, project_export: Im
         for ref in project_export.get("asset_refs", []):
             if not isinstance(ref, dict) or not ref.get("asset_id"):
                 continue
-            used_by_versions = ref.get("used_by_versions") if isinstance(ref.get("used_by_versions"), list) else []
+            used_by_versions = _as_list(ref.get("used_by_versions"))
             if version_id not in used_by_versions:
                 continue
             asset_id = str(ref["asset_id"])
@@ -489,7 +489,7 @@ def _final_version_reference_refs(run_dir: Path, version_id: str, project_export
         for ref in project_export.get("reference_refs", []):
             if not isinstance(ref, dict) or not ref.get("reference_id"):
                 continue
-            used_by_versions = ref.get("used_by_versions") if isinstance(ref.get("used_by_versions"), list) else []
+            used_by_versions = _as_list(ref.get("used_by_versions"))
             if version_id not in used_by_versions and not ref.get("linked_to_project"):
                 continue
             reference_id = str(ref["reference_id"])
@@ -511,7 +511,7 @@ def _final_version_context_pack(run_dir: Path, version_id: str, project_export: 
         for pack in project_export.get("context_packs", []):
             if not isinstance(pack, dict) or not pack.get("pack_id"):
                 continue
-            used_by_versions = pack.get("used_by_versions") if isinstance(pack.get("used_by_versions"), list) else []
+            used_by_versions = _as_list(pack.get("used_by_versions"))
             if version_id in used_by_versions:
                 return _context_pack_export_summary(pack)
     return {}
@@ -541,20 +541,20 @@ def _edit_metadata_export_summary(metadata: ImplementationDocument) -> Implement
         "changed_tracks": metadata.get("changed_tracks") or [],
         "clip_inserts": metadata.get("clip_inserts") or [],
         "template_inserts": metadata.get("template_inserts") or [],
-        "audition_summary": metadata.get("audition_summary") if isinstance(metadata.get("audition_summary"), dict) else {},
-        "review_edit": metadata.get("review_edit") if isinstance(metadata.get("review_edit"), dict) else {},
-        "review_summary": metadata.get("review_summary") if isinstance(metadata.get("review_summary"), dict) else {},
-        "review_task": metadata.get("review_task") if isinstance(metadata.get("review_task"), dict) else {},
-        "review_candidate": metadata.get("review_candidate") if isinstance(metadata.get("review_candidate"), dict) else {},
-        "review_candidate_source": metadata.get("review_candidate_source") if isinstance(metadata.get("review_candidate_source"), dict) else {},
-        "review_provider_patch": metadata.get("review_provider_patch") if isinstance(metadata.get("review_provider_patch"), dict) else {},
-        "review_decision": metadata.get("review_decision") if isinstance(metadata.get("review_decision"), dict) else {},
-        "review_sprint": metadata.get("review_sprint") if isinstance(metadata.get("review_sprint"), dict) else {},
-        "review_sprint_recommendation": metadata.get("review_sprint_recommendation") if isinstance(metadata.get("review_sprint_recommendation"), dict) else {},
-        "review_sprint_action_queue": metadata.get("review_sprint_action_queue") if isinstance(metadata.get("review_sprint_action_queue"), dict) else {},
-        "review_judge": metadata.get("review_judge") if isinstance(metadata.get("review_judge"), dict) else {},
-        "summary": metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {},
-        "structure": metadata.get("structure") if isinstance(metadata.get("structure"), dict) else {},
+        "audition_summary": _as_document(metadata.get("audition_summary")),
+        "review_edit": _as_document(metadata.get("review_edit")),
+        "review_summary": _as_document(metadata.get("review_summary")),
+        "review_task": _as_document(metadata.get("review_task")),
+        "review_candidate": _as_document(metadata.get("review_candidate")),
+        "review_candidate_source": _as_document(metadata.get("review_candidate_source")),
+        "review_provider_patch": _as_document(metadata.get("review_provider_patch")),
+        "review_decision": _as_document(metadata.get("review_decision")),
+        "review_sprint": _as_document(metadata.get("review_sprint")),
+        "review_sprint_recommendation": _as_document(metadata.get("review_sprint_recommendation")),
+        "review_sprint_action_queue": _as_document(metadata.get("review_sprint_action_queue")),
+        "review_judge": _as_document(metadata.get("review_judge")),
+        "summary": _as_document(metadata.get("summary")),
+        "structure": _as_document(metadata.get("structure")),
         "warnings": metadata.get("warnings") or [],
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
@@ -588,7 +588,7 @@ def _final_review_sprint_recommendations(project_export: ImplementationDocument 
         "ready_to_close": bool(latest.get("ready_to_close", False)),
         "open_recommendation_count": sum(int(item.get("open_recommendation_count") or 0) for item in summaries),
         "context_recommendation_count": sum(int(item.get("context_recommendation_count") or 0) for item in summaries),
-        "top_recommendation": latest.get("top_recommendation") if isinstance(latest.get("top_recommendation"), dict) else {},
+        "top_recommendation": _as_document(latest.get("top_recommendation")),
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
 
@@ -616,7 +616,7 @@ def _final_review_sprint_action_queues(project_export: ImplementationDocument | 
 def _final_review_metrics(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
-    project_summary = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
+    project_summary = _as_document(project_export.get("review_metrics_summary"))
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
     sprint_summaries = []
     for sprint in sprints:
@@ -640,7 +640,7 @@ def _final_review_metrics(project_export: ImplementationDocument | None) -> Impl
         "provider_tokens": project_summary.get("total_provider_tokens") if project_summary else latest.get("provider_tokens"),
         "total_candidate_count": project_summary.get("total_candidate_count"),
         "total_applied_candidate_count": project_summary.get("total_applied_candidate_count"),
-        "warnings": latest.get("warnings") if isinstance(latest.get("warnings"), list) else [],
+        "warnings": _as_list(latest.get("warnings")),
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
 
@@ -657,7 +657,7 @@ def _final_review_judge(project_export: ImplementationDocument | None, edit_meta
         if not judge_summary.get("sprint_id") and sprint.get("sprint_id"):
             judge_summary = {**judge_summary, "sprint_id": sprint.get("sprint_id")}
         judge_summaries.append(judge_summary)
-    latest_sprint_id = str(project_summary.get("latest_sprint_id") or "")
+    latest_sprint_id = str(_as_document(project_summary).get("latest_sprint_id") or "")
     latest = next((summary for summary in judge_summaries if str(summary.get("sprint_id") or "") == latest_sprint_id), None) if latest_sprint_id else None
     if latest is None:
         latest = judge_summaries[0] if judge_summaries else {}
@@ -667,12 +667,12 @@ def _final_review_judge(project_export: ImplementationDocument | None, edit_meta
         "stale_judge_count": sum(int(item.get("stale_judge_count") or 0) for item in judge_summaries),
         "judge_provider_tokens": sum(int(item.get("judge_provider_tokens") or 0) for item in judge_summaries),
         "high_risk_candidate_count": sum(int(item.get("high_risk_candidate_count") or 0) for item in judge_summaries),
-        "applied_matches_judge": edit_judge.get("applied_matches_judge"),
+        "applied_matches_judge": _as_document(edit_judge).get("applied_matches_judge"),
         "manual_review_required": True if judge_summaries or edit_judge else None,
-        "judge_recommended_candidate_id": edit_judge.get("judge_recommended_candidate_id"),
-        "top_overall": edit_judge.get("top_overall"),
-        "confidence": edit_judge.get("confidence"),
-        "judge_stale_at_apply": edit_judge.get("judge_stale_at_apply"),
+        "judge_recommended_candidate_id": _as_document(edit_judge).get("judge_recommended_candidate_id"),
+        "top_overall": _as_document(edit_judge).get("top_overall"),
+        "confidence": _as_document(edit_judge).get("confidence"),
+        "judge_stale_at_apply": _as_document(edit_judge).get("judge_stale_at_apply"),
     }
     return _drop_empty(_sanitize_asset_metadata(summary))
 
@@ -680,7 +680,7 @@ def _final_review_judge(project_export: ImplementationDocument | None, edit_meta
 def _final_review_sprint_closeout(project_export: ImplementationDocument | None) -> ImplementationDocument:
     if not isinstance(project_export, dict):
         return {}
-    project_summary = project_export.get("review_metrics_summary") if isinstance(project_export.get("review_metrics_summary"), dict) else {}
+    project_summary = _as_document(project_export.get("review_metrics_summary"))
     sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
     if not sprints:
         return {}
@@ -691,8 +691,8 @@ def _final_review_sprint_closeout(project_export: ImplementationDocument | None)
         latest_sprint_id = str(latest_sprint.get("sprint_id") or "")
     closeout_summaries = [sprint.get("closeout_summary", {}) for sprint in sprints if isinstance(sprint.get("closeout_summary"), dict)]
     signoff_summaries = [sprint.get("signoff_summary", {}) for sprint in sprints if isinstance(sprint.get("signoff_summary"), dict)]
-    latest_closeout = latest_sprint.get("closeout_summary") if isinstance(latest_sprint.get("closeout_summary"), dict) else {}
-    latest_signoff = latest_sprint.get("signoff_summary") if isinstance(latest_sprint.get("signoff_summary"), dict) else {}
+    latest_closeout = _as_document(latest_sprint.get("closeout_summary"))
+    latest_signoff = _as_document(latest_sprint.get("signoff_summary"))
     summary = {
         "latest_sprint_id": latest_sprint_id or None,
         "closed_sprint_count": len([sprint for sprint in sprints if sprint.get("status") == "closed"]),
@@ -803,7 +803,7 @@ def _final_acceptance_kb(project_export: ImplementationDocument | None) -> Imple
                 "effective_count": summary.get("effective_count"),
                 "ineffective_count": summary.get("ineffective_count"),
                 "average_effectiveness_score": summary.get("average_effectiveness_score"),
-                "top_recurring_issues": summary.get("top_recurring_issues") if isinstance(summary.get("top_recurring_issues"), list) else [],
+                "top_recurring_issues": _as_list(summary.get("top_recurring_issues")),
                 "warning_count": summary.get("warning_count"),
                 "stale": summary.get("stale"),
             }

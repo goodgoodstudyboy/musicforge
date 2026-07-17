@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_float as _as_float, as_list as _as_list
 
 import hashlib as hashlib
 import io as io
@@ -9,7 +9,7 @@ import shutil as shutil
 import threading as threading
 import wave as wave
 from pathlib import Path as Path
-from typing import Any as Any
+from typing import Any as Any, Protocol as Protocol
 
 from song_agent.domains.quality.audio_health import analyze_wav_health as analyze_wav_health, audio_health_integrity_ok as audio_health_integrity_ok, audio_health_summary as audio_health_summary
 from song_agent.domains.creation.final_export import final_export_dir as final_export_dir
@@ -93,7 +93,7 @@ class MasteringStore:
                 return default
             raise MasteringNotFoundError("Mastering analysis does not exist.")
         data = read_json(path)
-        return self._with_analysis_current_state(data if isinstance(data, dict) else {})
+        return self._with_analysis_current_state(_as_document(data))
 
     def build_plan(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
@@ -115,7 +115,7 @@ class MasteringStore:
                 return default
             raise MasteringNotFoundError("Mastering plan does not exist.")
         data = read_json(path)
-        return self._with_plan_current_state(release_id, data if isinstance(data, dict) else {})
+        return self._with_plan_current_state(release_id, _as_document(data))
 
     def render_candidate(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
@@ -169,7 +169,7 @@ class MasteringStore:
                 return default
             raise MasteringNotFoundError(candidate_id)
         data = read_json(path)
-        return self._with_candidate_current_state(release_id, data if isinstance(data, dict) else {})
+        return self._with_candidate_current_state(release_id, _as_document(data))
 
     def read_selected_candidate(self, release_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.selected_path(release_id)
@@ -181,7 +181,7 @@ class MasteringStore:
         candidate_id = str(data.get("candidate_id") or "")
         if candidate_id:
             return self.read_candidate(release_id, candidate_id)
-        return self._with_candidate_current_state(release_id, data if isinstance(data, dict) else {})
+        return self._with_candidate_current_state(release_id, _as_document(data))
 
     def candidate_audio_path(self, release_id: str, candidate_id: str, track_id: str) -> Path:
         candidate = self.read_candidate(release_id, candidate_id)
@@ -232,8 +232,8 @@ class MasteringStore:
         candidate = self.read_candidate(release_id, candidate_id)
         if candidate.get("stale") or not mastering_candidate_integrity_ok(candidate):
             raise MasteringStateError("Mastered candidate is stale or tampered.")
-        review = candidate.get("review") if isinstance(candidate.get("review"), dict) else {}
-        after = candidate.get("after_analysis") if isinstance(candidate.get("after_analysis"), dict) else {}
+        review = _as_document(candidate.get("review"))
+        after = _as_document(candidate.get("after_analysis"))
         if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
             raise MasteringStateError("Mastered candidate must have an accepted manual review before selection.")
         if after.get("status") not in {"passed", "warning"}:
@@ -301,8 +301,8 @@ class MasteringStore:
             return {**mastering_analysis_summary(analysis), "require_mastering_qa": True, "status": "failed", "hard_block": True, "message": "Selected mastered candidate is required before signoff."}
         if selected.get("stale") or not mastering_candidate_integrity_ok(selected):
             return {"status": "failed", "hard_block": True, "require_mastering_qa": True, "message": "Selected mastered candidate is stale or tampered.", "candidate_id": selected.get("candidate_id"), "stale_reasons": selected.get("stale_reasons", [])}
-        review = selected.get("review") if isinstance(selected.get("review"), dict) else {}
-        after = selected.get("after_analysis") if isinstance(selected.get("after_analysis"), dict) else {}
+        review = _as_document(selected.get("review"))
+        after = _as_document(selected.get("after_analysis"))
         status = str(after.get("status") or "")
         if review.get("status") != "accepted" or review.get("review_mode") != "manual" or not review.get("playback_confirmed"):
             return {"status": "failed", "hard_block": True, "require_mastering_qa": True, "message": "Selected mastered candidate is missing accepted manual review.", "candidate_id": selected.get("candidate_id")}
@@ -345,7 +345,7 @@ class MasteringStore:
                 status = "failed"
                 blockers.append("selected_candidate_integrity")
             else:
-                after = selected.get("after_analysis") if isinstance(selected.get("after_analysis"), dict) else {}
+                after = _as_document(selected.get("after_analysis"))
                 status = str(after.get("status") or status or "failed")
         elif analysis:
             warnings.append("selected_candidate_missing")
@@ -449,11 +449,15 @@ class MasteringStore:
                 index += 1
 
 
+class _ProjectPathStore(Protocol):
+    def project_dir(self, project_id: str) -> Path: ...
+
+
 def build_mastering_analysis(
     *,
     release: ReleaseDocument,
-    release_store: ReleaseStore,
-    project_store: ProjectStore,
+    release_store: object,
+    project_store: _ProjectPathStore,
     profile: MasteringProfile,
     now: str | None = None,
     source_override: dict[str, Any] | None = None,
@@ -507,7 +511,7 @@ def build_mastering_analysis(
     return sanitize_metadata(analysis, blocked_keys=MASTERING_BLOCKED_KEYS)
 
 
-def mastering_source_state(*, release: ReleaseDocument, release_store: ReleaseStore, project_store: ProjectStore, profile: MasteringProfile) -> dict[str, Any]:
+def mastering_source_state(*, release: ReleaseDocument, release_store: object, project_store: _ProjectPathStore, profile: MasteringProfile) -> dict[str, Any]:
     tracks: list[dict[str, Any]] = []
     for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
         project_dir = project_store.project_dir(track.project_id)
@@ -543,16 +547,16 @@ def build_mastering_plan(analysis: dict[str, Any], payload: dict[str, Any] | Non
     payload = payload or {}
     now = now or now_iso()
     profile_id = str(analysis.get("profile_id") or "streaming_balanced")
-    profile_limits = analysis.get("profile") if isinstance(analysis.get("profile"), dict) else {}
-    target_loudness = float(profile_limits.get("target_loudness_proxy_db") if profile_limits.get("target_loudness_proxy_db") is not None else payload.get("target_loudness_proxy_db") or -15.0)
+    profile_limits = _as_document(analysis.get("profile"))
+    target_loudness = _as_float(profile_limits.get("target_loudness_proxy_db") if profile_limits.get("target_loudness_proxy_db") is not None else payload.get("target_loudness_proxy_db") or -15.0)
     actions: list[dict[str, Any]] = []
     for track in analysis.get("tracks", []) if isinstance(analysis.get("tracks"), list) else []:
         if not isinstance(track, dict):
             continue
-        metrics = track.get("metrics") if isinstance(track.get("metrics"), dict) else {}
-        fmt = track.get("format") if isinstance(track.get("format"), dict) else {}
-        loudness = float(metrics.get("loudness_proxy_db") if metrics.get("loudness_proxy_db") is not None else -120.0)
-        peak_dbfs = float(metrics.get("peak_dbfs") if metrics.get("peak_dbfs") is not None else -120.0)
+        metrics = _as_document(track.get("metrics"))
+        fmt = _as_document(track.get("format"))
+        loudness = _as_float(metrics.get("loudness_proxy_db") if metrics.get("loudness_proxy_db") is not None else -120.0)
+        peak_dbfs = _as_float(metrics.get("peak_dbfs") if metrics.get("peak_dbfs") is not None else -120.0)
         max_peak_dbfs = float(track.get("profile_limits", {}).get("max_peak_dbfs") if isinstance(track.get("profile_limits"), dict) else -0.5)
         desired_gain = target_loudness - loudness
         headroom_gain = max_peak_dbfs - peak_dbfs
@@ -725,7 +729,7 @@ def apply_mastering_actions(source: Path, target: Path, actions: list[dict[str, 
 
 
 def mastering_analysis_summary(analysis: dict[str, Any]) -> dict[str, Any]:
-    summary = analysis.get("summary") if isinstance(analysis.get("summary"), dict) else {}
+    summary = _as_document(analysis.get("summary"))
     return sanitize_metadata(
         {
             "status": analysis.get("status") or "missing",
@@ -851,15 +855,15 @@ def _analyze_mastering_track(*, track: ImplementationDocument, wav_path: Path, p
         report_id=f"mqa-{track.get('track_id')}",
         now=now,
     )
-    fmt = health.get("format") if isinstance(health.get("format"), dict) else {}
-    metrics = dict(health.get("metrics") if isinstance(health.get("metrics"), dict) else {})
+    fmt = _as_document(health.get("format"))
+    metrics = dict(_as_document(health.get("metrics")))
     peak = float(metrics.get("peak") or 0.0)
     rms = float(metrics.get("rms") or 0.0)
     peak_dbfs = _amplitude_db(peak)
     loudness = _amplitude_db(rms)
     metrics["peak_dbfs"] = peak_dbfs
     metrics["loudness_proxy_db"] = loudness
-    checks = list(health.get("checks") if isinstance(health.get("checks"), list) else [])
+    checks = list(_as_list(health.get("checks")))
     warnings = [str(item) for item in health.get("warnings", []) if str(item)]
     failures = [str(item) for item in health.get("failures", []) if str(item)]
     if not audio_health_integrity_ok(health):

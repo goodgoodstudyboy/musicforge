@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramContinuityHttpRoutes:
+class ProgramContinuityHttpRoutes(ProgramHttpContext):
     def _dispatch_continuity(self, method, program_id, tail) -> bool:
         return (
             self._dispatch_continuity_workflow(method, program_id, tail)

@@ -13,6 +13,10 @@ from song_agent.release_check.v14_quality import (
     collect_typing_metrics,
     evaluate_v14_quality,
 )
+from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
+from tools.adopt_v141_composition_types import adopt_composition_types
+from tools.adopt_v141_document_coercions import adopt_document_coercions
+from tools.consolidate_v141_contract_imports import consolidate_contract_imports
 from tools.migrate_v14_private_document_types import migrate_private_document_types
 from tools.split_v14_active_functions import split_active_functions
 from tools.split_v14_interface_functions import _split_one, split_interfaces
@@ -38,6 +42,23 @@ def test_v14_migration_tools_are_idempotent() -> None:
     assert migrate_private_document_types(ROOT, write=False)["changed_file_count"] == 0
     assert split_active_functions(ROOT, write=False) == {"changed_files": [], "skipped": []}
     assert split_interfaces(ROOT, write=False) == {"selected": 0, "changed_files": [], "skipped": []}
+    assert adopt_composition_types(ROOT, write=False)["changed_files"] == []
+    assert adopt_document_coercions(ROOT, write=False)["changed_files"] == []
+    assert consolidate_contract_imports(ROOT, write=False)["changed_files"] == []
+
+
+def test_v141_contract_coercions_are_typed_and_fail_closed() -> None:
+    assert as_document({"status": "passed"}) == {"status": "passed"}
+    assert as_document(None) == {}
+    assert as_list(["one", "two"]) == ["one", "two"]
+    assert as_int("7") == 7
+    assert as_float("1.5") == 1.5
+    assert as_text("ready") == "ready"
+    assert as_path("evidence/report.json") == Path("evidence/report.json")
+    with pytest.raises((TypeError, ValueError)):
+        as_path(None)
+    with pytest.raises((TypeError, ValueError)):
+        as_text(7)
 
 
 def test_v14_splitter_preserves_cross_chunk_state_and_early_return() -> None:
@@ -62,17 +83,15 @@ def test_v14_quality_policy_rejects_type_and_mypy_budget_growth() -> None:
     assert any("typing_raw_dict_str_any" in value for value in _typing_blockers(forged_typing, policy))
 
     allowed = policy["mypy"]["error_budgets"]
-    key = next(iter(allowed))
     mypy = {
         "status": "measured",
         "total_errors": policy["mypy"]["max_total_errors"] + 1,
-        "error_budgets": {**allowed, key: allowed[key] + 1, "song_agent/new.py|name-defined": 1},
+        "error_budgets": {**allowed, "song_agent/new.py|name-defined": 1},
         "strict_status": "passed",
     }
     blockers = _mypy_blockers(mypy, policy)
     assert any("mypy_total" in value for value in blockers)
     assert any("mypy_new_error_budget" in value for value in blockers)
-    assert any("mypy_grown_error_budget" in value for value in blockers)
 
 
 def test_v14_module_debt_is_registered_and_function_limits_are_hard() -> None:
@@ -81,7 +100,27 @@ def test_v14_module_debt_is_registered_and_function_limits_are_hard() -> None:
 
     assert report["status"] == "passed", report["blockers"]
     assert report["registered_oversized_module_count"] == len(policy["module_size_debt"])
-    assert all(row["expires_version"] == "14.1.0" for row in policy["module_size_debt"])
+    assert all(row["expires_version"] == "14.2.0" for row in policy["module_size_debt"])
+    aggregate = policy["complexity"]["aggregate_debt"]
+    assert report["aggregate"]["oversized_module_count"] <= aggregate["max_oversized_module_count"]
+    assert report["aggregate"]["modules_over_1000_lines"] <= aggregate["max_modules_over_1000_lines"]
+    assert report["aggregate"]["largest_module_lines"] <= aggregate["max_largest_module_lines"]
+    assert report["aggregate"]["total_oversized_module_lines"] <= aggregate["max_total_oversized_module_lines"]
+    assert aggregate["required_total_line_reduction"] > 0
+    assert (ROOT / aggregate["architecture_decision"]).is_file()
+
+
+def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository() -> None:
+    policy = json.loads((ROOT / "architecture-v14-quality.json").read_text(encoding="utf-8"))
+    workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
+    configured = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert policy["release_version"] == "14.1.0"
+    assert policy["mypy"]["max_total_errors"] == 0
+    assert policy["mypy"]["error_budgets"] == {}
+    assert '"song_agent/domains"' in configured
+    assert "python -m ruff check song_agent tests tools" in workflow
+    assert "python -m mypy --no-incremental" in workflow
 
 
 def test_v14_mypy_ownership_ratchet_only_moves_down() -> None:

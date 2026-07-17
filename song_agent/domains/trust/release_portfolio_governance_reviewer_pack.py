@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -90,10 +90,10 @@ class ReleasePortfolioGovernanceReviewerPackStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceReviewerPackNotFoundError("Portfolio Governance Reviewer Pack export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
     def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None) -> bool:
-        data = report if isinstance(report, dict) else self.read_report(portfolio_id, default={})
+        data = _document_or(report, self.read_report(portfolio_id, default={}))
         if not data:
             return False
         try:
@@ -133,8 +133,8 @@ class ReleasePortfolioGovernanceReviewerPackStore:
                 blockers=blockers,
                 generated_at=now,
             )
-            coverage = audit_report.get("coverage") if isinstance(audit_report.get("coverage"), dict) else {}
-            audit_report_summary = audit_report.get("summary") if isinstance(audit_report.get("summary"), dict) else {}
+            coverage = _as_document(audit_report.get("coverage"))
+            audit_report_summary = _as_document(audit_report.get("summary"))
             portfolio = self.portfolio_store.get_portfolio(portfolio_id)
             summary = {
                 "portfolio_name": portfolio.get("name"),
@@ -253,7 +253,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
             _write_json(export_dir / "timeline.json", timeline)
             _write_json(export_dir / "audit-summary.json", {"summary": audit_summary(audit_report), "verification": _verification_summary(audit_verification)})
             _write_json(export_dir / "queue-summaries.json", {"items": audit_report.get("queue_summaries", []), "count": len(audit_report.get("queue_summaries", []) if isinstance(audit_report.get("queue_summaries"), list) else [])})
-            _write_json(export_dir / "signoff-summaries.json", {"items": [item for item in audit_report.get("queue_summaries", []) if isinstance(item, dict) and item.get("signoff_status")], "count": (audit_report.get("coverage") if isinstance(audit_report.get("coverage"), dict) else {}).get("signed_queue_count", 0)})
+            _write_json(export_dir / "signoff-summaries.json", {"items": [item for item in audit_report.get("queue_summaries", []) if isinstance(item, dict) and item.get("signoff_status")], "count": (_as_document(audit_report.get("coverage"))).get("signed_queue_count", 0)})
             _write_json(export_dir / "archive-verification-summaries.json", audit_report.get("archive_summary", {}))
             _write_json(export_dir / "change-request-ledger.json", audit_report.get("change_request_summary", {}))
             _write_json(export_dir / "risk-summary.json", report.get("risk_summary", {}))
@@ -272,7 +272,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
                 "generated_at": now,
                 "app_version": __version__,
                 "source_hash": report.get("source_hash"),
-                "summary": {"status": report.get("status"), **(report.get("summary") if isinstance(report.get("summary"), dict) else {})},
+                "summary": {"status": report.get("status"), **(_as_document(report.get("summary")))},
                 "reviewer_report": {"integrity_hash": report.get("integrity_hash"), "source_hash": report.get("source_hash")},
                 "retrospective_report": {"integrity_hash": retrospective.get("integrity_hash"), "source_hash": retrospective.get("source_hash")},
                 "evidence_index": {"integrity_hash": evidence_index.get("integrity_hash"), "source_hash": evidence_index.get("source_hash")},
@@ -373,7 +373,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
         for item in audit_report.get("blockers", []) if isinstance(audit_report.get("blockers"), list) else []:
             if isinstance(item, dict):
                 blockers.append(_blocker(f"audit_{item.get('check_id') or 'blocker'}", str(item.get("message") or "Governance Audit blocker.")))
-        coverage = audit_report.get("coverage") if isinstance(audit_report.get("coverage"), dict) else {}
+        coverage = _as_document(audit_report.get("coverage"))
         if int(coverage.get("force_signed_count") or 0) > 0:
             warnings.append(_warning("force_signed_governance_queue", "At least one Governance Queue was force signed."))
         if int(coverage.get("reset_count") or 0) > 0:
@@ -407,7 +407,7 @@ def build_evidence_index(*, portfolio_id: str, source_hash: str, audit_report: d
                 "name": str(entry.get("event_type") or "governance_event"),
                 "type": str(entry.get("domain") or "ledger"),
                 "status": "failed" if entry.get("integrity_ok") is False or entry.get("stale") else "passed",
-                "hash": (entry.get("source") if isinstance(entry.get("source"), dict) else {}).get("payload_hash"),
+                "hash": (_as_document(entry.get("source"))).get("payload_hash"),
                 "queue_id": entry.get("queue_id"),
                 "event_at": entry.get("event_at"),
                 "required": False,
@@ -451,7 +451,7 @@ def build_timeline(*, portfolio_id: str, source_hash: str, ledger_entries: list[
 
 
 def build_retrospective_report(*, portfolio_id: str, source_hash: str, audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]], timeline: dict[str, Any], warnings: list[dict[str, Any]], blockers: list[dict[str, Any]], generated_at: str) -> dict[str, Any]:
-    coverage = audit_report.get("coverage") if isinstance(audit_report.get("coverage"), dict) else {}
+    coverage = _as_document(audit_report.get("coverage"))
     recommendations = _recommendations(coverage, warnings, blockers)
     report = {
         "schema_version": PORTFOLIO_GOVERNANCE_REVIEWER_PACK_SCHEMA_VERSION,
@@ -466,7 +466,7 @@ def build_retrospective_report(*, portfolio_id: str, source_hash: str, audit_rep
             "force_signed_count": int(coverage.get("force_signed_count") or 0),
             "reset_count": int(coverage.get("reset_count") or 0),
             "recommendation_count": len(recommendations),
-            "timeline_event_count": (timeline.get("summary") if isinstance(timeline.get("summary"), dict) else {}).get("event_count", 0),
+            "timeline_event_count": (_as_document(timeline.get("summary"))).get("event_count", 0),
         },
         "timeline": timeline.get("events", [])[:200] if isinstance(timeline.get("events"), list) else [],
         "risk_hotspots": _risk_hotspots(ledger_entries, warnings, blockers),
@@ -482,7 +482,7 @@ def build_retrospective_report(*, portfolio_id: str, source_hash: str, audit_rep
 
 
 def reviewer_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_report_integrity_hash(data)
 
 
@@ -490,7 +490,7 @@ def reviewer_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def retrospective_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == retrospective_report_integrity_hash(data)
 
 
@@ -498,7 +498,7 @@ def retrospective_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def evidence_index_integrity_ok(index: dict[str, Any] | None) -> bool:
-    data = index if isinstance(index, dict) else {}
+    data = _as_document(index)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == evidence_index_integrity_hash(data)
 
 
@@ -506,7 +506,7 @@ def evidence_index_integrity_ok(index: dict[str, Any] | None) -> bool:
 
 
 def timeline_integrity_ok(timeline: dict[str, Any] | None) -> bool:
-    data = timeline if isinstance(timeline, dict) else {}
+    data = _as_document(timeline)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == timeline_integrity_hash(data)
 
 
@@ -514,13 +514,13 @@ def timeline_integrity_ok(timeline: dict[str, Any] | None) -> bool:
 
 
 def reviewer_pack_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_pack_manifest_integrity_hash(data)
 
 
 def reviewer_pack_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -545,12 +545,12 @@ def _reset_causality_status(entries: list[ImplementationDocument]) -> str:
     if not resets:
         return "not_applicable"
     applied_ids = {
-        str((item.get("source") if isinstance(item.get("source"), dict) else {}).get("id") or "")
+        str((_as_document(item.get("source"))).get("id") or "")
         for item in entries
         if item.get("event_type") == "governance_change_request_applied"
     }
     for item in resets:
-        refs = item.get("causal_refs") if isinstance(item.get("causal_refs"), list) else []
+        refs = _as_list(item.get("causal_refs"))
         request_ids = {str(ref.get("id") or "") for ref in refs if isinstance(ref, dict) and ref.get("type") == "change_request"}
         if not request_ids or not (request_ids & applied_ids):
             return "failed"
@@ -558,7 +558,7 @@ def _reset_causality_status(entries: list[ImplementationDocument]) -> str:
 
 
 def _risk_summary(audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
-    coverage = audit_report.get("coverage") if isinstance(audit_report.get("coverage"), dict) else {}
+    coverage = _as_document(audit_report.get("coverage"))
     return {
         "status": "failed" if blockers else "warning" if warnings else "passed",
         "blocker_count": len(blockers),
@@ -604,7 +604,7 @@ def _recommendations(coverage: ImplementationDocument, warnings: list[Implementa
 
 
 def _reviewer_guide(report: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     lines = [
         "# MusicForge Portfolio Governance Reviewer Guide",
         "",
@@ -629,11 +629,11 @@ def _reviewer_guide(report: ImplementationDocument) -> str:
         "",
         "## Blockers",
     ]
-    blockers = report.get("blockers") if isinstance(report.get("blockers"), list) else []
+    blockers = _as_list(report.get("blockers"))
     lines.extend([f"- {item.get('check_id')}: {item.get('message')}" for item in blockers] or ["- None"])
     lines.append("")
     lines.append("## Warnings")
-    warnings = report.get("warnings") if isinstance(report.get("warnings"), list) else []
+    warnings = _as_list(report.get("warnings"))
     lines.extend([f"- {item.get('check_id')}: {item.get('message')}" for item in warnings] or ["- None"])
     return "\n".join(lines) + "\n"
 
@@ -650,7 +650,7 @@ def _retrospective_markdown(report: ImplementationDocument) -> str:
             lines.append(f"- {item.get('risk')}: {item.get('count')} ({item.get('severity')})")
     lines.append("")
     lines.append("## Recommendations")
-    recommendations = report.get("recommendations") if isinstance(report.get("recommendations"), list) else []
+    recommendations = _as_list(report.get("recommendations"))
     lines.extend([f"- {item.get('recommendation')}" for item in recommendations if isinstance(item, dict)] or ["- No deterministic recommendations."])
     return "\n".join(lines) + "\n"
 
@@ -672,7 +672,7 @@ def _timeline_markdown(timeline: ImplementationDocument) -> str:
 
 
 def _report_markdown(report: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return "\n".join(
         [
             "# Portfolio Governance Reviewer Report",
@@ -700,7 +700,7 @@ def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
 
 
 def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return {"status": report.get("status") or "missing", "summary": summary}
 
 
@@ -708,7 +708,7 @@ def _read_json_or_default(path: Path, default: ImplementationDocument | None) ->
     if not path.exists():
         return default if default is not None else {}
     value = read_json(path)
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
 
 def _read_optional_json(path: Path) -> ImplementationDocument:
@@ -718,7 +718,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, data: ImplementationDocument) -> Path:

@@ -7,7 +7,7 @@ from song_agent.music_quality import (
     repair_quality_metadata,
     score_song_plan,
 )
-from song_agent.schemas.song import SongQualityMeta, NoteEvent, SongPlan, SongRequest, TrackPlan
+from song_agent.schemas.song import SongQualityMeta, NoteEvent, SongRequest, TrackPlan
 
 
 def request(vocal_mode: str = "guide_melody") -> SongRequest:

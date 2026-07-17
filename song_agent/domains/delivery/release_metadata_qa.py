@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import re as re
 from typing import Any as Any
@@ -27,7 +27,7 @@ def build_release_metadata_qa_report(
     now: str | None = None,
 ) -> dict[str, Any]:
     now = now or now_iso()
-    metadata = metadata if isinstance(metadata, dict) else {}
+    metadata = _as_document(metadata)
     release_checks = _release_checks(release, metadata)
     track_checks = _track_checks(release, metadata)
     blockers = [check for check in [*release_checks, *track_checks] if check.get("status") == "failed" and check.get("severity") == "blocking"]
@@ -57,8 +57,8 @@ def build_release_metadata_qa_report(
 
 
 def release_metadata_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or summary.get("status") or "missing",
@@ -78,7 +78,7 @@ def mark_release_metadata_qa_stale(report: dict[str, Any] | None, *, current_sou
     data["stale"] = True
     if current_source_hash:
         data["current_source_hash"] = current_source_hash
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    summary = _as_document(data.get("summary"))
     summary["status"] = "stale"
     if current_source_hash:
         summary["current_source_hash"] = current_source_hash
@@ -89,7 +89,7 @@ def mark_release_metadata_qa_stale(report: dict[str, Any] | None, *, current_sou
 def _release_checks(release: ReleaseDocument, metadata: ImplementationDocument) -> list[ImplementationDocument]:
     if not metadata:
         return [_check("metadata_exists", True, "blocking", "metadata.json is missing.", 1)]
-    release_meta = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
+    release_meta = _as_document(metadata.get("release"))
     upc = str(release_meta.get("upc") or "").strip()
     release_date = str(release_meta.get("release_date") or "").strip()
     checks = [
@@ -115,7 +115,7 @@ def _release_checks(release: ReleaseDocument, metadata: ImplementationDocument) 
 
 
 def _track_checks(release: ReleaseDocument, metadata: ImplementationDocument) -> list[ImplementationDocument]:
-    tracks = metadata.get("tracks") if isinstance(metadata.get("tracks"), list) else []
+    tracks = _as_list(metadata.get("tracks"))
     release_track_ids = {track.track_id for track in release.tracks}
     metadata_track_ids = {str(item.get("track_id")) for item in tracks if isinstance(item, dict)}
     checks = [
@@ -134,7 +134,7 @@ def _track_checks(release: ReleaseDocument, metadata: ImplementationDocument) ->
         track_id = str(item.get("track_id") or "unknown")
         isrc = str(item.get("isrc") or "").strip().upper()
         lyrics = str(item.get("lyrics") or "")
-        credits = item.get("credits") if isinstance(item.get("credits"), list) else []
+        credits = _as_list(item.get("credits"))
         roles = {str(credit.get("role") or "") for credit in credits if isinstance(credit, dict)}
         invalid_roles = [role for role in roles if role and role not in CREDIT_ROLES]
         checks.extend(

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.program_ucc import ProgramUccRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class ProgramUccHandoffRoutes:
+class ProgramUccHandoffRoutes(ProgramUccRouteContext):
     def _dispatch_ucc_handoff(self, method, center_id, tail) -> bool:
         if tail == '/archive/verify':
             if method != 'POST':

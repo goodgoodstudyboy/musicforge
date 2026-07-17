@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -175,7 +175,7 @@ def _document_binding_checks(
     signoff: ImplementationDocument,
     signoff_binding: ImplementationDocument,
 ) -> list[ImplementationDocument]:
-    manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    manifest_source = _as_document(manifest.get("source"))
     source_hash = source.get("source_hash")
     docs = [
         ("reviewer_roster", roster),
@@ -218,7 +218,7 @@ def _external_binding_checks(
         evidence_review_verification_report_path = Path(evidence_review_verification_report_path)
         runtime = verify_unified_command_center_evidence_review_package(evidence_review_path, strict=False, require_replay_passed=False)
         external = _read_json_file(evidence_review_verification_report_path)
-        source_review = source.get("evidence_review") if isinstance(source.get("evidence_review"), dict) else {}
+        source_review = _as_document(source.get("evidence_review"))
         checks.extend(
             [
                 _check("ucc_decision_board_evidence_review_external_package_type", external.get("package_type") == UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_VERIFICATION_PACKAGE_TYPE, "Evidence Review verification package type is valid."),
@@ -237,7 +237,7 @@ def _external_binding_checks(
     mismatched = []
     for item in expected_items:
         evidence_id = str(item.get("evidence_id") or "")
-        external = external_by_id.get(evidence_id)
+        external = _as_document(external_by_id.get(evidence_id))
         if not external:
             missing.append(evidence_id)
             continue
@@ -279,7 +279,7 @@ def _external_acceptance_items(
         external = _read_json_file(report_path)
         response_summary = _read_json_file(response_path)
         public_response = _read_zip_json(Path(zip_path), "original-response-public.json")
-        reviewer = public_response.get("reviewer") if isinstance(public_response.get("reviewer"), dict) else {}
+        reviewer = _as_document(public_response.get("reviewer"))
         rows.append(
             {
                 "evidence_id": str(runtime.get("summary", {}).get("evidence_id") or public_response.get("evidence_id") or ""),
@@ -301,11 +301,11 @@ def _external_acceptance_items(
 def _path_at(values: list[Path | str | None] | tuple[Path | str | None, ...], index: int) -> Path | None:
     if index >= len(values) or not values[index]:
         return None
-    return Path(values[index])
+    return _as_path(values[index])
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
     effective = names - {"manifest.json"}

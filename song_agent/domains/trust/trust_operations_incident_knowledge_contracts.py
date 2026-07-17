@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -58,7 +60,7 @@ def knowledge_manifest_hash(manifest: dict[str, Any]) -> str:
 
 
 def _classify_incident(incident: ImplementationDocument) -> dict[str, str]:
-    detected = incident.get("detected_from") if isinstance(incident.get("detected_from"), dict) else {}
+    detected = _as_document(incident.get("detected_from"))
     check_id = str(detected.get("check_id") or incident.get("category") or "").lower()
     category = str(incident.get("category") or "").lower()
     if "component_coverage" in check_id or "missing" in check_id:

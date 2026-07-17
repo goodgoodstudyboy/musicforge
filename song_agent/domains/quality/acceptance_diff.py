@@ -14,12 +14,12 @@ def build_acceptance_diff(left_report: dict[str, Any], right_report: dict[str, A
     left_cases = _cases_by_song(left_report)
     right_cases = _cases_by_song(right_report)
     song_ids = sorted(set(left_cases) | set(right_cases))
-    rows = []
+    rows: list[ImplementationDocument] = []
     blockers: list[str] = []
     for song_id in song_ids:
         left = left_cases.get(song_id, {})
         right = right_cases.get(song_id, {})
-        row = {
+        row: ImplementationDocument = {
             "song_id": song_id,
             "left_case_id": left.get("case_id"),
             "right_case_id": right.get("case_id"),

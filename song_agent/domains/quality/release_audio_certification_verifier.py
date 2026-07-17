@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -115,9 +115,9 @@ def verify_release_audio_certification_package(
             checks.append(_check("release_audio_certification_manifest_blocker_binding", manifest.get("blocker_register_hash") == blocker_register.get("integrity_hash"), "Manifest binds blocker register."))
             checks.append(_check("release_audio_certification_report_source_binding", manifest.get("source_hash") == report.get("source_hash") == matrix.get("source_hash") == evidence.get("source_hash") == blocker_register.get("source_hash"), "Certification documents bind the same source hash."))
 
-            matrix_summary = matrix.get("summary") if isinstance(matrix.get("summary"), dict) else {}
-            evidence_summary = evidence.get("summary") if isinstance(evidence.get("summary"), dict) else {}
-            blockers = blocker_register.get("blockers") if isinstance(blocker_register.get("blockers"), list) else []
+            matrix_summary = _as_document(matrix.get("summary"))
+            evidence_summary = _as_document(evidence.get("summary"))
+            blockers = _as_list(blocker_register.get("blockers"))
             if require_passed:
                 checks.append(_check("release_audio_certification_report_passed", report.get("status") == "passed", "Certification report is passed."))
             if require_real_audio:
@@ -130,7 +130,7 @@ def verify_release_audio_certification_package(
                 track_count = int(matrix_summary.get("track_count") or 0)
                 checks.append(_check("release_audio_certification_manual_review_complete", track_count > 0 and manual_count == track_count, "All certified tracks have manual accepted listening review.", {"manual_accepted_track_count": manual_count, "track_count": track_count}))
             if require_remediation_when_needed:
-                remediation = evidence_summary.get("remediation") if isinstance(evidence_summary.get("remediation"), dict) else {}
+                remediation = _as_document(evidence_summary.get("remediation"))
                 needed = bool(remediation.get("needed"))
                 ok = (not needed) or remediation.get("status") == "passed"
                 checks.append(_check("release_audio_certification_remediation_when_needed", ok, "Remediation evidence is passed when campaign issues require it.", remediation))
@@ -152,7 +152,7 @@ def release_audio_certification_verification_exit_code(report: dict[str, Any]) -
 
 def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, expected_entries: set[str], strict: bool) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     effective_names = names - {"manifest.json"}
     expected_files = expected_entries - {"manifest.json"}

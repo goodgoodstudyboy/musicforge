@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
 
 
 
-class StudioLibraryDispatch:
+
+class StudioLibraryDispatch(StudioDispatchRouteContext):
     def _dispatch_studio_library(self, method, path, parsed) -> bool:
         if path == '/api/assets':
             self._handle_assets_root(method, parsed.query)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -100,11 +100,11 @@ def _report_containers(report: ImplementationDocument) -> tuple[ImplementationDo
     identity_value = report.get("identity")
     summary_value = report.get("summary")
     source_value = report.get("source")
-    identity: dict[str, Any] = identity_value if isinstance(identity_value, dict) else {}
-    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+    identity: dict[str, Any] = _as_document(identity_value)
+    summary: dict[str, Any] = _as_document(summary_value)
     verification_value = summary.get("verification")
-    verification: dict[str, Any] = verification_value if isinstance(verification_value, dict) else {}
-    source: dict[str, Any] = source_value if isinstance(source_value, dict) else {}
+    verification: dict[str, Any] = _as_document(verification_value)
+    source: dict[str, Any] = _as_document(source_value)
     return identity, summary, report, verification, source
 
 

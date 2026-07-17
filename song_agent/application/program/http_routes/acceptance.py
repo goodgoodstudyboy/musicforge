@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramAcceptanceHttpRoutes:
+class ProgramAcceptanceHttpRoutes(ProgramHttpContext):
     def _dispatch_acceptance(self, method, program_id, tail) -> bool:
         if tail == '/continuity-acceptance':
             if method != 'GET':

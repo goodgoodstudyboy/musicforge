@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -89,4 +89,4 @@ class JobState:
 
 
 def _dict_or_empty(value: Any) -> ImplementationDocument:
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)

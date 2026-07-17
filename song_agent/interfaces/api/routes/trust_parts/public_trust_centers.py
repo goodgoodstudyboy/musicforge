@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustRoutesPublicTrustCenters:
+class TrustRoutesPublicTrustCenters(TrustRouteContext):
     def _handle_public_trust_centers_part_01(self, method: str, path: str, _split_state):
         if _split_state['tail'] in {'', '/'}:
             if method == 'GET':
@@ -96,19 +100,19 @@ class TrustRoutesPublicTrustCenters:
             if _split_state['subaction'] == 'register-current' and len(_split_state['parts']) == 3:
                 result = self.public_trust_center_anchor_registry_store.register_current_anchor(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
                 status = _interfaces_api_runtime.HTTPStatus.OK if result.get('existing') else _interfaces_api_runtime.HTTPStatus.CREATED
-                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(result.get('registry') if isinstance(result.get('registry'), dict) else {})}, status=status)
+                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(_as_document(result.get('registry')))}, status=status)
                 return (True, None)
             if _split_state['subaction'] == 'publish' and len(_split_state['parts']) == 4:
                 result = self.public_trust_center_anchor_registry_store.publish_entry(_split_state['center_id'], _split_state['parts'][3], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(result.get('registry') if isinstance(result.get('registry'), dict) else {})})
+                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(_as_document(result.get('registry')))})
                 return (True, None)
             if _split_state['subaction'] == 'revoke' and len(_split_state['parts']) == 4:
                 result = self.public_trust_center_anchor_registry_store.revoke_entry(_split_state['center_id'], _split_state['parts'][3], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(result.get('registry') if isinstance(result.get('registry'), dict) else {})})
+                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(_as_document(result.get('registry')))})
                 return (True, None)
             if _split_state['subaction'] == 'supersede' and len(_split_state['parts']) == 4:
                 result = self.public_trust_center_anchor_registry_store.supersede_entry(_split_state['center_id'], _split_state['parts'][3], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(result.get('registry') if isinstance(result.get('registry'), dict) else {})})
+                self._send_json({'ok': True, 'center_id': _split_state['center_id'], **result, 'summary': _interfaces_api_runtime.public_trust_center_anchor_registry_summary(_as_document(result.get('registry')))})
                 return (True, None)
             if _split_state['subaction'] == 'refresh' and len(_split_state['parts']) == 3:
                 _split_state['report'] = self.public_trust_center_anchor_registry_store.refresh_report(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())

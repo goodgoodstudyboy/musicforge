@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -124,11 +124,11 @@ def write_public_trust_center_distribution_kit_verification_report(report: dict[
 def print_public_trust_center_distribution_kit_verification_report(report: dict[str, Any]) -> None:
     print("MusicForge Public Trust Center Distribution Kit verification")
     print(f"status: {report.get('status')}")
-    print(f"center: {(report.get('summary') if isinstance(report.get('summary'), dict) else {}).get('center_id') or 'unknown'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"center: {(_as_document(report.get('summary'))).get('center_id') or 'unknown'}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -270,7 +270,7 @@ class _DistributionKitVerifier:
             return
         self._add_hash_check("manifest", "ptcdk_manifest_integrity", self.manifest.get("integrity_hash"), distribution_kit_manifest_hash(self.manifest), "Distribution Kit manifest integrity")
         self._add_exact_check("manifest", "ptcdk_manifest_package_type", self.manifest.get("package_type"), DISTRIBUTION_KIT_PACKAGE_TYPE, "Manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -306,7 +306,7 @@ class _DistributionKitVerifier:
         allowed = {str(item.get("path") or "") for item in valid} | {"distribution-kit-manifest.json"}
         extras = sorted(set(self.entry_names) - allowed)
         self._add_check("manifest", "ptcdk_manifest_no_extra_entries", "failed" if extras else "passed", "blocking", "ZIP has entries outside manifest.files: " + ", ".join(extras[:5]) if extras else "ZIP has no entries outside manifest.files.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "ptcdk_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
@@ -318,14 +318,14 @@ class _DistributionKitVerifier:
         self.checkpoint = self._read_json_entry(archive, "anchors/ptc-anchor-checkpoint-current.json", "checkpoint", "ptcdk_checkpoint_parse")
 
     def _verify_documents(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         self._add_hash_check("report", "ptcdk_report_integrity", self.report_doc.get("integrity_hash"), distribution_kit_report_hash(self.report_doc), "Distribution Kit report integrity")
         self._add_hash_check("report", "ptcdk_report_source_hash", self.report_doc.get("source_hash"), stable_hash(source), "Distribution Kit report source hash")
         self._add_exact_check("report", "ptcdk_manifest_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest source hash")
         self._add_exact_check("report", "ptcdk_manifest_report_hash", (self.manifest.get("report") or {}).get("integrity_hash") if isinstance(self.manifest.get("report"), dict) else None, self.report_doc.get("integrity_hash"), "Manifest report hash")
         self._add_hash_check("file_index", "ptcdk_file_index_integrity", self.file_index.get("integrity_hash"), stable_hash({key: value for key, value in self.file_index.items() if key != "integrity_hash"}), "File index integrity")
         self._add_exact_check("file_index", "ptcdk_file_index_source_hash", self.file_index.get("source_hash"), self.report_doc.get("source_hash"), "File index source hash")
-        file_index_rows = self.file_index.get("files") if isinstance(self.file_index.get("files"), list) else []
+        file_index_rows = _as_list(self.file_index.get("files"))
         file_index_paths = {str(item.get("path") or "") for item in file_index_rows if isinstance(item, dict)}
         expected_file_index_paths = FILE_INDEX_ALLOWED_ENTRIES
         self._add_exact_check("file_index", "ptcdk_file_index_allowed_files", sorted(file_index_paths), sorted(expected_file_index_paths), "File index list matches fixed Distribution Kit structure")
@@ -395,7 +395,7 @@ class _DistributionKitVerifier:
             self._compare_deep_reports("ptc", self.ptc_verification, self._read_json_file(paths.get("verification-reports/public-trust-center-verification-report.json")), "ptcdk_deep_public_trust_center")
             self._compare_deep_reports("registry", self.registry_verification, self._read_json_file(paths.get("verification-reports/anchor-registry-verification-report.json")), "ptcdk_deep_anchor_registry")
             self._compare_deep_reports("transparency", self.transparency_verification, self._read_json_file(paths.get("verification-reports/anchor-transparency-verification-report.json")), "ptcdk_deep_anchor_transparency")
-            source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+            source = _as_document(self.report_doc.get("source"))
             self._add_exact_check("deep", "ptcdk_source_ptc_zip_sha256", self.ptc_verification.get("zip_sha256"), source.get("ptc_zip_sha256"), "PTC ZIP sha256")
             self._add_exact_check("deep", "ptcdk_source_anchor_registry_zip_sha256", self.registry_verification.get("zip_sha256"), source.get("anchor_registry_zip_sha256"), "Anchor Registry ZIP sha256")
             self._add_exact_check("deep", "ptcdk_source_anchor_transparency_zip_sha256", self.transparency_verification.get("zip_sha256"), source.get("anchor_transparency_zip_sha256"), "Anchor Transparency ZIP sha256")
@@ -427,7 +427,7 @@ class _DistributionKitVerifier:
             now=self.generated_at,
         )
         self._add_exact_check("requirements", "ptcdk_acceptance_board_signoff_verification_status", report.get("status"), "passed", "Acceptance Board signoff archive verification status")
-        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        summary = _as_document(report.get("summary"))
         self._add_exact_check("requirements", "ptcdk_acceptance_board_signoff_status", summary.get("signoff_status"), "signed", "Acceptance Board signoff status")
         self._add_exact_check("requirements", "ptcdk_acceptance_board_signoff_ready", summary.get("board_readiness"), "ready", "Acceptance Board readiness")
 
@@ -473,7 +473,7 @@ class _DistributionKitVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _read_json_file(self, path: Path | None) -> ImplementationDocument:
         if path is None or not path.exists():
@@ -482,12 +482,12 @@ class _DistributionKitVerifier:
             value = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return {}
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
         summary = dict(summary)
         summary.update({"center_id": self.manifest.get("center_id") or self.report_doc.get("center_id"), "blocker_count": len(blockers), "warning_count": len(warnings)})
         report = {

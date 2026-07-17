@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from typing import Any as _InterfaceType
+
 from . import dependencies as _commands_trust_parts_dependencies
 
 from .verify_trust_operations_assurance import build_public_trust_center_publication_monitor_parser, build_trust_operations_assurance_watch_parser, build_trust_operations_assurance_watch_signoff_parser, build_trust_operations_hub_parser
@@ -16,7 +20,7 @@ def _execute_public_trust_center_publication_monitor(argv: list[str]) -> None:
     args = parser.parse_args(raw_args[1:])
     publication_store = _build_public_trust_center_publication_store()
     store = PublicTrustCenterPublicationMonitoringStore(publication_store=publication_store)
-    result: dict[str, Any] = {"ok": True, "center_id": args.center_id, "channel_id": args.channel_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "center_id": args.center_id, "channel_id": args.channel_id}
     monitor_id = args.monitor_id
     if args.create_monitor:
         monitor = store.create_monitor(args.center_id, args.channel_id, {"monitor_id": monitor_id, "name": args.monitor_name, "publication_id": args.publication_id, "mirror_dir": args.mirror_dir})
@@ -99,7 +103,7 @@ def _execute_trust_operations_hub_part_01(argv: list[str], _split_state):
     parser = build_trust_operations_hub_parser()
     _split_state['args'] = parser.parse_args(raw_args[1:])
     _split_state['store'] = TrustOperationsHubStore()
-    _split_state['result']: dict[str, Any] = {'ok': True}
+    _split_state['result'] = {'ok': True}
     _split_state['hub_id'] = _split_state['args'].hub_id
     if _split_state['args'].create or not _split_state['hub_id']:
         if _split_state['hub_id'] and _split_state['store'].hub_path(_split_state['hub_id']).exists():
@@ -167,7 +171,7 @@ def _execute_trust_operations_hub_part_02(argv: list[str], _split_state):
     return (False, None)
 
 def _execute_trust_operations_hub(argv: list[str]) -> None:
-    _split_state = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _execute_trust_operations_hub_part_01(argv, _split_state)
     if _split_result[0]:
         return _split_result[1]
@@ -189,9 +193,9 @@ def _execute_trust_operations_assurance_watch(argv: list[str]) -> None:
     hub_store = TrustOperationsHubStore()
     assurance_store = TrustOperationsAssuranceStore(hub_store=hub_store)
     store = TrustOperationsAssuranceWatchStore(assurance_store=assurance_store, hub_store=hub_store)
-    result: dict[str, Any] = {"ok": True, "schedule_id": args.schedule_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "schedule_id": args.schedule_id}
     source_payload = _trust_operations_assurance_watch_source_payload(args)
-    schedule_patch: dict[str, Any] = {}
+    schedule_patch: dict[str, _InterfaceType] = {}
     if args.hub_id:
         schedule_patch.setdefault("scope", {})["hub_ids"] = [args.hub_id]
     if args.interval_days is not None or args.grace_days is not None:
@@ -205,7 +209,7 @@ def _execute_trust_operations_assurance_watch(argv: list[str]) -> None:
     if args.list:
         result["queues"] = store.list_queues(args.schedule_id)
     if args.refresh:
-        refresh_payload: dict[str, Any] = {**source_payload}
+        refresh_payload: dict[str, _InterfaceType] = {**source_payload}
         if args.queue_id:
             refresh_payload["queue_id"] = args.queue_id
         if args.hub_id:
@@ -256,7 +260,7 @@ def _execute_trust_operations_assurance_watch_signoff(argv: list[str]) -> None:
     assurance_store = TrustOperationsAssuranceStore(hub_store=hub_store)
     watch_store = TrustOperationsAssuranceWatchStore(assurance_store=assurance_store, hub_store=hub_store)
     store = TrustOperationsAssuranceWatchSignoffStore(watch_store=watch_store, assurance_store=assurance_store, hub_store=hub_store)
-    result: dict[str, Any] = {"ok": True, "queue_id": args.queue_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "queue_id": args.queue_id}
     source_payload = {
         "watch_package_path": args.watch_package,
         "watch_verification_report_path": args.watch_verification_report,

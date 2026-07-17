@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -56,7 +58,7 @@ def public_trust_center_data_documents(
     verification_sidecars: dict[str, dict[str, Any]] | None = None,
     delivery_sidecars: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    source = _as_document(report.get("source"))
     source_hash = report.get("source_hash")
     release_index = {"source_hash": source_hash, "releases": report.get("release_readiness", [])}
     portfolio_index = {"source_hash": source_hash, "portfolios": report.get("portfolio_readiness", [])}
@@ -119,7 +121,7 @@ def public_trust_center_data_documents(
 
 
 def public_trust_center_html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]]) -> dict[str, str]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     source_hash = str(report.get("source_hash") or "")
     report_hash = str(report.get("integrity_hash") or "")
     data_hash = stable_hash(data_docs.get("trust-center-data.json", {}))
@@ -244,7 +246,7 @@ def _package_verification_index_from_sidecars(source_hash: Any, sidecars: dict[s
     for path, doc in sorted((sidecars or {}).items()):
         if not isinstance(doc, dict):
             continue
-        row = dict(doc.get("package") if isinstance(doc.get("package"), dict) else {})
+        row = dict(_as_document(doc.get("package")))
         row["sidecar_path"] = path
         row["sidecar_hash"] = stable_hash(doc)
         rows.append(row)
@@ -261,8 +263,8 @@ def _verification_sidecars_from_docs(sidecars: dict[str, ImplementationDocument]
     for doc in sidecars.values():
         if not isinstance(doc, dict):
             continue
-        package = doc.get("package") if isinstance(doc.get("package"), dict) else {}
-        verification = doc.get("verification") if isinstance(doc.get("verification"), dict) else {}
+        package = _as_document(doc.get("package"))
+        verification = _as_document(doc.get("verification"))
         rows.append(
             {
                 "portfolio_id": package.get("portfolio_id"),
@@ -304,7 +306,7 @@ def _delivery_verification_index_from_sidecars(source_hash: Any, sidecars: dict[
             continue
         if not path.startswith("delivery-verification-summaries/"):
             continue
-        summary = dict(doc.get("summary") if isinstance(doc.get("summary"), dict) else {})
+        summary = dict(_as_document(doc.get("summary")))
         summary["sidecar_path"] = path
         summary["sidecar_hash"] = stable_hash(doc)
         if doc.get("fingerprint_sidecar_path"):

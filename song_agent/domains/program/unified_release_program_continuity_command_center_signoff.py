@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import os as os
@@ -439,7 +439,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             context["state"] = state
             docs = self._archive_documents(program_id, context, event)
             self._write_export_dir(self.archive_dir(program_id), docs)
-            return docs["manifest.json"]
+            return _as_document(docs["manifest.json"])
 
     def build_archive_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = sanitize_metadata(payload or {})
@@ -513,7 +513,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             )
             docs = self._handoff_documents(program_id, context, event)
             self._write_export_dir(self.final_handoff_dir(program_id), docs)
-            return docs["manifest.json"]
+            return _as_document(docs["manifest.json"])
 
     def build_final_handoff_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = sanitize_metadata(payload or {})
@@ -664,7 +664,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError(
                 "Continuity Command Center is already signed. Use an approved Change Request to reset signoff."
             )
-        latest_event = latest.get("event") if isinstance(latest.get("event"), dict) else {}
+        latest_event = _as_document(latest.get("event"))
         if (
             latest.get("status") != "reset"
             or history[-1].get("event_type") != "command_center_signoff_reset"
@@ -726,7 +726,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
             raise UnifiedReleaseProgramContinuityCommandCenterSignoffStateError("Command Center external evidence manifest integrity failed.")
         with zipfile.ZipFile(zip_path) as archive:
             report = json.loads(archive.read("command-center-report.json").decode("utf-8"))
-        current_state = evidence.get("current_state") if isinstance(evidence.get("current_state"), dict) else {}
+        current_state = _as_document(evidence.get("current_state"))
         source = {
             "command_center_zip_sha256": _sha256_path(zip_path),
             "command_center_zip_size_bytes": zip_path.stat().st_size,
@@ -826,7 +826,7 @@ class UnifiedReleaseProgramContinuityCommandCenterSignoffStore:
         )
 
     def _signoff_binding(self, signoff: ImplementationDocument, event: ImplementationDocument) -> ImplementationDocument:
-        source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
+        source = _as_document(signoff.get("source"))
         return _with_integrity({"schema_version": 1, "package_type": "musicforge_unified_release_program_continuity_command_center_signoff_binding", "program_id": signoff.get("program_id"), "created_at": now_iso(), "signoff_hash": signoff.get("integrity_hash"), "signoff_payload_hash": signoff.get("payload_hash"), "signed_by": signoff.get("signed_by"), "role": signoff.get("role"), "reason_hash": stable_hash({"reason": signoff.get("reason")}), "signed_at": signoff.get("signed_at"), "history_event_hash": event.get("event_hash"), **source})
 
     def _append_history(self, program_id: str, payload: ImplementationDocument) -> ImplementationDocument:

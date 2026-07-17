@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -286,10 +286,10 @@ def _participants_from_evidence(evidences: dict[str, ImplementationDocument], re
             (f"{prefix}_binding_integrity", _integrity_ok(binding), "Accepted response binding integrity is valid."),
             (f"{prefix}_report_integrity", _integrity_ok(report), "Accepted evidence report integrity is valid."),
             (f"{prefix}_response_exists", bool(response_bundle), "Accepted evidence response exists in archive."),
-            (f"{prefix}_role_binding", accepted.get("receiver_role") == binding.get("receiver_role") == response_binding.get("receiver_role"), "Accepted role matches response binding."),
-            (f"{prefix}_org_binding", accepted.get("organization") == binding.get("organization") == response_binding.get("organization"), "Accepted organization matches response binding."),
-            (f"{prefix}_decision_binding", accepted.get("decision") == binding.get("decision") == response_binding.get("decision") == "accepted", "Accepted decision matches response binding."),
-            (f"{prefix}_verification_hash", verification_summary.get("verification_report_hash") == response_verification.get("integrity_hash"), "Accepted evidence summary matches response verification."),
+            (f"{prefix}_role_binding", accepted.get("receiver_role") == binding.get("receiver_role") == _as_document(response_binding).get("receiver_role"), "Accepted role matches response binding."),
+            (f"{prefix}_org_binding", accepted.get("organization") == binding.get("organization") == _as_document(response_binding).get("organization"), "Accepted organization matches response binding."),
+            (f"{prefix}_decision_binding", accepted.get("decision") == binding.get("decision") == _as_document(response_binding).get("decision") == "accepted", "Accepted decision matches response binding."),
+            (f"{prefix}_verification_hash", verification_summary.get("verification_report_hash") == _as_document(response_verification).get("integrity_hash"), "Accepted evidence summary matches response verification."),
         ):
             if not passed:
                 conflicts.append(_check(check_id, False, message))
@@ -360,7 +360,7 @@ def _decision_readiness(policy: ImplementationDocument, participants: list[Imple
 
 
 def _board_semantic_checks(report: ImplementationDocument, receiver_index: ImplementationDocument, accepted_index: ImplementationDocument, participants: list[ImplementationDocument], readiness: ImplementationDocument, *, require_quorum: bool) -> list[ImplementationDocument]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return [
         _check("urpca_report_accepted_count", int(summary.get("accepted_count") or -1) == int(readiness.get("accepted_count") or 0), "Report accepted count matches rebuilt participants."),
         _check("urpca_report_organization_count", int(summary.get("organization_count") or -1) == int(readiness.get("organization_count") or 0), "Report organization count matches rebuilt participants."),
@@ -381,7 +381,7 @@ def _document_binding_checks(manifest: ImplementationDocument, report: Implement
         "signoff_hash": signoff,
         "signoff_binding_hash": binding,
     }
-    source_doc = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source_doc = _as_document(manifest.get("source"))
     return [_check(f"urpca_manifest_{key}", source_doc.get(key) == doc.get("integrity_hash"), f"Manifest binds {key}.") for key, doc in docs.items()]
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
 from . import dependencies as _commands_trust_parts_dependencies
 
 from .verify_trust_operations_assurance import build_trust_operations_assurance_parser, build_trust_operations_final_readiness_parser
@@ -13,7 +15,7 @@ def _execute_trust_operations_final_readiness(argv: list[str]) -> None:
     parser = build_trust_operations_final_readiness_parser()
     args = parser.parse_args(raw_args[1:])
     store = TrustOperationsFinalReadinessStore()
-    result: dict[str, Any] = {"ok": True}
+    result: dict[str, _InterfaceType] = {"ok": True}
     source_payload = _trust_operations_final_readiness_source_payload(args)
     if args.refresh_report:
         result.update(store.refresh_report(source_payload))
@@ -64,7 +66,7 @@ def _execute_trust_operations_controls(argv: list[str]) -> None:
     incident_store = TrustOperationsIncidentStore(hub_store=hub_store)
     knowledge_store = TrustOperationsIncidentKnowledgeStore(hub_store=hub_store, incident_store=incident_store)
     store = TrustOperationsControlStore(hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
-    result: dict[str, Any] = {"ok": True, "hub_id": args.hub_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "hub_id": args.hub_id}
     source_payload = {
         "hub_package_path": args.hub_package,
         "hub_verification_report_path": args.hub_verification_report,
@@ -129,7 +131,7 @@ def _execute_trust_operations_assurance(argv: list[str]) -> None:
     args = parser.parse_args(raw_args[1:])
     hub_store = TrustOperationsHubStore()
     store = TrustOperationsAssuranceStore(hub_store=hub_store)
-    result: dict[str, Any] = {"ok": True, "hub_id": args.hub_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "hub_id": args.hub_id}
     source_payload = _trust_operations_assurance_source_payload(args)
     if args.list:
         result["runs"] = store.list_runs(args.hub_id)
@@ -185,7 +187,7 @@ def _execute_trust_operations_control_signoff(argv: list[str]) -> None:
     knowledge_store = TrustOperationsIncidentKnowledgeStore(hub_store=hub_store, incident_store=incident_store)
     control_store = TrustOperationsControlStore(hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
     store = TrustOperationsControlSignoffStore(control_store=control_store, hub_store=hub_store, incident_store=incident_store, knowledge_store=knowledge_store)
-    result: dict[str, Any] = {"ok": True, "hub_id": args.hub_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "hub_id": args.hub_id}
     source_payload = {
         "control_package_path": args.control_package,
         "control_verification_report_path": args.control_verification_report,
@@ -255,7 +257,7 @@ def _execute_trust_operations_hub_runbook(argv: list[str]) -> None:
     args = parser.parse_args(raw_args[1:])
     hub_store = TrustOperationsHubStore()
     store = TrustOperationsHubRunbookStore(hub_store=hub_store)
-    result: dict[str, Any] = {"ok": True, "hub_id": args.hub_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "hub_id": args.hub_id}
     report_id = args.report_id
     if not report_id:
         current = read_json(hub_store.current_report_path(args.hub_id)) if hub_store.current_report_path(args.hub_id).exists() else {}

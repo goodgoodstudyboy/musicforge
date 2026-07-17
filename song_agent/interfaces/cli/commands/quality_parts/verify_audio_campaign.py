@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import ImplementationDocument
+
 from . import dependencies as _commands_quality_parts_dependencies
 
 from .audio_fix_sprint import build_verify_audio_campaign_archive_parser, build_verify_audio_campaign_parser, build_verify_audio_campaign_remediation_parser
@@ -272,6 +274,7 @@ def _execute_audio_profile(argv: list[str]) -> None:
     parser = build_audio_profile_parser()
     args = parser.parse_args(raw_args[1:])
     store = AudioProfileStore()
+    result: ImplementationDocument
     if args.action == "list":
         result = {"profiles": [profile.public_summary() for profile in store.list_profiles(include_hidden=args.include_hidden)]}
     elif args.action == "create":

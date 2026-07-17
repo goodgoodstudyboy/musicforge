@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, unquote
 
@@ -247,7 +247,7 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
 
 def _recommendation_action_for_task(report: ImplementationDocument, task_id: str) -> ImplementationDocument:
     actions = report.get("recommended_actions") if isinstance(report, dict) else []
-    for action in actions if isinstance(actions, list) else []:
+    for action in _as_list(actions):
         if isinstance(action, dict) and action.get("task_id") == task_id:
             return action
     return {}

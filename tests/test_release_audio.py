@@ -23,7 +23,6 @@ def test_release_audio_qa_and_signoff_gates(tmp_path: Path, monkeypatch) -> None
         missing_audio_status, missing_audio = request_json(server, "POST", f"/api/releases/{release_id}/audio-qa", {"require_audio": True})
         sign_missing_status, sign_missing = request_json(server, "POST", f"/api/releases/{release_id}/signoff", {"signed_by": "tester", "require_audio_health": True})
 
-        project_dir = Path(".musicforge") / "projects" / project_id
         _add_final_export_audio(server, project_id, duration_seconds=30)
         request_json(server, "POST", f"/api/releases/{release_id}/tracks/track-000001/refresh")
         request_json(server, "POST", f"/api/releases/{release_id}/qa/refresh")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -95,7 +95,7 @@ class ReleasePortfolioGovernanceAuditStore:
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS)
 
     def get_report(self, portfolio_id: str) -> dict[str, Any]:
         report = self.read_report(portfolio_id, default={})
@@ -120,7 +120,7 @@ class ReleasePortfolioGovernanceAuditStore:
         return rows
 
     def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None) -> bool:
-        report_data = report if isinstance(report, dict) else self.read_report(portfolio_id, default={})
+        report_data = _document_or(report, self.read_report(portfolio_id, default={}))
         if not report_data:
             return False
         try:
@@ -239,7 +239,7 @@ class ReleasePortfolioGovernanceAuditStore:
         if plan:
             rows.append(_entry_seed(portfolio_id, queue_id, plan.get("generated_at"), "governance_queue", "governance_action_plan_current", "action_plan", queue_id, plan, payload_hash=plan.get("integrity_hash"), integrity_ok=action_plan_integrity_ok(plan)))
         if execution:
-            rows.append(_entry_seed(portfolio_id, queue_id, execution.get("generated_at"), "governance_queue", "governance_queue_run_safe_completed", "execution_report", queue_id, execution, payload_hash=execution.get("integrity_hash"), integrity_ok=execution_report_integrity_ok(execution), summary=execution.get("summary") if isinstance(execution.get("summary"), dict) else {}))
+            rows.append(_entry_seed(portfolio_id, queue_id, execution.get("generated_at"), "governance_queue", "governance_queue_run_safe_completed", "execution_report", queue_id, execution, payload_hash=execution.get("integrity_hash"), integrity_ok=execution_report_integrity_ok(execution), summary=_as_document(execution.get("summary"))))
         if manual:
             rows.append(_entry_seed(portfolio_id, queue_id, manual.get("generated_at"), "governance_queue", "governance_manual_action_list_current", "manual_action_list", queue_id, manual, payload_hash=manual.get("integrity_hash"), integrity_ok=manual_action_list_integrity_ok(manual)))
         export_manifest = _read_optional_json(self.governance_store.export_dir(queue_id) / "manifest.json")
@@ -255,16 +255,16 @@ class ReleasePortfolioGovernanceAuditStore:
             status = str(signoff.get("status") or "")
             event_type = "governance_signoff_reset" if status == "reset" else "governance_signoff_force_signed" if status == "force_signed" else "governance_signoff_signed"
             causal = [{"type": "change_request", "id": signoff.get("change_request_id")}] if status == "reset" and signoff.get("change_request_id") else []
-            rows.append(_entry_seed(portfolio_id, queue_id, signoff.get("reset_at") or signoff.get("signed_at"), "governance_signoff", event_type, "governance_signoff", signoff.get("signoff_id") or status, signoff, payload_hash=signoff.get("integrity_hash") or governance_signoff_hash(signoff), source_hash=(signoff.get("source") if isinstance(signoff.get("source"), dict) else {}).get("current_source_hash"), integrity_ok=governance_signoff_integrity_ok(signoff), stale=self.signoff_store.signoff_summary(queue_id, signoff=signoff).get("stale", False), causal_refs=causal, links={"signoff_hash": signoff.get("integrity_hash"), "queue_verification_report_hash": (signoff.get("evidence") if isinstance(signoff.get("evidence"), dict) else {}).get("queue_verification_report_hash"), "queue_zip_sha256": (signoff.get("evidence") if isinstance(signoff.get("evidence"), dict) else {}).get("queue_zip_sha256")}, summary=governance_signoff_summary(signoff)))
+            rows.append(_entry_seed(portfolio_id, queue_id, signoff.get("reset_at") or signoff.get("signed_at"), "governance_signoff", event_type, "governance_signoff", signoff.get("signoff_id") or status, signoff, payload_hash=signoff.get("integrity_hash") or governance_signoff_hash(signoff), source_hash=(_as_document(signoff.get("source"))).get("current_source_hash"), integrity_ok=governance_signoff_integrity_ok(signoff), stale=self.signoff_store.signoff_summary(queue_id, signoff=signoff).get("stale", False), causal_refs=causal, links={"signoff_hash": signoff.get("integrity_hash"), "queue_verification_report_hash": (_as_document(signoff.get("evidence"))).get("queue_verification_report_hash"), "queue_zip_sha256": (_as_document(signoff.get("evidence"))).get("queue_zip_sha256")}, summary=governance_signoff_summary(signoff)))
         for event in _read_jsonl(self.signoff_store.history_path(queue_id)):
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             change_request_id = str(summary.get("change_request_id") or "")
             reset_hash = str(summary.get("reset_hash") or "")
             rows.append(_entry_seed(portfolio_id, queue_id, event.get("at"), "governance_signoff", f"governance_signoff_history_{_slug(event.get('type') or 'event')}", "governance_signoff_history", event.get("event_id"), event, payload_hash=reset_hash or stable_hash(event), causal_refs=[{"type": "change_request", "id": change_request_id}] if change_request_id else []))
         for request in self.signoff_store.list_change_requests(queue_id):
             status = str(request.get("status") or "unknown")
             causal = []
-            application = request.get("application") if isinstance(request.get("application"), dict) else {}
+            application = _as_document(request.get("application"))
             if status == "applied" and application.get("applied_signoff_reset_hash"):
                 causal = [{"type": "governance_signoff_reset", "payload_hash": application.get("applied_signoff_reset_hash")}]
             rows.append(_entry_seed(portfolio_id, queue_id, request.get("updated_at") or request.get("requested_at"), "governance_change_request", f"governance_change_request_{_slug(status)}", "change_request", request.get("change_request_id"), request, payload_hash=request.get("integrity_hash") or governance_change_request_hash(request), integrity_ok=governance_change_request_integrity_ok(request), causal_refs=causal))
@@ -272,7 +272,7 @@ class ReleasePortfolioGovernanceAuditStore:
             rows.append(_entry_seed(portfolio_id, queue_id, event.get("at"), "governance_change_request", f"governance_change_request_event_{_slug(event.get('type') or 'event')}", "change_request_event", event.get("event_id"), event, payload_hash=stable_hash(event)))
         archive_manifest = _read_optional_json(self.signoff_store.archive_export_dir(queue_id) / "manifest.json")
         if archive_manifest:
-            rows.append(_entry_seed(portfolio_id, queue_id, archive_manifest.get("created_at"), "governance_archive", "governance_archive_exported", "governance_archive", queue_id, archive_manifest, payload_hash=archive_manifest.get("integrity_hash") or governance_archive_manifest_hash(archive_manifest), source_hash=archive_manifest.get("source_hash"), integrity_ok=governance_archive_manifest_integrity_ok(archive_manifest), links={"archive_manifest_hash": archive_manifest.get("integrity_hash")}, summary=archive_manifest.get("summary") if isinstance(archive_manifest.get("summary"), dict) else {}))
+            rows.append(_entry_seed(portfolio_id, queue_id, archive_manifest.get("created_at"), "governance_archive", "governance_archive_exported", "governance_archive", queue_id, archive_manifest, payload_hash=archive_manifest.get("integrity_hash") or governance_archive_manifest_hash(archive_manifest), source_hash=archive_manifest.get("source_hash"), integrity_ok=governance_archive_manifest_integrity_ok(archive_manifest), links={"archive_manifest_hash": archive_manifest.get("integrity_hash")}, summary=_as_document(archive_manifest.get("summary"))))
         archive_zip_path = self.signoff_store.archive_zip_path(queue_id)
         if archive_zip_path.exists():
             rows.append(_entry_seed(portfolio_id, queue_id, queue.get("updated_at"), "governance_archive", "governance_archive_zipped", "governance_archive_zip", queue_id, {"sha256": _sha256(archive_zip_path), "size_bytes": archive_zip_path.stat().st_size}, payload_hash=_sha256(archive_zip_path)))
@@ -317,7 +317,7 @@ class ReleasePortfolioGovernanceAuditStore:
                 "app_version": __version__,
                 "source_hash": report.get("source_hash"),
                 "ledger_hash": report.get("ledger_hash"),
-                "summary": {"status": report.get("status"), **(report.get("summary") if isinstance(report.get("summary"), dict) else {})},
+                "summary": {"status": report.get("status"), **(_as_document(report.get("summary")))},
                 "audit_report": {"integrity_hash": report.get("integrity_hash"), "source_hash": report.get("source_hash"), "ledger_hash": report.get("ledger_hash")},
                 "files": sorted(files, key=lambda item: item["path"]),
                 "zip": {},
@@ -364,7 +364,7 @@ class ReleasePortfolioGovernanceAuditStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceAuditNotFoundError("Portfolio Governance Audit export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS)
 
     def summary(self, portfolio_id: str) -> dict[str, Any]:
         report = self.read_report(portfolio_id, default={})
@@ -400,7 +400,7 @@ class ReleasePortfolioGovernanceAuditStore:
                     blockers.append(_blocker("queue_verification_missing", f"Signed Governance Queue {queue_id} is missing queue verification report."))
                 elif verification.get("status") == "failed":
                     blockers.append(_blocker("queue_verification_failed", f"Governance Queue {queue_id} verification failed."))
-                elif (signoff.get("evidence") if isinstance(signoff.get("evidence"), dict) else {}).get("queue_verification_report_hash") != stable_hash(verification):
+                elif (_as_document(signoff.get("evidence"))).get("queue_verification_report_hash") != stable_hash(verification):
                     blockers.append(_blocker("queue_verification_signoff_hash", f"Governance Queue {queue_id} signoff does not match queue verification report."))
                 if not archive_manifest:
                     blockers.append(_blocker("governance_archive_missing", f"Signed Governance Queue {queue_id} is missing Governance Archive export."))
@@ -435,7 +435,7 @@ class ReleasePortfolioGovernanceAuditStore:
                         request = self.signoff_store.get_change_request(queue_id, change_request_id)
                     except Exception:
                         request = {}
-                    application = request.get("application") if isinstance(request.get("application"), dict) else {}
+                    application = _as_document(request.get("application"))
                     if request.get("status") != "applied":
                         blockers.append(_blocker("reset_change_request_not_applied", f"Governance reset for {queue_id} requires applied Change Request."))
                     elif not governance_change_request_integrity_ok(request):
@@ -468,7 +468,7 @@ class ReleasePortfolioGovernanceAuditStore:
 
 
 def audit_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == audit_report_integrity_hash(data)
 
 
@@ -476,13 +476,13 @@ def audit_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def audit_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == audit_manifest_integrity_hash(data)
 
 
 def audit_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -563,7 +563,7 @@ def _bind_change_request_causal_refs(entries: list[ImplementationDocument]) -> N
     for entry in entries:
         if entry.get("event_type") != "governance_change_request_applied":
             continue
-        source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
+        source = _as_document(entry.get("source"))
         request_id = str(source.get("id") or "")
         if request_id:
             applied_by_id[request_id] = entry
@@ -574,13 +574,13 @@ def _bind_change_request_causal_refs(entries: list[ImplementationDocument]) -> N
     for entry in entries:
         if entry.get("event_type") not in {"governance_signoff_reset", "governance_signoff_history_reset", "governance_queue_governance_signoff_reset"}:
             continue
-        refs = entry.get("causal_refs") if isinstance(entry.get("causal_refs"), list) else []
+        refs = _as_list(entry.get("causal_refs"))
         request_id = ""
         for ref in refs:
             if isinstance(ref, dict) and ref.get("type") == "change_request" and ref.get("id"):
                 request_id = str(ref.get("id"))
                 break
-        reset_hash = str((entry.get("source") if isinstance(entry.get("source"), dict) else {}).get("payload_hash") or "")
+        reset_hash = str((_as_document(entry.get("source"))).get("payload_hash") or "")
         applied = applied_by_id.get(request_id) or applied_by_reset_hash.get(reset_hash)
         if not applied:
             continue
@@ -658,12 +658,12 @@ def _archive_summary(entries: list[ImplementationDocument]) -> ImplementationDoc
 
 
 def _portfolio_summary(portfolio: ImplementationDocument, report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return {"portfolio_id": portfolio.get("portfolio_id"), "name": portfolio.get("name"), "status": report.get("status") or portfolio.get("status"), "source_hash": report.get("source_hash"), "release_count": summary.get("release_count", 0), "integrity_hash": report.get("integrity_hash")}
 
 
 def _write_markdown(export_dir: Path, report: ImplementationDocument) -> None:
-    coverage = report.get("coverage") if isinstance(report.get("coverage"), dict) else {}
+    coverage = _as_document(report.get("coverage"))
     lines = [
         "# Portfolio Governance Audit",
         "",
@@ -749,7 +749,7 @@ def _read_optional_json(path: Path) -> ImplementationDocument:
         value = read_json(path)
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_AUDIT_BLOCKED_KEYS)
 
 
 def _read_jsonl(path: Path) -> list[ImplementationDocument]:

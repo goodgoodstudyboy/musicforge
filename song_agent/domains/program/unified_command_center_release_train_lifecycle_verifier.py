@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -294,7 +294,7 @@ def _semantic_checks(
     checks: list[dict[str, Any]] = []
     signoffs = external_train.get("signoff_events", [])
     resets = external_train.get("reset_events", [])
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     checks.extend(
         [
             _check("ucc_train_lifecycle_report_signoff_count", int(summary.get("signoff_count") or 0) == len(signoffs), "Report signoff count matches external train history."),
@@ -368,7 +368,7 @@ def _document_binding_checks(
     evidence_index: ImplementationDocument,
     ledger: list[ImplementationDocument],
 ) -> list[ImplementationDocument]:
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     return [
         _check("ucc_train_lifecycle_report_hash_binding", source.get("report_hash") == report.get("integrity_hash"), "Manifest binds report."),
         _check("ucc_train_lifecycle_succession_hash_binding", source.get("succession_hash") == succession.get("integrity_hash"), "Manifest binds succession map."),

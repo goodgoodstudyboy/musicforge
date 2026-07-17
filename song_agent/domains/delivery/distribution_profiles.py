@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
 from dataclasses import dataclass as dataclass, field as field
 from typing import Any as Any
 
@@ -108,8 +110,8 @@ def get_distribution_profile(profile_id: str) -> dict[str, Any]:
 
 
 def merge_profile_options(profile: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-    base = dict(profile.get("options") if isinstance(profile.get("options"), dict) else {})
-    overrides = overrides if isinstance(overrides, dict) else {}
+    base = dict(_as_document(profile.get("options")))
+    overrides = _as_document(overrides)
     allowed = set(base) | {"artwork_id", "submission_note"}
     for key, value in overrides.items():
         if key not in allowed:

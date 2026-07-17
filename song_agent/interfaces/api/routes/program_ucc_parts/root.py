@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.program_ucc import ProgramUccRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class ProgramUccRootRoutes:
+class ProgramUccRootRoutes(ProgramUccRouteContext):
     def _dispatch_ucc_root(self, method, path) -> bool:
         if path == '/api/unified-command-centers':
             if method == 'GET':

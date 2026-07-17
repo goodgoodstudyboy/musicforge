@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import zipfile
 
 from song_agent.format_decisions import FormatDecisionStore, format_report_integrity_ok
 from tests.test_server_audio_encoding import _FixtureEncoderRunner

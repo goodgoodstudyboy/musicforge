@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import base64 as base64
 import hashlib as hashlib
@@ -170,7 +172,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
             verification = verify_response_document(response_payload, binding)
             stale = _response_binding_stale(response_payload, binding)
             status = _response_state_status(str(response_payload.get("result") or ""), stale, verification)
-            record = {
+            record: _InferenceType = {
                 "schema_version": DISTRIBUTION_KIT_ACCEPTANCE_SCHEMA_VERSION,
                 "package_type": ACCEPTANCE_RESPONSE_TYPE,
                 "response_id": response_id,
@@ -208,12 +210,12 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
     def verify_response(self, center_id: str, response_id: str, *, now: str | None = None) -> dict[str, Any]:
         del now
         record = self.read_response(center_id, response_id)
-        payload = record.get("response_payload") if isinstance(record.get("response_payload"), dict) else {}
+        payload = _as_document(record.get("response_payload"))
         binding = self._current_kit_binding(center_id, require_verified=True)
         return verify_response_document(payload, binding)
 
     def response_is_stale(self, center_id: str, response: dict[str, Any]) -> bool:
-        payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
+        payload = _as_document(response.get("response_payload"))
         try:
             binding = self._current_kit_binding(center_id, require_verified=True)
         except Exception:
@@ -271,7 +273,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
+            source = _as_document(evidence.get("source"))
             response_id = str(source.get("response_id") or evidence.get("response_id") or "")
             docs = _evidence_documents(
                 evidence,
@@ -347,7 +349,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
             if existing:
                 return existing
             cr_id = _next_change_request_id(self.change_request_dir(center_id))
-            response_payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
+            response_payload = _as_document(response.get("response_payload"))
             draft = {
                 "draft_id": cr_id,
                 "source": "distribution_kit_acceptance_response",
@@ -356,7 +358,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
                 "status": "draft",
                 "result": response.get("result"),
                 "reason": "External receiver requested Distribution Kit acceptance follow-up.",
-                "findings": response_payload.get("findings") if isinstance(response_payload.get("findings"), list) else [],
+                "findings": _as_list(response_payload.get("findings")),
                 "created_at": now,
                 "payload": sanitize_metadata(payload or {}, blocked_keys=ACCEPTANCE_BLOCKED_KEYS),
             }
@@ -400,17 +402,17 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
                 "distribution_kit_source_hash": report.get("source_hash"),
                 "distribution_kit_verification_report_hash": verification_hash(verification),
                 "distribution_kit_verification_status": verification.get("status"),
-                "ptc_zip_sha256": (report.get("source") if isinstance(report.get("source"), dict) else {}).get("ptc_zip_sha256"),
-                "anchor_registry_zip_sha256": (report.get("source") if isinstance(report.get("source"), dict) else {}).get("anchor_registry_zip_sha256"),
-                "anchor_transparency_zip_sha256": (report.get("source") if isinstance(report.get("source"), dict) else {}).get("anchor_transparency_zip_sha256"),
-                "checkpoint_hash": (report.get("source") if isinstance(report.get("source"), dict) else {}).get("checkpoint_hash"),
+                "ptc_zip_sha256": (_as_document(report.get("source"))).get("ptc_zip_sha256"),
+                "anchor_registry_zip_sha256": (_as_document(report.get("source"))).get("anchor_registry_zip_sha256"),
+                "anchor_transparency_zip_sha256": (_as_document(report.get("source"))).get("anchor_transparency_zip_sha256"),
+                "checkpoint_hash": (_as_document(report.get("source"))).get("checkpoint_hash"),
             }
         )
 
     def _evidence_source(self, center_id: str, response: ImplementationDocument, verification: ImplementationDocument, binding: ImplementationDocument) -> ImplementationDocument:
         response_id = str(response.get("response_id") or "")
         binding_summary = _read_json_default(self.response_binding_summary_path(center_id, response_id), default={})
-        payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else {}
+        payload = _as_document(response.get("response_payload"))
         return _sanitize(
             {
                 "center_id": center_id,
@@ -435,7 +437,7 @@ class PublicTrustCenterDistributionKitAcceptanceStore:
     def _ensure_evidence_exportable(self, center_id: str, evidence: ImplementationDocument) -> None:
         if not evidence or evidence.get("status") != "current" or evidence.get("result") != "accepted":
             raise PublicTrustCenterDistributionKitAcceptanceStateError("Accepted evidence is not current accepted evidence.")
-        source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
+        source = _as_document(evidence.get("source"))
         response_id = str(source.get("response_id") or evidence.get("response_id") or "")
         response = self.read_response(center_id, response_id)
         verification = self.verify_response(center_id, response_id)
@@ -501,12 +503,12 @@ def verify_response_document(response: dict[str, Any], binding: dict[str, Any]) 
         "distribution_kit_source_hash",
         "distribution_kit_verification_report_hash",
     ]
-    kit_binding = response.get("kit_binding") if isinstance(response.get("kit_binding"), dict) else {}
+    kit_binding = _as_document(response.get("kit_binding"))
     missing = [key for key in required if not kit_binding.get(key)]
     checks.append(_check("ptcdka_response_required_binding", not missing, "Response Kit binding fields are present." if not missing else "Response Kit binding is missing: " + ", ".join(missing)))
     binding_ok = all(kit_binding.get(key) == binding.get(key) for key in required)
     checks.append(_check("ptcdka_response_kit_binding_current", binding_ok, "Response Kit binding matches current Distribution Kit."))
-    verification = response.get("verification") if isinstance(response.get("verification"), dict) else {}
+    verification = _as_document(response.get("verification"))
     checks.append(_check("ptcdka_response_external_verification_passed", result != "accepted" or verification.get("status") == "passed", "Accepted response has passed external verification."))
     checks.append(_check("ptcdka_response_hash", not response.get("response_hash") or response.get("response_hash") == response_payload_hash(response), "Response hash matches payload."))
     findings = _redaction_findings("response", json.dumps(response, ensure_ascii=False, sort_keys=True))
@@ -546,8 +548,8 @@ def response_summary(response: dict[str, Any]) -> dict[str, Any]:
 
 
 def accepted_evidence_summary(evidence: dict[str, Any] | None) -> dict[str, Any]:
-    data = evidence if isinstance(evidence, dict) else {}
-    reviewer = data.get("reviewer_summary") if isinstance(data.get("reviewer_summary"), dict) else {}
+    data = _as_document(evidence)
+    reviewer = _as_document(data.get("reviewer_summary"))
     return {"status": data.get("status") or "missing", "result": data.get("result") or "missing", "evidence_id": data.get("evidence_id"), "response_id": data.get("response_id"), "reviewer_name": reviewer.get("name"), "reviewer_organization": reviewer.get("organization")}
 
 
@@ -557,11 +559,11 @@ def redaction_summary(value: Any) -> dict[str, Any]:
 
 
 def _evidence_documents(evidence: ImplementationDocument, *, response_verification_report: ImplementationDocument | None = None, response_binding_summary: ImplementationDocument | None = None) -> ImplementationDocument:
-    source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
-    public = evidence.get("public_response") if isinstance(evidence.get("public_response"), dict) else {}
-    binding = evidence.get("kit_binding") if isinstance(evidence.get("kit_binding"), dict) else {}
-    response_verification_report = response_verification_report if isinstance(response_verification_report, dict) else {}
-    response_binding_summary = response_binding_summary if isinstance(response_binding_summary, dict) else {}
+    source = _as_document(evidence.get("source"))
+    public = _as_document(evidence.get("public_response"))
+    binding = _as_document(evidence.get("kit_binding"))
+    response_verification_report = _as_document(response_verification_report)
+    response_binding_summary = _as_document(response_binding_summary)
     response_verification = {
         "source_hash": evidence.get("source_hash"),
         "response_id": source.get("response_id"),
@@ -579,8 +581,8 @@ def _evidence_documents(evidence: ImplementationDocument, *, response_verificati
             "raw_response_sha256": source.get("raw_response_sha256"),
             "response_public_summary_hash": source.get("response_public_summary_hash"),
             "response_verification_hash": verification_hash(response_verification_report),
-            "check_count": len(response_verification_report.get("checks") if isinstance(response_verification_report.get("checks"), list) else []),
-            "blocker_count": len(response_verification_report.get("blockers") if isinstance(response_verification_report.get("blockers"), list) else []),
+            "check_count": len(_as_list(response_verification_report.get("checks"))),
+            "blocker_count": len(_as_list(response_verification_report.get("blockers"))),
         }
     )
     response_binding_proof = _sanitize(
@@ -592,8 +594,8 @@ def _evidence_documents(evidence: ImplementationDocument, *, response_verificati
             "raw_response_sha256": source.get("raw_response_sha256"),
             "response_public_summary_hash": source.get("response_public_summary_hash"),
             "kit_binding_status": response_binding_summary.get("kit_binding_status") or response_binding_summary.get("status"),
-            "response_binding": response_binding_summary.get("response_binding") if isinstance(response_binding_summary.get("response_binding"), dict) else {},
-            "current_binding": response_binding_summary.get("current_binding") if isinstance(response_binding_summary.get("current_binding"), dict) else {},
+            "response_binding": _as_document(response_binding_summary.get("response_binding")),
+            "current_binding": _as_document(response_binding_summary.get("current_binding")),
         }
     )
     return {
@@ -610,8 +612,8 @@ def _evidence_documents(evidence: ImplementationDocument, *, response_verificati
 
 
 def _public_response(response: ImplementationDocument) -> ImplementationDocument:
-    payload = response.get("response_payload") if isinstance(response.get("response_payload"), dict) else response
-    reviewer = payload.get("reviewer") if isinstance(payload.get("reviewer"), dict) else {}
+    payload = _document_or(response.get("response_payload"), response)
+    reviewer = _as_document(payload.get("reviewer"))
     public_findings = []
     for item in payload.get("findings", []) if isinstance(payload.get("findings"), list) else []:
         if isinstance(item, dict):
@@ -623,7 +625,7 @@ def _public_response(response: ImplementationDocument) -> ImplementationDocument
             "review_mode": payload.get("review_mode"),
             "reviewed_at": payload.get("reviewed_at"),
             "reviewer": {"name": reviewer.get("name"), "organization": reviewer.get("organization"), "role": reviewer.get("role")},
-            "verification_status": (payload.get("verification") if isinstance(payload.get("verification"), dict) else {}).get("status"),
+            "verification_status": (_as_document(payload.get("verification"))).get("status"),
             "comments_excerpt": sanitize_sensitive_text(str(payload.get("comments") or ""))[:500],
             "findings": public_findings,
         }
@@ -644,20 +646,20 @@ def _response_state_status(result: str, stale: bool, verification: Implementatio
 
 
 def _response_binding_stale(response: ImplementationDocument, binding: ImplementationDocument) -> bool:
-    response_binding = response.get("kit_binding") if isinstance(response.get("kit_binding"), dict) else {}
+    response_binding = _as_document(response.get("kit_binding"))
     keys = ["distribution_kit_zip_sha256", "distribution_kit_zip_size_bytes", "distribution_kit_manifest_hash", "distribution_kit_report_hash", "distribution_kit_source_hash", "distribution_kit_verification_report_hash"]
     return any(response_binding.get(key) != binding.get(key) for key in keys)
 
 
 def _binding_from_response(response: ImplementationDocument) -> ImplementationDocument:
-    return dict(response.get("kit_binding") if isinstance(response.get("kit_binding"), dict) else {})
+    return dict(_as_document(response.get("kit_binding")))
 
 
 def _require_response_binding(response: ImplementationDocument) -> None:
     if response.get("response_type") != ACCEPTANCE_RESPONSE_TYPE:
         raise PublicTrustCenterDistributionKitAcceptanceStateError("Acceptance response_type is invalid.")
     required = ["distribution_kit_zip_sha256", "distribution_kit_zip_size_bytes", "distribution_kit_manifest_hash", "distribution_kit_report_hash", "distribution_kit_source_hash", "distribution_kit_verification_report_hash"]
-    binding = response.get("kit_binding") if isinstance(response.get("kit_binding"), dict) else {}
+    binding = _as_document(response.get("kit_binding"))
     missing = [key for key in required if not binding.get(key)]
     if missing:
         raise PublicTrustCenterDistributionKitAcceptanceStateError("Acceptance response is missing required Kit binding fields: " + ", ".join(missing))
@@ -723,7 +725,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
             value = json.loads(archive.read(entry).decode("utf-8"))
     except Exception:
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
@@ -733,7 +735,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = json.loads(_read_text(path))
     except Exception:
         return dict(default or {})
-    return _sanitize(value if isinstance(value, dict) else dict(default or {}))
+    return _sanitize(_document_or(value, dict(default or {})))
 
 
 def _write_json(path: Path, payload: ImplementationDocument) -> Path:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, document_or as _document_or
 
 import json as json
 import shutil as shutil
@@ -148,7 +148,7 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
             payload["response_verification_report"] = read_json(Path(payload["response_verification_report_json"]))
         if payload.get("response_binding_summary_json"):
             payload["response_binding_summary"] = read_json(Path(payload["response_binding_summary_json"]))
-        response_payload = dict(payload.get("response") if isinstance(payload.get("response"), dict) else payload)
+        response_payload = dict(_document_or(payload.get("response"), payload))
         verification_payload = payload.get("response_verification_report") or payload.get("verification_report") or payload.get("verification")
         binding_payload = payload.get("response_binding_summary") or payload.get("binding_summary") or payload.get("binding")
         if not isinstance(verification_payload, dict) or not isinstance(binding_payload, dict):
@@ -700,20 +700,20 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
                 field
                 for field in ("kit_sha256", "kit_manifest_hash", "kit_verification_report_hash")
                 if binding.get(field) != source.get(field)
-                or response_binding.get(field) != source.get(field)
-                or response_verification.get(field) != source.get(field)
+                or _as_document(response_binding).get(field) != source.get(field)
+                or _as_document(response_verification).get(field) != source.get(field)
             ]
             if not response_bundle:
                 conflicts.append({"reason": "accepted_evidence_response_missing", "evidence_id": evidence_id})
             if stale_fields:
                 conflicts.append({"reason": "accepted_evidence_stale_kit", "evidence_id": evidence_id, "fields": stale_fields})
-            if accepted.get("receiver_role") != binding.get("receiver_role") or binding.get("receiver_role") != response_binding.get("receiver_role"):
+            if accepted.get("receiver_role") != binding.get("receiver_role") or binding.get("receiver_role") != _as_document(response_binding).get("receiver_role"):
                 conflicts.append({"reason": "accepted_evidence_role_mismatch", "evidence_id": evidence_id})
-            if accepted.get("organization") != binding.get("organization") or binding.get("organization") != response_binding.get("organization"):
+            if accepted.get("organization") != binding.get("organization") or binding.get("organization") != _as_document(response_binding).get("organization"):
                 conflicts.append({"reason": "accepted_evidence_organization_mismatch", "evidence_id": evidence_id})
-            if accepted.get("decision") != binding.get("decision") or binding.get("decision") != response_binding.get("decision"):
+            if accepted.get("decision") != binding.get("decision") or binding.get("decision") != _as_document(response_binding).get("decision"):
                 conflicts.append({"reason": "accepted_evidence_decision_mismatch", "evidence_id": evidence_id})
-            if summary.get("verification_report_hash") != response_verification.get("integrity_hash"):
+            if summary.get("verification_report_hash") != _as_document(response_verification).get("integrity_hash"):
                 conflicts.append({"reason": "accepted_evidence_verification_mismatch", "evidence_id": evidence_id})
             participants.append(
                 {
@@ -926,10 +926,10 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
 
 
 def _board_policy(value: Any) -> ImplementationDocument:
-    raw = value if isinstance(value, dict) else {}
+    raw = _as_document(value)
     return {
-        "min_accepted_receipts": int(raw.get("min_accepted_receipts") or raw.get("minimum_acceptances") or DEFAULT_BOARD_POLICY["min_accepted_receipts"]),
-        "min_organizations": int(raw.get("min_organizations") or raw.get("minimum_organizations") or DEFAULT_BOARD_POLICY["min_organizations"]),
+        "min_accepted_receipts": _as_int(raw.get("min_accepted_receipts") or raw.get("minimum_acceptances") or DEFAULT_BOARD_POLICY["min_accepted_receipts"]),
+        "min_organizations": _as_int(raw.get("min_organizations") or raw.get("minimum_organizations") or DEFAULT_BOARD_POLICY["min_organizations"]),
         "required_roles": [_bounded(role, 80) for role in raw.get("required_roles", DEFAULT_BOARD_POLICY["required_roles"])],
         "block_on_needs_changes": bool(raw.get("block_on_needs_changes", DEFAULT_BOARD_POLICY["block_on_needs_changes"])),
         "block_on_rejected": bool(raw.get("block_on_rejected", DEFAULT_BOARD_POLICY["block_on_rejected"])),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -149,15 +149,15 @@ def write_public_trust_center_verification_report(report: dict[str, Any], path: 
 
 
 def print_public_trust_center_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center verification")
     print(f"status: {report.get('status')}")
     print(f"center: {summary.get('center_id') or 'unknown'}")
     print(f"readiness: {summary.get('readiness') or 'unknown'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -328,7 +328,7 @@ class _PublicTrustCenterVerifier:
         self._add_hash_check("manifest", "ptc_manifest_integrity", self.manifest.get("integrity_hash"), public_trust_center_manifest_hash(self.manifest), "Trust Center manifest integrity")
         package_type_ok = self.manifest.get("package_type") == PTC_PACKAGE_TYPE
         self._add_check("manifest", "ptc_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is valid." if package_type_ok else "Manifest package_type is invalid.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -424,7 +424,7 @@ class _PublicTrustCenterVerifier:
             self._add_hash_check("report", "ptc_report_integrity", self.report_doc.get("integrity_hash"), public_trust_center_report_hash(self.report_doc), "Trust Center Report integrity")
             self._add_hash_check("report", "ptc_manifest_report_hash", self.manifest.get("trust_center_report", {}).get("integrity_hash") if isinstance(self.manifest.get("trust_center_report"), dict) else None, self.report_doc.get("integrity_hash"), "Manifest report hash")
             self._add_hash_check("report", "ptc_manifest_report_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest report source hash")
-            source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+            source = _as_document(self.report_doc.get("source"))
             self._add_hash_check("report", "ptc_report_source_hash", self.report_doc.get("source_hash"), stable_hash(source), "Trust Center Report source hash")
             self._verify_report_semantics()
             self._verify_data_documents()
@@ -433,9 +433,9 @@ class _PublicTrustCenterVerifier:
             self._add_check("report", "ptc_report_document_exists", "failed", "blocking", "trust-center-report.json must contain a JSON object.")
 
     def _verify_report_semantics(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
-        blockers = self.report_doc.get("blockers") if isinstance(self.report_doc.get("blockers"), list) else []
-        warnings = self.report_doc.get("warnings") if isinstance(self.report_doc.get("warnings"), list) else []
+        source = _as_document(self.report_doc.get("source"))
+        blockers = _as_list(self.report_doc.get("blockers"))
+        warnings = _as_list(self.report_doc.get("warnings"))
         expected_summary = _summary_from_source(source, blockers, warnings)
         for key in ("release_count", "portfolio_count", "public_package_count", "verification_count", "passed_verification_count", "blocker_count", "warning_count", "status", "readiness"):
             self._add_exact_check("report", f"ptc_report_summary_{key}", self.report_doc.get("summary", {}).get(key) if isinstance(self.report_doc.get("summary"), dict) else None, expected_summary.get(key), f"Report summary {key}")
@@ -485,7 +485,7 @@ class _PublicTrustCenterVerifier:
         self._verify_delivery_verification_sidecar()
 
     def _verify_manifest_bindings(self) -> None:
-        data = self.manifest.get("data") if isinstance(self.manifest.get("data"), dict) else {}
+        data = _as_document(self.manifest.get("data"))
         self._add_exact_check("manifest", "ptc_manifest_data_trust_center_hash", data.get("trust_center_data_hash"), stable_hash(self.data_docs.get("trust-center-data.json", {})), "Manifest trust-center-data hash")
         self._add_exact_check("manifest", "ptc_manifest_data_package_index_hash", data.get("package_index_hash"), stable_hash(self.data_docs.get("package-index.json", {})), "Manifest package-index hash")
         self._add_exact_check("manifest", "ptc_manifest_data_verification_index_hash", data.get("verification_index_hash"), stable_hash(self.data_docs.get("verification-index.json", {})), "Manifest verification-index hash")
@@ -503,7 +503,7 @@ class _PublicTrustCenterVerifier:
             ("delivery-verification-index.json", "delivery_verification_index_hash"),
         ):
             self._add_exact_check("manifest", f"ptc_manifest_data_{key}", data.get(key), stable_hash(self.data_docs.get(name, {})), f"Manifest {name} hash")
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
         for key in ("release_count", "portfolio_count", "public_package_count", "verification_count"):
             self._add_exact_check("manifest", f"ptc_manifest_{key}", self.manifest.get(key), summary.get(key), f"Manifest {key}")
 
@@ -511,7 +511,7 @@ class _PublicTrustCenterVerifier:
         sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
         delivery_sidecar_docs = {name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-verification-summaries/") or name.startswith("delivery-fingerprint-summaries/")}
         _expected_docs, expected_pages = expected_public_trust_center_documents(self.report_doc, sidecar_docs, delivery_sidecar_docs)
-        pages = self.manifest.get("pages") if isinstance(self.manifest.get("pages"), list) else []
+        pages = _as_list(self.manifest.get("pages"))
         page_rows = {str(item.get("path") or ""): item for item in pages if isinstance(item, dict)}
         source_hash = str(self.report_doc.get("source_hash") or "")
         for page in PTC_HTML_PAGES:
@@ -545,10 +545,10 @@ class _PublicTrustCenterVerifier:
         package_doc = self.data_docs.get("package-index.json", {})
         verification_doc = self.data_docs.get("verification-index.json", {})
         sidecar_doc = self.data_docs.get("public-package-verification-index.json", {})
-        packages = package_doc.get("packages") if isinstance(package_doc.get("packages"), list) else []
-        verifications = verification_doc.get("verifications") if isinstance(verification_doc.get("verifications"), list) else []
-        sidecar_packages = sidecar_doc.get("packages") if isinstance(sidecar_doc.get("packages"), list) else []
-        sidecar_verifications = sidecar_doc.get("verifications") if isinstance(sidecar_doc.get("verifications"), list) else []
+        packages = _as_list(package_doc.get("packages"))
+        verifications = _as_list(verification_doc.get("verifications"))
+        sidecar_packages = _as_list(sidecar_doc.get("packages"))
+        sidecar_verifications = _as_list(sidecar_doc.get("verifications"))
         independent_sidecars = {name: doc for name, doc in self.data_docs.items() if name.startswith("package-verification-summaries/")}
         expected_index = _package_verification_index_from_independent_sidecars(self.report_doc.get("source_hash"), independent_sidecars)
         self._add_exact_check("data", "ptc_package_fingerprint_verification_summary_binding", sidecar_packages, expected_index.get("packages"), "Public package fingerprints bind independent verification sidecars")
@@ -572,7 +572,7 @@ class _PublicTrustCenterVerifier:
         self._verify_independent_delivery_fingerprint_hashes(delivery_doc, fingerprint_sidecars)
 
     def _verify_independent_sidecar_hashes(self, sidecar_doc: ImplementationDocument, sidecars: dict[str, ImplementationDocument]) -> None:
-        rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
+        rows = _as_list(sidecar_doc.get("sidecars"))
         declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
         actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
         self._add_exact_check("data", "ptc_independent_verification_sidecar_set", sorted(declared), sorted(actual), "Declared independent verification sidecar set")
@@ -580,7 +580,7 @@ class _PublicTrustCenterVerifier:
             self._add_exact_check("data", "ptc_independent_verification_sidecar_hash", row.get("hash"), actual.get(path), f"Independent verification sidecar hash {path}")
 
     def _verify_independent_delivery_sidecar_hashes(self, sidecar_doc: ImplementationDocument, sidecars: dict[str, ImplementationDocument]) -> None:
-        rows = sidecar_doc.get("sidecars") if isinstance(sidecar_doc.get("sidecars"), list) else []
+        rows = _as_list(sidecar_doc.get("sidecars"))
         declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
         actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
         self._add_exact_check("data", "ptc_independent_delivery_sidecar_set", sorted(declared), sorted(actual), "Declared independent delivery sidecar set")
@@ -588,7 +588,7 @@ class _PublicTrustCenterVerifier:
             self._add_exact_check("data", "ptc_independent_delivery_sidecar_hash", row.get("hash"), actual.get(path), f"Independent delivery sidecar hash {path}")
 
     def _verify_independent_delivery_fingerprint_hashes(self, sidecar_doc: ImplementationDocument, sidecars: dict[str, ImplementationDocument]) -> None:
-        rows = sidecar_doc.get("fingerprint_sidecars") if isinstance(sidecar_doc.get("fingerprint_sidecars"), list) else []
+        rows = _as_list(sidecar_doc.get("fingerprint_sidecars"))
         declared = {str(row.get("path") or ""): row for row in rows if isinstance(row, dict)}
         actual = {path: stable_hash(doc) for path, doc in sidecars.items()}
         self._add_exact_check("data", "ptc_independent_delivery_fingerprint_sidecar_set", sorted(declared), sorted(actual), "Declared independent delivery fingerprint sidecar set")
@@ -599,25 +599,25 @@ class _PublicTrustCenterVerifier:
         for path, doc in sorted(sidecars.items()):
             if not isinstance(doc, dict):
                 continue
-            evidence = doc.get("evidence") if isinstance(doc.get("evidence"), dict) else {}
-            payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
-            summary = doc.get("summary") if isinstance(doc.get("summary"), dict) else {}
+            evidence = _as_document(doc.get("evidence"))
+            payload = _as_document(doc.get("payload"))
+            summary = _as_document(doc.get("summary"))
             fingerprint_path = str(doc.get("fingerprint_sidecar_path") or summary.get("fingerprint_sidecar_path") or "")
             fingerprint_doc = fingerprint_sidecars.get(fingerprint_path, {}) if fingerprint_path else {}
-            fingerprint_payload = fingerprint_doc.get("payload") if isinstance(fingerprint_doc.get("payload"), dict) else {}
-            evidence_payload = evidence.get("payload") if isinstance(evidence.get("payload"), dict) else {}
+            fingerprint_payload = _as_document(fingerprint_doc.get("payload"))
+            evidence_payload = _as_document(evidence.get("payload"))
             self._add_exact_check("data", "ptc_delivery_sidecar_evidence_binding", payload, evidence_payload, f"Delivery sidecar payload binds independent evidence {path}")
             self._add_exact_check("data", "ptc_delivery_sidecar_evidence_payload_hash", evidence.get("payload_hash"), stable_hash(evidence_payload), f"Delivery sidecar evidence payload hash {path}")
             self._add_exact_check("data", "ptc_delivery_sidecar_summary_hash", doc.get("summary_hash"), stable_hash({"summary": summary, "payload": payload, "evidence": evidence}), f"Delivery sidecar summary hash {path}")
             self._add_exact_check("data", "ptc_delivery_sidecar_fingerprint_reference", doc.get("fingerprint_sidecar_hash"), stable_hash(fingerprint_doc) if fingerprint_doc else None, f"Delivery sidecar fingerprint reference {path}")
             self._add_exact_check("data", "ptc_delivery_sidecar_fingerprint_payload_binding", payload, fingerprint_payload, f"Delivery sidecar payload binds fingerprint sidecar {path}")
             self._add_exact_check("data", "ptc_delivery_fingerprint_payload_hash", fingerprint_doc.get("payload_hash") if isinstance(fingerprint_doc, dict) else None, stable_hash(fingerprint_payload), f"Delivery fingerprint payload hash {path}")
-            fingerprints = fingerprint_doc.get("fingerprints") if isinstance(fingerprint_doc.get("fingerprints"), dict) else {}
+            fingerprints = _as_document(fingerprint_doc.get("fingerprints"))
             self._add_exact_check("data", "ptc_delivery_fingerprint_hash", fingerprint_doc.get("fingerprint_hash") if isinstance(fingerprint_doc, dict) else None, stable_hash({"payload_hash": fingerprint_doc.get("payload_hash") if isinstance(fingerprint_doc, dict) else None, "fingerprints": fingerprints}), f"Delivery fingerprint hash {path}")
 
     def _verify_requirements(self) -> None:
-        packages = self.report_doc.get("package_index") if isinstance(self.report_doc.get("package_index"), list) else []
-        releases = self.report_doc.get("release_readiness") if isinstance(self.report_doc.get("release_readiness"), list) else []
+        packages = _as_list(self.report_doc.get("package_index"))
+        releases = _as_list(self.report_doc.get("release_readiness"))
         if self.require_release_readiness:
             ok = bool(releases) and all(item.get("readiness") == "ready" for item in releases if isinstance(item, dict))
             self._add_check("requirements", "ptc_require_release_readiness", "passed" if ok else "failed", "blocking", "All releases are ready." if ok else "Release readiness is required.")
@@ -636,7 +636,7 @@ class _PublicTrustCenterVerifier:
             matching = [item for item in packages if isinstance(item, dict) and item.get("package_type") == package_type]
             ok = bool(matching) and all(item.get("verification_status") == "passed" for item in matching)
             self._add_check("requirements", f"ptc_require_{package_type}", "passed" if ok else "failed", "blocking", f"{package_type} public evidence is verified." if ok else f"{package_type} public evidence is required.")
-        delivery_rows = self.report_doc.get("delivery_readiness") if isinstance(self.report_doc.get("delivery_readiness"), list) else []
+        delivery_rows = _as_list(self.report_doc.get("delivery_readiness"))
         if self.require_delivery_readiness:
             ok = bool(delivery_rows) and all(item.get("readiness") == "ready" for item in delivery_rows if isinstance(item, dict))
             self._add_check("requirements", "ptc_require_delivery_readiness", "passed" if ok else "failed", "blocking", "Delivery readiness is complete." if ok else "Delivery readiness is required.")
@@ -682,7 +682,7 @@ class _PublicTrustCenterVerifier:
         except (OSError, json.JSONDecodeError) as exc:
             self._add_check("requirements", "ptc_delivery_external_anchor", "failed", "blocking", f"Delivery anchor cannot be read: {exc}")
             return
-        self.delivery_anchor_doc = anchor if isinstance(anchor, dict) else {}
+        self.delivery_anchor_doc = _as_document(anchor)
         self._add_exact_check("requirements", "ptc_delivery_anchor_package_type", self.delivery_anchor_doc.get("package_type"), "musicforge_public_trust_center_delivery_anchor", "Delivery anchor package type")
         self._add_exact_check("requirements", "ptc_delivery_anchor_hash", self.delivery_anchor_doc.get("anchor_hash"), stable_hash({key: value for key, value in self.delivery_anchor_doc.items() if key != "anchor_hash"}), "Delivery anchor integrity")
         self._add_exact_check("requirements", "ptc_delivery_anchor_zip_sha256", self.delivery_anchor_doc.get("zip_sha256"), self.zip_sha256, "Delivery anchor ZIP sha256")
@@ -690,7 +690,7 @@ class _PublicTrustCenterVerifier:
         self._add_exact_check("requirements", "ptc_delivery_anchor_manifest_hash", self.delivery_anchor_doc.get("manifest_hash"), self.manifest.get("integrity_hash"), "Delivery anchor manifest hash")
         self._add_exact_check("requirements", "ptc_delivery_anchor_source_hash", self.delivery_anchor_doc.get("source_hash"), self.report_doc.get("source_hash"), "Delivery anchor source hash")
         expected = _delivery_anchor_rows_from_fingerprint_sidecars({name: doc for name, doc in self.data_docs.items() if name.startswith("delivery-fingerprint-summaries/")})
-        actual = self.delivery_anchor_doc.get("fingerprint_sidecars") if isinstance(self.delivery_anchor_doc.get("fingerprint_sidecars"), list) else []
+        actual = _as_list(self.delivery_anchor_doc.get("fingerprint_sidecars"))
         self._add_exact_check("requirements", "ptc_delivery_anchor_fingerprint_sidecars", actual, expected, "Delivery anchor binds fingerprint sidecars")
 
     def _verify_anchor_registry(self) -> None:
@@ -726,9 +726,9 @@ class _PublicTrustCenterVerifier:
         current = _find_registry_current_entry(registry)
         registry_anchor = current.get("anchor") if current and isinstance(current.get("anchor"), dict) else {}
         self._add_exact_check("requirements", "ptc_anchor_registry_current_anchor", registry_anchor, self.delivery_anchor_doc, "Anchor Registry current anchor matches delivery anchor")
-        self._add_exact_check("requirements", "ptc_anchor_registry_zip_sha256", registry_anchor.get("zip_sha256"), self.zip_sha256, "Anchor Registry current anchor ZIP sha256")
-        self._add_exact_check("requirements", "ptc_anchor_registry_manifest_hash", registry_anchor.get("manifest_hash"), self.manifest.get("integrity_hash"), "Anchor Registry current anchor manifest hash")
-        self._add_exact_check("requirements", "ptc_anchor_registry_source_hash", registry_anchor.get("source_hash"), self.report_doc.get("source_hash"), "Anchor Registry current anchor source hash")
+        self._add_exact_check("requirements", "ptc_anchor_registry_zip_sha256", _as_document(registry_anchor).get("zip_sha256"), self.zip_sha256, "Anchor Registry current anchor ZIP sha256")
+        self._add_exact_check("requirements", "ptc_anchor_registry_manifest_hash", _as_document(registry_anchor).get("manifest_hash"), self.manifest.get("integrity_hash"), "Anchor Registry current anchor manifest hash")
+        self._add_exact_check("requirements", "ptc_anchor_registry_source_hash", _as_document(registry_anchor).get("source_hash"), self.report_doc.get("source_hash"), "Anchor Registry current anchor source hash")
         if self.require_anchor_published or self.require_anchor_registry_current:
             self._add_exact_check("requirements", "ptc_anchor_registry_current_status", current.get("status") if current else None, "published", "Anchor Registry current entry status")
         if self.require_anchor_not_revoked:
@@ -828,7 +828,7 @@ class _PublicTrustCenterVerifier:
             now=self.generated_at,
         )
         self._add_exact_check("requirements", "ptc_acceptance_board_signoff_verification_status", report.get("status"), "passed", "Acceptance Board signoff archive verification status")
-        summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+        summary = _as_document(report.get("summary"))
         self._add_exact_check("requirements", "ptc_acceptance_board_signoff_status", summary.get("signoff_status"), "signed", "Acceptance Board signoff status")
         self._add_exact_check("requirements", "ptc_acceptance_board_signoff_ready", summary.get("board_readiness"), "ready", "Acceptance Board readiness")
 
@@ -863,12 +863,12 @@ class _PublicTrustCenterVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
         summary = dict(summary)
         summary.update({"center_id": self.manifest.get("center_id") or self.report_doc.get("center_id"), "blocker_count": len(blockers), "warning_count": len(warnings)})
         report = {
@@ -1008,11 +1008,11 @@ def _package_verification_index_from_independent_sidecars(source_hash: Any, side
     for path, doc in sorted(sidecars.items()):
         if not isinstance(doc, dict):
             continue
-        package = dict(doc.get("package") if isinstance(doc.get("package"), dict) else {})
+        package = dict(_as_document(doc.get("package")))
         package["sidecar_path"] = path
         package["sidecar_hash"] = stable_hash(doc)
         packages.append(package)
-        verification = doc.get("verification") if isinstance(doc.get("verification"), dict) else {}
+        verification = _as_document(doc.get("verification"))
         verifications.append(
             {
                 "portfolio_id": package.get("portfolio_id"),
@@ -1046,7 +1046,7 @@ def _delivery_verification_index_from_independent_sidecars(source_hash: Any, sid
     for path, doc in sorted(sidecars.items()):
         if not isinstance(doc, dict):
             continue
-        summary = dict(doc.get("summary") if isinstance(doc.get("summary"), dict) else {})
+        summary = dict(_as_document(doc.get("summary")))
         summary["sidecar_path"] = path
         summary["sidecar_hash"] = stable_hash(doc)
         if doc.get("fingerprint_sidecar_path"):
@@ -1136,7 +1136,7 @@ def _delivery_payloads_from_sidecars(sidecars: dict[str, ImplementationDocument]
         del path
         if not isinstance(doc, dict):
             continue
-        payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+        payload = _as_document(doc.get("payload"))
         row = dict(payload)
         rows.append(row)
     return sorted(rows, key=_delivery_payload_key)
@@ -1148,7 +1148,7 @@ def _delivery_payloads_from_fingerprint_sidecars(sidecars: dict[str, Implementat
         del path
         if not isinstance(doc, dict):
             continue
-        payload = doc.get("payload") if isinstance(doc.get("payload"), dict) else {}
+        payload = _as_document(doc.get("payload"))
         rows.append(dict(payload))
     return sorted(rows, key=_delivery_payload_key)
 
@@ -1163,7 +1163,7 @@ def _delivery_anchor_rows_from_fingerprint_sidecars(sidecars: dict[str, Implemen
                 "path": path,
                 "fingerprint_hash": doc.get("fingerprint_hash"),
                 "payload_hash": doc.get("payload_hash"),
-                "fingerprints_hash": stable_hash(doc.get("fingerprints") if isinstance(doc.get("fingerprints"), dict) else {}),
+                "fingerprints_hash": stable_hash(_as_document(doc.get("fingerprints"))),
             }
         )
     return sorted(rows, key=lambda item: str(item.get("path") or ""))
@@ -1173,7 +1173,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
     try:
         with zipfile.ZipFile(zip_path, "r") as archive:
             value = json.loads(archive.read(entry).decode("utf-8"))
-            return value if isinstance(value, dict) else {}
+            return _as_document(value)
     except Exception:
         return {}
 
@@ -1196,7 +1196,7 @@ def _delivery_payloads_from_data_docs(data_docs: dict[str, ImplementationDocumen
         ("operations", "operations-index.json", "operations"),
     ):
         doc = data_docs.get(doc_name, {})
-        values = doc.get(row_key) if isinstance(doc.get(row_key), list) else []
+        values = _as_list(doc.get(row_key))
         for item in values:
             if isinstance(item, dict):
                 rows.append(_delivery_public_payload(domain, item))

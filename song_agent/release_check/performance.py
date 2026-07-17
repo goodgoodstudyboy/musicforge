@@ -13,6 +13,11 @@ PROFILE_DURATION_BUDGET_SECONDS: dict[str, float] = {
     "ga": 600.0,
 }
 CI_PROFILE_DURATION_BUDGET_SECONDS: dict[str, float] = {
+    "security": 1350.0,
+    "latest": 810.0,
+    "ga": 1080.0,
+}
+CI_PROFILE_DURATION_PREVIOUS_BUDGET_SECONDS: dict[str, float] = {
     "security": 1500.0,
     "latest": 900.0,
     "ga": 1200.0,

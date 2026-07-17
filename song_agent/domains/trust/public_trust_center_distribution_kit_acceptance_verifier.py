@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -75,12 +75,12 @@ def write_public_trust_center_distribution_kit_accepted_evidence_verification_re
 
 
 def print_public_trust_center_distribution_kit_accepted_evidence_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Distribution Kit Accepted Evidence verification")
     print(f"status: {report.get('status')}")
     print(f"center: {summary.get('center_id') or 'unknown'}")
     print(f"evidence: {summary.get('evidence_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def public_trust_center_distribution_kit_accepted_evidence_verification_exit_code(report: dict[str, Any]) -> int:
@@ -198,7 +198,7 @@ class _AcceptedEvidenceVerifier:
             return
         self._add_hash_check("manifest", "ptcdkae_manifest_integrity", self.manifest.get("integrity_hash"), accepted_evidence_manifest_hash(self.manifest), "Accepted Evidence manifest integrity")
         self._add_exact_check("manifest", "ptcdkae_manifest_package_type", self.manifest.get("package_type"), ACCEPTED_EVIDENCE_PACKAGE_TYPE, "Manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -231,16 +231,16 @@ class _AcceptedEvidenceVerifier:
             if actual_sha != item.get("sha256") or actual_size != item.get("size_bytes"):
                 mismatches.append(path)
         self._add_check("manifest", "ptcdkae_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:5]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "ptcdkae_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
     def _verify_documents(self) -> None:
         self._add_exact_check("report", "ptcdkae_report_package_type", self.evidence.get("package_type"), ACCEPTED_EVIDENCE_REPORT_PACKAGE_TYPE, "Evidence report package_type")
         self._add_hash_check("report", "ptcdkae_report_integrity", self.evidence.get("integrity_hash"), accepted_evidence_hash(self.evidence), "Evidence report integrity")
-        source = self.evidence.get("source") if isinstance(self.evidence.get("source"), dict) else {}
+        source = _as_document(self.evidence.get("source"))
         self._add_hash_check("report", "ptcdkae_report_source_hash", self.evidence.get("source_hash"), stable_hash(source), "Evidence report source hash")
-        row = self.manifest.get("evidence") if isinstance(self.manifest.get("evidence"), dict) else {}
+        row = _as_document(self.manifest.get("evidence"))
         self._add_exact_check("manifest", "ptcdkae_manifest_evidence_hash", row.get("integrity_hash"), self.evidence.get("integrity_hash"), "Manifest evidence hash")
         self._add_exact_check("manifest", "ptcdkae_manifest_source_hash", self.manifest.get("source_hash"), self.evidence.get("source_hash"), "Manifest source hash")
         self._add_exact_check("response", "ptcdkae_response_public_projection_match", self.public_response, self.evidence.get("public_response"), "Public response projection")
@@ -265,7 +265,7 @@ class _AcceptedEvidenceVerifier:
             self._add_exact_check("kit", f"ptcdkae_distribution_kit_{key}", self.distribution_kit_summary.get(key), source.get(key), f"Distribution Kit {key}")
 
     def _verify_external_distribution_kit(self) -> None:
-        source = self.evidence.get("source") if isinstance(self.evidence.get("source"), dict) else {}
+        source = _as_document(self.evidence.get("source"))
         if self.distribution_kit_path is None:
             status = "failed" if self.require_current else "warning"
             severity = "blocking" if self.require_current else "warning"
@@ -308,7 +308,7 @@ class _AcceptedEvidenceVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
@@ -362,7 +362,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
             value = json.loads(archive.read(entry).decode("utf-8"))
     except Exception:
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _fs_path(path: Path) -> str:

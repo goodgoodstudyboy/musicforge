@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.program_ucc import ProgramUccRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class ProgramUccEvidence_RootRoutes:
+class ProgramUccEvidence_RootRoutes(ProgramUccRouteContext):
     def _dispatch_ucc_evidence_root(self, method, center_id, tail) -> bool:
         if tail == '/evidence-reviews':
             if method == 'GET':

@@ -1,44 +1,48 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesProvider:
+class CreationRoutesProvider(CreationRouteContext):
     @property
-    def batch_store(self) -> _interfaces_api_runtime.BatchStore:
-        return self.server.batch_store  # type: ignore[attr-defined]
+    def batch_store(self) -> _InterfaceType:
+        return self.server.batch_store
 
     @property
-    def batch_runner(self) -> _interfaces_api_runtime.BatchRunner:
-        return self.server.batch_runner  # type: ignore[attr-defined]
+    def batch_runner(self) -> _InterfaceType:
+        return self.server.batch_runner
 
     @property
-    def project_store(self) -> _interfaces_api_runtime.ProjectStore:
-        return self.server.project_store  # type: ignore[attr-defined]
+    def project_store(self) -> _InterfaceType:
+        return self.server.project_store
 
     @property
-    def prompt_template_store(self) -> _interfaces_api_runtime.PromptTemplateStore:
-        return self.server.prompt_template_store  # type: ignore[attr-defined]
+    def prompt_template_store(self) -> _InterfaceType:
+        return self.server.prompt_template_store
 
     @property
-    def editor_template_store(self) -> _interfaces_api_runtime.EditorTemplateStore:
-        return self.server.editor_template_store  # type: ignore[attr-defined]
+    def editor_template_store(self) -> _InterfaceType:
+        return self.server.editor_template_store
 
     @property
-    def asset_store(self) -> _interfaces_api_runtime.AssetStore:
-        return self.server.asset_store  # type: ignore[attr-defined]
+    def asset_store(self) -> _InterfaceType:
+        return self.server.asset_store
 
     @property
-    def reference_store(self) -> _interfaces_api_runtime.ReferenceStore:
-        return self.server.reference_store  # type: ignore[attr-defined]
+    def reference_store(self) -> _InterfaceType:
+        return self.server.reference_store
 
     @property
-    def library_index_store(self) -> _interfaces_api_runtime.LibraryIndexStore:
-        return self.server.library_index_store  # type: ignore[attr-defined]
+    def library_index_store(self) -> _InterfaceType:
+        return self.server.library_index_store
 
     @property
-    def context_pack_store(self) -> _interfaces_api_runtime.ContextPackStore:
-        return self.server.context_pack_store  # type: ignore[attr-defined]
+    def context_pack_store(self) -> _InterfaceType:
+        return self.server.context_pack_store
 
     def _handle_provider_route(self, method: str) -> None:
         if method == "GET":

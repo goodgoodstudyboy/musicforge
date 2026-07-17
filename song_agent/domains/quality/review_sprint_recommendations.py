@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import json as json
 from typing import Any as Any
@@ -144,7 +144,7 @@ def recommend_review_sprint_task_action(
                 "provider_summary": provider_summary,
             },
             "conflicts": [_conflict_public(conflict) for conflict in conflicts],
-            "context_pack_preview": context_pack_preview if isinstance(context_pack_preview, dict) else {},
+            "context_pack_preview": _as_document(context_pack_preview),
             "warnings": warnings,
         }
     )
@@ -158,7 +158,7 @@ def review_task_context_recommendation_query(
     project_document: Any | None = None,
 ) -> dict[str, Any]:
     request = _song_request_for_task(project_document, task)
-    target = task.target if isinstance(task.target, dict) else {}
+    target = _as_document(task.target)
     role = str(target.get("role") or target.get("track_name") or "")
     candidate_goal = " ".join(
         item
@@ -201,7 +201,7 @@ def recommendation_report_summary(report: dict[str, Any] | None) -> dict[str, An
     if not isinstance(report, dict):
         return {}
     actions = [item for item in report.get("recommended_actions", []) if isinstance(item, dict)]
-    sprint_level = report.get("sprint_level_recommendation") if isinstance(report.get("sprint_level_recommendation"), dict) else {}
+    sprint_level = _as_document(report.get("sprint_level_recommendation"))
     return sanitize_metadata(
         {
             "schema_version": report.get("schema_version"),
@@ -342,14 +342,14 @@ def _context_pack_preview(
         recommended = recommend_library_context(library_index, query)
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         return {"query": query, "asset_refs": [], "reference_refs": [], "warnings": [sanitize_sensitive_text(str(exc))[:160]]}
-    recommendation = recommended.get("recommendation") if isinstance(recommended.get("recommendation"), dict) else {}
-    preview = recommendation.get("context_pack_preview") if isinstance(recommendation.get("context_pack_preview"), dict) else {}
+    recommendation = _as_document(recommended.get("recommendation"))
+    preview = _as_document(recommendation.get("context_pack_preview"))
     return sanitize_metadata(
         {
-            "query": recommendation.get("query") if isinstance(recommendation.get("query"), dict) else query,
-            "asset_refs": preview.get("asset_refs") if isinstance(preview.get("asset_refs"), list) else [],
-            "reference_refs": preview.get("reference_refs") if isinstance(preview.get("reference_refs"), list) else [],
-            "warnings": preview.get("warnings") if isinstance(preview.get("warnings"), list) else [],
+            "query": _document_or(recommendation.get("query"), query),
+            "asset_refs": _as_list(preview.get("asset_refs")),
+            "reference_refs": _as_list(preview.get("reference_refs")),
+            "warnings": _as_list(preview.get("warnings")),
         }
     )
 
@@ -410,7 +410,7 @@ def _ref_order(sprint: ReviewSprint, task_id: str) -> int:
 
 def _task_conflicts(conflict_report: ImplementationDocument, task_id: str) -> list[ImplementationDocument]:
     conflicts = conflict_report.get("conflicts") if isinstance(conflict_report, dict) else []
-    return [dict(item) for item in conflicts if isinstance(item, dict) and task_id in [str(task) for task in item.get("task_ids", [])]]
+    return [dict(item) for item in _as_list(conflicts) if isinstance(item, dict) and task_id in [str(task) for task in item.get("task_ids", [])]]
 
 
 def _conflict_summary(conflicts: list[ImplementationDocument]) -> ImplementationDocument:

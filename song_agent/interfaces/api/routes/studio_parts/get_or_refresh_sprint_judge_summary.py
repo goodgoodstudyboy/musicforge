@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list, list_or as _list_or
+
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.studio import StudioRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -8,12 +14,12 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioRoutesGetOrRefreshSprintJudgeSummary:
+class StudioRoutesGetOrRefreshSprintJudgeSummary(StudioRouteContext):
     def _get_or_refresh_sprint_judge_summary(
         self,
         project_id: str,
-        sprint_store: _interfaces_api_runtime.ReviewSprintStore,
-        task_store: _interfaces_api_runtime.ReviewTaskStore,
+        sprint_store: _InterfaceType,
+        task_store: _InterfaceType,
         sprint: Any,
         *,
         refresh: bool,
@@ -36,18 +42,18 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
     def _refresh_review_sprint_judge_reports(
         self,
         project_id: str,
-        sprint_store: _interfaces_api_runtime.ReviewSprintStore,
-        task_store: _interfaces_api_runtime.ReviewTaskStore,
+        sprint_store: _InterfaceType,
+        task_store: _InterfaceType,
         sprint: Any,
         payload: ImplementationDocument | None = None,
     ) -> ImplementationDocument:
-        payload = payload if isinstance(payload, dict) else {}
+        payload = _as_document(payload)
         requested = [str(item) for item in payload.get("task_ids", []) if str(item).strip()] if isinstance(payload.get("task_ids"), list) else []
         sprint_task_ids = self._review_sprint_ordered_task_ids(sprint)
         task_ids = [task_id for task_id in sprint_task_ids if not requested or task_id in requested]
         max_tasks = max(1, min(20, int(payload.get("max_tasks") or len(task_ids) or 1)))
         skip_existing = bool(payload.get("skip_existing_current", False))
-        results = []
+        results: list[ImplementationDocument] = []
         processed = 0
         for task_id in task_ids:
             if processed >= max_tasks:
@@ -73,7 +79,7 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
         self.project_store.append_event(project_id, "review_sprint_judge_summary_refreshed", {"sprint_id": sprint.sprint_id, "judged_task_count": summary.get("judged_task_count")})
         return _interfaces_api_runtime.sanitize_metadata({**summary, "results": results})
 
-    def _review_sprint_task_items(self, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any) -> list[ImplementationDocument]:
+    def _review_sprint_task_items(self, task_store: _InterfaceType, sprint: Any) -> list[ImplementationDocument]:
         items = []
         for ref in sorted(sprint.task_refs, key=lambda item: int(item.get("order") or 0)):
             if not ref.get("included", True):
@@ -99,13 +105,13 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
                 items.append({"ref": ref, "task_id": task_id, "missing": True})
         return items
 
-    def _refresh_review_sprint_state(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any) -> tuple[Any, ImplementationDocument]:
+    def _refresh_review_sprint_state(self, project_id: str, sprint_store: _InterfaceType, task_store: _InterfaceType, sprint: Any) -> tuple[Any, ImplementationDocument]:
         parent_hashes = self._review_sprint_parent_plan_hashes(project_id, task_store, sprint)
         report = sprint_store.detect_conflicts(sprint, task_store=task_store, parent_plan_hashes=parent_hashes, now=_interfaces_api_runtime._utc_now())
         sprint = sprint_store.refresh_summary(sprint, task_store=task_store, now=_interfaces_api_runtime._utc_now())
         return sprint, report
 
-    def _refresh_review_sprint_recommendations(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any) -> ImplementationDocument:
+    def _refresh_review_sprint_recommendations(self, project_id: str, sprint_store: _InterfaceType, task_store: _InterfaceType, sprint: Any) -> ImplementationDocument:
         try:
             project_document = self.project_store.sync_project(project_id, self.store.get_job)
         except FileNotFoundError:
@@ -122,7 +128,7 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
         )
         return sprint_store.write_recommendation_report(sprint, report, now=report.get("created_at") or _interfaces_api_runtime._utc_now())
 
-    def _review_sprint_parent_plan_hashes(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any) -> dict[str, str]:
+    def _review_sprint_parent_plan_hashes(self, project_id: str, task_store: _InterfaceType, sprint: Any) -> dict[str, str]:
         hashes: dict[str, str] = {}
         version_ids = []
         for ref in sprint.task_refs:
@@ -162,7 +168,7 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
                 conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
                 recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
                 queue_store = _interfaces_api_runtime.ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
-                queue_summary = _interfaces_api_runtime.action_queue_collection_summary(queue_store.list_queues(include_archived=True))
+                queue_summary = _interfaces_api_runtime.action_queue_collection_summary(_as_list(queue_store.list_queues(include_archived=True)))
                 judge_summary_data = sprint_store.read_judge_summary(sprint.sprint_id, default={})
                 matches.append(_interfaces_api_runtime.review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, queue_summary, judge_summary_data))
             if not matches:
@@ -232,14 +238,14 @@ class StudioRoutesGetOrRefreshSprintJudgeSummary:
         except (OSError, ValueError, TypeError, FileNotFoundError, _interfaces_api_runtime.json.JSONDecodeError):
             return {}
 
-    def _generate_review_sprint_local_candidates(self, project_id: str, sprint_store: _interfaces_api_runtime.ReviewSprintStore, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, payload: ImplementationDocument) -> ImplementationDocument:
+    def _generate_review_sprint_local_candidates(self, project_id: str, sprint_store: _InterfaceType, task_store: _InterfaceType, sprint: Any, payload: ImplementationDocument) -> ImplementationDocument:
         if sprint.status not in {"open", "in_progress", "blocked"}:
             raise _interfaces_api_runtime.ReviewSprintStateError(f"Cannot generate candidates for a {sprint.status} review sprint.")
         sprint, conflict_report = self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint)
         stop_on_conflict = bool(payload.get("stop_on_conflict", sprint.settings.get("stop_on_conflict", False)))
         if stop_on_conflict and any(item.get("severity") == "blocking" for item in conflict_report.get("conflicts", [])):
             raise _interfaces_api_runtime.ReviewSprintStateError("Review sprint has blocking conflicts.")
-        strategies = payload.get("strategies") if isinstance(payload.get("strategies"), list) else sprint.settings.get("local_candidate_strategies")
+        strategies = _list_or(payload.get("strategies"), sprint.settings.get("local_candidate_strategies"))
         render_midi = bool(payload.get("render_midi", sprint.settings.get("render_midi", True)))
         skip_existing = bool(payload.get("skip_existing_ready", True))
         results = []

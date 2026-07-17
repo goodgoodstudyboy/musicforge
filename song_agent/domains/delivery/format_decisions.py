@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -175,7 +177,7 @@ class FormatDecisionStore:
             profile = self.profile_store.get_profile(profile_id)
             manifest_summary = manifests.get(profile_id, {})
             acceptance_profile = acceptance_profiles.get(profile_id, {})
-            tracks = manifest.get("tracks") if isinstance(manifest.get("tracks"), list) else []
+            tracks = _as_list(manifest.get("tracks"))
             sizes = [int(row.get("size_bytes") or 0) for row in tracks if isinstance(row, dict)]
             ratings = []
             manual_count = 0
@@ -184,7 +186,7 @@ class FormatDecisionStore:
             rejected_count = 0
             warning_count = 0
             blockers = []
-            warnings = []
+            warnings: list[_InferenceType] = []
             if manifest.get("stale"):
                 blockers.append("manifest_stale")
             if not manifest or not manifest_summary:
@@ -454,7 +456,7 @@ class FormatDecisionStore:
                 return default
             raise FormatDecisionNotFoundError("No active format decision session.")
         value = read_json(path)
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def active_report(self, release_id: str, session_id: str | None = None) -> dict[str, Any]:
         active = {"session_id": session_id} if session_id else self.read_active_session(release_id, default={})
@@ -483,7 +485,7 @@ class FormatDecisionStore:
         except FormatDecisionError as exc:
             return {"status": "failed", "require_format_decision": True, "hard_block": True, "message": str(exc), "session_id": session_id}
         required_set = set(normalize_required_profiles(required_profiles or []))
-        decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
+        decision = _as_document(report.get("decision"))
         selected = set(decision.get("selected_profiles", []) if isinstance(decision.get("selected_profiles"), list) else [])
         missing = sorted(required_set - selected)
         failures = []
@@ -525,7 +527,7 @@ class FormatDecisionStore:
                 report = {}
         rejected = set(report.get("decision", {}).get("rejected_profiles", []) if isinstance(report.get("decision"), dict) else [])
         rejected_required = sorted(set(profiles) & rejected)
-        decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
+        decision = _as_document(report.get("decision"))
         coverage = distribution_target_format_decision_coverage(target, profiles, decision)
         missing_required = list(coverage["missing_profiles"])
         role_incompatible = list(coverage["role_incompatible_profiles"])
@@ -566,7 +568,7 @@ class FormatDecisionStore:
             return {"status": "missing", "summary_path": None}
         report = self.read_report(release_id, sid)
         required_profiles = [profile for profile in resolve_target_audio_format_profiles(target, self.distribution_store.resolve_target_template(target)) if profile != "wav_master"]
-        decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
+        decision = _as_document(report.get("decision"))
         coverage = distribution_target_format_decision_coverage(target, required_profiles, decision)
         missing = list(coverage["missing_profiles"])
         incompatible = list(coverage["role_incompatible_profiles"])
@@ -646,7 +648,7 @@ class FormatDecisionStore:
         )
 
     def with_current_session_state(self, session: dict[str, Any]) -> dict[str, Any]:
-        clean = sanitize_metadata(session if isinstance(session, dict) else {}, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
+        clean = sanitize_metadata(_as_document(session), blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
         reasons = []
         try:
             current_source = self.source_state(str(clean.get("release_id") or ""), normalize_required_profiles(clean.get("candidate_profiles") or []), now=str(clean.get("created_at") or "") or None)
@@ -654,7 +656,7 @@ class FormatDecisionStore:
         except Exception as exc:
             current_hash = ""
             reasons.append(sanitize_sensitive_text(str(exc))[:120] or "source_unavailable")
-        stored_source = clean.get("source") if isinstance(clean.get("source"), dict) else {}
+        stored_source = _as_document(clean.get("source"))
         if current_hash and stable_hash(stored_source) != current_hash:
             reasons.append("source_changed")
         if str(clean.get("source_hash") or "") != format_decision_source_hash(clean):
@@ -668,7 +670,7 @@ class FormatDecisionStore:
         return sanitize_metadata(clean, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
 
     def with_current_matrix_state(self, matrix: dict[str, Any]) -> dict[str, Any]:
-        clean = sanitize_metadata(matrix if isinstance(matrix, dict) else {}, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
+        clean = sanitize_metadata(_as_document(matrix), blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
         reasons = []
         try:
             current_hash = stable_hash(self.source_state(str(clean.get("release_id") or ""), normalize_required_profiles([row.get("profile_id") for row in clean.get("profiles", []) if isinstance(row, dict)]), now=str(clean.get("generated_at") or "") or None))
@@ -676,7 +678,7 @@ class FormatDecisionStore:
             current_hash = ""
             reasons.append(sanitize_sensitive_text(str(exc))[:120] or "source_unavailable")
         if current_hash and str(clean.get("source_hash") or "") != current_hash:
-            stored_source = clean.get("source") if isinstance(clean.get("source"), dict) else {}
+            stored_source = _as_document(clean.get("source"))
             if stable_hash(stored_source) == current_hash:
                 clean["source_hash"] = current_hash
             else:
@@ -692,7 +694,7 @@ class FormatDecisionStore:
         return sanitize_metadata(clean, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
 
     def with_current_recommendation_state(self, recommendation: dict[str, Any]) -> dict[str, Any]:
-        clean = sanitize_metadata(recommendation if isinstance(recommendation, dict) else {}, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
+        clean = sanitize_metadata(_as_document(recommendation), blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
         reasons = []
         matrix = self.read_matrix(str(clean.get("release_id") or ""), str(clean.get("session_id") or ""), default={})
         if matrix and str(clean.get("matrix_hash") or clean.get("source_hash") or "") not in {str(matrix.get("integrity_hash") or ""), str(matrix.get("source_hash") or "")}:
@@ -705,7 +707,7 @@ class FormatDecisionStore:
         return sanitize_metadata(clean, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
 
     def with_current_report_state(self, report: dict[str, Any]) -> dict[str, Any]:
-        clean = sanitize_metadata(report if isinstance(report, dict) else {}, blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
+        clean = sanitize_metadata(_as_document(report), blocked_keys=FORMAT_DECISION_BLOCKED_KEYS)
         reasons = []
         try:
             session = self.read_session(str(clean.get("release_id") or ""), str(clean.get("session_id") or ""))
@@ -754,7 +756,7 @@ class FormatDecisionStore:
         if not path.exists():
             return {}
         value = read_json(path)
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _target_context(self, release_id: str) -> ImplementationDocument:
         targets = []
@@ -910,9 +912,9 @@ def format_report_integrity_ok(report: dict[str, Any]) -> bool:
 
 
 def format_decision_export_summary(report: dict[str, Any], matrix: dict[str, Any] | None = None, recommendation: dict[str, Any] | None = None) -> dict[str, Any]:
-    matrix = matrix if isinstance(matrix, dict) else {}
-    recommendation = recommendation if isinstance(recommendation, dict) else {}
-    decision = report.get("decision") if isinstance(report.get("decision"), dict) else {}
+    matrix = _as_document(matrix)
+    recommendation = _as_document(recommendation)
+    decision = _as_document(report.get("decision"))
     return sanitize_metadata(
         {
             "status": report.get("status") or "missing",
@@ -984,7 +986,7 @@ def _safe_text(value: Any, fallback: str, limit: int) -> str:
 
 
 def _decision_relevant_target_options(options: Any) -> ImplementationDocument:
-    data = options if isinstance(options, dict) else {}
+    data = _as_document(options)
     return {
         key: data.get(key)
         for key in ("audio_format_profiles", "primary_audio_format", "require_encoded_audio", "require_encoded_audio_review", "require_format_decision")

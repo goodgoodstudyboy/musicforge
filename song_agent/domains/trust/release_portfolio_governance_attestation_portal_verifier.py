@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -90,7 +90,7 @@ def print_release_portfolio_governance_attestation_portal_verification_report(re
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -209,7 +209,7 @@ class _PortalVerifier:
         self._add_hash_check("manifest", "portal_manifest_integrity", self.manifest.get("integrity_hash"), actual_manifest_hash, "Portal manifest integrity")
         package_type_ok = self.manifest.get("package_type") == PORTAL_PACKAGE_TYPE
         self._add_check("manifest", "portal_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is valid." if package_type_ok else "Manifest package_type is invalid.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -273,10 +273,10 @@ class _PortalVerifier:
     def _verify_documents(self) -> None:
         if self.report_doc:
             self._add_hash_check("report", "portal_report_integrity", self.report_doc.get("integrity_hash"), portal_report_hash(self.report_doc), "Portal Report integrity")
-            row = self.manifest.get("portal_report") if isinstance(self.manifest.get("portal_report"), dict) else {}
+            row = _as_document(self.manifest.get("portal_report"))
             self._add_hash_check("report", "portal_manifest_report_hash", row.get("integrity_hash"), self.report_doc.get("integrity_hash"), "Manifest report hash")
             self._add_hash_check("report", "portal_manifest_report_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest report source hash")
-            source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+            source = _as_document(self.report_doc.get("source"))
             self._add_hash_check("report", "portal_report_source_hash", self.report_doc.get("source_hash"), stable_hash(source), "Portal Report source hash")
             self._verify_source_bindings(source)
             self._verify_summary_bindings()
@@ -285,8 +285,8 @@ class _PortalVerifier:
         self._verify_data_documents()
 
     def _verify_source_bindings(self, source: ImplementationDocument) -> None:
-        registry_row = self.manifest.get("registry") if isinstance(self.manifest.get("registry"), dict) else {}
-        current_row = self.manifest.get("current_attestation") if isinstance(self.manifest.get("current_attestation"), dict) else {}
+        registry_row = _as_document(self.manifest.get("registry"))
+        current_row = _as_document(self.manifest.get("current_attestation"))
         for label, expected, actual in (
             ("zip_sha256", registry_row.get("zip_sha256"), source.get("registry_zip_sha256")),
             ("manifest_hash", registry_row.get("manifest_hash"), source.get("registry_manifest_hash")),
@@ -304,13 +304,13 @@ class _PortalVerifier:
             self._add_exact_check("manifest", f"portal_manifest_current_attestation_{label}", expected, actual, f"Manifest current attestation {label}")
 
     def _verify_summary_bindings(self) -> None:
-        report_summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
-        portal_summary = self.data_docs.get("portal-summary.json", {}).get("summary") if isinstance(self.data_docs.get("portal-summary.json", {}).get("summary"), dict) else {}
+        report_summary = _as_document(self.report_doc.get("summary"))
+        portal_summary = _as_document(self.data_docs.get("portal-summary.json", {}).get("summary"))
         for key in ("current_entry_id", "current_certificate_id", "published_count", "revoked_count", "superseded_count"):
             self._add_exact_check("data", f"portal_data_portal_summary_{key}", portal_summary.get(key), report_summary.get(key), f"Portal summary {key}")
 
     def _verify_data_documents(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         registry_summary = self.data_docs.get("registry-summary.json", {})
         current_summary = self.data_docs.get("current-attestation-summary.json", {})
         registry_verification = self.data_docs.get("registry-verification-summary.json", {})
@@ -410,15 +410,15 @@ class _PortalVerifier:
             ("final_board_signoff_hash", "final_board_signoff_hash"),
         ):
             self._add_exact_check("data", f"portal_data_current_attestation_verification_{key}", current_summary.get(key), attestation_verification.get(verification_key), f"Current attestation summary {key} verification binding")
-        external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
-        accepted_external = accepted.get("external_review") if isinstance(accepted.get("external_review"), dict) else {}
+        external = _as_document(self.manifest.get("external_review"))
+        accepted_external = _as_document(accepted.get("external_review"))
         if accepted:
             self._add_exact_check("data", "portal_data_accepted_evidence_source_hash", accepted.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence summary source_hash")
             for key in ("status", "external_review_status", "accepted_evidence_id", "response_id", "reviewer_label", "reviewed_at", "verification_status", "source_hash", "current_entry_id", "current_certificate_id", "accepted_evidence_verification_status", "accepted_evidence_zip_sha256", "accepted_evidence_zip_size_bytes", "accepted_evidence_manifest_hash", "accepted_evidence_verification_report_hash"):
                 self._add_exact_check("data", f"portal_data_accepted_evidence_{key}", accepted_external.get(key), external.get(key), f"Accepted Evidence summary {key}")
         if accepted_verification:
-            manifest_verification = self.manifest.get("external_review_verification") if isinstance(self.manifest.get("external_review_verification"), dict) else {}
-            verification = accepted_verification.get("accepted_evidence_verification") if isinstance(accepted_verification.get("accepted_evidence_verification"), dict) else {}
+            manifest_verification = _as_document(self.manifest.get("external_review_verification"))
+            verification = _as_document(accepted_verification.get("accepted_evidence_verification"))
             self._add_exact_check("data", "portal_data_accepted_evidence_verification_source_hash", accepted_verification.get("source_hash"), self.report_doc.get("source_hash"), "Accepted Evidence verification summary source_hash")
             for key in (
                 "accepted_evidence_id",
@@ -458,7 +458,7 @@ class _PortalVerifier:
         self._add_check("data", "portal_data_verification_commands_safe", "failed" if unsafe_commands else "passed", "blocking", "verification-commands contains unsafe paths or remote URLs." if unsafe_commands else "verification-commands contains no local paths or remote URLs.")
 
     def _verify_html(self, archive: zipfile.ZipFile) -> None:
-        pages = self.manifest.get("pages") if isinstance(self.manifest.get("pages"), list) else []
+        pages = _as_list(self.manifest.get("pages"))
         page_rows = {str(item.get("path") or ""): item for item in pages if isinstance(item, dict)}
         source_hash = str(self.report_doc.get("source_hash") or "")
         for page in PORTAL_PAGES:
@@ -488,7 +488,7 @@ class _PortalVerifier:
             self._add_check("html", f"portal_html_{page}_safe", "failed" if bad else "passed", "blocking", f"{page} contains forbidden HTML content: " + ", ".join(bad) if bad else f"{page} contains no forbidden HTML content.")
 
     def _verify_requirements(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         if self.require_current:
             self._add_check("requirements", "portal_require_current", "passed" if source.get("registry_current_entry_id") and source.get("current_certificate_id") else "failed", "blocking", "Current published Portal entry is present." if source.get("registry_current_entry_id") and source.get("current_certificate_id") else "Current published Portal entry is required.")
         if self.require_registry:
@@ -496,9 +496,9 @@ class _PortalVerifier:
         if self.require_attestation:
             self._add_check("requirements", "portal_require_attestation", "passed" if source.get("attestation_verification_status") == "passed" and source.get("current_attestation_zip_sha256") else "failed", "blocking", "Public Attestation verification evidence is present." if source.get("attestation_verification_status") == "passed" and source.get("current_attestation_zip_sha256") else "Passed Public Attestation verification evidence is required.")
         if self.require_accepted_evidence:
-            external = self.manifest.get("external_review") if isinstance(self.manifest.get("external_review"), dict) else {}
+            external = _as_document(self.manifest.get("external_review"))
             accepted_verification = self.data_docs.get("accepted-evidence-verification-summary.json", {})
-            verification = accepted_verification.get("accepted_evidence_verification") if isinstance(accepted_verification.get("accepted_evidence_verification"), dict) else {}
+            verification = _as_document(accepted_verification.get("accepted_evidence_verification"))
             ok = (
                 bool(self.data_docs.get("accepted-evidence-summary.json"))
                 and bool(accepted_verification)
@@ -547,12 +547,12 @@ class _PortalVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = self.report_doc.get("summary") if isinstance(self.report_doc.get("summary"), dict) else {}
+        summary = _as_document(self.report_doc.get("summary"))
         summary = dict(summary)
         summary.update({"portfolio_id": self.manifest.get("portfolio_id") or self.report_doc.get("portfolio_id"), "blocker_count": len(blockers), "warning_count": len(warnings)})
         report = {

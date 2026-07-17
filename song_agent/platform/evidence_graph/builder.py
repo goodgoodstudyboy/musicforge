@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json
 from pathlib import Path
@@ -302,7 +302,7 @@ def _read_external_report(path: Path | None, package_type: str, blockers: list[s
         return {}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-        report = value if isinstance(value, dict) else {}
+        report = _as_document(value)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         blockers.append("evidence_verification_report_readable")
         return {}
@@ -317,7 +317,7 @@ def _read_external_report(path: Path | None, package_type: str, blockers: list[s
 
 def _resolve_proofs(row: ImplementationDocument, root: Path, allowed_root: Path | None, spec: Any, blockers: list[str]) -> dict[str, Path]:
     proof_value = row.get("proofs")
-    proofs: dict[str, Any] = proof_value if isinstance(proof_value, dict) else {}
+    proofs: dict[str, Any] = _as_document(proof_value)
     resolved: dict[str, Path] = {}
     for key, _argument in spec.proof_arguments:
         raw_path = proofs.get(key) or row.get(key)
@@ -379,10 +379,10 @@ def _validate_bindings(
 
 def _append_runtime_diagnostics(runtime: ImplementationDocument, blockers: list[str], warnings: list[str]) -> None:
     blocker_value = runtime.get("blockers")
-    runtime_blockers: list[Any] = blocker_value if isinstance(blocker_value, list) else []
+    runtime_blockers: list[Any] = _as_list(blocker_value)
     blockers.extend(f"runtime:{item}" for item in runtime_blockers if item)
     warning_value = runtime.get("warnings")
-    runtime_warnings: list[Any] = warning_value if isinstance(warning_value, list) else []
+    runtime_warnings: list[Any] = _as_list(warning_value)
     warnings.extend(f"runtime:{item}" for item in runtime_warnings if item)
 
 
@@ -412,7 +412,7 @@ def _build_edges(manifest: ImplementationDocument, nodes: list[EvidenceNode], bl
     node_ids = {node.node_id for node in nodes}
     result: list[EvidenceEdge] = []
     edge_value = manifest.get("edges")
-    raw_edges: list[Any] = edge_value if isinstance(edge_value, list) else []
+    raw_edges: list[Any] = _as_list(edge_value)
     for index, raw in enumerate(raw_edges):
         if not isinstance(raw, dict):
             blockers.append(f"evidence_edge_{index}_object")
@@ -454,9 +454,9 @@ def _dependency_cycle(edges: tuple[EvidenceEdge, ...]) -> bool:
 
 def _verification_fingerprint(report: ImplementationDocument) -> ImplementationDocument:
     summary_value = report.get("summary")
-    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+    summary: dict[str, Any] = _as_document(summary_value)
     verification_value = summary.get("verification")
-    verification: dict[str, Any] = verification_value if isinstance(verification_value, dict) else {}
+    verification: dict[str, Any] = _as_document(verification_value)
     return {
         "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256") or verification.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes") or summary.get("zip_size_bytes") or verification.get("zip_size_bytes"),
@@ -467,7 +467,7 @@ def _verification_fingerprint(report: ImplementationDocument) -> ImplementationD
 
 def _public_runtime_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary_value = report.get("summary")
-    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+    summary: dict[str, Any] = _as_document(summary_value)
     allowed = {
         "status",
         "readiness",
@@ -487,7 +487,7 @@ def _public_runtime_summary(report: ImplementationDocument) -> ImplementationDoc
 
 def _lifecycle_status(report: ImplementationDocument) -> str:
     summary_value = report.get("summary")
-    summary: dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+    summary: dict[str, Any] = _as_document(summary_value)
     for key in ("signoff_status", "lifecycle_status", "readiness", "status"):
         value = summary.get(key)
         if isinstance(value, str) and value:
@@ -497,7 +497,7 @@ def _lifecycle_status(report: ImplementationDocument) -> str:
 
 def _dependencies(row: ImplementationDocument) -> tuple[str, ...]:
     dependency_value = row.get("dependencies")
-    values: list[Any] = dependency_value if isinstance(dependency_value, list) else []
+    values: list[Any] = _as_list(dependency_value)
     return tuple(sorted({_text(value) for value in values if _text(value)}))
 
 

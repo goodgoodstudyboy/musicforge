@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+
 from typing import Any
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class CreationRoutesReference:
+class CreationRoutesReference(CreationRouteContext):
     def _handle_reference_route_part_01(self, method: str, reference_id: str, tail: str, _split_state):
         if tail == '':
             if method == 'GET':
@@ -99,7 +103,7 @@ class CreationRoutesReference:
         return (False, None)
 
     def _handle_reference_route(self, method: str, reference_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_reference_route_part_01(method, reference_id, tail, _split_state)
             if _split_result[0]:

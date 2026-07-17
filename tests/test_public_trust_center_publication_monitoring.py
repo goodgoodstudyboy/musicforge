@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import hashlib
 from pathlib import Path
@@ -48,7 +47,7 @@ def test_publication_monitoring_detects_mirror_drift_and_incident(tmp_path: Path
     mirror = publication_store.export_dir("ptc-default", "c", publication["publication_id"])
     (mirror / "README.txt").write_text("tampered", encoding="utf-8")
     store = PublicTrustCenterPublicationMonitoringStore(publication_store=publication_store)
-    monitor = store.create_monitor("ptc-default", "c", {"monitor_id": "mon"})
+    store.create_monitor("ptc-default", "c", {"monitor_id": "mon"})
     result = store.run_monitor("ptc-default", "c", "mon")
 
     assert result["monitor_run"]["status"] == "failed"
@@ -59,7 +58,7 @@ def test_publication_monitoring_detects_mirror_drift_and_incident(tmp_path: Path
 def test_publication_monitoring_old_zip_fails_after_revoke_and_supersede(tmp_path: Path, monkeypatch) -> None:
     publication_store, publication = _ready_publication(tmp_path, monkeypatch)
     store = PublicTrustCenterPublicationMonitoringStore(publication_store=publication_store)
-    monitor = store.create_monitor("ptc-default", "c", {"monitor_id": "mon"})
+    store.create_monitor("ptc-default", "c", {"monitor_id": "mon"})
     result = store.run_monitor("ptc-default", "c", "mon")
     run_id = result["monitor_run"]["run_id"]
     store.export_monitoring_run("ptc-default", "c", "mon", run_id)
@@ -91,7 +90,7 @@ def test_publication_monitoring_old_zip_fails_after_revoke_and_supersede(tmp_pat
 def test_publication_monitoring_verifier_rejects_tamper_and_zip_edges(tmp_path: Path, monkeypatch) -> None:
     publication_store, _publication = _ready_publication(tmp_path, monkeypatch)
     store = PublicTrustCenterPublicationMonitoringStore(publication_store=publication_store)
-    monitor = store.create_monitor("ptc-default", "c", {"monitor_id": "mon"})
+    store.create_monitor("ptc-default", "c", {"monitor_id": "mon"})
     result = store.run_monitor("ptc-default", "c", "mon")
     run_id = result["monitor_run"]["run_id"]
     store.export_monitoring_run("ptc-default", "c", "mon", run_id)

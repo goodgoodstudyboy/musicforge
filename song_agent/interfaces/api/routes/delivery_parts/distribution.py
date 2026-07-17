@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class DeliveryRoutesDistribution:
+class DeliveryRoutesDistribution(DeliveryRouteContext):
     def _handle_distribution_route_part_01(self, method: str, release_id: str, tail: str, _split_state):
         if tail in {'', '/'}:
             if method != 'GET':
@@ -161,7 +167,7 @@ class DeliveryRoutesDistribution:
                 _split_state['report'] = self._get_or_refresh_distribution_qa(release_id, _split_state['target'], refresh=False)
                 manifest = _interfaces_api_runtime.build_distribution_export_package(store=self.distribution_store, release_id=release_id, target=_split_state['target'], qa_report=_split_state['report'], now=_interfaces_api_runtime._utc_now())
                 _split_state['target'] = self.distribution_store.get_target(release_id, _split_state['target_id'])
-                self._send_json({'ok': True, 'release_id': release_id, 'target': _split_state['target'].to_dict(), 'manifest': manifest, 'summary': _interfaces_api_runtime.distribution_export_summary(manifest), 'layout_summary': _interfaces_api_runtime.layout_summary(manifest.get('layout') if isinstance(manifest.get('layout'), dict) else {})}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                self._send_json({'ok': True, 'release_id': release_id, 'target': _split_state['target'].to_dict(), 'manifest': manifest, 'summary': _interfaces_api_runtime.distribution_export_summary(manifest), 'layout_summary': _interfaces_api_runtime.layout_summary(_as_document(manifest.get('layout')))}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return (True, None)
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
             return (True, None)
@@ -277,7 +283,7 @@ class DeliveryRoutesDistribution:
         return (False, None)
 
     def _handle_distribution_route(self, method: str, release_id: str, tail: str) -> None:
-        _split_state = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_distribution_route_part_01(method, release_id, tail, _split_state)
             if _split_result[0]:

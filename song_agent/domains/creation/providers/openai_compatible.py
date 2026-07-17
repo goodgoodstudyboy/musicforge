@@ -94,7 +94,7 @@ class OpenAICompatibleClient:
         instruction: str,
         config: ProviderConfig,
         prompt: str,
-    ) -> dict[str, Any]:
+    ) -> ProviderEditResponse:
         config.validate_ready_for_provider()
         response = self._request(
             config,

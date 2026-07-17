@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import threading as threading
@@ -183,7 +183,7 @@ class AudioCampaignStore:
                         }
                     )
                 except AudioFixSprintStateError:
-                    sprint = self._find_existing_sprint_for_session(session_id)
+                    sprint = _as_document(self._find_existing_sprint_for_session(session_id))
                     if not sprint:
                         raise
                 created.append(sprint)
@@ -511,7 +511,7 @@ class AudioCampaignStore:
 
 
 def _build_campaign_report(campaign: ImplementationDocument, fix_store: AudioFixSprintStore) -> ImplementationDocument:
-    settings = campaign.get("settings") if isinstance(campaign.get("settings"), dict) else {}
+    settings = _as_document(campaign.get("settings"))
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     case_reports: list[dict[str, Any]] = []
@@ -534,8 +534,8 @@ def _build_campaign_report(campaign: ImplementationDocument, fix_store: AudioFix
     }
     for case in campaign.get("cases", []):
         case_blockers: list[str] = []
-        renderer = case.get("renderer") if isinstance(case.get("renderer"), dict) else {}
-        review = case.get("review") if isinstance(case.get("review"), dict) else {}
+        renderer = _as_document(case.get("renderer"))
+        review = _as_document(case.get("review"))
         markers = [marker for marker in case.get("markers", []) if isinstance(marker, dict)]
         wav_sha = case.get("artifact_hashes", {}).get("wav_sha256") if isinstance(case.get("artifact_hashes"), dict) else None
         if case.get("stale"):
@@ -734,7 +734,7 @@ def _session_ids_from_payload(payload: ImplementationDocument) -> list[str]:
 
 def _sessions_requiring_fix(campaign: ImplementationDocument) -> list[str]:
     sessions = []
-    settings = campaign.get("settings") if isinstance(campaign.get("settings"), dict) else {}
+    settings = _as_document(campaign.get("settings"))
     for case in campaign.get("cases", []):
         if _case_requires_fix(case, settings):
             session_id = str(case.get("session_id") or "")
@@ -744,7 +744,7 @@ def _sessions_requiring_fix(campaign: ImplementationDocument) -> list[str]:
 
 
 def _case_requires_fix(case: ImplementationDocument, settings: ImplementationDocument) -> bool:
-    review = case.get("review") if isinstance(case.get("review"), dict) else {}
+    review = _as_document(case.get("review"))
     if review.get("status") in {"needs_fix", "rejected"}:
         return True
     if not settings.get("block_high_or_critical_markers", True):
@@ -769,7 +769,7 @@ def _case_source(case: ImplementationDocument) -> ImplementationDocument:
         "source_hash": case.get("source_hash"),
         "artifact_hashes": case.get("artifact_hashes"),
         "renderer": case.get("renderer"),
-        "review": _review_public(case.get("review") if isinstance(case.get("review"), dict) else {}),
+        "review": _review_public(_as_document(case.get("review"))),
         "markers": [
             {"marker_id": marker.get("marker_id"), "severity": marker.get("severity"), "category": marker.get("category"), "source_hash": marker.get("source_hash")}
             for marker in case.get("markers", [])
@@ -814,7 +814,7 @@ def _blocker_message(blocker: str) -> str:
 
 
 def _readme(campaign: ImplementationDocument, report: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return "\n".join(
         [
             "# MusicForge Audio Campaign",

@@ -315,7 +315,7 @@ class CandidateGroupStore:
         candidate_dir = self.candidate_dir(group_id, candidate_id)
         plan = SongPlan.from_dict(self.read_candidate_plan(group_id, candidate_id))
         midi_path = candidate_midi_path(candidate_dir)
-        report = {
+        report: dict[str, Any] = {
             "candidate_id": candidate_id,
             "group_id": group_id,
             "status": "completed",
@@ -364,7 +364,7 @@ class CandidateGroupStore:
             self.render_candidate_midi(group_id, candidate_id)
         wav_path = candidate_audio_path(candidate_dir)
         candidate = self._candidate_by_id(group_id, candidate_id)
-        report = {
+        report: dict[str, Any] = {
             "candidate_id": candidate_id,
             "group_id": group_id,
             "status": "completed",

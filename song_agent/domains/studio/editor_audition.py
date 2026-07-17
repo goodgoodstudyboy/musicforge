@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import json as json
 import math as math
@@ -129,7 +129,7 @@ class EditorAuditionStore:
         if source not in AUDITION_SOURCES:
             raise EditorAuditionError("source must be parent or preview.")
         label = _bounded_label(payload.get("label"))
-        range_payload = payload.get("range") if isinstance(payload.get("range"), dict) else {"mode": "full_song"}
+        range_payload = _document_or(payload.get("range"), {"mode": "full_song"})
         track_mode = str(payload.get("track_mode") or "all").strip()
         if track_mode not in AUDITION_TRACK_MODES:
             raise EditorAuditionError("track_mode must be all, solo, or mute.")
@@ -402,9 +402,9 @@ def build_audition_plan(
     track_ids: list[str] | None = None,
     changed_sections: list[str] | None = None,
 ) -> tuple[SongPlan, dict[str, Any]]:
-    range_payload = range_payload if isinstance(range_payload, dict) else {"mode": "full_song"}
+    range_payload = _document_or(range_payload, {"mode": "full_song"})
     track_ids = track_ids or []
-    state = editor_state if isinstance(editor_state, dict) else build_editor_state(plan)
+    state = _document_or(editor_state, build_editor_state(plan))
     start_beat, end_beat, range_summary = _resolve_range(state, range_payload, changed_sections or [])
     selected_track_indexes, selected_track_ids = _resolve_tracks(state, track_mode, track_ids)
     sections = _clip_sections(plan, state, start_beat, end_beat)
@@ -609,7 +609,7 @@ def _track_ids(value: Any) -> list[str]:
 
 
 def _artifact_status(value: Any, *, status_key: str) -> ImplementationDocument:
-    data = value if isinstance(value, dict) else {}
+    data = _as_document(value)
     status = str(data.get("status") or status_key).strip()
     if status not in {"not_started", "running", "completed", "failed"}:
         status = status_key
@@ -679,7 +679,7 @@ def _append_audition_event(audition_dir: Path, event_type: str, payload: Impleme
 
 def _review_event_payload(manifest: EditorAuditionManifest) -> ImplementationDocument:
     row = audition_review_row(manifest)
-    review = row.get("review") if isinstance(row.get("review"), dict) else {}
+    review = _as_document(row.get("review"))
     return {
         "rating": review.get("rating", 0),
         "status": review.get("status", "unreviewed"),

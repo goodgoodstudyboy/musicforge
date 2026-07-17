@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramVaultOperationsHttpRoutes:
+class ProgramVaultOperationsHttpRoutes(ProgramHttpContext):
     def _dispatch_vault_operations(self, method, program_id, tail) -> bool:
         return (
             self._dispatch_vault_operations_custody(method, program_id, tail)

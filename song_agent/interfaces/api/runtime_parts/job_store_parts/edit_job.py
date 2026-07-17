@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
+
+from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import EditIntent, EditedSongPlanResult, JobState, Path, apply_asset_refs_to_plan, apply_edit_intent, asset_refs_snapshot, build_edit_metadata, write_asset_refs_snapshot
@@ -12,7 +16,7 @@ from song_agent.interfaces.api.runtime_parts.helpers.job_artifacts import _candi
 
 from song_agent.interfaces.api.runtime_parts.core import JobCancelled
 
-class JobStoreEditJob:
+class JobStoreEditJob(JobStoreContext):
     def _run_edit_job_part_01(self, job_id: str, _split_state):
         _split_state['metadata'] = dict(_split_state['job'].edit_metadata)
         intent = EditIntent.from_dict(_split_state['metadata'])
@@ -84,7 +88,7 @@ class JobStoreEditJob:
         if _split_state['metadata'].get('edit_source') == 'audition_review':
             _split_state['edit_metadata'].update({'edit_source': 'audition_review', 'review_edit': _split_state['metadata'].get('review_edit'), 'review_summary': _split_state['metadata'].get('review_summary') or {}})
         if _split_state['metadata'].get('edit_source') == 'review_task_candidate':
-            _split_state['edit_metadata'].update({'edit_source': 'review_task_candidate', 'operation_count': len(_split_state['metadata'].get('review_candidate_intents') or []), 'review_task': _split_state['metadata'].get('review_task') if isinstance(_split_state['metadata'].get('review_task'), dict) else {}, 'review_candidate': _split_state['metadata'].get('review_candidate') if isinstance(_split_state['metadata'].get('review_candidate'), dict) else {}, 'review_candidate_source': _split_state['metadata'].get('review_candidate_source') if isinstance(_split_state['metadata'].get('review_candidate_source'), dict) else {}, 'review_provider_patch': _split_state['metadata'].get('review_provider_patch') if isinstance(_split_state['metadata'].get('review_provider_patch'), dict) else {}, 'review_decision': _split_state['metadata'].get('review_decision') if isinstance(_split_state['metadata'].get('review_decision'), dict) else {}, 'review_judge': _split_state['metadata'].get('review_judge') if isinstance(_split_state['metadata'].get('review_judge'), dict) else {}, 'review_sprint': _split_state['metadata'].get('review_sprint') if isinstance(_split_state['metadata'].get('review_sprint'), dict) else {}, 'review_sprint_recommendation': _split_state['metadata'].get('review_sprint_recommendation') if isinstance(_split_state['metadata'].get('review_sprint_recommendation'), dict) else {}, 'review_sprint_action_queue': _split_state['metadata'].get('review_sprint_action_queue') if isinstance(_split_state['metadata'].get('review_sprint_action_queue'), dict) else {}, 'review_edit': _split_state['metadata'].get('review_edit') if isinstance(_split_state['metadata'].get('review_edit'), dict) else {}, 'review_candidate_intents': _split_state['metadata'].get('review_candidate_intents') if isinstance(_split_state['metadata'].get('review_candidate_intents'), list) else []})
+            _split_state['edit_metadata'].update({'edit_source': 'review_task_candidate', 'operation_count': len(_split_state['metadata'].get('review_candidate_intents') or []), 'review_task': _as_document(_split_state['metadata'].get('review_task')), 'review_candidate': _as_document(_split_state['metadata'].get('review_candidate')), 'review_candidate_source': _as_document(_split_state['metadata'].get('review_candidate_source')), 'review_provider_patch': _as_document(_split_state['metadata'].get('review_provider_patch')), 'review_decision': _as_document(_split_state['metadata'].get('review_decision')), 'review_judge': _as_document(_split_state['metadata'].get('review_judge')), 'review_sprint': _as_document(_split_state['metadata'].get('review_sprint')), 'review_sprint_recommendation': _as_document(_split_state['metadata'].get('review_sprint_recommendation')), 'review_sprint_action_queue': _as_document(_split_state['metadata'].get('review_sprint_action_queue')), 'review_edit': _as_document(_split_state['metadata'].get('review_edit')), 'review_candidate_intents': _as_list(_split_state['metadata'].get('review_candidate_intents'))})
         write_json(_split_state['paths'].data / 'edit-metadata.json', _split_state['edit_metadata'])
         if _split_state['asset_snapshot']['asset_refs']:
             write_asset_refs_snapshot(_split_state['run_dir'], _split_state['asset_snapshot'])
@@ -170,8 +174,8 @@ class JobStoreEditJob:
             return None
         pack = self.context_pack_store.read_pack(str(context_pack["pack_id"]))
         applied = {
-            "asset_refs": job.input_payload.get("asset_refs") if isinstance(job.input_payload.get("asset_refs"), list) else [],
-            "reference_refs": job.input_payload.get("reference_refs") if isinstance(job.input_payload.get("reference_refs"), list) else [],
+            "asset_refs": _as_list(job.input_payload.get("asset_refs")),
+            "reference_refs": _as_list(job.input_payload.get("reference_refs")),
         }
         snapshot = context_pack_snapshot(pack, applied, captured_at=_utc_now())
         ProjectPaths.create(Path(job.output_dir))

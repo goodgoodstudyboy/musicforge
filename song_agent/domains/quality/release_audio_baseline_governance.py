@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path, list_or as _list_or
 
 import json as json
 import shutil as shutil
@@ -82,10 +84,10 @@ class ReleaseAudioBaselineGovernanceStore:
             scope = _scope_from_payload(payload)
             source_binding = build_baseline_source_binding(
                 release_id=release_id,
-                timeline_path=payload.get("timeline") or payload.get("timeline_zip_path"),
-                timeline_report_path=payload.get("timeline_verification_report") or payload.get("timeline_verification_report_path"),
-                certification_path=payload.get("certification") or payload.get("certification_zip_path"),
-                certification_report_path=payload.get("certification_verification_report") or payload.get("certification_verification_report_path"),
+                timeline_path=_as_path(payload.get("timeline") or payload.get("timeline_zip_path")),
+                timeline_report_path=_as_path(payload.get("timeline_verification_report") or payload.get("timeline_verification_report_path")),
+                certification_path=_as_path(payload.get("certification") or payload.get("certification_zip_path")),
+                certification_report_path=_as_path(payload.get("certification_verification_report") or payload.get("certification_verification_report_path")),
             )
             tracks = _tracks_from_binding(source_binding)
             baseline = sanitize_metadata(
@@ -192,7 +194,7 @@ class ReleaseAudioBaselineGovernanceStore:
             current_binding = self._current_binding_for_release(release_id, payload)
             current_tracks = _tracks_from_binding(current_binding)
             current_track_set = _track_set_from_tracks(current_tracks)
-            compatibility_reasons = _track_set_compatibility_reasons(baseline.get("track_set") if isinstance(baseline.get("track_set"), dict) else {}, current_track_set)
+            compatibility_reasons = _track_set_compatibility_reasons(_as_document(baseline.get("track_set")), current_track_set)
             reasons.extend(compatibility_reasons)
         except Exception as exc:
             reasons.append("current_release_audio_evidence_invalid")
@@ -251,7 +253,7 @@ class ReleaseAudioBaselineGovernanceStore:
             for baseline in self.list_baselines():
                 write_entry(f"baselines/{baseline['baseline_id']}/baseline.json", baseline)
             write_entry("README.txt", "MusicForge Release Audio Baseline Registry\n")
-            manifest = {
+            manifest: _InferenceType = {
                 "package_type": RELEASE_AUDIO_BASELINE_REGISTRY_PACKAGE_TYPE,
                 "schema_version": RELEASE_AUDIO_BASELINE_SCHEMA_VERSION,
                 "generated_at": now_iso(),
@@ -337,7 +339,7 @@ class ReleaseAudioBaselineGovernanceStore:
         return active
 
     def _append_event(self, baseline: ImplementationDocument, event_type: str, payload: ImplementationDocument) -> None:
-        history = baseline.get("approval_history") if isinstance(baseline.get("approval_history"), list) else []
+        history = _as_list(baseline.get("approval_history"))
         previous = history[-1].get("event_hash") if history else None
         event = sanitize_metadata({"schema_version": RELEASE_AUDIO_BASELINE_SCHEMA_VERSION, "event_id": f"rabevt-{len(history) + 1:06d}", "event_type": event_type, "created_at": now_iso(), "previous_event_hash": previous, "payload": payload})
         event["payload_hash"] = stable_hash(event["payload"])
@@ -381,22 +383,22 @@ class ReleaseAudioBaselineGovernanceStore:
 
 
 def _scope_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
-    scope = payload.get("scope") if isinstance(payload.get("scope"), dict) else {}
+    scope = _as_document(payload.get("scope"))
     return sanitize_metadata(
         {
             "scope_type": scope.get("scope_type") or payload.get("scope_type") or "release_line",
             "release_line_id": scope.get("release_line_id") or payload.get("release_line_id") or "default",
             "project_id": scope.get("project_id") or payload.get("project_id"),
-            "style_tags": scope.get("style_tags") if isinstance(scope.get("style_tags"), list) else payload.get("style_tags") if isinstance(payload.get("style_tags"), list) else [],
+            "style_tags": _list_or(scope.get("style_tags"), _as_list(payload.get("style_tags"))),
         }
     )
 
 
 def _tracks_from_binding(binding: ImplementationDocument) -> list[ImplementationDocument]:
     facts = binding.get("facts")
-    tracks = facts.get("tracks") if isinstance(facts, dict) else facts if isinstance(facts, list) else []
+    tracks = facts.get("tracks") if isinstance(facts, dict) else _as_list(facts)
     output: list[dict[str, Any]] = []
-    for index, track in enumerate(tracks if isinstance(tracks, list) else [], start=1):
+    for index, track in enumerate(_as_list(tracks), start=1):
         title = str(track.get("title") or track.get("track_id") or f"track-{index:03d}")
         output.append(
             {
@@ -426,8 +428,8 @@ def _track_set_compatibility_reasons(baseline_track_set: ImplementationDocument,
         reasons.append("track_count_mismatch")
     if baseline_track_set.get("track_identity_set_hash") != current_track_set.get("track_identity_set_hash"):
         reasons.append("track_identity_set_mismatch")
-    baseline_tracks = baseline_track_set.get("tracks") if isinstance(baseline_track_set.get("tracks"), list) else []
-    current_tracks = current_track_set.get("tracks") if isinstance(current_track_set.get("tracks"), list) else []
+    baseline_tracks = _as_list(baseline_track_set.get("tracks"))
+    current_tracks = _as_list(current_track_set.get("tracks"))
     baseline_by_key = {str(track.get("identity_key") or ""): track for track in baseline_tracks if isinstance(track, dict)}
     current_by_key = {str(track.get("identity_key") or ""): track for track in current_tracks if isinstance(track, dict)}
     if set(baseline_by_key) != set(current_by_key):
@@ -456,16 +458,16 @@ def _evidence_summary(binding: ImplementationDocument) -> ImplementationDocument
 
 def _quality_summary(binding: ImplementationDocument) -> ImplementationDocument:
     facts = binding.get("facts")
-    tracks = facts.get("tracks") if isinstance(facts, dict) else facts if isinstance(facts, list) else []
-    manual_reviews = sum(int(track.get("manual_review_count") or 0) for track in tracks if isinstance(track, dict))
-    accepted = sum(1 for track in tracks if isinstance(track, dict) and int(track.get("accepted_review_count") or 0) > 0)
-    ratings = [float(track.get("manual_rating") or 0) for track in tracks if isinstance(track, dict)]
+    tracks = facts.get("tracks") if isinstance(facts, dict) else _as_list(facts)
+    manual_reviews = sum(int(track.get("manual_review_count") or 0) for track in _as_list(tracks) if isinstance(track, dict))
+    accepted = sum(1 for track in _as_list(tracks) if isinstance(track, dict) and int(track.get("accepted_review_count") or 0) > 0)
+    ratings = [float(track.get("manual_rating") or 0) for track in _as_list(tracks) if isinstance(track, dict)]
     return {
         "manual_acceptance_rate": (accepted / len(tracks)) if tracks else 0,
         "average_manual_rating": (sum(ratings) / len(ratings)) if ratings else 0,
         "manual_review_count": manual_reviews,
-        "high_issue_count": sum(int(track.get("high_issue_count") or 0) for track in tracks if isinstance(track, dict)),
-        "critical_issue_count": sum(int(track.get("critical_issue_count") or 0) for track in tracks if isinstance(track, dict)),
+        "high_issue_count": sum(int(track.get("high_issue_count") or 0) for track in _as_list(tracks) if isinstance(track, dict)),
+        "critical_issue_count": sum(int(track.get("critical_issue_count") or 0) for track in _as_list(tracks) if isinstance(track, dict)),
         "regression_status": "baseline",
     }
 

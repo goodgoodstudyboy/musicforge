@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -72,13 +72,13 @@ def write_trust_operations_hub_incident_verification_report(report: dict[str, An
 
 
 def print_trust_operations_hub_incident_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Incident Board verification")
     print(f"status: {report.get('status')}")
     print(f"hub: {summary.get('hub_id') or '-'}")
     print(f"incidents: {summary.get('total_incidents') or 0}")
     print(f"open blocking: {summary.get('blocking_open_count') or 0}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def trust_operations_hub_incident_verification_exit_code(report: dict[str, Any]) -> int:
@@ -113,7 +113,7 @@ def _evidence_binding_valid(evidence: ImplementationDocument) -> bool:
         expected_key = "expected_" + key
         if evidence.get(expected_key) is not None and evidence.get(key) != evidence.get(expected_key):
             return False
-    checks = evidence.get("binding_checks") if isinstance(evidence.get("binding_checks"), list) else []
+    checks = _as_list(evidence.get("binding_checks"))
     return bool(checks) and all(isinstance(check, dict) and check.get("status") == "passed" for check in checks)
 
 
@@ -256,7 +256,7 @@ class _IncidentVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "tohi_manifest_integrity", self.manifest.get("integrity_hash"), incident_manifest_hash(self.manifest), "Incident manifest integrity")
         self._add_exact_check("manifest", "tohi_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_INCIDENT_MANIFEST_PACKAGE_TYPE, "Incident manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "tohi_manifest_files_match_entries", sorted(manifest_paths), sorted(INCIDENT_EXPORT_ENTRIES - {"trust-operations-incident-manifest.json"}), "Manifest file list matches fixed Incident structure")
         mismatches: list[str] = []
@@ -274,7 +274,7 @@ class _IncidentVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "tohi_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "tohi_manifest_zip_summary", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files." if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
@@ -290,15 +290,15 @@ class _IncidentVerifier:
         }.items():
             self._add_hash_check(label, f"tohi_{label}_integrity", doc.get("integrity_hash"), incident_hash(doc), f"{label} integrity")
         self._add_exact_check("board", "tohi_board_package_type", self.board.get("package_type"), TRUST_OPERATIONS_INCIDENT_BOARD_PACKAGE_TYPE, "Incident Board package_type")
-        integrity = self.manifest.get("integrity") if isinstance(self.manifest.get("integrity"), dict) else {}
+        integrity = _as_document(self.manifest.get("integrity"))
         self._add_exact_check("manifest", "tohi_manifest_board_hash", integrity.get("board_hash"), self.board.get("integrity_hash"), "Manifest board hash")
         self._add_exact_check("manifest", "tohi_manifest_report_hash", integrity.get("report_hash"), self.report.get("integrity_hash"), "Manifest report hash")
         self._add_exact_check("manifest", "tohi_manifest_evidence_index_hash", integrity.get("evidence_index_hash"), self.evidence_index.get("integrity_hash"), "Manifest evidence index hash")
         self._add_exact_check("manifest", "tohi_manifest_closeout_summary_hash", integrity.get("closeout_summary_hash"), self.closeout_summary.get("integrity_hash"), "Manifest closeout summary hash")
 
     def _verify_semantics(self) -> None:
-        incidents = self.incidents_doc.get("incidents") if isinstance(self.incidents_doc.get("incidents"), list) else []
-        closeouts = self.closeout_summary.get("closeouts") if isinstance(self.closeout_summary.get("closeouts"), list) else []
+        incidents = _as_list(self.incidents_doc.get("incidents"))
+        closeouts = _as_list(self.closeout_summary.get("closeouts"))
         self._add_exact_check("board", "tohi_board_summary_matches_incidents", self.board.get("summary"), _board_summary(incidents), "Board summary matches incidents")
         self._add_exact_check("report", "tohi_report_summary_matches_incidents", self.report.get("summary"), _board_summary(incidents), "Report summary matches incidents")
         event_rebuild = _rebuild_status_from_events(self.events)
@@ -313,7 +313,7 @@ class _IncidentVerifier:
         self._add_check("events", "tohi_incident_events_chain", "passed" if _event_chain_ok(self.events) else "failed", "blocking", "Incident event chain is intact." if _event_chain_ok(self.events) else "Incident event chain is broken.")
         self._add_check("events", "tohi_incident_status_matches_events", "failed" if mismatches else "passed", "blocking", "Incident status differs from event chain: " + ", ".join(mismatches[:5]) if mismatches else "Incident status matches event chain.")
         closeout_by_id = {str(row.get("incident_id") or ""): row for row in closeouts if isinstance(row, dict)}
-        evidence_rows = self.evidence_index.get("evidence") if isinstance(self.evidence_index.get("evidence"), list) else []
+        evidence_rows = _as_list(self.evidence_index.get("evidence"))
         invalid_evidence = _invalid_passed_evidence_bindings(evidence_rows)
         self._add_check("evidence", "tohi_evidence_binding_integrity", "failed" if invalid_evidence else "passed", "blocking", "Invalid passed evidence bindings: " + ", ".join(invalid_evidence[:5]) if invalid_evidence else "Passed evidence is bound to current Hub verification evidence.")
         hub_verification_report = self.hub_verification_report
@@ -339,7 +339,7 @@ class _IncidentVerifier:
             if isinstance(item, dict) and item.get("status") == "closed" and not valid_evidence_by_incident.get(str(item.get("incident_id") or ""))
         ]
         self._add_check("evidence", "tohi_closed_incident_valid_evidence", "failed" if valid_evidence_missing else "passed", "blocking", "Closed incidents missing valid external evidence: " + ", ".join(valid_evidence_missing[:5]) if valid_evidence_missing else "Closed incidents have valid external evidence.")
-        report_source = self.report.get("source") if isinstance(self.report.get("source"), dict) else {}
+        report_source = _as_document(self.report.get("source"))
         self._add_exact_check("report", "tohi_report_source_board_hash", report_source.get("board_hash"), self.board.get("integrity_hash"), "Report board hash")
         self._add_exact_check("report", "tohi_report_source_event_chain_hash", report_source.get("event_chain_hash"), self.events[-1].get("event_hash") if self.events else None, "Report event chain hash")
 
@@ -355,7 +355,7 @@ class _IncidentVerifier:
             self._add_check("external", "tohi_hub_verification_required", "failed", "blocking", "Current Incident verification requires external Hub verification report.")
 
     def _verify_requirements(self) -> None:
-        summary = self.report.get("summary") if isinstance(self.report.get("summary"), dict) else {}
+        summary = _as_document(self.report.get("summary"))
         critical = int(summary.get("critical_count") or 0)
         blocking = int(summary.get("blocking_open_count") or 0)
         stale = int(summary.get("stale_count") or 0)
@@ -396,7 +396,7 @@ class _IncidentVerifier:
         summary = {
             "hub_id": self.board.get("hub_id"),
             "board_id": self.board.get("board_id"),
-            **(_board_summary(self.incidents_doc.get("incidents") if isinstance(self.incidents_doc.get("incidents"), list) else [])),
+            **(_board_summary(_as_list(self.incidents_doc.get("incidents")))),
             "blocker_count": len(blockers),
             "warning_count": len(warnings),
             "zip_size_bytes": self.zip_size_bytes,
@@ -485,7 +485,7 @@ def _rebuild_status_from_events(events: list[ImplementationDocument]) -> dict[st
     for event in events:
         incident_id = str(event.get("incident_id") or "")
         event_type = str(event.get("event_type") or "")
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event_type in {"incident_created", "incident_refreshed"}:
             statuses[incident_id] = str(payload.get("status") or "open")
         elif event_type == "incident_triaged":
@@ -525,7 +525,7 @@ def _read_json_file(path: Path) -> ImplementationDocument:
             value = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:

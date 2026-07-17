@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -59,7 +59,7 @@ def verify_release_operations_package(
 
 
 def release_operations_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status"),
@@ -90,7 +90,7 @@ def print_release_operations_verification_report(report: dict[str, Any]) -> None
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        items = report.get(key) if isinstance(report.get(key), list) else []
+        items = _as_list(report.get(key))
         if not items:
             continue
         print(f"{label}:")
@@ -207,7 +207,7 @@ class _ReleaseOperationsVerifier:
         if not isinstance(self.manifest.get("summary"), dict):
             missing_fields.append("summary")
         self._add_check("manifest", "operations_manifest_schema", "failed" if missing_fields else "passed", "blocking", "Missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Operations manifest schema has required fields.", count=len(missing_fields))
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid_rows: list[dict[str, Any]] = []
         shape_errors: list[str] = []
         for index, item in enumerate(rows):
@@ -271,15 +271,15 @@ class _ReleaseOperationsVerifier:
         self._add_check("report", "operations_report_exists", "passed", "blocking", "operations-report.json exists.")
         actual_report_hash = operations_report_integrity_hash(self.report_doc)
         stored_integrity = self.report_doc.get("integrity_hash")
-        manifest_report = self.manifest.get("report") if isinstance(self.manifest.get("report"), dict) else {}
+        manifest_report = _as_document(self.manifest.get("report"))
         self._add_check("report", "operations_report_integrity", "passed" if stored_integrity == actual_report_hash else "failed", "blocking", "Operations report integrity hash matches content." if stored_integrity == actual_report_hash else "Operations report integrity hash does not match content.")
         self._add_check("report", "operations_manifest_report_hash", "passed" if manifest_report.get("report_hash") == actual_report_hash and manifest_report.get("integrity_hash") == stored_integrity else "failed", "blocking", "Operations manifest report hash matches report content." if manifest_report.get("report_hash") == actual_report_hash and manifest_report.get("integrity_hash") == stored_integrity else "Operations manifest report hash does not match report content.")
         self._add_check("report", "operations_report_source_hash", "passed" if self.report_doc.get("source_hash") == self.manifest.get("source_hash") else "failed", "blocking", "Operations report source hash matches manifest." if self.report_doc.get("source_hash") == self.manifest.get("source_hash") else "Operations report source hash does not match manifest.")
-        self._verify_sidecar_hash(archive, "readiness", "readiness-summary.json", self.readiness, self.manifest.get("readiness") if isinstance(self.manifest.get("readiness"), dict) else {})
-        self._verify_sidecar_hash(archive, "evidence_graph", "evidence-graph.json", self.evidence_graph, self.manifest.get("evidence_graph") if isinstance(self.manifest.get("evidence_graph"), dict) else {})
-        self._verify_sidecar_hash(archive, "verifiers", "verifier-summaries.json", self.verifier_summaries, self.manifest.get("verifier_summaries") if isinstance(self.manifest.get("verifier_summaries"), dict) else {})
-        blockers = self.report_doc.get("blockers") if isinstance(self.report_doc.get("blockers"), list) else []
-        warnings = self.report_doc.get("warnings") if isinstance(self.report_doc.get("warnings"), list) else []
+        self._verify_sidecar_hash(archive, "readiness", "readiness-summary.json", self.readiness, _as_document(self.manifest.get("readiness")))
+        self._verify_sidecar_hash(archive, "evidence_graph", "evidence-graph.json", self.evidence_graph, _as_document(self.manifest.get("evidence_graph")))
+        self._verify_sidecar_hash(archive, "verifiers", "verifier-summaries.json", self.verifier_summaries, _as_document(self.manifest.get("verifier_summaries")))
+        blockers = _as_list(self.report_doc.get("blockers"))
+        warnings = _as_list(self.report_doc.get("warnings"))
         bad_shape = [
             item
             for item in [*blockers, *warnings]

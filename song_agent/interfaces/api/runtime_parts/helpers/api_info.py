@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, AuthConfig, Path, __version__, datetime, json, os, timezone, webbrowser
 
@@ -97,7 +97,7 @@ def discover_artifacts(run_dir: Path) -> list[dict[str, Any]]:
 
 def open_folder(path: Path) -> None:
     if os.name == "nt":
-        os.startfile(path)  # type: ignore[attr-defined]
+        os.startfile(path)
         return
     webbrowser.open(path.resolve().as_uri())
 
@@ -188,8 +188,8 @@ def _review_sprints_list_summary(sprints: list[ImplementationDocument]) -> Imple
     for sprint in sprints:
         status = str(sprint.get("status") or "unknown")
         statuses[status] = statuses.get(status, 0) + 1
-        summary = sprint.get("summary") if isinstance(sprint.get("summary"), dict) else {}
-        counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else {}
+        summary = _as_document(sprint.get("summary"))
+        counts = _as_document(summary.get("counts"))
         total_conflicts += int(counts.get("conflict_count") or 0)
         blocking_conflicts += int(counts.get("blocking_conflict_count") or 0)
     return sanitize_metadata(

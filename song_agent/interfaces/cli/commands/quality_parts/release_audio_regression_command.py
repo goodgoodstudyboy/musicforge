@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_quality_parts_dependencies

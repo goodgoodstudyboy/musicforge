@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramCommandCenterHttpRoutes:
+class ProgramCommandCenterHttpRoutes(ProgramHttpContext):
     def _dispatch_command_center(self, method, program_id, tail) -> bool:
         if tail == '/continuity-command-center':
             if method != 'GET':

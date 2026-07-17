@@ -6,7 +6,6 @@ from pathlib import Path
 
 from tests.test_release_portfolio_audit import portfolio_fixture
 
-from song_agent.projectio import write_json
 from song_agent.release_portfolio_governance import (
     ReleasePortfolioGovernanceStore,
     action_plan_integrity_ok,

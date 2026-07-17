@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -79,15 +79,15 @@ def write_public_trust_center_anchor_transparency_verification_report(report: di
 
 
 def print_public_trust_center_anchor_transparency_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Anchor Transparency verification")
     print(f"status: {report.get('status')}")
     print(f"center: {summary.get('center_id') or 'unknown'}")
     print(f"checkpoint: {summary.get('checkpoint_id') or 'none'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
-    print(f"warnings: {len(report.get('warnings') if isinstance(report.get('warnings'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
+    print(f"warnings: {len(_as_list(report.get('warnings')))}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -206,7 +206,7 @@ class _AnchorTransparencyVerifier:
             return
         self._add_hash_check("manifest", "ptcat_manifest_integrity", self.manifest.get("integrity_hash"), anchor_transparency_manifest_hash(self.manifest), "Anchor Transparency manifest integrity")
         self._add_exact_check("manifest", "ptcat_manifest_package_type", self.manifest.get("package_type"), ANCHOR_TRANSPARENCY_PACKAGE_TYPE, "Manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -257,14 +257,14 @@ class _AnchorTransparencyVerifier:
         if self.checkpoint_path is not None:
             try:
                 value = json.loads(self.checkpoint_path.read_text(encoding="utf-8"))
-                self.external_checkpoint = value if isinstance(value, dict) else {}
+                self.external_checkpoint = _as_document(value)
                 self._add_check("checkpoint", "ptcat_external_checkpoint_parse", "passed", "blocking", "External checkpoint parses as JSON.")
             except (OSError, json.JSONDecodeError) as exc:
                 self._add_check("checkpoint", "ptcat_external_checkpoint_parse", "failed", "blocking", f"External checkpoint cannot be parsed: {exc}")
 
     def _verify_documents(self) -> None:
         latest = self.ledger_events[-1] if self.ledger_events else {}
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         self._add_hash_check("report", "ptcat_report_integrity", self.report_doc.get("integrity_hash"), anchor_transparency_report_hash(self.report_doc), "Report integrity")
         self._add_hash_check("report", "ptcat_report_source_hash", self.report_doc.get("source_hash"), stable_hash(source), "Report source hash")
         self._add_hash_check("manifest", "ptcat_manifest_report_hash", self.manifest.get("report", {}).get("integrity_hash") if isinstance(self.manifest.get("report"), dict) else None, self.report_doc.get("integrity_hash"), "Manifest report hash")
@@ -289,7 +289,7 @@ class _AnchorTransparencyVerifier:
         self._add_hash_check("ledger", "ptcat_ledger_hash", source.get("ledger_hash"), anchor_transparency_ledger_hash(self.ledger_events), "Ledger hash")
         self._add_hash_check("ledger", "ptcat_latest_event_hash", source.get("latest_event_hash"), latest.get("event_hash"), "Latest event hash")
         self._add_exact_check("ledger", "ptcat_latest_sequence", source.get("latest_sequence"), latest.get("sequence"), "Latest sequence")
-        latest_state = latest.get("state") if isinstance(latest.get("state"), dict) else {}
+        latest_state = _as_document(latest.get("state"))
         for key in ("registry_hash", "registry_zip_sha256", "registry_manifest_hash", "registry_verification_status", "registry_verification_report_hash", "current_entry_id", "current_anchor_hash", "current_entry_status", "ptc_zip_sha256", "ptc_manifest_hash", "ptc_source_hash"):
             self._add_exact_check("ledger", f"ptcat_source_{key}", source.get(key), latest_state.get(key), f"Report source {key}")
 
@@ -304,9 +304,9 @@ class _AnchorTransparencyVerifier:
             self._add_exact_check("checkpoint", f"{prefix}_{key}", checkpoint.get(key), source.get(key), f"{label} checkpoint {key}")
 
     def _verify_registry_summary(self, source: ImplementationDocument) -> None:
-        summary = self.registry_summary.get("summary") if isinstance(self.registry_summary.get("summary"), dict) else {}
-        current = self.registry_summary.get("current_entry") if isinstance(self.registry_summary.get("current_entry"), dict) else {}
-        anchor = self.registry_summary.get("current_anchor") if isinstance(self.registry_summary.get("current_anchor"), dict) else {}
+        summary = _as_document(self.registry_summary.get("summary"))
+        current = _as_document(self.registry_summary.get("current_entry"))
+        anchor = _as_document(self.registry_summary.get("current_anchor"))
         self._add_hash_check("registry", "ptcat_registry_summary_hash", self.manifest.get("current_anchor_registry_summary", {}).get("hash") if isinstance(self.manifest.get("current_anchor_registry_summary"), dict) else None, stable_hash(self.registry_summary), "Registry summary manifest hash")
         self._add_hash_check("registry", "ptcat_registry_summary_registry_hash", self.registry_summary.get("registry_hash"), source.get("registry_hash"), "Registry summary registry hash")
         self._add_exact_check("registry", "ptcat_registry_summary_current_entry_id", summary.get("current_entry_id"), source.get("current_entry_id"), "Registry summary current entry")
@@ -340,12 +340,12 @@ class _AnchorTransparencyVerifier:
         self._add_hash_check("chain", "ptcat_chain_integrity", self.chain.get("integrity_hash"), stable_hash({key: value for key, value in self.chain.items() if key != "integrity_hash"}), "Chain of custody integrity")
         self._add_hash_check("chain", "ptcat_chain_source_hash", self.chain.get("source_hash"), self.report_doc.get("source_hash"), "Chain source hash")
         self._add_exact_check("chain", "ptcat_chain_events_match_ledger", self.chain.get("events"), self.ledger_events, "Chain events derive from ledger")
-        chain_summary = self.chain.get("summary") if isinstance(self.chain.get("summary"), dict) else {}
+        chain_summary = _as_document(self.chain.get("summary"))
         latest_event_hash = self.chain.get("latest_event_hash") or chain_summary.get("latest_event_hash")
         self._add_exact_check("chain", "ptcat_chain_latest_event_hash", latest_event_hash, source.get("latest_event_hash"), "Chain latest event")
 
     def _verify_requirements(self) -> None:
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        source = _as_document(self.report_doc.get("source"))
         current_status = source.get("current_entry_status")
         if self.require_current_checkpoint:
             self._add_check("requirements", "ptcat_require_current_checkpoint", "passed" if self.current_checkpoint and self.current_checkpoint.get("latest_event_hash") == source.get("latest_event_hash") else "failed", "blocking", "Current checkpoint exists and binds latest event." if self.current_checkpoint and self.current_checkpoint.get("latest_event_hash") == source.get("latest_event_hash") else "Current checkpoint is required.")
@@ -386,7 +386,7 @@ class _AnchorTransparencyVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return value if isinstance(value, dict) else {}
+        return _as_document(value)
 
     def _read_ledger_entry(self, archive: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
         info = self.entry_map.get(name)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -110,7 +110,7 @@ class ReleaseAudioRegressionStore:
                     "certification_zip_path": str(payload.get("current_certification") or payload.get("current_certification_zip_path") or self.certification_store.zip_path(release_id)),
                     "certification_verification_report_path": str(payload.get("current_certification_verification_report") or payload.get("current_certification_verification_report_path") or self.certification_store.verification_report_path(release_id)),
                 },
-                "policy": _default_policy(payload.get("policy") if isinstance(payload.get("policy"), dict) else {}),
+                "policy": _default_policy(_as_document(payload.get("policy"))),
                 "created_at": now_iso(),
                 "updated_at": now_iso(),
             }
@@ -303,9 +303,9 @@ class ReleaseAudioRegressionStore:
 
     def _build_documents(self, release_id: str) -> dict[str, ImplementationDocument]:
         config = self.read_config(release_id)
-        baseline = self._binding_from_config("baseline", config.get("baseline") if isinstance(config.get("baseline"), dict) else {})
-        current = self._binding_from_config("current", config.get("current") if isinstance(config.get("current"), dict) else {})
-        docs = build_regression_documents_from_bindings(baseline, current, policy=config.get("policy") if isinstance(config.get("policy"), dict) else {})
+        baseline = self._binding_from_config("baseline", _as_document(config.get("baseline")))
+        current = self._binding_from_config("current", _as_document(config.get("current")))
+        docs = build_regression_documents_from_bindings(baseline, current, policy=_as_document(config.get("policy")))
         return {"baseline": baseline, "current": current, **docs}
 
     def _binding_from_config(self, kind: str, config: ImplementationDocument) -> ImplementationDocument:
@@ -390,7 +390,7 @@ class ReleaseAudioRegressionStore:
         if not rows or not _history_chain_ok(rows):
             raise ReleaseAudioRegressionStateError("Release Audio Regression signoff history integrity failed.")
         latest = rows[-1]
-        payload = latest.get("payload") if isinstance(latest.get("payload"), dict) else {}
+        payload = _as_document(latest.get("payload"))
         if latest.get("event_type") != "regression_signoff_created":
             raise ReleaseAudioRegressionStateError("Release Audio Regression latest history event is not signed.")
         if payload.get("signoff_hash") != signoff.get("integrity_hash"):
@@ -433,8 +433,8 @@ class ReleaseAudioRegressionStore:
         return latest.get("event_type") == "regression_signoff_created"
 
     def _with_default_evidence_args(self, config: ImplementationDocument, kwargs: ImplementationDocument) -> ImplementationDocument:
-        baseline = config.get("baseline") if isinstance(config.get("baseline"), dict) else {}
-        current = config.get("current") if isinstance(config.get("current"), dict) else {}
+        baseline = _as_document(config.get("baseline"))
+        current = _as_document(config.get("current"))
         defaults = {
             "baseline_timeline_path": baseline.get("timeline_zip_path"),
             "baseline_timeline_verification_report_path": baseline.get("timeline_verification_report_path"),
@@ -493,7 +493,7 @@ def _read_jsonl(path: Path) -> list[ImplementationDocument]:
 
 
 def _readme(report: ImplementationDocument, matrix: ImplementationDocument, quality: ImplementationDocument) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return "\n".join(
         [
             "MusicForge Release Audio Regression Guard",
@@ -538,7 +538,7 @@ def _integrity_hash(payload: ImplementationDocument) -> str:
 def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
     previous: str | None = None
     for event in history:
-        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        payload = _as_document(event.get("payload"))
         if event.get("previous_event_hash") != previous:
             return False
         if event.get("payload_hash") != stable_hash(payload):

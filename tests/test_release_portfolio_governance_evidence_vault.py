@@ -25,10 +25,6 @@ from song_agent.release_portfolio_governance_final_board_verifier import (
     verify_release_portfolio_governance_final_board_package,
     write_release_portfolio_governance_final_board_verification_report,
 )
-from song_agent.release_portfolio_governance_reviewer_pack_verifier import (
-    verify_release_portfolio_governance_reviewer_pack,
-    write_release_portfolio_governance_reviewer_pack_verification_report,
-)
 
 
 def _signed_final_board_vault_fixture(tmp_path: Path, monkeypatch):

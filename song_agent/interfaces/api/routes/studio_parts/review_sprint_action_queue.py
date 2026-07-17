@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list, list_or as _list_or
+
+from typing import Any as _InterfaceType
+
+from song_agent.interfaces.api.route_contexts.studio import StudioRouteContext
+
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -9,14 +15,14 @@ from song_agent.application.interface_persistence import write_interface_documen
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-class StudioRoutesReviewSprintActionQueue:
+class StudioRoutesReviewSprintActionQueue(StudioRouteContext):
     def _run_review_sprint_action_queue(
         self,
         project_id: str,
-        sprint_store: _interfaces_api_runtime.ReviewSprintStore,
-        task_store: _interfaces_api_runtime.ReviewTaskStore,
+        sprint_store: _InterfaceType,
+        task_store: _InterfaceType,
         sprint: Any,
-        queue_store: _interfaces_api_runtime.ReviewSprintActionQueueStore,
+        queue_store: _InterfaceType,
         queue_id: str,
         payload: ImplementationDocument,
     ) -> ImplementationDocument:
@@ -25,7 +31,7 @@ class StudioRoutesReviewSprintActionQueue:
             raise FileNotFoundError(queue_id)
         if queue.status == "archived":
             raise _interfaces_api_runtime.ReviewSprintStateError("Archived action queue cannot be run.")
-        selected_ids = payload.get("item_ids") if isinstance(payload.get("item_ids"), list) else []
+        selected_ids = _as_list(payload.get("item_ids"))
         selected_ids = [str(item) for item in selected_ids if str(item).strip()]
         include_provider = bool(payload.get("include_provider", queue.settings.get("run_provider_actions", False)))
         rerun_failed = bool(payload.get("rerun_failed", False))
@@ -79,12 +85,12 @@ class StudioRoutesReviewSprintActionQueue:
     def _execute_review_sprint_action_item(
         self,
         project_id: str,
-        sprint_store: _interfaces_api_runtime.ReviewSprintStore,
-        task_store: _interfaces_api_runtime.ReviewTaskStore,
+        sprint_store: _InterfaceType,
+        task_store: _InterfaceType,
         sprint: Any,
-        queue: _interfaces_api_runtime.SprintActionQueue,
-        item: _interfaces_api_runtime.SprintActionItem,
-    ) -> _interfaces_api_runtime.SprintActionItem:
+        queue: _InterfaceType,
+        item: _InterfaceType,
+    ) -> _InterfaceType:
         if item.safety in {"manual_required", "informational"}:
             return _interfaces_api_runtime.replace(item, status="manual_required" if item.safety == "manual_required" else "skipped", completed_at=_interfaces_api_runtime._utc_now())
         if item.safety == "blocked":
@@ -117,7 +123,7 @@ class StudioRoutesReviewSprintActionQueue:
         self._refresh_review_sprint_state(project_id, sprint_store, task_store, sprint_store.read_sprint(sprint.sprint_id))
         return _interfaces_api_runtime.replace(item, status="completed", result=_interfaces_api_runtime.sanitize_metadata(result), error=None, completed_at=_interfaces_api_runtime._utc_now())
 
-    def _ensure_action_item_task_current(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, sprint: Any, item: _interfaces_api_runtime.SprintActionItem) -> Any:
+    def _ensure_action_item_task_current(self, project_id: str, task_store: _InterfaceType, sprint: Any, item: _InterfaceType) -> Any:
         if not item.task_id or item.task_id not in self._review_sprint_ordered_task_ids(sprint):
             raise _interfaces_api_runtime.ReviewSprintStateError("Action item task is no longer in this sprint.")
         task = task_store.read_task(item.task_id)
@@ -127,13 +133,13 @@ class StudioRoutesReviewSprintActionQueue:
         _interfaces_api_runtime.ensure_task_current(task, parent_plan)
         return task
 
-    def _generate_review_task_local_candidates_for_queue(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, payload: ImplementationDocument) -> ImplementationDocument:
+    def _generate_review_task_local_candidates_for_queue(self, project_id: str, task_store: _InterfaceType, task: Any, payload: ImplementationDocument) -> ImplementationDocument:
         candidates = task_store.list_candidates(task.task_id)
         if bool(payload.get("skip_existing_ready", True)) and any(candidate.candidate_type == "local_review_intents" and candidate.status in {"ready", "applied"} for candidate in candidates):
             return {"status": "skipped", "reason": "ready local candidate exists", "created_count": 0, "created_candidate_ids": []}
         _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
         _interfaces_api_runtime.ensure_task_current(task, parent_plan)
-        strategies = payload.get("strategies") if isinstance(payload.get("strategies"), list) else ["balanced"]
+        strategies = _list_or(payload.get("strategies"), ["balanced"])
         render_midi = bool(payload.get("render_midi", True))
         generated = []
         for candidate, candidate_plan, validator, summary in _interfaces_api_runtime.build_local_review_candidates(task, parent_plan, strategies=strategies):
@@ -144,7 +150,7 @@ class StudioRoutesReviewSprintActionQueue:
         self.project_store.append_event(project_id, "review_sprint_action_local_candidates_generated", {"task_id": task.task_id, "candidate_count": len(generated)})
         return {"status": "generated" if generated else "skipped", "created_count": len(generated), "created_candidate_ids": [candidate.candidate_id for candidate in generated], "decision_report": _interfaces_api_runtime.review_decision_summary(decision_report), "provider_summary": _interfaces_api_runtime.review_candidate_source_breakdown(ranked)}
 
-    def _read_review_task_judge_report(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, candidates: list[Any] | None = None, *, parent_plan: _interfaces_api_runtime.SongPlan | None = None) -> ImplementationDocument:
+    def _read_review_task_judge_report(self, project_id: str, task_store: _InterfaceType, task: Any, candidates: list[Any] | None = None, *, parent_plan: _InterfaceType | None = None) -> ImplementationDocument:
         report = task_store.read_judge_report(task.task_id, default={})
         if not report:
             return {}
@@ -157,8 +163,8 @@ class StudioRoutesReviewSprintActionQueue:
         except (FileNotFoundError, _interfaces_api_runtime.ProviderError, _interfaces_api_runtime.ReviewTaskError, _interfaces_api_runtime.ReviewTaskStateError, ValueError, TypeError):
             return _interfaces_api_runtime.mark_judge_report_stale(report, stale=True)
 
-    def _refresh_review_task_judge_report(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, payload: ImplementationDocument | None = None) -> ImplementationDocument:
-        payload = payload if isinstance(payload, dict) else {}
+    def _refresh_review_task_judge_report(self, project_id: str, task_store: _InterfaceType, task: Any, payload: ImplementationDocument | None = None) -> ImplementationDocument:
+        payload = _as_document(payload)
         _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
         _interfaces_api_runtime.ensure_task_current(task, parent_plan)
         template_id = str(payload.get("template_id") or _interfaces_api_runtime.REVIEW_JUDGE_TEMPLATE_ID).strip()
@@ -186,7 +192,7 @@ class StudioRoutesReviewSprintActionQueue:
             now=_interfaces_api_runtime._utc_now(),
         )
         saved = task_store.write_judge_report(task, report, now=_interfaces_api_runtime._utc_now())
-        provider_usage = provider_snapshot.get("usage") if isinstance(provider_snapshot.get("usage"), dict) else {}
+        provider_usage = _as_document(provider_snapshot.get("usage"))
         usage_record = _interfaces_api_runtime._provider_usage_record(
             config_snapshot=provider_snapshot,
             operation="provider_review_judge",
@@ -206,7 +212,7 @@ class StudioRoutesReviewSprintActionQueue:
         self.project_store.append_event(project_id, "review_task_judge_report_refreshed", {"task_id": task.task_id, "recommended_candidate_id": saved.get("recommended_candidate_id"), "template_id": template.template_id})
         return {"ok": True, "task": task.to_dict(), "judge_report": saved, "summary": _interfaces_api_runtime.judge_report_summary(saved), "decision_report": refreshed_decision, "provider_snapshot": provider_snapshot}
 
-    def _refresh_review_task_decision_report_for_queue(self, project_id: str, task_store: _interfaces_api_runtime.ReviewTaskStore, task: Any, payload: ImplementationDocument) -> ImplementationDocument:
+    def _refresh_review_task_decision_report_for_queue(self, project_id: str, task_store: _InterfaceType, task: Any, payload: ImplementationDocument) -> ImplementationDocument:
         _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, task.parent_version_id)
         _interfaces_api_runtime.ensure_task_current(task, parent_plan)
         ranked = task_store.rank_candidates(task)
@@ -217,15 +223,15 @@ class StudioRoutesReviewSprintActionQueue:
 
     def _set_action_item(
         self,
-        queue_store: _interfaces_api_runtime.ReviewSprintActionQueueStore,
-        queue: _interfaces_api_runtime.SprintActionQueue,
-        item: _interfaces_api_runtime.SprintActionItem,
+        queue_store: _InterfaceType,
+        queue: _InterfaceType,
+        item: _InterfaceType,
         *,
         status: str,
         result: ImplementationDocument | None = None,
         error: str | None = None,
         event: str | None = None,
-    ) -> _interfaces_api_runtime.SprintActionItem:
+    ) -> _InterfaceType:
         now = _interfaces_api_runtime._utc_now()
         updated_item = _interfaces_api_runtime.replace(
             item,

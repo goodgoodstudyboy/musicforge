@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -87,7 +87,7 @@ def print_release_portfolio_governance_evidence_vault_verification_report(report
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -208,7 +208,7 @@ class _EvidenceVaultVerifier:
         self._add_check("manifest", "evidence_vault_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Evidence Vault manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Evidence Vault manifest integrity hash does not match.")
         package_type_ok = self.manifest.get("package_type") == EVIDENCE_VAULT_PACKAGE_TYPE
         self._add_check("manifest", "evidence_vault_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", f"Manifest package_type is {EVIDENCE_VAULT_PACKAGE_TYPE}." if package_type_ok else "Manifest package_type is not release_portfolio_governance_evidence_vault.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -258,32 +258,32 @@ class _EvidenceVaultVerifier:
         manifest_source_hash = self.manifest.get("source_hash")
         if self.report_doc:
             self._add_hash_check("report", "evidence_vault_report_integrity", self.report_doc.get("integrity_hash"), evidence_vault_report_integrity_hash(self.report_doc), "Evidence Vault Report integrity")
-            row = self.manifest.get("vault_report") if isinstance(self.manifest.get("vault_report"), dict) else {}
+            row = _as_document(self.manifest.get("vault_report"))
             self._add_hash_check("report", "evidence_vault_manifest_report_hash", row.get("integrity_hash"), self.report_doc.get("integrity_hash"), "Manifest report hash")
             self._add_hash_check("report", "evidence_vault_report_source_hash", manifest_source_hash, self.report_doc.get("source_hash"), "Manifest report source hash")
         if self.package_index:
             self._add_hash_check("package_index", "evidence_vault_package_index_integrity", self.package_index.get("integrity_hash"), evidence_vault_package_index_hash(self.package_index), "Package index integrity")
-            row = self.manifest.get("package_index") if isinstance(self.manifest.get("package_index"), dict) else {}
+            row = _as_document(self.manifest.get("package_index"))
             self._add_hash_check("package_index", "evidence_vault_manifest_package_index_hash", row.get("integrity_hash"), self.package_index.get("integrity_hash"), "Manifest package index hash")
             self._add_hash_check("package_index", "evidence_vault_package_index_source_hash", manifest_source_hash, self.package_index.get("source_hash"), "Package index source hash")
             self._add_hash_check("package_index", "evidence_vault_manifest_package_index_source_hash", row.get("source_hash"), self.package_index.get("source_hash"), "Manifest package index source hash")
         if self.verification_index:
             self._add_hash_check("verification_index", "evidence_vault_verification_index_integrity", self.verification_index.get("integrity_hash"), evidence_vault_verification_index_hash(self.verification_index), "Verification index integrity")
-            row = self.manifest.get("verification_index") if isinstance(self.manifest.get("verification_index"), dict) else {}
+            row = _as_document(self.manifest.get("verification_index"))
             self._add_hash_check("verification_index", "evidence_vault_manifest_verification_index_hash", row.get("integrity_hash"), self.verification_index.get("integrity_hash"), "Manifest verification index hash")
             self._add_hash_check("verification_index", "evidence_vault_verification_index_source_hash", manifest_source_hash, self.verification_index.get("source_hash"), "Verification index source hash")
             self._add_hash_check("verification_index", "evidence_vault_manifest_verification_index_source_hash", row.get("source_hash"), self.verification_index.get("source_hash"), "Manifest verification index source hash")
         if self.chain:
             self._add_hash_check("chain", "evidence_vault_chain_integrity", self.chain.get("integrity_hash"), evidence_vault_chain_hash(self.chain), "Chain of custody integrity")
-            row = self.manifest.get("chain_of_custody") if isinstance(self.manifest.get("chain_of_custody"), dict) else {}
+            row = _as_document(self.manifest.get("chain_of_custody"))
             self._add_hash_check("chain", "evidence_vault_manifest_chain_hash", row.get("integrity_hash"), self.chain.get("integrity_hash"), "Manifest chain hash")
             self._add_hash_check("chain", "evidence_vault_chain_source_hash", manifest_source_hash, self.chain.get("source_hash"), "Chain of custody source hash")
             self._add_hash_check("chain", "evidence_vault_manifest_chain_source_hash", row.get("source_hash"), self.chain.get("source_hash"), "Manifest chain source hash")
 
     def _verify_nested_packages(self, archive: zipfile.ZipFile) -> None:
-        manifest_rows = self.manifest.get("nested_packages") if isinstance(self.manifest.get("nested_packages"), list) else []
-        index_rows = self.package_index.get("items") if isinstance(self.package_index.get("items"), list) else []
-        verification_rows = self.verification_index.get("items") if isinstance(self.verification_index.get("items"), list) else []
+        manifest_rows = _as_list(self.manifest.get("nested_packages"))
+        index_rows = _as_list(self.package_index.get("items"))
+        verification_rows = _as_list(self.verification_index.get("items"))
         index_by_id = {str(item.get("package_id") or ""): item for item in index_rows if isinstance(item, dict)}
         verification_by_id = {str(item.get("package_id") or ""): item for item in verification_rows if isinstance(item, dict)}
         for item in manifest_rows:
@@ -295,7 +295,7 @@ class _EvidenceVaultVerifier:
             package_type = str(item.get("package_type") or "")
             role = str(item.get("role") or "")
             required = bool(item.get("required"))
-            result = {"package_id": package_id, "role": role, "package_type": package_type, "required": required, "status": "pending", "checks": []}
+            result: ImplementationDocument = {"package_id": package_id, "role": role, "package_type": package_type, "required": required, "status": "pending", "checks": []}
             info = self.entry_map.get(path)
             if info is None:
                 self._add_nested_check(result, "evidence_vault_nested_package_exists", "failed", "blocking", f"{package_id} nested ZIP is missing.")
@@ -439,7 +439,7 @@ class _EvidenceVaultVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]

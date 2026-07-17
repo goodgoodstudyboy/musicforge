@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -110,7 +110,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
         if not path.exists():
             raise ReleasePortfolioGovernanceEvidenceVaultNotFoundError("Portfolio Governance Evidence Vault export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
 
     def refresh_report(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
@@ -293,7 +293,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
         return sanitize_metadata(source, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS), packages
 
     def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None) -> bool:
-        data = report if isinstance(report, dict) else self.read_report(portfolio_id, default={})
+        data = _document_or(report, self.read_report(portfolio_id, default={}))
         if not data:
             return False
         try:
@@ -423,7 +423,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
         summary["stale"] = self.report_is_stale(portfolio_id, report)
         summary["zip_sha256"] = _sha256(self.zip_path(portfolio_id)) if self.zip_path(portfolio_id).exists() else None
         summary["verification_status"] = verification.get("status") or "missing"
-        summary["deep_verification_status"] = (verification.get("summary") if isinstance(verification.get("summary"), dict) else {}).get("deep_verification_status") or "missing"
+        summary["deep_verification_status"] = (_as_document(verification.get("summary"))).get("deep_verification_status") or "missing"
         return sanitize_metadata(summary, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
 
     def _package_binding(
@@ -552,7 +552,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
                 continue
             if not isinstance(event, dict) or str(event.get("type") or "") != event_type:
                 continue
-            summary = event.get("summary") if isinstance(event.get("summary"), dict) else {}
+            summary = _as_document(event.get("summary"))
             if str(summary.get("signoff_integrity_hash") or "") == signoff_hash:
                 return True
         return False
@@ -649,7 +649,7 @@ def build_chain_of_custody(*, portfolio_id: str, source_hash: str, packages: lis
 
 
 def evidence_vault_report_integrity_ok(report: dict[str, Any] | None) -> bool:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == evidence_vault_report_integrity_hash(data)
 
 
@@ -657,7 +657,7 @@ def evidence_vault_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 def evidence_vault_package_index_integrity_ok(index: dict[str, Any] | None) -> bool:
-    data = index if isinstance(index, dict) else {}
+    data = _as_document(index)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == evidence_vault_package_index_hash(data)
 
 
@@ -665,7 +665,7 @@ def evidence_vault_package_index_integrity_ok(index: dict[str, Any] | None) -> b
 
 
 def evidence_vault_verification_index_integrity_ok(index: dict[str, Any] | None) -> bool:
-    data = index if isinstance(index, dict) else {}
+    data = _as_document(index)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == evidence_vault_verification_index_hash(data)
 
 
@@ -673,7 +673,7 @@ def evidence_vault_verification_index_integrity_ok(index: dict[str, Any] | None)
 
 
 def evidence_vault_chain_integrity_ok(chain: dict[str, Any] | None) -> bool:
-    data = chain if isinstance(chain, dict) else {}
+    data = _as_document(chain)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == evidence_vault_chain_hash(data)
 
 
@@ -681,15 +681,15 @@ def evidence_vault_chain_integrity_ok(chain: dict[str, Any] | None) -> bool:
 
 
 def evidence_vault_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == evidence_vault_manifest_hash(data)
 
 
 def evidence_vault_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
+    data = _as_document(report)
     if not data:
         return {"status": "missing", "integrity_ok": False}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata({"status": data.get("status"), "readiness": data.get("readiness"), "portfolio_id": data.get("portfolio_id"), "source_hash": data.get("source_hash"), "integrity_hash": data.get("integrity_hash"), "integrity_ok": evidence_vault_report_integrity_ok(data), **summary}, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
 
 
@@ -825,7 +825,7 @@ def _read_json_default(path: Path, *, default: ImplementationDocument | None = N
         value = read_json(path)
     except Exception:
         return default if default is not None else {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
 
 
 def _write_json(path: Path, data: Any) -> Path:
@@ -862,7 +862,7 @@ def _read_zip_json(zip_path: Path, name: str) -> ImplementationDocument:
                 value = json.loads(handle.read().decode("utf-8"))
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
 
 
 def _int_or_none(value: Any) -> int | None:
@@ -889,7 +889,7 @@ def _redaction_summary(value: Any) -> ImplementationDocument:
 
 
 def _vault_markdown(report: ImplementationDocument, packages: list[ImplementationDocument]) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     lines = [
         "# MusicForge Portfolio Governance Evidence Vault",
         "",

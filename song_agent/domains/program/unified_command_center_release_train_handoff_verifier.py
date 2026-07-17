@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -394,7 +394,7 @@ def _accepted_evidence_row_from_dir(response_dir: Path) -> ImplementationDocumen
     binding = _read_optional_json(response_dir / "response-binding-summary.json")
     response_public = _response_public_summary(response) if response else {}
     expected_binding = _response_binding_summary(response, verification) if response and verification else {}
-    evidence_binding = accepted.get("response_binding") if isinstance(accepted.get("response_binding"), dict) else {}
+    evidence_binding = _as_document(accepted.get("response_binding"))
     failures: list[str] = []
 
     def require(check_id: str, passed: bool) -> None:
@@ -445,7 +445,7 @@ def _accepted_row_projection(row: ImplementationDocument) -> ImplementationDocum
 
 
 def _response_public_summary(response: ImplementationDocument) -> ImplementationDocument:
-    reviewer = response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}
+    reviewer = _as_document(response.get("reviewer"))
     return {
         "reviewer_id": reviewer.get("reviewer_id"),
         "reviewer_name": sanitize_sensitive_text(str(reviewer.get("name") or "")) or None,
@@ -476,7 +476,7 @@ def _response_binding_summary(response: ImplementationDocument, verification: Im
 
 def _external_semantic_checks(report: ImplementationDocument, inventory: ImplementationDocument, readiness: ImplementationDocument, external_manifest: ImplementationDocument, train: ImplementationDocument, change: ImplementationDocument, lifecycle: ImplementationDocument) -> list[ImplementationDocument]:
     checks: list[dict[str, Any]] = []
-    source = report.get("source") if isinstance(report.get("source"), dict) else {}
+    source = _as_document(report.get("source"))
     checks.extend(
         [
             _check("ucc_train_handoff_source_train_zip_sha256", not train.get("zip_sha256") or source.get("current_train_zip_sha256") == train.get("zip_sha256"), "Report source binds current train ZIP."),
@@ -493,7 +493,7 @@ def _external_semantic_checks(report: ImplementationDocument, inventory: Impleme
 
 def _document_binding_checks(manifest: ImplementationDocument, file_index: ImplementationDocument, report: ImplementationDocument, inventory: ImplementationDocument, readiness: ImplementationDocument, gap_plan: ImplementationDocument, external_manifest: ImplementationDocument, response_summary: ImplementationDocument, accepted_summary: ImplementationDocument, signoff: ImplementationDocument, binding: ImplementationDocument) -> list[ImplementationDocument]:
     source_hash = report.get("source_hash")
-    manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    manifest_source = _as_document(manifest.get("source"))
     checks = [
         _check("ucc_train_handoff_source_hash_consistent", manifest.get("source_hash") == source_hash == inventory.get("source_hash") == readiness.get("source_hash"), "Source hash is consistent across handoff documents."),
         _check("ucc_train_handoff_manifest_file_index_binding", manifest_source.get("file_index_hash") == file_index.get("integrity_hash"), "Manifest binds file index."),

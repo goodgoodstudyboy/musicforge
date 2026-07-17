@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -258,7 +258,7 @@ def _document_binding_checks(
     signoff: ImplementationDocument,
     binding: ImplementationDocument,
 ) -> list[ImplementationDocument]:
-    manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    manifest_source = _as_document(manifest.get("source"))
     source_hash = source.get("source_hash")
     checks = [
         _check("ucc_train_source_hash_manifest", manifest.get("source_hash") == source_hash == report.get("source_hash") == inventory.get("source_hash") == readiness.get("source_hash"), "Source hash is consistent across train documents."),
@@ -366,7 +366,7 @@ def _signoff_binding_checks(binding: ImplementationDocument, signoff: Implementa
     for row in history:
         if row.get("event_type") == "ucc_release_train_signoff_created" and row.get("signoff_hash") == signoff.get("integrity_hash"):
             signoff_event = row
-    binding_source = binding.get("source") if isinstance(binding.get("source"), dict) else {}
+    binding_source = _as_document(binding.get("source"))
     checks = [
         _check("ucc_train_signoff_binding_package_type", binding.get("package_type") == "musicforge_unified_command_center_release_train_signoff_binding", "Signoff binding package type is valid."),
         _check("ucc_train_signoff_binding_signoff_hash", binding.get("signoff_hash") == signoff.get("integrity_hash"), "Signoff binding matches signoff hash."),

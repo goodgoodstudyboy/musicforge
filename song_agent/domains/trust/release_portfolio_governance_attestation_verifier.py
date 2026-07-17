@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -69,7 +69,7 @@ def print_release_portfolio_governance_attestation_verification_report(report: d
     print(f"blockers: {summary.get('blocker_count', 0)}")
     print(f"warnings: {summary.get('warning_count', 0)}")
     for label, key in (("Blockers", "blockers"), ("Warnings", "warnings")):
-        rows = report.get(key) if isinstance(report.get(key), list) else []
+        rows = _as_list(report.get(key))
         if not rows:
             continue
         print(f"{label}:")
@@ -180,7 +180,7 @@ class _AttestationVerifier:
         self._add_check("manifest", "attestation_manifest_integrity", "passed" if self.manifest.get("integrity_hash") == actual_manifest_hash else "failed", "blocking", "Attestation manifest integrity hash matches." if self.manifest.get("integrity_hash") == actual_manifest_hash else "Attestation manifest integrity hash does not match.")
         package_type_ok = self.manifest.get("package_type") == ATTESTATION_PACKAGE_TYPE
         self._add_check("manifest", "attestation_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", f"Manifest package_type is {ATTESTATION_PACKAGE_TYPE}." if package_type_ok else "Manifest package_type is not release_portfolio_governance_public_attestation.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -227,19 +227,19 @@ class _AttestationVerifier:
     def _verify_documents(self) -> None:
         if self.report_doc:
             self._add_hash_check("report", "attestation_report_integrity", self.report_doc.get("integrity_hash"), attestation_report_integrity_hash(self.report_doc), "Attestation Report integrity")
-            row = self.manifest.get("attestation_report") if isinstance(self.manifest.get("attestation_report"), dict) else {}
+            row = _as_document(self.manifest.get("attestation_report"))
             self._add_hash_check("report", "attestation_manifest_report_hash", row.get("integrity_hash"), self.report_doc.get("integrity_hash"), "Manifest report hash")
             self._add_hash_check("report", "attestation_report_source_hash", self.manifest.get("source_hash"), self.report_doc.get("source_hash"), "Manifest report source hash")
         if self.certificate:
             self._add_hash_check("certificate", "attestation_certificate_payload_hash", self.certificate.get("payload_hash"), attestation_certificate_hash(self.certificate), "Certificate payload hash")
-            row = self.manifest.get("certificate") if isinstance(self.manifest.get("certificate"), dict) else {}
+            row = _as_document(self.manifest.get("certificate"))
             self._add_hash_check("certificate", "attestation_manifest_certificate_hash", row.get("payload_hash"), self.certificate.get("payload_hash"), "Manifest certificate payload hash")
             self._add_hash_check("certificate", "attestation_manifest_certificate_id", row.get("certificate_id"), self.certificate.get("certificate_id"), "Manifest certificate id")
-        evidence_manifest = self.manifest.get("evidence_vault") if isinstance(self.manifest.get("evidence_vault"), dict) else {}
-        evidence_cert = self.certificate.get("evidence_vault") if isinstance(self.certificate.get("evidence_vault"), dict) else {}
-        final_cert = self.certificate.get("final_board") if isinstance(self.certificate.get("final_board"), dict) else {}
-        coverage_cert = self.certificate.get("coverage") if isinstance(self.certificate.get("coverage"), dict) else {}
-        source = self.report_doc.get("source") if isinstance(self.report_doc.get("source"), dict) else {}
+        evidence_manifest = _as_document(self.manifest.get("evidence_vault"))
+        evidence_cert = _as_document(self.certificate.get("evidence_vault"))
+        final_cert = _as_document(self.certificate.get("final_board"))
+        coverage_cert = _as_document(self.certificate.get("coverage"))
+        source = _as_document(self.report_doc.get("source"))
         expected_status = "passed" if self.report_doc.get("status") == "passed" else self.report_doc.get("status")
         self._add_value_check("certificate", "attestation_certificate_status", self.certificate.get("governance_status"), expected_status, "Certificate governance status")
         self._add_value_check("certificate", "attestation_certificate_profile", self.certificate.get("attestation_profile"), source.get("attestation_profile") or self.manifest.get("attestation_profile"), "Certificate attestation profile")
@@ -264,8 +264,8 @@ class _AttestationVerifier:
         self._add_check("certificate", "attestation_certificate_type", "passed" if type_ok else "failed", "blocking", "Certificate type is valid." if type_ok else "Certificate type is invalid.")
 
     def _verify_requirements(self) -> None:
-        evidence_cert = self.certificate.get("evidence_vault") if isinstance(self.certificate.get("evidence_vault"), dict) else {}
-        final_cert = self.certificate.get("final_board") if isinstance(self.certificate.get("final_board"), dict) else {}
+        evidence_cert = _as_document(self.certificate.get("evidence_vault"))
+        final_cert = _as_document(self.certificate.get("final_board"))
         if self.require_vault:
             ok = evidence_cert.get("verification_status") == "passed" and evidence_cert.get("deep_verification_status") == "passed" and bool(evidence_cert.get("zip_sha256"))
             self._add_check("requirements", "attestation_require_vault", "passed" if ok else "failed", "blocking", "Evidence Vault verification is passed and deep." if ok else "Evidence Vault verification is required.")
@@ -304,7 +304,7 @@ class _AttestationVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]

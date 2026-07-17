@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.coercion import as_document as _as_document
+
+from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
+
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from typing import Any
@@ -9,7 +13,7 @@ from song_agent.domains.delivery.distribution_artwork import latest_distribution
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class DeliveryRoutesGetOrRefreshSubmissionQa:
+class DeliveryRoutesGetOrRefreshSubmissionQa(DeliveryRouteContext):
     def _get_or_refresh_submission_qa(self, release_id: str, batch: Any, *, refresh: bool) -> ImplementationDocument:
         if not refresh:
             existing = self.submission_store.read_qa(release_id, batch.submission_id, default={})
@@ -27,9 +31,9 @@ class DeliveryRoutesGetOrRefreshSubmissionQa:
         payload = batch.to_dict()
         try:
             overview = self.submission_evidence_store.overview(release_id, batch.submission_id)
-            summary = overview.get("summary") if isinstance(overview.get("summary"), dict) else {}
-            report_summary = overview.get("report_summary") if isinstance(overview.get("report_summary"), dict) else {}
-            signoff_summary = overview.get("signoff_summary") if isinstance(overview.get("signoff_summary"), dict) else {}
+            summary = _as_document(overview.get("summary"))
+            report_summary = _as_document(overview.get("report_summary"))
+            signoff_summary = _as_document(overview.get("signoff_summary"))
             payload["latest_evidence_summary"] = {
                 **summary,
                 "status": report_summary.get("status") or summary.get("status") or "not_started",
@@ -57,6 +61,6 @@ class DeliveryRoutesGetOrRefreshSubmissionQa:
             release_manifest=release_manifest,
             release_metadata=metadata,
             template=template,
-            artwork=artwork if isinstance(artwork, dict) else {},
+            artwork=_as_document(artwork),
             release_export_dir=self.release_store.export_dir(release_id),
         )

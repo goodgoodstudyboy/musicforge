@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -89,12 +89,12 @@ def write_public_trust_center_acceptance_board_verification_report(report: dict[
 
 
 def print_public_trust_center_acceptance_board_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Acceptance Board verification")
     print(f"status: {report.get('status')}")
     print(f"center: {summary.get('center_id') or 'unknown'}")
     print(f"readiness: {summary.get('readiness') or 'unknown'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def public_trust_center_acceptance_board_verification_exit_code(report: dict[str, Any]) -> int:
@@ -239,7 +239,7 @@ class _AcceptanceBoardVerifier:
         allowed_entries = self._expected_entries()
         unexpected = sorted(set(self.entry_names) - allowed_entries)
         self._add_check("zip", "ptcab_zip_allowed_entries", "failed" if unexpected else "passed", "blocking", "Unexpected Acceptance Board entries: " + ", ".join(unexpected[:5]) if unexpected else "Acceptance Board ZIP entries match report-derived allow-list.")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -272,13 +272,13 @@ class _AcceptanceBoardVerifier:
             if actual_sha != item.get("sha256") or actual_size != item.get("size_bytes"):
                 mismatches.append(path)
         self._add_check("manifest", "ptcab_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:5]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "ptcab_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
     def _verify_documents(self) -> None:
-        source = self.report.get("source") if isinstance(self.report.get("source"), dict) else {}
-        participants = self.report.get("participants") if isinstance(self.report.get("participants"), list) else []
+        source = _as_document(self.report.get("source"))
+        participants = _as_list(self.report.get("participants"))
         self._add_exact_check("report", "ptcab_report_package_type", self.report.get("package_type"), ACCEPTANCE_BOARD_REPORT_PACKAGE_TYPE, "Board report package_type")
         self._add_hash_check("report", "ptcab_report_integrity", self.report.get("integrity_hash"), acceptance_board_report_hash(self.report), "Board report integrity")
         self._add_hash_check("report", "ptcab_report_source_hash", self.report.get("source_hash"), stable_hash(source), "Board report source hash")
@@ -309,10 +309,10 @@ class _AcceptanceBoardVerifier:
             if not proof:
                 missing.append(response_id)
                 continue
-            binding = proof.get("binding") if isinstance(proof.get("binding"), dict) else {}
-            verification = proof.get("verification") if isinstance(proof.get("verification"), dict) else {}
-            public = binding.get("public_response") if isinstance(binding.get("public_response"), dict) else {}
-            reviewer = public.get("reviewer") if isinstance(public.get("reviewer"), dict) else {}
+            binding = _as_document(proof.get("binding"))
+            verification = _as_document(proof.get("verification"))
+            public = _as_document(binding.get("public_response"))
+            reviewer = _as_document(public.get("reviewer"))
             expected_public_bits = {
                 "result": public.get("result"),
                 "review_mode": public.get("review_mode"),
@@ -339,7 +339,7 @@ class _AcceptanceBoardVerifier:
     def _verify_evidence_summaries(self) -> None:
         missing: list[str] = []
         mismatches: list[str] = []
-        rows = self.evidence_index.get("items") if isinstance(self.evidence_index.get("items"), list) else []
+        rows = _as_list(self.evidence_index.get("items"))
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -354,8 +354,8 @@ class _AcceptanceBoardVerifier:
         self._add_check("evidence", "ptcab_accepted_evidence_summaries_match", "failed" if mismatches else "passed", "blocking", "Accepted evidence summary mismatches: " + ", ".join(mismatches[:5]) if mismatches else "Accepted evidence summaries match evidence index.")
 
     def _verify_gates(self) -> None:
-        summary = self.report.get("summary") if isinstance(self.report.get("summary"), dict) else {}
-        participants = self.report.get("participants") if isinstance(self.report.get("participants"), list) else []
+        summary = _as_document(self.report.get("summary"))
+        participants = _as_list(self.report.get("participants"))
         self._add_check("gate", "ptcab_quorum_status", "passed" if summary.get("quorum_status") == "passed" else "failed", "blocking", "Board quorum is passed." if summary.get("quorum_status") == "passed" else "Board quorum is not passed.")
         self._add_check("gate", "ptcab_required_roles_status", "passed" if summary.get("required_roles_status") == "passed" else "failed", "blocking", "Required roles are passed." if summary.get("required_roles_status") == "passed" else "Required roles are not passed.")
         self._add_check("gate", "ptcab_conflict_status", "passed" if summary.get("conflict_status") == "passed" else "failed", "blocking", "No blocking conflicts." if summary.get("conflict_status") == "passed" else "Blocking conflicts exist.")
@@ -377,8 +377,8 @@ class _AcceptanceBoardVerifier:
             self._add_check("requirements", "ptcab_require_required_roles", "passed" if not missing else "failed", "blocking", "Required roles are present." if not missing else "Missing required roles: " + ", ".join(missing))
 
     def _verify_external_distribution_kit(self) -> None:
-        source = self.report.get("source") if isinstance(self.report.get("source"), dict) else {}
-        kit = source.get("distribution_kit") if isinstance(source.get("distribution_kit"), dict) else {}
+        source = _as_document(self.report.get("source"))
+        kit = _as_document(source.get("distribution_kit"))
         if self.distribution_kit_path is None:
             return
         if not self.distribution_kit_path.exists() or not self.distribution_kit_path.is_file():
@@ -392,7 +392,7 @@ class _AcceptanceBoardVerifier:
         self._add_check("external", "ptcab_external_distribution_kit_verification", "passed" if verification.get("status") == "passed" else "failed", "blocking", "External Distribution Kit verification passed.")
 
     def _verify_external_accepted_evidence(self) -> None:
-        participants = [item for item in (self.report.get("participants") if isinstance(self.report.get("participants"), list) else []) if isinstance(item, dict)]
+        participants = [item for item in (_as_list(self.report.get("participants"))) if isinstance(item, dict)]
         counted = [item for item in participants if item.get("counts_for_quorum")]
         strong_gate = bool(self.require_ready or self.require_quorum or self.min_accepted_count or self.min_accepted_organizations or self.required_roles)
         if not strong_gate and self.accepted_evidence_dir is None:
@@ -428,7 +428,7 @@ class _AcceptanceBoardVerifier:
             evidence = _read_zip_json(evidence_zip, "evidence-report.json")
             public = _read_zip_json(evidence_zip, "original-response-public.json")
             manifest = _read_zip_json(evidence_zip, "evidence-manifest.json")
-            reviewer = public.get("reviewer") if isinstance(public.get("reviewer"), dict) else {}
+            reviewer = _as_document(public.get("reviewer"))
             response_row = _find_row(self.response_index.get("items"), "response_id", response_id)
             evidence_row = _find_row(self.evidence_index.get("items"), "evidence_id", evidence_id)
             expected_public = {
@@ -445,7 +445,7 @@ class _AcceptanceBoardVerifier:
                 mismatches.append(response_id + ":identity")
             if evidence.get("status") != "current" or evidence.get("result") != "accepted" or evidence.get("review_mode") != "external_manual":
                 mismatches.append(response_id + ":state")
-            source = evidence.get("source") if isinstance(evidence.get("source"), dict) else {}
+            source = _as_document(evidence.get("source"))
             if source.get("response_payload_hash") != response_row.get("response_payload_hash"):
                 mismatches.append(response_id + ":payload")
             if source.get("raw_response_sha256") != response_row.get("raw_response_sha256"):
@@ -512,7 +512,7 @@ class _AcceptanceBoardVerifier:
 
     def _expected_entries(self) -> set[str]:
         entries = set(ROOT_ENTRIES)
-        participants = self.report.get("participants") if isinstance(self.report.get("participants"), list) else []
+        participants = _as_list(self.report.get("participants"))
         for item in participants:
             if not isinstance(item, dict):
                 continue
@@ -535,12 +535,12 @@ class _AcceptanceBoardVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
         warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        summary = {"center_id": self.report.get("center_id"), "readiness": self.report.get("readiness"), "status": self.report.get("status"), "accepted_count": (self.report.get("summary") if isinstance(self.report.get("summary"), dict) else {}).get("accepted_count"), "blocker_count": len(blockers), "warning_count": len(warnings)}
+        summary = {"center_id": self.report.get("center_id"), "readiness": self.report.get("readiness"), "status": self.report.get("status"), "accepted_count": (_as_document(self.report.get("summary"))).get("accepted_count"), "blocker_count": len(blockers), "warning_count": len(warnings)}
         return sanitize_metadata({"schema_version": ACCEPTANCE_BOARD_VERIFICATION_SCHEMA_VERSION, "generated_at": self.generated_at, "status": "failed" if blockers else "warning" if warnings else "passed", "package_kind": "public_trust_center_acceptance_board", "zip_path": self.zip_path.name, "zip_sha256": self.zip_sha256, "zip_size_bytes": self.zip_size_bytes, "manifest_hash": self.manifest.get("integrity_hash") if isinstance(self.manifest, dict) else None, "summary": summary, "checks": self.checks, "files": self.files, "blockers": blockers, "warnings": warnings, "redaction_findings": self.redaction_findings[:50]}, blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _add_hash_check(self, scope: str, check_id: str, expected: Any, actual: Any, label: str) -> None:
@@ -556,16 +556,16 @@ class _AcceptanceBoardVerifier:
 
 
 def _quorum_from_report(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
-    policy = report.get("policy") if isinstance(report.get("policy"), dict) else {}
-    participants = report.get("participants") if isinstance(report.get("participants"), list) else []
+    summary = _as_document(report.get("summary"))
+    policy = _as_document(report.get("policy"))
+    participants = _as_list(report.get("participants"))
     counted = [str(item.get("response_id") or "") for item in participants if isinstance(item, dict) and item.get("counts_for_quorum")]
     roles = {str(item.get("role") or "").lower(): "passed" for item in participants if isinstance(item, dict) and item.get("counts_for_quorum") and item.get("role")}
     return {"schema_version": 1, "source_hash": report.get("source_hash"), "policy_hash": policy.get("policy_hash"), "decision": {"readiness": report.get("readiness"), "quorum_status": summary.get("quorum_status"), "required_roles_status": summary.get("required_roles_status"), "conflict_status": summary.get("conflict_status")}, "counted_response_ids": counted, "required_roles": roles}
 
 
 def _find_row(rows: Any, key: str, value: str) -> ImplementationDocument:
-    for item in rows if isinstance(rows, list) else []:
+    for item in _as_list(rows):
         if isinstance(item, dict) and str(item.get(key) or "") == value:
             return item
     return {}
@@ -605,7 +605,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
             value = json.loads(archive.read(entry).decode("utf-8"))
     except Exception:
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _fs_path(path: Path) -> str:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import threading as threading
@@ -40,7 +40,7 @@ _LOCKS_GUARD = threading.Lock()
 
 
 DEFAULT_BOUNDS = {"min_score": 0, "max_score": 100, "high_score_threshold": 75}
-BASELINE_RULESET = {
+BASELINE_RULESET: dict[str, Any] = {
     "weights": {
         "weakness": 0.55,
         "severity_high_bonus": 15,
@@ -346,7 +346,7 @@ class PlanningRuleSimulationStore:
         if existing.status == "archived":
             raise PlanningRuleSimulationStateError("Archived Planning Rule Simulation cannot be refreshed.")
         ruleset = self.read_ruleset(existing.ruleset_id)
-        review_ids = existing.source.get("review_ids") if isinstance(existing.source.get("review_ids"), list) else []
+        review_ids = _as_list(existing.source.get("review_ids"))
         reviews = [self.review_store.read_review(str(review_id)) for review_id in review_ids]
         for review in reviews:
             if review.status == "archived" or self.review_store.review_is_stale(review):
@@ -369,14 +369,14 @@ class PlanningRuleSimulationStore:
             return updated
 
     def simulation_is_stale(self, report: PlanningRuleSimulationReport | dict[str, Any]) -> bool:
-        data = report.to_dict() if isinstance(report, PlanningRuleSimulationReport) else report if isinstance(report, dict) else {}
+        data = report.to_dict() if isinstance(report, PlanningRuleSimulationReport) else _as_document(report)
         if data.get("status") == "archived":
             return False
         try:
             current = self._source_state(data)
         except PlanningRuleSimulationError:
             return True
-        stored = data.get("source") if isinstance(data.get("source"), dict) else {}
+        stored = _as_document(data.get("source"))
         return stable_hash(current) != stable_hash(_source_core(stored))
 
     def latest_summary(self, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
@@ -469,7 +469,7 @@ class PlanningRuleSimulationStore:
         return PlanningRuleSimulationReport.from_dict({**report.to_dict(), "status": "stale", "summary": {**report.summary, "stale": True}, "warnings": warnings})
 
     def _source_state(self, report_data: ImplementationDocument) -> ImplementationDocument:
-        source = report_data.get("source") if isinstance(report_data.get("source"), dict) else {}
+        source = _as_document(report_data.get("source"))
         ruleset = self.read_ruleset(str(report_data.get("ruleset_id") or source.get("ruleset_id") or ""))
         if ruleset.status == "archived":
             raise PlanningRuleSimulationStateError("Planning Rule Set is archived.")
@@ -519,30 +519,30 @@ class PlanningRuleSimulationStore:
 
 
 def ruleset_summary(ruleset: PlanningRuleSet | dict[str, Any] | None) -> dict[str, Any]:
-    data = ruleset.to_dict() if isinstance(ruleset, PlanningRuleSet) else ruleset if isinstance(ruleset, dict) else {}
+    data = ruleset.to_dict() if isinstance(ruleset, PlanningRuleSet) else _as_document(ruleset)
     return sanitize_metadata(
         {
             "ruleset_id": data.get("ruleset_id"),
             "name": data.get("name"),
             "status": data.get("status") or "missing",
-            "template": (data.get("source") if isinstance(data.get("source"), dict) else {}).get("template"),
+            "template": (_as_document(data.get("source"))).get("template"),
             "base_rules_version": data.get("base_rules_version"),
-            "synthetic_only_penalty": (data.get("confidence") if isinstance(data.get("confidence"), dict) else {}).get("synthetic_only_penalty", 0),
-            "waiver_penalty": (data.get("penalties") if isinstance(data.get("penalties"), dict) else {}).get("waiver_heavy_history", 0),
+            "synthetic_only_penalty": (_as_document(data.get("confidence"))).get("synthetic_only_penalty", 0),
+            "waiver_penalty": (_as_document(data.get("penalties"))).get("waiver_heavy_history", 0),
         }
     )
 
 
 def planning_simulation_summary(report: PlanningRuleSimulationReport | dict[str, Any] | None) -> dict[str, Any]:
-    data = report.to_dict() if isinstance(report, PlanningRuleSimulationReport) else report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    source = data.get("source") if isinstance(data.get("source"), dict) else {}
+    data = report.to_dict() if isinstance(report, PlanningRuleSimulationReport) else _as_document(report)
+    summary = _as_document(data.get("summary"))
+    source = _as_document(data.get("source"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
             "simulation_id": data.get("simulation_id"),
             "ruleset_id": data.get("ruleset_id"),
-            "scope": data.get("scope") if isinstance(data.get("scope"), dict) else {},
+            "scope": _as_document(data.get("scope")),
             "review_count": summary.get("review_count", 0),
             "item_count": summary.get("item_count", 0),
             "baseline_alignment_score": summary.get("baseline_alignment_score"),
@@ -569,7 +569,7 @@ def write_planning_simulation_summary(path: Path, store: PlanningRuleSimulationS
 
 
 def _ruleset_from_payload(ruleset_id: str, payload: ImplementationDocument, *, now: str) -> PlanningRuleSet:
-    source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
+    source = _as_document(payload.get("source"))
     template_name = str(payload.get("template") or source.get("template") or "baseline")
     template = RULESET_TEMPLATES.get(template_name)
     if template is None:
@@ -604,7 +604,7 @@ def _ruleset_from_payload(ruleset_id: str, payload: ImplementationDocument, *, n
 
 
 def _simulate_review(review: AcceptanceFixPlanReview, ruleset: PlanningRuleSet) -> ImplementationDocument:
-    summary = review.summary if isinstance(review.summary, dict) else {}
+    summary = _as_document(review.summary)
     item_results = [_simulate_item(item, ruleset, summary) for item in review.item_outcomes if isinstance(item, dict)]
     baseline_alignment = _alignment_score(item_results, key="baseline_planning_score")
     simulated_alignment = _alignment_score(item_results, key="simulated_planning_score")
@@ -646,8 +646,8 @@ def _simulate_item(item: ImplementationDocument, ruleset: PlanningRuleSet, revie
     baseline = max(0, min(100, _int(item.get("planning_score"), 0)))
     score = baseline
     effects: list[str] = []
-    knowledge = item.get("planned_knowledge") if isinstance(item.get("planned_knowledge"), dict) else {}
-    execution = item.get("execution") if isinstance(item.get("execution"), dict) else {}
+    knowledge = _as_document(item.get("planned_knowledge"))
+    execution = _as_document(item.get("execution"))
     warnings = [str(value) for value in knowledge.get("warnings", []) if str(value).strip()] if isinstance(knowledge.get("warnings"), list) else []
     if review_summary.get("manual_recheck_confirmed"):
         score += _int(ruleset.confidence.get("manual_recheck_bonus"), 0)
@@ -696,8 +696,8 @@ def _simulate_item(item: ImplementationDocument, ruleset: PlanningRuleSet, revie
     min_score = _int(ruleset.bounds.get("min_score"), 0)
     max_score = _int(ruleset.bounds.get("max_score"), 100)
     simulated = max(min_score, min(max_score, score))
-    outcome = item.get("outcome") if isinstance(item.get("outcome"), dict) else {}
-    target = item.get("target") if isinstance(item.get("target"), dict) else {}
+    outcome = _as_document(item.get("outcome"))
+    target = _as_document(item.get("target"))
     return sanitize_metadata(
         {
             "planned_item_id": item.get("planned_item_id"),
@@ -731,7 +731,7 @@ def _rule_effects(review_results: list[ImplementationDocument]) -> list[Implemen
                 bucket["count"] += 1
                 bucket["score_deltas"].append(_int(item.get("score_delta"), 0))
                 bucket["affected_review_ids"].add(str(review.get("review_id") or ""))
-                target = item.get("target") if isinstance(item.get("target"), dict) else {}
+                target = _as_document(item.get("target"))
                 for issue in target.get("issue_types", []) if isinstance(target.get("issue_types"), list) else []:
                     bucket["affected_issue_types"].add(str(issue))
     rows = []
@@ -859,10 +859,10 @@ def _source_core(source: ImplementationDocument) -> ImplementationDocument:
             "engine_version": source.get("engine_version"),
             "ruleset_id": source.get("ruleset_id"),
             "ruleset_hash": source.get("ruleset_hash"),
-            "review_ids": source.get("review_ids") if isinstance(source.get("review_ids"), list) else [],
-            "review_hashes": source.get("review_hashes") if isinstance(source.get("review_hashes"), dict) else {},
-            "scope": source.get("scope") if isinstance(source.get("scope"), dict) else {},
-            "options": source.get("options") if isinstance(source.get("options"), dict) else {},
+            "review_ids": _as_list(source.get("review_ids")),
+            "review_hashes": _as_document(source.get("review_hashes")),
+            "scope": _as_document(source.get("scope")),
+            "options": _as_document(source.get("options")),
         }
     )
 
@@ -890,7 +890,7 @@ def _target_summary(target: ImplementationDocument) -> ImplementationDocument:
 
 def _scope(value: Any, payload: ImplementationDocument | None = None) -> ImplementationDocument:
     payload = payload or {}
-    source = value if isinstance(value, dict) else {}
+    source = _as_document(value)
     scope_type = str(source.get("type") or payload.get("scope_type") or ("release" if source.get("release_id") or payload.get("release_id") else "project" if source.get("project_id") or payload.get("project_id") else "global"))
     if scope_type not in {"global", "release", "project"}:
         scope_type = "global"
@@ -907,7 +907,7 @@ def _review_matches_project(review: AcceptanceFixPlanReview, project_id: str) ->
     if review.scope.get("project_id") == project_id:
         return True
     for item in review.item_outcomes:
-        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        target = _as_document(item.get("target"))
         if target.get("project_id") == project_id:
             return True
     return False
@@ -918,7 +918,7 @@ def _simulation_matches_release(report: PlanningRuleSimulationReport, release_id
         return True
     for review in report.review_results:
         scope = review.get("scope") if isinstance(review, dict) and isinstance(review.get("scope"), dict) else {}
-        if scope.get("release_id") == release_id:
+        if _as_document(scope).get("release_id") == release_id:
             return True
     return False
 
@@ -929,7 +929,7 @@ def _simulation_matches_project(report: PlanningRuleSimulationReport, project_id
     for review in report.review_results:
         for item in review.get("item_results", []):
             target = item.get("target") if isinstance(item, dict) and isinstance(item.get("target"), dict) else {}
-            if target.get("project_id") == project_id:
+            if _as_document(target).get("project_id") == project_id:
                 return True
     return False
 
@@ -948,7 +948,7 @@ def _numeric_map(value: Any, low: int, high: int) -> dict[str, int]:
 
 
 def _bounds(value: Any) -> dict[str, int]:
-    raw = value if isinstance(value, dict) else {}
+    raw = _as_document(value)
     min_score = max(0, min(100, _int(raw.get("min_score"), 0)))
     max_score = max(min_score, min(100, _int(raw.get("max_score"), 100)))
     threshold = max(50, min(95, _int(raw.get("high_score_threshold"), 75)))
@@ -986,7 +986,7 @@ def _lock_for_root(root: Path) -> threading.RLock:
 
 
 def _safe_dict(value: Any) -> ImplementationDocument:
-    return sanitize_metadata(value if isinstance(value, dict) else {})
+    return sanitize_metadata(_as_document(value))
 
 
 def _bounded(value: Any, limit: int) -> str:

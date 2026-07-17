@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -84,7 +84,7 @@ class ReleaseOperationsSignoffStore:
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
     def get_signoff(self, release_id: str) -> dict[str, Any]:
         signoff = self.read_signoff(release_id, default={})
@@ -120,7 +120,7 @@ class ReleaseOperationsSignoffStore:
         _maybe_block(blockers, "operations_redaction", not redaction_ok, "Operations Report redaction scan failed.")
         _maybe_block(blockers, "operations_accepted_stage", current.get("current_stage") != "accepted", "Operations current_stage must be accepted before Operations Signoff.")
 
-        summary = current.get("summary") if isinstance(current.get("summary"), dict) else {}
+        summary = _as_document(current.get("summary"))
         blocker_count = int(summary.get("blocker_count") or 0)
         warning_count = int(summary.get("warning_count") or 0)
         _maybe_block(blockers, "operations_blockers", blocker_count > 0, "Operations Report still has blockers.")
@@ -253,11 +253,11 @@ class ReleaseOperationsSignoffStore:
 
     def package_ledger(self, release_id: str, *, current_report: dict[str, Any] | None = None) -> dict[str, Any]:
         report = current_report or self.operations_store.build_report(release_id, persist=False)
-        packages = report.get("package_summaries") if isinstance(report.get("package_summaries"), dict) else {}
-        release_zip = packages.get("release_zip") if isinstance(packages.get("release_zip"), dict) else {}
-        distribution = packages.get("distribution_packages") if isinstance(packages.get("distribution_packages"), list) else []
-        submission = packages.get("submission_packages") if isinstance(packages.get("submission_packages"), list) else []
-        evidence = packages.get("submission_evidence_packages") if isinstance(packages.get("submission_evidence_packages"), list) else []
+        packages = _as_document(report.get("package_summaries"))
+        release_zip = _as_document(packages.get("release_zip"))
+        distribution = _as_list(packages.get("distribution_packages"))
+        submission = _as_list(packages.get("submission_packages"))
+        evidence = _as_list(packages.get("submission_evidence_packages"))
         ledger = {
             "release_id": release_id,
             "generated_at": now_iso(),
@@ -288,7 +288,7 @@ class ReleaseOperationsSignoffStore:
             report = self.operations_store.read_report(release_id, default={}) or self.operations_store.refresh(release_id, now=now)
             latest_runbook = _latest_runbook(self.runbook_store, release_id)
             latest_runbook_summary = runbook_summary(latest_runbook) if latest_runbook else {"status": "missing"}
-            verifier_summaries = report.get("verifier_summaries") if isinstance(report.get("verifier_summaries"), dict) else {}
+            verifier_summaries = _as_document(report.get("verifier_summaries"))
             package_ledger = self.package_ledger(release_id, current_report=report)
             change_summary = self.change_request_summary(release_id)
             export_dir = self.archive_export_dir(release_id).resolve()
@@ -361,7 +361,7 @@ class ReleaseOperationsSignoffStore:
         if not path.exists():
             raise FileNotFoundError("Operations Archive export has not been generated.")
         value = read_json(path)
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
     def list_change_requests(self, release_id: str, *, include_cancelled: bool = True) -> list[dict[str, Any]]:
         root = self.change_requests_root(release_id)
@@ -387,7 +387,7 @@ class ReleaseOperationsSignoffStore:
         reason = sanitize_sensitive_text(str(payload.get("reason") or "").strip())
         if len(reason) < 8:
             raise ReleaseOperationsSignoffStateError("Change Request reason must be at least 8 characters.")
-        scope = payload.get("scope") if isinstance(payload.get("scope"), list) else []
+        scope = _as_list(payload.get("scope"))
         clean_scope = sorted({_safe_text(item, 80) for item in scope if _safe_text(item, 80)})
         if not clean_scope:
             raise ReleaseOperationsSignoffStateError("Change Request scope is required.")
@@ -503,19 +503,19 @@ class ReleaseOperationsSignoffStore:
 
 
 def operations_signoff_integrity_ok(signoff: dict[str, Any] | None) -> bool:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     return bool(data.get("payload_hash")) and str(data.get("payload_hash")) == operations_signoff_hash(data)
 
 
 def operations_signoff_summary(signoff: dict[str, Any] | None, *, current_report: dict[str, Any] | None = None) -> dict[str, Any]:
-    data = signoff if isinstance(signoff, dict) else {}
+    data = _as_document(signoff)
     if not data:
         return {"status": "not_signed", "integrity_ok": False, "payload_hash_ok": False, "stale": False}
     payload_hash_ok = operations_signoff_integrity_ok(data)
     current_source_hash = current_report.get("source_hash") if isinstance(current_report, dict) else None
     stale = bool(current_source_hash and data.get("source_hash") and str(current_source_hash) != str(data.get("source_hash")))
-    gate = data.get("gate") if isinstance(data.get("gate"), dict) else {}
-    operations_report = data.get("operations_report") if isinstance(data.get("operations_report"), dict) else {}
+    gate = _as_document(data.get("gate"))
+    operations_report = _as_document(data.get("operations_report"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",
@@ -548,7 +548,7 @@ def operations_signoff_summary(signoff: dict[str, Any] | None, *, current_report
 
 
 def operations_archive_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
-    data = manifest if isinstance(manifest, dict) else {}
+    data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == operations_archive_manifest_hash(data)
 
 
@@ -561,7 +561,7 @@ def _runbook_gate(runbook: ImplementationDocument, current_report: Implementatio
     if not runbook:
         return {"status": "warning", "message": "No Release Operations Runbook exists.", "runbook_id": None}
     summary = runbook_summary(runbook)
-    source = runbook.get("source") if isinstance(runbook.get("source"), dict) else {}
+    source = _as_document(runbook.get("source"))
     stale = str(source.get("operations_source_hash") or "") != str(current_report.get("source_hash") or "")
     failed_safe_count = sum(1 for item in runbook.get("items", []) if isinstance(item, dict) and item.get("risk") == "auto_safe" and item.get("status") == "failed")
     pending_safe_count = sum(1 for item in runbook.get("items", []) if isinstance(item, dict) and item.get("risk") == "auto_safe" and item.get("status") in {"pending", "running"})
@@ -580,7 +580,7 @@ def _runbook_gate(runbook: ImplementationDocument, current_report: Implementatio
 
 
 def _verifier_summary_from_report(report: ImplementationDocument) -> ImplementationDocument:
-    return sanitize_metadata(report.get("verifier_summaries") if isinstance(report.get("verifier_summaries"), dict) else {}, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(report.get("verifier_summaries")), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
 
 def _failed_verifier_summaries(value: Any) -> list[ImplementationDocument]:
@@ -605,18 +605,18 @@ def _missing_submission_evidence(report: ImplementationDocument) -> bool:
     domain = report.get("domains", {}).get("submission_evidence") if isinstance(report.get("domains"), dict) else {}
     if not isinstance(domain, dict) or not domain.get("required"):
         return False
-    summary = domain.get("summary") if isinstance(domain.get("summary"), dict) else {}
+    summary = _as_document(domain.get("summary"))
     return int(summary.get("accepted_count") or 0) <= 0 or domain.get("status") not in {"passed", "warning"}
 
 
 def _package_ledger_complete(ledger: ImplementationDocument) -> bool:
-    summary = ledger.get("summary") if isinstance(ledger.get("summary"), dict) else {}
+    summary = _as_document(ledger.get("summary"))
     return bool(summary.get("release_zip_exists")) and int(summary.get("missing_count") or 0) == 0
 
 
 def _missing_package_count(packages: ImplementationDocument) -> int:
     missing = 0
-    release_zip = packages.get("release_zip") if isinstance(packages.get("release_zip"), dict) else {}
+    release_zip = _as_document(packages.get("release_zip"))
     if not release_zip.get("exists"):
         missing += 1
     for key in ("distribution_packages", "submission_packages", "submission_evidence_packages"):

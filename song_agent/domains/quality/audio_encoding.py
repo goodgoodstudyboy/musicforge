@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from typing import Any as _InferenceType
+
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -52,7 +54,7 @@ class AudioEncoderConfig:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None, *, allow_fake_runner: bool = False) -> "AudioEncoderConfig":
-        data = data if isinstance(data, dict) else {}
+        data = _as_document(data)
         return cls(
             engine=str(data.get("engine") or "ffmpeg").strip().lower(),
             ffmpeg_path=str(os.environ.get("MUSICFORGE_FFMPEG_PATH") or data.get("ffmpeg_path") or "ffmpeg").strip(),
@@ -232,7 +234,7 @@ class AudioEncodingStore:
                 return default
             raise AudioEncodingNotFoundError(f"Encoded audio manifest not found: {profile_id}.")
         data = read_json(path)
-        return self.with_current_state(release_id, data if isinstance(data, dict) else {})
+        return self.with_current_state(release_id, _as_document(data))
 
     def render(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
@@ -425,8 +427,8 @@ def encoded_audio_source_state(release_store: ReleaseStore, release_id: str, pro
     except FileNotFoundError:
         return {"release_id": release_id, "profile": _profile_source(profile), "status": "missing", "message": "Release Export is missing."}
     export_dir = release_store.export_dir(release_id)
-    tracks = manifest.get("tracks") if isinstance(manifest.get("tracks"), list) else []
-    mastering = manifest.get("mastering") if isinstance(manifest.get("mastering"), dict) else {}
+    tracks = _as_list(manifest.get("tracks"))
+    mastering = _as_document(manifest.get("mastering"))
     export_hash = release_export_audio_source_hash(manifest)
     source_tracks: list[dict[str, Any]] = []
     missing: list[str] = []
@@ -493,12 +495,12 @@ def encoded_audio_source_state(release_store: ReleaseStore, release_id: str, pro
 def build_encoded_audio_summary(release_id: str, manifests: list[dict[str, Any]], *, now: str | None = None) -> dict[str, Any]:
     now = now or now_iso()
     profiles = []
-    missing = []
+    missing: list[_InferenceType] = []
     stale = []
     failed = []
     for manifest in manifests:
         profile_id = str(manifest.get("profile_id") or "")
-        summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+        summary = _as_document(manifest.get("summary"))
         row = {
             "profile_id": profile_id,
             "status": "stale" if manifest.get("stale") else summary.get("status") or "missing",
@@ -536,7 +538,7 @@ def build_encoded_audio_summary(release_id: str, manifests: list[dict[str, Any]]
 
 
 def release_export_audio_source_hash(manifest: dict[str, Any]) -> str:
-    mastering = manifest.get("mastering") if isinstance(manifest.get("mastering"), dict) else {}
+    mastering = _as_document(manifest.get("mastering"))
     return stable_hash(
         sanitize_metadata(
             {
@@ -552,7 +554,7 @@ def release_export_audio_source_hash(manifest: dict[str, Any]) -> str:
                         "version_id": item.get("version_id"),
                         "directory": item.get("directory"),
                     }
-                    for item in (manifest.get("tracks") if isinstance(manifest.get("tracks"), list) else [])
+                    for item in (_as_list(manifest.get("tracks")))
                     if isinstance(item, dict)
                 ],
                 "mastering": {
@@ -672,22 +674,22 @@ def normalize_required_profiles(value: Any) -> list[str]:
 
 def resolve_target_audio_format_profiles(target: Any, template: dict[str, Any] | None = None) -> list[str]:
     options = getattr(target, "options", None)
-    options = options if isinstance(options, dict) else {}
+    options = _as_document(options)
     rules = template.get("rules") if isinstance(template, dict) and isinstance(template.get("rules"), dict) else {}
     profiles = normalize_required_profiles(options.get("audio_format_profiles"))
     if not profiles:
-        profiles = normalize_required_profiles(rules.get("required_audio_formats"))
+        profiles = normalize_required_profiles(_as_document(rules).get("required_audio_formats"))
     if not profiles:
-        primary = str(options.get("primary_audio_format") or rules.get("primary_audio_format") or "").strip()
+        primary = str(options.get("primary_audio_format") or _as_document(rules).get("primary_audio_format") or "").strip()
         profiles = normalize_required_profiles(primary)
     return profiles or ["wav_master"]
 
 
 def primary_target_audio_format_profile(target: Any, template: dict[str, Any] | None = None) -> str:
     options = getattr(target, "options", None)
-    options = options if isinstance(options, dict) else {}
+    options = _as_document(options)
     rules = template.get("rules") if isinstance(template, dict) and isinstance(template.get("rules"), dict) else {}
-    primary = str(options.get("primary_audio_format") or rules.get("primary_audio_format") or "").strip()
+    primary = str(options.get("primary_audio_format") or _as_document(rules).get("primary_audio_format") or "").strip()
     if primary:
         return _validate_profile_id(primary)
     return resolve_target_audio_format_profiles(target, template)[0]
@@ -743,8 +745,8 @@ def encoder_runner_kind(*, runner: EncoderRunner, profile: AudioEncodingProfile)
 
 def encoder_runner_is_fake(*, runner: EncoderRunner | None = None, profile: AudioEncodingProfile | None = None, manifest: dict[str, Any] | None = None, summary_row: dict[str, Any] | None = None) -> bool:
     if manifest is not None:
-        encoder = manifest.get("encoder") if isinstance(manifest.get("encoder"), dict) else {}
-        runner_doc = encoder.get("runner") if isinstance(encoder.get("runner"), dict) else {}
+        encoder = _as_document(manifest.get("encoder"))
+        runner_doc = _as_document(encoder.get("runner"))
         return bool(encoder.get("engine") == "fake" or runner_doc.get("kind") == "fake" or runner_doc.get("fake"))
     if summary_row is not None:
         return bool(summary_row.get("fake_evidence") or summary_row.get("encoder_engine") == "fake" or summary_row.get("encoder_runner_kind") == "fake")
@@ -756,7 +758,7 @@ def encoded_manifest_uses_fake(manifest: dict[str, Any]) -> bool:
 
 
 def encoded_audio_summary_uses_fake(summary: dict[str, Any]) -> bool:
-    profiles = summary.get("profiles") if isinstance(summary.get("profiles"), list) else []
+    profiles = _as_list(summary.get("profiles"))
     return any(encoder_runner_is_fake(summary_row=row) for row in profiles if isinstance(row, dict))
 
 

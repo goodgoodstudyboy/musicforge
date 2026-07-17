@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -490,7 +490,7 @@ class TrustOperationsHubStore:
             state = _read_json_default(state_path, default={})
             if not state:
                 continue
-            current = state.get("current_publication") if isinstance(state.get("current_publication"), dict) else {}
+            current = _as_document(state.get("current_publication"))
             states.append({"center_id": state.get("center_id"), "channel_id": state.get("channel_id"), "state_hash": publication_channel_state_hash(state), "latest_event_hash": state.get("latest_event_hash"), "current_publication_id": current.get("publication_id"), "current_status": current.get("status")})
         data = {"schema_version": TRUST_OPERATIONS_SCHEMA_VERSION, "package_type": TRUST_OPERATIONS_SOURCE_STATE_PACKAGE_TYPE, "hub_id": hub.get("hub_id"), "report_id": report_id, "sources": {"publication_channel_states": states, "release_signoffs": [], "operations_signoffs": [], "acceptance_board_signoffs": []}}
         data["integrity_hash"] = hub_hash(data)
@@ -522,7 +522,7 @@ class TrustOperationsHubStore:
         return data
 
     def _readiness_matrix(self, hub: ImplementationDocument, report_id: str, evidence_index: ImplementationDocument, verification_index: ImplementationDocument, source_state: ImplementationDocument) -> ImplementationDocument:
-        requirements = hub.get("requirements") if isinstance(hub.get("requirements"), dict) else {}
+        requirements = _as_document(hub.get("requirements"))
         rows: list[dict[str, Any]] = []
         by_type = {str(row.get("component_type") or ""): row for row in evidence_index.get("evidence", []) if isinstance(row, dict)}
         if requirements.get("require_public_trust_center_verified", True):
@@ -536,7 +536,7 @@ class TrustOperationsHubStore:
             evidence = by_type.get("publication_monitoring_verification")
             rows.append(_readiness_row("publication-monitoring:public-release", "publication_monitoring", "publication_monitoring_clean", evidence))
             monitoring_summary = evidence.get("summary") if isinstance(evidence, dict) and isinstance(evidence.get("summary"), dict) else {}
-            if requirements.get("require_no_open_critical_incidents", True) and evidence and monitoring_summary.get("critical_incidents", 0):
+            if requirements.get("require_no_open_critical_incidents", True) and evidence and _as_document(monitoring_summary).get("critical_incidents", 0):
                 rows.append({"component_id": "publication-monitoring:public-release", "component_type": "publication_monitoring", "requirement": "no_open_critical_incidents", "status": "blocked", "severity": "blocking", "evidence_refs": ["publication-monitoring-verification"], "source_check_id": "ptcpm_require_no_open_critical_incidents", "summary": "Publication monitoring has open critical incidents."})
         data = {"schema_version": TRUST_OPERATIONS_SCHEMA_VERSION, "package_type": TRUST_OPERATIONS_READINESS_MATRIX_PACKAGE_TYPE, "hub_id": hub.get("hub_id"), "report_id": report_id, "rows": rows, "summary": _readiness_summary(rows)}
         data["source"] = {"evidence_binding_index_hash": evidence_index.get("integrity_hash"), "verification_summary_index_hash": verification_index.get("integrity_hash"), "source_state_hash": source_state.get("integrity_hash")}
@@ -583,7 +583,7 @@ class TrustOperationsHubStore:
         return data
 
     def _delivery_readiness_matrix(self, hub: ImplementationDocument, report_id: str, delivery_evidence: ImplementationDocument) -> ImplementationDocument:
-        requirements = hub.get("requirements") if isinstance(hub.get("requirements"), dict) else {}
+        requirements = _as_document(hub.get("requirements"))
         rows: list[dict[str, Any]] = []
         evidence_rows = [row for row in delivery_evidence.get("evidence", []) if isinstance(row, dict)]
         by_type: dict[str, list[dict[str, Any]]] = {}
@@ -716,7 +716,7 @@ class TrustOperationsHubStore:
         for key in ("readiness_matrix", "blocker_register", "manual_action_queue", "evidence_binding_index", "verification_summary_index", "source_state", "delivery_evidence_index", "delivery_readiness_matrix", "delivery_blocker_register", "delivery_manual_action_queue"):
             if docs[key].get("integrity_hash") != hub_hash(docs[key]):
                 raise TrustOperationsHubStateError(f"{key} integrity failed.")
-        source = docs["hub_report"].get("source") if isinstance(docs["hub_report"].get("source"), dict) else {}
+        source = _as_document(docs["hub_report"].get("source"))
         expected = {
             "readiness_matrix_hash": docs["readiness_matrix"].get("integrity_hash"),
             "blocker_register_hash": docs["blocker_register"].get("integrity_hash"),
@@ -745,7 +745,7 @@ class TrustOperationsHubStore:
                 raise TrustOperationsHubStateError("Trust Operations Hub publication channel state is missing.")
             if publication_channel_state_hash(state) not in state_hashes:
                 raise TrustOperationsHubStateError("Trust Operations Hub publication channel state changed. Refresh before export.")
-            current = state.get("current_publication") if isinstance(state.get("current_publication"), dict) else {}
+            current = _as_document(state.get("current_publication"))
             if not current or current.get("status") in {"revoked", "superseded"}:
                 raise TrustOperationsHubStateError("Trust Operations Hub publication channel is no longer current. Refresh before export.")
         evidence_rows = [row for row in docs["evidence_binding_index"].get("evidence", []) if isinstance(row, dict)]
@@ -860,11 +860,11 @@ def _source_paths(payload: ImplementationDocument) -> ImplementationDocument:
 
 
 def _evidence_from_verification(evidence_id: str, component_type: str, report: ImplementationDocument, path: Path) -> ImplementationDocument:
-    return {"evidence_id": evidence_id, "component_type": component_type, "path_hint": str(path.name), "package_type": report.get("package_type"), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash"), "verification_report_hash": verification_hash(report), "source_hash": report.get("source_hash"), "status": report.get("status") or "missing", "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {}, "current_state_refs": {"publication_channel_state_hash": report.get("channel_state_hash")}}
+    return {"evidence_id": evidence_id, "component_type": component_type, "path_hint": str(path.name), "package_type": report.get("package_type"), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash"), "verification_report_hash": verification_hash(report), "source_hash": report.get("source_hash"), "status": report.get("status") or "missing", "summary": _as_document(report.get("summary")), "current_state_refs": {"publication_channel_state_hash": report.get("channel_state_hash")}}
 
 
 def _delivery_component_id(spec: dict[str, str], report: ImplementationDocument, index: int) -> str:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     for key in ("release_id", "target_id", "submission_id", "evidence_id", "operations_id", "package_id"):
         value = report.get(key) or summary.get(key)
         if value:
@@ -886,7 +886,7 @@ def _delivery_evidence_from_verification(component_id: str, component_type: str,
         "verification_report_hash": verification_hash(report),
         "source_hash": report.get("source_hash"),
         "status": report.get("status") or "missing",
-        "summary": report.get("summary") if isinstance(report.get("summary"), dict) else {},
+        "summary": _as_document(report.get("summary")),
     }
 
 

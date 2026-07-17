@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from song_agent.application.program.http_context import ProgramHttpContext
+
 from http import HTTPStatus
 
-class ProgramCoreHttpRoutes:
+class ProgramCoreHttpRoutes(ProgramHttpContext):
     def _dispatch_core(self, method, program_id, tail) -> bool:
         if tail in {'', '/'}:
             if method != 'GET':

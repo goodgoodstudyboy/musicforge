@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -76,12 +76,12 @@ def write_public_trust_center_acceptance_board_signoff_archive_verification_repo
 
 
 def print_public_trust_center_acceptance_board_signoff_archive_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Acceptance Board Signoff Archive verification")
     print(f"status: {report.get('status')}")
     print(f"center: {summary.get('center_id') or 'unknown'}")
     print(f"signoff: {summary.get('signoff_id') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def public_trust_center_acceptance_board_signoff_archive_verification_exit_code(report: dict[str, Any]) -> int:
@@ -218,7 +218,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
             return
         self._add_hash_check("manifest", "ptcabs_manifest_integrity", self.manifest.get("integrity_hash"), acceptance_board_signoff_archive_hash(self.manifest), "Signoff archive manifest integrity")
         self._add_exact_check("manifest", "ptcabs_manifest_package_type", self.manifest.get("package_type"), ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_PACKAGE_TYPE, "Manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
@@ -251,12 +251,12 @@ class _AcceptanceBoardSignoffArchiveVerifier:
             if actual_sha != item.get("sha256") or actual_size != item.get("size_bytes"):
                 mismatches.append(path)
         self._add_check("manifest", "ptcabs_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:5]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "ptcabs_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files: " + ", ".join(spoof[:5]) if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
     def _verify_documents(self) -> None:
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
         self._add_exact_check("report", "ptcabs_report_package_type", self.report.get("package_type"), ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_REPORT_PACKAGE_TYPE, "Archive report package_type")
         self._add_hash_check("report", "ptcabs_report_integrity", self.report.get("integrity_hash"), acceptance_board_signoff_archive_hash(self.report), "Archive report integrity")
         self._add_exact_check("report", "ptcabs_report_signoff_hash", self.report.get("signoff_hash"), self.signoff.get("integrity_hash"), "Archive report signoff hash")
@@ -268,8 +268,8 @@ class _AcceptanceBoardSignoffArchiveVerifier:
         self._add_exact_check("board", "ptcabs_board_fingerprint_match", self.board_fingerprint.get("board"), source.get("board"), "Board fingerprint source")
         self._add_exact_check("board", "ptcabs_board_verification_match", self.board_fingerprint.get("verification"), source.get("verification"), "Board verification fingerprint")
         self._add_hash_check("board", "ptcabs_board_fingerprint_integrity", self.board_fingerprint.get("integrity_hash"), sidecar_hash(self.board_fingerprint), "Board fingerprint integrity")
-        self._add_exact_check("board", "ptcabs_board_verification_summary_hash", self.board_verification.get("verification_report_hash"), (source.get("verification") if isinstance(source.get("verification"), dict) else {}).get("verification_report_hash"), "Board verification report hash")
-        self._add_exact_check("board", "ptcabs_board_verification_zip_hash", self.board_verification.get("zip_sha256"), (source.get("verification") if isinstance(source.get("verification"), dict) else {}).get("zip_sha256"), "Board verification ZIP hash")
+        self._add_exact_check("board", "ptcabs_board_verification_summary_hash", self.board_verification.get("verification_report_hash"), (_as_document(source.get("verification"))).get("verification_report_hash"), "Board verification report hash")
+        self._add_exact_check("board", "ptcabs_board_verification_zip_hash", self.board_verification.get("zip_sha256"), (_as_document(source.get("verification"))).get("zip_sha256"), "Board verification ZIP hash")
         self._add_hash_check("board", "ptcabs_board_verification_integrity", self.board_verification.get("integrity_hash"), sidecar_hash(self.board_verification), "Board verification sidecar integrity")
         self._add_exact_check("quorum", "ptcabs_quorum_match", self.quorum.get("quorum"), source.get("quorum"), "Quorum source")
         self._add_hash_check("quorum", "ptcabs_quorum_integrity", self.quorum.get("integrity_hash"), sidecar_hash(self.quorum), "Quorum sidecar integrity")
@@ -283,7 +283,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
                 "verification_report_hash": item.get("verification_report_hash"),
                 "zip_sha256": item.get("zip_sha256"),
             }
-            for item in (source.get("accepted_evidence") if isinstance(source.get("accepted_evidence"), list) else [])
+            for item in (_as_list(source.get("accepted_evidence")))
             if isinstance(item, dict)
         ]
         self._add_exact_check("evidence", "ptcabs_accepted_evidence_verification_index_match", self.accepted_verification_index.get("items"), expected_verification_items, "Accepted Evidence verification index")
@@ -294,8 +294,8 @@ class _AcceptanceBoardSignoffArchiveVerifier:
         self._add_hash_check("chain", "ptcabs_chain_integrity", self.chain.get("integrity_hash"), sidecar_hash(self.chain), "Chain of custody integrity")
 
     def _verify_requirements(self) -> None:
-        board = self.signoff.get("board") if isinstance(self.signoff.get("board"), dict) else {}
-        verification = self.signoff.get("verification") if isinstance(self.signoff.get("verification"), dict) else {}
+        board = _as_document(self.signoff.get("board"))
+        verification = _as_document(self.signoff.get("verification"))
         if self.require_signed:
             self._add_exact_check("requirements", "ptcabs_require_signed", self.signoff.get("status"), "signed", "Signed signoff")
         if self.require_ready:
@@ -304,9 +304,9 @@ class _AcceptanceBoardSignoffArchiveVerifier:
             self._add_check("external", "ptcabs_external_board_zip_required", "failed", "blocking", "External Acceptance Board ZIP is required for current signoff archive verification.")
 
     def _verify_external_board(self) -> None:
-        source = self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}
-        board = source.get("board") if isinstance(source.get("board"), dict) else {}
-        verification = source.get("verification") if isinstance(source.get("verification"), dict) else {}
+        source = _as_document(self.signoff.get("source"))
+        board = _as_document(source.get("board"))
+        verification = _as_document(source.get("verification"))
         if self.board_zip_path is not None:
             if not self.board_zip_path.exists() or not self.board_zip_path.is_file():
                 self._add_check("external", "ptcabs_external_board_zip_present", "failed", "blocking", "External Acceptance Board ZIP is missing.")
@@ -321,9 +321,9 @@ class _AcceptanceBoardSignoffArchiveVerifier:
                 require_ready=True,
                 require_quorum=True,
                 require_no_conflicts=True,
-                min_accepted_count=int(((source.get("quorum") if isinstance(source.get("quorum"), dict) else {}).get("requirements") or {}).get("min_accepted_count") or 0),
-                min_accepted_organizations=int(((source.get("quorum") if isinstance(source.get("quorum"), dict) else {}).get("requirements") or {}).get("min_accepted_organizations") or 0),
-                required_roles=list(((source.get("quorum") if isinstance(source.get("quorum"), dict) else {}).get("requirements") or {}).get("required_roles") or []),
+                min_accepted_count=int(((_as_document(source.get("quorum"))).get("requirements") or {}).get("min_accepted_count") or 0),
+                min_accepted_organizations=int(((_as_document(source.get("quorum"))).get("requirements") or {}).get("min_accepted_organizations") or 0),
+                required_roles=list(((_as_document(source.get("quorum"))).get("requirements") or {}).get("required_roles") or []),
                 distribution_kit_path=self.distribution_kit_path,
                 accepted_evidence_dir=self.accepted_evidence_dir,
             )
@@ -337,8 +337,8 @@ class _AcceptanceBoardSignoffArchiveVerifier:
             self._add_exact_check("external", "ptcabs_external_board_verification_report_manifest", stored.get("manifest_hash"), verification.get("manifest_hash"), "Stored Acceptance Board verification manifest hash")
 
     def _verify_external_distribution_kit(self) -> None:
-        distribution = (self.signoff.get("source") if isinstance(self.signoff.get("source"), dict) else {}).get("distribution_kit")
-        distribution = distribution if isinstance(distribution, dict) else {}
+        distribution = (_as_document(self.signoff.get("source"))).get("distribution_kit")
+        distribution = _as_document(distribution)
         if self.distribution_kit_path is None:
             return
         if not self.distribution_kit_path.exists() or not self.distribution_kit_path.is_file():
@@ -352,7 +352,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
         self._add_exact_check("external", "ptcabs_external_distribution_kit_verification_status", verification.get("status"), "passed", "External Distribution Kit verification status")
 
     def _verify_external_accepted_evidence(self) -> None:
-        rows = self.accepted_index.get("items") if isinstance(self.accepted_index.get("items"), list) else []
+        rows = _as_list(self.accepted_index.get("items"))
         if not rows:
             return
         if self.accepted_evidence_dir is None:
@@ -376,7 +376,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
                 unverified.append(evidence_id)
             evidence = _read_zip_json(evidence_zip, "evidence-report.json")
             public = _read_zip_json(evidence_zip, "original-response-public.json")
-            reviewer = public.get("reviewer") if isinstance(public.get("reviewer"), dict) else {}
+            reviewer = _as_document(public.get("reviewer"))
             participant = _find_participant(self.signoff, response_id, evidence_id)
             if evidence.get("evidence_id") != evidence_id or evidence.get("response_id") != response_id:
                 mismatches.append(response_id + ":identity")
@@ -419,7 +419,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be parsed: {exc}")
             return {}
         self._add_check(scope, check_id, "passed", "blocking", f"{name} parses as JSON.")
-        return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+        return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
     def _build_report(self) -> ImplementationDocument:
         blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
@@ -428,7 +428,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
             "center_id": self.signoff.get("center_id"),
             "signoff_id": self.signoff.get("signoff_id"),
             "signoff_status": self.signoff.get("status"),
-            "board_readiness": (self.signoff.get("board") if isinstance(self.signoff.get("board"), dict) else {}).get("readiness"),
+            "board_readiness": (_as_document(self.signoff.get("board"))).get("readiness"),
             "blocker_count": len(blockers),
             "warning_count": len(warnings),
         }
@@ -465,7 +465,7 @@ class _AcceptanceBoardSignoffArchiveVerifier:
 
 
 def _find_participant(signoff: ImplementationDocument, response_id: str, evidence_id: str) -> ImplementationDocument:
-    quorum = signoff.get("quorum") if isinstance(signoff.get("quorum"), dict) else {}
+    quorum = _as_document(signoff.get("quorum"))
     for item in quorum.get("participants", []) if isinstance(quorum.get("participants"), list) else []:
         if isinstance(item, dict) and item.get("response_id") == response_id and item.get("evidence_id") == evidence_id:
             return item
@@ -501,7 +501,7 @@ def _read_json_file(path: Path) -> ImplementationDocument:
         value = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
 
 def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
@@ -510,7 +510,7 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
             value = json.loads(archive.read(entry).decode("utf-8"))
     except Exception:
         return {}
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=VERIFIER_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=VERIFIER_BLOCKED_KEYS)
 
 
 def _sha256_file(path: Path) -> str | None:

@@ -196,6 +196,9 @@ def _make_drum_notes_for_sections(sections: list[SongSection]) -> list[NoteEvent
         lower_name = section.name.lower()
         for bar_offset in range(section.bars):
             bar_start = (section_start_bar + bar_offset) * 4
+            hat_beats: tuple[int, ...]
+            kicks: tuple[int, ...]
+            snares: tuple[int, ...]
             if "intro" in lower_name:
                 hat_beats = (0, 2)
                 kicks = (0,)

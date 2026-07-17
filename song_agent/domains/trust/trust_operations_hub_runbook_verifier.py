@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -59,12 +59,12 @@ def write_trust_operations_hub_runbook_verification_report(report: dict[str, Any
 
 
 def print_trust_operations_hub_runbook_verification_report(report: dict[str, Any]) -> None:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Hub Runbook verification")
     print(f"status: {report.get('status')}")
     print(f"runbook: {summary.get('runbook_id') or '-'}")
     print(f"result: {summary.get('result_status') or '-'}")
-    print(f"blockers: {len(report.get('blockers') if isinstance(report.get('blockers'), list) else [])}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
 def trust_operations_hub_runbook_verification_exit_code(report: dict[str, Any]) -> int:
@@ -177,7 +177,7 @@ class _RunbookVerifier:
     def _verify_manifest(self, archive: zipfile.ZipFile) -> None:
         self._add_hash_check("manifest", "tohr_manifest_integrity", self.manifest.get("integrity_hash"), runbook_hash(self.manifest), "Runbook manifest integrity")
         self._add_exact_check("manifest", "tohr_manifest_package_type", self.manifest.get("package_type"), TRUST_OPERATIONS_RUNBOOK_MANIFEST_PACKAGE_TYPE, "Runbook manifest package_type")
-        rows = self.manifest.get("files") if isinstance(self.manifest.get("files"), list) else []
+        rows = _as_list(self.manifest.get("files"))
         manifest_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         self._add_exact_check("manifest", "tohr_manifest_allowed_files", sorted(manifest_paths), sorted(RUNBOOK_EXPORT_ENTRIES - {"trust-operations-hub-runbook-manifest.json"}), "Manifest file list matches fixed Runbook structure")
         mismatches: list[str] = []
@@ -195,7 +195,7 @@ class _RunbookVerifier:
                 mismatches.append(path)
             self.files.append({"path": path, "size_bytes": actual_size, "sha256": actual_sha, "status": "passed" if path not in mismatches else "failed"})
         self._add_check("manifest", "tohr_manifest_file_hashes", "failed" if mismatches else "passed", "blocking", "Manifest file mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Manifest file hashes match ZIP entries.")
-        manifest_zip_entries = set(str(item) for item in ((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else []) if item)
+        manifest_zip_entries = set(str(item) for item in (_as_list((self.manifest.get("zip") or {}).get("entries") if isinstance(self.manifest.get("zip"), dict) else [])) if item)
         spoof = sorted(manifest_zip_entries - set(self.entry_names))
         self._add_check("manifest", "tohr_manifest_zip_entries_reference_only", "failed" if spoof else "passed", "blocking", "manifest.zip.entries references missing files." if spoof else "manifest.zip.entries does not expand ZIP contents.")
 
@@ -204,13 +204,13 @@ class _RunbookVerifier:
             self._add_hash_check(label, f"tohr_{label}_integrity", doc.get("integrity_hash"), runbook_hash(doc), f"{label} integrity")
         self._add_exact_check("runbook", "tohr_runbook_package_type", self.runbook.get("package_type"), TRUST_OPERATIONS_RUNBOOK_PACKAGE_TYPE, "Runbook package_type")
         self._add_exact_check("result", "tohr_result_package_type", self.result.get("package_type"), TRUST_OPERATIONS_RUNBOOK_RESULT_PACKAGE_TYPE, "Runbook result package_type")
-        source = self.manifest.get("source") if isinstance(self.manifest.get("source"), dict) else {}
+        source = _as_document(self.manifest.get("source"))
         self._add_exact_check("manifest", "tohr_manifest_source_runbook_hash", source.get("runbook_hash"), self.runbook.get("integrity_hash"), "Manifest runbook hash")
         self._add_exact_check("manifest", "tohr_manifest_source_result_hash", source.get("result_hash"), self.result.get("integrity_hash"), "Manifest result hash")
         self._add_exact_check("manifest", "tohr_manifest_source_event_chain_hash", source.get("event_chain_hash"), self.events[-1].get("event_hash") if self.events else None, "Manifest event chain hash")
 
     def _verify_checksums(self, archive: zipfile.ZipFile) -> None:
-        rows = self.checksum_json.get("files") if isinstance(self.checksum_json.get("files"), list) else []
+        rows = _as_list(self.checksum_json.get("files"))
         row_paths = {str(item.get("path") or "") for item in rows if isinstance(item, dict)}
         expected_paths = RUNBOOK_EXPORT_ENTRIES - {"trust-operations-hub-runbook-manifest.json", "checksum/SHA256SUMS.json", "checksum/SHA256SUMS.txt"}
         self._add_exact_check("checksum", "tohr_checksum_allowed_files", sorted(row_paths), sorted(expected_paths), "Checksum file list matches fixed Runbook payload files")
@@ -228,24 +228,24 @@ class _RunbookVerifier:
         self._add_check("checksum", "tohr_checksum_file_hashes", "failed" if mismatches else "passed", "blocking", "Checksum mismatches: " + ", ".join(mismatches[:8]) if mismatches else "Checksum hashes match ZIP entries.")
 
     def _verify_semantics(self) -> None:
-        actions = self.runbook.get("actions") if isinstance(self.runbook.get("actions"), list) else []
-        results = self.result.get("results") if isinstance(self.result.get("results"), list) else []
+        actions = _as_list(self.runbook.get("actions"))
+        results = _as_list(self.result.get("results"))
         self._add_exact_check("runbook", "tohr_runbook_summary_matches_actions", self.runbook.get("summary"), _action_summary(actions), "Runbook summary matches actions")
         self._add_exact_check("result", "tohr_result_summary_matches_results", self.result.get("summary"), _result_summary(results), "Runbook result summary matches results")
-        self._add_exact_check("result", "tohr_result_source_runbook_hash", (self.result.get("source") if isinstance(self.result.get("source"), dict) else {}).get("runbook_hash"), self.runbook.get("integrity_hash"), "Result runbook hash")
+        self._add_exact_check("result", "tohr_result_source_runbook_hash", (_as_document(self.result.get("source"))).get("runbook_hash"), self.runbook.get("integrity_hash"), "Result runbook hash")
         chain_ok = _event_chain_ok(self.events)
         self._add_check("events", "tohr_event_chain_integrity", "passed" if chain_ok else "failed", "blocking", "Runbook event chain is intact." if chain_ok else "Runbook event chain is broken.")
         expected_result_actions = sorted(str(action.get("action_id") or "") for action in actions if isinstance(action, dict))
         actual_result_actions = sorted(str(item.get("action_id") or "") for item in results if isinstance(item, dict))
         self._add_exact_check("result", "tohr_result_actions_match_runbook", actual_result_actions, expected_result_actions, "Result actions match runbook actions")
-        event_action_ids = sorted(str((event.get("payload") if isinstance(event.get("payload"), dict) else {}).get("action_id") or "") for event in self.events if str(event.get("event_type") or "").startswith("runbook_action_"))
+        event_action_ids = sorted(str((_as_document(event.get("payload"))).get("action_id") or "") for event in self.events if str(event.get("event_type") or "").startswith("runbook_action_"))
         safe_result_ids = sorted(str(item.get("action_id") or "") for item in results if isinstance(item, dict) and item.get("status") in {"completed", "blocked"})
         self._add_exact_check("events", "tohr_safe_results_match_events", safe_result_ids, event_action_ids, "Safe action results match event log")
 
     def _verify_requirements(self) -> None:
         completed = self.result.get("status") in {"completed", "completed_with_manual_actions"}
         self._add_check("requirements", "tohr_require_completed", "passed" if completed or not self.require_completed else "failed", "blocking", "Runbook completed." if completed else "Runbook is not completed.")
-        blocked_count = int((self.result.get("summary") if isinstance(self.result.get("summary"), dict) else {}).get("blocked_count") or 0)
+        blocked_count = int((_as_document(self.result.get("summary"))).get("blocked_count") or 0)
         self._add_check("requirements", "tohr_require_no_blocked", "passed" if blocked_count == 0 or not self.require_no_blocked else "failed", "blocking", "Runbook has no blocked safe actions." if blocked_count == 0 else "Runbook has blocked safe actions.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:

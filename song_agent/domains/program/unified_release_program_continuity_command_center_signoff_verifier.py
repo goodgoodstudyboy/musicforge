@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -183,7 +183,7 @@ def verify_unified_release_program_continuity_command_center_signoff_package(
                 checks.extend(
                     [
                         _check("urpcccs_require_signed", signoff.get("status") == "signed", "Signoff is signed."),
-                        _check("urpcccs_latest_state_signed", bool(latest_state_event) and latest_state_event.get("event_type") == "command_center_signoff_created", "Latest signoff state is signed."),
+                        _check("urpcccs_latest_state_signed", bool(latest_state_event) and _as_document(latest_state_event).get("event_type") == "command_center_signoff_created", "Latest signoff state is signed."),
                     ]
                 )
                 checks.extend(_external_binding_checks(signoff_binding_path, binding, require=True))
@@ -272,7 +272,7 @@ def verify_unified_release_program_continuity_command_center_final_handoff_packa
             receiver = _read_json_entry(archive, "receiver-checklist.json")
             archive_summary = _read_json_entry(archive, "archive-verification-summary.json")
             binding = _read_json_entry(archive, "signoff-binding-summary.json")
-            manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+            manifest_source = _as_document(manifest.get("source"))
             summary.update({"program_id": handoff.get("program_id"), "manifest_hash": manifest.get("integrity_hash"), "status": handoff.get("status")})
             checks.extend(_manifest_checks(archive, manifest, HANDOFF_REQUIRED_ENTRIES, "urpccch"))
             checks.extend(
@@ -341,8 +341,8 @@ def _internal_binding_checks(
     latest_state_event: ImplementationDocument | None,
     signoff_event: ImplementationDocument | None,
 ) -> list[ImplementationDocument]:
-    source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
-    manifest_source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(signoff.get("source"))
+    manifest_source = _as_document(manifest.get("source"))
     reason_hash = stable_hash({"reason": signoff.get("reason")})
     checks = [
         _check("urpcccs_signoff_payload_hash", signoff.get("payload_hash") == stable_hash({key: value for key, value in signoff.items() if key not in {"payload_hash", "integrity_hash"}}), "Signoff payload hash is valid."),
@@ -376,7 +376,7 @@ def _internal_binding_checks(
         )
     else:
         checks.append(_check("urpcccs_history_signoff_event", False, "History contains current signoff event."))
-    checks.append(_check("urpcccs_latest_signoff_hash", bool(latest_state_event) and latest_state_event.get("signoff_hash") == signoff.get("integrity_hash"), "Latest signed state matches signoff."))
+    checks.append(_check("urpcccs_latest_signoff_hash", bool(latest_state_event) and _as_document(latest_state_event).get("signoff_hash") == signoff.get("integrity_hash"), "Latest signed state matches signoff."))
     for field in ("command_center_zip_sha256", "command_center_manifest_hash", "command_center_verification_report_hash", "external_evidence_manifest_hash"):
         checks.append(_check(f"urpcccs_manifest_source_{field}", manifest_source.get(field) == source.get(field), f"Manifest source field {field} matches signoff."))
     return checks
@@ -457,8 +457,8 @@ def _current_command_center_checks(
         require_ready=True,
         evidence_manifest_path=evidence_path,
     )
-    source = signoff.get("source") if isinstance(signoff.get("source"), dict) else {}
-    current_state = evidence.get("current_state") if isinstance(evidence.get("current_state"), dict) else {}
+    source = _as_document(signoff.get("source"))
+    current_state = _as_document(evidence.get("current_state"))
     actual = {
         "command_center_zip_sha256": _sha256_path(zip_path),
         "command_center_zip_size_bytes": zip_path.stat().st_size,
@@ -552,7 +552,7 @@ def _source_projection(value: ImplementationDocument) -> ImplementationDocument:
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, required: set[str], prefix: str) -> list[ImplementationDocument]:
-    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = required - {"manifest.json"}
     checks = [_check(f"{prefix}_manifest_files_exact", declared == expected, "Manifest files match fixed package entries.", {"extra": sorted(declared - expected), "missing": sorted(expected - declared)})]

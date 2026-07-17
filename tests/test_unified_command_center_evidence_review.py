@@ -20,7 +20,7 @@ def test_unified_command_center_evidence_review_lifecycle(tmp_path: Path) -> Non
     release_check_report = tmp_path / "release-check.json"
     continuous = review_store.create_plan(center_id, {"review_id": "uccrv-clear"})
     review_store.run_review(center_id, continuous["review_id"])
-    continuous_zip = review_store.build_zip(center_id, continuous["review_id"])
+    review_store.build_zip(center_id, continuous["review_id"])
     continuous_verification = review_store.verify_package(center_id, continuous["review_id"])
     assert continuous_verification["status"] == "passed"
 

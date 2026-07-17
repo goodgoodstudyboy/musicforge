@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -427,17 +427,17 @@ class EditorTemplateStore:
     def hide_template(self, template_type: str, template_id: str, hidden: bool = True) -> dict[str, Any]:
         with self.lock:
             if template_type == "section":
-                template = self.read_section_template(template_id)
-                updated = SectionTemplate.from_dict({**template.to_dict(), "hidden": hidden, "updated_at": now_iso()})
-                write_json(self.section_template_dir(template_id) / "template.json", updated.to_dict())
-                self.append_event("section", template_id, "section_template_hidden" if hidden else "section_template_unhidden", {}, now=updated.updated_at)
-                return section_template_public_dict(updated)
+                section_template = self.read_section_template(template_id)
+                section_updated = SectionTemplate.from_dict({**section_template.to_dict(), "hidden": hidden, "updated_at": now_iso()})
+                write_json(self.section_template_dir(template_id) / "template.json", section_updated.to_dict())
+                self.append_event("section", template_id, "section_template_hidden" if hidden else "section_template_unhidden", {}, now=section_updated.updated_at)
+                return section_template_public_dict(section_updated)
             if template_type == "track":
-                template = self.read_track_template(template_id)
-                updated = TrackTemplate.from_dict({**template.to_dict(), "hidden": hidden, "updated_at": now_iso()})
-                write_json(self.track_template_dir(template_id) / "template.json", updated.to_dict())
-                self.append_event("track", template_id, "track_template_hidden" if hidden else "track_template_unhidden", {}, now=updated.updated_at)
-                return track_template_public_dict(updated)
+                track_template = self.read_track_template(template_id)
+                track_updated = TrackTemplate.from_dict({**track_template.to_dict(), "hidden": hidden, "updated_at": now_iso()})
+                write_json(self.track_template_dir(template_id) / "template.json", track_updated.to_dict())
+                self.append_event("track", template_id, "track_template_hidden" if hidden else "track_template_unhidden", {}, now=track_updated.updated_at)
+                return track_template_public_dict(track_updated)
             raise ValueError("template_type must be section or track.")
 
     def delete_template(self, template_type: str, template_id: str) -> None:
@@ -678,7 +678,7 @@ def build_multitrack_clip_insert_patch(
     if not isinstance(mappings, list):
         raise EditorTemplateError("lane_mappings must be a list.")
     base_state = build_editor_state(parent_plan)
-    state = draft_state if isinstance(draft_state, dict) else build_editor_state(draft_plan or parent_plan)
+    state = _document_or(draft_state, build_editor_state(draft_plan or parent_plan))
     section = _target_section(target, state)
     start_beat = _target_start_beat(target, section)
     transpose = _int_range(options.get("transpose", 0), "transpose", -24, 24)
@@ -938,7 +938,7 @@ def _ranges_overlap(left: tuple[str, float, float], right: tuple[str, float, flo
 
 
 def _range_from_payload(payload: ImplementationDocument, *, default_start: float, default_end: float) -> tuple[float, float]:
-    raw_range = payload.get("range") if isinstance(payload.get("range"), dict) else {}
+    raw_range = _as_document(payload.get("range"))
     start = _float_min(raw_range.get("start_beat", default_start), "range.start_beat", 0.0)
     end = _float_min(raw_range.get("end_beat", default_end), "range.end_beat", 0.0)
     if end <= start:

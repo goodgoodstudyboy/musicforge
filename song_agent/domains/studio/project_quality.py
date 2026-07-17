@@ -7,7 +7,7 @@ from dataclasses import dataclass as dataclass, field as field
 from pathlib import Path as Path
 from typing import Any as Any
 
-from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality
+from song_agent.domains.creation.music_quality import analyze_song_quality as analyze_song_quality, score_song_plan as score_song_plan
 from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
 from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 from song_agent.domains.creation.stems import read_stem_manifest as read_stem_manifest, stem_manifest_stale as stem_manifest_stale, stem_midi_path as stem_midi_path
@@ -112,7 +112,7 @@ def evaluate_quality_gate(run_dir: Path, config: QualityGateConfig, *, now: str)
             evaluated_at=now,
         )
 
-    scores = quality.scores or analyze_song_quality(plan).scores
+    scores = quality.scores or score_song_plan(plan)
     score_checks = [
         ("overall", scores.overall, config.min_overall),
         ("structure", scores.structure, config.min_structure),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import zipfile as zipfile
@@ -315,7 +315,7 @@ def _document_binding_checks(
     lifecycle: ImplementationDocument,
     evidence: ImplementationDocument,
 ) -> list[ImplementationDocument]:
-    source = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source = _as_document(manifest.get("source"))
     return [
         _check("urp_ops_manifest_program_hash", source.get("program_summary_hash") == program.get("integrity_hash"), "Manifest binds Program summary."),
         _check("urp_ops_manifest_program_verification_hash", source.get("program_verification_summary_hash") == program_verification.get("integrity_hash"), "Manifest binds Program verification summary."),

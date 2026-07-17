@@ -6,10 +6,9 @@ from pathlib import Path
 from song_agent.delivery_qa import build_delivery_qa_report, build_delivery_signoff_record
 from song_agent.final_export import FinalExportOptions, build_final_export_bundle, build_final_export_zip
 from song_agent.project_quality import QualityGateConfig, evaluate_quality_gate
-from song_agent.projectio import write_json
 from song_agent.projects import ProjectStore
 from song_agent.releases import ReleaseStateError, ReleaseStore
-from tests.test_delivery_qa import Project, Version
+from tests.test_delivery_qa import Version
 from tests.test_final_export import make_run
 
 
@@ -96,10 +95,9 @@ def _signed_project(tmp_path: Path, project_store: ProjectStore, title: str) -> 
     project_dir = project_store.project_dir(project_id)
     gate = evaluate_quality_gate(run_dir, QualityGateConfig(), now="2026-05-15T00:00:00+00:00")
     project_export = project_store.project_export_snapshot(project_id)
-    manifest = build_final_export_bundle(project=document.state, version=document.versions[0], project_dir=project_dir, run_dir=run_dir, gate=gate, options=FinalExportOptions(include_stems=False, include_stem_audio=False), now="2026-05-15T00:00:00+00:00", project_export=project_export)
+    build_final_export_bundle(project=document.state, version=document.versions[0], project_dir=project_dir, run_dir=run_dir, gate=gate, options=FinalExportOptions(include_stems=False, include_stem_audio=False), now="2026-05-15T00:00:00+00:00", project_export=project_export)
     project_store.update_version_final_export(project_id, "v001", project_dir / "final-export")
     build_final_export_zip(project_dir, now="2026-05-15T00:01:00+00:00")
-    manifest = project_store.project_dir(project_id) / "final-export" / "manifest.json"
     report = build_delivery_qa_report(project_id=project_id, project_document=project_store.get_project(project_id), project_dir=project_dir, project_export=project_store.project_export_snapshot(project_id), final_export_manifest=None)
     project_store.write_delivery_qa(project_id, report)
     signoff = build_delivery_signoff_record(project_id=project_id, report=report, payload={"signed_by": "tester"}, now="2026-05-15T00:02:00+00:00")

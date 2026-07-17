@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustPortfolioFinalActionsRoutes:
+class TrustPortfolioFinalActionsRoutes(TrustPortfolioRouteContext):
     def _dispatch_portfolio_final_actions(self, method, parts, portfolio_id, action) -> bool:
         if action == 'governance-queues' and len(parts) == 2:
             if method != 'POST':

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import io as io
 import json as json
@@ -312,7 +312,7 @@ def _document_binding_checks(
     public_summary: ImplementationDocument,
     replay_plan: ImplementationDocument,
 ) -> list[ImplementationDocument]:
-    source_doc = manifest.get("source") if isinstance(manifest.get("source"), dict) else {}
+    source_doc = _as_document(manifest.get("source"))
     source_hash = source.get("source_hash")
     return [
         _check("urpv_source_hash_binding", manifest.get("source_hash") == report.get("source_hash") == source_hash, "Manifest, report, and source use one source hash."),

@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
@@ -42,13 +44,13 @@ def anchor_checkpoint_hash(checkpoint: dict[str, Any]) -> str:
 
 
 def anchor_checkpoint_integrity_ok(checkpoint: dict[str, Any] | None) -> bool:
-    data = checkpoint if isinstance(checkpoint, dict) else {}
+    data = _as_document(checkpoint)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_checkpoint_hash(data)
 
 
 def anchor_checkpoint_signature_ok(checkpoint: dict[str, Any] | None) -> bool:
-    data = checkpoint if isinstance(checkpoint, dict) else {}
-    signature = data.get("signature") if isinstance(data.get("signature"), dict) else {}
+    data = _as_document(checkpoint)
+    signature = _as_document(data.get("signature"))
     payload_hash = _checkpoint_payload_hash(data)
     expected_key = stable_hash({"key_id": signature.get("key_id"), "mode": signature.get("mode")})
     expected_signature = stable_hash({key: value for key, value in signature.items() if key != "signature_hash"})
@@ -69,8 +71,8 @@ def anchor_transparency_manifest_hash(manifest: dict[str, Any]) -> str:
 
 
 def anchor_transparency_summary(report: dict[str, Any] | None) -> dict[str, Any]:
-    data = report if isinstance(report, dict) else {}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
     return sanitize_metadata(
         {
             "status": data.get("status") or "missing",

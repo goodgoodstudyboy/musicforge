@@ -28,7 +28,7 @@ def test_release_audio_response_api_and_release_gate(tmp_path: Path, monkeypatch
         regression_store.build_zip(current_release_id)
         regression_store.verify_zip(current_release_id, strict=True, require_passed=True, require_signed=True, require_current=True, require_baseline_current=True)
 
-        status, created = _post_json(server, f"/api/audio-baselines", {
+        status, created = _post_json(server, "/api/audio-baselines", {
             "release_id": baseline_release_id,
             "timeline": str(baseline_store.zip_path(baseline_release_id, baseline_timeline_id)),
             "timeline_verification_report": str(baseline_store.verification_report_path(baseline_release_id, baseline_timeline_id)),

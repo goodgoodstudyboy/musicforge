@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
-class TrustPortfolioDetailRoutes:
+class TrustPortfolioDetailRoutes(TrustPortfolioRouteContext):
     def _dispatch_portfolio_detail(self, method, parts, portfolio_id, action) -> bool:
         if len(parts) == 1:
             if method != 'GET':
@@ -12,7 +14,7 @@ class TrustPortfolioDetailRoutes:
             portfolio = self.release_portfolio_audit_store.get_portfolio(portfolio_id)
             report = self.release_portfolio_audit_store.read_report(portfolio_id, default={})
             stale = self.release_portfolio_audit_store.report_is_stale(portfolio_id, report) if report else False
-            summary = _interfaces_api_runtime.portfolio_audit_summary(report) if report else {'status': 'missing'}
+            summary = _interfaces_api_runtime.sanitize_metadata(_interfaces_api_runtime.portfolio_audit_summary(report) if report else {'status': 'missing'})
             summary['stale'] = stale
             self._send_json({'ok': True, 'portfolio': portfolio, 'report': report, 'summary': summary, 'stale': stale})
             return True
@@ -29,7 +31,7 @@ class TrustPortfolioDetailRoutes:
                 return True
             report = self.release_portfolio_audit_store.read_report(portfolio_id, default={})
             stale = self.release_portfolio_audit_store.report_is_stale(portfolio_id, report) if report else False
-            summary = _interfaces_api_runtime.portfolio_audit_summary(report) if report else {'status': 'missing'}
+            summary = _interfaces_api_runtime.sanitize_metadata(_interfaces_api_runtime.portfolio_audit_summary(report) if report else {'status': 'missing'})
             summary['stale'] = stale
             self._send_json({'ok': True, 'portfolio_id': portfolio_id, 'report': report, 'summary': summary, 'stale': stale})
             return True

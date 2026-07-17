@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import csv as csv
 import hashlib as hashlib
@@ -246,9 +246,9 @@ class ReleaseMetadataDocument:
             schema_version=int(data.get("schema_version", RELEASE_METADATA_SCHEMA_VERSION) or RELEASE_METADATA_SCHEMA_VERSION),
             release_id=_safe_text(data.get("release_id"), 80),
             updated_at=_safe_text(data.get("updated_at"), 80) or now_iso(),
-            release=ReleaseMetadata.from_dict(data.get("release") if isinstance(data.get("release"), dict) else {}),
+            release=ReleaseMetadata.from_dict(_as_document(data.get("release"))),
             tracks=[TrackMetadata.from_dict(item) for item in data.get("tracks", []) if isinstance(item, dict)],
-            source_summary=sanitize_metadata(data.get("source_summary") if isinstance(data.get("source_summary"), dict) else {}, blocked_keys=METADATA_BLOCKED_KEYS),
+            source_summary=sanitize_metadata(_as_document(data.get("source_summary")), blocked_keys=METADATA_BLOCKED_KEYS),
         )
 
 
@@ -277,7 +277,7 @@ def read_release_metadata(
             return default
         raise FileNotFoundError("Release metadata does not exist.")
     value = read_json(path)
-    return ReleaseMetadataDocument.from_dict(value if isinstance(value, dict) else {}).to_dict()
+    return ReleaseMetadataDocument.from_dict(_as_document(value)).to_dict()
 
 
 def write_release_metadata(
@@ -291,7 +291,7 @@ def write_release_metadata(
     now = now or now_iso()
     release = release_store.get_release(release_id)
     _ensure_release_metadata_mutable(release)
-    source_summary = payload.get("source_summary") if isinstance(payload.get("source_summary"), dict) else _source_summary(release, release_store.project_store)
+    source_summary = _document_or(payload.get("source_summary"), _source_summary(release, release_store.project_store))
     document = ReleaseMetadataDocument.from_dict(
         {
             **payload,
@@ -339,7 +339,7 @@ def append_release_metadata_history(release_store: ReleaseStore, release_id: str
     event = sanitize_metadata({"timestamp": now or now_iso(), "type": event_type, "payload": payload}, blocked_keys=METADATA_BLOCKED_KEYS)
     with path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(event, ensure_ascii=False) + "\n")
-    release_store.append_event(release_id, event_type, event.get("payload") if isinstance(event.get("payload"), dict) else {})
+    release_store.append_event(release_id, event_type, _as_document(event.get("payload")))
 
 
 def read_release_metadata_history(release_store: ReleaseStore, release_id: str) -> list[dict[str, Any]]:
@@ -368,7 +368,7 @@ def read_release_metadata_qa(release_store: ReleaseStore, release_id: str, *, de
             return default
         raise FileNotFoundError("Release metadata QA does not exist.")
     value = read_json(path)
-    return sanitize_metadata(value if isinstance(value, dict) else {}, blocked_keys=METADATA_BLOCKED_KEYS)
+    return sanitize_metadata(_as_document(value), blocked_keys=METADATA_BLOCKED_KEYS)
 
 
 def write_release_metadata_qa(release_store: ReleaseStore, release_id: str, report: dict[str, Any]) -> dict[str, Any]:
@@ -407,12 +407,12 @@ def release_metadata_source_hash(release: ReleaseDocument, metadata: dict[str, A
 
 
 def release_metadata_summary(metadata: dict[str, Any] | None, qa_report: dict[str, Any] | None = None, export_summary: dict[str, Any] | None = None) -> dict[str, Any]:
-    data = metadata if isinstance(metadata, dict) else {}
-    release = data.get("release") if isinstance(data.get("release"), dict) else {}
-    tracks = data.get("tracks") if isinstance(data.get("tracks"), list) else []
-    qa = qa_report if isinstance(qa_report, dict) else {}
-    qa_summary = qa.get("summary") if isinstance(qa.get("summary"), dict) else {}
-    export_data = export_summary if isinstance(export_summary, dict) else {}
+    data = _as_document(metadata)
+    release = _as_document(data.get("release"))
+    tracks = _as_list(data.get("tracks"))
+    qa = _as_document(qa_report)
+    qa_summary = _as_document(qa.get("summary"))
+    export_data = _as_document(export_summary)
     return sanitize_metadata(
         {
             "exists": bool(data),
@@ -441,8 +441,8 @@ def metadata_qa_allows_export(report: dict[str, Any] | None, *, current_source_h
 
 
 def metadata_export_summary(manifest: dict[str, Any] | None = None) -> dict[str, Any]:
-    data = manifest if isinstance(manifest, dict) else {}
-    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    data = _as_document(manifest)
+    metadata = _as_document(data.get("metadata"))
     return sanitize_metadata(
         {
             "status": "exported" if metadata.get("exists") else "missing",
@@ -528,7 +528,7 @@ def attach_metadata_export_to_manifest(release_store: ReleaseStore, release_id: 
     files = sorted([*existing_files, *new_files], key=lambda item: item["path"])
     manifest["files"] = files
     manifest["metadata"] = metadata_export
-    summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+    summary = _as_document(manifest.get("summary"))
     summary["file_count"] = len(files)
     summary["total_bytes"] = sum(int(item.get("size_bytes") or 0) for item in files)
     summary["metadata_status"] = metadata_export.get("qa_status")
@@ -589,7 +589,7 @@ def _metadata_from_release(release: ReleaseDocument, project_store: ProjectStore
 def _merge_missing_metadata(existing: ImplementationDocument, inferred: ImplementationDocument) -> ImplementationDocument:
     merged = json.loads(json.dumps(existing, ensure_ascii=False))
     release_existing = merged.setdefault("release", {})
-    release_inferred = inferred.get("release") if isinstance(inferred.get("release"), dict) else {}
+    release_inferred = _as_document(inferred.get("release"))
     for key, value in release_inferred.items():
         if release_existing.get(key) in (None, "", []):
             release_existing[key] = value
@@ -643,7 +643,7 @@ def _track_plan(project_store: ProjectStore, project_id: str) -> ImplementationD
         value = read_json(path)
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
-    return value if isinstance(value, dict) else {}
+    return _as_document(value)
 
 
 def _extract_lyrics(plan: ImplementationDocument) -> str | None:
@@ -651,7 +651,7 @@ def _extract_lyrics(plan: ImplementationDocument) -> str | None:
         value = plan.get(key)
         if isinstance(value, str) and value.strip():
             return _optional_text(value, 120_000)
-    sections = plan.get("sections") if isinstance(plan.get("sections"), list) else []
+    sections = _as_list(plan.get("sections"))
     lines: list[str] = []
     for section in sections:
         if not isinstance(section, dict):
@@ -664,7 +664,7 @@ def _extract_lyrics(plan: ImplementationDocument) -> str | None:
 
 
 def _duration_beats(plan: ImplementationDocument) -> float | None:
-    sections = plan.get("sections") if isinstance(plan.get("sections"), list) else []
+    sections = _as_list(plan.get("sections"))
     values: list[float] = []
     for section in sections:
         if not isinstance(section, dict):
@@ -677,7 +677,7 @@ def _duration_beats(plan: ImplementationDocument) -> float | None:
 
 
 def _write_platform_csv(path: Path, metadata: ImplementationDocument) -> None:
-    release = metadata.get("release") if isinstance(metadata.get("release"), dict) else {}
+    release = _as_document(metadata.get("release"))
     rows = []
     for track in metadata.get("tracks", []) if isinstance(metadata.get("tracks"), list) else []:
         if not isinstance(track, dict):
@@ -807,7 +807,7 @@ def _ensure_within(root: Path, target: Path) -> None:
 
 
 def _qa_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
             "status": report.get("status") or summary.get("status") or "missing",

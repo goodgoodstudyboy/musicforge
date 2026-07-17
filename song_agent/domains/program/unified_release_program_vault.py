@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import shutil as shutil
 import zipfile as zipfile
@@ -368,11 +368,11 @@ class UnifiedReleaseProgramVaultStore:
     def _accepted_evidence_items(self, program_id: str, payload: ImplementationDocument) -> list[ImplementationDocument]:
         explicit = payload.get("accepted_evidence")
         if isinstance(explicit, list):
-            rows = []
+            explicit_rows = []
             for item in explicit:
                 if isinstance(item, dict) and item.get("evidence_id"):
-                    rows.append(item)
-            return rows
+                    explicit_rows.append(item)
+            return explicit_rows
         base = self.handoff_store.handoff_dir(program_id) / "accepted-evidence"
         if not base.exists():
             return []
@@ -427,7 +427,7 @@ def _verification_export_doc(source_path: Path) -> ImplementationDocument:
             "zip_sha256": source.get("zip_sha256") or (source.get("summary") or {}).get("zip_sha256"),
             "zip_size_bytes": source.get("zip_size_bytes") or (source.get("summary") or {}).get("zip_size_bytes"),
             "manifest_hash": source.get("manifest_hash") or (source.get("summary") or {}).get("manifest_hash"),
-            "summary": _public_verification_summary(source.get("summary") if isinstance(source.get("summary"), dict) else {}),
+            "summary": _public_verification_summary(_as_document(source.get("summary"))),
             "blockers": list(source.get("blockers") or []),
             "warnings": list(source.get("warnings") or []),
         },

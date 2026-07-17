@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import base64 as base64
 import json as json
@@ -278,7 +278,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             "response_id": response_id,
             "status": status,
             "result": result,
-            "reviewer": _public_reviewer(response.get("reviewer") if isinstance(response.get("reviewer"), dict) else {}),
+            "reviewer": _public_reviewer(_as_document(response.get("reviewer"))),
             "findings": _findings(response.get("findings")),
             "signed_at": sanitize_sensitive_text(str(response.get("signed_at") or now_iso())),
             "bindings": expected,
@@ -639,15 +639,15 @@ def _run_replay_document(center_id: str, review_id: str, source: ImplementationD
     for step in plan.get("steps", []):
         step_id = step.get("step_id")
         if step_id == "verify_ucc":
-            report = verify_unified_command_center_package(paths.get("ucc_zip"), strict=True, release_check_report_path=paths.get("release_check_report"))
+            report = verify_unified_command_center_package(_as_path(paths.get("ucc_zip")), strict=True, release_check_report_path=paths.get("release_check_report"))
         elif step_id == "verify_archive":
-            report = verify_unified_command_center_archive_package(paths.get("archive_zip"), strict=True, require_signed=True, require_current_ucc=True, command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
+            report = verify_unified_command_center_archive_package(_as_path(paths.get("archive_zip")), strict=True, require_signed=True, require_current_ucc=True, command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
         elif step_id == "verify_handoff":
-            report = verify_unified_command_center_handoff_package(paths.get("handoff_zip"), strict=True, require_archive=True, archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"))
+            report = verify_unified_command_center_handoff_package(_as_path(paths.get("handoff_zip")), strict=True, require_archive=True, archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"))
         elif step_id == "verify_continuous_review":
-            report = verify_unified_command_center_continuous_review_package(paths.get("continuous_review_zip"), strict=True, require_clear=False, require_recovery_drill=False, require_current_review=True, archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"), handoff_zip_path=paths.get("handoff_zip"), handoff_verification_report_path=paths.get("handoff_verification_report"), command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
+            report = verify_unified_command_center_continuous_review_package(_as_path(paths.get("continuous_review_zip")), strict=True, require_clear=False, require_recovery_drill=False, require_current_review=True, archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"), handoff_zip_path=paths.get("handoff_zip"), handoff_verification_report_path=paths.get("handoff_verification_report"), command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
         elif step_id == "verify_drift_response":
-            report = verify_unified_command_center_drift_response_package(paths.get("drift_response_zip"), strict=True, require_closed=True, require_recheck_clear=True, require_current_review=True, source_review_zip_path=paths.get("source_review_zip") or paths.get("continuous_review_zip"), source_review_verification_report_path=paths.get("source_review_verification_report") or paths.get("continuous_review_verification_report"), recheck_review_zip_path=paths.get("recheck_review_zip") or paths.get("continuous_review_zip"), recheck_review_verification_report_path=paths.get("recheck_review_verification_report") or paths.get("continuous_review_verification_report"), change_request_binding_report_path=paths.get("drift_change_request_binding_report"), archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"), handoff_zip_path=paths.get("handoff_zip"), handoff_verification_report_path=paths.get("handoff_verification_report"), command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
+            report = verify_unified_command_center_drift_response_package(_as_path(paths.get("drift_response_zip")), strict=True, require_closed=True, require_recheck_clear=True, require_current_review=True, source_review_zip_path=paths.get("source_review_zip") or paths.get("continuous_review_zip"), source_review_verification_report_path=paths.get("source_review_verification_report") or paths.get("continuous_review_verification_report"), recheck_review_zip_path=paths.get("recheck_review_zip") or paths.get("continuous_review_zip"), recheck_review_verification_report_path=paths.get("recheck_review_verification_report") or paths.get("continuous_review_verification_report"), change_request_binding_report_path=paths.get("drift_change_request_binding_report"), archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"), handoff_zip_path=paths.get("handoff_zip"), handoff_verification_report_path=paths.get("handoff_verification_report"), command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
         elif step_id == "verify_ga_readiness":
             report = _generic_report(paths.get("ga_readiness_report"))
         elif step_id == "verify_release_check":
@@ -726,7 +726,7 @@ def _review_verifier_kwargs(paths: ImplementationDocument) -> ImplementationDocu
 
 def _summary_from_path(path: Any, label: str) -> ImplementationDocument:
     if not path or not Path(path).exists():
-        doc = {"package_type": f"musicforge_{label}_summary", "status": "not_applicable", "label": label}
+        doc: ImplementationDocument = {"package_type": f"musicforge_{label}_summary", "status": "not_applicable", "label": label}
     else:
         source = read_json(Path(path))
         doc = {key: source.get(key) for key in ("package_type", "status", "zip_sha256", "zip_size_bytes", "manifest_hash", "integrity_hash") if key in source}
@@ -759,7 +759,7 @@ def _public_reviewer(reviewer: ImplementationDocument) -> ImplementationDocument
 
 
 def _findings(value: Any) -> list[ImplementationDocument]:
-    rows = value if isinstance(value, list) else []
+    rows = _as_list(value)
     return [{"severity": sanitize_sensitive_text(str(row.get("severity") or "low"))[:40], "component": sanitize_sensitive_text(str(row.get("component") or ""))[:120], "message": sanitize_sensitive_text(str(row.get("message") or ""))[:1000]} for row in rows if isinstance(row, dict)]
 
 
