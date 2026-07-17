@@ -12,6 +12,7 @@ from song_agent.release_check.v14_quality import (
     collect_complexity_metrics,
     collect_typing_metrics,
     evaluate_v14_quality,
+    run_v141_quality_debt_closure_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.interfaces.api.runtime_parts.helpers import api_info
@@ -132,6 +133,12 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     assert '"song_agent/domains"' in configured
     assert "python -m ruff check song_agent tests tools" in workflow
     assert "python -m mypy --no-incremental" in workflow
+
+
+def test_v141_quality_debt_closure_smoke_is_self_consistent() -> None:
+    passed, detail = run_v141_quality_debt_closure_smoke(ROOT)
+
+    assert passed, detail
 
 
 def test_v14_mypy_ownership_ratchet_only_moves_down() -> None:

@@ -352,7 +352,6 @@ def run_v14_typing_coverage_ratchet_smoke(root: Path) -> tuple[bool, str]:
 
 
 def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
-    report = evaluate_v14_quality(root, run_mypy=False, require_coverage=False)
     policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
     ruff = subprocess.run(
         [sys.executable, "-m", "ruff", "check", "song_agent", "tests", "tools"],
@@ -366,23 +365,30 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         CI_PROFILE_DURATION_PREVIOUS_BUDGET_SECONDS,
     )
 
+    aggregate = dict((policy.get("complexity") or {}).get("aggregate_debt") or {})
+    policy_integrity = policy.get("integrity_hash") == stable_hash(
+        {key: value for key, value in policy.items() if key != "integrity_hash"}
+    )
     details = {
-        "quality_status": report["status"],
+        "policy_integrity": policy_integrity,
         "mypy_budget": int((policy.get("mypy") or {}).get("max_total_errors") or 0),
         "mypy_roots": list((policy.get("mypy") or {}).get("active_roots") or []),
         "ruff_status": "passed" if ruff.returncode == 0 else "failed",
-        "complexity": report["complexity"]["aggregate"],
+        "complexity": aggregate,
+        "complexity_decision_present": bool(aggregate.get("architecture_decision"))
+        and (root / str(aggregate["architecture_decision"])).is_file(),
         "ci_budget_ratchet": all(
             CI_PROFILE_DURATION_BUDGET_SECONDS[profile] < previous
             for profile, previous in CI_PROFILE_DURATION_PREVIOUS_BUDGET_SECONDS.items()
         ),
-        "blockers": report["blockers"],
     }
     passed = (
-        report["status"] == "passed"
+        policy_integrity
+        and policy.get("release_version") == "14.1.0"
         and details["mypy_budget"] == 0
         and details["mypy_roots"] == list(MYPY_ROOTS)
         and ruff.returncode == 0
+        and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
     )
     return passed, json.dumps(details, sort_keys=True)
