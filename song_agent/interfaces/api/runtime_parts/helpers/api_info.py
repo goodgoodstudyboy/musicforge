@@ -96,8 +96,9 @@ def discover_artifacts(run_dir: Path) -> list[dict[str, Any]]:
     return artifacts
 
 def open_folder(path: Path) -> None:
-    if os.name == "nt":
-        os.startfile(path)
+    startfile = getattr(os, "startfile", None)
+    if os.name == "nt" and callable(startfile):
+        startfile(path)
         return
     webbrowser.open(path.resolve().as_uri())
 

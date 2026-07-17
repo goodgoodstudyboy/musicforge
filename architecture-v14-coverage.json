@@ -4028,9 +4028,9 @@
     },
     "song_agent/interfaces/api/runtime_parts/helpers/api_info.py": {
       "summary": {
-        "covered_lines": 104,
-        "missing_lines": 19,
-        "num_statements": 123
+        "covered_lines": 100,
+        "missing_lines": 24,
+        "num_statements": 124
       }
     },
     "song_agent/interfaces/api/runtime_parts/helpers/context_pack.py": {
@@ -7088,5 +7088,5 @@
   },
   "package_type": "musicforge_v14_coverage_evidence",
   "schema_version": 2,
-  "source_report_semantic_hash": "14873e9f00388c02c98e9e04023b5d33203f93eea7ee1714c45a4a57f50b6acf"
+  "source_report_semantic_hash": "f5a5e4dc3f854d04b3cf0c634c7b1ca6fd647918e056891a2f0d016c14a21742"
 }

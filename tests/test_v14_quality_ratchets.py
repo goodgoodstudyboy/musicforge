@@ -14,6 +14,7 @@ from song_agent.release_check.v14_quality import (
     evaluate_v14_quality,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
+from song_agent.interfaces.api.runtime_parts.helpers import api_info
 from tools.adopt_v141_composition_types import adopt_composition_types
 from tools.adopt_v141_document_coercions import adopt_document_coercions
 from tools.consolidate_v141_contract_imports import consolidate_contract_imports
@@ -59,6 +60,16 @@ def test_v141_contract_coercions_are_typed_and_fail_closed() -> None:
         as_path(None)
     with pytest.raises((TypeError, ValueError)):
         as_text(7)
+
+
+def test_v141_open_folder_uses_optional_windows_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    opened: list[Path] = []
+    monkeypatch.setattr(api_info.os, "name", "nt")
+    monkeypatch.setattr(api_info.os, "startfile", opened.append, raising=False)
+
+    api_info.open_folder(tmp_path)
+
+    assert opened == [tmp_path]
 
 
 def test_v14_splitter_preserves_cross_chunk_state_and_early_return() -> None:
