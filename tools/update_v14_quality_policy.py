@@ -41,7 +41,7 @@ def main() -> int:
         _ratchet_typing_policy(document, collect_typing_metrics(root))
     if args.ratchet_complexity:
         _ratchet_complexity_policy(document, root)
-    document["release_version"] = "14.1.0"
+    document["release_version"] = "14.1.1"
     if report is not None:
         output = (root / args.tracked_coverage_output).resolve()
         _write_compact_coverage(report, output, root)
@@ -61,6 +61,7 @@ def main() -> int:
             {
                 "path": path.relative_to(root).as_posix(),
                 "raw_dict_str_any_max": document["typing"]["raw_dict_str_any_max_count"],
+                "explicit_any_max": document["typing"].get("explicit_any_max_count", 0),
                 "mypy_error_budget": document["mypy"]["max_total_errors"],
                 "module_debt_count": len(document["module_size_debt"]),
                 "coverage_bound": bool(document["coverage"]["report_sha256"]),
@@ -94,12 +95,45 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         raise RuntimeError("Existing v14 typing policy is invalid.")
     raw = int(metrics.get("raw_dict_str_any_count") or 0)
     implementation = int(metrics.get("implementation_document_count") or 0)
+    explicit_any = int(metrics.get("explicit_any_count") or 0)
     previous_raw = int(policy.get("raw_dict_str_any_max_count") or 0)
     previous_implementation = int(policy.get("implementation_document_max_count") or 0)
+    has_explicit_any_budget = "explicit_any_max_count" in policy
+    previous_explicit_any = int(policy.get("explicit_any_max_count") or explicit_any)
     if int(metrics.get("public_implementation_document_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot expose implementation documents publicly.")
     if int(metrics.get("untyped_public_function_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot introduce untyped public functions.")
+    if explicit_any > previous_explicit_any:
+        raise RuntimeError(f"Typing explicit Any cannot grow: {explicit_any}>{previous_explicit_any}.")
+    previous_layers = {
+        str(key): int(value)
+        for key, value in (policy.get("explicit_any_layer_budgets") or {}).items()
+    }
+    current_layers = {
+        str(key): int(value)
+        for key, value in (metrics.get("explicit_any_by_layer") or {}).items()
+    }
+    if not has_explicit_any_budget:
+        previous_layers = dict(current_layers)
+    for layer, count in sorted(current_layers.items()):
+        maximum = previous_layers.get(layer, 0)
+        if count > maximum:
+            raise RuntimeError(f"Typing explicit Any layer cannot grow: {layer} {count}>{maximum}.")
+    previous_files = {
+        str(key): int(value)
+        for key, value in (policy.get("explicit_any_file_budgets") or {}).items()
+    }
+    current_files = {
+        str(key): int(value)
+        for key, value in (metrics.get("explicit_any_by_file") or {}).items()
+    }
+    if not has_explicit_any_budget:
+        previous_files = dict(current_files)
+    for path, count in sorted(current_files.items()):
+        maximum = previous_files.get(path, 0)
+        if count > maximum:
+            raise RuntimeError(f"Typing explicit Any file cannot grow: {path} {count}>{maximum}.")
     if raw + implementation > previous_raw + previous_implementation:
         raise RuntimeError(
             "Typing ownership cannot grow: "
@@ -107,6 +141,9 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         )
     policy["raw_dict_str_any_max_count"] = raw
     policy["implementation_document_max_count"] = implementation
+    policy["explicit_any_max_count"] = explicit_any
+    policy["explicit_any_layer_budgets"] = dict(sorted(current_layers.items()))
+    policy["explicit_any_file_budgets"] = dict(sorted(current_files.items()))
 
 
 def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
@@ -124,6 +161,9 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
     added = sorted(set(current) - set(previous))
     if added:
         raise RuntimeError(f"Complexity debt cannot add oversized modules: {added}.")
+    grown = {path: (previous[path], current[path]) for path in sorted(current) if current[path] > previous.get(path, 0)}
+    if grown:
+        raise RuntimeError(f"Complexity debt cannot grow registered modules: {grown}.")
     previous_total = sum(previous.values())
     current_total = sum(current.values())
     if len(current) > len(previous):

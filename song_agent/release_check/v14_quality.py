@@ -14,6 +14,7 @@ from song_agent.platform.verification.hashing import canonical_text_bytes, sha25
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
+QUALITY_POLICY_VERSION = "14.1.1"
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -62,6 +63,8 @@ def evaluate_v14_quality(
 def collect_typing_metrics(root: Path) -> dict[str, Any]:
     raw_count = 0
     implementation_count = 0
+    explicit_any_by_file: Counter[str] = Counter()
+    explicit_any_by_layer: Counter[str] = Counter()
     public_dynamic: list[dict[str, Any]] = []
     untyped_public: list[dict[str, Any]] = []
     for path in _active_python_files(root):
@@ -70,6 +73,10 @@ def collect_typing_metrics(root: Path) -> dict[str, Any]:
         implementation_count += source.count("ImplementationDocument")
         tree = ast.parse(source, filename=str(path))
         relative = path.relative_to(root).as_posix()
+        explicit_any = _explicit_any_annotation_count(tree)
+        if explicit_any:
+            explicit_any_by_file[relative] = explicit_any
+            explicit_any_by_layer[_typing_layer(relative)] += explicit_any
         for function, owner in _public_functions(tree):
             annotations = _function_annotations(function, skip_receiver=owner is not None)
             if function.returns is None or any(annotation is None for annotation in annotations):
@@ -88,6 +95,9 @@ def collect_typing_metrics(root: Path) -> dict[str, Any]:
     return {
         "raw_dict_str_any_count": raw_count,
         "implementation_document_count": implementation_count,
+        "explicit_any_count": sum(explicit_any_by_file.values()),
+        "explicit_any_by_layer": dict(sorted(explicit_any_by_layer.items())),
+        "explicit_any_by_file": dict(sorted(explicit_any_by_file.items())),
         "public_implementation_document_count": len(public_dynamic),
         "public_implementation_documents": public_dynamic,
         "untyped_public_function_count": len(untyped_public),
@@ -279,11 +289,14 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
     document: dict[str, Any] = {
         "schema_version": 1,
         "package_type": "musicforge_v14_quality_policy",
-        "release_version": "14.1.0",
+        "release_version": QUALITY_POLICY_VERSION,
         "typing": {
             "activation_baseline_dict_str_any_count": 12535,
             "raw_dict_str_any_max_count": 8774,
             "implementation_document_max_count": typing["implementation_document_count"],
+            "explicit_any_max_count": typing["explicit_any_count"],
+            "explicit_any_layer_budgets": typing["explicit_any_by_layer"],
+            "explicit_any_file_budgets": typing["explicit_any_by_file"],
             "public_implementation_document_max_count": 0,
             "untyped_public_function_max_count": 0,
         },
@@ -343,6 +356,7 @@ def run_v14_typing_coverage_ratchet_smoke(root: Path) -> tuple[bool, str]:
     detail = {
         "status": report["status"],
         "raw_dict_str_any": report["typing"]["raw_dict_str_any_count"],
+        "explicit_any": report["typing"]["explicit_any_count"],
         "mypy_errors": report["mypy"]["total_errors"],
         "strict_mypy": report["mypy"]["strict_status"],
         "coverage": report["coverage"]["layers"],
@@ -374,6 +388,8 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "mypy_budget": int((policy.get("mypy") or {}).get("max_total_errors") or 0),
         "mypy_roots": list((policy.get("mypy") or {}).get("active_roots") or []),
         "ruff_status": "passed" if ruff.returncode == 0 else "failed",
+        "explicit_any_max": int((policy.get("typing") or {}).get("explicit_any_max_count") or 0),
+        "explicit_any_layer_budgets": dict((policy.get("typing") or {}).get("explicit_any_layer_budgets") or {}),
         "complexity": aggregate,
         "complexity_decision_present": bool(aggregate.get("architecture_decision"))
         and (root / str(aggregate["architecture_decision"])).is_file(),
@@ -384,7 +400,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
     }
     passed = (
         policy_integrity
-        and policy.get("release_version") == "14.1.0"
+        and policy.get("release_version") == QUALITY_POLICY_VERSION
         and details["mypy_budget"] == 0
         and details["mypy_roots"] == list(MYPY_ROOTS)
         and ruff.returncode == 0
@@ -399,14 +415,29 @@ def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[st
     fields = (
         ("raw_dict_str_any_count", "raw_dict_str_any_max_count", "typing_raw_dict_str_any"),
         ("implementation_document_count", "implementation_document_max_count", "typing_implementation_document"),
+        ("explicit_any_count", "explicit_any_max_count", "typing_explicit_any"),
         ("public_implementation_document_count", "public_implementation_document_max_count", "typing_public_dynamic"),
         ("untyped_public_function_count", "untyped_public_function_max_count", "typing_untyped_public"),
     )
-    return [
+    blockers = [
         f"v14_quality_{label}:{metrics[current]}>{limits[maximum]}"
         for current, maximum, label in fields
+        if maximum in limits
         if int(metrics[current]) > int(limits[maximum])
     ]
+    layer_limits = {str(key): int(value) for key, value in (limits.get("explicit_any_layer_budgets") or {}).items()}
+    layer_actual = {str(key): int(value) for key, value in (metrics.get("explicit_any_by_layer") or {}).items()}
+    for layer, count in sorted(layer_actual.items()):
+        maximum = layer_limits.get(layer, 0)
+        if count > maximum:
+            blockers.append(f"v14_quality_typing_explicit_any_layer:{layer}:{count}>{maximum}")
+    file_limits = {str(key): int(value) for key, value in (limits.get("explicit_any_file_budgets") or {}).items()}
+    file_actual = {str(key): int(value) for key, value in (metrics.get("explicit_any_by_file") or {}).items()}
+    for path, count in sorted(file_actual.items()):
+        maximum = file_limits.get(path, 0)
+        if count > maximum:
+            blockers.append(f"v14_quality_typing_explicit_any_file:{path}:{count}>{maximum}")
+    return blockers
 
 
 def _mypy_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
@@ -439,10 +470,12 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         blockers.append("v14_quality_policy_integrity")
     if policy.get("package_type") != "musicforge_v14_quality_policy":
         blockers.append("v14_quality_policy_type")
-    if policy.get("release_version") != "14.1.0":
+    if policy.get("release_version") != QUALITY_POLICY_VERSION:
         blockers.append("v14_quality_policy_version")
     if int((policy.get("typing") or {}).get("raw_dict_str_any_max_count") or 0) > 8774:
         blockers.append("v14_quality_policy_typing_loosened")
+    if "explicit_any_max_count" not in (policy.get("typing") or {}):
+        blockers.append("v14_quality_policy_explicit_any_missing")
     if int((policy.get("mypy") or {}).get("max_total_errors") or 0) != 0:
         blockers.append("v14_quality_policy_mypy_debt_not_closed")
     return blockers
@@ -472,6 +505,43 @@ def _function_annotations(
     if node.args.kwarg:
         annotations.append(node.args.kwarg.annotation)
     return annotations
+
+
+def _explicit_any_annotation_count(tree: ast.Module) -> int:
+    return sum(_annotation_any_count(annotation) for annotation in _annotation_nodes(tree))
+
+
+def _annotation_nodes(tree: ast.Module) -> Iterable[ast.expr]:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for annotation in _function_annotations(node, skip_receiver=False):
+                if annotation is not None:
+                    yield annotation
+            if node.returns is not None:
+                yield node.returns
+            continue
+        if isinstance(node, ast.AnnAssign):
+            yield node.annotation
+            continue
+        if hasattr(ast, "TypeAlias") and isinstance(node, ast.TypeAlias):
+            value = getattr(node, "value", None)
+            if isinstance(value, ast.expr):
+                yield value
+
+
+def _annotation_any_count(annotation: ast.expr) -> int:
+    count = 0
+    for node in ast.walk(annotation):
+        if isinstance(node, ast.Name) and node.id == "Any":
+            count += 1
+        elif isinstance(node, ast.Attribute) and node.attr == "Any":
+            count += 1
+    return count
+
+
+def _typing_layer(relative: str) -> str:
+    parts = relative.split("/")
+    return parts[1] if len(parts) > 1 and parts[0] == "song_agent" else "unknown"
 
 
 def _function_layer_limit(relative: str) -> tuple[str, int]:

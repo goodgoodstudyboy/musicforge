@@ -157,8 +157,8 @@
     },
     "song_agent/application/legacy/release_signoff.py": {
       "summary": {
-        "covered_lines": 322,
-        "missing_lines": 147,
+        "covered_lines": 327,
+        "missing_lines": 142,
         "num_statements": 469
       }
     },
@@ -262,8 +262,8 @@
     },
     "song_agent/application/program/http_routes/operations.py": {
       "summary": {
-        "covered_lines": 31,
-        "missing_lines": 47,
+        "covered_lines": 42,
+        "missing_lines": 36,
         "num_statements": 78
       }
     },
@@ -276,8 +276,8 @@
     },
     "song_agent/application/program/http_routes/receiver_acceptance_change.py": {
       "summary": {
-        "covered_lines": 14,
-        "missing_lines": 50,
+        "covered_lines": 19,
+        "missing_lines": 45,
         "num_statements": 64
       }
     },
@@ -325,8 +325,8 @@
     },
     "song_agent/architecture_guardrails.py": {
       "summary": {
-        "covered_lines": 335,
-        "missing_lines": 31,
+        "covered_lines": 340,
+        "missing_lines": 26,
         "num_statements": 366
       }
     },
@@ -1011,8 +1011,8 @@
     },
     "song_agent/domains/delivery/distribution_verifier.py": {
       "summary": {
-        "covered_lines": 623,
-        "missing_lines": 131,
+        "covered_lines": 626,
+        "missing_lines": 128,
         "num_statements": 754
       }
     },
@@ -1144,57 +1144,57 @@
     },
     "song_agent/domains/program/unified_command_center.py": {
       "summary": {
-        "covered_lines": 369,
-        "missing_lines": 167,
+        "covered_lines": 458,
+        "missing_lines": 78,
         "num_statements": 536
       }
     },
     "song_agent/domains/program/unified_command_center_archive_verifier.py": {
       "summary": {
-        "covered_lines": 184,
-        "missing_lines": 22,
+        "covered_lines": 185,
+        "missing_lines": 21,
         "num_statements": 206
       }
     },
     "song_agent/domains/program/unified_command_center_continuous_review.py": {
       "summary": {
-        "covered_lines": 366,
-        "missing_lines": 56,
+        "covered_lines": 391,
+        "missing_lines": 31,
         "num_statements": 422
       }
     },
     "song_agent/domains/program/unified_command_center_continuous_review_verifier.py": {
       "summary": {
-        "covered_lines": 207,
-        "missing_lines": 38,
+        "covered_lines": 218,
+        "missing_lines": 27,
         "num_statements": 245
       }
     },
     "song_agent/domains/program/unified_command_center_drift_response.py": {
       "summary": {
-        "covered_lines": 366,
-        "missing_lines": 69,
+        "covered_lines": 384,
+        "missing_lines": 51,
         "num_statements": 435
       }
     },
     "song_agent/domains/program/unified_command_center_drift_response_verifier.py": {
       "summary": {
-        "covered_lines": 206,
-        "missing_lines": 29,
+        "covered_lines": 209,
+        "missing_lines": 26,
         "num_statements": 235
       }
     },
     "song_agent/domains/program/unified_command_center_evidence_review.py": {
       "summary": {
-        "covered_lines": 421,
-        "missing_lines": 70,
+        "covered_lines": 438,
+        "missing_lines": 53,
         "num_statements": 491
       }
     },
     "song_agent/domains/program/unified_command_center_evidence_review_verifier.py": {
       "summary": {
-        "covered_lines": 284,
-        "missing_lines": 65,
+        "covered_lines": 290,
+        "missing_lines": 59,
         "num_statements": 349
       }
     },
@@ -1207,43 +1207,43 @@
     },
     "song_agent/domains/program/unified_command_center_handoff_verifier.py": {
       "summary": {
-        "covered_lines": 128,
-        "missing_lines": 17,
+        "covered_lines": 129,
+        "missing_lines": 16,
         "num_statements": 145
       }
     },
     "song_agent/domains/program/unified_command_center_release_train.py": {
       "summary": {
-        "covered_lines": 446,
-        "missing_lines": 146,
+        "covered_lines": 474,
+        "missing_lines": 118,
         "num_statements": 592
       }
     },
     "song_agent/domains/program/unified_command_center_release_train_change_control.py": {
       "summary": {
-        "covered_lines": 354,
-        "missing_lines": 42,
+        "covered_lines": 356,
+        "missing_lines": 40,
         "num_statements": 396
       }
     },
     "song_agent/domains/program/unified_command_center_release_train_change_control_verifier.py": {
       "summary": {
-        "covered_lines": 176,
-        "missing_lines": 20,
+        "covered_lines": 179,
+        "missing_lines": 17,
         "num_statements": 196
       }
     },
     "song_agent/domains/program/unified_command_center_release_train_handoff.py": {
       "summary": {
-        "covered_lines": 426,
-        "missing_lines": 167,
+        "covered_lines": 529,
+        "missing_lines": 64,
         "num_statements": 593
       }
     },
     "song_agent/domains/program/unified_command_center_release_train_handoff_verifier.py": {
       "summary": {
-        "covered_lines": 257,
-        "missing_lines": 91,
+        "covered_lines": 312,
+        "missing_lines": 36,
         "num_statements": 348
       }
     },
@@ -1256,50 +1256,50 @@
     },
     "song_agent/domains/program/unified_command_center_release_train_lifecycle_verifier.py": {
       "summary": {
-        "covered_lines": 222,
-        "missing_lines": 22,
+        "covered_lines": 223,
+        "missing_lines": 21,
         "num_statements": 244
       }
     },
     "song_agent/domains/program/unified_command_center_release_train_verifier.py": {
       "summary": {
-        "covered_lines": 241,
-        "missing_lines": 45,
+        "covered_lines": 245,
+        "missing_lines": 41,
         "num_statements": 286
       }
     },
     "song_agent/domains/program/unified_command_center_reviewer_decision_board.py": {
       "summary": {
-        "covered_lines": 446,
-        "missing_lines": 121,
+        "covered_lines": 489,
+        "missing_lines": 78,
         "num_statements": 567
       }
     },
     "song_agent/domains/program/unified_command_center_reviewer_decision_board_verifier.py": {
       "summary": {
-        "covered_lines": 206,
-        "missing_lines": 28,
+        "covered_lines": 210,
+        "missing_lines": 24,
         "num_statements": 234
       }
     },
     "song_agent/domains/program/unified_command_center_signoff.py": {
       "summary": {
-        "covered_lines": 212,
-        "missing_lines": 103,
+        "covered_lines": 265,
+        "missing_lines": 50,
         "num_statements": 315
       }
     },
     "song_agent/domains/program/unified_command_center_verifier.py": {
       "summary": {
-        "covered_lines": 290,
-        "missing_lines": 191,
+        "covered_lines": 362,
+        "missing_lines": 119,
         "num_statements": 481
       }
     },
     "song_agent/domains/program/unified_release_program.py": {
       "summary": {
-        "covered_lines": 562,
-        "missing_lines": 118,
+        "covered_lines": 580,
+        "missing_lines": 100,
         "num_statements": 680
       }
     },
@@ -1312,57 +1312,57 @@
     },
     "song_agent/domains/program/unified_release_program_continuity_acceptance.py": {
       "summary": {
-        "covered_lines": 500,
-        "missing_lines": 59,
+        "covered_lines": 501,
+        "missing_lines": 58,
         "num_statements": 559
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_acceptance_change.py": {
       "summary": {
-        "covered_lines": 373,
-        "missing_lines": 44,
+        "covered_lines": 376,
+        "missing_lines": 41,
         "num_statements": 417
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_acceptance_change_verifier.py": {
       "summary": {
-        "covered_lines": 215,
-        "missing_lines": 14,
+        "covered_lines": 216,
+        "missing_lines": 13,
         "num_statements": 229
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_acceptance_verifier.py": {
       "summary": {
-        "covered_lines": 211,
-        "missing_lines": 23,
+        "covered_lines": 212,
+        "missing_lines": 22,
         "num_statements": 234
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center.py": {
       "summary": {
-        "covered_lines": 306,
-        "missing_lines": 28,
+        "covered_lines": 311,
+        "missing_lines": 23,
         "num_statements": 334
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance.py": {
       "summary": {
-        "covered_lines": 569,
-        "missing_lines": 167,
+        "covered_lines": 628,
+        "missing_lines": 108,
         "num_statements": 736
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change.py": {
       "summary": {
-        "covered_lines": 89,
-        "missing_lines": 483,
+        "covered_lines": 509,
+        "missing_lines": 63,
         "num_statements": 572
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py": {
       "summary": {
-        "covered_lines": 57,
-        "missing_lines": 257,
+        "covered_lines": 296,
+        "missing_lines": 18,
         "num_statements": 314
       }
     },
@@ -1375,8 +1375,8 @@
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center_signoff.py": {
       "summary": {
-        "covered_lines": 445,
-        "missing_lines": 94,
+        "covered_lines": 472,
+        "missing_lines": 67,
         "num_statements": 539
       }
     },
@@ -1396,15 +1396,15 @@
     },
     "song_agent/domains/program/unified_release_program_continuity_distribution.py": {
       "summary": {
-        "covered_lines": 227,
-        "missing_lines": 67,
+        "covered_lines": 261,
+        "missing_lines": 33,
         "num_statements": 294
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_distribution_verifier.py": {
       "summary": {
-        "covered_lines": 159,
-        "missing_lines": 33,
+        "covered_lines": 172,
+        "missing_lines": 20,
         "num_statements": 192
       }
     },
@@ -1417,8 +1417,8 @@
     },
     "song_agent/domains/program/unified_release_program_handoff.py": {
       "summary": {
-        "covered_lines": 688,
-        "missing_lines": 101,
+        "covered_lines": 696,
+        "missing_lines": 93,
         "num_statements": 789
       }
     },
@@ -1431,15 +1431,15 @@
     },
     "song_agent/domains/program/unified_release_program_operations.py": {
       "summary": {
-        "covered_lines": 260,
-        "missing_lines": 221,
+        "covered_lines": 370,
+        "missing_lines": 111,
         "num_statements": 481
       }
     },
     "song_agent/domains/program/unified_release_program_operations_verifier.py": {
       "summary": {
-        "covered_lines": 158,
-        "missing_lines": 13,
+        "covered_lines": 159,
+        "missing_lines": 12,
         "num_statements": 171
       }
     },
@@ -1473,8 +1473,8 @@
     },
     "song_agent/domains/program/unified_release_program_verifier.py": {
       "summary": {
-        "covered_lines": 240,
-        "missing_lines": 35,
+        "covered_lines": 242,
+        "missing_lines": 33,
         "num_statements": 275
       }
     },
@@ -1641,8 +1641,8 @@
     },
     "song_agent/domains/quality/audio_lab.py": {
       "summary": {
-        "covered_lines": 481,
-        "missing_lines": 130,
+        "covered_lines": 502,
+        "missing_lines": 109,
         "num_statements": 611
       }
     },
@@ -2117,8 +2117,8 @@
     },
     "song_agent/domains/trust/ga_readiness.py": {
       "summary": {
-        "covered_lines": 511,
-        "missing_lines": 404,
+        "covered_lines": 549,
+        "missing_lines": 366,
         "num_statements": 915
       }
     },
@@ -2131,22 +2131,22 @@
     },
     "song_agent/domains/trust/ga_readiness_verifier.py": {
       "summary": {
-        "covered_lines": 385,
-        "missing_lines": 522,
+        "covered_lines": 414,
+        "missing_lines": 493,
         "num_statements": 907
       }
     },
     "song_agent/domains/trust/public_trust_center.py": {
       "summary": {
-        "covered_lines": 607,
-        "missing_lines": 420,
+        "covered_lines": 745,
+        "missing_lines": 282,
         "num_statements": 1027
       }
     },
     "song_agent/domains/trust/public_trust_center_acceptance_board.py": {
       "summary": {
-        "covered_lines": 677,
-        "missing_lines": 100,
+        "covered_lines": 698,
+        "missing_lines": 79,
         "num_statements": 777
       }
     },
@@ -2159,22 +2159,22 @@
     },
     "song_agent/domains/trust/public_trust_center_acceptance_board_signoff_verifier.py": {
       "summary": {
-        "covered_lines": 349,
-        "missing_lines": 73,
+        "covered_lines": 356,
+        "missing_lines": 66,
         "num_statements": 422
       }
     },
     "song_agent/domains/trust/public_trust_center_acceptance_board_verifier.py": {
       "summary": {
-        "covered_lines": 409,
-        "missing_lines": 89,
+        "covered_lines": 422,
+        "missing_lines": 76,
         "num_statements": 498
       }
     },
     "song_agent/domains/trust/public_trust_center_anchor_registry.py": {
       "summary": {
-        "covered_lines": 355,
-        "missing_lines": 93,
+        "covered_lines": 377,
+        "missing_lines": 71,
         "num_statements": 448
       }
     },
@@ -2187,15 +2187,15 @@
     },
     "song_agent/domains/trust/public_trust_center_anchor_registry_verifier.py": {
       "summary": {
-        "covered_lines": 309,
-        "missing_lines": 54,
+        "covered_lines": 321,
+        "missing_lines": 42,
         "num_statements": 363
       }
     },
     "song_agent/domains/trust/public_trust_center_anchor_transparency.py": {
       "summary": {
-        "covered_lines": 330,
-        "missing_lines": 39,
+        "covered_lines": 337,
+        "missing_lines": 32,
         "num_statements": 369
       }
     },
@@ -2208,36 +2208,36 @@
     },
     "song_agent/domains/trust/public_trust_center_anchor_transparency_verifier.py": {
       "summary": {
-        "covered_lines": 316,
-        "missing_lines": 54,
+        "covered_lines": 327,
+        "missing_lines": 43,
         "num_statements": 370
       }
     },
     "song_agent/domains/trust/public_trust_center_contracts.py": {
       "summary": {
-        "covered_lines": 106,
-        "missing_lines": 56,
+        "covered_lines": 136,
+        "missing_lines": 26,
         "num_statements": 162
       }
     },
     "song_agent/domains/trust/public_trust_center_core_verifier.py": {
       "summary": {
-        "covered_lines": 606,
-        "missing_lines": 181,
+        "covered_lines": 678,
+        "missing_lines": 109,
         "num_statements": 787
       }
     },
     "song_agent/domains/trust/public_trust_center_distribution_kit.py": {
       "summary": {
-        "covered_lines": 274,
-        "missing_lines": 22,
+        "covered_lines": 275,
+        "missing_lines": 21,
         "num_statements": 296
       }
     },
     "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance.py": {
       "summary": {
-        "covered_lines": 416,
-        "missing_lines": 99,
+        "covered_lines": 437,
+        "missing_lines": 78,
         "num_statements": 515
       }
     },
@@ -2250,8 +2250,8 @@
     },
     "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance_verifier.py": {
       "summary": {
-        "covered_lines": 258,
-        "missing_lines": 44,
+        "covered_lines": 271,
+        "missing_lines": 31,
         "num_statements": 302
       }
     },
@@ -2264,8 +2264,8 @@
     },
     "song_agent/domains/trust/public_trust_center_distribution_kit_core_verifier.py": {
       "summary": {
-        "covered_lines": 320,
-        "missing_lines": 50,
+        "covered_lines": 330,
+        "missing_lines": 40,
         "num_statements": 370
       }
     },
@@ -2446,8 +2446,8 @@
     },
     "song_agent/domains/trust/release_portfolio_audit.py": {
       "summary": {
-        "covered_lines": 492,
-        "missing_lines": 77,
+        "covered_lines": 497,
+        "missing_lines": 72,
         "num_statements": 569
       }
     },
@@ -2460,29 +2460,29 @@
     },
     "song_agent/domains/trust/release_portfolio_audit_verifier.py": {
       "summary": {
-        "covered_lines": 239,
-        "missing_lines": 50,
+        "covered_lines": 245,
+        "missing_lines": 44,
         "num_statements": 289
       }
     },
     "song_agent/domains/trust/release_portfolio_governance.py": {
       "summary": {
-        "covered_lines": 527,
-        "missing_lines": 120,
+        "covered_lines": 528,
+        "missing_lines": 119,
         "num_statements": 647
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_archive_verifier.py": {
       "summary": {
-        "covered_lines": 280,
-        "missing_lines": 56,
+        "covered_lines": 289,
+        "missing_lines": 47,
         "num_statements": 336
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation.py": {
       "summary": {
-        "covered_lines": 300,
-        "missing_lines": 64,
+        "covered_lines": 305,
+        "missing_lines": 59,
         "num_statements": 364
       }
     },
@@ -2509,8 +2509,8 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_verifier.py": {
       "summary": {
-        "covered_lines": 261,
-        "missing_lines": 40,
+        "covered_lines": 267,
+        "missing_lines": 34,
         "num_statements": 301
       }
     },
@@ -2523,8 +2523,8 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_portal.py": {
       "summary": {
-        "covered_lines": 312,
-        "missing_lines": 48,
+        "covered_lines": 313,
+        "missing_lines": 47,
         "num_statements": 360
       }
     },
@@ -2537,8 +2537,8 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review.py": {
       "summary": {
-        "covered_lines": 356,
-        "missing_lines": 68,
+        "covered_lines": 365,
+        "missing_lines": 59,
         "num_statements": 424
       }
     },
@@ -2551,50 +2551,50 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_verifier.py": {
       "summary": {
-        "covered_lines": 305,
-        "missing_lines": 86,
+        "covered_lines": 340,
+        "missing_lines": 51,
         "num_statements": 391
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_portal_verifier.py": {
       "summary": {
-        "covered_lines": 337,
-        "missing_lines": 57,
+        "covered_lines": 343,
+        "missing_lines": 51,
         "num_statements": 394
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_registry.py": {
       "summary": {
-        "covered_lines": 358,
-        "missing_lines": 97,
+        "covered_lines": 396,
+        "missing_lines": 59,
         "num_statements": 455
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_registry_contracts.py": {
       "summary": {
-        "covered_lines": 33,
-        "missing_lines": 1,
+        "covered_lines": 34,
+        "missing_lines": 0,
         "num_statements": 34
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_registry_verifier.py": {
       "summary": {
-        "covered_lines": 345,
-        "missing_lines": 56,
+        "covered_lines": 355,
+        "missing_lines": 46,
         "num_statements": 401
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_transparency.py": {
       "summary": {
-        "covered_lines": 351,
-        "missing_lines": 57,
+        "covered_lines": 355,
+        "missing_lines": 53,
         "num_statements": 408
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement.py": {
       "summary": {
-        "covered_lines": 455,
-        "missing_lines": 107,
+        "covered_lines": 486,
+        "missing_lines": 76,
         "num_statements": 562
       }
     },
@@ -2607,8 +2607,8 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_verifier.py": {
       "summary": {
-        "covered_lines": 322,
-        "missing_lines": 39,
+        "covered_lines": 333,
+        "missing_lines": 28,
         "num_statements": 361
       }
     },
@@ -2621,36 +2621,36 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_verifier.py": {
       "summary": {
-        "covered_lines": 365,
-        "missing_lines": 59,
+        "covered_lines": 381,
+        "missing_lines": 43,
         "num_statements": 424
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_verifier.py": {
       "summary": {
-        "covered_lines": 260,
-        "missing_lines": 45,
+        "covered_lines": 267,
+        "missing_lines": 38,
         "num_statements": 305
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_audit.py": {
       "summary": {
-        "covered_lines": 421,
-        "missing_lines": 117,
+        "covered_lines": 468,
+        "missing_lines": 70,
         "num_statements": 538
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_audit_contracts.py": {
       "summary": {
-        "covered_lines": 30,
-        "missing_lines": 3,
+        "covered_lines": 31,
+        "missing_lines": 2,
         "num_statements": 33
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_audit_verifier.py": {
       "summary": {
-        "covered_lines": 277,
-        "missing_lines": 93,
+        "covered_lines": 288,
+        "missing_lines": 82,
         "num_statements": 370
       }
     },
@@ -2663,8 +2663,8 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_evidence_vault.py": {
       "summary": {
-        "covered_lines": 389,
-        "missing_lines": 86,
+        "covered_lines": 405,
+        "missing_lines": 70,
         "num_statements": 475
       }
     },
@@ -2677,36 +2677,36 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_evidence_vault_verifier.py": {
       "summary": {
-        "covered_lines": 341,
-        "missing_lines": 66,
+        "covered_lines": 349,
+        "missing_lines": 58,
         "num_statements": 407
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_final_board.py": {
       "summary": {
-        "covered_lines": 469,
-        "missing_lines": 185,
+        "covered_lines": 550,
+        "missing_lines": 104,
         "num_statements": 654
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_final_board_contracts.py": {
       "summary": {
-        "covered_lines": 21,
-        "missing_lines": 3,
+        "covered_lines": 24,
+        "missing_lines": 0,
         "num_statements": 24
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_final_board_verifier.py": {
       "summary": {
-        "covered_lines": 288,
-        "missing_lines": 65,
+        "covered_lines": 297,
+        "missing_lines": 56,
         "num_statements": 353
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_reviewer_pack.py": {
       "summary": {
-        "covered_lines": 368,
-        "missing_lines": 72,
+        "covered_lines": 377,
+        "missing_lines": 63,
         "num_statements": 440
       }
     },
@@ -2719,15 +2719,15 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_reviewer_pack_verifier.py": {
       "summary": {
-        "covered_lines": 257,
-        "missing_lines": 56,
+        "covered_lines": 263,
+        "missing_lines": 50,
         "num_statements": 313
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_signoff.py": {
       "summary": {
-        "covered_lines": 444,
-        "missing_lines": 90,
+        "covered_lines": 456,
+        "missing_lines": 78,
         "num_statements": 534
       }
     },
@@ -2740,15 +2740,15 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_verifier.py": {
       "summary": {
-        "covered_lines": 256,
-        "missing_lines": 54,
+        "covered_lines": 263,
+        "missing_lines": 47,
         "num_statements": 310
       }
     },
     "song_agent/domains/trust/trust_operations_assurance_watch.py": {
       "summary": {
-        "covered_lines": 389,
-        "missing_lines": 104,
+        "covered_lines": 408,
+        "missing_lines": 85,
         "num_statements": 493
       }
     },
@@ -2761,8 +2761,8 @@
     },
     "song_agent/domains/trust/trust_operations_assurance_watch_signoff.py": {
       "summary": {
-        "covered_lines": 334,
-        "missing_lines": 120,
+        "covered_lines": 393,
+        "missing_lines": 61,
         "num_statements": 454
       }
     },
@@ -2775,22 +2775,22 @@
     },
     "song_agent/domains/trust/trust_operations_assurance_watch_signoff_verifier.py": {
       "summary": {
-        "covered_lines": 327,
-        "missing_lines": 52,
+        "covered_lines": 334,
+        "missing_lines": 45,
         "num_statements": 379
       }
     },
     "song_agent/domains/trust/trust_operations_assurance_watch_verifier.py": {
       "summary": {
-        "covered_lines": 369,
-        "missing_lines": 81,
+        "covered_lines": 406,
+        "missing_lines": 44,
         "num_statements": 450
       }
     },
     "song_agent/domains/trust/trust_operations_continuous_assurance.py": {
       "summary": {
-        "covered_lines": 413,
-        "missing_lines": 59,
+        "covered_lines": 421,
+        "missing_lines": 51,
         "num_statements": 472
       }
     },
@@ -2803,15 +2803,15 @@
     },
     "song_agent/domains/trust/trust_operations_continuous_assurance_verifier.py": {
       "summary": {
-        "covered_lines": 346,
-        "missing_lines": 49,
+        "covered_lines": 360,
+        "missing_lines": 35,
         "num_statements": 395
       }
     },
     "song_agent/domains/trust/trust_operations_control_signoff.py": {
       "summary": {
-        "covered_lines": 316,
-        "missing_lines": 173,
+        "covered_lines": 369,
+        "missing_lines": 120,
         "num_statements": 489
       }
     },
@@ -2824,8 +2824,8 @@
     },
     "song_agent/domains/trust/trust_operations_control_signoff_verifier.py": {
       "summary": {
-        "covered_lines": 319,
-        "missing_lines": 54,
+        "covered_lines": 327,
+        "missing_lines": 46,
         "num_statements": 373
       }
     },
@@ -2838,22 +2838,22 @@
     },
     "song_agent/domains/trust/trust_operations_controls_contracts.py": {
       "summary": {
-        "covered_lines": 78,
-        "missing_lines": 4,
+        "covered_lines": 80,
+        "missing_lines": 2,
         "num_statements": 82
       }
     },
     "song_agent/domains/trust/trust_operations_controls_verifier.py": {
       "summary": {
-        "covered_lines": 437,
-        "missing_lines": 67,
+        "covered_lines": 443,
+        "missing_lines": 61,
         "num_statements": 504
       }
     },
     "song_agent/domains/trust/trust_operations_final_readiness.py": {
       "summary": {
-        "covered_lines": 397,
-        "missing_lines": 127,
+        "covered_lines": 452,
+        "missing_lines": 72,
         "num_statements": 524
       }
     },
@@ -2873,8 +2873,8 @@
     },
     "song_agent/domains/trust/trust_operations_hub.py": {
       "summary": {
-        "covered_lines": 531,
-        "missing_lines": 146,
+        "covered_lines": 595,
+        "missing_lines": 82,
         "num_statements": 677
       }
     },
@@ -2887,15 +2887,15 @@
     },
     "song_agent/domains/trust/trust_operations_hub_incident_verifier.py": {
       "summary": {
-        "covered_lines": 374,
-        "missing_lines": 64,
+        "covered_lines": 389,
+        "missing_lines": 49,
         "num_statements": 438
       }
     },
     "song_agent/domains/trust/trust_operations_hub_incidents.py": {
       "summary": {
-        "covered_lines": 573,
-        "missing_lines": 113,
+        "covered_lines": 580,
+        "missing_lines": 106,
         "num_statements": 686
       }
     },
@@ -2908,29 +2908,29 @@
     },
     "song_agent/domains/trust/trust_operations_hub_runbook.py": {
       "summary": {
-        "covered_lines": 68,
-        "missing_lines": 219,
+        "covered_lines": 254,
+        "missing_lines": 33,
         "num_statements": 287
       }
     },
     "song_agent/domains/trust/trust_operations_hub_runbook_contracts.py": {
       "summary": {
-        "covered_lines": 10,
-        "missing_lines": 1,
+        "covered_lines": 11,
+        "missing_lines": 0,
         "num_statements": 11
       }
     },
     "song_agent/domains/trust/trust_operations_hub_runbook_verifier.py": {
       "summary": {
-        "covered_lines": 58,
-        "missing_lines": 271,
+        "covered_lines": 281,
+        "missing_lines": 48,
         "num_statements": 329
       }
     },
     "song_agent/domains/trust/trust_operations_hub_verifier.py": {
       "summary": {
-        "covered_lines": 586,
-        "missing_lines": 333,
+        "covered_lines": 819,
+        "missing_lines": 100,
         "num_statements": 919
       }
     },
@@ -2950,8 +2950,8 @@
     },
     "song_agent/domains/trust/trust_operations_incident_knowledge_verifier.py": {
       "summary": {
-        "covered_lines": 401,
-        "missing_lines": 64,
+        "covered_lines": 406,
+        "missing_lines": 59,
         "num_statements": 465
       }
     },
@@ -3363,8 +3363,8 @@
     },
     "song_agent/interfaces/api/routes/maintenance.py": {
       "summary": {
-        "covered_lines": 83,
-        "missing_lines": 40,
+        "covered_lines": 89,
+        "missing_lines": 34,
         "num_statements": 123
       }
     },
@@ -3377,8 +3377,8 @@
     },
     "song_agent/interfaces/api/routes/program.py": {
       "summary": {
-        "covered_lines": 49,
-        "missing_lines": 12,
+        "covered_lines": 47,
+        "missing_lines": 14,
         "num_statements": 61
       }
     },
@@ -3587,8 +3587,8 @@
     },
     "song_agent/interfaces/api/routes/quality_parts/release_encoded_audio.py": {
       "summary": {
-        "covered_lines": 131,
-        "missing_lines": 225,
+        "covered_lines": 150,
+        "missing_lines": 206,
         "num_statements": 356
       }
     },
@@ -4028,8 +4028,8 @@
     },
     "song_agent/interfaces/api/runtime_parts/helpers/api_info.py": {
       "summary": {
-        "covered_lines": 100,
-        "missing_lines": 24,
+        "covered_lines": 108,
+        "missing_lines": 16,
         "num_statements": 124
       }
     },
@@ -4490,8 +4490,8 @@
     },
     "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py": {
       "summary": {
-        "covered_lines": 186,
-        "missing_lines": 44,
+        "covered_lines": 187,
+        "missing_lines": 43,
         "num_statements": 230
       }
     },
@@ -5281,8 +5281,8 @@
     },
     "song_agent/platform/persistence/repository.py": {
       "summary": {
-        "covered_lines": 78,
-        "missing_lines": 5,
+        "covered_lines": 79,
+        "missing_lines": 4,
         "num_statements": 83
       }
     },
@@ -5918,22 +5918,22 @@
     },
     "song_agent/release_check/lts_audit.py": {
       "summary": {
-        "covered_lines": 141,
-        "missing_lines": 29,
+        "covered_lines": 140,
+        "missing_lines": 30,
         "num_statements": 170
       }
     },
     "song_agent/release_check/lts_cutover.py": {
       "summary": {
-        "covered_lines": 12,
-        "missing_lines": 25,
+        "covered_lines": 35,
+        "missing_lines": 2,
         "num_statements": 37
       }
     },
     "song_agent/release_check/lts_recertification.py": {
       "summary": {
-        "covered_lines": 52,
-        "missing_lines": 7,
+        "covered_lines": 57,
+        "missing_lines": 2,
         "num_statements": 59
       }
     },
@@ -6009,9 +6009,9 @@
     },
     "song_agent/release_check/v14_quality.py": {
       "summary": {
-        "covered_lines": 210,
-        "missing_lines": 57,
-        "num_statements": 267
+        "covered_lines": 251,
+        "missing_lines": 67,
+        "num_statements": 318
       }
     },
     "song_agent/release_check/v14_reviewer.py": {
@@ -6044,8 +6044,8 @@
     },
     "song_agent/release_check_governance_v137.py": {
       "summary": {
-        "covered_lines": 30,
-        "missing_lines": 42,
+        "covered_lines": 70,
+        "missing_lines": 2,
         "num_statements": 72
       }
     },
@@ -6072,15 +6072,15 @@
     },
     "song_agent/release_check_persistence_kernel.py": {
       "summary": {
-        "covered_lines": 13,
-        "missing_lines": 112,
+        "covered_lines": 57,
+        "missing_lines": 68,
         "num_statements": 125
       }
     },
     "song_agent/release_check_program_vertical.py": {
       "summary": {
-        "covered_lines": 14,
-        "missing_lines": 53,
+        "covered_lines": 62,
+        "missing_lines": 5,
         "num_statements": 67
       }
     },
@@ -7088,5 +7088,5 @@
   },
   "package_type": "musicforge_v14_coverage_evidence",
   "schema_version": 2,
-  "source_report_semantic_hash": "d51982213a0e45710119a5a4ffca81442ab2274b8850686183ecd23267698724"
+  "source_report_semantic_hash": "da0e4d8dada0bf60b5418ddfa6ba9703bca858c47768c485dd321a30c64d7c64"
 }

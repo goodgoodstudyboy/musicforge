@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.1.0 is a local-first modular monolith. It remains one Python
+MusicForge v14.1.1 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -174,3 +174,16 @@ boundary violations, dependency exceptions, or compatibility imports.
 - v14 quality policy enforces active and migrated coverage, strict shared-kernel
   typing, no new active mypy debt, and explicit v14.1 owners for remaining large
   domain modules.
+
+## v14.1 Quality Debt Closure
+
+- Full active-tree mypy covers `platform`, `application`, `domains`,
+  `capabilities`, and `interfaces` with a zero-error budget.
+- Repository-wide Ruff covers `song_agent`, `tests`, and `tools`; remaining
+  ignores are documented static public-facade exceptions only.
+- `architecture-v14-quality.json` freezes explicit `Any` usage by total, layer,
+  and file. TYPE-003 tracks the remaining type-precision cleanup separately
+  from the closed TYPE-002 mypy-error budget.
+- ADR-015 keeps ARCH-014 open through v14.2 and v14.1.1 enforces per-file
+  no-growth ceilings so aggregate module shrinkage cannot mask one module
+  growing.

@@ -22,7 +22,12 @@ from tools.consolidate_v141_contract_imports import consolidate_contract_imports
 from tools.migrate_v14_private_document_types import migrate_private_document_types
 from tools.split_v14_active_functions import split_active_functions
 from tools.split_v14_interface_functions import _split_one, split_interfaces
-from tools.update_v14_quality_policy import _ratchet_mypy_policy, _ratchet_typing_policy, _write_compact_coverage
+from tools.update_v14_quality_policy import (
+    _ratchet_complexity_policy,
+    _ratchet_mypy_policy,
+    _ratchet_typing_policy,
+    _write_compact_coverage,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,11 +35,13 @@ pytestmark = pytest.mark.contract
 
 
 def test_v14_typing_and_complexity_ratchets_pass_without_hiding_public_debt() -> None:
+    policy = json.loads((ROOT / "architecture-v14-quality.json").read_text(encoding="utf-8"))
     report = evaluate_v14_quality(ROOT, run_mypy=False, require_coverage=False)
 
     assert report["status"] == "passed", report["blockers"]
     assert report["typing"]["raw_dict_str_any_count"] <= 8774
     assert report["typing"]["raw_dict_str_any_count"] <= int(12535 * 0.70)
+    assert report["typing"]["explicit_any_count"] <= int(policy["typing"]["explicit_any_max_count"])
     assert report["typing"]["public_implementation_document_count"] == 0
     assert report["typing"]["untyped_public_function_count"] == 0
     assert report["complexity"]["oversized_function_count"] == 0
@@ -93,6 +100,15 @@ def test_v14_quality_policy_rejects_type_and_mypy_budget_growth() -> None:
     typing = collect_typing_metrics(ROOT)
     forged_typing = {**typing, "raw_dict_str_any_count": policy["typing"]["raw_dict_str_any_max_count"] + 1}
     assert any("typing_raw_dict_str_any" in value for value in _typing_blockers(forged_typing, policy))
+    forged_explicit = {**typing, "explicit_any_count": policy["typing"]["explicit_any_max_count"] + 1}
+    assert any("typing_explicit_any" in value for value in _typing_blockers(forged_explicit, policy))
+    file_budgets = policy["typing"]["explicit_any_file_budgets"]
+    path, budget = next(iter(file_budgets.items()))
+    forged_file = {
+        **typing,
+        "explicit_any_by_file": {**typing["explicit_any_by_file"], path: budget + 1},
+    }
+    assert any("typing_explicit_any_file" in value for value in _typing_blockers(forged_file, policy))
 
     allowed = policy["mypy"]["error_budgets"]
     mypy = {
@@ -127,9 +143,11 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     configured = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert policy["release_version"] == "14.1.0"
+    assert policy["release_version"] == "14.1.1"
     assert policy["mypy"]["max_total_errors"] == 0
     assert policy["mypy"]["error_budgets"] == {}
+    assert policy["typing"]["explicit_any_max_count"] == collect_typing_metrics(ROOT)["explicit_any_count"]
+    assert set(policy["typing"]["explicit_any_layer_budgets"]) >= {"platform", "application", "capabilities"}
     assert '"song_agent/domains"' in configured
     assert "python -m ruff check song_agent tests tools" in workflow
     assert "python -m mypy --no-incremental" in workflow
@@ -171,6 +189,9 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
         "typing": {
             "raw_dict_str_any_max_count": 8,
             "implementation_document_max_count": 4,
+            "explicit_any_max_count": 3,
+            "explicit_any_layer_budgets": {"application": 3},
+            "explicit_any_file_budgets": {"song_agent/application/a.py": 2, "song_agent/application/b.py": 1},
         }
     }
     _ratchet_typing_policy(
@@ -178,6 +199,9 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
         {
             "raw_dict_str_any_count": 5,
             "implementation_document_count": 6,
+            "explicit_any_count": 3,
+            "explicit_any_by_layer": {"application": 3},
+            "explicit_any_by_file": {"song_agent/application/a.py": 2, "song_agent/application/b.py": 1},
             "public_implementation_document_count": 0,
             "untyped_public_function_count": 0,
         },
@@ -185,6 +209,9 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
     assert policy["typing"] == {
         "raw_dict_str_any_max_count": 5,
         "implementation_document_max_count": 6,
+        "explicit_any_max_count": 3,
+        "explicit_any_layer_budgets": {"application": 3},
+        "explicit_any_file_budgets": {"song_agent/application/a.py": 2, "song_agent/application/b.py": 1},
     }
 
     with pytest.raises(RuntimeError, match="cannot grow"):
@@ -193,10 +220,54 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
             {
                 "raw_dict_str_any_count": 6,
                 "implementation_document_count": 6,
+                "explicit_any_count": 3,
+                "explicit_any_by_layer": {"application": 3},
+                "explicit_any_by_file": {"song_agent/application/a.py": 2, "song_agent/application/b.py": 1},
                 "public_implementation_document_count": 0,
                 "untyped_public_function_count": 0,
             },
         )
+
+    with pytest.raises(RuntimeError, match="explicit Any file cannot grow"):
+        _ratchet_typing_policy(
+            policy,
+            {
+                "raw_dict_str_any_count": 5,
+                "implementation_document_count": 6,
+                "explicit_any_count": 3,
+                "explicit_any_by_layer": {"application": 3},
+                "explicit_any_by_file": {"song_agent/application/a.py": 3},
+                "public_implementation_document_count": 0,
+                "untyped_public_function_count": 0,
+            },
+        )
+
+
+def test_v14_complexity_ratchet_rejects_file_growth_even_when_total_decreases(tmp_path: Path) -> None:
+    root = tmp_path
+    first = root / "song_agent" / "domains" / "sample_a.py"
+    second = root / "song_agent" / "domains" / "sample_b.py"
+    first.parent.mkdir(parents=True)
+    first.write_text("# a\n" * 710, encoding="utf-8")
+    second.write_text("# b\n" * 780, encoding="utf-8")
+    policy = {
+        "complexity": {
+            "module_default_max_lines": 600,
+            "aggregate_debt": {
+                "max_oversized_module_count": 2,
+                "max_modules_over_1000_lines": 0,
+                "max_largest_module_lines": 800,
+                "max_total_oversized_module_lines": 1500,
+            },
+        },
+        "module_size_debt": [
+            {"path": "song_agent/domains/sample_a.py", "max_lines": 700},
+            {"path": "song_agent/domains/sample_b.py", "max_lines": 800},
+        ],
+    }
+
+    with pytest.raises(RuntimeError, match="cannot grow registered modules"):
+        _ratchet_complexity_policy(policy, root)
 
 
 def test_v14_source_tree_hash_is_independent_of_line_endings(tmp_path: Path) -> None:

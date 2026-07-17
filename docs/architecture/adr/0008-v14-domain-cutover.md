@@ -27,5 +27,6 @@ isolated non-empty workspace and must restore source and logical state hashes.
 
 Architecture, compatibility, public contract, typing, coverage, security,
 migration, and reviewer-package checks are hard release gates. Registered large
-module debt expires in v14.1. Any future extraction to services requires a new
-ADR and may not weaken offline verification or local transaction semantics.
+module debt expires in v14.2 under ADR-015. Any future extraction to services
+requires a new ADR and may not weaken offline verification or local transaction
+semantics.

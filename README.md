@@ -51,9 +51,10 @@ listening acceptance.
 ## Quality Gates
 
 v14.1 checks the complete active modular-monolith tree with mypy and checks the
-entire repository with Ruff. ARCH-014 module-size debt remains explicitly
-tracked under ADR-015 and cannot grow in count, maximum size, or aggregate
-lines.
+entire repository with Ruff. v14.1.1 also freezes explicit `Any` usage by file
+and layer. ARCH-014 module-size debt remains explicitly tracked under ADR-015
+and cannot grow in count, maximum size, aggregate lines, or any registered
+per-file ceiling.
 
 ```powershell
 python -m mypy --no-incremental

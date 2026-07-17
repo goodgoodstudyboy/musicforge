@@ -4,6 +4,17 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.1.1 - 2026-07-17
+
+- Fixed the v14.1 complexity ratchet updater so one oversized module cannot
+  grow while another module shrinks enough to reduce the aggregate total.
+- Documented the v14.1 one-time per-file complexity exceptions in ADR-015 and
+  kept ARCH-014 open for v14.2 extraction work.
+- Added explicit-`Any` quality metrics by total, layer, and file, with machine
+  budgets in `architecture-v14-quality.json`.
+- Split remaining type-precision debt into TYPE-003 so TYPE-002 continues to
+  mean zero active-tree mypy errors rather than "no explicit Any anywhere."
+
 ## v14.1.0 - 2026-07-17
 
 - Closed TYPE-002 by migrating the complete active source tree from 12,885

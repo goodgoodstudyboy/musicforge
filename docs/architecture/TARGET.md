@@ -1,7 +1,7 @@
 # v14 Domain-Cutover Modular Monolith
 
 Status: realized by v14.0.0. Remaining registered module-size debt expires in
-v14.1 and cannot grow under the v14 quality policy.
+v14.2 and cannot grow under the v14 quality policy.
 
 The v14 cutover keeps MusicForge as one local application while enforcing:
 
