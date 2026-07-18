@@ -14,7 +14,8 @@ from song_agent.platform.verification.hashing import canonical_text_bytes, sha25
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.1.1"
+QUALITY_POLICY_VERSION = "14.1.2"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 2
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -93,6 +94,7 @@ def collect_typing_metrics(root: Path) -> dict[str, Any]:
                     {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
                 )
     return {
+        "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "raw_dict_str_any_count": raw_count,
         "implementation_document_count": implementation_count,
         "explicit_any_count": sum(explicit_any_by_file.values()),
@@ -294,6 +296,7 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
             "activation_baseline_dict_str_any_count": 12535,
             "raw_dict_str_any_max_count": 8774,
             "implementation_document_max_count": typing["implementation_document_count"],
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "explicit_any_max_count": typing["explicit_any_count"],
             "explicit_any_layer_budgets": typing["explicit_any_by_layer"],
             "explicit_any_file_budgets": typing["explicit_any_by_file"],
@@ -388,6 +391,10 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "mypy_budget": int((policy.get("mypy") or {}).get("max_total_errors") or 0),
         "mypy_roots": list((policy.get("mypy") or {}).get("active_roots") or []),
         "ruff_status": "passed" if ruff.returncode == 0 else "failed",
+        "explicit_any_alias_probe": _explicit_any_alias_probe(),
+        "explicit_any_collector_schema_version": int(
+            (policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0
+        ),
         "explicit_any_max": int((policy.get("typing") or {}).get("explicit_any_max_count") or 0),
         "explicit_any_layer_budgets": dict((policy.get("typing") or {}).get("explicit_any_layer_budgets") or {}),
         "complexity": aggregate,
@@ -404,6 +411,8 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and details["mypy_budget"] == 0
         and details["mypy_roots"] == list(MYPY_ROOTS)
         and ruff.returncode == 0
+        and details["explicit_any_alias_probe"]
+        and details["explicit_any_collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
         and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
     )
@@ -412,6 +421,11 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
 
 def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
     limits = policy.get("typing") or {}
+    blockers: list[str] = []
+    if int(limits.get("explicit_any_collector_schema_version") or 0) != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION:
+        blockers.append("v14_quality_typing_explicit_any_collector_schema")
+    if int(metrics.get("collector_schema_version") or 0) != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION:
+        blockers.append("v14_quality_typing_metrics_collector_schema")
     fields = (
         ("raw_dict_str_any_count", "raw_dict_str_any_max_count", "typing_raw_dict_str_any"),
         ("implementation_document_count", "implementation_document_max_count", "typing_implementation_document"),
@@ -419,12 +433,12 @@ def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[st
         ("public_implementation_document_count", "public_implementation_document_max_count", "typing_public_dynamic"),
         ("untyped_public_function_count", "untyped_public_function_max_count", "typing_untyped_public"),
     )
-    blockers = [
+    blockers.extend(
         f"v14_quality_{label}:{metrics[current]}>{limits[maximum]}"
         for current, maximum, label in fields
         if maximum in limits
         if int(metrics[current]) > int(limits[maximum])
-    ]
+    )
     layer_limits = {str(key): int(value) for key, value in (limits.get("explicit_any_layer_budgets") or {}).items()}
     layer_actual = {str(key): int(value) for key, value in (metrics.get("explicit_any_by_layer") or {}).items()}
     for layer, count in sorted(layer_actual.items()):
@@ -476,6 +490,11 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         blockers.append("v14_quality_policy_typing_loosened")
     if "explicit_any_max_count" not in (policy.get("typing") or {}):
         blockers.append("v14_quality_policy_explicit_any_missing")
+    if (
+        int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0)
+        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+    ):
+        blockers.append("v14_quality_policy_explicit_any_collector_schema")
     if int((policy.get("mypy") or {}).get("max_total_errors") or 0) != 0:
         blockers.append("v14_quality_policy_mypy_debt_not_closed")
     return blockers
@@ -508,7 +527,24 @@ def _function_annotations(
 
 
 def _explicit_any_annotation_count(tree: ast.Module) -> int:
-    return sum(_annotation_any_count(annotation) for annotation in _annotation_nodes(tree))
+    any_names, module_names = _typing_any_aliases(tree)
+    return sum(_annotation_any_count(annotation, any_names, module_names) for annotation in _annotation_nodes(tree))
+
+
+def _typing_any_aliases(tree: ast.Module) -> tuple[set[str], set[str]]:
+    any_names = {"Any"}
+    module_names = {"typing", "typing_extensions"}
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in {"typing", "typing_extensions"}:
+                    module_names.add(alias.asname or alias.name)
+            continue
+        if isinstance(node, ast.ImportFrom) and node.module in {"typing", "typing_extensions"}:
+            for alias in node.names:
+                if alias.name == "Any":
+                    any_names.add(alias.asname or alias.name)
+    return any_names, module_names
 
 
 def _annotation_nodes(tree: ast.Module) -> Iterable[ast.expr]:
@@ -529,14 +565,50 @@ def _annotation_nodes(tree: ast.Module) -> Iterable[ast.expr]:
                 yield value
 
 
-def _annotation_any_count(annotation: ast.expr) -> int:
+def _annotation_any_count(annotation: ast.expr, any_names: set[str], module_names: set[str]) -> int:
     count = 0
     for node in ast.walk(annotation):
-        if isinstance(node, ast.Name) and node.id == "Any":
+        if isinstance(node, ast.Name) and node.id in any_names:
             count += 1
-        elif isinstance(node, ast.Attribute) and node.attr == "Any":
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr == "Any"
+            and isinstance(node.value, ast.Name)
+            and node.value.id in module_names
+        ):
             count += 1
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            count += _quoted_annotation_any_count(node.value, any_names, module_names)
     return count
+
+
+def _quoted_annotation_any_count(value: str, any_names: set[str], module_names: set[str]) -> int:
+    try:
+        expression = ast.parse(value, mode="eval")
+    except SyntaxError:
+        return 0
+    return _annotation_any_count(expression.body, any_names, module_names)
+
+
+def _explicit_any_alias_probe() -> bool:
+    tree = ast.parse(
+        """
+from typing import Any, Any as _InterfaceType
+from typing_extensions import Any as _InferenceType
+import typing as t
+import typing_extensions as tx
+
+direct: Any
+alias: _InterfaceType
+module_alias: t.Any
+extension_alias: _InferenceType
+extension_module_alias: tx.Any
+nested: dict[str, list[_InterfaceType | t.Any]]
+quoted: "_InterfaceType"
+quoted_nested: "dict[str, tx.Any]"
+"""
+    )
+    return _explicit_any_annotation_count(tree) == 9
 
 
 def _typing_layer(relative: str) -> str:

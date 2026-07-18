@@ -143,14 +143,82 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     configured = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert policy["release_version"] == "14.1.1"
+    assert policy["release_version"] == "14.1.2"
     assert policy["mypy"]["max_total_errors"] == 0
     assert policy["mypy"]["error_budgets"] == {}
-    assert policy["typing"]["explicit_any_max_count"] == collect_typing_metrics(ROOT)["explicit_any_count"]
+    typing = collect_typing_metrics(ROOT)
+    assert policy["typing"]["explicit_any_collector_schema_version"] == typing["collector_schema_version"]
+    assert policy["typing"]["explicit_any_max_count"] == typing["explicit_any_count"]
     assert set(policy["typing"]["explicit_any_layer_budgets"]) >= {"platform", "application", "capabilities"}
     assert '"song_agent/domains"' in configured
     assert "python -m ruff check song_agent tests tools" in workflow
     assert "python -m mypy --no-incremental" in workflow
+
+
+def test_v1412_explicit_any_collector_counts_alias_module_nested_and_quoted_annotations(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "sample.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "\n".join(
+            [
+                "from typing import Any, Any as _InterfaceType",
+                "from typing_extensions import Any as _InferenceType",
+                "import typing as t",
+                "import typing_extensions as tx",
+                "",
+                "direct: Any",
+                "alias: _InterfaceType",
+                "module_alias: t.Any",
+                "extension_alias: _InferenceType",
+                "extension_module_alias: tx.Any",
+                "nested: dict[str, list[_InterfaceType | t.Any]]",
+                "quoted: \"_InterfaceType\"",
+                "quoted_nested: \"dict[str, tx.Any]\"",
+                "class Handler:",
+                "    def route(self, value: \"_InferenceType\") -> list[\"t.Any\"]:",
+                "        return []",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["collector_schema_version"] == 2
+    assert typing["explicit_any_count"] == 11
+    assert typing["explicit_any_by_layer"] == {"interfaces": 11}
+    assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/sample.py": 11}
+
+
+def test_v1412_explicit_any_alias_growth_is_not_hidden_from_ratchet(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "alias_growth.py"
+    target.parent.mkdir(parents=True)
+    annotations = [f"field_{index}: _InterfaceType" for index in range(100)]
+    target.write_text(
+        "from typing import Any as _InterfaceType\n" + "\n".join(annotations) + "\n",
+        encoding="utf-8",
+    )
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": typing["collector_schema_version"],
+            "explicit_any_max_count": 99,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {"song_agent/interfaces/api/alias_growth.py": 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+
+    blockers = _typing_blockers(typing, policy)
+
+    assert typing["explicit_any_count"] == 100
+    assert any("typing_explicit_any" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
 
 
 def test_v141_quality_debt_closure_smoke_is_self_consistent() -> None:
@@ -209,6 +277,7 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
     assert policy["typing"] == {
         "raw_dict_str_any_max_count": 5,
         "implementation_document_max_count": 6,
+        "explicit_any_collector_schema_version": 2,
         "explicit_any_max_count": 3,
         "explicit_any_layer_budgets": {"application": 3},
         "explicit_any_file_budgets": {"song_agent/application/a.py": 2, "song_agent/application/b.py": 1},

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from song_agent.platform.verification.hashing import stable_hash
 from song_agent.release_check.v14_quality import (
+    EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
     active_source_tree_hash,
     build_v14_quality_policy,
     collect_complexity_metrics,
@@ -41,7 +42,7 @@ def main() -> int:
         _ratchet_typing_policy(document, collect_typing_metrics(root))
     if args.ratchet_complexity:
         _ratchet_complexity_policy(document, root)
-    document["release_version"] = "14.1.1"
+    document["release_version"] = "14.1.2"
     if report is not None:
         output = (root / args.tracked_coverage_output).resolve()
         _write_compact_coverage(report, output, root)
@@ -99,12 +100,14 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
     previous_raw = int(policy.get("raw_dict_str_any_max_count") or 0)
     previous_implementation = int(policy.get("implementation_document_max_count") or 0)
     has_explicit_any_budget = "explicit_any_max_count" in policy
+    collector_schema = int(policy.get("explicit_any_collector_schema_version") or 0)
+    collector_upgrade = collector_schema != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     previous_explicit_any = int(policy.get("explicit_any_max_count") or explicit_any)
     if int(metrics.get("public_implementation_document_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot expose implementation documents publicly.")
     if int(metrics.get("untyped_public_function_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot introduce untyped public functions.")
-    if explicit_any > previous_explicit_any:
+    if explicit_any > previous_explicit_any and not collector_upgrade:
         raise RuntimeError(f"Typing explicit Any cannot grow: {explicit_any}>{previous_explicit_any}.")
     previous_layers = {
         str(key): int(value)
@@ -114,7 +117,7 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         str(key): int(value)
         for key, value in (metrics.get("explicit_any_by_layer") or {}).items()
     }
-    if not has_explicit_any_budget:
+    if not has_explicit_any_budget or collector_upgrade:
         previous_layers = dict(current_layers)
     for layer, count in sorted(current_layers.items()):
         maximum = previous_layers.get(layer, 0)
@@ -128,7 +131,7 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         str(key): int(value)
         for key, value in (metrics.get("explicit_any_by_file") or {}).items()
     }
-    if not has_explicit_any_budget:
+    if not has_explicit_any_budget or collector_upgrade:
         previous_files = dict(current_files)
     for path, count in sorted(current_files.items()):
         maximum = previous_files.get(path, 0)
@@ -141,6 +144,7 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         )
     policy["raw_dict_str_any_max_count"] = raw
     policy["implementation_document_max_count"] = implementation
+    policy["explicit_any_collector_schema_version"] = EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     policy["explicit_any_max_count"] = explicit_any
     policy["explicit_any_layer_budgets"] = dict(sorted(current_layers.items()))
     policy["explicit_any_file_budgets"] = dict(sorted(current_files.items()))

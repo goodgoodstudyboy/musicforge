@@ -3,7 +3,7 @@
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
 | ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.2.0 | ADR-015 freezes per-file ceilings plus aggregate module count, thousand-line count, largest-module size, and total oversized lines. |
-| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.2.0 | `architecture-v14-quality.json` freezes total, layer, and per-file explicit-`Any` budgets; no file, layer, or total budget may grow. |
+| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.2.0 | `architecture-v14-quality.json` freezes alias-aware total, layer, and per-file explicit-`Any` budgets; no file, layer, or total budget may grow. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -66,8 +66,11 @@ checks `song_agent`, `tests`, and `tools`; the only ignores are the documented
 static public facades in `pyproject.toml`.
 
 v14.1.1 separates TYPE-003 from TYPE-002. Zero mypy errors does not mean the
-active tree is fully precise: explicit `Any` is now counted by total, layer, and
-file, and those budgets are locked as a v14.2 cleanup target.
+active tree is fully precise: explicit `Any` is counted by total, layer, and
+file, and those budgets are locked as a v14.2 cleanup target. v14.1.2 fixes the
+counter so aliases imported from `typing.Any` and `typing_extensions.Any`,
+module aliases, nested annotations, and quoted annotations are included in the
+same ratchet.
 
 ARCH-014 is not closed. ADR-015 formally reapproves it through v14.2.0 after a
 measured aggregate reduction. v14.1.1 adds the missing per-file no-growth

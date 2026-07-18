@@ -4,6 +4,18 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.1.2 - 2026-07-18
+
+- Fixed the explicit-`Any` quality collector so aliases from `typing.Any` and
+  `typing_extensions.Any`, module aliases such as `import typing as t`, nested
+  annotations, and quoted annotations are all counted.
+- Added a collector schema version to the typing ratchet so older incomplete
+  explicit-`Any` baselines cannot be reused silently.
+- Rebuilt explicit-`Any` total, layer, and per-file budgets with the corrected
+  collector while keeping TYPE-003 open for v14.2 precision cleanup.
+- Added regression coverage for direct, alias, module-alias, nested, quoted, and
+  100-field alias growth cases.
+
 ## v14.1.1 - 2026-07-17
 
 - Fixed the v14.1 complexity ratchet updater so one oversized module cannot
