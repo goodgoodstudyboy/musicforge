@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 from dataclasses import asdict, dataclass
+from typing import Any
 
 
 SUPPORTED_WIRE_APIS = {"openai_chat_completions", "mock"}
@@ -29,8 +29,8 @@ class ProviderOutputError(ProviderError):
 
 @dataclass(frozen=True)
 class ProviderEditResponse:
-    data: ImplementationDocument
-    usage: ImplementationDocument | None = None
+    data: dict[str, Any]
+    usage: dict[str, Any] | None = None
     request_id: str | None = None
 
 
@@ -50,7 +50,7 @@ class ProviderConfig:
     max_output_tokens: int = 4000
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ProviderConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "ProviderConfig":
         config = cls(
             base_url=str(data.get("base_url", "") or "").strip(),
             wire_api=str(data.get("wire_api", "openai_chat_completions") or "").strip(),
@@ -91,10 +91,10 @@ class ProviderConfig:
                 f"Provider config is incomplete: {', '.join(missing)} is required."
             )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
-    def to_public_dict(self, sources: dict[str, str] | None = None) -> DomainDocument:
+    def to_public_dict(self, sources: dict[str, str] | None = None) -> dict[str, Any]:
         data = {
             "base_url": self.base_url,
             "wire_api": self.wire_api,
@@ -114,7 +114,7 @@ class ProviderConfig:
             data["sources"] = sources
         return data
 
-    def to_snapshot(self, mode: str, captured_at: str) -> DomainDocument:
+    def to_snapshot(self, mode: str, captured_at: str) -> dict[str, Any]:
         return {
             "mode": mode,
             "base_url": self.base_url,

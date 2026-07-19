@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -43,10 +43,10 @@ def verify_audio_campaign_archive_package(
     max_zip_size_mb: int = 256,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 5000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {
         "zip_path": str(zip_path),
         "zip_sha256": None,
         "zip_size_bytes": 0,
@@ -120,16 +120,16 @@ def verify_audio_campaign_archive_package(
     return _finish(checks, summary)
 
 
-def write_audio_campaign_archive_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_audio_campaign_archive_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def audio_campaign_archive_verification_exit_code(report: DomainDocument) -> int:
+def audio_campaign_archive_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, strict: bool) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected = names - {"manifest.json"}

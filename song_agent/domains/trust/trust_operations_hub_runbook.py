@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_text as _as_text
+from song_agent.platform.contracts import ImplementationDocument, as_text as _as_text
 
 import hashlib as hashlib
 import json as json
@@ -74,7 +74,7 @@ class TrustOperationsHubRunbookStore:
     def zip_path(self, hub_id: str, runbook_id: str) -> Path:
         return self.runbook_dir(hub_id, runbook_id) / "trust-operations-hub-runbook.zip"
 
-    def create_runbook(self, hub_id: str, report_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def create_runbook(self, hub_id: str, report_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or _now()
             payload = payload or {}
@@ -107,13 +107,13 @@ class TrustOperationsHubRunbookStore:
             self._write_event(hub_id, runbook_id, "runbook_created", {"runbook_hash": runbook["integrity_hash"]}, now=now)
             return _sanitize(runbook)
 
-    def read_runbook(self, hub_id: str, runbook_id: str) -> DomainDocument:
+    def read_runbook(self, hub_id: str, runbook_id: str) -> dict[str, Any]:
         path = self.runbook_path(hub_id, runbook_id)
         if not path.exists():
             raise TrustOperationsHubRunbookNotFoundError("Trust Operations Hub Runbook not found.")
         return read_json(path)
 
-    def run_safe_actions(self, hub_id: str, runbook_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def run_safe_actions(self, hub_id: str, runbook_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or _now()
             payload = payload or {}
@@ -122,7 +122,7 @@ class TrustOperationsHubRunbookStore:
             runbook = self.read_runbook(hub_id, runbook_id)
             self._assert_runbook_current(hub_id, runbook)
             events = _read_jsonl(self.events_path(hub_id, runbook_id))
-            item_results: list[ImplementationDocument] = []
+            item_results: list[dict[str, Any]] = []
             for action in runbook.get("actions", []) if isinstance(runbook.get("actions"), list) else []:
                 if not isinstance(action, dict):
                     continue
@@ -166,7 +166,7 @@ class TrustOperationsHubRunbookStore:
             _write_jsonl(self.events_path(hub_id, runbook_id), events)
             return _sanitize(result)
 
-    def export_runbook(self, hub_id: str, runbook_id: str, *, now: str | None = None) -> DomainDocument:
+    def export_runbook(self, hub_id: str, runbook_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or _now()
             runbook = self.read_runbook(hub_id, runbook_id)
@@ -200,7 +200,7 @@ class TrustOperationsHubRunbookStore:
             _write_json(export_dir / "trust-operations-hub-runbook-manifest.json", manifest)
             return _sanitize(manifest)
 
-    def build_zip(self, hub_id: str, runbook_id: str, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, hub_id: str, runbook_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or _now()
             export_dir = self.export_dir(hub_id, runbook_id)
@@ -249,7 +249,7 @@ def _safe_actions(hub_id: str, report_id: str) -> list[ImplementationDocument]:
 
 
 def _manual_actions(docs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
-    actions: list[ImplementationDocument] = []
+    actions: list[dict[str, Any]] = []
     for key in ("manual_action_queue", "delivery_manual_action_queue"):
         for action in docs[key].get("actions", []) if isinstance(docs[key].get("actions"), list) else []:
             if not isinstance(action, dict):
@@ -330,7 +330,7 @@ def _safe_id(value: str) -> str:
 def _read_jsonl(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
-    rows: list[ImplementationDocument] = []
+    rows: list[dict[str, Any]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue

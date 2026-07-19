@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-from song_agent.platform.contracts import DomainDocument
+from typing import Any
 
 from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance_contracts import ACCEPTANCE_BLOCKED_KEYS
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
@@ -63,33 +62,33 @@ SIGNOFF_ARCHIVE_ENTRIES = {
 }
 
 
-def acceptance_board_policy_hash(policy: DomainDocument) -> str:
+def acceptance_board_policy_hash(policy: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (policy or {}).items() if key not in ACCEPTANCE_BOARD_POLICY_HASH_EXCLUDE_KEYS})
 
 
-def acceptance_board_report_hash(report: DomainDocument) -> str:
+def acceptance_board_report_hash(report: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in ACCEPTANCE_BOARD_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def acceptance_board_conflict_hash(report: DomainDocument) -> str:
+def acceptance_board_conflict_hash(report: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in ACCEPTANCE_BOARD_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def acceptance_board_manifest_hash(manifest: DomainDocument) -> str:
+def acceptance_board_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in ACCEPTANCE_BOARD_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def acceptance_board_signoff_hash(signoff: DomainDocument) -> str:
+def acceptance_board_signoff_hash(signoff: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (signoff or {}).items() if key not in ACCEPTANCE_BOARD_SIGNOFF_HASH_EXCLUDE_KEYS})
 
 
-def acceptance_board_signoff_archive_hash(payload: DomainDocument) -> str:
+def acceptance_board_signoff_archive_hash(payload: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (payload or {}).items() if key not in ACCEPTANCE_BOARD_SIGNOFF_ARCHIVE_HASH_EXCLUDE_KEYS})
 
 
-def acceptance_board_verification_hash(report: DomainDocument) -> str:
+def acceptance_board_verification_hash(report: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key != "generated_at"})
 
 
-def sidecar_hash(payload: DomainDocument) -> str:
+def sidecar_hash(payload: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (payload or {}).items() if key not in ACCEPTANCE_BOARD_SIDECAR_HASH_EXCLUDE_KEYS})

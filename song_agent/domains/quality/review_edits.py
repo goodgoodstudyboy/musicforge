@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -54,16 +53,16 @@ class ReviewEditIntent:
     parent_version_id: str
     preview_id: str
     audition_id: str
-    source: ImplementationDocument
+    source: dict[str, Any]
     mode: str = "local"
-    intents: list[ImplementationDocument] = field(default_factory=list)
+    intents: list[dict[str, Any]] = field(default_factory=list)
     instruction: str = ""
     confidence: float = 0.0
     warnings: list[str] = field(default_factory=list)
     created_at: str = ""
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ReviewEditIntent":
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewEditIntent":
         if not isinstance(data, dict):
             raise ReviewEditError("review edit must be an object.")
         return cls(
@@ -82,7 +81,7 @@ class ReviewEditIntent:
             created_at=str(data.get("created_at") or ""),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -97,7 +96,7 @@ class ReviewEditStore:
         review_edit: ReviewEditIntent,
         parent_plan: SongPlan,
         result: EditedSongPlanResult,
-        validator: DomainDocument,
+        validator: dict[str, Any],
         now: str | None = None,
     ) -> ReviewEditIntent:
         now = now or now_iso()
@@ -147,7 +146,7 @@ def build_review_edit(
     parent_plan: SongPlan,
     audition: EditorAuditionManifest,
     audition_plan: SongPlan,
-    payload: DomainDocument | None = None,
+    payload: dict[str, Any] | None = None,
     now: str | None = None,
 ) -> ReviewEditIntent:
     payload = _as_document(payload)
@@ -189,7 +188,7 @@ def build_review_edit_source(
     parent_version_id: str,
     audition: EditorAuditionManifest,
     audition_plan: SongPlan,
-) -> DomainDocument:
+) -> dict[str, Any]:
     review = _as_document(audition.review)
     markers = [
         {
@@ -347,7 +346,7 @@ def infer_review_edit_intents(parent_plan: SongPlan, audition: EditorAuditionMan
 def apply_review_edit(parent_plan: SongPlan, review_edit: ReviewEditIntent) -> EditedSongPlanResult:
     validate_review_edit(parent_plan, review_edit)
     current = parent_plan
-    summaries: list[ImplementationDocument] = []
+    summaries: list[dict[str, Any]] = []
     warnings = list(review_edit.warnings)
     for raw_intent in review_edit.intents:
         intent = EditIntent.from_dict(raw_intent)
@@ -381,7 +380,7 @@ def validate_review_edit(parent_plan: SongPlan, review_edit: ReviewEditIntent) -
         validate_edit_intent(parent_plan, EditIntent.from_dict(raw_intent))
 
 
-def review_edit_metadata(review_edit: ReviewEditIntent, result: EditedSongPlanResult) -> DomainDocument:
+def review_edit_metadata(review_edit: ReviewEditIntent, result: EditedSongPlanResult) -> dict[str, Any]:
     metadata = sanitize_metadata(
         {
             "edit_source": "audition_review",
@@ -394,7 +393,7 @@ def review_edit_metadata(review_edit: ReviewEditIntent, result: EditedSongPlanRe
     return metadata
 
 
-def review_edit_summary(review_edit: ReviewEditIntent, result: EditedSongPlanResult | None = None) -> DomainDocument:
+def review_edit_summary(review_edit: ReviewEditIntent, result: EditedSongPlanResult | None = None) -> dict[str, Any]:
     return sanitize_metadata(
         {
             "review_edit_id": review_edit.review_edit_id,
@@ -522,7 +521,82 @@ def _track_state(plan: SongPlan) -> dict[str, int]:
     return {f"track-{index + 1:03d}": index for index, _track in enumerate(plan.tracks)}
 
 
-from song_agent.domains.quality import v142_re_readiness as _v142_re_readiness
-from song_agent.domains.quality.v142_re_readiness import _find_section as _find_section, _section_for_beat as _section_for_beat, _global_marker_beat as _global_marker_beat, _intent as _intent, _has_any as _has_any, _mode as _mode, _confidence as _confidence, _float_or_none as _float_or_none
+def _find_section(plan: SongPlan, name: str) -> SongSection | None:
+    for section in plan.sections:
+        if section.name.lower() == str(name or "").lower():
+            return section
+    return None
 
-_v142_re_readiness.bind_globals(globals())
+
+def _section_for_beat(plan: SongPlan, beat: float) -> SongSection | None:
+    for section in plan.sections:
+        start = float((section.start_bar - 1) * 4)
+        end = start + float(section.bars * 4)
+        if start <= beat < end:
+            return section
+    return None
+
+
+def _global_marker_beat(range_data: ImplementationDocument, marker_beat: float) -> float:
+    start = _float_or_none(range_data.get("start_beat"))
+    if start is None:
+        return marker_beat
+    return start + marker_beat
+
+
+def _intent(
+    edit_type: str,
+    *,
+    section_name: str | None = None,
+    track_name: str | None = None,
+    strength: int,
+    instruction: str,
+    preserve: list[str],
+    payload: ImplementationDocument,
+) -> EditIntent:
+    target: dict[str, Any] = {}
+    if section_name:
+        target["section_name"] = section_name
+    if track_name:
+        target["track_name"] = track_name
+    if edit_type in {"section_energy", "melody_variation", "arrangement_variation"}:
+        target["field"] = "notes"
+    if edit_type == "track_density":
+        target["field"] = "notes"
+    return EditIntent.from_dict(
+        {
+            "edit_type": edit_type,
+            "target": target,
+            "instruction": instruction,
+            "preserve": preserve,
+            "strength": strength,
+            "provider_mode": "local",
+            "payload": payload,
+        }
+    )
+
+
+def _has_any(text: str, keywords: tuple[str, ...]) -> bool:
+    return any(keyword.lower() in text for keyword in keywords)
+
+
+def _mode(value: Any) -> str:
+    mode = str(value or "local").strip()
+    if mode not in {"local", "provider"}:
+        raise ReviewEditError("review edit mode must be local or provider.")
+    return mode
+
+
+def _confidence(value: Any) -> float:
+    try:
+        confidence = float(value or 0.0)
+    except (TypeError, ValueError) as exc:
+        raise ReviewEditError("confidence must be a number.") from exc
+    return round(max(0.0, min(1.0, confidence)), 3)
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

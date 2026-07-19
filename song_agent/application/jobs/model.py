@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 
 @dataclass
@@ -16,14 +17,14 @@ class JobState:
     updated_at: str
     step: str = "created"
     message: str = ""
-    summary: ImplementationDocument = field(default_factory=dict)
+    summary: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     attempt_count: int = 0
     cancel_requested: bool = False
     pause_requested: bool = False
     hidden: bool = False
-    input_payload: ImplementationDocument = field(default_factory=dict)
-    provider_snapshot: ImplementationDocument = field(default_factory=dict)
+    input_payload: dict[str, Any] = field(default_factory=dict)
+    provider_snapshot: dict[str, Any] = field(default_factory=dict)
     artifacts: dict[str, str] = field(default_factory=dict)
     deleted: bool = False
     interrupted: bool = False
@@ -41,13 +42,13 @@ class JobState:
     generation_mode: str = "local"
     pipeline_mode: str = "single"
     job_type: str = "song"
-    edit_metadata: ImplementationDocument = field(default_factory=dict)
+    edit_metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "JobState":
+    def from_dict(cls, data: dict[str, Any]) -> "JobState":
         now = datetime.now(timezone.utc).isoformat()
         return cls(
             job_id=str(data["job_id"]),
@@ -87,5 +88,5 @@ class JobState:
         )
 
 
-def _dict_or_empty(value: object) -> ImplementationDocument:
+def _dict_or_empty(value: Any) -> ImplementationDocument:
     return _as_document(value)

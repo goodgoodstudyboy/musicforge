@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -33,15 +32,52 @@ MAX_TEXT_SCAN_BYTES = 2 * 1024 * 1024
 VERIFIER_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"}
 
 
-from song_agent.domains.trust import v142_toikv_readiness as _v142_toikv_readiness
-from song_agent.domains.trust.v142_toikv_readiness import verify_trust_operations_incident_knowledge_package as verify_trust_operations_incident_knowledge_package, write_trust_operations_incident_knowledge_verification_report as write_trust_operations_incident_knowledge_verification_report, print_trust_operations_incident_knowledge_verification_report as print_trust_operations_incident_knowledge_verification_report, trust_operations_incident_knowledge_verification_exit_code as trust_operations_incident_knowledge_verification_exit_code, _read_json_file as _read_json_file, _entry_matches_external_fact as _entry_matches_external_fact, _sha256_entry as _sha256_entry, _sha256_file as _sha256_file, _counts as _counts, _is_safe_entry as _is_safe_entry, _is_forbidden_entry as _is_forbidden_entry, _is_text_scan_entry as _is_text_scan_entry, _contains_sensitive_text as _contains_sensitive_text, _walk_json_values as _walk_json_values, _fs_path as _fs_path
+def verify_trust_operations_incident_knowledge_package(
+    zip_path: Path | str,
+    *,
+    strict: bool = False,
+    require_guards_passed: bool = False,
+    require_no_open_recurrence: bool = False,
+    incident_board_package_path: Path | str | None = None,
+    incident_board_verification_report_path: Path | str | None = None,
+    hub_verification_report_path: Path | str | None = None,
+    max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
+    max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
+    max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
+    now: str | None = None,
+) -> dict[str, Any]:
+    verifier = _KnowledgeVerifier(
+        Path(zip_path),
+        strict=strict,
+        require_guards_passed=require_guards_passed,
+        require_no_open_recurrence=require_no_open_recurrence,
+        incident_board_package_path=Path(incident_board_package_path) if incident_board_package_path else None,
+        incident_board_verification_report_path=Path(incident_board_verification_report_path) if incident_board_verification_report_path else None,
+        hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
+        max_zip_size_mb=max_zip_size_mb,
+        max_uncompressed_size_mb=max_uncompressed_size_mb,
+        max_entry_count=max_entry_count,
+        now=now,
+    )
+    return verifier.run()
 
 
+def write_trust_operations_incident_knowledge_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+    return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
+def print_trust_operations_incident_knowledge_verification_report(report: dict[str, Any]) -> None:
+    summary = _as_document(report.get("summary"))
+    print("MusicForge Trust Operations Incident Knowledge verification")
+    print(f"status: {report.get('status')}")
+    print(f"hub: {summary.get('hub_id') or '-'}")
+    print(f"entries: {summary.get('entry_count') or 0}")
+    print(f"guards: {summary.get('guard_count') or 0}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
-
+def trust_operations_incident_knowledge_verification_exit_code(report: dict[str, Any]) -> int:
+    return 1 if report.get("status") == "failed" else 0
 
 
 class _KnowledgeVerifier:
@@ -71,8 +107,8 @@ class _KnowledgeVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
+        self.checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -80,24 +116,24 @@ class _KnowledgeVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.manifest: ImplementationDocument = {}
-        self.base: ImplementationDocument = {}
-        self.report: ImplementationDocument = {}
-        self.entries_doc: ImplementationDocument = {}
-        self.guards_doc: ImplementationDocument = {}
-        self.runs_doc: ImplementationDocument = {}
-        self.recurrence: ImplementationDocument = {}
-        self.source_summary: ImplementationDocument = {}
-        self.external_incident_manifest: ImplementationDocument = {}
-        self.external_incidents_doc: ImplementationDocument = {}
-        self.external_closeout_summary: ImplementationDocument = {}
-        self.external_incident_verification: ImplementationDocument = {}
-        self.external_hub_verification: ImplementationDocument = {}
+        self.manifest: dict[str, Any] = {}
+        self.base: dict[str, Any] = {}
+        self.report: dict[str, Any] = {}
+        self.entries_doc: dict[str, Any] = {}
+        self.guards_doc: dict[str, Any] = {}
+        self.runs_doc: dict[str, Any] = {}
+        self.recurrence: dict[str, Any] = {}
+        self.source_summary: dict[str, Any] = {}
+        self.external_incident_manifest: dict[str, Any] = {}
+        self.external_incidents_doc: dict[str, Any] = {}
+        self.external_closeout_summary: dict[str, Any] = {}
+        self.external_incident_verification: dict[str, Any] = {}
+        self.external_hub_verification: dict[str, Any] = {}
         self.external_incident_zip_sha256: str | None = None
         self.external_incident_zip_size_bytes: int | None = None
-        self.redaction_findings: list[ImplementationDocument] = []
+        self.redaction_findings: list[dict[str, Any]] = []
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -312,7 +348,7 @@ class _KnowledgeVerifier:
         facts = self._external_incident_facts()
         entries = _as_list(self.entries_doc.get("entries"))
         guards = _as_list(self.guards_doc.get("guards"))
-        entry_by_incident_hash: dict[str, ImplementationDocument] = {}
+        entry_by_incident_hash: dict[str, dict[str, Any]] = {}
         duplicate_entries: list[str] = []
         extra_entries: list[str] = []
         for entry in entries:
@@ -365,7 +401,7 @@ class _KnowledgeVerifier:
         incidents = _as_list(self.external_incidents_doc.get("incidents"))
         closeouts = _as_list(self.external_closeout_summary.get("closeouts"))
         closeout_by_id = {str(closeout.get("incident_id") or ""): closeout for closeout in closeouts if isinstance(closeout, dict)}
-        facts: dict[str, ImplementationDocument] = {}
+        facts: dict[str, dict[str, Any]] = {}
         for incident in incidents:
             if not isinstance(incident, dict) or incident.get("status") != "closed" or incident.get("stale"):
                 continue
@@ -409,7 +445,7 @@ class _KnowledgeVerifier:
         self._add_check("requirements", "tohk_require_no_open_recurrence", "passed" if (not self.require_no_open_recurrence or recurrence_count == 0) else "failed", "blocking", "No recurrence detected." if recurrence_count == 0 else "Incident recurrence remains open.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[ImplementationDocument] = []
+        findings: list[dict[str, Any]] = []
         for info in self.entry_infos:
             name = info.filename
             if not _is_text_scan_entry(name) or int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
@@ -496,4 +532,120 @@ class _KnowledgeVerifier:
     def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str) -> None:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
-_v142_toikv_readiness.bind_globals(globals())
+
+def _read_json_file(path: Path) -> ImplementationDocument:
+    try:
+        with open(_fs_path(path), "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return _as_document(value)
+
+
+def _entry_matches_external_fact(entry: ImplementationDocument, fact: ImplementationDocument, source_summary: ImplementationDocument) -> bool:
+    source = _as_document(entry.get("source"))
+    expected_source = {
+        "incident_hash": source.get("incident_hash"),
+        "closeout_hash": source.get("closeout_hash"),
+        "incident_verification_report_hash": source.get("incident_verification_report_hash"),
+        "hub_verification_report_hash": source.get("hub_verification_report_hash"),
+        "source_fingerprint": source.get("source_fingerprint"),
+    }
+    expected_source_hash = stable_hash(expected_source)
+    recommended = _as_document(entry.get("recommended_guard"))
+    return (
+        entry.get("incident_id") == fact.get("incident_id")
+        and entry.get("severity") == fact.get("severity")
+        and entry.get("category") == fact.get("category")
+        and entry.get("component_type") == fact.get("component_type")
+        and entry.get("component_id") == fact.get("component_id")
+        and entry.get("failure_mode") == fact.get("failure_mode")
+        and entry.get("root_cause") == fact.get("root_cause")
+        and entry.get("preventive_pattern") == fact.get("preventive_pattern")
+        and recommended.get("guard_type") == fact.get("recommended_guard", {}).get("guard_type")
+        and recommended.get("title") == fact.get("recommended_guard", {}).get("title")
+        and recommended.get("reason") == fact.get("recommended_guard", {}).get("reason")
+        and source.get("closeout_hash") == fact.get("closeout_hash")
+        and source.get("incident_verification_report_hash") == source_summary.get("incident_verification_report_hash")
+        and source.get("hub_verification_report_hash") == source_summary.get("hub_verification_report_hash")
+        and source.get("source_fingerprint") == fact.get("source_fingerprint")
+        and entry.get("source_hash") == expected_source_hash
+    )
+
+
+def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
+    digest = hashlib.sha256()
+    with archive.open(info, "r") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(_fs_path(path), "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _counts(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _is_safe_entry(name: str) -> bool:
+    if not name or "\\" in name:
+        return False
+    try:
+        path = PurePosixPath(name)
+    except ValueError:
+        return False
+    return not path.is_absolute() and all(part not in {"", ".", ".."} for part in path.parts)
+
+
+def _is_forbidden_entry(name: str) -> bool:
+    lowered = name.lower()
+    return lowered.startswith(".musicforge/") or "/.musicforge/" in lowered
+
+
+def _is_text_scan_entry(name: str) -> bool:
+    return name.lower().endswith((".json", ".txt", ".md", ".csv", ".html", ".jsonl"))
+
+
+def _contains_sensitive_text(text: str) -> bool:
+    for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
+        if pattern.search(text):
+            return True
+    for pattern, _kind in LOCAL_PATH_VALUE_PATTERNS:
+        if pattern.search(text):
+            return True
+    lowered = text.lower()
+    return any(marker in lowered for marker in ("github" + "key", "x-access" + "-token", "github" + "_pat_"))
+
+
+def _walk_json_values(value: Any, prefix: str = "$") -> list[tuple[str, Any]]:
+    rows: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            rows.extend(_walk_json_values(item, f"{prefix}.{key}"))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            rows.extend(_walk_json_values(item, f"{prefix}[{index}]"))
+    elif isinstance(value, str):
+        rows.append((prefix, value))
+    return rows
+
+
+def _fs_path(path: Path) -> str:
+    value = os.fspath(path)
+    if os.name == "nt":
+        absolute = os.path.abspath(value)
+        if absolute.startswith("\\\\?\\"):
+            return absolute
+        if absolute.startswith("\\\\"):
+            return "\\\\?\\UNC\\" + absolute[2:]
+        return "\\\\?\\" + absolute
+    return value

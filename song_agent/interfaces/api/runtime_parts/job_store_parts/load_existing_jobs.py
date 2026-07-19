@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
 
 from song_agent.platform.contracts.coercion import as_list as _as_list
 
 from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies as core_dependencies
 import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import EditIntent, HTTPStatus, JobState, Path, build_edit_metadata, json, threading, validate_edit_intent
+from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, EditIntent, HTTPStatus, JobState, Path, build_edit_metadata, json, threading, validate_edit_intent
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongPlan, SongRequest, load_provider_config, read_json, write_json
 
@@ -71,14 +72,14 @@ class JobStoreLoadExistingJobs(JobStoreContext):
         with self.lock:
             return self.jobs.get(job_id)
 
-    def create_job(self, payload: DomainDocument, start_immediately: bool = True) -> JobState:
+    def create_job(self, payload: dict[str, Any], start_immediately: bool = True) -> JobState:
         request = SongRequest.from_dict(payload)
         asset_refs = _as_list(payload.get("asset_refs"))
         reference_refs = _as_list(payload.get("reference_refs"))
         context_pack = payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None
         generation_mode = _generation_mode(payload)
         pipeline_mode = _pipeline_mode(payload)
-        provider_snapshot: ImplementationDocument
+        provider_snapshot: dict[str, Any]
         if generation_mode == "provider":
             provider_config, _sources = load_provider_config()
             provider_config.validate_ready_for_provider()
@@ -172,8 +173,8 @@ class JobStoreLoadExistingJobs(JobStoreContext):
         return (True, _split_state['job'])
         return (False, None)
 
-    def create_edit_job(self, *, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: DomainDocument | None=None, name: str='', start_immediately: bool=True, provider_patch: DomainDocument | None=None, provider_usage: DomainDocument | None=None, provider_snapshot: DomainDocument | None=None, template_id: str | None=None, preview_id: str | None=None, candidate_group_id: str | None=None, candidate_id: str | None=None, candidate: DomainDocument | None=None, asset_refs: list[DomainDocument] | None=None, reference_refs: list[DomainDocument] | None=None, context_pack: DomainDocument | None=None) -> JobState:
-        _split_state: ImplementationDocument = {}
+    def create_edit_job(self, *, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: dict[str, Any] | None=None, name: str='', start_immediately: bool=True, provider_patch: dict[str, Any] | None=None, provider_usage: dict[str, Any] | None=None, provider_snapshot: dict[str, Any] | None=None, template_id: str | None=None, preview_id: str | None=None, candidate_group_id: str | None=None, candidate_id: str | None=None, candidate: dict[str, Any] | None=None, asset_refs: list[dict[str, Any]] | None=None, reference_refs: list[dict[str, Any]] | None=None, context_pack: dict[str, Any] | None=None) -> JobState:
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._create_edit_job_part_01(project_id, parent_version_id, parent_job, parent_plan, intent, preset, name, start_immediately, provider_patch, provider_usage, provider_snapshot, template_id, preview_id, candidate_group_id, candidate_id, candidate, asset_refs, reference_refs, context_pack, _split_state)
         if _split_result[0]:
             return _split_result[1]

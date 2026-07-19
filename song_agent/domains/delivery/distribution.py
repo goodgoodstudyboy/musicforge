@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -51,14 +50,14 @@ class DistributionTarget:
     template_pack_id: str | None = None
     template_hash: str | None = None
     template_source: str | None = None
-    options: ImplementationDocument = field(default_factory=dict)
-    latest_qa_summary: ImplementationDocument = field(default_factory=dict)
-    latest_export_summary: ImplementationDocument = field(default_factory=dict)
-    latest_signoff_summary: ImplementationDocument = field(default_factory=dict)
+    options: dict[str, Any] = field(default_factory=dict)
+    latest_qa_summary: dict[str, Any] = field(default_factory=dict)
+    latest_export_summary: dict[str, Any] = field(default_factory=dict)
+    latest_signoff_summary: dict[str, Any] = field(default_factory=dict)
     created_at: str = ""
     updated_at: str = ""
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return sanitize_metadata(
             {
                 "schema_version": self.schema_version,
@@ -81,7 +80,7 @@ class DistributionTarget:
         )
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "DistributionTarget":
+    def from_dict(cls, data: dict[str, Any]) -> "DistributionTarget":
         created_at = str(data.get("created_at") or now_iso())
         profile_id = _safe_id(data.get("profile_id"), default="generic_dsp")
         profile = get_distribution_profile(profile_id)
@@ -170,7 +169,7 @@ class DistributionStore:
             raise DistributionNotFoundError(target_id)
         return DistributionTarget.from_dict(read_json(path))
 
-    def create_target(self, release_id: str, payload: DomainDocument) -> DistributionTarget:
+    def create_target(self, release_id: str, payload: dict[str, Any]) -> DistributionTarget:
         with self.lock:
             release = self.release_store.get_release(release_id)
             if release.status == "archived":
@@ -199,7 +198,7 @@ class DistributionStore:
             self.append_event(release_id, "distribution_target_created", {"target_id": target_id, "profile_id": profile_id, "template_pack_id": target.template_pack_id})
             return target
 
-    def update_target(self, release_id: str, target_id: str, patch: DomainDocument) -> DistributionTarget:
+    def update_target(self, release_id: str, target_id: str, patch: dict[str, Any]) -> DistributionTarget:
         with self.lock:
             target = self.get_target(release_id, target_id)
             self.ensure_target_mutable(release_id, target)
@@ -225,7 +224,7 @@ class DistributionStore:
             self.append_event(release_id, "distribution_target_updated", {"target_id": target.target_id})
             return target
 
-    def delete_target(self, release_id: str, target_id: str) -> DomainDocument:
+    def delete_target(self, release_id: str, target_id: str) -> dict[str, Any]:
         with self.lock:
             target = self.get_target(release_id, target_id)
             self.ensure_target_mutable(release_id, target)
@@ -244,7 +243,7 @@ class DistributionStore:
         write_json(path, target.to_dict())
         return target
 
-    def update_qa_summary(self, release_id: str, target_id: str, summary: DomainDocument) -> DistributionTarget:
+    def update_qa_summary(self, release_id: str, target_id: str, summary: dict[str, Any]) -> DistributionTarget:
         target = self.get_target(release_id, target_id)
         target.latest_qa_summary = _safe_dict(summary)
         status = str(summary.get("status") or "")
@@ -252,21 +251,21 @@ class DistributionStore:
             target.status = {"passed": "qa_passed", "warning": "qa_warning", "failed": "qa_failed", "stale": "qa_failed"}.get(status, target.status)
         return self.save_target(target)
 
-    def update_export_summary(self, release_id: str, target_id: str, summary: DomainDocument) -> DistributionTarget:
+    def update_export_summary(self, release_id: str, target_id: str, summary: dict[str, Any]) -> DistributionTarget:
         target = self.get_target(release_id, target_id)
         target.latest_export_summary = _safe_dict(summary)
         if target.status not in {"signed", "archived"}:
             target.status = "exported"
         return self.save_target(target)
 
-    def update_signoff_summary(self, release_id: str, target_id: str, summary: DomainDocument) -> DistributionTarget:
+    def update_signoff_summary(self, release_id: str, target_id: str, summary: dict[str, Any]) -> DistributionTarget:
         target = self.get_target(release_id, target_id)
         target.latest_signoff_summary = _safe_dict(summary)
         if str(summary.get("status") or "") in SIGNED_DISTRIBUTION_STATUSES and target.status != "archived":
             target.status = "signed"
         return self.save_target(target)
 
-    def read_qa(self, release_id: str, target_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_qa(self, release_id: str, target_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.qa_path(release_id, target_id)
         if not path.exists():
             if default is not None:
@@ -275,13 +274,13 @@ class DistributionStore:
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
-    def write_qa(self, release_id: str, target_id: str, report: DomainDocument) -> DomainDocument:
+    def write_qa(self, release_id: str, target_id: str, report: dict[str, Any]) -> dict[str, Any]:
         self.get_target(release_id, target_id)
         clean = sanitize_metadata(report, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
         write_json(self.qa_path(release_id, target_id), clean)
         return clean
 
-    def read_layout(self, release_id: str, target_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_layout(self, release_id: str, target_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.layout_path(release_id, target_id)
         if not path.exists():
             if default is not None:
@@ -290,7 +289,7 @@ class DistributionStore:
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
-    def write_layout(self, release_id: str, target_id: str, layout: DomainDocument) -> DomainDocument:
+    def write_layout(self, release_id: str, target_id: str, layout: dict[str, Any]) -> dict[str, Any]:
         self.get_target(release_id, target_id)
         clean = sanitize_metadata(layout, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
         write_json(self.layout_path(release_id, target_id), clean)
@@ -299,7 +298,7 @@ class DistributionStore:
     def template_store(self) -> TemplatePackStore:
         return TemplatePackStore(self.release_store.root.parent / "distribution-templates")
 
-    def resolve_target_template(self, target: DistributionTarget) -> DomainDocument:
+    def resolve_target_template(self, target: DistributionTarget) -> dict[str, Any]:
         if not target.template_pack_id:
             return {}
         try:
@@ -308,7 +307,7 @@ class DistributionStore:
             return {}
         return template
 
-    def target_template_summary(self, target: DistributionTarget) -> DomainDocument:
+    def target_template_summary(self, target: DistributionTarget) -> dict[str, Any]:
         template = self.resolve_target_template(target)
         return template_summary(template) if template else {}
 
@@ -351,8 +350,8 @@ class DistributionStore:
             "Unbind dependent targets before deleting this template."
         )
 
-    def mark_template_dependents_stale(self, template_pack_id: str, reason: str) -> list[DomainDocument]:
-        stale_targets: list[ImplementationDocument] = []
+    def mark_template_dependents_stale(self, template_pack_id: str, reason: str) -> list[dict[str, Any]]:
+        stale_targets: list[dict[str, Any]] = []
         with self.lock:
             for target in self.targets_using_template(template_pack_id):
                 if self._target_has_signed_package(target):
@@ -390,7 +389,7 @@ class DistributionStore:
                 continue
         raise DistributionValidationError("Unable to allocate a unique distribution package id.")
 
-    def read_signoff(self, release_id: str, target: DistributionTarget, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_signoff(self, release_id: str, target: DistributionTarget, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         package_id = self.latest_package_id(target)
         if not package_id:
             if default is not None:
@@ -404,12 +403,12 @@ class DistributionStore:
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
-    def write_signoff(self, release_id: str, package_id: str, record: DomainDocument) -> DomainDocument:
+    def write_signoff(self, release_id: str, package_id: str, record: dict[str, Any]) -> dict[str, Any]:
         clean = sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
         write_json(self.signoff_path(release_id, package_id), clean)
         return clean
 
-    def reset_signoff(self, release_id: str, target_id: str, reason: str) -> DomainDocument:
+    def reset_signoff(self, release_id: str, target_id: str, reason: str) -> dict[str, Any]:
         with self.lock:
             target = self.get_target(release_id, target_id)
             package_id = self.latest_package_id(target)
@@ -454,18 +453,18 @@ class DistributionStore:
         signoff = self.read_signoff(target.release_id, target, default={})
         return signoff.get("status") in SIGNED_DISTRIBUTION_STATUSES
 
-    def append_event(self, release_id: str, event_type: str, payload: DomainDocument) -> None:
+    def append_event(self, release_id: str, event_type: str, payload: dict[str, Any]) -> None:
         path = self.distribution_dir(release_id) / "events.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         event = sanitize_metadata({"timestamp": now_iso(), "type": event_type, "payload": payload}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
         with path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(event, ensure_ascii=False) + "\n")
 
-    def read_events(self, release_id: str) -> list[DomainDocument]:
+    def read_events(self, release_id: str) -> list[dict[str, Any]]:
         path = self.distribution_dir(release_id) / "events.jsonl"
         if not path.exists():
             return []
-        events: list[ImplementationDocument] = []
+        events: list[dict[str, Any]] = []
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -477,7 +476,7 @@ class DistributionStore:
                 events.append(value)
         return sanitize_metadata(events, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
-    def summary(self, release_id: str) -> DomainDocument:
+    def summary(self, release_id: str) -> dict[str, Any]:
         targets = self.list_targets(release_id)
         return sanitize_metadata(
             {
@@ -506,7 +505,178 @@ class DistributionStore:
         return self.template_store().get_template(raw)
 
 
-from song_agent.domains.delivery import v142_d_readiness as _v142_d_readiness
-from song_agent.domains.delivery.v142_d_readiness import distribution_target_summary as distribution_target_summary, distribution_signoff_summary as distribution_signoff_summary, build_distribution_signoff_record as build_distribution_signoff_record, distribution_signoff_history_event as distribution_signoff_history_event, remove_distribution_dir as remove_distribution_dir, _stale_summary as _stale_summary, _safe_dict as _safe_dict, _safe_text as _safe_text, _safe_id as _safe_id, _optional_id as _optional_id, _optional_text as _optional_text, _merge_target_options as _merge_target_options, _validate_target_id as _validate_target_id, _validate_package_id as _validate_package_id
+def distribution_target_summary(target: DistributionTarget | dict[str, Any] | None) -> dict[str, Any]:
+    data = target.to_dict() if isinstance(target, DistributionTarget) else _as_document(target)
+    return sanitize_metadata(
+        {
+            "target_id": data.get("target_id"),
+            "release_id": data.get("release_id"),
+            "profile_id": data.get("profile_id"),
+            "template_pack_id": data.get("template_pack_id"),
+            "template_hash": data.get("template_hash"),
+            "template_source": data.get("template_source"),
+            "name": data.get("name"),
+            "status": data.get("status") or "missing",
+            "qa_status": (data.get("latest_qa_summary") or {}).get("status") if isinstance(data.get("latest_qa_summary"), dict) else None,
+            "export_status": (data.get("latest_export_summary") or {}).get("status") if isinstance(data.get("latest_export_summary"), dict) else None,
+            "package_id": (data.get("latest_export_summary") or {}).get("package_id") if isinstance(data.get("latest_export_summary"), dict) else None,
+            "signoff_status": (data.get("latest_signoff_summary") or {}).get("status") if isinstance(data.get("latest_signoff_summary"), dict) else None,
+            "updated_at": data.get("updated_at"),
+        },
+        blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
+    )
 
-_v142_d_readiness.bind_globals(globals())
+
+def distribution_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
+    data = _as_document(record)
+    return sanitize_metadata(
+        {
+            "status": data.get("status") or "not_signed",
+            "release_id": data.get("release_id"),
+            "target_id": data.get("target_id"),
+            "package_id": data.get("package_id"),
+            "signed_at": data.get("signed_at"),
+            "signed_by": data.get("signed_by"),
+            "qa_source_hash": data.get("qa_source_hash"),
+            "export_manifest_hash": data.get("export_manifest_hash"),
+            "forced": bool(data.get("forced", False)),
+            "encoded_audio_acceptance": _as_document(data.get("encoded_audio_acceptance")),
+            "format_decision": _as_document(data.get("format_decision")),
+            "rights_clearance": _as_document(data.get("rights_clearance")),
+        },
+        blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
+    )
+
+
+def build_distribution_signoff_record(
+    *,
+    release_id: str,
+    target: DistributionTarget,
+    package_id: str,
+    qa_report: dict[str, Any],
+    payload: dict[str, Any] | None = None,
+    export_manifest: dict[str, Any] | None = None,
+    now: str | None = None,
+) -> dict[str, Any]:
+    now = now or now_iso()
+    payload = payload or {}
+    force = bool(payload.get("force", False))
+    if force and not str(payload.get("override_reason") or "").strip():
+        raise ValueError("override_reason is required when force=true.")
+    blockers = qa_report.get("blockers", []) if isinstance(qa_report.get("blockers"), list) else []
+    warnings = qa_report.get("warnings", []) if isinstance(qa_report.get("warnings"), list) else []
+    if not force and (qa_report.get("status") not in {"passed", "warning"} or blockers):
+        raise ValueError("Distribution QA does not allow signoff.")
+    record = {
+        "schema_version": 1,
+        "release_id": release_id,
+        "target_id": target.target_id,
+        "package_id": package_id,
+        "profile_id": target.profile_id,
+        "status": "force_signed" if force else "signed",
+        "signed_at": now,
+        "signed_by": _safe_text(payload.get("signed_by"), 120) or "local-user",
+        "qa_source_hash": qa_report.get("source_hash"),
+        "distribution_source_hash": qa_report.get("source_hash"),
+        "export_manifest_hash": stable_hash(export_manifest) if isinstance(export_manifest, dict) and export_manifest else None,
+        "forced": force,
+        "override_reason": _safe_text(payload.get("override_reason"), 500) if force else None,
+        "acknowledged_blockers": blockers if force else [],
+        "acknowledged_warnings": warnings,
+        "encoded_audio_acceptance": _as_document(payload.get("encoded_audio_acceptance")),
+        "format_decision": _as_document(payload.get("format_decision")),
+        "rights_clearance": _as_document(payload.get("rights_clearance")),
+        "notes": _safe_text(payload.get("notes"), 2000),
+    }
+    return sanitize_metadata(record, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+
+
+def distribution_signoff_history_event(record: dict[str, Any], *, reason: str, now: str | None = None) -> dict[str, Any]:
+    return sanitize_metadata(
+        {
+            "timestamp": now or now_iso(),
+            "event": "distribution_signoff_reset",
+            "reason": sanitize_sensitive_text(str(reason or ""))[:500],
+            "previous_summary": distribution_signoff_summary(record),
+        },
+        blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
+    )
+
+
+def remove_distribution_dir(store: DistributionStore, release_id: str) -> None:
+    path = store.distribution_dir(release_id)
+    root = store.release_store.release_dir(release_id).resolve()
+    try:
+        path.resolve().relative_to(root)
+    except ValueError as exc:
+        raise DistributionValidationError("Refusing to operate outside release distribution boundaries.") from exc
+    if path.exists():
+        shutil.rmtree(path)
+
+
+def _stale_summary(summary: ImplementationDocument | None, reason: str) -> ImplementationDocument:
+    data = dict(summary or {})
+    if data:
+        data["stale"] = True
+        data["status"] = "stale"
+        data["stale_reason"] = reason
+    return sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+
+
+def _safe_dict(value: Any) -> ImplementationDocument:
+    return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+
+
+def _safe_text(value: Any, limit: int) -> str:
+    return sanitize_sensitive_text(str(value or "").strip())[:limit]
+
+
+def _safe_id(value: Any, *, default: str) -> str:
+    text = str(value or default).strip().lower().replace(" ", "_")
+    if not text:
+        return default
+    if not all(ch.isalnum() or ch in {"_", "-"} for ch in text):
+        raise DistributionValidationError("Identifier contains unsupported characters.")
+    return text[:80]
+
+
+def _optional_id(value: Any) -> str | None:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    if not all(ch.isalnum() or ch in {"_", "-"} for ch in text):
+        raise DistributionValidationError("Identifier contains unsupported characters.")
+    return text[:80]
+
+
+def _optional_text(value: Any, limit: int) -> str | None:
+    text = _safe_text(value, limit)
+    return text or None
+
+
+def _merge_target_options(profile: ImplementationDocument, rules: ImplementationDocument, overrides: ImplementationDocument | None = None) -> ImplementationDocument:
+    base = merge_profile_options(profile, rules)
+    overrides = _as_document(overrides)
+    allowed = set(base) | {"artwork_id", "submission_note"}
+    for key, value in overrides.items():
+        if key not in allowed:
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            base[key] = value
+        elif isinstance(value, list) and all(isinstance(item, (str, int, float, bool)) or item is None for item in value):
+            base[key] = value
+    return sanitize_metadata(base, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+
+
+def _validate_target_id(value: str) -> str:
+    text = str(value or "").strip()
+    if not text.startswith("target-") or not text.removeprefix("target-").isdigit():
+        raise DistributionValidationError("Invalid distribution target id.")
+    return text
+
+
+def _validate_package_id(value: str) -> str:
+    text = str(value or "").strip()
+    if not text.startswith("package-") or not text.removeprefix("package-").isdigit():
+        raise DistributionValidationError("Invalid distribution package id.")
+    return text

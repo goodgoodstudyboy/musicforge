@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, AuthConfig, Path, __version__, datetime, json, os, timezone, webbrowser
 
@@ -12,9 +12,9 @@ def api_info(
     auth_config: AuthConfig | None = None,
     *,
     authorized: bool = True,
-) -> DomainDocument:
+) -> dict[str, Any]:
     auth_required = bool(auth_config and auth_config.enabled)
-    public_info: ImplementationDocument = {
+    public_info: dict[str, Any] = {
         "app": "MusicForge",
         "version": __version__,
         "auth_required": auth_required,
@@ -29,7 +29,7 @@ def api_info(
         "provider": {"enabled": False, "summary": "Local deterministic composer"},
     }
 
-def api_template() -> DomainDocument:
+def api_template() -> dict[str, Any]:
     return {
         "defaults": {
             "title": "Rainy Convenience Store",
@@ -86,8 +86,8 @@ def _artifact_dict(path: Path) -> ImplementationDocument:
         "size_bytes": path.stat().st_size,
     }
 
-def discover_artifacts(run_dir: Path) -> list[DomainDocument]:
-    artifacts: list[ImplementationDocument] = []
+def discover_artifacts(run_dir: Path) -> list[dict[str, Any]]:
+    artifacts: list[dict[str, Any]] = []
     for path in sorted(run_dir.rglob("*")):
         if path.is_file():
             artifacts.append(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
 
 import json as json
 import os as os
@@ -36,7 +36,7 @@ class LTSMaintenanceStore:
         self.migrations_dir = self.root / "migrations"
         self.backups = LTSBackupStore(self.repo_root, self.root)
 
-    def status(self) -> DomainDocument:
+    def status(self) -> dict[str, Any]:
         backups = self.backups.list_backups()
         latest_backup = backups[-1] if backups else {}
         migration = self.migration_status()
@@ -85,13 +85,13 @@ class LTSMaintenanceStore:
         target_version: str,
         require_verified_backup: bool = False,
         allow_dirty: bool = False,
-    ) -> DomainDocument:
+    ) -> dict[str, Any]:
         preflight_id = self._next_id(self.preflights_dir, "up")
         git = _git_summary(self.repo_root)
         configs = _config_summary(self.repo_root)
         backups = self.backups.list_backups()
         latest_backup = backups[-1] if backups else {}
-        checks: list[ImplementationDocument] = []
+        checks: list[dict[str, Any]] = []
         _add_check(checks, "upgrade.version_order", "passed" if _version_key(__version__) <= _version_key(target_version) else "failed", "blocking", "Current version is not newer than target version.")
         _add_check(checks, "upgrade.git_clean", "passed" if git.get("state") == "clean" or allow_dirty else "failed", "blocking", "Working tree is clean." if git.get("state") == "clean" else "Working tree is dirty.")
         tracked = [key for key, value in configs.items() if value.get("tracked")]
@@ -118,7 +118,7 @@ class LTSMaintenanceStore:
         write_json(self.preflights_dir / preflight_id / "upgrade-preflight-report.json", report)
         return report
 
-    def list_preflights(self) -> list[DomainDocument]:
+    def list_preflights(self) -> list[dict[str, Any]]:
         if not self.preflights_dir.exists():
             return []
         rows = []
@@ -128,7 +128,7 @@ class LTSMaintenanceStore:
                 rows.append(read_json(report_path))
         return rows
 
-    def migration_status(self) -> DomainDocument:
+    def migration_status(self) -> dict[str, Any]:
         path = self.migrations_dir / "migration-state.json"
         if not path.exists():
             return {"package_type": MIGRATION_STATE_PACKAGE_TYPE, "schema_version": 1, "status": "empty", "applied": []}
@@ -141,19 +141,19 @@ class LTSMaintenanceStore:
         state["pending"] = [item for item in self.migration_plan()["pending"] if item["migration_id"] not in {row.get("migration_id") for row in applied}]
         return state
 
-    def migration_plan(self) -> DomainDocument:
+    def migration_plan(self) -> dict[str, Any]:
         applied_ids = {str(row.get("migration_id")) for row in self._read_migration_state().get("applied", []) if isinstance(row, dict)}
         migrations = [{"migration_id": INIT_MIGRATION_ID, "title": "Initialize LTS maintenance state", "destructive": False}]
         pending = [item for item in migrations if item["migration_id"] not in applied_ids]
         return {"schema_version": 1, "status": "pending" if pending else "noop", "pending": pending, "applied_count": len(applied_ids)}
 
-    def run_migrations(self, *, require_backup: bool = False) -> DomainDocument:
+    def run_migrations(self, *, require_backup: bool = False) -> dict[str, Any]:
         if require_backup and not any(item.get("verification_status") == "passed" for item in self.backups.list_backups()):
             raise LTSMaintenanceError("A verified maintenance backup is required before running migrations.")
         state = self._read_migration_state()
         applied = state.setdefault("applied", [])
         applied_ids = {str(row.get("migration_id")) for row in applied if isinstance(row, dict)}
-        events: list[ImplementationDocument] = []
+        events: list[dict[str, Any]] = []
         if INIT_MIGRATION_ID not in applied_ids:
             self.root.mkdir(parents=True, exist_ok=True)
             status_doc = self.status()
@@ -174,7 +174,7 @@ class LTSMaintenanceStore:
         write_json(self.migrations_dir / "migration-state.json", state)
         return {"status": "applied" if events else "noop", "applied": events, "state": state}
 
-    def run_check(self, *, profile: str = "daily") -> DomainDocument:
+    def run_check(self, *, profile: str = "daily") -> dict[str, Any]:
         profile = str(profile or "daily")
         if profile not in MAINTENANCE_PROFILES:
             raise LTSMaintenanceError(f"Unknown maintenance check profile: {profile}")
@@ -201,7 +201,7 @@ class LTSMaintenanceStore:
         write_json(self.check_runs_dir / check_id / "maintenance-check-report.json", report)
         return report
 
-    def list_check_runs(self) -> list[DomainDocument]:
+    def list_check_runs(self) -> list[dict[str, Any]]:
         if not self.check_runs_dir.exists():
             return []
         rows = []
@@ -211,7 +211,7 @@ class LTSMaintenanceStore:
                 rows.append(read_json(report_path))
         return rows
 
-    def latest_check_report_summary(self) -> DomainDocument:
+    def latest_check_report_summary(self) -> dict[str, Any]:
         rows = self.list_check_runs()
         if not rows:
             return {"status": "missing"}
@@ -256,7 +256,7 @@ class LTSMaintenanceStore:
         return f"{prefix}-{(max(existing) + 1) if existing else 1:06d}"
 
 
-def maintenance_report_integrity_ok(report: DomainDocument) -> bool:
+def maintenance_report_integrity_ok(report: dict[str, Any]) -> bool:
     expected = str(report.get("integrity_hash") or "")
     return bool(expected) and expected == stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
 

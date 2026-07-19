@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
+from typing import Any
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -83,7 +84,7 @@ class CreationRoutesProjectEdit(CreationRouteContext):
         return (False, None)
 
     def _handle_project_edit(self, method: str, project_id: str, version_id: str) -> None:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._handle_project_edit_part_01(method, project_id, version_id, _split_state)
         if _split_result[0]:
             return _split_result[1]
@@ -170,7 +171,7 @@ class CreationRoutesProjectEdit(CreationRouteContext):
                 "warnings": list(result.warnings),
                 "operation_counts": dict(result.summary.get("operation_counts") or {}),
             }
-            response: ImplementationDocument = {
+            response: dict[str, Any] = {
                 "ok": True,
                 "project_id": project_id,
                 "version_id": version.version_id,
@@ -239,8 +240,8 @@ class CreationRoutesProjectEdit(CreationRouteContext):
             existing_patch_data = payload.get("current_patch")
             existing_result = None
             draft_plan = None
-            existing_operations: list[ImplementationDocument] = []
-            existing_metadata: ImplementationDocument = {}
+            existing_operations: list[dict[str, Any]] = []
+            existing_metadata: dict[str, Any] = {}
             draft_state = None
             if isinstance(existing_patch_data, dict):
                 existing_result = _interfaces_api_runtime.apply_editor_patch(parent_plan, existing_patch_data)

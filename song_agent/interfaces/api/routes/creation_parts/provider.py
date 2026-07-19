@@ -1,58 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any as _InterfaceType
-from typing import Protocol
-from typing import cast
 
-import song_agent.domains.studio.projects as _studio_projects
-from song_agent.domains.studio.projects import ProjectDocument
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
-from song_agent.platform.contracts import DomainDocument
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
-
-
-class _ProjectCatalog(Protocol):
-    def get_project(self, project_id: str) -> ProjectDocument: ...
-
-    def sync_project(self, project_id: str, job_lookup: Callable[[str], object]) -> ProjectDocument: ...
-
-    def list_projects(self, include_hidden: bool = False) -> list[ProjectDocument]: ...
-
-    def create_project(
-        self,
-        name: str,
-        description: str = "",
-        tags: list[str] | None = None,
-    ) -> ProjectDocument: ...
-
-    def add_version_from_job(
-        self,
-        project_id: str,
-        job: object,
-        name: str = "",
-        note: str = "",
-        parent_version_id: str | None = None,
-        variant_type: str = "original",
-        change_summary: str = "",
-    ) -> ProjectDocument: ...
-
-    def set_selected_version(self, project_id: str, version_id: str) -> ProjectDocument: ...
-
-    def set_final_version(self, project_id: str, version_id: str) -> ProjectDocument: ...
-
-    def diff_versions(self, project_id: str, left_id: str, right_id: str) -> DomainDocument: ...
-
-    def export_project(self, project_id: str) -> DomainDocument: ...
-
-    def read_events(self, project_id: str) -> list[DomainDocument]: ...
-
-    def hide_project(self, project_id: str, hidden: bool) -> ProjectDocument: ...
-
-    def delete_project(self, project_id: str) -> None: ...
-
 
 class CreationRoutesProvider(CreationRouteContext):
     @property
@@ -64,7 +17,7 @@ class CreationRoutesProvider(CreationRouteContext):
         return self.server.batch_runner
 
     @property
-    def project_store(self) -> _ProjectCatalog:
+    def project_store(self) -> _InterfaceType:
         return self.server.project_store
 
     @property
@@ -220,8 +173,7 @@ class CreationRoutesProvider(CreationRouteContext):
             return
         query = _interfaces_api_runtime.parse_qs(query_string)
         include_hidden = _interfaces_api_runtime._query_value(query, "include_hidden") in {"1", "true", "yes"}
-        project_store = cast(_studio_projects.ProjectStore, self.project_store)
-        self._send_json(self.editor_template_store.to_response(include_hidden=include_hidden, project_store=project_store))
+        self._send_json(self.editor_template_store.to_response(include_hidden=include_hidden, project_store=self.project_store))
 
     def _handle_editor_template_route(self, method: str, template_type: str, template_id: str, tail: str) -> None:
         try:
@@ -231,8 +183,7 @@ class CreationRoutesProvider(CreationRouteContext):
                     return
                 if template_type == "sections":
                     template = self.editor_template_store.read_section_template(template_id)
-                    project_store = cast(_studio_projects.ProjectStore, self.project_store)
-                    self._send_json({"template": _interfaces_api_runtime.section_template_public_dict(template, project_store=project_store)})
+                    self._send_json({"template": _interfaces_api_runtime.section_template_public_dict(template, project_store=self.project_store)})
                     return
                 template = self.editor_template_store.read_track_template(template_id)
                 self._send_json({"template": _interfaces_api_runtime.track_template_public_dict(template)})

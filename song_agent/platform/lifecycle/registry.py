@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import ast
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -18,7 +19,7 @@ class LifecycleCapability:
     archive_method: str = ""
     required_services: tuple[str, ...] = ()
 
-    def inventory(self) -> DomainDocument:
+    def inventory(self) -> dict[str, Any]:
         return {
             "component_type": self.component_type,
             "module": self.module,
@@ -40,10 +41,10 @@ class LifecycleCapabilityRegistry:
     def all(self) -> tuple[LifecycleCapability, ...]:
         return self._capabilities
 
-    def inventory(self) -> list[DomainDocument]:
+    def inventory(self) -> list[dict[str, Any]]:
         return [row.inventory() for row in self._capabilities]
 
-    def adoption_report(self) -> DomainDocument:
+    def adoption_report(self) -> dict[str, Any]:
         rows = [_adoption_row(capability) for capability in self._capabilities]
         return {
             "schema_version": 1,
@@ -97,13 +98,9 @@ def _adoption_row(capability: LifecycleCapability) -> ImplementationDocument:
     module = import_module(capability.module)
     store = getattr(module, capability.store_class)
     source_path = Path(module.__file__ or "")
-    trees = [
-        ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for path in _implementation_source_paths(source_path)
-    ]
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
     call_owners = {
         node.func.value.id
-        for tree in trees
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
@@ -111,7 +108,6 @@ def _adoption_row(capability: LifecycleCapability) -> ImplementationDocument:
     }
     call_owners.update(
         node.func.id
-        for tree in trees
         for node in ast.walk(tree)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     )
@@ -127,22 +123,3 @@ def _adoption_row(capability: LifecycleCapability) -> ImplementationDocument:
         "missing_methods": missing_methods,
         "missing_services": missing_services,
     }
-
-
-def _implementation_source_paths(source_path: Path) -> tuple[Path, ...]:
-    source = source_path.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(source_path))
-    paths = [source_path]
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom):
-            continue
-        if node.module != "song_agent.domains.program":
-            continue
-        for alias in node.names:
-            name = alias.name
-            if not name.startswith("v142_"):
-                continue
-            path = source_path.with_name(f"{name}.py")
-            if path.is_file() and path not in paths:
-                paths.append(path)
-    return tuple(paths)

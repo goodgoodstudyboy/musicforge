@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import ast
 import hashlib
 import json
@@ -17,11 +16,11 @@ DEFAULT_DEBT_PATH = "architecture-debt.json"
 def evaluate_architecture_ratchet(
     repo_root: Path | str,
     *,
-    current_baseline: DomainDocument,
-    snapshot: DomainDocument,
+    current_baseline: dict[str, Any],
+    snapshot: dict[str, Any],
     declaration_path: Path | str = DEFAULT_DECLARATION_PATH,
     debt_path: Path | str = DEFAULT_DEBT_PATH,
-) -> DomainDocument:
+) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     declaration = _read_json(_resolve(root, declaration_path))
     debt = _read_json(_resolve(root, debt_path))
@@ -68,11 +67,11 @@ def evaluate_architecture_ratchet(
 
 def verify_architecture_ratchet_report(
     repo_root: Path | str,
-    report: DomainDocument,
+    report: dict[str, Any],
     *,
-    current_baseline: DomainDocument,
-    snapshot: DomainDocument,
-) -> DomainDocument:
+    current_baseline: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
     expected = evaluate_architecture_ratchet(
         repo_root,
         current_baseline=current_baseline,
@@ -103,8 +102,8 @@ def evaluate_interface_limits(
     repo_root: Path | str,
     *,
     previous_tag: str,
-    debt: DomainDocument,
-) -> DomainDocument:
+    debt: dict[str, Any],
+) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     limits = debt.get("interface_limits") or {}
     module_limit = int(limits.get("module_max_lines", 600))
@@ -113,7 +112,7 @@ def evaluate_interface_limits(
     route_limit = int(limits.get("route_handler_max_lines", 100))
     debt_rows = {str(row.get("path")): row for row in debt.get("interface_entries") or []}
     blockers: list[str] = []
-    measurements: list[ImplementationDocument] = []
+    measurements: list[dict[str, Any]] = []
     for path in _interface_paths(root):
         relative = path.relative_to(root).as_posix()
         source = path.read_text(encoding="utf-8")
@@ -180,8 +179,8 @@ def build_architecture_debt_catalog(
     repo_root: Path | str,
     *,
     previous_release_tag: str,
-    snapshot: DomainDocument,
-) -> DomainDocument:
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     import_counts: dict[str, int] = {}
     for row in snapshot.get("active_to_compatibility_imports") or []:
@@ -258,7 +257,7 @@ def build_architecture_debt_catalog(
     }
 
 
-def _historical_interface_functions(root: Path, tag: str) -> dict[str, list[ImplementationDocument]]:
+def _historical_interface_functions(root: Path, tag: str) -> dict[str, list[dict[str, Any]]]:
     paths = _git_text(
         root,
         "ls-tree",
@@ -270,7 +269,7 @@ def _historical_interface_functions(root: Path, tag: str) -> dict[str, list[Impl
         "song_agent/server.py",
         "song_agent/webui.py",
     ).splitlines()
-    result: dict[str, list[ImplementationDocument]] = {}
+    result: dict[str, list[dict[str, Any]]] = {}
     for relative in paths:
         if not relative.endswith(".py"):
             continue
@@ -284,7 +283,7 @@ def _historical_interface_functions(root: Path, tag: str) -> dict[str, list[Impl
     return result
 
 
-def _migrated_dispatch_origin(relative: str, name: str, lines: int) -> ImplementationDocument | None:
+def _migrated_dispatch_origin(relative: str, name: str, lines: int) -> dict[str, Any] | None:
     origins = (
         (
             "song_agent/interfaces/api/routes/trust_portfolio_parts/",
@@ -305,7 +304,7 @@ def _migrated_dispatch_origin(relative: str, name: str, lines: int) -> Implement
     return None
 
 
-def _declaration_checks(document: ImplementationDocument) -> list[str]:
+def _declaration_checks(document: dict[str, Any]) -> list[str]:
     blockers = []
     if document.get("schema_version") != RATCHET_SCHEMA_VERSION:
         blockers.append("architecture_ratchet_schema")
@@ -314,7 +313,7 @@ def _declaration_checks(document: ImplementationDocument) -> list[str]:
     return blockers
 
 
-def _baseline_checks(previous: ImplementationDocument, current: ImplementationDocument) -> list[str]:
+def _baseline_checks(previous: dict[str, Any], current: dict[str, Any]) -> list[str]:
     blockers: list[str] = []
     for field in ("mega_file_max_lines", "security_helper_max_counts"):
         previous_values = previous.get(field) or {}
@@ -334,9 +333,9 @@ def _baseline_checks(previous: ImplementationDocument, current: ImplementationDo
 
 
 def _compatibility_checks(
-    previous: ImplementationDocument,
-    snapshot: ImplementationDocument,
-    debt: ImplementationDocument,
+    previous: dict[str, Any],
+    snapshot: dict[str, Any],
+    debt: dict[str, Any],
 ) -> list[str]:
     blockers: list[str] = []
     debt_rows = {str(row.get("module")): row for row in debt.get("compatibility_entries") or []}
@@ -388,7 +387,7 @@ def _interface_paths(root: Path) -> list[Path]:
     return sorted(path for path in paths if path.is_file())
 
 
-def _function_rows(source: str, relative: str) -> list[ImplementationDocument]:
+def _function_rows(source: str, relative: str) -> list[dict[str, Any]]:
     if not source:
         return []
     tree = ast.parse(source, filename=relative)
@@ -419,14 +418,14 @@ def _resolve(root: Path, value: Path | str) -> Path:
     return path if path.is_absolute() else root / path
 
 
-def _read_json(path: Path) -> ImplementationDocument:
+def _read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     value = json.loads(path.read_text(encoding="utf-8"))
     return value if isinstance(value, dict) else {}
 
 
-def _git_json(root: Path, tag: str, path: str) -> ImplementationDocument:
+def _git_json(root: Path, tag: str, path: str) -> dict[str, Any]:
     source = _git_source(root, tag, path)
     if source is None:
         return {}

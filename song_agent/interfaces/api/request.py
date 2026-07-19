@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -9,5 +9,5 @@ class RequestContext:
     method: str
     path: str
     query: str = ""
-    body: ImplementationDocument | None = None
+    body: dict[str, Any] | None = None
     authorized: bool = False

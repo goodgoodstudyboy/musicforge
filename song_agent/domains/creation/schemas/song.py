@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
 from typing import Any as Any
@@ -31,7 +31,7 @@ class SongRequest:
     lyrics: str | None = None
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "SongRequest":
+    def from_dict(cls, data: dict[str, Any]) -> "SongRequest":
         required = ["title", "language", "style", "theme"]
         missing = [field_name for field_name in required if not data.get(field_name)]
         if missing:
@@ -59,7 +59,7 @@ class SongRequest:
             lyrics=data.get("lyrics"),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -71,7 +71,7 @@ class NoteEvent:
     velocity: int = 90
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "NoteEvent":
+    def from_dict(cls, data: dict[str, Any]) -> "NoteEvent":
         data = _require_mapping(data, "note")
         required = ["pitch", "start_beat", "duration_beats"]
         missing = [field_name for field_name in required if field_name not in data]
@@ -85,7 +85,7 @@ class NoteEvent:
             velocity=int(data.get("velocity", 90)),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -96,7 +96,7 @@ class TrackPlan:
     notes: list[NoteEvent] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "TrackPlan":
+    def from_dict(cls, data: dict[str, Any]) -> "TrackPlan":
         data = _require_mapping(data, "track")
         required = ["name", "instrument"]
         missing = [field_name for field_name in required if not data.get(field_name)]
@@ -113,7 +113,7 @@ class TrackPlan:
             notes=notes,
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -126,7 +126,7 @@ class SongSection:
     lyrics: str | None = None
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "SongSection":
+    def from_dict(cls, data: dict[str, Any]) -> "SongSection":
         data = _require_mapping(data, "section")
         required = ["name", "start_bar", "bars", "chords"]
         missing = [field_name for field_name in required if field_name not in data]
@@ -143,7 +143,7 @@ class SongSection:
             lyrics=None if lyrics is None else str(lyrics),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -182,7 +182,7 @@ class MotifPlan:
     anchor_section: str | None = None
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "MotifPlan":
+    def from_dict(cls, data: dict[str, Any]) -> "MotifPlan":
         data = _require_mapping(data, "motif")
         required = ["name", "description"]
         missing = [field_name for field_name in required if field_name not in data]
@@ -196,7 +196,7 @@ class MotifPlan:
             anchor_section=_optional_str(data.get("anchor_section")),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -211,7 +211,7 @@ class SectionIntent:
     hook: bool = False
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "SectionIntent":
+    def from_dict(cls, data: dict[str, Any]) -> "SectionIntent":
         data = _require_mapping(data, "section_intent")
         if "section_name" not in data:
             raise ValueError("Missing section intent fields: section_name")
@@ -225,7 +225,7 @@ class SectionIntent:
             hook=bool(data.get("hook", False)),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -239,7 +239,7 @@ class QualityScores:
     lyric_fit: int = 0
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "QualityScores":
+    def from_dict(cls, data: dict[str, Any]) -> "QualityScores":
         data = _require_mapping(data, "quality_scores")
         required = ["overall", "structure", "melody", "harmony", "arrangement"]
         missing = [field_name for field_name in required if field_name not in data]
@@ -254,7 +254,7 @@ class QualityScores:
             lyric_fit=_range_int(data, "lyric_fit", 0, 100, default=0),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -268,7 +268,7 @@ class SongQualityMeta:
     warnings: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "SongQualityMeta":
+    def from_dict(cls, data: dict[str, Any]) -> "SongQualityMeta":
         data = _require_mapping(data, "quality")
         primary_motif = data.get("primary_motif")
         scores = data.get("scores")
@@ -284,7 +284,7 @@ class SongQualityMeta:
             warnings=[str(warning) for warning in _require_list(data.get("warnings", []), "quality.warnings")],
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -299,7 +299,7 @@ class SongPlan:
     quality: SongQualityMeta | None = None
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "SongPlan":
+    def from_dict(cls, data: dict[str, Any]) -> "SongPlan":
         data = _require_mapping(data, "song_plan")
         required = ["title", "key", "tempo_bpm", "meter", "sections", "tracks"]
         missing = [field_name for field_name in required if field_name not in data]
@@ -325,7 +325,7 @@ class SongPlan:
             quality=None if quality_data is None else SongQualityMeta.from_dict(quality_data),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     def validate(self) -> None:

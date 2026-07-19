@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -56,23 +55,23 @@ class PlanningRuleImpactStateError(PlanningRuleImpactError):
 class PlanningRuleImpactReport:
     report_id: str
     status: str
-    scope: ImplementationDocument
-    active_version: ImplementationDocument
-    source: ImplementationDocument
-    summary: ImplementationDocument
-    adoption: ImplementationDocument
-    before_after: ImplementationDocument
-    risk_drift: ImplementationDocument
-    version_metrics: list[ImplementationDocument]
-    plan_samples: list[ImplementationDocument]
-    review_samples: list[ImplementationDocument]
+    scope: dict[str, Any]
+    active_version: dict[str, Any]
+    source: dict[str, Any]
+    summary: dict[str, Any]
+    adoption: dict[str, Any]
+    before_after: dict[str, Any]
+    risk_drift: dict[str, Any]
+    version_metrics: list[dict[str, Any]]
+    plan_samples: list[dict[str, Any]]
+    review_samples: list[dict[str, Any]]
     warnings: list[str]
     integrity_hash: str = ""
     created_at: str = ""
     updated_at: str = ""
     created_by: str = "developer"
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return sanitize_metadata(
             {
                 "schema_version": PLANNING_RULE_IMPACT_SCHEMA_VERSION,
@@ -97,7 +96,7 @@ class PlanningRuleImpactReport:
         )
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "PlanningRuleImpactReport":
+    def from_dict(cls, data: dict[str, Any]) -> "PlanningRuleImpactReport":
         now = now_iso()
         status = str(data.get("status") or "warning")
         if status not in IMPACT_REPORT_STATUSES:
@@ -152,10 +151,10 @@ class PlanningRuleImpactStore:
             raise PlanningRuleImpactError("Refusing to operate outside planning rule impact reports.") from exc
         return target
 
-    def latest_path(self, scope: DomainDocument | None = None) -> Path:
+    def latest_path(self, scope: dict[str, Any] | None = None) -> Path:
         return self.root / f"latest-{_scope_key(_scope(scope))}.json"
 
-    def refresh(self, payload: DomainDocument | None = None, *, now: str | None = None) -> PlanningRuleImpactReport:
+    def refresh(self, payload: dict[str, Any] | None = None, *, now: str | None = None) -> PlanningRuleImpactReport:
         payload = payload or {}
         now = now or now_iso()
         with self.lock:
@@ -168,7 +167,7 @@ class PlanningRuleImpactStore:
             write_json(self.latest_path(report.scope), report.to_dict())
             return report
 
-    def refresh_report(self, report_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> PlanningRuleImpactReport:
+    def refresh_report(self, report_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> PlanningRuleImpactReport:
         existing = self.get_report(report_id)
         payload = {**(payload or {}), "scope": existing.scope, "include_legacy": existing.source.get("include_legacy", True), "include_superseded": existing.source.get("include_superseded", True)}
         report = self._build_report(existing.report_id, payload, created_at=existing.created_at, now=now or now_iso())
@@ -208,7 +207,7 @@ class PlanningRuleImpactStore:
             rows.append(report)
         return sorted(rows, key=lambda item: item.updated_at or item.created_at, reverse=True)
 
-    def latest_summary(self, *, release_id: str | None = None, project_id: str | None = None) -> DomainDocument:
+    def latest_summary(self, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
         scope = _scope({"type": "release" if release_id else "project" if project_id else "global", "release_id": release_id, "project_id": project_id})
         path = self.latest_path(scope)
         if path.exists():
@@ -222,7 +221,7 @@ class PlanningRuleImpactStore:
             return {"status": "missing"}
         return planning_rule_impact_summary(reports[0])
 
-    def report_is_stale(self, report: PlanningRuleImpactReport | DomainDocument) -> bool:
+    def report_is_stale(self, report: PlanningRuleImpactReport | dict[str, Any]) -> bool:
         data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else _as_document(report)
         if data.get("status") == "archived":
             return False
@@ -240,7 +239,7 @@ class PlanningRuleImpactStore:
         keys = ("source_hash", "governance_active_hash", "active_version_source_hash")
         return any(str(current.get(key) or "") != str(source.get(key) or "") for key in keys) or current.get("plan_hashes") != source.get("plan_hashes") or current.get("review_hashes") != source.get("review_hashes") or current.get("version_hashes") != source.get("version_hashes") or bool(current.get("source_stale", False))
 
-    def report_integrity_ok(self, report: PlanningRuleImpactReport | DomainDocument) -> bool:
+    def report_integrity_ok(self, report: PlanningRuleImpactReport | dict[str, Any]) -> bool:
         data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else _as_document(report)
         expected = str(data.get("integrity_hash") or data.get("report_hash") or "")
         return bool(expected and expected == planning_rule_impact_report_hash(data))
@@ -256,10 +255,7 @@ class PlanningRuleImpactStore:
         risk_drift = _risk_drift_metrics(version_metrics, active.get("version_id"), before_after)
         warnings = _impact_warnings(state, adoption, risk_drift)
         recommendation = _recommendation(adoption, before_after, risk_drift, warnings)
-        active_metric: DomainDocument = next(
-            (item for item in version_metrics if item.get("version_id") == active.get("version_id")),
-            {},
-        )
+        active_metric = next((item for item in version_metrics if item.get("version_id") == active.get("version_id")), {})
         status = _report_status(state, recommendation, warnings, active)
         summary = {
             "status": status,
@@ -323,7 +319,7 @@ class PlanningRuleImpactStore:
         include_superseded = bool(payload.get("include_superseded", True))
         active_version = self.governance_store.active_version()
         active_summary = self.governance_store.active_summary()
-        active_payload: ImplementationDocument = {}
+        active_payload: dict[str, Any] = {}
         source_stale = False
         if active_version is None:
             active_payload = {"status": "missing", "version_id": None, "integrity_ok": False, "evidence_stale": True}
@@ -379,7 +375,7 @@ class PlanningRuleImpactStore:
         }
 
     def _plan_samples(self, *, scope: ImplementationDocument, include_legacy: bool, include_superseded: bool, active_version_id: str | None) -> list[ImplementationDocument]:
-        rows: list[ImplementationDocument] = []
+        rows: list[dict[str, Any]] = []
         for plan in self.plan_store.list_plans(include_archived=False):
             if not _plan_matches_scope(plan, scope):
                 continue
@@ -411,7 +407,7 @@ class PlanningRuleImpactStore:
 
     def _review_samples(self, plan_samples: list[ImplementationDocument]) -> list[ImplementationDocument]:
         plan_versions = {str(item.get("plan_id") or ""): str(item.get("version_id") or "legacy_default") for item in plan_samples}
-        rows: list[ImplementationDocument] = []
+        rows: list[dict[str, Any]] = []
         for review in self.review_store.list_reviews(include_archived=False):
             if review.plan_id not in plan_versions:
                 continue
@@ -473,60 +469,343 @@ class PlanningRuleImpactStore:
             return report_id, report_dir
 
 
-from song_agent.domains.creation import v142_pri_readiness as _v142_pri_readiness
-from song_agent.domains.creation.v142_pri_readiness import planning_rule_impact_summary as planning_rule_impact_summary, latest_planning_rule_impact_summary as latest_planning_rule_impact_summary, write_planning_rule_impact_summary as write_planning_rule_impact_summary, planning_rule_impact_report_hash as planning_rule_impact_report_hash, _version_metrics as _version_metrics, _adoption_metrics as _adoption_metrics, _before_after_metrics as _before_after_metrics, _risk_drift_metrics as _risk_drift_metrics, _impact_warnings as _impact_warnings, _recommendation as _recommendation, _report_status as _report_status, _readiness_status as _readiness_status, _plan_matches_scope as _plan_matches_scope, _plan_project_ids as _plan_project_ids, _report_project_ids as _report_project_ids, _review_observed_effectiveness as _review_observed_effectiveness, _scope as _scope, _scope_key as _scope_key, _safe_dict as _safe_dict, _bounded as _bounded, _validate_id as _validate_id, _int as _int, _mean as _mean, _rate as _rate, _weighted_average as _weighted_average, _lock_for_root as _lock_for_root, _append_event as _append_event
+def planning_rule_impact_summary(report: PlanningRuleImpactReport | dict[str, Any] | None) -> dict[str, Any]:
+    data = report.to_dict() if isinstance(report, PlanningRuleImpactReport) else _as_document(report)
+    summary = _as_document(data.get("summary"))
+    risk = _as_document(data.get("risk_drift"))
+    integrity_hash = str(data.get("integrity_hash") or data.get("report_hash") or "")
+    return sanitize_metadata(
+        {
+            "status": data.get("status") or summary.get("status") or "missing",
+            "report_id": data.get("report_id") or summary.get("report_id"),
+            "active_version_id": summary.get("active_version_id"),
+            "observed_plan_count": summary.get("observed_plan_count", 0),
+            "observed_review_count": summary.get("observed_review_count", 0),
+            "manual_review_count": summary.get("manual_review_count", 0),
+            "synthetic_review_count": summary.get("synthetic_review_count", 0),
+            "adoption_status": summary.get("adoption_status"),
+            "effectiveness_delta": summary.get("effectiveness_delta"),
+            "ranking_alignment_delta": summary.get("ranking_alignment_delta"),
+            "recommendation": summary.get("recommendation") or "missing",
+            "rollback_recommended": bool(summary.get("rollback_recommended", False)),
+            "readiness_status": summary.get("readiness_status"),
+            "synthetic_only_rate": risk.get("synthetic_only_rate"),
+            "waiver_rate": risk.get("waiver_rate"),
+            "force_close_rate": risk.get("force_close_rate"),
+            "stale": data.get("status") == "stale" or bool(summary.get("stale", False)),
+            "warnings": data.get("warnings", []) if isinstance(data.get("warnings"), list) else [],
+            "source_hash": (_as_document(data.get("source"))).get("source_hash"),
+            "integrity_hash": integrity_hash,
+            "integrity_ok": bool(integrity_hash and integrity_hash == planning_rule_impact_report_hash(data)),
+        }
+    )
 
 
+def latest_planning_rule_impact_summary(store: PlanningRuleImpactStore, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
+    return store.latest_summary(release_id=release_id, project_id=project_id)
 
 
+def write_planning_rule_impact_summary(path: Path, store: PlanningRuleImpactStore, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
+    summary = latest_planning_rule_impact_summary(store, release_id=release_id, project_id=project_id)
+    write_json(path, summary)
+    return summary
 
 
+def planning_rule_impact_report_hash(report: PlanningRuleImpactReport | dict[str, Any] | None) -> str:
+    if isinstance(report, PlanningRuleImpactReport):
+        data = {key: getattr(report, key) for key in IMPACT_REPORT_INTEGRITY_FIELDS}
+    else:
+        data = _as_document(report)
+    payload = {key: data.get(key) for key in IMPACT_REPORT_INTEGRITY_FIELDS}
+    return stable_hash(payload)
 
 
+def _version_metrics(plan_samples: list[ImplementationDocument], review_samples: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    version_ids = sorted(set([str(item.get("version_id") or "legacy_default") for item in plan_samples] + [str(item.get("version_id") or "legacy_default") for item in review_samples]))
+    rows = []
+    for version_id in version_ids:
+        plans = [item for item in plan_samples if str(item.get("version_id") or "legacy_default") == version_id]
+        reviews = [item for item in review_samples if str(item.get("version_id") or "legacy_default") == version_id]
+        planned_item_total = sum(_int(item.get("planned_item_count"), 0) for item in reviews)
+        waived_total = sum(_int(item.get("waived_item_count"), 0) for item in reviews)
+        synthetic_count = sum(1 for item in reviews if item.get("synthetic_only"))
+        force_count = sum(1 for item in reviews if item.get("force_closed"))
+        stale_count = sum(1 for item in plans if item.get("stale")) + sum(1 for item in reviews if item.get("stale"))
+        rows.append(
+            sanitize_metadata(
+                {
+                    "version_id": version_id,
+                    "plan_count": len(plans),
+                    "review_count": len(reviews),
+                    "manual_review_count": sum(_int(item.get("manual_review_count"), 0) for item in reviews),
+                    "synthetic_review_count": sum(_int(item.get("synthetic_review_count"), 0) for item in reviews),
+                    "average_plan_effectiveness_score": _mean([item.get("plan_effectiveness_score") for item in reviews]),
+                    "average_ranking_alignment_score": _mean([item.get("ranking_alignment_score") for item in reviews]),
+                    "average_observed_effectiveness_score": _mean([item.get("observed_effectiveness_score") for item in reviews]),
+                    "synthetic_only_rate": _rate(synthetic_count, len(reviews)),
+                    "waiver_rate": _rate(waived_total, planned_item_total),
+                    "force_close_rate": _rate(force_count, len(reviews)),
+                    "stale_source_count": stale_count,
+                    "warning_count": sum(_int(item.get("warning_count"), 0) for item in reviews),
+                }
+            )
+        )
+    return rows
 
 
+def _adoption_metrics(plan_samples: list[ImplementationDocument], active_version_id: str | None) -> ImplementationDocument:
+    total = len(plan_samples)
+    active_count = sum(1 for item in plan_samples if active_version_id and item.get("version_id") == active_version_id)
+    legacy_count = sum(1 for item in plan_samples if item.get("version_id") == "legacy_default")
+    superseded_count = max(0, total - active_count - legacy_count)
+    rate = _rate(active_count, total)
+    if total == 0:
+        status = "missing"
+    elif rate < 25:
+        status = "low"
+    elif rate < 70:
+        status = "partial"
+    elif rate < 95:
+        status = "healthy"
+    else:
+        status = "dominant"
+    return {"active_plan_count": active_count, "legacy_plan_count": legacy_count, "superseded_plan_count": superseded_count, "total_plan_count": total, "active_adoption_rate": rate, "status": status}
 
 
+def _before_after_metrics(version_metrics: list[ImplementationDocument], active_version_id: str | None) -> ImplementationDocument:
+    active = next((item for item in version_metrics if item.get("version_id") == active_version_id), {})
+    baseline = [item for item in version_metrics if item.get("version_id") != active_version_id]
+    baseline_reviews = sum(_int(item.get("review_count"), 0) for item in baseline)
+    active_reviews = _int(active.get("review_count"), 0)
+    if not active or baseline_reviews == 0 or active_reviews == 0:
+        return {"status": "insufficient_data", "baseline_group": "previous_or_legacy", "baseline_review_count": baseline_reviews, "active_review_count": active_reviews}
+    baseline_effectiveness = _weighted_average(baseline, "average_plan_effectiveness_score", "review_count")
+    baseline_ranking = _weighted_average(baseline, "average_ranking_alignment_score", "review_count")
+    return {
+        "status": "ready",
+        "baseline_group": "previous_or_legacy",
+        "baseline_review_count": baseline_reviews,
+        "active_review_count": active_reviews,
+        "effectiveness_delta": _int(active.get("average_plan_effectiveness_score"), 0) - baseline_effectiveness,
+        "ranking_alignment_delta": _int(active.get("average_ranking_alignment_score"), 0) - baseline_ranking,
+        "manual_only_delta": _int(active.get("manual_review_count"), 0) - sum(_int(item.get("manual_review_count"), 0) for item in baseline),
+    }
 
 
+def _risk_drift_metrics(version_metrics: list[ImplementationDocument], active_version_id: str | None, before_after: ImplementationDocument) -> ImplementationDocument:
+    active = next((item for item in version_metrics if item.get("version_id") == active_version_id), {})
+    baseline = [item for item in version_metrics if item.get("version_id") != active_version_id]
+    synthetic_rate = _int(active.get("synthetic_only_rate"), 0)
+    waiver_rate = _int(active.get("waiver_rate"), 0)
+    force_rate = _int(active.get("force_close_rate"), 0)
+    stale_count = _int(active.get("stale_source_count"), 0)
+    baseline_synthetic = _weighted_average(baseline, "synthetic_only_rate", "review_count") if baseline else 0
+    baseline_waiver = _weighted_average(baseline, "waiver_rate", "review_count") if baseline else 0
+    baseline_force = _weighted_average(baseline, "force_close_rate", "review_count") if baseline else 0
+    warnings = []
+    if synthetic_rate >= 50:
+        warnings.append("synthetic_only_sample_high")
+    if waiver_rate - baseline_waiver >= 20:
+        warnings.append("waiver_rate_increased")
+    if force_rate - baseline_force > 0:
+        warnings.append("force_close_rate_increased")
+    if stale_count:
+        warnings.append("stale_sources_present")
+    return {
+        "synthetic_only_rate": synthetic_rate,
+        "waiver_rate": waiver_rate,
+        "force_close_rate": force_rate,
+        "stale_source_count": stale_count,
+        "synthetic_only_rate_delta": synthetic_rate - baseline_synthetic,
+        "waiver_rate_delta": waiver_rate - baseline_waiver,
+        "force_close_rate_delta": force_rate - baseline_force,
+        "warnings": warnings,
+    }
 
 
+def _impact_warnings(state: ImplementationDocument, adoption: ImplementationDocument, risk: ImplementationDocument) -> list[str]:
+    warnings = list(_as_list(risk.get("warnings")))
+    active = _as_document(state.get("active_version"))
+    if active.get("status") == "missing":
+        warnings.append("missing_active_rule_version")
+    if active.get("evidence_stale") or active.get("integrity_ok") is False:
+        warnings.append("active_rule_evidence_stale_or_invalid")
+    if adoption.get("status") in {"missing", "low", "partial"}:
+        warnings.append(f"adoption_{adoption.get('status')}")
+    if state.get("source_stale"):
+        warnings.append("source_stale")
+    return sorted(set(warnings))
 
 
+def _recommendation(adoption: ImplementationDocument, before_after: ImplementationDocument, risk: ImplementationDocument, warnings: list[str]) -> str:
+    active_reviews = _int(before_after.get("active_review_count"), 0)
+    active_plans = _int(adoption.get("active_plan_count"), 0)
+    effectiveness_delta = _int(before_after.get("effectiveness_delta"), 0)
+    ranking_delta = _int(before_after.get("ranking_alignment_delta"), 0)
+    force_delta = _int(risk.get("force_close_rate_delta"), 0)
+    waiver_delta = _int(risk.get("waiver_rate_delta"), 0)
+    if active_reviews < 2 or active_plans < 2:
+        if risk.get("synthetic_only_rate", 0) >= 50:
+            return "increase_manual_review"
+        return "insufficient_data"
+    if _int(risk.get("force_close_rate"), 0) >= 20 and effectiveness_delta <= -10:
+        return "rollback_recommended"
+    if effectiveness_delta <= -10 and ranking_delta < 0:
+        return "rollback_recommended"
+    if effectiveness_delta <= -5 or waiver_delta >= 20 or force_delta > 0:
+        return "rollback_watch"
+    if risk.get("synthetic_only_rate", 0) >= 50:
+        return "increase_manual_review"
+    if effectiveness_delta >= 5 and ranking_delta >= 0 and force_delta <= 0 and "source_stale" not in warnings:
+        return "candidate_improving"
+    return "continue_monitoring"
 
 
+def _report_status(state: ImplementationDocument, recommendation: str, warnings: list[str], active: ImplementationDocument) -> str:
+    if active.get("status") == "missing":
+        return "missing"
+    if active.get("integrity_ok") is False:
+        return "failed"
+    if recommendation == "rollback_recommended":
+        return "failed"
+    if warnings or recommendation in {"insufficient_data", "increase_manual_review", "rollback_watch"} or state.get("source_stale"):
+        return "warning"
+    return "ready"
 
 
+def _readiness_status(recommendation: str, warnings: list[str]) -> str:
+    if recommendation == "rollback_recommended":
+        return "rollback_recommended"
+    if recommendation == "rollback_watch":
+        return "rollback_watch"
+    if recommendation == "increase_manual_review" or "synthetic_only_sample_high" in warnings:
+        return "needs_more_manual_evidence"
+    if recommendation == "insufficient_data":
+        return "needs_more_samples"
+    return "ready"
 
 
+def _plan_matches_scope(plan: AcceptanceFixPlan, scope: ImplementationDocument) -> bool:
+    scope_type = str(scope.get("type") or "global")
+    if scope_type == "global":
+        return True
+    if scope_type == "release":
+        release_id = str(scope.get("release_id") or "")
+        return plan.scope.get("release_id") == release_id
+    if scope_type == "project":
+        project_id = str(scope.get("project_id") or "")
+        if plan.scope.get("project_id") == project_id:
+            return True
+        return any(str((_as_document(item.get("target"))).get("project_id") or "") == project_id for item in plan.planned_items)
+    return True
 
 
+def _plan_project_ids(plan: AcceptanceFixPlan) -> list[str]:
+    ids = set()
+    if plan.scope.get("project_id"):
+        ids.add(str(plan.scope["project_id"]))
+    for item in plan.planned_items:
+        target = _as_document(item.get("target"))
+        if target.get("project_id"):
+            ids.add(str(target["project_id"]))
+    return sorted(ids)
 
 
+def _report_project_ids(report: PlanningRuleImpactReport) -> set[str]:
+    ids = set()
+    for item in report.plan_samples:
+        for project_id in item.get("project_ids", []) if isinstance(item.get("project_ids"), list) else []:
+            if str(project_id).strip():
+                ids.add(str(project_id))
+    return ids
 
 
+def _review_observed_effectiveness(review: AcceptanceFixPlanReview) -> int:
+    values = []
+    for item in review.item_outcomes:
+        outcome = _as_document(item.get("outcome"))
+        values.append(outcome.get("observed_effectiveness_score"))
+    return _mean(values)
 
 
+def _scope(value: Any) -> ImplementationDocument:
+    raw = _as_document(value)
+    scope_type = str(raw.get("type") or ("release" if raw.get("release_id") else "project" if raw.get("project_id") else "global"))
+    if scope_type not in {"global", "release", "project"}:
+        scope_type = "global"
+    return sanitize_metadata({"type": scope_type, "release_id": _bounded(raw.get("release_id"), 120), "project_id": _bounded(raw.get("project_id"), 120)})
 
 
+def _scope_key(scope: ImplementationDocument) -> str:
+    if scope.get("type") == "release" and scope.get("release_id"):
+        return "release-" + re.sub(r"[^A-Za-z0-9_.-]+", "-", str(scope["release_id"]))
+    if scope.get("type") == "project" and scope.get("project_id"):
+        return "project-" + re.sub(r"[^A-Za-z0-9_.-]+", "-", str(scope["project_id"]))
+    return "global"
 
 
+def _safe_dict(value: Any) -> ImplementationDocument:
+    return sanitize_metadata(_as_document(value))
 
 
+def _bounded(value: Any, limit: int) -> str:
+    return sanitize_sensitive_text(str(value or "").strip())[:limit]
 
 
+def _validate_id(value: str, prefix: str) -> str:
+    text = str(value or "").strip()
+    if not re.fullmatch(rf"{re.escape(prefix)}-[0-9]{{6}}", text):
+        raise PlanningRuleImpactError(f"Invalid {prefix} id.")
+    return text
 
 
+def _int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
+def _mean(values: list[Any]) -> int:
+    numbers = []
+    for value in values:
+        try:
+            numbers.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if not numbers:
+        return 0
+    return int(round(sum(numbers) / len(numbers)))
 
 
+def _rate(part: int, total: int) -> int:
+    if total <= 0:
+        return 0
+    return int(round((part / total) * 100))
 
 
-
+def _weighted_average(rows: list[ImplementationDocument], value_key: str, weight_key: str) -> int:
+    total_weight = sum(max(0, _int(item.get(weight_key), 0)) for item in rows)
+    if total_weight <= 0:
+        return 0
+    total = sum(_int(item.get(value_key), 0) * max(0, _int(item.get(weight_key), 0)) for item in rows)
+    return int(round(total / total_weight))
 
 
 _LOCKS: dict[str, threading.RLock] = {}
 _LOCKS_GUARD = threading.Lock()
 
-_v142_pri_readiness.bind_globals(globals())
+
+def _lock_for_root(root: Path) -> threading.RLock:
+    key = str(root.resolve())
+    with _LOCKS_GUARD:
+        if key not in _LOCKS:
+            _LOCKS[key] = threading.RLock()
+        return _LOCKS[key]
+
+
+def _append_event(path: Path, event: str, payload: ImplementationDocument, now: str | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = sanitize_metadata({"timestamp": now or now_iso(), "event": event, **payload})
+    with path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -60,10 +60,10 @@ def verify_release_audio_quality_action_queue_signoff_archive_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {"zip_path": str(zip_path), "zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None, "queue_id": None, "release_ids": []}
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {"zip_path": str(zip_path), "zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None, "queue_id": None, "release_ids": []}
     if not zip_path.exists():
         return _finish(checks, summary, _check("release_audio_quality_action_queue_signoff_archive_zip_exists", False, "Archive ZIP exists."))
 
@@ -169,11 +169,11 @@ def verify_release_audio_quality_action_queue_signoff_archive_package(
     return _finish(checks, summary)
 
 
-def write_release_audio_quality_action_queue_signoff_archive_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_release_audio_quality_action_queue_signoff_archive_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def release_audio_quality_action_queue_signoff_archive_verification_exit_code(report: DomainDocument) -> int:
+def release_audio_quality_action_queue_signoff_archive_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -193,7 +193,7 @@ def _external_queue_checks(
     observatory_verification_report_path: Path | str | None,
     evidence_root: Path | str | None,
 ) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     if not queue_zip_path or not queue_verification_report_path:
         return [_check("release_audio_quality_action_queue_signoff_archive_current_queue_required", False, "Current queue ZIP and queue verification report are required.")]
     queue_zip = Path(queue_zip_path)
@@ -258,7 +258,7 @@ def _document_binding_checks(documents: dict[str, ImplementationDocument], histo
     manual_summary = _as_document(resolutions.get("summary"))
     closeout_source = _as_document(closeout.get("source"))
     signoff_source = _as_document(signoff.get("source"))
-    signoff_event: ImplementationDocument = {}
+    signoff_event: dict[str, Any] = {}
     for row in reversed(history):
         payload = _as_document(row.get("payload"))
         if row.get("event_type") == "action_queue_signoff_created" and payload.get("signoff_hash") == signoff.get("integrity_hash"):
@@ -343,7 +343,7 @@ def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocum
 
 
 def _read_jsonl_entry(archive: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
-    rows: list[ImplementationDocument] = []
+    rows: list[dict[str, Any]] = []
     for line in archive.read(name).decode("utf-8").splitlines():
         if not line.strip():
             continue

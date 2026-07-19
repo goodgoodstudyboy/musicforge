@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 from typing import Any
 
 from song_agent.domains.delivery.releases import stable_hash
 
 
-def audio_campaign_release_track_coverage(tracks: list[Any], case_index: DomainDocument) -> DomainDocument:
+def audio_campaign_release_track_coverage(tracks: list[Any], case_index: dict[str, Any]) -> dict[str, Any]:
     cases = [case for case in case_index.get("cases", []) if isinstance(case, dict)]
     case_keys = {_case_release_key(case) for case in cases}
     case_keys.discard("")

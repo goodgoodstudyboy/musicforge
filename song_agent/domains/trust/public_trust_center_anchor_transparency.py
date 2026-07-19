@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -77,11 +76,11 @@ class PublicTrustCenterAnchorTransparencyStore:
     def history_path(self, center_id: str = "ptc-default") -> Path:
         return self.root_dir(center_id) / "transparency-history.json"
 
-    def read_ledger(self, center_id: str = "ptc-default") -> list[DomainDocument]:
+    def read_ledger(self, center_id: str = "ptc-default") -> list[dict[str, Any]]:
         path = self.ledger_path(center_id)
         if not path.exists():
             return []
-        events: list[ImplementationDocument] = []
+        events: list[dict[str, Any]] = []
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -93,20 +92,20 @@ class PublicTrustCenterAnchorTransparencyStore:
                 events.append(value)
         return events
 
-    def read_report(self, center_id: str = "ptc-default", *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_report(self, center_id: str = "ptc-default", *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.report_path(center_id), default=default)
 
-    def read_checkpoint(self, center_id: str = "ptc-default", *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_checkpoint(self, center_id: str = "ptc-default", *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.current_checkpoint_path(center_id), default=default)
 
     def append_event_from_registry_state(
         self,
         center_id: str = "ptc-default",
         event_type: str | None = None,
-        payload: DomainDocument | None = None,
+        payload: dict[str, Any] | None = None,
         *,
         now: str | None = None,
-    ) -> DomainDocument:
+    ) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             state = self._current_registry_state(center_id)
@@ -119,7 +118,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             self._write_ledger(center_id, events)
             return sanitize_metadata(event, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
-    def create_checkpoint(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def create_checkpoint(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             events = self.read_ledger(center_id)
@@ -164,7 +163,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             _write_json(self.current_checkpoint_path(center_id), checkpoint)
             return sanitize_metadata(checkpoint, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
-    def refresh_report(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh_report(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             self.append_event_from_registry_state(center_id, payload=payload, now=now)
@@ -192,7 +191,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             _write_json(self.report_path(center_id), report)
             return sanitize_metadata(report, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
-    def export_transparency(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def export_transparency(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             del payload
@@ -259,7 +258,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             self._append_history(center_id, "transparency_exported", {**state, "manifest_hash": manifest["integrity_hash"]}, now=now)
             return sanitize_metadata(manifest, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
-    def build_zip(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             del payload
@@ -294,7 +293,7 @@ class PublicTrustCenterAnchorTransparencyStore:
             self._append_history(center_id, "transparency_zip_built", {**state, "zip_sha256": info["sha256"], "manifest_hash": manifest["integrity_hash"]}, now=now)
             return sanitize_metadata(info, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
-    def summary(self, center_id: str = "ptc-default") -> DomainDocument:
+    def summary(self, center_id: str = "ptc-default") -> dict[str, Any]:
         report = self.read_report(center_id, default={})
         checkpoint = self.read_checkpoint(center_id, default={})
         verification = _read_json_default(self.verification_report_path(center_id), default={})
@@ -400,9 +399,9 @@ class PublicTrustCenterAnchorTransparencyStore:
         return sanitize_metadata(source, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS)
 
     def _findings(self, events: list[ImplementationDocument], checkpoint: ImplementationDocument, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
-        blockers: list[ImplementationDocument] = []
-        warnings: list[ImplementationDocument] = []
-        checks: list[ImplementationDocument] = []
+        blockers: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+        checks: list[dict[str, Any]] = []
 
         def check(check_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
             row = {"check_id": check_id, "status": "passed" if passed else "warning" if warning else "failed", "severity": "warning" if warning else "blocking", "message": message}
@@ -479,7 +478,7 @@ class PublicTrustCenterAnchorTransparencyStore:
 
 
 
-def anchor_transparency_report_integrity_ok(report: DomainDocument | None) -> bool:
+def anchor_transparency_report_integrity_ok(report: dict[str, Any] | None) -> bool:
     data = _as_document(report)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_transparency_report_hash(data)
 
@@ -487,7 +486,7 @@ def anchor_transparency_report_integrity_ok(report: DomainDocument | None) -> bo
 
 
 
-def anchor_transparency_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
+def anchor_transparency_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
     data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_transparency_manifest_hash(data)
 
@@ -498,7 +497,183 @@ def anchor_transparency_manifest_integrity_ok(manifest: DomainDocument | None) -
 
 
 
-from song_agent.domains.trust import v142_ptcat_readiness as _v142_ptcat_readiness
-from song_agent.domains.trust.v142_ptcat_readiness import _signature_envelope as _signature_envelope, _event_type_for_state as _event_type_for_state, _summary_from_source as _summary_from_source, _registry_verification_summary as _registry_verification_summary, _current_entry_summary as _current_entry_summary, _current_entry as _current_entry, _event_chain_ok as _event_chain_ok, source_or_none as source_or_none, _state_row as _state_row, _manifest_state as _manifest_state, _ledger_text as _ledger_text, _file_record as _file_record, _zip_entries as _zip_entries, _read_json_default as _read_json_default, _read_zip_json as _read_zip_json, _write_json as _write_json, _write_readme as _write_readme, _safe_text as _safe_text, _sha256 as _sha256, _ensure_within as _ensure_within
+def _signature_envelope(payload_hash: str, *, key_id: str) -> ImplementationDocument:
+    signature = {
+        "mode": "local_deterministic_checkpoint",
+        "key_id": key_id,
+        "payload_hash": payload_hash,
+    }
+    signature["key_fingerprint"] = stable_hash({"key_id": signature["key_id"], "mode": signature["mode"]})
+    signature["signature_hash"] = stable_hash(signature)
+    return signature
 
-_v142_ptcat_readiness.bind_globals(globals())
+
+def _event_type_for_state(state: ImplementationDocument) -> str:
+    if state.get("current_entry_status") == "revoked":
+        return "anchor_revoked"
+    if state.get("current_entry_status") == "published":
+        return "anchor_published" if state.get("registry_verification_status") != "passed" else "anchor_registry_verified"
+    return "anchor_registered"
+
+
+def _summary_from_source(source: ImplementationDocument, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
+    return {
+        "center_id": source.get("center_id"),
+        "status": "failed" if blockers else "warning" if warnings else "current",
+        "event_count": source.get("event_count", 0),
+        "latest_sequence": source.get("latest_sequence"),
+        "latest_event_hash": source.get("latest_event_hash"),
+        "checkpoint_id": source.get("checkpoint_id"),
+        "checkpoint_hash": source.get("checkpoint_hash"),
+        "current_entry_id": source.get("current_entry_id"),
+        "current_anchor_hash": source.get("current_anchor_hash"),
+        "current_entry_status": source.get("current_entry_status"),
+        "registry_verification_status": source.get("registry_verification_status"),
+        "blocker_count": len(blockers),
+        "warning_count": len(warnings),
+    }
+
+
+def _registry_verification_summary(report: ImplementationDocument) -> ImplementationDocument:
+    summary = anchor_registry_verification_summary(_as_document(report))
+    return sanitize_metadata(
+        {
+            "status": report.get("status") if isinstance(report, dict) else "missing",
+            "zip_sha256": report.get("zip_sha256") if isinstance(report, dict) else None,
+            "zip_size_bytes": report.get("zip_size_bytes") if isinstance(report, dict) else None,
+            "manifest_hash": report.get("manifest_hash") if isinstance(report, dict) else None,
+            "verification_report_hash": stable_hash(report) if report else None,
+            "summary": summary,
+        },
+        blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS,
+    )
+
+
+def _current_entry_summary(entry: ImplementationDocument) -> ImplementationDocument:
+    anchor = _as_document(entry.get("anchor"))
+    return {
+        "entry_id": entry.get("entry_id"),
+        "status": entry.get("status"),
+        "integrity_hash": entry.get("integrity_hash"),
+        "anchor_hash": entry.get("anchor_hash"),
+        "ptc_zip_sha256": anchor.get("zip_sha256"),
+        "ptc_manifest_hash": anchor.get("manifest_hash"),
+        "ptc_source_hash": anchor.get("source_hash"),
+    }
+
+
+def _current_entry(registry: ImplementationDocument) -> ImplementationDocument:
+    current_id = str(registry.get("current_entry_id") or "")
+    for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
+        if isinstance(entry, dict) and entry.get("entry_id") == current_id:
+            return entry
+    return {}
+
+
+def _event_chain_ok(events: list[ImplementationDocument]) -> bool:
+    previous = None
+    for index, event in enumerate(events, start=1):
+        if not isinstance(event, dict):
+            return False
+        if event.get("sequence") != index:
+            return False
+        if event.get("previous_event_hash") != previous:
+            return False
+        if event.get("event_hash") != anchor_transparency_event_hash(event):
+            return False
+        previous = event.get("event_hash")
+    return True
+
+
+def source_or_none(report: dict[str, Any], key: str) -> Any:
+    source = _as_document(report.get("source"))
+    return source.get(key)
+
+
+def _state_row(report: ImplementationDocument) -> dict[str, str]:
+    return {
+        "source_hash": str(report.get("source_hash") or ""),
+        "report_hash": str(report.get("integrity_hash") or ""),
+        "latest_event_hash": str(source_or_none(report, "latest_event_hash") or ""),
+        "checkpoint_hash": str(source_or_none(report, "checkpoint_hash") or ""),
+    }
+
+
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
+    report = _as_document(manifest.get("report"))
+    ledger = _as_document(manifest.get("ledger"))
+    checkpoint = _as_document(manifest.get("checkpoint"))
+    return {
+        "source_hash": str(manifest.get("source_hash") or ""),
+        "report_hash": str(report.get("integrity_hash") or ""),
+        "latest_event_hash": str(ledger.get("latest_event_hash") or ""),
+        "checkpoint_hash": str(checkpoint.get("integrity_hash") or ""),
+    }
+
+
+def _ledger_text(events: list[ImplementationDocument]) -> str:
+    return "".join(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n" for event in events)
+
+
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
+    return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
+
+
+def _zip_entries(root: Path) -> list[tuple[Path, str]]:
+    return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
+
+
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
+    if not path.exists():
+        return dict(default or {})
+    try:
+        value = read_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return dict(default or {})
+    return _document_or(value, dict(default or {}))
+
+
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            value = json.loads(archive.read(entry).decode("utf-8"))
+            return _as_document(value)
+    except Exception:
+        return {}
+
+
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return write_json(Path(path), sanitize_metadata(payload, blocked_keys=ANCHOR_TRANSPARENCY_BLOCKED_KEYS))
+
+
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
+    text = (
+        "MusicForge Public Trust Center Anchor Transparency\n"
+        "This package records an append-only local transparency ledger for Public Trust Center Anchor Registry states.\n"
+        "External checkpoint files are the portable trust anchor for detecting whole-package replacement.\n"
+        f"Center: {report.get('center_id')}\n"
+        f"Status: {report.get('status')}\n"
+    )
+    (export_dir / "README.txt").write_text(sanitize_sensitive_text(text), encoding="utf-8")
+
+
+def _safe_text(value: Any) -> str:
+    return sanitize_sensitive_text(str(value or "").strip())[:1000]
+
+
+def _sha256(path: Path) -> str | None:
+    if not path.exists() or not path.is_file() or path.is_symlink():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise PublicTrustCenterAnchorTransparencyStateError("Resolved path escapes Anchor Transparency directory.") from exc

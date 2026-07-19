@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-from song_agent.platform.contracts import DomainDocument
+from typing import Any
 
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -26,15 +25,15 @@ PUBLICATION_MONITORING_PACKAGE_TYPE = "musicforge_public_trust_center_publicatio
 PUBLICATION_MONITORING_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", "generated_at", "zip"}
 
 
-def monitoring_hash(doc: DomainDocument) -> str:
+def monitoring_hash(doc: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in PUBLICATION_MONITORING_HASH_EXCLUDE_KEYS})
 
 
-def monitoring_manifest_hash(manifest: DomainDocument) -> str:
+def monitoring_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key not in {"integrity_hash", "generated_at", "zip"}})
 
 
-def verification_hash(report: DomainDocument) -> str | None:
+def verification_hash(report: dict[str, Any]) -> str | None:
     if not report:
         return None
     return stable_hash({key: value for key, value in report.items() if key != "generated_at"})

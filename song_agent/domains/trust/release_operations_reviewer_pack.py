@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -72,21 +72,21 @@ class ReleaseOperationsReviewerPackStore:
     def verification_report_path(self, release_id: str) -> Path:
         return self.root_dir(release_id) / "reviewer-pack-verification-report.json"
 
-    def read_report(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_report(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.report_path(release_id)
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
-    def read_retrospective(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_retrospective(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.retrospective_path(release_id)
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
-    def refresh(self, release_id: str, *, now: str | None = None) -> DomainDocument:
+    def refresh(self, release_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             release = self.release_store.get_release(release_id)
@@ -156,11 +156,11 @@ class ReleaseOperationsReviewerPackStore:
             _write_json(self.retrospective_path(release_id), retrospective)
             return report
 
-    def summary(self, release_id: str) -> DomainDocument:
+    def summary(self, release_id: str) -> dict[str, Any]:
         report = self.read_report(release_id, default={})
         return reviewer_pack_summary(report)
 
-    def export_pack(self, release_id: str, *, now: str | None = None) -> DomainDocument:
+    def export_pack(self, release_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             report = self.read_report(release_id, default={}) or self.refresh(release_id, now=now)
@@ -215,7 +215,7 @@ class ReleaseOperationsReviewerPackStore:
             _write_json(export_dir / "reviewer-pack-manifest.json", manifest)
             return sanitize_metadata(manifest, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
-    def build_zip(self, release_id: str, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, release_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             export_dir = self.export_dir(release_id).resolve()
@@ -243,7 +243,7 @@ class ReleaseOperationsReviewerPackStore:
                 raise
             return sanitize_metadata({"created_at": now, "filename": zip_path.name, "size_bytes": zip_path.stat().st_size, "sha256": _sha256(zip_path), "entry_count": len(entries), "entries": [entry for _path, entry in entries]}, blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
-    def read_export_manifest(self, release_id: str) -> DomainDocument:
+    def read_export_manifest(self, release_id: str) -> dict[str, Any]:
         path = self.export_dir(release_id) / "reviewer-pack-manifest.json"
         if not path.exists():
             raise FileNotFoundError("Operations Reviewer Pack export has not been generated.")
@@ -251,8 +251,8 @@ class ReleaseOperationsReviewerPackStore:
         return sanitize_metadata(_as_document(value), blocked_keys=REVIEWER_PACK_BLOCKED_KEYS)
 
     def _reviewer_findings(self, release_id: str, audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument]) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
-        blockers: list[ImplementationDocument] = []
-        warnings: list[ImplementationDocument] = []
+        blockers: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
         if not audit_report:
             blockers.append(_blocker("audit_report_missing", "Operations Audit Report is missing."))
         elif not audit_report_integrity_ok(audit_report):
@@ -302,7 +302,7 @@ class ReleaseOperationsReviewerPackStore:
 
 
 
-def reviewer_report_integrity_ok(report: DomainDocument | None) -> bool:
+def reviewer_report_integrity_ok(report: dict[str, Any] | None) -> bool:
     data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_report_integrity_hash(data)
 
@@ -310,12 +310,12 @@ def reviewer_report_integrity_ok(report: DomainDocument | None) -> bool:
 
 
 
-def reviewer_pack_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
+def reviewer_pack_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
     data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_pack_manifest_integrity_hash(data)
 
 
-def reviewer_pack_summary(report: DomainDocument | None) -> DomainDocument:
+def reviewer_pack_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(

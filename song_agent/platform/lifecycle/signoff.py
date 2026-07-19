@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument
 from pathlib import Path
+from typing import Any
 
 from song_agent.platform.contracts.lifecycle import SignoffRef
 from song_agent.platform.lifecycle.event_ledger import HistoryChain
@@ -10,7 +10,7 @@ from song_agent.platform.verification.hashing import integrity_hash, integrity_o
 
 class SignoffService:
     @staticmethod
-    def seal(document: DomainDocument, *, payload_hash: bool = True) -> DomainDocument:
+    def seal(document: dict[str, Any], *, payload_hash: bool = True) -> dict[str, Any]:
         result = dict(document)
         if payload_hash:
             result["payload_hash"] = stable_hash({key: value for key, value in result.items() if key not in {"payload_hash", "integrity_hash"}})
@@ -18,7 +18,7 @@ class SignoffService:
         return result
 
     @staticmethod
-    def validate_pair(signoff: DomainDocument, binding: DomainDocument, *, signoff_field: str = "signoff_hash") -> bool:
+    def validate_pair(signoff: dict[str, Any], binding: dict[str, Any], *, signoff_field: str = "signoff_hash") -> bool:
         return integrity_ok(signoff) and integrity_ok(binding) and binding.get(signoff_field) == signoff.get("integrity_hash")
 
     @staticmethod

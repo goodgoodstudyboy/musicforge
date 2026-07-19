@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import hashlib as hashlib
 import json as json
@@ -33,10 +33,10 @@ class LTSBackupStore:
         self.root = Path(maintenance_root).resolve() if maintenance_root else (self.repo_root / DEFAULT_MAINTENANCE_ROOT).resolve()
         self.backups_dir = self.root / "backups"
 
-    def create_backup(self, *, mode: str = "workspace") -> DomainDocument:
+    def create_backup(self, *, mode: str = "workspace") -> dict[str, Any]:
         return self._create_backup_from_root(self.repo_root, mode=mode, backup_kind="manual", source_label=".")
 
-    def create_target_before_restore_backup(self, target: Path | str, *, mode: str = "workspace") -> DomainDocument:
+    def create_target_before_restore_backup(self, target: Path | str, *, mode: str = "workspace") -> dict[str, Any]:
         return self._create_backup_from_root(Path(target).resolve(), mode=mode, backup_kind="target-before-restore", source_label="restore-target")
 
     def _create_backup_from_root(self, source_root: Path, *, mode: str = "workspace", backup_kind: str = "manual", source_label: str = ".") -> ImplementationDocument:
@@ -49,7 +49,7 @@ class LTSBackupStore:
         zip_path = backup_dir / BACKUP_ZIP_NAME
         files = self._collect_files(mode, source_root=source_root)
         excluded = self._excluded_summary(mode, source_root=source_root)
-        manifest_files: list[ImplementationDocument] = []
+        manifest_files: list[dict[str, Any]] = []
         workspace_index: ImplementationDocument = {
             "schema_version": 1,
             "backup_id": backup_id,
@@ -111,8 +111,8 @@ class LTSBackupStore:
         write_json(backup_dir / "backup-metadata.json", metadata)
         return {"backup": metadata, "manifest": manifest, "verification": verification}
 
-    def list_backups(self) -> list[DomainDocument]:
-        backups: list[ImplementationDocument] = []
+    def list_backups(self) -> list[dict[str, Any]]:
+        backups: list[dict[str, Any]] = []
         if not self.backups_dir.exists():
             return backups
         for path in sorted(self.backups_dir.glob("mb-*")):
@@ -124,7 +124,7 @@ class LTSBackupStore:
                     backups.append({"backup_id": path.name, "status": "corrupted"})
         return backups
 
-    def read_backup(self, backup_id: str) -> DomainDocument:
+    def read_backup(self, backup_id: str) -> dict[str, Any]:
         backup_dir = self._backup_dir(backup_id)
         return {
             "backup": read_json(backup_dir / "backup-metadata.json"),
@@ -132,25 +132,25 @@ class LTSBackupStore:
             "verification": read_json(backup_dir / "backup-verification-report.json") if (backup_dir / "backup-verification-report.json").exists() else {},
         }
 
-    def verify_backup(self, backup_id: str) -> DomainDocument:
+    def verify_backup(self, backup_id: str) -> dict[str, Any]:
         backup_dir = self._backup_dir(backup_id)
         report = verify_maintenance_backup_zip(backup_dir / BACKUP_ZIP_NAME, strict=True)
         write_maintenance_backup_verification_report(report, backup_dir / "backup-verification-report.json")
         return report
 
-    def verify_zip(self, zip_path: Path | str) -> DomainDocument:
+    def verify_zip(self, zip_path: Path | str) -> dict[str, Any]:
         return verify_maintenance_backup_zip(Path(zip_path), strict=True)
 
     def backup_zip_path(self, backup_id: str) -> Path:
         return self._backup_dir(backup_id) / BACKUP_ZIP_NAME
 
-    def restore_plan(self, *, backup_id: str | None = None, zip_path: Path | str | None = None, target: Path | str) -> DomainDocument:
+    def restore_plan(self, *, backup_id: str | None = None, zip_path: Path | str | None = None, target: Path | str) -> dict[str, Any]:
         source_zip = self.backup_zip_path(backup_id) if backup_id else Path(zip_path or "")
         target_path = Path(target).resolve()
         verification = verify_maintenance_backup_zip(source_zip, strict=True)
         blockers: list[str] = []
         warnings = ["Provider config is not restored. Recreate .musicforge/provider.json manually if needed.", "Renderer config is not restored. Recreate .musicforge/renderer.json manually if needed."]
-        actions: list[ImplementationDocument] = []
+        actions: list[dict[str, Any]] = []
         if verification.get("status") == "failed":
             blockers.append("Backup verification failed.")
         if target_path == self.repo_root:
@@ -194,7 +194,7 @@ class LTSBackupStore:
         confirm: bool = False,
         overwrite: bool = False,
         allow_current_workspace: bool = False,
-    ) -> DomainDocument:
+    ) -> dict[str, Any]:
         plan = self.restore_plan(backup_id=backup_id, zip_path=zip_path, target=target)
         target_path = Path(target).resolve()
         if not confirm:
@@ -204,7 +204,7 @@ class LTSBackupStore:
         if target_path == self.repo_root and not allow_current_workspace:
             raise LTSBackupError("Restore to current workspace requires allow_current_workspace.")
         target_is_non_empty = target_path.exists() and any(target_path.iterdir())
-        pre_restore_backup: ImplementationDocument | None = None
+        pre_restore_backup: dict[str, Any] | None = None
         if target_is_non_empty:
             if not overwrite:
                 raise LTSBackupError("Restore target exists and is not empty.")

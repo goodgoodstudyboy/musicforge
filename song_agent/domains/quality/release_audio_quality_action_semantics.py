@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import zipfile
 from pathlib import Path
+from typing import Any
 from song_agent.domains.studio.projectio import read_json
 from song_agent.domains.studio.project_repository import now_iso
 from song_agent.domains.creation.redaction import sanitize_metadata
@@ -27,13 +28,13 @@ class ReleaseAudioQualityActionQueueValidationError(ReleaseAudioQualityActionQue
 
 
 def build_expected_action_documents_from_observatory(
-    queue: DomainDocument,
-    source_binding: DomainDocument,
+    queue: dict[str, Any],
+    source_binding: dict[str, Any],
     *,
     observatory_zip_path: Path | str | None,
     observatory_verification_report_path: Path | str | None,
     evidence_root: Path | str | None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     if not observatory_zip_path or not observatory_verification_report_path or not evidence_root:
         raise ReleaseAudioQualityActionQueueValidationError("Current Observatory verification requires Observatory ZIP, verification report, and evidence root.")
     observatory_zip = Path(observatory_zip_path)
@@ -136,10 +137,10 @@ def _action_items_from_binding(
     floor = severity_rank.get(str(severity_floor or "warning"), 1)
     risks = binding.get("risk_register", {}).get("risks") if isinstance(binding.get("risk_register"), dict) else []
     recommendations = binding.get("recommendation_report", {}).get("recommendations") if isinstance(binding.get("recommendation_report"), dict) else []
-    items: list[ImplementationDocument] = []
+    items: list[dict[str, Any]] = []
     fingerprints: set[str] = set()
 
-    def add_item(item: DomainDocument) -> None:
+    def add_item(item: dict[str, Any]) -> None:
         fingerprint = stable_hash(
             {
                 "source_type": item.get("source_type"),

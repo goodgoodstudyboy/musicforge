@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import io as io
@@ -31,14 +31,14 @@ INTEGRITY_EXCLUDE_KEYS = {"integrity_hash"}
 def analyze_wav_health(
     wav_path: str | Path,
     *,
-    source: DomainDocument | None = None,
+    source: dict[str, Any] | None = None,
     expected_sample_rate: int | None = None,
     expected_channels: int | None = None,
     expected_bit_depth: int | None = None,
     expected_duration_seconds: float | None = None,
     report_id: str | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     path = Path(wav_path)
     source = source or {}
     now = now or now_iso()
@@ -68,17 +68,17 @@ def analyze_wav_bytes(
     data: bytes,
     *,
     filename: str = "song.wav",
-    source: DomainDocument | None = None,
+    source: dict[str, Any] | None = None,
     expected_sample_rate: int | None = None,
     expected_channels: int | None = None,
     expected_bit_depth: int | None = None,
     expected_duration_seconds: float | None = None,
     report_id: str | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     source = source or {}
     now = now or now_iso()
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     warnings: list[str] = []
     failures: list[str] = []
     base = {
@@ -175,7 +175,7 @@ def analyze_wav_bytes(
     return _finalize_report({**base, "status": status, "format": fmt, "metrics": metrics, "checks": checks, "warnings": warnings, "failures": failures})
 
 
-def audio_health_summary(report: DomainDocument) -> DomainDocument:
+def audio_health_summary(report: dict[str, Any]) -> dict[str, Any]:
     fmt = _as_document(report.get("format"))
     metrics = _as_document(report.get("metrics"))
     return sanitize_metadata(
@@ -197,18 +197,18 @@ def audio_health_summary(report: DomainDocument) -> DomainDocument:
     )
 
 
-def audio_health_allows_release(report: DomainDocument) -> bool:
+def audio_health_allows_release(report: dict[str, Any]) -> bool:
     if not report:
         return False
     return str(report.get("status") or "") in {"passed", "warning"} and bool(report.get("wav_sha256"))
 
 
-def audio_health_integrity_hash(report: DomainDocument) -> str:
+def audio_health_integrity_hash(report: dict[str, Any]) -> str:
     core = {key: value for key, value in report.items() if key not in INTEGRITY_EXCLUDE_KEYS}
     return stable_hash(sanitize_metadata(core))
 
 
-def audio_health_integrity_ok(report: DomainDocument) -> bool:
+def audio_health_integrity_ok(report: dict[str, Any]) -> bool:
     expected = str(report.get("integrity_hash") or "")
     return bool(expected) and expected == audio_health_integrity_hash(report)
 

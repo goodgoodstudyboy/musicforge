@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json as json
 import shutil as shutil
@@ -63,13 +63,13 @@ class UnifiedCommandCenterSignoffStore:
     def archive_verification_report_path(self, center_id: str) -> Path:
         return self.archive_dir(center_id) / "unified-command-center-archive-verification-report.json"
 
-    def read_signoff(self, center_id: str) -> DomainDocument:
+    def read_signoff(self, center_id: str) -> dict[str, Any]:
         path = self.signoff_path(center_id)
         if not path.exists():
             raise UnifiedCommandCenterSignoffNotFoundError(f"Unified Command Center signoff not found: {center_id}.")
         return read_json(path)
 
-    def signoff(self, center_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def signoff(self, center_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             self.center_store.ensure_mutable(center_id)
@@ -134,7 +134,7 @@ class UnifiedCommandCenterSignoffStore:
             write_json(self.center_store.center_path(center_id), center)
             return signoff
 
-    def create_change_request(self, center_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def create_change_request(self, center_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             signoff = self.read_signoff(center_id)
@@ -168,7 +168,7 @@ class UnifiedCommandCenterSignoffStore:
             write_json(self.change_request_dir(center_id) / f"{cr_id}.json", cr)
             return cr
 
-    def approve_change_request(self, center_id: str, change_request_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def approve_change_request(self, center_id: str, change_request_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             cr = self._read_change_request(center_id, change_request_id)
@@ -184,7 +184,7 @@ class UnifiedCommandCenterSignoffStore:
             write_json(self.change_request_dir(center_id) / f"{change_request_id}.json", cr)
             return cr
 
-    def reset_signoff(self, center_id: str, change_request_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def reset_signoff(self, center_id: str, change_request_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             signoff = self.read_signoff(center_id)
@@ -224,7 +224,7 @@ class UnifiedCommandCenterSignoffStore:
             write_json(self.change_request_dir(center_id) / f"{change_request_id}.json", cr)
             return {"status": "reset", "center": center, "change_request": cr, "reset_event": event}
 
-    def export_archive(self, center_id: str) -> DomainDocument:
+    def export_archive(self, center_id: str) -> dict[str, Any]:
         with self.lock:
             source = self._source_state(center_id, require_ready=True)
             self._ensure_archive_mutable(center_id, source["signoff"].get("integrity_hash"))
@@ -232,9 +232,9 @@ class UnifiedCommandCenterSignoffStore:
             if archive_dir.exists():
                 shutil.rmtree(archive_dir)
             archive_dir.mkdir(parents=True, exist_ok=True)
-            files: list[ImplementationDocument] = []
+            files: list[dict[str, Any]] = []
 
-            def write_entry(rel: str, payload: DomainDocument | str) -> None:
+            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
                 path = archive_dir / rel
                 if isinstance(payload, str):
                     path.parent.mkdir(parents=True, exist_ok=True)
@@ -279,7 +279,7 @@ class UnifiedCommandCenterSignoffStore:
             write_json(self.archive_manifest_path(center_id), manifest)
             return manifest
 
-    def build_archive_zip(self, center_id: str) -> DomainDocument:
+    def build_archive_zip(self, center_id: str) -> dict[str, Any]:
         with self.lock:
             source = self._source_state(center_id, require_ready=True)
             self._ensure_archive_mutable(center_id, source["signoff"].get("integrity_hash"))
@@ -317,7 +317,7 @@ class UnifiedCommandCenterSignoffStore:
             )
             return {"status": "passed", "zip_path": str(zip_path), "zip_sha256": final_sha, "manifest": manifest}
 
-    def verify_archive(self, center_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def verify_archive(self, center_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         report = verify_unified_command_center_archive_package(
             self.archive_zip_path(center_id),
@@ -331,7 +331,7 @@ class UnifiedCommandCenterSignoffStore:
         write_unified_command_center_archive_verification_report(report, self.archive_verification_report_path(center_id))
         return report
 
-    def gate(self, center_id: str, *, required: bool = True, archive_zip_path: Path | str | None = None, archive_verification_report_path: Path | str | None = None) -> DomainDocument:
+    def gate(self, center_id: str, *, required: bool = True, archive_zip_path: Path | str | None = None, archive_verification_report_path: Path | str | None = None) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
         archive_zip = Path(archive_zip_path) if archive_zip_path else self.archive_zip_path(center_id)
@@ -366,7 +366,7 @@ class UnifiedCommandCenterSignoffStore:
         signoff = read_json(self.signoff_path(center_id)) if self.signoff_path(center_id).exists() else {}
         if signoff.get("status") != "signed" and self.center_store.latest_signoff_state(center_id).get("status") == "signed":
             raise UnifiedCommandCenterSignoffStateError("Unified Command Center signoff file is missing but history shows a signed state.")
-        signoff_binding: ImplementationDocument = {}
+        signoff_binding: dict[str, Any] = {}
         if signoff.get("status") == "signed":
             signoff_binding = self._read_signoff_binding(center_id, signoff)
         report = read_json(self.center_store.report_path(center_id))

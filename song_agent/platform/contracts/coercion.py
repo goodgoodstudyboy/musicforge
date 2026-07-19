@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument
 import os
 from pathlib import Path
 from typing import Any
 
 
-def as_document(value: Any) -> DomainDocument:
+def as_document(value: Any) -> dict[str, Any]:
     """Return a mapping-shaped JSON value without copying it."""
     return value if isinstance(value, dict) else {}
 
@@ -16,7 +15,7 @@ def as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
-def document_or(value: Any, fallback: DomainDocument) -> DomainDocument:
+def document_or(value: Any, fallback: dict[str, Any]) -> dict[str, Any]:
     """Return a mapping-shaped value or an explicit mapping fallback."""
     return value if isinstance(value, dict) else fallback
 

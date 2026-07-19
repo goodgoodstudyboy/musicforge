@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InterfaceType
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
@@ -143,7 +143,7 @@ class CreationRoutesProjectMix(CreationRouteContext):
         return (False, None)
 
     def _handle_project_mix_route(self, method: str, project_id: str, version_id: str, action: str, resource_id: str | None=None) -> None:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InterfaceType] = {}
         _split_state['mix_store'] = _interfaces_api_runtime.MixRenderStore(self.project_store, self.store)
         _split_state['control_store'] = _interfaces_api_runtime.MixControlStore(self.project_store.project_dir(project_id))
         try:

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import hashlib
 import json
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from song_agent.platform.persistence.database import MusicForgeDatabase, SCHEMA_VERSION
 from song_agent.platform.persistence.file_artifacts import sha256_path, stable_tree_hash
@@ -33,7 +33,7 @@ class LegacyWorkspaceMigrator:
         self.legacy_roots = tuple(_safe_legacy_root(value) for value in legacy_roots)
         self.migration_root = self.workspace_root / "state" / "migrations"
 
-    def dry_run(self) -> DomainDocument:
+    def dry_run(self) -> dict[str, Any]:
         files = self._source_files()
         source_hash = stable_tree_hash(files)
         migration_id = f"legacy-{source_hash[:16]}"
@@ -52,7 +52,7 @@ class LegacyWorkspaceMigrator:
             "backup_required": True,
         }
 
-    def execute(self, *, fail_after_backup: bool = False) -> DomainDocument:
+    def execute(self, *, fail_after_backup: bool = False) -> dict[str, Any]:
         plan = self.dry_run()
         migration_id = str(plan["migration_id"])
         if plan["status"] == "no_changes":
@@ -131,7 +131,7 @@ class LegacyWorkspaceMigrator:
             report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             return report
 
-    def rollback(self, migration_id: str) -> DomainDocument:
+    def rollback(self, migration_id: str) -> dict[str, Any]:
         with WorkspaceLock(self.workspace_root, operation=f"legacy-migration-rollback:{migration_id}"):
             existing = self._existing(migration_id)
             if not existing:
@@ -237,7 +237,7 @@ def _program_documents(
     root: Path,
     rows: list[ImplementationDocument],
 ) -> list[tuple[str, ImplementationDocument, bytes]]:
-    documents: list[tuple[str, ImplementationDocument, bytes]] = []
+    documents: list[tuple[str, dict[str, Any], bytes]] = []
     for row in rows:
         relative = str(row["path"])
         parts = Path(relative.replace("\\", "/")).parts
@@ -258,7 +258,7 @@ def _program_documents(
     return documents
 
 
-def migration_source_id(rows: list[DomainDocument]) -> str:
+def migration_source_id(rows: list[dict[str, Any]]) -> str:
     payload = json.dumps(rows, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

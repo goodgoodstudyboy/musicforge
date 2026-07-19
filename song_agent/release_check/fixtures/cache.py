@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
 import atexit
 import hashlib
 import inspect
@@ -25,7 +24,7 @@ FixtureRelocator = Callable[[Path, Path], None]
 class FixtureCheckout:
     key: str
     path: Path
-    metadata: ImplementationDocument
+    metadata: dict[str, Any]
     cache_hit: bool
 
 
@@ -87,7 +86,7 @@ class ReleaseCheckFixtureCache:
         self._checkouts = 0
         self._active.clear()
 
-    def _prepare(self, key: str, builder: FixtureBuilder) -> tuple[Path, ImplementationDocument, bool]:
+    def _prepare(self, key: str, builder: FixtureBuilder) -> tuple[Path, dict[str, Any], bool]:
         cached = self._sources.get(key)
         if cached is not None and cached.is_dir():
             self._hits += 1
@@ -166,7 +165,7 @@ def reset_release_check_fixture_cache() -> None:
     _PROCESS_CACHE = None
 
 
-def _read_metadata(source: Path) -> ImplementationDocument:
+def _read_metadata(source: Path) -> dict[str, Any]:
     path = source / ".release-check-fixture.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 

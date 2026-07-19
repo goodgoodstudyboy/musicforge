@@ -1,6 +1,6 @@
 [project]
 name = "song-agent"
-version = "14.2.0"
+version = "14.2.1"
 description = "Open songwriting agent that uses LLM APIs and open renderers."
 requires-python = ">=3.11"
 dependencies = []
@@ -68,7 +68,6 @@ ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true
 follow_imports = "skip"
-exclude = "v142_.*\\.py$"
 files = [
   "song_agent/platform",
   "song_agent/application",

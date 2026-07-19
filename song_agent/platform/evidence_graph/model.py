@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.verification.hashing import stable_hash
@@ -13,7 +13,7 @@ class EvidenceEdge:
     target: str
     relation: str
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -29,7 +29,7 @@ class EvidenceNode:
     blockers: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     dependencies: tuple[str, ...] = ()
-    runtime_summary: ImplementationDocument = field(default_factory=dict)
+    runtime_summary: dict[str, Any] = field(default_factory=dict)
 
     @property
     def ready(self) -> bool:
@@ -40,7 +40,7 @@ class EvidenceNode:
             and not self.blockers
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
         value["ready"] = self.ready
         return value
@@ -75,7 +75,7 @@ class EvidenceGraph:
     def by_node_id(self) -> dict[str, EvidenceNode]:
         return {node.node_id: node for node in self.nodes}
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "status": self.status,

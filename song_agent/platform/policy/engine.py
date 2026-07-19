@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
+from typing import Any
 
 from song_agent.platform.contracts.policy import GateResult, PolicyProfile
 from song_agent.platform.evidence_graph.model import EvidenceGraph, EvidenceNode
@@ -12,7 +13,7 @@ class PolicyEvaluationError(RuntimeError):
 
 
 def evaluate_policy(profile: PolicyProfile, graph: EvidenceGraph) -> GateResult:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     blockers: list[str] = list(graph.blockers)
     warnings: list[str] = list(graph.warnings)
 

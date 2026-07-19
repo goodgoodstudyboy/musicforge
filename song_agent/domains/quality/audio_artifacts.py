@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -29,9 +29,9 @@ def build_audio_artifact_manifest(
     song_plan_path: Path,
     renderer_config: RendererConfig,
     profile: RendererProfile | None = None,
-    extra_source: DomainDocument | None = None,
+    extra_source: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     profile_payload = _renderer_profile_payload(profile, renderer_config)
     manifest = {
@@ -53,20 +53,20 @@ def build_audio_artifact_manifest(
     return sanitize_metadata(manifest)
 
 
-def write_audio_artifact_manifest(path: Path, manifest: DomainDocument) -> DomainDocument:
+def write_audio_artifact_manifest(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     clean = sanitize_metadata(manifest)
     write_json(path, clean)
     return clean
 
 
-def read_audio_artifact_manifest(path: Path, *, default: DomainDocument | None = None) -> DomainDocument:
+def read_audio_artifact_manifest(path: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
     if not path.exists():
         return default if default is not None else {}
     data = read_json(path)
     return sanitize_metadata(_as_document(data))
 
 
-def audio_artifact_source_hash(manifest: DomainDocument) -> str:
+def audio_artifact_source_hash(manifest: dict[str, Any]) -> str:
     return stable_hash(
         {
             "wav": _state_for_source(manifest.get("wav")),
@@ -78,26 +78,26 @@ def audio_artifact_source_hash(manifest: DomainDocument) -> str:
     )
 
 
-def audio_artifact_integrity_hash(manifest: DomainDocument) -> str:
+def audio_artifact_integrity_hash(manifest: dict[str, Any]) -> str:
     core = {key: value for key, value in manifest.items() if key not in _INTEGRITY_EXCLUDE_KEYS}
     return stable_hash(sanitize_metadata(core))
 
 
-def audio_artifact_integrity_ok(manifest: DomainDocument) -> bool:
+def audio_artifact_integrity_ok(manifest: dict[str, Any]) -> bool:
     expected = str(manifest.get("integrity_hash") or "")
     return bool(expected) and expected == audio_artifact_integrity_hash(manifest)
 
 
-def audio_artifact_current(manifest: DomainDocument, *, wav_path: Path, midi_path: Path, song_plan_path: Path) -> bool:
+def audio_artifact_current(manifest: dict[str, Any], *, wav_path: Path, midi_path: Path, song_plan_path: Path) -> bool:
     return not audio_artifact_stale_reasons(manifest, wav_path=wav_path, midi_path=midi_path, song_plan_path=song_plan_path)
 
 
-def audio_artifact_stale_reasons(manifest: DomainDocument, *, wav_path: Path, midi_path: Path, song_plan_path: Path) -> list[str]:
+def audio_artifact_stale_reasons(manifest: dict[str, Any], *, wav_path: Path, midi_path: Path, song_plan_path: Path) -> list[str]:
     return audio_artifact_stale_reasons_for_profile(manifest, wav_path=wav_path, midi_path=midi_path, song_plan_path=song_plan_path, profile=None)
 
 
 def audio_artifact_stale_reasons_for_profile(
-    manifest: DomainDocument,
+    manifest: dict[str, Any],
     *,
     wav_path: Path,
     midi_path: Path,
@@ -124,7 +124,7 @@ def audio_artifact_stale_reasons_for_profile(
     return reasons
 
 
-def audio_artifact_summary(manifest: DomainDocument, *, wav_path: Path | None = None, midi_path: Path | None = None, song_plan_path: Path | None = None) -> DomainDocument:
+def audio_artifact_summary(manifest: dict[str, Any], *, wav_path: Path | None = None, midi_path: Path | None = None, song_plan_path: Path | None = None) -> dict[str, Any]:
     current = bool(manifest.get("current", False))
     stale_reasons: list[str] = []
     if manifest and wav_path is not None and midi_path is not None and song_plan_path is not None:

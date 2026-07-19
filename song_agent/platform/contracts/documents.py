@@ -11,12 +11,10 @@ JsonDocument: TypeAlias = dict[str, JsonValue]
 # that escape hatch named lets the architecture gate prevent it from becoming a
 # public command, query, or report contract.
 ImplementationDocument: TypeAlias = dict[str, Any]
-DomainDocument: TypeAlias = ImplementationDocument
 
 
 __all__ = [
     "ImplementationDocument",
-    "DomainDocument",
     "JsonDocument",
     "JsonPrimitive",
     "JsonValue",

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
-from typing import Iterable
+from typing import Any, Iterable
 
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.contracts.policy import PolicyProfile
@@ -13,7 +13,7 @@ from song_agent.platform.policy import evaluate_policy
 _PASSING_STATES = {"passed", "ready", "signed", "closed", "current", "accepted", "not_required"}
 
 
-def normalized_legacy_require_payload(payload: DomainDocument) -> DomainDocument:
+def normalized_legacy_require_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = {
         key: value for key, value in payload.items() if key.startswith("require_")
     }
@@ -23,7 +23,7 @@ def normalized_legacy_require_payload(payload: DomainDocument) -> DomainDocument
     return normalized
 
 
-def legacy_require_summary(payload: DomainDocument, policy_id: str) -> DomainDocument:
+def legacy_require_summary(payload: dict[str, Any], policy_id: str) -> dict[str, Any]:
     payload = normalized_legacy_require_payload(payload)
     enabled = sorted(
         key
@@ -39,7 +39,7 @@ def legacy_require_summary(payload: DomainDocument, policy_id: str) -> DomainDoc
     }
 
 
-def canonical_release_policy_id(payload: DomainDocument) -> str:
+def canonical_release_policy_id(payload: dict[str, Any]) -> str:
     requested = str(payload.get("gate_policy") or payload.get("policy") or "").strip()
     if requested == "release.audio_strict":
         return "release.audio"
@@ -51,7 +51,7 @@ def canonical_release_policy_id(payload: DomainDocument) -> str:
     ) else "release.standard"
 
 
-def canonical_ga_policy_id(requested: str | None, payload: DomainDocument) -> str:
+def canonical_ga_policy_id(requested: str | None, payload: dict[str, Any]) -> str:
     if requested:
         return str(requested)
     lts_terms = ("continuity", "receiver", "final_readiness", "trust_control", "assurance")
@@ -64,12 +64,12 @@ def canonical_ga_policy_id(requested: str | None, payload: DomainDocument) -> st
 
 
 def evaluate_legacy_release_policy(
-    payload: DomainDocument,
-    acceptance_gate: DomainDocument,
+    payload: dict[str, Any],
+    acceptance_gate: dict[str, Any],
     *,
     release_id: str,
     qa_passed: bool,
-) -> DomainDocument:
+) -> dict[str, Any]:
     policy_id = canonical_release_policy_id(payload)
     external = acceptance_gate.get("evidence_policy")
     if isinstance(external, dict):
@@ -77,7 +77,7 @@ def evaluate_legacy_release_policy(
         result["policy_id"] = policy_id
         result["legacy_require_summary"] = legacy_require_summary(payload, policy_id)
         return result
-    rows: list[tuple[str, ImplementationDocument]] = [
+    rows: list[tuple[str, dict[str, Any]]] = [
         ("release_qa", {"status": "passed" if qa_passed else "failed"})
     ]
     if acceptance_gate.get("status"):
@@ -98,8 +98,8 @@ def evaluate_legacy_release_policy(
 def evaluate_check_policy(
     policy_id: str,
     component_id: str,
-    checks: Iterable[DomainDocument],
-) -> DomainDocument:
+    checks: Iterable[dict[str, Any]],
+) -> dict[str, Any]:
     rows = [
         (str(check.get("check_id") or "check"), check)
         for check in checks
@@ -111,8 +111,8 @@ def evaluate_check_policy(
 def evaluate_gate_rows(
     policy_id: str,
     component_id: str,
-    rows: Iterable[tuple[str, DomainDocument]],
-) -> DomainDocument:
+    rows: Iterable[tuple[str, dict[str, Any]]],
+) -> dict[str, Any]:
     nodes = tuple(_gate_node(component_id, key, value) for key, value in rows)
     graph = EvidenceGraph(nodes=nodes, edges=())
     gate = evaluate_policy(PolicyProfile(policy_id=policy_id, description="Legacy gate facts projected into Policy Engine."), graph)

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
+from typing import Any as _InterfaceType
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_delivery_parts_dependencies
 
@@ -22,7 +23,7 @@ def _release_train_handoff_payload_from_args(args: argparse.Namespace) -> Implem
         "lifecycle_verification_report": getattr(args, "lifecycle_verification_report", None),
     }
 
-def print_release_operations_result(result: DomainDocument) -> None:
+def print_release_operations_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     report = _as_document(result.get("report"))
     verification = _as_document(result.get("verification_summary"))
@@ -51,7 +52,7 @@ def print_release_operations_result(result: DomainDocument) -> None:
     if archive_verification:
         print(f"acceptance board signoff archive verify: {archive_verification.get('status')}")
 
-def print_release_operations_runbook_result(result: DomainDocument) -> None:
+def print_release_operations_runbook_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     verification = _as_document(result.get("verification_summary"))
     manifest = _as_document(result.get("manifest"))
@@ -69,7 +70,7 @@ def print_release_operations_runbook_result(result: DomainDocument) -> None:
     if verification:
         print(f"verify: {verification.get('status')}")
 
-def print_release_operations_signoff_result(result: DomainDocument) -> None:
+def print_release_operations_signoff_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     gate = _as_document(result.get("gate"))
     print("MusicForge release-operations-signoff")
@@ -80,7 +81,7 @@ def print_release_operations_signoff_result(result: DomainDocument) -> None:
     if gate:
         print(f"gate: {gate.get('status')} signable={gate.get('signable')}")
 
-def print_release_operations_archive_result(result: DomainDocument) -> None:
+def print_release_operations_archive_result(result: dict[str, _InterfaceType]) -> None:
     manifest = _as_document(result.get("manifest"))
     verification = _as_document(result.get("verification_summary"))
     print("MusicForge release-operations-archive")
@@ -92,7 +93,7 @@ def print_release_operations_archive_result(result: DomainDocument) -> None:
     if verification:
         print(f"verify: {verification.get('status')}")
 
-def print_release_operations_audit_result(result: DomainDocument) -> None:
+def print_release_operations_audit_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     verification = _as_document(result.get("verification_summary"))
     print("MusicForge release-operations-audit")
@@ -106,7 +107,7 @@ def print_release_operations_audit_result(result: DomainDocument) -> None:
     if verification:
         print(f"verify: {verification.get('status')}")
 
-def print_release_operations_reviewer_pack_result(result: DomainDocument) -> None:
+def print_release_operations_reviewer_pack_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     verification = _as_document(result.get("verification_summary"))
     print("MusicForge release-operations-reviewer-pack")

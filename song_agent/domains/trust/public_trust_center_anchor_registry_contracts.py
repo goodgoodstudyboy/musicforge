@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
+from typing import Any
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
@@ -32,7 +33,7 @@ ANCHOR_EVENT_HASH_EXCLUDE_KEYS = {"event_hash"}
 ANCHOR_ENTRY_STATUSES = {"draft", "published", "superseded", "revoked"}
 
 
-def anchor_registry_hash(registry: DomainDocument) -> str:
+def anchor_registry_hash(registry: dict[str, Any]) -> str:
     payload = {key: value for key, value in (registry or {}).items() if key not in ANCHOR_REGISTRY_HASH_EXCLUDE_KEYS}
     payload["state_events"] = [
         event
@@ -41,23 +42,23 @@ def anchor_registry_hash(registry: DomainDocument) -> str:
     return stable_hash(payload)
 
 
-def anchor_entry_hash(entry: DomainDocument) -> str:
+def anchor_entry_hash(entry: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (entry or {}).items() if key not in ANCHOR_ENTRY_HASH_EXCLUDE_KEYS})
 
 
-def anchor_registry_report_hash(report: DomainDocument) -> str:
+def anchor_registry_report_hash(report: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in ANCHOR_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def anchor_registry_manifest_hash(manifest: DomainDocument) -> str:
+def anchor_registry_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in ANCHOR_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def anchor_event_hash(event: DomainDocument) -> str:
+def anchor_event_hash(event: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (event or {}).items() if key not in ANCHOR_EVENT_HASH_EXCLUDE_KEYS})
 
 
-def anchor_entry_signature_ok(entry: DomainDocument | None) -> bool:
+def anchor_entry_signature_ok(entry: dict[str, Any] | None) -> bool:
     data = _as_document(entry)
     signature = _as_document(data.get("signature"))
     payload = {
@@ -77,7 +78,7 @@ def anchor_entry_signature_ok(entry: DomainDocument | None) -> bool:
     )
 
 
-def anchor_registry_summary(registry: DomainDocument | None) -> DomainDocument:
+def anchor_registry_summary(registry: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(registry)
     entries = _as_list(data.get("entries"))
     current = _current_entry(data)
@@ -97,7 +98,7 @@ def anchor_registry_summary(registry: DomainDocument | None) -> DomainDocument:
     )
 
 
-def anchor_registry_verification_summary(report: DomainDocument) -> DomainDocument:
+def anchor_registry_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
     summary = _as_document(report.get("summary"))
     return sanitize_metadata({"status": report.get("status"), "center_id": summary.get("center_id"), "current_entry_id": summary.get("current_entry_id"), "current_anchor_hash": summary.get("current_anchor_hash"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash")}, blocked_keys=ANCHOR_REGISTRY_BLOCKED_KEYS)
 

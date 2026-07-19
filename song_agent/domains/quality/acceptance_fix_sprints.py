@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -30,13 +29,16 @@ OPEN_REVIEW_TASK_STATUSES = {"open", "candidate_ready", "applied", "needs_more_w
 TERMINAL_REVIEW_TASK_STATUSES = {"resolved", "archived"}
 
 
-from song_agent.domains.quality import v142_afs_readiness as _v142_afs_readiness
-from song_agent.domains.quality.v142_afs_readiness import AcceptanceFixSprintError as AcceptanceFixSprintError, AcceptanceFixSprintNotFoundError as AcceptanceFixSprintNotFoundError, AcceptanceFixSprintStateError as AcceptanceFixSprintStateError, build_delta_report as build_delta_report, build_closeout_report as build_closeout_report, fix_sprint_summary as fix_sprint_summary, acceptance_fix_closeout_summary as acceptance_fix_closeout_summary, latest_fix_sprint_summary as latest_fix_sprint_summary, write_acceptance_fix_sprints_summary as write_acceptance_fix_sprints_summary, _selected_recommendations as _selected_recommendations, _item_from_recommendation as _item_from_recommendation, _counts as _counts, _matching_open_review_task as _matching_open_review_task, _issue_types_from_blob as _issue_types_from_blob, _request_for_recheck as _request_for_recheck, _source_report_id as _source_report_id, _song_deltas as _song_deltas, _issue_deltas as _issue_deltas, _review_task_close_rate as _review_task_close_rate, _accepted_count as _accepted_count, _review_count as _review_count, _close_check as _close_check, _safe_dict as _safe_dict, _bounded as _bounded, _optional_str as _optional_str, _int as _int, _validate_id as _validate_id, _lock_for_root as _lock_for_root, _append_event as _append_event
+class AcceptanceFixSprintError(ValueError):
+    pass
 
 
+class AcceptanceFixSprintNotFoundError(AcceptanceFixSprintError):
+    pass
 
 
-
+class AcceptanceFixSprintStateError(AcceptanceFixSprintError):
+    pass
 
 
 @dataclass
@@ -45,18 +47,18 @@ class AcceptanceFixItem:
     status: str
     priority: int
     severity: str
-    source: ImplementationDocument
-    target: ImplementationDocument
+    source: dict[str, Any]
+    target: dict[str, Any]
     title: str
     summary: str
-    evidence: ImplementationDocument = field(default_factory=dict)
+    evidence: dict[str, Any] = field(default_factory=dict)
     review_task_id: str | None = None
     review_sprint_id: str | None = None
-    resolution: ImplementationDocument = field(default_factory=lambda: {"status": "pending", "notes": ""})
+    resolution: dict[str, Any] = field(default_factory=lambda: {"status": "pending", "notes": ""})
     created_at: str = ""
     updated_at: str = ""
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return sanitize_metadata(
             {
                 "item_id": self.item_id,
@@ -77,7 +79,7 @@ class AcceptanceFixItem:
         )
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "AcceptanceFixItem":
+    def from_dict(cls, data: dict[str, Any]) -> "AcceptanceFixItem":
         now = now_iso()
         status = str(data.get("status") or "open")
         if status not in ITEM_STATUSES:
@@ -105,18 +107,18 @@ class AcceptanceFixSprint:
     fix_sprint_id: str
     name: str
     status: str
-    scope: ImplementationDocument
-    source: ImplementationDocument
-    settings: ImplementationDocument
-    counts: ImplementationDocument
-    recheck: ImplementationDocument
-    delta_summary: ImplementationDocument = field(default_factory=dict)
-    closeout_summary: ImplementationDocument = field(default_factory=dict)
+    scope: dict[str, Any]
+    source: dict[str, Any]
+    settings: dict[str, Any]
+    counts: dict[str, Any]
+    recheck: dict[str, Any]
+    delta_summary: dict[str, Any] = field(default_factory=dict)
+    closeout_summary: dict[str, Any] = field(default_factory=dict)
     created_at: str = ""
     updated_at: str = ""
     created_by: str = "developer"
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return sanitize_metadata(
             {
                 "schema_version": ACCEPTANCE_FIX_SPRINT_SCHEMA_VERSION,
@@ -137,7 +139,7 @@ class AcceptanceFixSprint:
         )
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "AcceptanceFixSprint":
+    def from_dict(cls, data: dict[str, Any]) -> "AcceptanceFixSprint":
         now = now_iso()
         status = str(data.get("status") or "draft")
         if status not in SPRINT_STATUSES:
@@ -213,7 +215,7 @@ class AcceptanceFixSprintStore:
         rows = _as_list(data.get("items"))
         return [AcceptanceFixItem.from_dict(item) for item in rows if isinstance(item, dict)]
 
-    def create_from_analytics(self, payload: DomainDocument | None = None, *, now: str | None = None) -> AcceptanceFixSprint:
+    def create_from_analytics(self, payload: dict[str, Any] | None = None, *, now: str | None = None) -> AcceptanceFixSprint:
         payload = payload or {}
         now = now or now_iso()
         report_id = str(payload.get("analytics_report_id") or "").strip()
@@ -299,7 +301,7 @@ class AcceptanceFixSprintStore:
             self._write_items(fix_sprint_id, synced)
         return synced
 
-    def create_review_tasks(self, fix_sprint_id: str, item_id: str | None = None, *, now: str | None = None) -> DomainDocument:
+    def create_review_tasks(self, fix_sprint_id: str, item_id: str | None = None, *, now: str | None = None) -> dict[str, Any]:
         sprint = self._require_actionable(fix_sprint_id)
         items = self.read_items(sprint.fix_sprint_id)
         selected = [item for item in items if item.item_id == item_id] if item_id else items
@@ -319,7 +321,7 @@ class AcceptanceFixSprintStore:
         updated_sprint = self.refresh_status(sprint.fix_sprint_id, now=now)
         return {"fix_sprint": updated_sprint.to_dict(), "items": [item.to_dict() for item in merged], "results": results, "summary": fix_sprint_summary(updated_sprint, merged)}
 
-    def add_item(self, fix_sprint_id: str, payload: DomainDocument, *, now: str | None = None) -> AcceptanceFixItem:
+    def add_item(self, fix_sprint_id: str, payload: dict[str, Any], *, now: str | None = None) -> AcceptanceFixItem:
         sprint = self._require_actionable(fix_sprint_id)
         title = _bounded(payload.get("title"), 180)
         reason = _bounded(payload.get("reason") or payload.get("summary"), 800)
@@ -358,7 +360,7 @@ class AcceptanceFixSprintStore:
         self._require_actionable(fix_sprint_id)
         return self._update_item(fix_sprint_id, item_id, {"status": "open", "resolution": {"status": "pending", "notes": ""}}, now=now)
 
-    def create_recheck_suite(self, fix_sprint_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def create_recheck_suite(self, fix_sprint_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         sprint = self._require_actionable(fix_sprint_id)
         items = self.read_items(fix_sprint_id)
@@ -405,7 +407,7 @@ class AcceptanceFixSprintStore:
         self._write_sprint(updated)
         return updated
 
-    def refresh_delta(self, fix_sprint_id: str, *, now: str | None = None) -> DomainDocument:
+    def refresh_delta(self, fix_sprint_id: str, *, now: str | None = None) -> dict[str, Any]:
         sprint = self._require_actionable(fix_sprint_id)
         suite_id = str(sprint.recheck.get("suite_id") or "")
         if not suite_id:
@@ -431,7 +433,7 @@ class AcceptanceFixSprintStore:
         self._write_sprint(updated)
         return delta
 
-    def read_delta(self, fix_sprint_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_delta(self, fix_sprint_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.sprint_dir(fix_sprint_id) / "delta-report.json"
         if not path.exists():
             if default is not None:
@@ -439,7 +441,7 @@ class AcceptanceFixSprintStore:
             raise AcceptanceFixSprintNotFoundError("delta-report.json")
         return sanitize_metadata(read_json(path))
 
-    def close(self, fix_sprint_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def close(self, fix_sprint_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         sprint = self.read_sprint(fix_sprint_id)
         force = bool(payload.get("force", False))
@@ -456,7 +458,7 @@ class AcceptanceFixSprintStore:
         self._write_sprint(updated)
         return closeout
 
-    def read_closeout(self, fix_sprint_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_closeout(self, fix_sprint_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.sprint_dir(fix_sprint_id) / "closeout-report.json"
         if not path.exists():
             if default is not None:
@@ -620,55 +622,336 @@ class AcceptanceFixSprintStore:
                 index += 1
 
 
+def build_delta_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], source_report: dict[str, Any], recheck_report: dict[str, Any], *, now: str | None = None, project_store: ProjectStore | None = None) -> dict[str, Any]:
+    before = acceptance_analytics_summary(source_report)
+    after = acceptance_analytics_summary(recheck_report)
+    before_summary = _as_document(source_report.get("summary"))
+    after_summary = _as_document(recheck_report.get("summary"))
+    before_rating = before.get("average_rating")
+    after_rating = after.get("average_rating")
+    rating_delta = round(float(after_rating or 0) - float(before_rating or 0), 2) if before_rating is not None and after_rating is not None else None
+    issue_delta = int(after.get("issue_count") or 0) - int(before.get("issue_count") or 0)
+    accepted_delta = int(after_summary.get("accepted_count") or 0) - int(before_summary.get("accepted_count") or 0)
+    fixed_count = sum(1 for item in items if item.status in {"fixed", "closed", "waived"})
+    status = "incomplete"
+    if after.get("readiness_status") == "blocked":
+        status = "blocked"
+    elif rating_delta is not None and (rating_delta > 0 or issue_delta < 0 or accepted_delta > 0):
+        status = "improved"
+    elif rating_delta is not None and (rating_delta < 0 or issue_delta > 0):
+        status = "regressed"
+    elif after.get("readiness_status") != "missing":
+        status = "unchanged"
+    return sanitize_metadata(
+        {
+            "schema_version": ACCEPTANCE_FIX_DELTA_SCHEMA_VERSION,
+            "fix_sprint_id": sprint.fix_sprint_id,
+            "generated_at": now or now_iso(),
+            "source": {"analytics_report_id": _source_report_id(sprint), "source_hash": sprint.source.get("source_hash")},
+            "recheck": {"suite_id": sprint.recheck.get("suite_id"), "analytics_report_id": recheck_report.get("report_id"), "source_hash": recheck_report.get("source_hash")},
+            "summary": {
+                "status": status,
+                "before_readiness": before.get("readiness_status"),
+                "after_readiness": after.get("readiness_status"),
+                "rating_delta": rating_delta,
+                "issue_count_delta": issue_delta,
+                "accepted_delta": accepted_delta,
+                "manual_accepted_count": _accepted_count(recheck_report, mode="manual"),
+                "synthetic_accepted_count": _accepted_count(recheck_report, mode="synthetic"),
+                "manual_review_count": _review_count(recheck_report, mode="manual"),
+                "synthetic_review_count": _review_count(recheck_report, mode="synthetic"),
+                "needs_fix_delta": int(after_summary.get("needs_fix_count") or 0) - int(before_summary.get("needs_fix_count") or 0),
+                "rejected_delta": int(after_summary.get("rejected_count") or 0) - int(before_summary.get("rejected_count") or 0),
+                "fixed_item_count": fixed_count,
+                "regressed_item_count": 0,
+                "review_task_close_rate": _review_task_close_rate(items, project_store),
+            },
+            "song_deltas": _song_deltas(source_report, recheck_report),
+            "issue_deltas": _issue_deltas(source_report, recheck_report),
+            "warnings": [],
+        }
+    )
 
 
+def build_closeout_report(sprint: AcceptanceFixSprint, items: list[AcceptanceFixItem], delta: dict[str, Any], *, force: bool = False, override_reason: str = "", now: str | None = None) -> dict[str, Any]:
+    active = [item for item in items if item.status not in {"waived", "fixed", "closed"}]
+    waived_without_reason = [item.item_id for item in items if item.status == "waived" and not str((item.resolution or {}).get("notes") or "").strip()]
+    after_readiness = (_as_document(delta.get("summary"))).get("after_readiness")
+    checks = [
+        _close_check("items_closed", not active, "blocking", "All non-waived fix items are closed or fixed.", [item.item_id for item in active]),
+        _close_check("recheck_suite_exists", bool(sprint.recheck.get("suite_id")), "blocking", "Recheck suite exists.", [] if sprint.recheck.get("suite_id") else ["missing_recheck_suite"]),
+        _close_check("delta_ready", bool(delta), "blocking", "Delta report exists.", [] if delta else ["missing_delta_report"]),
+        _close_check("recheck_not_blocked", after_readiness not in {"blocked", "missing", None}, "blocking", "Recheck analytics is not blocked.", [] if after_readiness not in {"blocked", "missing", None} else [str(after_readiness or "missing")]),
+        _close_check("waiver_reason", not waived_without_reason, "blocking", "Waived items have reasons.", waived_without_reason),
+    ]
+    blockers = [check for check in checks if check["status"] == "failed" and check.get("severity") == "blocking"]
+    if force and not override_reason.strip():
+        blockers.append(_close_check("override_reason", False, "blocking", "Force close requires override_reason.", ["missing_override_reason"]))
+    status = "passed" if not blockers else "force_closed" if force and override_reason.strip() else "failed"
+    return sanitize_metadata(
+        {
+            "schema_version": ACCEPTANCE_FIX_CLOSEOUT_SCHEMA_VERSION,
+            "fix_sprint_id": sprint.fix_sprint_id,
+            "generated_at": now or now_iso(),
+            "status": status,
+            "message": "Acceptance Fix Sprint closeout failed." if status == "failed" else "Acceptance Fix Sprint closeout complete.",
+            "forced": bool(force),
+            "override_reason": _bounded(override_reason, 500),
+            "checks": checks,
+            "summary": {"status": status, "item_count": len(items), "open_item_count": len(active), "delta_status": (delta.get("summary") or {}).get("status"), "after_readiness": after_readiness},
+        }
+    )
 
 
+def fix_sprint_summary(sprint: AcceptanceFixSprint | dict[str, Any] | None, items: list[AcceptanceFixItem] | None = None) -> dict[str, Any]:
+    data = sprint.to_dict() if isinstance(sprint, AcceptanceFixSprint) else _as_document(sprint)
+    counts = _as_document(data.get("counts"))
+    recheck = _as_document(data.get("recheck"))
+    delta = _as_document(data.get("delta_summary"))
+    closeout = _as_document(data.get("closeout_summary"))
+    delta_status = delta.get("status")
+    if not delta_status and isinstance(delta.get("summary"), dict):
+        delta_status = delta["summary"].get("status")
+    return sanitize_metadata(
+        {
+            "fix_sprint_id": data.get("fix_sprint_id"),
+            "status": data.get("status") or "missing",
+            "source_report_id": (_as_document(data.get("source"))).get("report_id") or (_as_document(data.get("source"))).get("analytics_report_id"),
+            "source_hash": (_as_document(data.get("source"))).get("source_hash"),
+            "item_count": counts.get("item_count", len(items or [])),
+            "open_item_count": counts.get("open_item_count", 0),
+            "linked_review_task_count": counts.get("linked_review_task_count", 0),
+            "completed_review_task_count": counts.get("completed_review_task_count", 0),
+            "recheck_suite_id": recheck.get("suite_id"),
+            "recheck_status": recheck.get("status") or "not_started",
+            "delta_status": delta_status,
+            "closeout_status": closeout.get("status") or "missing",
+        }
+    )
 
 
+def acceptance_fix_closeout_summary(closeout: dict[str, Any] | None) -> dict[str, Any]:
+    data = _as_document(closeout)
+    summary = _as_document(data.get("summary"))
+    return sanitize_metadata({"status": data.get("status") or "missing", "forced": bool(data.get("forced", False)), "delta_status": summary.get("delta_status"), "after_readiness": summary.get("after_readiness")})
 
 
+def latest_fix_sprint_summary(store: AcceptanceFixSprintStore, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
+    for sprint in store.list_sprints(include_archived=True):
+        scope = _as_document(sprint.scope)
+        if release_id and scope.get("release_id") != release_id:
+            continue
+        items = store.read_items(sprint.fix_sprint_id)
+        if project_id and scope.get("project_id") != project_id and not any(str(item.target.get("project_id") or "") == project_id for item in items):
+            continue
+        return fix_sprint_summary(sprint, items)
+    return {"status": "missing"}
 
 
+def write_acceptance_fix_sprints_summary(path: Path, store: AcceptanceFixSprintStore, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
+    summary = latest_fix_sprint_summary(store, release_id=release_id, project_id=project_id)
+    write_json(path, summary)
+    return summary
 
 
+def _selected_recommendations(report: ImplementationDocument, recommendation_ids: Any, *, max_items: int) -> list[ImplementationDocument]:
+    rows = [item for item in report.get("recommendations", []) if isinstance(item, dict)]
+    selected_ids = [str(item) for item in recommendation_ids if str(item).strip()] if isinstance(recommendation_ids, list) else []
+    if selected_ids:
+        wanted = set(selected_ids)
+        rows = [item for item in rows if str(item.get("recommendation_id") or "") in wanted]
+    else:
+        rows = [item for item in rows if item.get("type") == "create_review_task"] or rows[:max_items]
+    seen = set()
+    deduped = []
+    for row in rows:
+        key = str(row.get("recommendation_id") or stable_hash(row))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped[:max_items]
 
 
+def _item_from_recommendation(index: int, recommendation: ImplementationDocument, *, report_id: str, source_hash: str, now: str) -> AcceptanceFixItem:
+    target = _safe_dict(recommendation.get("target"))
+    evidence = _safe_dict(recommendation.get("evidence"))
+    issue_types = [str(item) for item in evidence.get("issue_types", []) if str(item).strip()] if isinstance(evidence.get("issue_types"), list) else []
+    if issue_types:
+        target["issue_types"] = issue_types
+    severity = str(recommendation.get("severity") or "medium")
+    priority = 90 if severity == "high" else 72 if severity == "medium" else 50
+    return AcceptanceFixItem(
+        item_id=f"afi-{index:06d}",
+        status="open",
+        priority=priority,
+        severity=severity,
+        source={"source_type": "analytics_recommendation", "report_id": report_id, "recommendation_id": recommendation.get("recommendation_id"), "source_hash": source_hash, "recommendation_hash": stable_hash(recommendation)},
+        target=target,
+        title=_bounded(recommendation.get("title"), 180) or "Fix acceptance weakness",
+        summary=_bounded(recommendation.get("reason"), 800) or "Acceptance analytics recommends a follow-up fix.",
+        evidence={**evidence, "weakness_score": recommendation.get("weakness_score")},
+        created_at=now,
+        updated_at=now,
+    )
 
 
+def _counts(items: list[AcceptanceFixItem], project_store: ProjectStore | None = None) -> ImplementationDocument:
+    linked = len([item for item in items if item.review_task_id])
+    completed = 0
+    if project_store:
+        for item in items:
+            if not item.review_task_id or not item.target.get("project_id"):
+                continue
+            try:
+                task = ReviewTaskStore(project_store.project_dir(str(item.target.get("project_id")))).read_task(str(item.review_task_id))
+                if task.status in TERMINAL_REVIEW_TASK_STATUSES:
+                    completed += 1
+            except Exception:
+                continue
+    return {
+        "item_count": len(items),
+        "open_item_count": len([item for item in items if item.status in {"open", "linked", "in_progress", "needs_recheck", "blocked", "stale"}]),
+        "linked_review_task_count": linked,
+        "completed_review_task_count": completed,
+        "waived_item_count": len([item for item in items if item.status == "waived"]),
+        "fixed_item_count": len([item for item in items if item.status in {"fixed", "closed"}]),
+    }
 
 
+def _matching_open_review_task(project_dir: Path, song_id: str, issue_types: list[str]) -> ReviewTask | None:
+    store = ReviewTaskStore(project_dir)
+    wanted = set(issue_types)
+    for task in store.list_tasks(include_archived=False):
+        if task.status not in OPEN_REVIEW_TASK_STATUSES:
+            continue
+        blob = json.dumps({"source": task.source, "target": task.target, "title": task.title}, ensure_ascii=False)
+        if song_id and song_id not in blob:
+            continue
+        if wanted and not wanted.intersection(set(_issue_types_from_blob(blob))):
+            continue
+        return task
+    return None
 
 
+def _issue_types_from_blob(blob: str) -> list[str]:
+    found = []
+    for value in ["hook", "rhythm", "melody", "arrangement", "mix", "structure", "ending", "lyrics", "performance", "other"]:
+        if value in blob:
+            found.append(value)
+    return found
 
 
+def _request_for_recheck(report: ImplementationDocument, song_id: str) -> ImplementationDocument:
+    source = _as_document(report.get("source"))
+    for suite_row in source.get("suites", []) if isinstance(source.get("suites"), list) else []:
+        for case_row in suite_row.get("cases", []) if isinstance(suite_row.get("cases"), list) else []:
+            case = _as_document(case_row.get("case"))
+            if case.get("song_id") == song_id:
+                summary = _as_document(case.get("request_summary"))
+                return {"title": summary.get("title") or song_id, "language": summary.get("language") or "English", "style": summary.get("style") or "pop", "theme": summary.get("theme") or "acceptance fix recheck", "duration_seconds": 90}
+    return {"title": song_id, "language": "English", "style": "pop", "theme": "acceptance fix recheck", "duration_seconds": 90}
 
 
+def _source_report_id(sprint: AcceptanceFixSprint) -> str:
+    return str(sprint.source.get("report_id") or sprint.source.get("analytics_report_id") or "")
 
 
+def _song_deltas(source_report: ImplementationDocument, recheck_report: ImplementationDocument) -> list[ImplementationDocument]:
+    before = {str(item.get("song_id") or ""): item for item in source_report.get("songbook_heatmap", []) if isinstance(item, dict)}
+    after = {str(item.get("song_id") or ""): item for item in recheck_report.get("songbook_heatmap", []) if isinstance(item, dict)}
+    rows = []
+    for song_id in sorted(set(before) | set(after)):
+        left = before.get(song_id, {})
+        right = after.get(song_id, {})
+        if not left and not right:
+            continue
+        rows.append({"song_id": song_id, "before_status": left.get("latest_status"), "after_status": right.get("latest_status"), "before_rating": left.get("average_rating"), "after_rating": right.get("average_rating"), "issue_delta": int(right.get("issue_count") or 0) - int(left.get("issue_count") or 0)})
+    return rows[:50]
 
 
+def _issue_deltas(source_report: ImplementationDocument, recheck_report: ImplementationDocument) -> list[ImplementationDocument]:
+    before = {str(item.get("issue_type") or ""): int(item.get("count") or 0) for item in source_report.get("issue_taxonomy", []) if isinstance(item, dict)}
+    after = {str(item.get("issue_type") or ""): int(item.get("count") or 0) for item in recheck_report.get("issue_taxonomy", []) if isinstance(item, dict)}
+    return [{"issue_type": key, "before_count": before.get(key, 0), "after_count": after.get(key, 0), "count_delta": after.get(key, 0) - before.get(key, 0)} for key in sorted(set(before) | set(after))][:50]
 
 
+def _review_task_close_rate(items: list[AcceptanceFixItem], project_store: ProjectStore | None) -> float:
+    linked = [item for item in items if item.review_task_id and item.target.get("project_id")]
+    if not linked or not project_store:
+        return 0.0
+    closed = 0
+    for item in linked:
+        try:
+            task = ReviewTaskStore(project_store.project_dir(str(item.target.get("project_id")))).read_task(str(item.review_task_id))
+            if task.status in TERMINAL_REVIEW_TASK_STATUSES:
+                closed += 1
+        except Exception:
+            continue
+    return round(closed / len(linked), 4)
 
 
+def _accepted_count(report: ImplementationDocument, *, mode: str) -> int:
+    summary = _as_document(report.get("summary"))
+    key = f"{mode}_accepted_count"
+    if key in summary:
+        return _int(summary.get(key), 0)
+    return sum(1 for row in report.get("cases", []) if isinstance(row, dict) and row.get("review_mode") == mode and row.get("review_status") == "accepted")
 
 
+def _review_count(report: ImplementationDocument, *, mode: str) -> int:
+    summary = _as_document(report.get("summary"))
+    key = f"{mode}_review_count"
+    if key in summary:
+        return _int(summary.get(key), 0)
+    return sum(1 for row in report.get("cases", []) if isinstance(row, dict) and row.get("review_mode") == mode and row.get("review_status") in {"accepted", "needs_fix", "rejected", "waived"})
 
 
+def _close_check(check_id: str, passed: bool, severity: str, message: str, details: list[str]) -> ImplementationDocument:
+    return {"check_id": check_id, "status": "passed" if passed else "failed", "severity": severity, "message": message if passed else f"{message} Problems: {', '.join(details[:5])}", "details": details}
 
 
+def _safe_dict(value: Any) -> ImplementationDocument:
+    return sanitize_metadata(_as_document(value))
 
 
+def _bounded(value: Any, limit: int) -> str:
+    return sanitize_sensitive_text(str(value or ""))[:limit]
 
 
+def _optional_str(value: Any, limit: int) -> str | None:
+    text = _bounded(value, limit).strip()
+    return text or None
 
 
+def _int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
+def _validate_id(value: str, prefix: str) -> str:
+    text = str(value or "").strip()
+    if not re.fullmatch(rf"{re.escape(prefix)}-[0-9]{{6}}", text):
+        raise AcceptanceFixSprintError(f"Invalid {prefix} id.")
+    return text
 
 
 _LOCKS: dict[str, threading.RLock] = {}
 _LOCKS_GUARD = threading.Lock()
 
-_v142_afs_readiness.bind_globals(globals())
+
+def _lock_for_root(root: Path) -> threading.RLock:
+    key = str(root.resolve())
+    with _LOCKS_GUARD:
+        if key not in _LOCKS:
+            _LOCKS[key] = threading.RLock()
+        return _LOCKS[key]
+
+
+def _append_event(path: Path, event: str, payload: ImplementationDocument | None = None, now: str | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = sanitize_metadata({"timestamp": now or now_iso(), "event": event, **(payload or {})})
+    with path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(record, ensure_ascii=False) + "\n")

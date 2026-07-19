@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -460,7 +460,7 @@ class LegacyReleaseSignoffAdapter:
         return (False, None)
 
     def execute(self, method: str, release_id: str) -> None:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._execute_part_01(method, release_id, _split_state)
         if _split_result[0]:
             return _split_result[1]

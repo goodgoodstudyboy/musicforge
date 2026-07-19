@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import os as os
 from dataclasses import asdict as asdict, dataclass as dataclass
 from pathlib import Path as Path
@@ -17,7 +16,7 @@ def load_provider_config(
     env: dict[str, str] | None = None,
 ) -> tuple[ProviderConfig, dict[str, str]]:
     env_data = env if env is not None else os.environ
-    data: ImplementationDocument = {}
+    data: dict[str, Any] = {}
     sources = {field: "default" for field in ProviderConfig.__dataclass_fields__}
 
     if path.exists():
@@ -40,7 +39,7 @@ def save_provider_config(config: ProviderConfig, path: Path = CONFIG_PATH) -> Pa
     return write_json(path, config.to_dict())
 
 
-def save_provider_config_from_dict(data: DomainDocument, path: Path = CONFIG_PATH) -> ProviderConfig:
+def save_provider_config_from_dict(data: dict[str, Any], path: Path = CONFIG_PATH) -> ProviderConfig:
     config = ProviderConfig.from_dict(data)
     save_provider_config(config, path)
     return config
@@ -57,7 +56,7 @@ def provider_configured(config: ProviderConfig) -> bool:
     return bool(config.model and (config.wire_api == "mock" or (config.base_url and config.api_key)))
 
 
-def test_provider_config(config: ProviderConfig) -> DomainDocument:
+def test_provider_config(config: ProviderConfig) -> dict[str, Any]:
     config.validate_ready_for_provider()
     if config.wire_api == "mock":
         from song_agent.domains.creation.providers.mock import MockProviderClient

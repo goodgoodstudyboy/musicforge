@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -90,8 +90,8 @@ def verify_public_trust_center_distribution_kit_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-    _acceptance_board_signoff_verifier: Callable[..., DomainDocument] | None = None,
-) -> DomainDocument:
+    _acceptance_board_signoff_verifier: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     verifier = _DistributionKitVerifier(
         Path(zip_path),
         strict=strict,
@@ -117,11 +117,11 @@ def verify_public_trust_center_distribution_kit_package(
     return verifier.run()
 
 
-def write_public_trust_center_distribution_kit_verification_report(report: DomainDocument, path: Path | str) -> Path:
+def write_public_trust_center_distribution_kit_verification_report(report: dict[str, Any], path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_public_trust_center_distribution_kit_verification_report(report: DomainDocument) -> None:
+def print_public_trust_center_distribution_kit_verification_report(report: dict[str, Any]) -> None:
     print("MusicForge Public Trust Center Distribution Kit verification")
     print(f"status: {report.get('status')}")
     print(f"center: {(_as_document(report.get('summary'))).get('center_id') or 'unknown'}")
@@ -136,7 +136,7 @@ def print_public_trust_center_distribution_kit_verification_report(report: Domai
             print(f"  [{item.get('check_id', 'unknown')}] {item.get('message', '')}")
 
 
-def public_trust_center_distribution_kit_verification_exit_code(report: DomainDocument) -> int:
+def public_trust_center_distribution_kit_verification_exit_code(report: dict[str, Any]) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -185,18 +185,18 @@ class _DistributionKitVerifier:
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
         self.acceptance_board_signoff_verifier = acceptance_board_signoff_verifier
-        self.checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
-        self.redaction_findings: list[ImplementationDocument] = []
-        self.manifest: ImplementationDocument = {}
-        self.report_doc: ImplementationDocument = {}
-        self.file_index: ImplementationDocument = {}
-        self.verification_index: ImplementationDocument = {}
-        self.chain: ImplementationDocument = {}
-        self.ptc_verification: ImplementationDocument = {}
-        self.registry_verification: ImplementationDocument = {}
-        self.transparency_verification: ImplementationDocument = {}
-        self.checkpoint: ImplementationDocument = {}
+        self.checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
+        self.redaction_findings: list[dict[str, Any]] = []
+        self.manifest: dict[str, Any] = {}
+        self.report_doc: dict[str, Any] = {}
+        self.file_index: dict[str, Any] = {}
+        self.verification_index: dict[str, Any] = {}
+        self.chain: dict[str, Any] = {}
+        self.ptc_verification: dict[str, Any] = {}
+        self.registry_verification: dict[str, Any] = {}
+        self.transparency_verification: dict[str, Any] = {}
+        self.checkpoint: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -205,7 +205,7 @@ class _DistributionKitVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -271,7 +271,7 @@ class _DistributionKitVerifier:
         self._add_hash_check("manifest", "ptcdk_manifest_integrity", self.manifest.get("integrity_hash"), distribution_kit_manifest_hash(self.manifest), "Distribution Kit manifest integrity")
         self._add_exact_check("manifest", "ptcdk_manifest_package_type", self.manifest.get("package_type"), DISTRIBUTION_KIT_PACKAGE_TYPE, "Manifest package_type")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[ImplementationDocument] = []
+        valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -440,7 +440,7 @@ class _DistributionKitVerifier:
             self._add_check(scope, f"{prefix}_passed", "passed" if actual.get("status") == "passed" else "failed", "blocking", f"{scope} deep verification passed." if actual.get("status") == "passed" else f"{scope} deep verification failed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[ImplementationDocument] = []
+        findings: list[dict[str, Any]] = []
         for info in self.entry_infos:
             if int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
                 continue
@@ -554,7 +554,7 @@ def _counts(values: list[str]) -> dict[str, int]:
 
 
 def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
-    findings: list[ImplementationDocument] = []
+    findings: list[dict[str, Any]] = []
     for pattern in SENSITIVE_VALUE_PATTERNS + LOCAL_PATH_VALUE_PATTERNS:
         compiled = pattern[0] if isinstance(pattern, tuple) and pattern else pattern
         label = pattern[1] if isinstance(pattern, tuple) and len(pattern) > 1 else getattr(compiled, "pattern", str(compiled))
@@ -564,7 +564,7 @@ def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[ImplementationDocument]:
-    findings: list[ImplementationDocument] = []
+    findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():
             path = f"{prefix}.{key}" if prefix else str(key)

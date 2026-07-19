@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -69,17 +69,17 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
     def zip_path(self, portfolio_id: str, profile: str = "public_summary") -> Path:
         return self.root_dir(portfolio_id, profile) / "governance-attestation-accepted-evidence.zip"
 
-    def read_evidence(self, portfolio_id: str, *, profile: str = "public_summary", default: DomainDocument | None = None) -> DomainDocument:
+    def read_evidence(self, portfolio_id: str, *, profile: str = "public_summary", default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.evidence_path(portfolio_id, profile), default=default)
 
-    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         path = self.export_dir(portfolio_id, profile) / "accepted-evidence-manifest.json"
         if not path.exists():
             raise ReleasePortfolioGovernanceAttestationAcceptedEvidenceNotFoundError("Accepted Evidence export has not been generated.")
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
-    def refresh_evidence(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh_evidence(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             payload = payload or {}
@@ -126,10 +126,10 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         response_id: str,
         *,
         profile: str = "public_summary",
-        response: DomainDocument | None = None,
-        pack: DomainDocument | None = None,
-        verification: DomainDocument | None = None,
-    ) -> DomainDocument:
+        response: dict[str, Any] | None = None,
+        pack: dict[str, Any] | None = None,
+        verification: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         response = _document_or(response, self.review_store.get_response(portfolio_id, response_id, profile=profile))
         pack = _document_or(pack, self.review_store.read_pack(portfolio_id, profile=profile, default={}))
         verification = _document_or(verification, self.review_store.verify_response(portfolio_id, response_id, profile=profile))
@@ -174,7 +174,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         }
         return sanitize_metadata(source, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
-    def evidence_is_stale(self, portfolio_id: str, evidence: DomainDocument | None = None, *, profile: str = "public_summary") -> bool:
+    def evidence_is_stale(self, portfolio_id: str, evidence: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
         data = _document_or(evidence, self.read_evidence(portfolio_id, profile=profile, default={}))
         if not data:
             return False
@@ -188,7 +188,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
             return True
         return _source_stale_hash(current) != _source_stale_hash(source)
 
-    def export_evidence(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def export_evidence(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             profile = str((payload or {}).get("profile") or "public_summary")
@@ -240,7 +240,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
             self._append_history(portfolio_id, profile, "accepted_evidence_exported", {**state, "manifest_hash": manifest["integrity_hash"]}, now=now)
             return sanitize_metadata(manifest, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
-    def build_zip(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             profile = str((payload or {}).get("profile") or "public_summary")
@@ -280,7 +280,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
             self._append_history(portfolio_id, profile, "accepted_evidence_zip_built", {**state, "zip_sha256": info["sha256"]}, now=now)
             return sanitize_metadata(info, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
-    def verify_evidence(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def verify_evidence(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_verifier import verify_release_portfolio_governance_attestation_accepted_evidence, write_release_portfolio_governance_attestation_accepted_evidence_verification_report
 
         profile = str((payload or {}).get("profile") or "public_summary")
@@ -293,7 +293,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         write_release_portfolio_governance_attestation_accepted_evidence_verification_report(report, self.verification_report_path(portfolio_id, profile))
         return report
 
-    def archive_evidence(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def archive_evidence(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             profile = str((payload or {}).get("profile") or "public_summary")
@@ -312,7 +312,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
             self._append_history(portfolio_id, profile, "accepted_evidence_archived", {"accepted_evidence_id": evidence.get("accepted_evidence_id"), "reason_hash": stable_hash(reason)}, now=now)
             return sanitize_metadata(evidence, blocked_keys=ACCEPTED_EVIDENCE_BLOCKED_KEYS)
 
-    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         evidence = self.read_evidence(portfolio_id, profile=profile, default={})
         if not evidence:
             return {"status": "missing", "external_review_status": "missing", "profile": profile}
@@ -324,7 +324,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         root = self.review_store.responses_dir(portfolio_id, profile)
         if not root.exists():
             return ""
-        rows: list[ImplementationDocument] = []
+        rows: list[dict[str, Any]] = []
         for path in sorted(root.glob("aprr-*.json")):
             value = _read_json_default(path, default={})
             if value.get("decision") == "accepted" and value.get("status") == "accepted":
@@ -340,7 +340,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         return ""
 
     def _findings(self, source: ImplementationDocument, response: ImplementationDocument, pack: ImplementationDocument, verification: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
-        checks: list[ImplementationDocument] = []
+        checks: list[dict[str, Any]] = []
 
         def check(check_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
             row = {"check_id": check_id, "status": "passed" if passed else "warning" if warning else "failed", "severity": "warning" if warning else "blocking", "message": message}
@@ -399,7 +399,7 @@ class ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
 
 
 
-def accepted_evidence_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
+def accepted_evidence_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
     data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == accepted_evidence_manifest_hash(data)
 

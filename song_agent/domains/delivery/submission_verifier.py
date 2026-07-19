@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -54,7 +54,7 @@ def verify_submission_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     verifier = _SubmissionPackageVerifier(
         Path(zip_path),
         strict=strict,
@@ -70,7 +70,7 @@ def verify_submission_package(
     return verifier.run()
 
 
-def submission_verification_summary(report: DomainDocument) -> DomainDocument:
+def submission_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
     summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
@@ -87,11 +87,11 @@ def submission_verification_summary(report: DomainDocument) -> DomainDocument:
     )
 
 
-def write_submission_verification_report(report: DomainDocument, path: Path | str) -> Path:
+def write_submission_verification_report(report: dict[str, Any], path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
 
 
-def print_submission_verification_report(report: DomainDocument) -> None:
+def print_submission_verification_report(report: dict[str, Any]) -> None:
     summary = submission_verification_summary(report)
     print("MusicForge submission package verification")
     print(f"status: {summary.get('status')}")
@@ -115,7 +115,7 @@ def print_submission_verification_report(report: DomainDocument) -> None:
             print(f"  ... {len(items) - 10} more")
 
 
-def submission_verification_exit_code(report: DomainDocument) -> int:
+def submission_verification_exit_code(report: dict[str, Any]) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -144,13 +144,13 @@ class _SubmissionPackageVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[ImplementationDocument] = []
-        self.item_checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
-        self.redaction_findings: list[ImplementationDocument] = []
-        self.manifest: ImplementationDocument = {}
-        self.signoff: ImplementationDocument = {}
-        self.report_doc: ImplementationDocument = {}
+        self.checks: list[dict[str, Any]] = []
+        self.item_checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
+        self.redaction_findings: list[dict[str, Any]] = []
+        self.manifest: dict[str, Any] = {}
+        self.signoff: dict[str, Any] = {}
+        self.report_doc: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -159,7 +159,7 @@ class _SubmissionPackageVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -229,7 +229,7 @@ class _SubmissionPackageVerifier:
             missing_fields.append("summary")
         self._add_check("manifest", "submission_manifest_schema", "failed" if missing_fields else "passed", "blocking", "Missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Submission manifest schema has required fields.", count=len(missing_fields))
         rows = _as_list(self.manifest.get("files"))
-        valid_rows: list[ImplementationDocument] = []
+        valid_rows: list[dict[str, Any]] = []
         shape_errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -419,13 +419,13 @@ class _SubmissionPackageVerifier:
         return value
 
     def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str, *, count: int | None = None) -> None:
-        item: ImplementationDocument = {"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message}
+        item: dict[str, Any] = {"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message}
         if count is not None:
             item["count"] = count
         self.checks.append(sanitize_metadata(item, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
 
     def _add_item_check(self, item_id: str, check_id: str, status: str, severity: str, message: str, *, target_id: str | None = None, count: int | None = None, extra: ImplementationDocument | None = None) -> None:
-        item: ImplementationDocument = {"scope": "item", "item_id": item_id, "check_id": check_id, "status": status, "severity": severity, "message": message}
+        item: dict[str, Any] = {"scope": "item", "item_id": item_id, "check_id": check_id, "status": status, "severity": severity, "message": message}
         if target_id:
             item["target_id"] = target_id
         if count is not None:
@@ -503,7 +503,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 
 
 def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
-    findings: list[ImplementationDocument] = []
+    findings: list[dict[str, Any]] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         if pattern.search(text):
             findings.append({"path": path, "kind": kind, "message": f"{path} contains a local path-like value."})
@@ -514,7 +514,7 @@ def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(path: str, value: Any, *, prefix: str = "") -> list[ImplementationDocument]:
-    findings: list[ImplementationDocument] = []
+    findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, item in value.items():
             child_path = f"{prefix}.{key}" if prefix else str(key)

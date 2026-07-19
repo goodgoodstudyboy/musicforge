@@ -1,9 +1,8 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -56,10 +55,10 @@ def build_release_export_bundle(
     release: ReleaseDocument,
     release_store: ReleaseStore,
     project_store: ProjectStore,
-    qa_report: DomainDocument,
+    qa_report: dict[str, Any],
     now: str | None = None,
     allow_signed: bool = False,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     if not allow_signed:
         _ensure_release_export_mutable(release_store, release.release_id, release=release)
@@ -73,8 +72,8 @@ def build_release_export_bundle(
         shutil.rmtree(export_dir)
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    copied_files: list[ImplementationDocument] = []
-    tracklist: list[ImplementationDocument] = []
+    copied_files: list[dict[str, Any]] = []
+    tracklist: list[dict[str, Any]] = []
     used_slugs: set[str] = set()
     mastered_track_sources = selected_mastering_track_sources(release_store, release.release_id, project_store=project_store)
     for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
@@ -121,8 +120,8 @@ def build_release_export_bundle(
     audio_revisions_summary = _release_audio_revisions_summary(release_store, release.release_id, export_dir)
     mastering_summary = _release_mastering_summary(release_store, release.release_id, export_dir)
     encoded_audio_summary = _release_encoded_audio_summary(release_store, release.release_id, export_dir)
-    encoded_audio_acceptance_summary: ImplementationDocument = {"status": "pending", "required_profiles": [], "track_count": 0}
-    format_decision_summary: ImplementationDocument = {"status": "pending"}
+    encoded_audio_acceptance_summary: dict[str, Any] = {"status": "pending", "required_profiles": [], "track_count": 0}
+    format_decision_summary: dict[str, Any] = {"status": "pending"}
     rights_clearance_summary = _release_rights_clearance_summary(release_store, release.release_id, export_dir)
     _write_readme(export_dir, release, tracklist, qa_public, signoff_public)
     copied_files.extend(_file_record(export_dir, path) for path in [export_dir / "release.json", export_dir / "tracklist.json", export_dir / "release-qa.json", export_dir / "README.txt"])
@@ -250,7 +249,7 @@ def build_release_export_bundle(
     return manifest
 
 
-def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, now: str | None = None, allow_signed: bool = False) -> DomainDocument:
+def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, now: str | None = None, allow_signed: bool = False) -> dict[str, Any]:
     if not allow_signed:
         _ensure_release_export_mutable(release_store, release_id)
     refresh_release_export_signoff_summary(release_store, release_id)
@@ -303,7 +302,7 @@ def _ensure_release_export_mutable(release_store: ReleaseStore, release_id: str,
         raise ReleaseExportError("Signed releases cannot rebuild export or ZIP. Reset signoff before exporting again.")
 
 
-def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_id: str) -> DomainDocument:
+def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:
     export_dir = release_store.export_dir(release_id)
     manifest_path = export_dir / "manifest.json"
     if not manifest_path.exists():
@@ -324,7 +323,7 @@ def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_
     return read_release_export_manifest(release_store, release_id)
 
 
-def release_export_summary(manifest: DomainDocument | None) -> DomainDocument:
+def release_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(manifest)
     summary = _as_document(data.get("summary"))
     zip_info = _as_document(data.get("zip"))
@@ -350,7 +349,7 @@ def release_export_summary(manifest: DomainDocument | None) -> DomainDocument:
 def _copy_track_files(source_dir: Path, target_dir: Path, track_dir_name: str, *, mastered_wav: Path | None = None) -> list[ImplementationDocument]:
     if not source_dir.exists() or not source_dir.is_dir() or source_dir.is_symlink():
         raise ReleaseExportError("Project Final Export directory is missing.")
-    records: list[ImplementationDocument] = []
+    records: list[dict[str, Any]] = []
     for file in sorted(source_dir.rglob("*")):
         if not file.is_file() or file.is_symlink():
             continue
@@ -500,7 +499,189 @@ def _release_signoff_sidecar_record(signoff_public: ImplementationDocument) -> I
     }
 
 
-from song_agent.domains.delivery import v142_re_readiness as _v142_re_readiness
-from song_agent.domains.delivery.v142_re_readiness import _release_signoff_hash_payload as _release_signoff_hash_payload, _release_acceptance_analytics_summary as _release_acceptance_analytics_summary, _release_acceptance_fix_sprint_summary as _release_acceptance_fix_sprint_summary, _release_acceptance_fix_plan_summary as _release_acceptance_fix_plan_summary, _release_acceptance_fix_plan_review_summary as _release_acceptance_fix_plan_review_summary, _release_acceptance_kb_summary as _release_acceptance_kb_summary, _release_planning_rule_simulation_summary as _release_planning_rule_simulation_summary, _release_planning_rule_governance_summary as _release_planning_rule_governance_summary, _release_planning_rule_impact_summary as _release_planning_rule_impact_summary, _release_audio_qa_summary as _release_audio_qa_summary, _release_audio_reviews_summary as _release_audio_reviews_summary, _release_audio_revisions_summary as _release_audio_revisions_summary, _release_mastering_summary as _release_mastering_summary, _release_encoded_audio_summary as _release_encoded_audio_summary, _release_encoded_audio_acceptance_summary as _release_encoded_audio_acceptance_summary, _release_format_decision_summary as _release_format_decision_summary, _release_rights_clearance_summary as _release_rights_clearance_summary, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _sha256 as _sha256
+def _release_signoff_hash_payload(signoff_public: ImplementationDocument) -> ImplementationDocument:
+    return {key: value for key, value in signoff_public.items() if key not in SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
 
-_v142_re_readiness.bind_globals(globals())
+
+def _release_acceptance_analytics_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        analytics_store = AcceptanceAnalyticsStore(release_store=release_store, project_store=release_store.project_store)
+        report = analytics_store.refresh(AnalyticsScope.from_values(scope_type="release", release_id=release_id))
+    except Exception:
+        summary = {"status": "missing", "readiness_status": "missing"}
+        write_json(export_dir / "acceptance-analytics-summary.json", summary)
+        return summary
+    return write_acceptance_analytics_summary(export_dir / "acceptance-analytics-summary.json", report)
+
+
+def _release_acceptance_fix_sprint_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        store = AcceptanceFixSprintStore(project_store=release_store.project_store)
+        return write_acceptance_fix_sprints_summary(export_dir / "acceptance-fix-sprints-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "acceptance-fix-sprints-summary.json", summary)
+        return summary
+
+
+def _release_acceptance_fix_plan_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        store = AcceptanceFixPlanningStore(project_store=release_store.project_store)
+        return write_acceptance_fix_plan_summary(export_dir / "acceptance-fix-plan-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "acceptance-fix-plan-summary.json", summary)
+        return summary
+
+
+def _release_acceptance_fix_plan_review_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        store = AcceptanceFixPlanReviewStore(project_store=release_store.project_store)
+        return write_acceptance_fix_plan_review_summary(export_dir / "acceptance-fix-plan-review-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "acceptance-fix-plan-review-summary.json", summary)
+        return summary
+
+
+def _release_acceptance_kb_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        store = AcceptanceKnowledgeBaseStore(project_store=release_store.project_store)
+        return write_acceptance_kb_summary(export_dir / "acceptance-kb-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "acceptance-kb-summary.json", summary)
+        return summary
+
+
+def _release_planning_rule_simulation_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        store = PlanningRuleSimulationStore(project_store=release_store.project_store)
+        return write_planning_simulation_summary(export_dir / "planning-rule-simulation-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "planning-rule-simulation-summary.json", summary)
+        return summary
+
+
+def _release_planning_rule_governance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        store = PlanningRuleGovernanceStore(project_store=release_store.project_store)
+        return write_planning_rule_governance_summary(export_dir / "planning-rule-governance-summary.json", store)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "planning-rule-governance-summary.json", summary)
+        return summary
+
+
+def _release_planning_rule_impact_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        store = PlanningRuleImpactStore(project_store=release_store.project_store)
+        return write_planning_rule_impact_summary(export_dir / "planning-rule-impact-summary.json", store, release_id=release_id)
+    except Exception:
+        summary = {"status": "missing"}
+        write_json(export_dir / "planning-rule-impact-summary.json", summary)
+        return summary
+
+
+def _release_audio_qa_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    report = read_release_audio_qa(release_store, release_id, default={})
+    summary = release_audio_summary(report)
+    write_json(export_dir / "audio-summary.json", summary)
+    return summary
+
+
+def _release_audio_reviews_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        return export_audio_reviews(release_store, release_id, export_dir, project_store=release_store.project_store)
+    except Exception:
+        summary = {"status": "missing", "track_count": 0, "manual_accepted_track_count": 0, "missing_track_ids": []}
+        target = export_dir / "audio-reviews"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "summary.json", summary)
+        return summary
+
+
+def _release_audio_revisions_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        return export_audio_revisions(release_store, release_id, export_dir, project_store=release_store.project_store)
+    except Exception:
+        summary = {"status": "missing", "session_count": 0, "open_issue_count": 0}
+        target = export_dir / "audio-revisions"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "summary.json", summary)
+        return summary
+
+
+def _release_mastering_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        return export_mastering(release_store, release_id, export_dir, project_store=release_store.project_store)
+    except Exception:
+        summary = {"status": "missing", "track_count": 0}
+        target = export_dir / "mastering"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "summary.json", summary)
+        return summary
+
+
+def _release_encoded_audio_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        return export_encoded_audio_summary(release_store, release_id, export_dir)
+    except Exception:
+        summary = {"status": "missing", "profile_count": 0}
+        write_json(export_dir / "encoded-audio-summary.json", summary)
+        return summary
+
+
+def _release_encoded_audio_acceptance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        return export_encoded_audio_acceptance(release_store, release_id, export_dir, project_store=release_store.project_store)
+    except Exception:
+        summary = {"status": "missing", "required_profiles": [], "track_count": 0}
+        write_json(export_dir / "encoded-audio-acceptance-summary.json", summary)
+        return summary
+
+
+def _release_format_decision_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        return FormatDecisionStore(release_store, project_store=release_store.project_store).export_release(release_id, export_dir)
+    except Exception:
+        summary = {"status": "missing", "session_id": None}
+        target = export_dir / "format-decision"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "decision-report.json", summary)
+        return summary
+
+
+def _release_rights_clearance_summary(release_store: ReleaseStore, release_id: str, export_dir: Path) -> ImplementationDocument:
+    try:
+        return RightsClearanceStore(release_store).export_release(release_id, export_dir)
+    except Exception:
+        summary = {"status": "missing", "summary_path": "rights/summary.json", "track_count": 0}
+        target = export_dir / "rights"
+        target.mkdir(parents=True, exist_ok=True)
+        write_json(target / "summary.json", summary)
+        return summary
+
+
+def _validate_relative_path(path: str) -> str:
+    normalized = str(path or "").replace("\\", "/")
+    parts = [part for part in normalized.split("/") if part]
+    if not parts or normalized.startswith("/") or normalized.startswith("\\") or normalized.startswith("//") or any(part in {"..", "."} for part in parts) or ":" in parts[0]:
+        raise ValueError("Unsafe relative path.")
+    return PurePosixPath(*parts).as_posix()
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise ReleaseExportError("Refusing to operate outside release export boundaries.") from exc
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

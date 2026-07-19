@@ -167,6 +167,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v140.public_contract_compatibility_smoke",
         "v140.reviewer_package_smoke",
         "v141.quality_debt_closure_smoke",
+        "v1421.stabilization_rollback_smoke",
     ]
 
 

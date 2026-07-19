@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import re
 from pathlib import Path
@@ -16,7 +16,7 @@ PLAN_ID_PATTERN = re.compile(r"^afp-[0-9]{6}$")
 ENTRY_ID_PATTERN = re.compile(r"^akb-[0-9]{6}$")
 
 
-def current_fix_plan_state(plan_id: str, *, analytics_store: Any) -> DomainDocument:
+def current_fix_plan_state(plan_id: str, *, analytics_store: Any) -> dict[str, Any]:
     if not PLAN_ID_PATTERN.fullmatch(plan_id):
         return {"plan": {}, "stale": True, "reasons": ["invalid_plan_id"]}
     plan = _read_optional(FIX_PLAN_ROOT / plan_id / "fix-plan.json")

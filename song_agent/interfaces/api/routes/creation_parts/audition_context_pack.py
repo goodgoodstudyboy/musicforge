@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -240,7 +241,7 @@ class CreationRoutesAuditionContextPack(CreationRouteContext):
         return (False, None)
 
     def _handle_project_editor_preview_apply(self, project_id: str, preview_id: str, payload: ImplementationDocument) -> None:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InterfaceType] = {}
         _split_state['store'] = _interfaces_api_runtime.EditorPreviewStore(self.project_store.project_dir(project_id))
         with self.project_store.lock, _split_state['store'].lock:
             _split_result = self._handle_project_editor_preview_apply_part_01(project_id, preview_id, payload, _split_state)

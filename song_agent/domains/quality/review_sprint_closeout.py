@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -31,12 +30,12 @@ def build_closeout_report(
     task_store: ReviewTaskStore,
     sprint_store: ReviewSprintStore,
     queue_store: ReviewSprintActionQueueStore,
-    metrics_report: DomainDocument | None = None,
-    judge_summary: DomainDocument | None = None,
-    recommendation_report: DomainDocument | None = None,
-    conflict_report: DomainDocument | None = None,
+    metrics_report: dict[str, Any] | None = None,
+    judge_summary: dict[str, Any] | None = None,
+    recommendation_report: dict[str, Any] | None = None,
+    conflict_report: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     source = _closeout_sources(
         sprint=sprint,
@@ -101,10 +100,10 @@ def closeout_source_hash(
     task_store: ReviewTaskStore,
     sprint_store: ReviewSprintStore,
     queue_store: ReviewSprintActionQueueStore,
-    metrics_report: DomainDocument | None = None,
-    judge_summary: DomainDocument | None = None,
-    recommendation_report: DomainDocument | None = None,
-    conflict_report: DomainDocument | None = None,
+    metrics_report: dict[str, Any] | None = None,
+    judge_summary: dict[str, Any] | None = None,
+    recommendation_report: dict[str, Any] | None = None,
+    conflict_report: dict[str, Any] | None = None,
 ) -> str:
     return _source_hash(
         _closeout_sources(
@@ -121,7 +120,7 @@ def closeout_source_hash(
     )
 
 
-def closeout_report_summary(report: DomainDocument | None) -> DomainDocument:
+def closeout_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
     recommended = _as_document(report.get("recommended_final_version"))
@@ -144,7 +143,7 @@ def closeout_report_summary(report: DomainDocument | None) -> DomainDocument:
     )
 
 
-def mark_closeout_report_stale(report: DomainDocument | None, *, current_source_hash: str | None = None) -> DomainDocument:
+def mark_closeout_report_stale(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> dict[str, Any]:
     data = dict(report or {})
     checks = [check for check in data.get("checks", []) if isinstance(check, dict)]
     stale_check = _check("closeout_stale", True, "blocking", "Closeout Report is stale. Refresh closeout before closing.", 1)
@@ -164,7 +163,7 @@ def mark_closeout_report_stale(report: DomainDocument | None, *, current_source_
     return sanitize_metadata(data)
 
 
-def mark_closeout_report_forced(report: DomainDocument | None) -> DomainDocument:
+def mark_closeout_report_forced(report: dict[str, Any] | None) -> dict[str, Any]:
     data = dict(report or {})
     data["forced"] = True
     return sanitize_metadata(data)
@@ -174,10 +173,10 @@ def build_signoff_record(
     *,
     project_id: str,
     sprint: ReviewSprint,
-    closeout_report: DomainDocument,
-    payload: DomainDocument | None = None,
+    closeout_report: dict[str, Any],
+    payload: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     payload = _as_document(payload)
     now = now or now_iso()
     forced = bool(payload.get("force", False))
@@ -207,7 +206,7 @@ def build_signoff_record(
     return sanitize_metadata(record)
 
 
-def signoff_summary(record: DomainDocument | None) -> DomainDocument:
+def signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(record, dict) or not record:
         return {"status": "not_signed"}
     return sanitize_metadata(
@@ -228,7 +227,7 @@ def signoff_summary(record: DomainDocument | None) -> DomainDocument:
     )
 
 
-def closeout_allows_close(report: DomainDocument | None) -> bool:
+def closeout_allows_close(report: dict[str, Any] | None) -> bool:
     return bool(isinstance(report, dict) and report.get("close_allowed") and report.get("status") in {"passed", "warning"} and not report.get("stale"))
 
 
@@ -503,7 +502,176 @@ def _sprint_source_summary(sprint: ReviewSprint) -> ImplementationDocument:
     }
 
 
-from song_agent.domains.quality import v142_rsc_readiness as _v142_rsc_readiness
-from song_agent.domains.quality.v142_rsc_readiness import _task_source_summary as _task_source_summary, _queue_source_summary as _queue_source_summary, _conflict_source_summary as _conflict_source_summary, _recommendation_source_summary as _recommendation_source_summary, _metrics_source_summary as _metrics_source_summary, _judge_source_summary as _judge_source_summary, _project_source_summary as _project_source_summary, _source_hash as _source_hash, _stable_hash as _stable_hash, _blocking_conflict_count as _blocking_conflict_count, _report_stale as _report_stale, _quality_not_improved as _quality_not_improved, _has_applied_or_selected_version as _has_applied_or_selected_version, _optional_str as _optional_str
+def _task_source_summary(task: ReviewTask, candidates: list[ReviewCandidate]) -> ImplementationDocument:
+    return {
+        "task_id": task.task_id,
+        "status": task.status,
+        "parent_version_id": task.parent_version_id,
+        "selected_candidate_id": task.selected_candidate_id,
+        "applied_version_id": task.applied_version_id,
+        "follow_up_task_id": task.follow_up_task_id,
+        "counts": task.counts,
+        "candidates": [
+            {
+                "candidate_id": candidate.candidate_id,
+                "candidate_type": candidate.candidate_type,
+                "status": candidate.status,
+                "rank": candidate.rank,
+                "midi_status": candidate.midi_status,
+                "audio_status": candidate.audio_status,
+                "score": candidate.scores.get("combined"),
+            }
+            for candidate in candidates
+        ],
+    }
 
-_v142_rsc_readiness.bind_globals(globals())
+
+def _queue_source_summary(queue: SprintActionQueue) -> ImplementationDocument:
+    return {
+        "queue_id": queue.queue_id,
+        "status": queue.status,
+        "updated_at": queue.updated_at,
+        "summary": queue.summary,
+        "items": [
+            {
+                "item_id": item.item_id,
+                "task_id": item.task_id,
+                "action": item.action,
+                "status": item.status,
+                "safety": item.safety,
+            }
+            for item in queue.items
+        ],
+    }
+
+
+def _conflict_source_summary(report: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "schema_version": report.get("schema_version"),
+        "sprint_id": report.get("sprint_id"),
+        "conflicts": [
+            {
+                "severity": item.get("severity"),
+                "kind": item.get("kind"),
+                "task_ids": _as_list(item.get("task_ids")),
+            }
+            for item in report.get("conflicts", [])
+            if isinstance(item, dict)
+        ]
+        if isinstance(report, dict)
+        else [],
+    }
+
+
+def _recommendation_source_summary(report: ImplementationDocument) -> ImplementationDocument:
+    if not isinstance(report, dict):
+        return {}
+    return {
+        "schema_version": report.get("schema_version"),
+        "sprint_id": report.get("sprint_id"),
+        "created_at": report.get("created_at"),
+        "stale": report.get("stale"),
+        "status": report.get("status"),
+        "recommended_order": _as_list(report.get("recommended_order")),
+        "source_summary": _as_document(report.get("source_summary")),
+    }
+
+
+def _metrics_source_summary(report: ImplementationDocument) -> ImplementationDocument:
+    if not isinstance(report, dict):
+        return {}
+    return {
+        "schema_version": report.get("schema_version"),
+        "sprint_id": report.get("sprint_id"),
+        "source_hash": report.get("source_hash"),
+        "risk_readiness": _as_document(report.get("risk_readiness")),
+        "overview": _as_document(report.get("overview")),
+        "candidate_funnel": _as_document(report.get("candidate_funnel")),
+        "action_queue_execution": _as_document(report.get("action_queue_execution")),
+        "quality_delta": _as_document(report.get("quality_delta")),
+        "judge_metrics": _as_document(report.get("judge_metrics")),
+        "provider_usage": _as_document(report.get("provider_usage")),
+    }
+
+
+def _judge_source_summary(summary: ImplementationDocument) -> ImplementationDocument:
+    if not isinstance(summary, dict):
+        return {}
+    return {
+        "schema_version": summary.get("schema_version"),
+        "sprint_id": summary.get("sprint_id"),
+        "source_hash": summary.get("source_hash"),
+        "created_at": summary.get("created_at"),
+        "judged_task_count": summary.get("judged_task_count"),
+        "stale_judge_count": summary.get("stale_judge_count"),
+        "recommended_candidate_count": summary.get("recommended_candidate_count"),
+        "high_risk_candidate_count": summary.get("high_risk_candidate_count"),
+        "judge_provider_tokens": summary.get("judge_provider_tokens"),
+    }
+
+
+def _project_source_summary(project_document: Any) -> ImplementationDocument:
+    state = getattr(project_document, "state", None)
+    return {
+        "selected_version_id": getattr(state, "selected_version_id", None),
+        "final_version_id": getattr(state, "final_version_id", None),
+        "latest_version_id": getattr(state, "latest_version_id", None),
+        "versions": [
+            {
+                "version_id": getattr(version, "version_id", None),
+                "status": getattr(version, "status", None),
+                "quality_score": getattr(version, "quality_score", None),
+                "updated_at": getattr(version, "updated_at", None),
+            }
+            for version in getattr(project_document, "versions", [])
+        ],
+    }
+
+
+def _source_hash(source: ImplementationDocument) -> str:
+    source_summary = {
+        **{key: value for key, value in source.items() if key not in {"tasks", "candidates_by_task", "queues"}},
+        "tasks": [_task_source_summary(task, source.get("candidates_by_task", {}).get(task.task_id, [])) for task in source.get("tasks", [])],
+        "missing_task_ids": source.get("missing_task_ids", []),
+        "queues": [_queue_source_summary(queue) for queue in source.get("queues", [])],
+    }
+    return _stable_hash(source_summary)
+
+
+def _stable_hash(value: Any) -> str:
+    clean = sanitize_metadata(value)
+    payload = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _blocking_conflict_count(report: ImplementationDocument) -> int:
+    conflicts = report.get("conflicts") if isinstance(report, dict) else []
+    return len([item for item in _as_list(conflicts) if isinstance(item, dict) and item.get("severity") == "blocking"])
+
+
+def _report_stale(report: ImplementationDocument) -> bool:
+    return bool(isinstance(report, dict) and (report.get("stale") or report.get("status") == "stale"))
+
+
+def _quality_not_improved(metrics_summary: ImplementationDocument) -> bool:
+    if metrics_summary.get("quality_delta") is None:
+        return False
+    try:
+        return int(metrics_summary.get("quality_delta") or 0) <= 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _has_applied_or_selected_version(task_summary: ImplementationDocument, project_document: Any, recommended_final_version: ImplementationDocument) -> bool:
+    if task_summary.get("applied_version_ids"):
+        return True
+    if recommended_final_version.get("version_id"):
+        return True
+    state = getattr(project_document, "state", None)
+    return bool(getattr(state, "selected_version_id", None) or getattr(state, "final_version_id", None))
+
+
+def _optional_str(value: Any) -> str | None:
+    if value is None or not str(value).strip():
+        return None
+    return sanitize_sensitive_text(str(value).strip())[:160]

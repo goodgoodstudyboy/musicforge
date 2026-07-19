@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json
 import os
@@ -8,7 +8,7 @@ import shutil
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from song_agent.platform.persistence.database import MusicForgeDatabase
 from song_agent.platform.persistence.file_artifacts import FileArtifactStore, sha256_path, stable_tree_hash
@@ -35,19 +35,19 @@ class FileUnitOfWork:
         self.artifacts = FileArtifactStore(self.workspace_root)
         self.transaction_id = transaction_id or f"tx-{uuid.uuid4().hex}"
         self.crash_hook = crash_hook
-        self._records: dict[str, ImplementationDocument] = {}
+        self._records: dict[str, dict[str, Any]] = {}
 
-    def write_bytes(self, relative_path: str, data: bytes) -> DomainDocument:
+    def write_bytes(self, relative_path: str, data: bytes) -> dict[str, Any]:
         record = self.artifacts.write_staged(self.transaction_id, relative_path, data)
         self._records[str(record["path"])] = record
         return record
 
-    def write_json(self, relative_path: str, value: DomainDocument) -> DomainDocument:
+    def write_json(self, relative_path: str, value: dict[str, Any]) -> dict[str, Any]:
         record = self.artifacts.write_staged_json(self.transaction_id, relative_path, value)
         self._records[str(record["path"])] = record
         return record
 
-    def commit(self) -> DomainDocument:
+    def commit(self) -> dict[str, Any]:
         lock = WorkspaceLock(self.workspace_root, operation=f"artifact-commit:{self.namespace}")
         with lock:
             staging = self.artifacts.staging_dir(self.transaction_id)

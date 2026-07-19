@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -62,10 +61,10 @@ def build_delivery_qa_report(
     project_id: str,
     project_document: ProjectDocument | Any,
     project_dir: Path,
-    project_export: DomainDocument | None = None,
-    final_export_manifest: DomainDocument | None = None,
+    project_export: dict[str, Any] | None = None,
+    final_export_manifest: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     project_dir = Path(project_dir).resolve()
     source = _delivery_sources(
@@ -131,8 +130,8 @@ def delivery_qa_source_hash(
     project_id: str,
     project_document: ProjectDocument | Any,
     project_dir: Path,
-    project_export: DomainDocument | None = None,
-    final_export_manifest: DomainDocument | None = None,
+    project_export: dict[str, Any] | None = None,
+    final_export_manifest: dict[str, Any] | None = None,
 ) -> str:
     return _source_hash(
         _delivery_sources(
@@ -145,7 +144,7 @@ def delivery_qa_source_hash(
     )
 
 
-def mark_delivery_qa_stale(report: DomainDocument | None, *, current_source_hash: str | None = None) -> DomainDocument:
+def mark_delivery_qa_stale(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> dict[str, Any]:
     data = dict(report or {})
     checks = [check for check in data.get("checks", []) if isinstance(check, dict)]
     stale_check = _check("delivery_qa_stale", True, "blocking", "Delivery QA is stale. Refresh QA before signoff.", 1)
@@ -165,7 +164,7 @@ def mark_delivery_qa_stale(report: DomainDocument | None, *, current_source_hash
     return sanitize_metadata(data, blocked_keys=BLOCKED_DELIVERY_KEYS)
 
 
-def delivery_qa_summary(report: DomainDocument | None) -> DomainDocument:
+def delivery_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
     final_version = _as_document(report.get("final_version"))
@@ -193,17 +192,17 @@ def delivery_qa_summary(report: DomainDocument | None) -> DomainDocument:
     )
 
 
-def delivery_qa_allows_signoff(report: DomainDocument | None) -> bool:
+def delivery_qa_allows_signoff(report: dict[str, Any] | None) -> bool:
     return bool(isinstance(report, dict) and report.get("handoff_allowed") and report.get("status") in {"passed", "warning"} and not report.get("stale"))
 
 
 def build_delivery_signoff_record(
     *,
     project_id: str,
-    report: DomainDocument,
-    payload: DomainDocument | None = None,
+    report: dict[str, Any],
+    payload: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     payload = _as_document(payload)
     now = now or now_iso()
     force = bool(payload.get("force", False))
@@ -236,7 +235,7 @@ def build_delivery_signoff_record(
     return sanitize_metadata(record, blocked_keys=BLOCKED_DELIVERY_KEYS)
 
 
-def delivery_signoff_summary(record: DomainDocument | None) -> DomainDocument:
+def delivery_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(record, dict) or not record:
         return {"status": "not_signed"}
     forced = bool(record.get("force", record.get("forced", False)))
@@ -260,7 +259,7 @@ def delivery_signoff_summary(record: DomainDocument | None) -> DomainDocument:
     )
 
 
-def signoff_history_event(event: str, previous_signoff: DomainDocument, reason: str, *, now: str | None = None) -> DomainDocument:
+def signoff_history_event(event: str, previous_signoff: dict[str, Any], reason: str, *, now: str | None = None) -> dict[str, Any]:
     return sanitize_metadata(
         {
             "event": event,
@@ -272,8 +271,8 @@ def signoff_history_event(event: str, previous_signoff: DomainDocument, reason: 
     )
 
 
-def scan_delivery_payload_for_sensitive_values(payload: Any) -> list[DomainDocument]:
-    findings: list[ImplementationDocument] = []
+def scan_delivery_payload_for_sensitive_values(payload: Any) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
 
     def walk(value: Any, path: str) -> None:
         if isinstance(value, dict):
@@ -407,7 +406,7 @@ def _strip_delivery_summaries(manifest: ImplementationDocument) -> Implementatio
 
 def _expected_files(project_dir: Path, manifest: ImplementationDocument, manifest_exists: bool) -> list[ImplementationDocument]:
     export_dir = final_export_dir(project_dir).resolve()
-    rows_by_path: dict[str, ImplementationDocument] = {}
+    rows_by_path: dict[str, dict[str, Any]] = {}
     manifest_items = [item for item in manifest.get("files", []) if isinstance(item, dict)] if isinstance(manifest.get("files"), list) else []
     manifest_by_path = {str(item.get("path") or "").strip(): item for item in manifest_items if str(item.get("path") or "").strip()}
 
@@ -471,10 +470,495 @@ def _expected_files(project_dir: Path, manifest: ImplementationDocument, manifes
     return sanitize_metadata(list(rows_by_path.values()), blocked_keys=BLOCKED_DELIVERY_KEYS)
 
 
-from song_agent.domains.delivery import v142_dq_readiness as _v142_dq_readiness
-from song_agent.domains.delivery.v142_dq_readiness import _expected_file_row as _expected_file_row, _quality_gate_requires_stems as _quality_gate_requires_stems, _required_stem_midi_paths as _required_stem_midi_paths, _actual_export_files as _actual_export_files, _actual_zip_info as _actual_zip_info, _zip_manifest_matches_current as _zip_manifest_matches_current, _final_version_summary as _final_version_summary, _version_by_id as _version_by_id, _final_export_summary as _final_export_summary, _zip_summary as _zip_summary, _quality_gate_summary as _quality_gate_summary, _review_sprint_summary as _review_sprint_summary, _artifact_integrity_summary as _artifact_integrity_summary, _build_checks as _build_checks, _project_export_delivery_probe as _project_export_delivery_probe, _qa_status as _qa_status, _qa_readiness as _qa_readiness, _check as _check, _check_message as _check_message, _file_missing as _file_missing, _stem_audio_partial as _stem_audio_partial, _safe_export_path as _safe_export_path
-from song_agent.domains.delivery import v142_dq_evidence as _v142_dq_evidence
-from song_agent.domains.delivery.v142_dq_evidence import _validate_relative_path as _validate_relative_path, _path_presence as _path_presence, _sha256 as _sha256, _source_hash as _source_hash, _stable_hash as _stable_hash, _raw_stable_hash as _raw_stable_hash
+def _expected_file_row(
+    export_dir: Path,
+    raw_path: str,
+    *,
+    kind: str,
+    required: bool,
+    manifest_exists: bool,
+    skipped: Any = None,
+) -> ImplementationDocument:
+    row = {
+        "kind": kind,
+        "path": raw_path,
+        "required": bool(required),
+        "manifest_exists": bool(manifest_exists),
+        "safe": False,
+        "exists": False,
+        "size_bytes": None,
+        "sha256": None,
+        "error": "",
+    }
+    if skipped is not None:
+        row["skipped"] = skipped
+    try:
+        target = _safe_export_path(export_dir, raw_path)
+        row["safe"] = True
+        if target.exists() and target.is_file() and not target.is_symlink():
+            row["exists"] = True
+            row["size_bytes"] = target.stat().st_size
+            row["sha256"] = _sha256(target)
+        elif target.is_symlink():
+            row["error"] = "Artifact path is a symlink."
+        elif row["manifest_exists"] or row["required"]:
+            row["error"] = "Artifact file is missing."
+    except ValueError as exc:
+        row["error"] = str(exc)
+    return row
 
-_v142_dq_readiness.bind_globals(globals())
-_v142_dq_evidence.bind_globals(globals())
+
+def _quality_gate_requires_stems(manifest: ImplementationDocument) -> bool:
+    gate = _as_document(manifest.get("quality_gate"))
+    config = _as_document(gate.get("config"))
+    if config.get("require_stems"):
+        return True
+    checks = _as_list(gate.get("checks"))
+    return any(isinstance(check, dict) and check.get("name") == "stems" for check in checks)
+
+
+def _required_stem_midi_paths(export_dir: Path) -> list[str]:
+    manifest_path = export_dir / "stems" / "manifest.json"
+    if not manifest_path.exists() or manifest_path.is_symlink():
+        return []
+    try:
+        data = read_json(manifest_path)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return []
+    paths: list[str] = []
+    for stem in data.get("stems", []) if isinstance(data, dict) else []:
+        if not isinstance(stem, dict) or int(stem.get("note_count") or 0) <= 0:
+            continue
+        raw_path = str(stem.get("midi_path") or "").strip()
+        if raw_path and raw_path not in paths:
+            paths.append(raw_path)
+    return paths
+
+
+def _actual_export_files(project_dir: Path) -> list[ImplementationDocument]:
+    export_dir = final_export_dir(project_dir).resolve()
+    if not export_dir.exists() or not export_dir.is_dir() or export_dir.is_symlink():
+        return []
+    rows = []
+    for file in sorted(export_dir.rglob("*")):
+        if not file.is_file():
+            continue
+        try:
+            resolved = file.resolve()
+            resolved.relative_to(export_dir)
+            rel = resolved.relative_to(export_dir).as_posix()
+            _validate_relative_path(rel)
+            if file.is_symlink():
+                rows.append({"path": rel, "safe": False, "error": "File is a symlink."})
+                continue
+            rows.append({"path": rel, "safe": True, "size_bytes": file.stat().st_size, "sha256": _sha256(file)})
+        except (OSError, ValueError) as exc:
+            rows.append({"path": sanitize_sensitive_text(str(file.name)), "safe": False, "error": str(exc)})
+    return sanitize_metadata(rows, blocked_keys=BLOCKED_DELIVERY_KEYS)
+
+
+def _actual_zip_info(project_dir: Path, actual_files: list[ImplementationDocument]) -> ImplementationDocument:
+    zip_path = final_export_zip_path(project_dir).resolve()
+    project_dir = project_dir.resolve()
+    export_dir = final_export_dir(project_dir).resolve()
+    try:
+        zip_path.relative_to(project_dir)
+    except ValueError:
+        return {"exists": False, "valid": False, "error": "ZIP path is outside project directory."}
+    if not zip_path.exists():
+        return {"exists": False, "valid": False, "entries": []}
+    if zip_path.is_symlink():
+        return {"exists": True, "valid": False, "error": "ZIP path is a symlink.", "entries": []}
+    info = {
+        "exists": True,
+        "valid": True,
+        "filename": zip_path.name,
+        "size_bytes": zip_path.stat().st_size,
+        "sha256": _sha256(zip_path),
+        "entries": [],
+        "entry_count": 0,
+        "unsafe_entry_count": 0,
+        "mismatched_entry_count": 0,
+        "missing_entry_count": 0,
+        "extra_entry_count": 0,
+        "error": "",
+    }
+    actual_by_path = {str(row.get("path")): row for row in actual_files if row.get("safe") and row.get("path")}
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            entries = []
+            for member in archive.infolist():
+                if member.is_dir():
+                    continue
+                entry_name = member.filename.replace("\\", "/")
+                row = {
+                    "path": entry_name,
+                    "safe": False,
+                    "size_bytes": member.file_size,
+                    "sha256": None,
+                    "matches_file": False,
+                    "error": "",
+                }
+                try:
+                    safe_entry = _validate_relative_path(entry_name)
+                    data = archive.read(member)
+                    digest = hashlib.sha256(data).hexdigest()
+                    row.update({"path": safe_entry, "safe": True, "sha256": digest})
+                    actual = actual_by_path.get(safe_entry)
+                    if safe_entry == "manifest.json":
+                        row["matches_file"] = _zip_manifest_matches_current(data, export_dir / safe_entry)
+                    else:
+                        row["matches_file"] = bool(actual and actual.get("sha256") == digest)
+                    if actual and not row["matches_file"]:
+                        row["error"] = "ZIP entry hash does not match final-export file."
+                except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as exc:
+                    row["error"] = str(exc)
+                entries.append(row)
+    except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+        info.update({"valid": False, "error": f"Final Export ZIP is invalid. {exc}", "entries": []})
+        return sanitize_metadata(info, blocked_keys=BLOCKED_DELIVERY_KEYS)
+    entry_by_path = {row["path"]: row for row in entries if row.get("safe")}
+    actual_paths = set(actual_by_path)
+    entry_paths = set(entry_by_path)
+    info["entries"] = entries
+    info["entry_count"] = len(entries)
+    info["unsafe_entry_count"] = len([row for row in entries if not row.get("safe")])
+    info["mismatched_entry_count"] = len([row for row in entries if row.get("safe") and not row.get("matches_file")])
+    info["missing_entry_count"] = len(actual_paths - entry_paths)
+    info["extra_entry_count"] = len(entry_paths - actual_paths)
+    return sanitize_metadata(info, blocked_keys=BLOCKED_DELIVERY_KEYS)
+
+
+def _zip_manifest_matches_current(zipped_bytes: bytes, current_path: Path) -> bool:
+    try:
+        zipped = json.loads(zipped_bytes.decode("utf-8"))
+        current = read_json(current_path)
+    except (OSError, UnicodeDecodeError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+    return _stable_hash({key: value for key, value in zipped.items() if key != "zip"}) == _stable_hash({key: value for key, value in current.items() if key != "zip"})
+
+
+def _final_version_summary(project_document: ProjectDocument | Any) -> ImplementationDocument:
+    state = getattr(project_document, "state", None)
+    final_id = getattr(state, "final_version_id", None)
+    version = _version_by_id(project_document, final_id)
+    return sanitize_metadata(
+        {
+            "version_id": final_id,
+            "exists": bool(version),
+            "status": getattr(version, "status", None) if version else None,
+            "quality_score": getattr(version, "quality_score", None) if version else None,
+            "quality_gate_status": getattr(version, "quality_gate_status", None) if version else None,
+            "quality_gate_score": getattr(version, "quality_gate_score", None) if version else None,
+            "updated_at": getattr(version, "updated_at", None) if version else None,
+        },
+        blocked_keys=BLOCKED_DELIVERY_KEYS,
+    )
+
+
+def _version_by_id(project_document: ProjectDocument | Any, version_id: str | None) -> Any | None:
+    if not version_id:
+        return None
+    for version in getattr(project_document, "versions", []):
+        if getattr(version, "version_id", None) == version_id:
+            return version
+    return None
+
+
+def _final_export_summary(manifest: ImplementationDocument, manifest_exists: bool, manifest_error: str, expected: list[ImplementationDocument], actual: list[ImplementationDocument]) -> ImplementationDocument:
+    manifest_path = next((row for row in actual if row.get("path") == "manifest.json"), {})
+    unsafe_count = len([row for row in expected + actual if row.get("safe") is False])
+    missing_required = len([row for row in expected if row.get("required") and not row.get("exists")])
+    return sanitize_metadata(
+        {
+            "exists": bool(manifest_exists),
+            "manifest_version_id": manifest.get("version_id") if manifest_exists else None,
+            "generated_at": manifest.get("generated_at") if manifest_exists else None,
+            "file_count": len(actual),
+            "missing_required_count": missing_required,
+            "unsafe_file_count": unsafe_count,
+            "manifest_sha256": manifest_path.get("sha256"),
+            "error": manifest_error,
+        },
+        blocked_keys=BLOCKED_DELIVERY_KEYS,
+    )
+
+
+def _zip_summary(zip_info: ImplementationDocument, actual_files: list[ImplementationDocument], manifest: ImplementationDocument) -> ImplementationDocument:
+    manifest_zip = _as_document(manifest.get("zip"))
+    matches_manifest = bool(
+        zip_info.get("exists")
+        and zip_info.get("valid")
+        and zip_info.get("unsafe_entry_count", 0) == 0
+        and zip_info.get("mismatched_entry_count", 0) == 0
+        and zip_info.get("missing_entry_count", 0) == 0
+        and zip_info.get("extra_entry_count", 0) == 0
+        and (not manifest_zip.get("sha256") or manifest_zip.get("sha256") == zip_info.get("sha256"))
+        and (not manifest_zip.get("entry_count") or int(manifest_zip.get("entry_count") or 0) == int(zip_info.get("entry_count") or 0))
+    )
+    return sanitize_metadata(
+        {
+            "exists": bool(zip_info.get("exists")),
+            "valid": bool(zip_info.get("valid", False)),
+            "filename": zip_info.get("filename") or "final-export.zip",
+            "size_bytes": zip_info.get("size_bytes", 0),
+            "sha256": zip_info.get("sha256"),
+            "entry_count": zip_info.get("entry_count", 0),
+            "expected_entry_count": len(actual_files),
+            "matches_manifest": matches_manifest,
+            "unsafe_entry_count": zip_info.get("unsafe_entry_count", 0),
+            "mismatched_entry_count": zip_info.get("mismatched_entry_count", 0),
+            "missing_entry_count": zip_info.get("missing_entry_count", 0),
+            "extra_entry_count": zip_info.get("extra_entry_count", 0),
+            "manifest_sha256": manifest_zip.get("sha256"),
+            "manifest_entry_count": manifest_zip.get("entry_count"),
+            "error": zip_info.get("error") or "",
+        },
+        blocked_keys=BLOCKED_DELIVERY_KEYS,
+    )
+
+
+def _quality_gate_summary(manifest: ImplementationDocument, final_version: ImplementationDocument) -> ImplementationDocument:
+    gate = _as_document(manifest.get("quality_gate"))
+    return sanitize_metadata(
+        {
+            "status": gate.get("status") or final_version.get("quality_gate_status"),
+            "overall_score": gate.get("score", final_version.get("quality_gate_score") or final_version.get("quality_score")),
+            "require_stems": _quality_gate_requires_stems(manifest),
+            "warnings": _as_list(gate.get("warnings")),
+        },
+        blocked_keys=BLOCKED_DELIVERY_KEYS,
+    )
+
+
+def _review_sprint_summary(project_export: ImplementationDocument | None) -> ImplementationDocument:
+    if not isinstance(project_export, dict):
+        return {"sprint_count": 0}
+    sprints = [sprint for sprint in project_export.get("review_sprints", []) if isinstance(sprint, dict)]
+    metrics = _as_document(project_export.get("review_metrics_summary"))
+    latest_id = str(metrics.get("latest_sprint_id") or "")
+    latest = next((sprint for sprint in sprints if str(sprint.get("sprint_id") or "") == latest_id), None) if latest_id else None
+    if latest is None and sprints:
+        latest = sprints[0]
+        latest_id = str(latest.get("sprint_id") or "")
+    closeout = latest.get("closeout_summary") if isinstance(latest, dict) and isinstance(latest.get("closeout_summary"), dict) else {}
+    signoff = latest.get("signoff_summary") if isinstance(latest, dict) and isinstance(latest.get("signoff_summary"), dict) else {}
+    signoffs = [sprint.get("signoff_summary", {}) for sprint in sprints if isinstance(sprint.get("signoff_summary"), dict)]
+    closeouts = [sprint.get("closeout_summary", {}) for sprint in sprints if isinstance(sprint.get("closeout_summary"), dict)]
+    return sanitize_metadata(
+        {
+            "sprint_count": len(sprints),
+            "latest_sprint_id": latest_id or None,
+            "latest_closeout_status": _as_document(closeout).get("status"),
+            "latest_closeout_readiness": _as_document(closeout).get("readiness"),
+            "latest_signoff_status": _as_document(signoff).get("status"),
+            "signed_sprint_count": len([item for item in signoffs if item.get("status") == "signed"]),
+            "forced_close_count": len([item for item in signoffs if item.get("forced")]) or len([item for item in closeouts if item.get("forced")]),
+            "selected_version_id": _as_document(signoff).get("selected_version_id") or _as_document(closeout).get("recommended_final_version_id"),
+            "warning_count": _as_document(closeout).get("warning_count", 0),
+            "blocker_count": _as_document(closeout).get("blocker_count", 0),
+        },
+        blocked_keys=BLOCKED_DELIVERY_KEYS,
+    )
+
+
+def _artifact_integrity_summary(expected: list[ImplementationDocument], actual: list[ImplementationDocument]) -> ImplementationDocument:
+    actual_paths = {str(row.get("path")) for row in actual if row.get("safe") and row.get("path")}
+    expected_paths = {str(row.get("path")) for row in expected if row.get("safe") and row.get("path")}
+    extra_paths = sorted(actual_paths - expected_paths)
+    files = []
+    for row in expected:
+        files.append(
+            {
+                "path": row.get("path"),
+                "kind": row.get("kind"),
+                "required": bool(row.get("required", False)),
+                "exists": bool(row.get("exists", False)),
+                "safe": bool(row.get("safe", False)),
+                "size_bytes": row.get("size_bytes"),
+                "sha256": row.get("sha256"),
+                "error": row.get("error"),
+            }
+        )
+    for path in extra_paths:
+        actual_row = next((row for row in actual if row.get("path") == path), {})
+        files.append({"path": path, "kind": "extra", "required": False, "exists": True, "safe": True, "size_bytes": actual_row.get("size_bytes"), "sha256": actual_row.get("sha256"), "error": "Extra file not listed in manifest."})
+    return sanitize_metadata(
+        {
+            "checked_count": len(actual),
+            "missing_count": len([row for row in expected if row.get("required") and not row.get("exists")]),
+            "hash_count": len([row for row in actual if row.get("sha256")]),
+            "total_bytes": sum(int(row.get("size_bytes") or 0) for row in actual),
+            "extra_count": len(extra_paths),
+            "files": files,
+        },
+        blocked_keys=BLOCKED_DELIVERY_KEYS,
+    )
+
+
+def _build_checks(
+    *,
+    final_version: ImplementationDocument,
+    final_export: ImplementationDocument,
+    zip_summary: ImplementationDocument,
+    quality_gate: ImplementationDocument,
+    review_sprint: ImplementationDocument,
+    artifact_integrity: ImplementationDocument,
+    manifest: ImplementationDocument,
+    raw_manifest: ImplementationDocument,
+    project_export: ImplementationDocument | None,
+    report_probe: ImplementationDocument,
+) -> list[ImplementationDocument]:
+    final_id = final_version.get("version_id")
+    manifest_version = final_export.get("manifest_version_id")
+    sprint_count = int(review_sprint.get("sprint_count") or 0)
+    review_selected = review_sprint.get("selected_version_id")
+    required_missing = int(artifact_integrity.get("missing_count") or 0)
+    unsafe_files = int(final_export.get("unsafe_file_count") or 0)
+    zip_hash_mismatch = bool(zip_summary.get("manifest_sha256") and zip_summary.get("manifest_sha256") != zip_summary.get("sha256"))
+    zip_count_mismatch = bool(zip_summary.get("manifest_entry_count") and int(zip_summary.get("manifest_entry_count") or 0) != int(zip_summary.get("entry_count") or 0))
+    redaction_findings = scan_delivery_payload_for_sensitive_values({"manifest": raw_manifest, "project_export_delivery": _project_export_delivery_probe(project_export), "report": report_probe})
+    checks = [
+        _check("project_final_version", not final_id or not final_version.get("exists"), "blocking", "Project has no final_version_id.", 1 if not final_id else 0),
+        _check("final_export_exists", not final_export.get("exists"), "blocking", "Final Export manifest is missing or invalid.", 1 if not final_export.get("exists") else 0),
+        _check("final_export_version_match", bool(final_id and manifest_version and manifest_version != final_id), "blocking", "Final Export version does not match Project final version.", 1 if final_id and manifest_version and manifest_version != final_id else 0),
+        _check("quality_gate_passed", quality_gate.get("status") not in {"passed", "warning"}, "blocking", "Final Export quality gate is not passed or warning.", 1 if quality_gate.get("status") not in {"passed", "warning"} else 0),
+        _check("closeout_signed", sprint_count > 0 and review_sprint.get("latest_signoff_status") != "signed", "blocking", "Latest Review Sprint is not signed off.", sprint_count),
+        _check("closeout_version_match", bool(final_id and review_selected and review_selected != final_id), "blocking", "Review Sprint signoff selected version does not match Project final version.", 1 if final_id and review_selected and review_selected != final_id else 0),
+        _check("required_artifacts_exist", required_missing > 0, "blocking", "Required Final Export artifacts are missing.", required_missing),
+        _check("artifact_path_safe", unsafe_files > 0, "blocking", "Final Export artifact path is unsafe.", unsafe_files),
+        _check("artifact_hash_valid", int(artifact_integrity.get("hash_count") or 0) < int(artifact_integrity.get("checked_count") or 0), "blocking", "Final Export artifact hash could not be calculated.", int(artifact_integrity.get("checked_count") or 0) - int(artifact_integrity.get("hash_count") or 0)),
+        _check("zip_exists", not zip_summary.get("exists"), "blocking", "Final Export ZIP is missing.", 1 if not zip_summary.get("exists") else 0),
+        _check("zip_valid", bool(zip_summary.get("exists") and not zip_summary.get("valid")), "blocking", "Final Export ZIP is invalid.", 1 if zip_summary.get("exists") and not zip_summary.get("valid") else 0),
+        _check("zip_manifest_match", bool(zip_summary.get("exists") and not zip_summary.get("matches_manifest")), "blocking", "Final Export ZIP does not match current manifest and files.", 1 if zip_summary.get("exists") and not zip_summary.get("matches_manifest") else 0),
+        _check("zip_hash_valid", zip_hash_mismatch or zip_count_mismatch, "blocking", "Final Export ZIP manifest metadata does not match the actual ZIP.", 1 if zip_hash_mismatch or zip_count_mismatch else 0),
+        _check("redaction_scan", bool(redaction_findings), "blocking", "Delivery payload contains sensitive fields or values.", len(redaction_findings)),
+        _check("audio_missing", _file_missing(artifact_integrity, "audio") and not _file_missing(artifact_integrity, "midi"), "warning", "WAV is not included, but MIDI exists.", 1 if _file_missing(artifact_integrity, "audio") else 0),
+        _check("stems_missing", _file_missing(artifact_integrity, "stem_manifest") and not quality_gate.get("require_stems"), "warning", "Stems are not included.", 1 if _file_missing(artifact_integrity, "stem_manifest") else 0),
+        _check("stem_audio_partial", _stem_audio_partial(artifact_integrity), "warning", "Some stem WAV files are missing.", 1 if _stem_audio_partial(artifact_integrity) else 0),
+        _check("forced_sprint_close", int(review_sprint.get("forced_close_count") or 0) > 0, "warning", "A Review Sprint was force closed.", int(review_sprint.get("forced_close_count") or 0)),
+        _check("high_warning_count", int(review_sprint.get("warning_count") or 0) > 0, "warning", "Review Sprint closeout has warnings.", int(review_sprint.get("warning_count") or 0)),
+        _check("zip_large", int(zip_summary.get("size_bytes") or 0) > ZIP_SIZE_WARNING_BYTES, "warning", "Final Export ZIP is larger than the recommended size.", int(zip_summary.get("size_bytes") or 0)),
+        _check("extra_export_files", int(artifact_integrity.get("extra_count") or 0) > 0, "warning", "Final Export contains files not listed in manifest.", int(artifact_integrity.get("extra_count") or 0)),
+    ]
+    return checks
+
+
+def _project_export_delivery_probe(project_export: ImplementationDocument | None) -> ImplementationDocument:
+    if not isinstance(project_export, dict):
+        return {}
+    return {
+        "delivery_qa_summary": _as_document(project_export.get("delivery_qa_summary")),
+        "delivery_signoff_summary": _as_document(project_export.get("delivery_signoff_summary")),
+    }
+
+
+def _qa_status(project_document: ProjectDocument | Any, blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> str:
+    if not getattr(project_document, "versions", []):
+        return "not_ready"
+    if blockers:
+        return "failed"
+    if warnings:
+        return "warning"
+    return "passed"
+
+
+def _qa_readiness(status: str, checks: list[ImplementationDocument]) -> str:
+    if status == "not_ready":
+        return "no_data"
+    if status == "stale":
+        return "stale"
+    if any(check.get("check_id") == "final_export_exists" and check.get("status") == "failed" for check in checks):
+        return "needs_export"
+    if any(check.get("check_id") == "zip_exists" and check.get("status") == "failed" for check in checks):
+        return "needs_zip"
+    if any(check.get("check_id") in {"closeout_signed", "closeout_version_match"} and check.get("status") == "failed" for check in checks):
+        return "needs_review"
+    if status == "failed":
+        return "blocked"
+    return "ready_to_handoff"
+
+
+def _check(check_id: str, failed: bool, severity: str, message: str, count: int | float | None = 0) -> ImplementationDocument:
+    return sanitize_metadata(
+        {
+            "check_id": check_id,
+            "status": "failed" if failed and severity == "blocking" else ("warning" if failed else "passed"),
+            "severity": severity,
+            "message": message,
+            "count": count,
+        },
+        blocked_keys=BLOCKED_DELIVERY_KEYS,
+    )
+
+
+def _check_message(check: ImplementationDocument) -> str:
+    count = check.get("count")
+    suffix = f" ({count})" if count not in {None, "", 0} else ""
+    return sanitize_sensitive_text(f"{check.get('check_id')}: {check.get('message')}{suffix}")[:240]
+
+
+def _file_missing(artifact: ImplementationDocument, kind: str) -> bool:
+    for row in artifact.get("files", []) if isinstance(artifact.get("files"), list) else []:
+        if isinstance(row, dict) and row.get("kind") == kind:
+            return not bool(row.get("exists"))
+    return False
+
+
+def _stem_audio_partial(artifact: ImplementationDocument) -> bool:
+    stem_rows = [row for row in artifact.get("files", []) if isinstance(row, dict) and row.get("kind") == "stem_audio"] if isinstance(artifact.get("files"), list) else []
+    return bool(stem_rows and any(not row.get("exists") for row in stem_rows) and any(row.get("exists") for row in stem_rows))
+
+
+def _safe_export_path(export_dir: Path, relative_path: str) -> Path:
+    safe = _validate_relative_path(relative_path)
+    target = (export_dir / safe).resolve()
+    try:
+        target.relative_to(export_dir.resolve())
+    except ValueError as exc:
+        raise ValueError("Artifact path escapes final-export directory.") from exc
+    return target
+
+
+def _validate_relative_path(path: str) -> str:
+    normalized = str(path or "").replace("\\", "/")
+    if "\x00" in normalized:
+        raise ValueError("Path contains NUL.")
+    if not normalized or normalized.startswith("/") or normalized.startswith("\\") or normalized.startswith("//"):
+        raise ValueError("Path must be relative.")
+    parts = [part for part in normalized.split("/") if part]
+    if not parts or any(part in {"..", "."} for part in parts) or ".." in parts:
+        raise ValueError("Path contains traversal.")
+    if ":" in parts[0]:
+        raise ValueError("Path must not include a drive prefix.")
+    safe = PurePosixPath(*parts).as_posix()
+    if safe.endswith("/"):
+        raise ValueError("Path must reference a file.")
+    return safe
+
+
+def _path_presence(value: Any) -> str | None:
+    return "set" if value else None
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _source_hash(source: ImplementationDocument) -> str:
+    return _stable_hash({key: value for key, value in source.items() if key != "raw_manifest"})
+
+
+def _stable_hash(value: Any) -> str:
+    clean = sanitize_metadata(value, blocked_keys=BLOCKED_DELIVERY_KEYS)
+    payload = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _raw_stable_hash(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()

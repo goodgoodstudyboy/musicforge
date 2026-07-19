@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -63,10 +63,10 @@ def verify_unified_release_program_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -184,16 +184,16 @@ def verify_unified_release_program_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_unified_release_program_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_release_program_verification_exit_code(report: DomainDocument) -> int:
+def unified_release_program_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _external_manifest_checks(path: Path | str | None, items: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     if not path:
         if require:
             return [_check("urp_external_evidence_manifest_required", False, "External evidence manifest is required.")]
@@ -229,7 +229,7 @@ def _external_handoff_checks(path: Path | str | None, items: ImplementationDocum
         return []
     external = _read_json_file(Path(path))
     external_by_key = {_item_key(row): row for row in external.get("items", []) if isinstance(row, dict)}
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     for item in items.get("items", []):
         key = _item_key(item)
         external_row = external_by_key.get(key)
@@ -240,7 +240,7 @@ def _external_handoff_checks(path: Path | str | None, items: ImplementationDocum
 
 
 def _external_row_fingerprint_checks(key: str, expected: ImplementationDocument, external_row: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     prefix = f"urp_external_evidence_{_safe_check_key(key)}"
     fp = _as_document(expected.get("fingerprint"))
     for field in ("handoff_zip_sha256", "handoff_manifest_hash", "handoff_verification_report_hash", "handoff_signoff_binding_hash"):
@@ -352,9 +352,9 @@ def _dependency_semantics_checks(dependency: ImplementationDocument, readiness: 
 
 
 def _history_checks(history: list[ImplementationDocument], signoff: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     previous = ""
-    signoff_event: ImplementationDocument | None = None
+    signoff_event: dict[str, Any] | None = None
     for index, event in enumerate(history):
         payload_hash = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         event_hash = stable_hash({key: value for key, value in event.items() if key != "event_hash"})

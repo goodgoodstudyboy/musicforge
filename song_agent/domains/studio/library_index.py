@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -46,12 +45,12 @@ class LibraryItem:
     hidden: bool = False
     usage_count: int = 0
     updated_at: str = ""
-    features: ImplementationDocument = field(default_factory=dict)
-    summary: ImplementationDocument = field(default_factory=dict)
-    origin: ImplementationDocument = field(default_factory=dict)
+    features: dict[str, Any] = field(default_factory=dict)
+    summary: dict[str, Any] = field(default_factory=dict)
+    origin: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "LibraryItem":
+    def from_dict(cls, data: dict[str, Any]) -> "LibraryItem":
         return cls(
             schema_version=int(data.get("schema_version", LIBRARY_INDEX_SCHEMA_VERSION) or LIBRARY_INDEX_SCHEMA_VERSION),
             item_id=str(data.get("item_id") or ""),
@@ -77,7 +76,7 @@ class LibraryItem:
             origin=sanitize_metadata(dict(data.get("origin") or {})),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -89,7 +88,7 @@ class LibraryIndex:
     items: list[LibraryItem]
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "LibraryIndex":
+    def from_dict(cls, data: dict[str, Any]) -> "LibraryIndex":
         return cls(
             schema_version=int(data.get("schema_version", LIBRARY_INDEX_SCHEMA_VERSION) or LIBRARY_INDEX_SCHEMA_VERSION),
             built_at=str(data.get("built_at") or ""),
@@ -100,7 +99,7 @@ class LibraryIndex:
             items=[LibraryItem.from_dict(item) for item in data.get("items", []) if isinstance(item, dict)],
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "built_at": self.built_at,
@@ -108,7 +107,7 @@ class LibraryIndex:
             "items": [item.to_dict() for item in self.items],
         }
 
-    def summary(self) -> DomainDocument:
+    def summary(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "built_at": self.built_at,
@@ -140,7 +139,7 @@ class LibraryIndexStore:
         self.append_event("library_index_rebuilt", {"item_count": len(index.items), "source_counts": index.source_counts}, now=index.built_at)
         return index
 
-    def append_event(self, event_type: str, payload: DomainDocument, *, now: str | None = None) -> None:
+    def append_event(self, event_type: str, payload: dict[str, Any], *, now: str | None = None) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         event = {
             "timestamp": now or now_iso(),
@@ -231,7 +230,7 @@ def extract_asset_item(asset: CreativeAsset) -> LibraryItem:
 
 def extract_reference_item(reference: ReferenceItem, store: ReferenceStore) -> LibraryItem:
     analysis_status = "not_analyzed"
-    analysis_summary: ImplementationDocument = {}
+    analysis_summary: dict[str, Any] = {}
     slice_count = 0
     roles: list[str] = reference_roles(reference.reference_type)
     try:
@@ -296,7 +295,7 @@ def extract_reference_item(reference: ReferenceItem, store: ReferenceStore) -> L
     )
 
 
-def search_library(index: LibraryIndex, request: DomainDocument) -> DomainDocument:
+def search_library(index: LibraryIndex, request: dict[str, Any]) -> dict[str, Any]:
     include_hidden = bool(request.get("include_hidden", False))
     include_stale = bool(request.get("include_stale", False))
     limit = _limit(request.get("limit"))
@@ -326,8 +325,8 @@ def search_library(index: LibraryIndex, request: DomainDocument) -> DomainDocume
     }
 
 
-def score_library_item(item: LibraryItem, request: DomainDocument) -> tuple[int, list[DomainDocument]]:
-    breakdown: list[ImplementationDocument] = []
+def score_library_item(item: LibraryItem, request: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+    breakdown: list[dict[str, Any]] = []
     score = 0
     query_tokens = tokenize_library_text(str(request.get("query") or ""))
     item_tokens = set(str(token) for token in item.features.get("tokens", []) if isinstance(token, str))
@@ -354,7 +353,7 @@ def score_library_item(item: LibraryItem, request: DomainDocument) -> tuple[int,
     return min(100, score), breakdown
 
 
-def recommend_library_context(index: LibraryIndex, request: DomainDocument) -> DomainDocument:
+def recommend_library_context(index: LibraryIndex, request: dict[str, Any]) -> dict[str, Any]:
     query = recommendation_query(request)
     search_request = {
         **query,
@@ -377,7 +376,7 @@ def recommend_library_context(index: LibraryIndex, request: DomainDocument) -> D
     }
 
 
-def recommendation_query(request: DomainDocument) -> DomainDocument:
+def recommendation_query(request: dict[str, Any]) -> dict[str, Any]:
     source = str(request.get("source") or "song_request")
     goal = str(request.get("goal") or "generate")
     song_request = _as_document(request.get("song_request"))
@@ -404,7 +403,7 @@ def recommendation_query(request: DomainDocument) -> DomainDocument:
     )
 
 
-def context_pack_preview_from_results(asset_results: list[DomainDocument], reference_results: list[DomainDocument]) -> DomainDocument:
+def context_pack_preview_from_results(asset_results: list[dict[str, Any]], reference_results: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "asset_refs": [
             {
@@ -428,7 +427,7 @@ def context_pack_preview_from_results(asset_results: list[DomainDocument], refer
     }
 
 
-def library_result_dict(item: LibraryItem) -> DomainDocument:
+def library_result_dict(item: LibraryItem) -> dict[str, Any]:
     return sanitize_metadata(
         {
             "item_id": item.item_id,
@@ -480,7 +479,320 @@ def stable_source_hash(data: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-from song_agent.domains.studio import v142_li_readiness as _v142_li_readiness
-from song_agent.domains.studio.v142_li_readiness import tokenize_library_text as tokenize_library_text, asset_roles as asset_roles, reference_roles as reference_roles, _matches_filters as _matches_filters, _type_role_points as _type_role_points, _style_mood_points as _style_mood_points, _musical_points as _musical_points, _utility_points as _utility_points, _reason as _reason, _safe_query_summary as _safe_query_summary, _has_search_constraints as _has_search_constraints, _role_for_result as _role_for_result, _roles_for_goal as _roles_for_goal, _density_hint as _density_hint, _source_summary as _source_summary, _source_origin as _source_origin, _roles_from_analysis as _roles_from_analysis, _reference_analysis_features as _reference_analysis_features, _compact_analysis_for_index as _compact_analysis_for_index, _tempo_from_analysis as _tempo_from_analysis, _normalize_key as _normalize_key, _string_set as _string_set, _clean_string_list as _clean_string_list, _optional_int as _optional_int, _optional_float as _optional_float, _limit as _limit
+def tokenize_library_text(text: Any) -> list[str]:
+    clean = sanitize_sensitive_text(str(text or "")).lower()
+    tokens: list[str] = []
+    for token in re.split(r"[\s,.;:!?()\[\]{}<>\"'`|/\\+=*&^%$#@~，。！？、；：（）【】《》]+", clean):
+        token = token.strip("-_")
+        if 0 < len(token) <= MAX_LIBRARY_TOKEN_LENGTH:
+            tokens.append(token)
+    chinese_runs = re.findall(r"[\u4e00-\u9fff]{2,}", clean)
+    for run in chinese_runs:
+        if len(run) <= MAX_LIBRARY_TOKEN_LENGTH:
+            tokens.append(run)
+        for index in range(0, max(0, len(run) - 1)):
+            tokens.append(run[index : index + 2])
+    phrase = clean.strip()
+    if 0 < len(phrase) <= MAX_LIBRARY_TOKEN_LENGTH and " " in phrase:
+        tokens.append(phrase)
+    deduped = []
+    seen = set()
+    for token in tokens:
+        if token in seen:
+            continue
+        seen.add(token)
+        deduped.append(token)
+        if len(deduped) >= MAX_LIBRARY_TOKENS:
+            break
+    return deduped
 
-_v142_li_readiness.bind_globals(globals())
+
+def asset_roles(asset_type: str) -> list[str]:
+    return {
+        "motif": ["melody", "hook"],
+        "bass_pattern": ["bass"],
+        "drum_pattern": ["drums"],
+        "chord_progression": ["harmony"],
+        "lyric_hook": ["lyrics", "hook"],
+        "section_template": ["structure"],
+        "arrangement_template": ["arrangement"],
+    }.get(asset_type, [])
+
+
+def reference_roles(reference_type: str) -> list[str]:
+    return {
+        "midi": ["melody", "harmony", "arrangement"],
+        "lyrics_text": ["lyrics", "hook"],
+        "style_note": ["style", "arrangement"],
+        "audio_wav": ["reference", "audio"],
+    }.get(reference_type, ["reference"])
+
+
+def _matches_filters(item: LibraryItem, request: ImplementationDocument) -> bool:
+    item_kinds = _string_set(request.get("item_kinds"))
+    if item_kinds and item.item_kind not in item_kinds:
+        return False
+    asset_types = _string_set(request.get("asset_types"))
+    if asset_types and item.item_kind == "asset" and item.item_type not in asset_types:
+        return False
+    reference_types = _string_set(request.get("reference_types"))
+    if reference_types and item.item_kind == "reference" and item.item_type not in reference_types:
+        return False
+    roles = _string_set(request.get("roles"))
+    if roles and not roles.intersection(_string_set(item.features.get("roles"))):
+        return False
+    tag = str(request.get("tag") or "").strip().lower()
+    if tag and tag not in {item_tag.lower() for item_tag in item.tags}:
+        return False
+    if bool(request.get("favorite_only", False)) and not item.favorite:
+        return False
+    return True
+
+
+def _type_role_points(item: LibraryItem, request: ImplementationDocument) -> tuple[int, list[ImplementationDocument]]:
+    points = 0
+    breakdown = []
+    requested_types = _string_set(request.get("asset_types") if item.item_kind == "asset" else request.get("reference_types"))
+    if requested_types and item.item_type in requested_types:
+        points += 8
+        breakdown.append(_reason("type_match", 8, item.item_type))
+    requested_roles = _string_set(request.get("roles"))
+    item_roles = _string_set(item.features.get("roles"))
+    matched_roles = sorted(requested_roles & item_roles)
+    if matched_roles:
+        role_points = min(12, 6 * len(matched_roles))
+        points += role_points
+        breakdown.append(_reason("role_match", role_points, ", ".join(matched_roles)))
+    return min(20, points), breakdown
+
+
+def _style_mood_points(item: LibraryItem, request: ImplementationDocument) -> tuple[int, list[ImplementationDocument]]:
+    points = 0
+    breakdown = []
+    for field_name, max_points in (("style", 8), ("mood", 7)):
+        wanted = tokenize_library_text(request.get(field_name))
+        actual = set(tokenize_library_text(getattr(item, field_name)))
+        matched = sorted(set(wanted) & actual)
+        if matched:
+            points += max_points
+            breakdown.append(_reason(f"{field}_match", max_points, ", ".join(matched)))
+    return min(15, points), breakdown
+
+
+def _musical_points(item: LibraryItem, request: ImplementationDocument) -> tuple[int, list[ImplementationDocument]]:
+    points = 0
+    breakdown = []
+    tempo = _optional_int(request.get("tempo_bpm"))
+    if tempo and item.tempo_bpm:
+        delta = abs(tempo - item.tempo_bpm)
+        tempo_points = 8 if delta <= 3 else 6 if delta <= 8 else 3 if delta <= 16 else 0
+        if tempo_points:
+            points += tempo_points
+            breakdown.append(_reason("tempo_close", tempo_points, f"{item.tempo_bpm} vs {tempo}"))
+    key = str(request.get("key") or "").strip().lower()
+    if key and item.key and _normalize_key(key) == _normalize_key(item.key):
+        points += 5
+        breakdown.append(_reason("key_match", 5, item.key))
+    meter = str(request.get("meter") or "").strip()
+    if meter and item.meter and meter == item.meter:
+        points += 2
+        breakdown.append(_reason("meter_match", 2, meter))
+    return min(15, points), breakdown
+
+
+def _utility_points(item: LibraryItem) -> tuple[int, list[ImplementationDocument]]:
+    points = 0
+    breakdown = []
+    if item.quality_score is not None:
+        quality_points = min(6, max(0, int(item.quality_score) // 15))
+        points += quality_points
+        breakdown.append(_reason("quality_score", quality_points, str(item.quality_score)))
+    if item.favorite:
+        points += 2
+        breakdown.append(_reason("favorite", 2, "favorite"))
+    if item.usage_count:
+        usage_points = min(2, item.usage_count)
+        points += usage_points
+        breakdown.append(_reason("usage_count", usage_points, str(item.usage_count)))
+    return min(10, points), breakdown
+
+
+def _reason(reason: str, points: int, detail: str) -> ImplementationDocument:
+    return {"reason": reason, "points": int(points), "detail": sanitize_sensitive_text(detail)}
+
+
+def _safe_query_summary(request: ImplementationDocument) -> ImplementationDocument:
+    allowed = {"query", "item_kinds", "asset_types", "reference_types", "roles", "style", "mood", "key", "tempo_bpm", "meter", "limit"}
+    return sanitize_metadata({key: request.get(key) for key in allowed if key in request})
+
+
+def _has_search_constraints(request: ImplementationDocument) -> bool:
+    return any(request.get(key) for key in ("query", "item_kinds", "asset_types", "reference_types", "roles", "style", "mood", "key", "tempo_bpm", "meter", "tag", "favorite_only"))
+
+
+def _role_for_result(result: ImplementationDocument) -> str:
+    roles = result.get("features", {}).get("roles") if isinstance(result.get("features"), dict) else []
+    if isinstance(roles, list) and roles:
+        return str(roles[0])
+    return "reference" if result.get("item_kind") == "reference" else "asset"
+
+
+def _roles_for_goal(goal: str, text: str) -> list[str]:
+    clean = text.lower()
+    roles = ["hook", "melody", "harmony"] if goal in {"generate", "variation"} else []
+    if any(token in clean for token in ("chorus", "hook", "副歌")):
+        roles.extend(["hook", "melody", "lyrics"])
+    if any(token in clean for token in ("bass", "低音")):
+        roles.append("bass")
+    if any(token in clean for token in ("drum", "beat", "鼓")):
+        roles.append("drums")
+    if any(token in clean for token in ("chord", "harmony", "和弦")):
+        roles.append("harmony")
+    if any(token in clean for token in ("arrangement", "编曲")):
+        roles.append("arrangement")
+    return sorted(set(roles or ["reference"]))
+
+
+def _density_hint(note_count: int, duration_beats: float) -> str:
+    density = note_count / max(1.0, duration_beats)
+    if density >= 2.5:
+        return "dense"
+    if density >= 0.75:
+        return "medium"
+    return "sparse"
+
+
+def _source_summary(source: ImplementationDocument) -> ImplementationDocument:
+    return sanitize_metadata({key: source.get(key) for key in ("source_type", "project_id", "version_id", "job_id", "reference_id", "slice_id", "candidate_group_id", "candidate_id") if source.get(key)})
+
+
+def _source_origin(source: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "project_id": source.get("project_id"),
+        "version_id": source.get("version_id"),
+        "candidate_group_id": source.get("candidate_group_id"),
+    }
+
+
+def _roles_from_analysis(summary: ImplementationDocument) -> list[str]:
+    roles = []
+    for track in summary.get("track_summaries", []) if isinstance(summary.get("track_summaries"), list) else []:
+        if isinstance(track, dict) and track.get("likely_role"):
+            roles.append(str(track["likely_role"]))
+    return roles
+
+
+def _reference_analysis_features(reference_type: str, summary: ImplementationDocument) -> ImplementationDocument:
+    features: dict[str, Any] = {}
+    if reference_type == "audio_wav":
+        features.update(
+            {
+                "duration_seconds": summary.get("duration_seconds"),
+                "sample_rate": summary.get("sample_rate"),
+                "channels": summary.get("channels"),
+            }
+        )
+    elif reference_type == "midi":
+        track_summaries = _as_list(summary.get("track_summaries"))
+        note_counts = [int(track.get("note_count") or 0) for track in track_summaries if isinstance(track, dict)]
+        pitch_values = [
+            int(track[key])
+            for track in track_summaries
+            if isinstance(track, dict)
+            for key in ("pitch_min", "pitch_max")
+            if isinstance(track.get(key), int)
+        ]
+        features.update(
+            {
+                "track_count": summary.get("track_count"),
+                "note_count": sum(note_counts),
+                "pitch_min": min(pitch_values) if pitch_values else None,
+                "pitch_max": max(pitch_values) if pitch_values else None,
+            }
+        )
+    else:
+        features.update(
+            {
+                "line_count": summary.get("line_count"),
+                "keyword_hints": summary.get("keywords", [])[:20] if isinstance(summary.get("keywords"), list) else [],
+            }
+        )
+    return features
+
+
+def _compact_analysis_for_index(summary: ImplementationDocument) -> ImplementationDocument:
+    compact: ImplementationDocument = {
+        key: summary.get(key)
+        for key in ("duration_seconds", "sample_rate", "channels", "track_count", "tempo_bpm", "meter", "line_count", "keywords", "safe_excerpt")
+        if key in summary
+    }
+    if isinstance(summary.get("track_summaries"), list):
+        compact["track_summaries"] = [
+            {
+                "track_index": track.get("track_index"),
+                "likely_role": track.get("likely_role"),
+                "note_count": track.get("note_count"),
+                "pitch_min": track.get("pitch_min"),
+                "pitch_max": track.get("pitch_max"),
+            }
+            for track in summary["track_summaries"][:8]
+            if isinstance(track, dict)
+        ]
+    return compact
+
+
+def _tempo_from_analysis(summary: ImplementationDocument) -> int | None:
+    for key in ("tempo_bpm", "manual_tempo_bpm"):
+        value = _optional_int(summary.get(key))
+        if value:
+            return value
+    tempos = summary.get("tempos")
+    if isinstance(tempos, list) and tempos:
+        first = tempos[0]
+        if isinstance(first, dict):
+            return _optional_int(first.get("bpm"))
+    return None
+
+
+def _normalize_key(value: str) -> str:
+    return value.lower().replace("major", "").replace("minor", "m").replace(" ", "")
+
+
+def _string_set(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, str):
+        return {value.strip()} if value.strip() else set()
+    if isinstance(value, list):
+        return {str(item).strip() for item in value if str(item).strip()}
+    return set()
+
+
+def _clean_string_list(value: Any) -> list[str]:
+    return sorted(_string_set(value))
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return int(float(str(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _limit(value: Any) -> int:
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        limit = 20
+    return max(1, min(limit, MAX_LIBRARY_RESULTS))

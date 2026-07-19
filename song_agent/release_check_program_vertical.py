@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
 import inspect
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from song_agent.application.program import ProgramApplicationService
 from song_agent.architecture_guardrails import build_architecture_snapshot
@@ -61,7 +61,7 @@ def run_program_vertical_slice_smoke(root: Path) -> tuple[bool, str]:
             "/api/unified-release-programs/urp-000001",
         )
 
-        signals: ImplementationDocument = {
+        signals: dict[str, Any] = {
             "canonical_modules": len(canonical_files) == 30,
             "compatibility_wrappers": len(compatibility_files) == 30
             and all(_is_short_wrapper(path) for path in compatibility_files),

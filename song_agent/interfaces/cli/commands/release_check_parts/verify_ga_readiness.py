@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 from typing import Any as _InterfaceType
 
@@ -36,7 +36,7 @@ def _execute_verify_ga_readiness_report_part_03(argv: list[str], _split_state):
     return (False, None)
 
 def _execute_verify_ga_readiness_report(argv: list[str]) -> None:
-    _split_state: ImplementationDocument = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _execute_verify_ga_readiness_report_part_01(argv, _split_state)
     if _split_result[0]:
         return _split_result[1]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import re
@@ -23,7 +23,7 @@ RELEASE_AUDIO_QUALITY_OBSERVATORY_PACKAGE_TYPE = "release_audio_quality_observat
 RELEASE_AUDIO_QUALITY_OBSERVATORY_SCHEMA_VERSION = 1
 
 
-def build_observatory_documents(config: DomainDocument, release_entries: list[DomainDocument]) -> dict[str, DomainDocument]:
+def build_observatory_documents(config: dict[str, Any], release_entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     now = now_iso()
     config_doc = dict(config)
     config_doc["integrity_hash"] = _integrity_hash(config_doc)
@@ -107,11 +107,11 @@ def build_observatory_documents(config: DomainDocument, release_entries: list[Do
     return docs
 
 
-def build_observatory_documents_from_evidence_root(config: DomainDocument, evidence_root: Path | str) -> dict[str, DomainDocument]:
+def build_observatory_documents_from_evidence_root(config: dict[str, Any], evidence_root: Path | str) -> dict[str, dict[str, Any]]:
     root = Path(evidence_root)
     release_ids = [str(item) for item in config.get("release_ids", []) if str(item).strip()]
     candidates = [root / release_id for release_id in release_ids] if release_ids else sorted(path for path in root.glob("release-*") if path.is_dir())
-    entries: list[ImplementationDocument] = []
+    entries: list[dict[str, Any]] = []
     for release_dir in candidates:
         try:
             release_doc = read_json(release_dir / "release.json") if (release_dir / "release.json").exists() else {"release_id": release_dir.name}
@@ -139,7 +139,7 @@ def _build_release_entry_from_paths(release_dir: Path, release_doc: Implementati
 
 def _build_release_entry(release_doc: ImplementationDocument, paths: dict[str, Path | None], *, explicit: bool) -> ImplementationDocument:
     release_id = str(release_doc.get("release_id") or "")
-    components: list[ImplementationDocument] = []
+    components: list[dict[str, Any]] = []
     cert = _verification_component("release_audio_certification", release_id, paths.get("certification_zip"), paths.get("certification_verification_report"), verifier="certification")
     timeline = _verification_component(
         "release_audio_timeline",
@@ -251,7 +251,7 @@ def _timeline_facts(timeline_zip: Path | None) -> ImplementationDocument:
         track_index = _read_json_entry(archive, "track-timeline-index.json")
         taxonomy = _read_json_entry(archive, "issue-taxonomy.json")
         trend = _read_json_entry(archive, "quality-trend.json")
-    tracks: list[ImplementationDocument] = []
+    tracks: list[dict[str, Any]] = []
     for row in track_index.get("tracks") or []:
         if not isinstance(row, dict):
             continue
@@ -321,7 +321,7 @@ def _trend_report(config: ImplementationDocument, facts: list[ImplementationDocu
 
 
 def _issue_heatmap(config: ImplementationDocument, facts: list[ImplementationDocument], *, source_hash: str) -> ImplementationDocument:
-    buckets: dict[str, ImplementationDocument] = {}
+    buckets: dict[str, dict[str, Any]] = {}
     for item in facts:
         release_id = item.get("release_id")
         for issue in item.get("facts", {}).get("issues", []) if isinstance(item.get("facts"), dict) else []:
@@ -347,7 +347,7 @@ def _issue_heatmap(config: ImplementationDocument, facts: list[ImplementationDoc
 
 def _baseline_drift(config: ImplementationDocument, facts: list[ImplementationDocument], *, source_hash: str) -> ImplementationDocument:
     release_rows = [_source_row(item) for item in facts]
-    drift_rows: list[ImplementationDocument] = []
+    drift_rows: list[dict[str, Any]] = []
     if len(release_rows) >= 2:
         first = release_rows[0]
         latest = release_rows[-1]
@@ -372,7 +372,7 @@ def _remediation_cost(config: ImplementationDocument, facts: list[Implementation
 
 
 def _risk_register(config: ImplementationDocument, facts: list[ImplementationDocument], trend: ImplementationDocument, heatmap: ImplementationDocument, drift: ImplementationDocument, remediation: ImplementationDocument, *, thresholds: ImplementationDocument, source_hash: str) -> ImplementationDocument:
-    risks: list[ImplementationDocument] = []
+    risks: list[dict[str, Any]] = []
     for item in facts:
         failed = [component for component in item.get("components", []) if component.get("present", True) and component.get("status") != "passed"]
         if failed or item.get("status") != "passed":

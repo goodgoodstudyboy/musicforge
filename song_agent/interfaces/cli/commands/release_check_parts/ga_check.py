@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 from . import dependencies as _commands_release_check_parts_dependencies
 
@@ -32,7 +32,7 @@ def _execute_ga_check_part_03(argv: list[str], _split_state):
     return (False, None)
 
 def _execute_ga_check(argv: list[str]) -> None:
-    _split_state: ImplementationDocument = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _execute_ga_check_part_01(argv, _split_state)
     if _split_result[0]:
         return _split_result[1]

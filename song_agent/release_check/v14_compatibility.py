@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import ast
 import json
 from pathlib import Path
+from typing import Any
 
 from song_agent.architecture_guardrails import build_architecture_snapshot
 from song_agent.platform.verification.hashing import sha256_text_file, stable_hash
@@ -18,8 +18,8 @@ def evaluate_v14_compatibility_retirement(
     repo_root: Path | str = ".",
     *,
     retirement_path: Path | str = RETIREMENT_PATH,
-    snapshot: DomainDocument | None = None,
-) -> DomainDocument:
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     target = _rooted(root, retirement_path)
     document = _read_json(target)
@@ -53,7 +53,7 @@ def evaluate_v14_compatibility_retirement(
         for row in wave.get("modules") or []
     }
     entries = {str(row.get("module")): row for row in document.get("entries") or []}
-    analyses: dict[str, ImplementationDocument] = {}
+    analyses: dict[str, dict[str, Any]] = {}
     if set(entries) != set(baseline_entries):
         blockers.append("v14_compatibility_module_inventory")
     if len(migration_entries) != 270:
@@ -180,7 +180,7 @@ def _current_profile_legacy_callables() -> list[tuple[str, str]]:
     return rows
 
 
-def _active_legacy_imports(snapshot: ImplementationDocument) -> list[dict[str, str]]:
+def _active_legacy_imports(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     ownership = {str(row["module"]): row for row in snapshot.get("modules") or []}
     return [
         {"importer": str(row["importer"]), "imported": str(row["imported"])}
@@ -191,7 +191,7 @@ def _active_legacy_imports(snapshot: ImplementationDocument) -> list[dict[str, s
     ]
 
 
-def _facade_analysis(path: Path) -> ImplementationDocument:
+def _facade_analysis(path: Path) -> dict[str, Any]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     dynamic = False
     wildcard = False
@@ -260,7 +260,7 @@ def _module_path(root: Path, module: str) -> Path | None:
     return package_path if package_path.is_file() else None
 
 
-def _read_json(path: Path) -> ImplementationDocument:
+def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError(f"Expected JSON object: {path}")

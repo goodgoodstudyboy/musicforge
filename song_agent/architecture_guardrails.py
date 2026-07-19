@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import ast
 import copy
 import hashlib
@@ -53,10 +52,10 @@ CUSTOM_LIFECYCLE_ALGORITHM_NAMES = (
     "_hash_history_event",
 )
 DEPENDENCY_EXCEPTIONS: dict[tuple[str, str], str] = {}
-_SNAPSHOT_CACHE: dict[tuple[str, tuple[tuple[str, int, int], ...]], ImplementationDocument] = {}
+_SNAPSHOT_CACHE: dict[tuple[str, tuple[tuple[str, int, int], ...]], dict[str, Any]] = {}
 
 
-def build_architecture_snapshot(repo_root: Path | str = ".") -> DomainDocument:
+def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
     root = Path(repo_root).resolve()
     paths = sorted((root / "song_agent").rglob("*.py"))
     source_stamp = tuple(
@@ -148,7 +147,7 @@ def build_architecture_baseline(
     repo_root: Path | str = ".",
     *,
     baseline_version: str = "13.0.0",
-) -> DomainDocument:
+) -> dict[str, Any]:
     snapshot = build_architecture_snapshot(repo_root)
     return {
         "schema_version": ARCHITECTURE_BASELINE_SCHEMA_VERSION,
@@ -178,7 +177,7 @@ def evaluate_architecture(
     repo_root: Path | str = ".",
     *,
     baseline_path: Path | str = "architecture-baseline.json",
-) -> DomainDocument:
+) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     baseline_file = Path(baseline_path)
     if not baseline_file.is_absolute():
@@ -312,7 +311,7 @@ def evaluate_architecture(
     }
 
 
-def write_architecture_metrics(report: DomainDocument, path: Path | str) -> Path:
+def write_architecture_metrics(report: dict[str, Any], path: Path | str) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
@@ -322,7 +321,7 @@ def write_architecture_metrics(report: DomainDocument, path: Path | str) -> Path
     return target
 
 
-def write_architecture_baseline(document: DomainDocument, path: Path | str) -> Path:
+def write_architecture_baseline(document: dict[str, Any], path: Path | str) -> Path:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -361,7 +360,7 @@ def _module_name(root: Path, path: Path) -> str:
     return ".".join(parts)
 
 
-def _module_ownership(module: str, path: str) -> ImplementationDocument:
+def _module_ownership(module: str, path: str) -> dict[str, Any]:
     if module == "song_agent":
         return _ownership_row(module, path, "compatibility", None)
     if module.startswith("song_agent.platform"):
@@ -388,7 +387,7 @@ def _module_ownership(module: str, path: str) -> ImplementationDocument:
     return _ownership_row(module, path, "compatibility", _legacy_domain_context(module))
 
 
-def _ownership_row(module: str, path: str, layer: str, context: str | None) -> ImplementationDocument:
+def _ownership_row(module: str, path: str, layer: str, context: str | None) -> dict[str, Any]:
     return {"module": module, "path": path, "layer": layer, "context": context}
 
 
@@ -438,12 +437,12 @@ def _import_graph(
 ) -> tuple[
     dict[str, set[str]],
     dict[str, list[tuple[str, tuple[str, ...]]]],
-    list[ImplementationDocument],
+    list[dict[str, Any]],
 ]:
     known = set(modules)
     graph: dict[str, set[str]] = {module: set() for module in known}
     imported_names: dict[str, list[tuple[str, tuple[str, ...]]]] = {module: [] for module in known}
-    dynamic_internal_imports: list[ImplementationDocument] = []
+    dynamic_internal_imports: list[dict[str, Any]] = []
     for module in modules:
         path = modules[module]
         tree = trees[module]
@@ -560,10 +559,10 @@ def _import_cycles(graph: dict[str, set[str]]) -> list[list[str]]:
 
 
 def _boundary_violations(
-    ownership: dict[str, ImplementationDocument],
+    ownership: dict[str, dict[str, Any]],
     imports: dict[str, set[str]],
     imported_names: dict[str, list[tuple[str, tuple[str, ...]]]],
-    dynamic_internal_imports: list[ImplementationDocument],
+    dynamic_internal_imports: list[dict[str, Any]],
 ) -> list[dict[str, str]]:
     violations: set[tuple[str, str, str]] = set()
     for importer, targets in imports.items():
@@ -615,7 +614,7 @@ def _active_dependency_exceptions(imports: dict[str, set[str]]) -> list[dict[str
 
 def _security_helper_counts(
     trees: dict[str, ast.AST],
-    ownership: dict[str, ImplementationDocument],
+    ownership: dict[str, dict[str, Any]],
     *,
     active_only: bool,
 ) -> dict[str, int]:
@@ -634,7 +633,7 @@ def _security_helper_counts(
 
 def _lifecycle_algorithm_counts(
     trees: dict[str, ast.AST],
-    ownership: dict[str, ImplementationDocument],
+    ownership: dict[str, dict[str, Any]],
 ) -> dict[str, int]:
     counts = {name: 0 for name in CUSTOM_LIFECYCLE_ALGORITHM_NAMES}
     for module, tree in trees.items():
@@ -654,10 +653,10 @@ def _code_metrics(
     trees: dict[str, ast.AST],
     line_counts: dict[str, int],
     imports: dict[str, set[str]],
-    ownership: dict[str, ImplementationDocument],
-) -> ImplementationDocument:
-    functions: list[ImplementationDocument] = []
-    classes: list[ImplementationDocument] = []
+    ownership: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    functions: list[dict[str, Any]] = []
+    classes: list[dict[str, Any]] = []
     store_class_count = 0
     verifier_function_count = 0
     dict_str_any_count = 0
@@ -724,7 +723,7 @@ def _definition_metric(
     path: str,
     node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
     kind: str,
-) -> ImplementationDocument:
+) -> dict[str, Any]:
     end_line = int(node.end_lineno or node.lineno)
     return {
         "module": module,
@@ -736,7 +735,7 @@ def _definition_metric(
     }
 
 
-def _largest_definitions(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
+def _largest_definitions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(
         rows,
         key=lambda row: (-int(row["lines"]), str(row["module"]), int(row["line"]), str(row["name"])),
@@ -771,7 +770,7 @@ def _new_cycles(
     ]
 
 
-def _ownership_key(row: ImplementationDocument) -> tuple[str, str | None, str]:
+def _ownership_key(row: dict[str, Any]) -> tuple[str, str | None, str]:
     return str(row.get("layer")), row.get("context"), str(row.get("path"))
 
 

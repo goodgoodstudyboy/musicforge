@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import re as re
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
@@ -39,7 +39,7 @@ class AuditionMarker:
     updated_at: str = ""
 
     @classmethod
-    def from_dict(cls, data: DomainDocument, *, duration_beats: float | None = None) -> "AuditionMarker":
+    def from_dict(cls, data: dict[str, Any], *, duration_beats: float | None = None) -> "AuditionMarker":
         if not isinstance(data, dict):
             raise EditorReviewError("marker must be an object.")
         marker_id = validate_marker_id(str(data.get("marker_id") or "marker-001"))
@@ -63,7 +63,7 @@ class AuditionMarker:
             updated_at=str(data.get("updated_at") or created_at),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -74,13 +74,13 @@ class AuditionReview:
     status: str = "unreviewed"
     notes: str = ""
     tags: list[str] = field(default_factory=list)
-    markers: list[ImplementationDocument] = field(default_factory=list)
+    markers: list[dict[str, Any]] = field(default_factory=list)
     updated_at: str | None = None
     asset_count: int = 0
     last_asset_id: str | None = None
 
     @classmethod
-    def from_dict(cls, data: DomainDocument | None, *, duration_beats: float | None = None) -> "AuditionReview":
+    def from_dict(cls, data: dict[str, Any] | None, *, duration_beats: float | None = None) -> "AuditionReview":
         raw = _as_document(data)
         rating = _int(raw.get("rating"), "review.rating", default=0)
         if rating < 0 or rating > 5:
@@ -105,19 +105,19 @@ class AuditionReview:
             last_asset_id=last_asset_id,
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def default_review() -> DomainDocument:
+def default_review() -> dict[str, Any]:
     return AuditionReview().to_dict()
 
 
-def normalize_review(value: Any, *, duration_beats: float | None = None) -> DomainDocument:
+def normalize_review(value: Any, *, duration_beats: float | None = None) -> dict[str, Any]:
     return AuditionReview.from_dict(_as_document(value), duration_beats=duration_beats).to_dict()
 
 
-def apply_review_patch(review_value: Any, patch: DomainDocument, *, duration_beats: float, now: str | None = None) -> DomainDocument:
+def apply_review_patch(review_value: Any, patch: dict[str, Any], *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
     if not isinstance(patch, dict):
         raise EditorReviewError("review patch must be an object.")
     review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
@@ -146,7 +146,7 @@ def apply_review_patch(review_value: Any, patch: DomainDocument, *, duration_bea
     return AuditionReview.from_dict(data, duration_beats=duration_beats).to_dict()
 
 
-def add_marker(review_value: Any, payload: DomainDocument, *, duration_beats: float, now: str | None = None) -> DomainDocument:
+def add_marker(review_value: Any, payload: dict[str, Any], *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise EditorReviewError("marker payload must be an object.")
     now = now or now_iso()
@@ -173,7 +173,7 @@ def add_marker(review_value: Any, payload: DomainDocument, *, duration_beats: fl
     return AuditionReview.from_dict(data, duration_beats=duration_beats).to_dict()
 
 
-def update_marker(review_value: Any, marker_id: str, patch: DomainDocument, *, duration_beats: float, now: str | None = None) -> DomainDocument:
+def update_marker(review_value: Any, marker_id: str, patch: dict[str, Any], *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
     marker_id = validate_marker_id(marker_id)
     if not isinstance(patch, dict):
         raise EditorReviewError("marker patch must be an object.")
@@ -182,7 +182,7 @@ def update_marker(review_value: Any, marker_id: str, patch: DomainDocument, *, d
         raise EditorReviewError(f"marker patch contains unsupported fields: {', '.join(unknown)}.")
     now = now or now_iso()
     review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
-    updated_markers: list[ImplementationDocument] = []
+    updated_markers: list[dict[str, Any]] = []
     found = False
     for item in review.markers:
         if item.get("marker_id") != marker_id:
@@ -199,7 +199,7 @@ def update_marker(review_value: Any, marker_id: str, patch: DomainDocument, *, d
     return AuditionReview.from_dict(data, duration_beats=duration_beats).to_dict()
 
 
-def delete_marker(review_value: Any, marker_id: str, *, duration_beats: float, now: str | None = None) -> DomainDocument:
+def delete_marker(review_value: Any, marker_id: str, *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
     marker_id = validate_marker_id(marker_id)
     review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
     markers = [item for item in review.markers if item.get("marker_id") != marker_id]
@@ -211,7 +211,7 @@ def delete_marker(review_value: Any, marker_id: str, *, duration_beats: float, n
     return AuditionReview.from_dict(data, duration_beats=duration_beats).to_dict()
 
 
-def record_asset_created(review_value: Any, asset_id: str, *, duration_beats: float, now: str | None = None) -> DomainDocument:
+def record_asset_created(review_value: Any, asset_id: str, *, duration_beats: float, now: str | None = None) -> dict[str, Any]:
     review = AuditionReview.from_dict(_as_document(review_value), duration_beats=duration_beats)
     data = review.to_dict()
     data["asset_count"] = int(data.get("asset_count") or 0) + 1
@@ -220,7 +220,7 @@ def record_asset_created(review_value: Any, asset_id: str, *, duration_beats: fl
     return AuditionReview.from_dict(data, duration_beats=duration_beats).to_dict()
 
 
-def review_board(auditions: list[Any], filters: DomainDocument | None = None) -> DomainDocument:
+def review_board(auditions: list[Any], filters: dict[str, Any] | None = None) -> dict[str, Any]:
     filters = filters or {}
     rows = [audition_review_row(item) for item in auditions]
     rows = [row for row in rows if _matches_filters(row, filters)]
@@ -229,7 +229,7 @@ def review_board(auditions: list[Any], filters: DomainDocument | None = None) ->
     return {"summary": review_summary(rows), "auditions": rows[:limit], "filters": sanitize_metadata(filters)}
 
 
-def review_summary(auditions_or_rows: list[Any]) -> DomainDocument:
+def review_summary(auditions_or_rows: list[Any]) -> dict[str, Any]:
     rows = [item if isinstance(item, dict) and "review" in item else audition_review_row(item) for item in auditions_or_rows]
     ratings = [int((row.get("review") or {}).get("rating") or 0) for row in rows if int((row.get("review") or {}).get("rating") or 0) > 0]
     status_counts = {status: 0 for status in sorted(REVIEW_STATUSES)}
@@ -260,7 +260,7 @@ def review_summary(auditions_or_rows: list[Any]) -> DomainDocument:
     )
 
 
-def audition_review_row(manifest: Any) -> DomainDocument:
+def audition_review_row(manifest: Any) -> dict[str, Any]:
     data = manifest.to_dict() if hasattr(manifest, "to_dict") else dict(manifest)
     review = normalize_review(data.get("review"), duration_beats=float(data.get("duration_beats") or 0.0))
     row = {
@@ -284,7 +284,7 @@ def audition_review_row(manifest: Any) -> DomainDocument:
     return sanitize_metadata(row)
 
 
-def audition_asset_payload(plan: SongPlan, manifest: Any, payload: DomainDocument) -> DomainDocument:
+def audition_asset_payload(plan: SongPlan, manifest: Any, payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise EditorReviewError("asset payload must be an object.")
     data = manifest.to_dict() if hasattr(manifest, "to_dict") else dict(manifest)
@@ -294,7 +294,7 @@ def audition_asset_payload(plan: SongPlan, manifest: Any, payload: DomainDocumen
     track_id = str(payload.get("track_id") or "").strip()
     section = _section_from_range(plan, _as_document(data.get("range")))
     track = _select_asset_track(plan, asset_type, track_id)
-    content: ImplementationDocument
+    content: dict[str, Any]
     source_track_name = None
     if asset_type == "chord_progression":
         content = {
@@ -393,7 +393,7 @@ def _sort_rows(rows: list[ImplementationDocument], filters: ImplementationDocume
         sort = "updated"
     reverse = str(filters.get("order") or "desc").strip() != "asc"
 
-    def key(row: DomainDocument) -> tuple[Any, ...]:
+    def key(row: dict[str, Any]) -> tuple[Any, ...]:
         review = _as_document(row.get("review"))
         primary: Any
         if sort == "rating":

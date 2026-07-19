@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -74,26 +73,26 @@ class ReleasePortfolioGovernanceReviewerPackStore:
     def verification_report_path(self, portfolio_id: str) -> Path:
         return self.root_dir(portfolio_id) / "portfolio-governance-reviewer-pack-verification-report.json"
 
-    def read_report(self, portfolio_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_report(self, portfolio_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_or_default(self.report_path(portfolio_id), default)
 
-    def read_retrospective(self, portfolio_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_retrospective(self, portfolio_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_or_default(self.retrospective_path(portfolio_id), default)
 
-    def read_evidence_index(self, portfolio_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_evidence_index(self, portfolio_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_or_default(self.evidence_index_path(portfolio_id), default)
 
-    def read_timeline(self, portfolio_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_timeline(self, portfolio_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_or_default(self.timeline_path(portfolio_id), default)
 
-    def read_export_manifest(self, portfolio_id: str) -> DomainDocument:
+    def read_export_manifest(self, portfolio_id: str) -> dict[str, Any]:
         path = self.export_dir(portfolio_id) / "manifest.json"
         if not path.exists():
             raise ReleasePortfolioGovernanceReviewerPackNotFoundError("Portfolio Governance Reviewer Pack export has not been generated.")
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
-    def report_is_stale(self, portfolio_id: str, report: DomainDocument | None = None) -> bool:
+    def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None) -> bool:
         data = _document_or(report, self.read_report(portfolio_id, default={}))
         if not data:
             return False
@@ -103,7 +102,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
             return True
         return stable_hash(source) != str(data.get("source_hash") or "")
 
-    def refresh(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         del payload
         with self.lock:
             now = now or now_iso()
@@ -186,7 +185,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
             _write_json(self.timeline_path(portfolio_id), timeline)
             return report
 
-    def build_source(self, portfolio_id: str) -> DomainDocument:
+    def build_source(self, portfolio_id: str) -> dict[str, Any]:
         portfolio = self.portfolio_store.get_portfolio(portfolio_id)
         portfolio_report = self.portfolio_store.read_report(portfolio_id, default={})
         audit_report = self.audit_store.read_report(portfolio_id, default={})
@@ -222,7 +221,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
             blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS,
         )
 
-    def export_pack(self, portfolio_id: str, *, now: str | None = None) -> DomainDocument:
+    def export_pack(self, portfolio_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             report = self.read_report(portfolio_id, default={}) or self.refresh(portfolio_id, now=now)
@@ -293,7 +292,7 @@ class ReleasePortfolioGovernanceReviewerPackStore:
             _write_json(export_dir / "manifest.json", manifest)
             return sanitize_metadata(manifest, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
-    def build_zip(self, portfolio_id: str, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, portfolio_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             export_dir = self.export_dir(portfolio_id).resolve()
@@ -324,12 +323,12 @@ class ReleasePortfolioGovernanceReviewerPackStore:
                 raise
             return sanitize_metadata({"created_at": now, "filename": zip_path.name, "size_bytes": zip_path.stat().st_size, "sha256": _sha256(zip_path), "entry_count": len(entries), "entries": [entry for _path, entry in entries]}, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
-    def summary(self, portfolio_id: str) -> DomainDocument:
+    def summary(self, portfolio_id: str) -> dict[str, Any]:
         return reviewer_pack_summary(self.read_report(portfolio_id, default={}))
 
     def _reviewer_findings(self, portfolio_id: str, audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument], audit_verification: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
-        blockers: list[ImplementationDocument] = []
-        warnings: list[ImplementationDocument] = []
+        blockers: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
         if not audit_report:
             blockers.append(_blocker("governance_audit_missing", "Portfolio Governance Audit Report is missing."))
         elif not audit_report_integrity_ok(audit_report):
@@ -395,8 +394,8 @@ class ReleasePortfolioGovernanceReviewerPackStore:
         }
 
 
-def build_evidence_index(*, portfolio_id: str, source_hash: str, audit_report: DomainDocument, ledger_entries: list[DomainDocument], audit_verification: DomainDocument, audit_export_manifest: DomainDocument, generated_at: str) -> DomainDocument:
-    items: list[ImplementationDocument] = [
+def build_evidence_index(*, portfolio_id: str, source_hash: str, audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]], audit_verification: dict[str, Any], audit_export_manifest: dict[str, Any], generated_at: str) -> dict[str, Any]:
+    items: list[dict[str, Any]] = [
         {"name": "Portfolio Governance Audit Report", "type": "json", "status": audit_report.get("status") or "missing", "hash": audit_report.get("integrity_hash"), "required": True},
         {"name": "Portfolio Governance Audit Ledger", "type": "jsonl", "status": "passed" if ledger_entries and audit_ledger_integrity_ok(ledger_entries) else "failed", "hash": audit_report.get("ledger_hash"), "required": True},
         {"name": "Portfolio Governance Audit Verification", "type": "json", "status": audit_verification.get("status") or "missing", "hash": stable_hash(audit_verification) if audit_verification else None, "required": True},
@@ -426,7 +425,7 @@ def build_evidence_index(*, portfolio_id: str, source_hash: str, audit_report: D
     return sanitize_metadata(report, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
 
-def build_timeline(*, portfolio_id: str, source_hash: str, ledger_entries: list[DomainDocument], generated_at: str) -> DomainDocument:
+def build_timeline(*, portfolio_id: str, source_hash: str, ledger_entries: list[dict[str, Any]], generated_at: str) -> dict[str, Any]:
     events = [
         {
             "event_at": item.get("event_at"),
@@ -451,7 +450,348 @@ def build_timeline(*, portfolio_id: str, source_hash: str, ledger_entries: list[
     return sanitize_metadata(report, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
 
-from song_agent.domains.trust import v142_rpgrp_readiness as _v142_rpgrp_readiness
-from song_agent.domains.trust.v142_rpgrp_readiness import build_retrospective_report as build_retrospective_report, reviewer_report_integrity_ok as reviewer_report_integrity_ok, retrospective_report_integrity_ok as retrospective_report_integrity_ok, evidence_index_integrity_ok as evidence_index_integrity_ok, timeline_integrity_ok as timeline_integrity_ok, reviewer_pack_manifest_integrity_ok as reviewer_pack_manifest_integrity_ok, reviewer_pack_summary as reviewer_pack_summary, _reset_causality_status as _reset_causality_status, _risk_summary as _risk_summary, _risk_hotspots as _risk_hotspots, _recommendations as _recommendations, _reviewer_guide as _reviewer_guide, _retrospective_markdown as _retrospective_markdown, _evidence_index_markdown as _evidence_index_markdown, _timeline_markdown as _timeline_markdown, _report_markdown as _report_markdown, _write_readme as _write_readme, _verification_summary as _verification_summary, _read_json_or_default as _read_json_or_default, _read_optional_json as _read_optional_json, _write_json as _write_json, _file_record as _file_record, _zip_entries as _zip_entries, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _sha256 as _sha256, _int_or_none as _int_or_none, _redaction_summary as _redaction_summary, _blocker as _blocker, _warning as _warning
+def build_retrospective_report(*, portfolio_id: str, source_hash: str, audit_report: dict[str, Any], ledger_entries: list[dict[str, Any]], timeline: dict[str, Any], warnings: list[dict[str, Any]], blockers: list[dict[str, Any]], generated_at: str) -> dict[str, Any]:
+    coverage = _as_document(audit_report.get("coverage"))
+    recommendations = _recommendations(coverage, warnings, blockers)
+    report = {
+        "schema_version": PORTFOLIO_GOVERNANCE_REVIEWER_PACK_SCHEMA_VERSION,
+        "portfolio_id": portfolio_id,
+        "generated_at": generated_at,
+        "source_hash": source_hash,
+        "status": "failed" if blockers else "warning" if warnings else "passed",
+        "summary": {
+            "queue_count": int(coverage.get("queue_count") or 0),
+            "signed_queue_count": int(coverage.get("signed_queue_count") or 0),
+            "archive_verified_count": int(coverage.get("archive_verified_count") or 0),
+            "force_signed_count": int(coverage.get("force_signed_count") or 0),
+            "reset_count": int(coverage.get("reset_count") or 0),
+            "recommendation_count": len(recommendations),
+            "timeline_event_count": (_as_document(timeline.get("summary"))).get("event_count", 0),
+        },
+        "timeline": timeline.get("events", [])[:200] if isinstance(timeline.get("events"), list) else [],
+        "risk_hotspots": _risk_hotspots(ledger_entries, warnings, blockers),
+        "recommendations": recommendations,
+        "warnings": warnings,
+        "blockers": blockers,
+    }
+    report["integrity_hash"] = retrospective_report_integrity_hash(report)
+    return sanitize_metadata(report, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
 
-_v142_rpgrp_readiness.bind_globals(globals())
+
+
+
+
+def reviewer_report_integrity_ok(report: dict[str, Any] | None) -> bool:
+    data = _as_document(report)
+    return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_report_integrity_hash(data)
+
+
+
+
+
+def retrospective_report_integrity_ok(report: dict[str, Any] | None) -> bool:
+    data = _as_document(report)
+    return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == retrospective_report_integrity_hash(data)
+
+
+
+
+
+def evidence_index_integrity_ok(index: dict[str, Any] | None) -> bool:
+    data = _as_document(index)
+    return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == evidence_index_integrity_hash(data)
+
+
+
+
+
+def timeline_integrity_ok(timeline: dict[str, Any] | None) -> bool:
+    data = _as_document(timeline)
+    return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == timeline_integrity_hash(data)
+
+
+
+
+
+def reviewer_pack_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
+    data = _as_document(manifest)
+    return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == reviewer_pack_manifest_integrity_hash(data)
+
+
+def reviewer_pack_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
+    return sanitize_metadata(
+        {
+            "status": data.get("status") or "missing",
+            "readiness": data.get("readiness"),
+            "portfolio_id": data.get("portfolio_id"),
+            "source_hash": data.get("source_hash"),
+            "integrity_ok": reviewer_report_integrity_ok(data),
+            "audit_status": summary.get("audit_status"),
+            "audit_package_verification_status": summary.get("audit_package_verification_status"),
+            "queue_count": summary.get("queue_count", 0),
+            "signed_queue_count": summary.get("signed_queue_count", 0),
+            "archive_verified_count": summary.get("archive_verified_count", 0),
+            "blocker_count": summary.get("blocker_count", 0),
+            "warning_count": summary.get("warning_count", 0),
+        },
+        blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS,
+    )
+
+
+def _reset_causality_status(entries: list[ImplementationDocument]) -> str:
+    resets = [item for item in entries if item.get("event_type") in {"governance_signoff_reset", "governance_signoff_history_reset", "governance_queue_governance_signoff_reset"}]
+    if not resets:
+        return "not_applicable"
+    applied_ids = {
+        str((_as_document(item.get("source"))).get("id") or "")
+        for item in entries
+        if item.get("event_type") == "governance_change_request_applied"
+    }
+    for item in resets:
+        refs = _as_list(item.get("causal_refs"))
+        request_ids = {str(ref.get("id") or "") for ref in refs if isinstance(ref, dict) and ref.get("type") == "change_request"}
+        if not request_ids or not (request_ids & applied_ids):
+            return "failed"
+    return "passed"
+
+
+def _risk_summary(audit_report: ImplementationDocument, ledger_entries: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
+    coverage = _as_document(audit_report.get("coverage"))
+    return {
+        "status": "failed" if blockers else "warning" if warnings else "passed",
+        "blocker_count": len(blockers),
+        "warning_count": len(warnings),
+        "force_signed_count": int(coverage.get("force_signed_count") or 0),
+        "reset_count": int(coverage.get("reset_count") or 0),
+        "failed_evidence_count": sum(1 for item in ledger_entries if item.get("integrity_ok") is False),
+        "stale_evidence_count": sum(1 for item in ledger_entries if item.get("stale")),
+    }
+
+
+def _risk_hotspots(ledger_entries: list[ImplementationDocument], warnings: list[ImplementationDocument], blockers: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    counts: dict[str, int] = {}
+    for item in ledger_entries:
+        if item.get("integrity_ok") is False:
+            counts["integrity_failed"] = counts.get("integrity_failed", 0) + 1
+        if item.get("stale"):
+            counts["stale_evidence"] = counts.get("stale_evidence", 0) + 1
+        if "force" in str(item.get("event_type") or ""):
+            counts["force_signoff"] = counts.get("force_signoff", 0) + 1
+        if "reset" in str(item.get("event_type") or ""):
+            counts["reset"] = counts.get("reset", 0) + 1
+    if blockers:
+        counts["blockers"] = len(blockers)
+    if warnings:
+        counts["warnings"] = len(warnings)
+    return [{"risk": key, "count": value, "severity": "blocking" if key in {"integrity_failed", "stale_evidence", "blockers"} else "warning"} for key, value in sorted(counts.items())]
+
+
+def _recommendations(coverage: ImplementationDocument, warnings: list[ImplementationDocument], blockers: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    rows: list[dict[str, Any]] = []
+    if blockers:
+        rows.append({"recommendation": "Resolve blocking Governance Audit evidence before sending the reviewer pack.", "priority": "high"})
+    if int(coverage.get("force_signed_count") or 0) > 0:
+        rows.append({"recommendation": "Review force-signed Governance Queues and confirm follow-up ownership.", "priority": "medium"})
+    if int(coverage.get("reset_count") or 0) > 0:
+        rows.append({"recommendation": "Review reset Change Request causality and applied reset hashes.", "priority": "medium"})
+    if warnings and not rows:
+        rows.append({"recommendation": "Review warning findings before external handoff.", "priority": "low"})
+    if not rows:
+        rows.append({"recommendation": "No deterministic governance follow-up is required.", "priority": "low"})
+    return rows
+
+
+def _reviewer_guide(report: ImplementationDocument) -> str:
+    summary = _as_document(report.get("summary"))
+    lines = [
+        "# MusicForge Portfolio Governance Reviewer Guide",
+        "",
+        f"Portfolio: {summary.get('portfolio_name') or report.get('portfolio_id')}",
+        f"Status: {report.get('status')}",
+        f"Readiness: {report.get('readiness')}",
+        "",
+        "## Scope",
+        "This pack summarizes Portfolio Governance Audit evidence for external review. It does not include credentials, provider raw responses, audio, artwork, delivery ZIPs, or platform account data.",
+        "",
+        "## Key Evidence",
+        f"- Governance audit status: {summary.get('audit_status')}",
+        f"- Audit package verification: {summary.get('audit_package_verification_status')}",
+        f"- Queues: {summary.get('queue_count', 0)}",
+        f"- Signed queues: {summary.get('signed_queue_count', 0)}",
+        f"- Verified archives: {summary.get('archive_verified_count', 0)}",
+        f"- Force signed queues: {summary.get('force_signed_queue_count', 0)}",
+        f"- Resets: {summary.get('reset_count', 0)}",
+        "",
+        "## Offline Verification",
+        str((report.get("verification_instructions") or {}).get("command") or "verify-release-portfolio-governance-reviewer-pack portfolio-governance-reviewer-pack.zip"),
+        "",
+        "## Blockers",
+    ]
+    blockers = _as_list(report.get("blockers"))
+    lines.extend([f"- {item.get('check_id')}: {item.get('message')}" for item in blockers] or ["- None"])
+    lines.append("")
+    lines.append("## Warnings")
+    warnings = _as_list(report.get("warnings"))
+    lines.extend([f"- {item.get('check_id')}: {item.get('message')}" for item in warnings] or ["- None"])
+    return "\n".join(lines) + "\n"
+
+
+def _retrospective_markdown(report: ImplementationDocument) -> str:
+    lines = ["# MusicForge Portfolio Governance Retrospective", "", f"Status: {report.get('status')}", "", "## Timeline"]
+    for item in report.get("timeline", [])[:60] if isinstance(report.get("timeline"), list) else []:
+        if isinstance(item, dict):
+            lines.append(f"- {item.get('event_at')} | {item.get('domain')} | {item.get('event_type')} | {item.get('status')}")
+    lines.append("")
+    lines.append("## Risk Hotspots")
+    for item in report.get("risk_hotspots", []) if isinstance(report.get("risk_hotspots"), list) else []:
+        if isinstance(item, dict):
+            lines.append(f"- {item.get('risk')}: {item.get('count')} ({item.get('severity')})")
+    lines.append("")
+    lines.append("## Recommendations")
+    recommendations = _as_list(report.get("recommendations"))
+    lines.extend([f"- {item.get('recommendation')}" for item in recommendations if isinstance(item, dict)] or ["- No deterministic recommendations."])
+    return "\n".join(lines) + "\n"
+
+
+def _evidence_index_markdown(index: ImplementationDocument) -> str:
+    lines = ["# Portfolio Governance Evidence Index", ""]
+    for item in index.get("items", []) if isinstance(index.get("items"), list) else []:
+        if isinstance(item, dict):
+            lines.append(f"- {item.get('name')} | {item.get('type')} | {item.get('status')} | {item.get('hash') or '-'}")
+    return "\n".join(lines) + "\n"
+
+
+def _timeline_markdown(timeline: ImplementationDocument) -> str:
+    lines = ["# Portfolio Governance Timeline", ""]
+    for item in timeline.get("events", []) if isinstance(timeline.get("events"), list) else []:
+        if isinstance(item, dict):
+            lines.append(f"- {item.get('event_at')} | #{item.get('sequence')} | {item.get('domain')} | {item.get('event_type')} | {item.get('status')}")
+    return "\n".join(lines) + "\n"
+
+
+def _report_markdown(report: ImplementationDocument) -> str:
+    summary = _as_document(report.get("summary"))
+    return "\n".join(
+        [
+            "# Portfolio Governance Reviewer Report",
+            "",
+            f"Portfolio: {report.get('portfolio_id')}",
+            f"Status: {report.get('status')}",
+            f"Audit: {summary.get('audit_status')}",
+            f"Queues: {summary.get('queue_count', 0)}",
+            f"Signed Queues: {summary.get('signed_queue_count', 0)}",
+            f"Verified Archives: {summary.get('archive_verified_count', 0)}",
+        ]
+    ) + "\n"
+
+
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
+    lines = [
+        "MusicForge Release Portfolio Governance Reviewer Pack",
+        "",
+        f"Portfolio ID: {report.get('portfolio_id')}",
+        f"Status: {report.get('status')}",
+        "",
+        "Open REVIEWER_GUIDE.md for external review instructions and RETROSPECTIVE.md for internal process notes.",
+    ]
+    (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
+    summary = _as_document(report.get("summary"))
+    return {"status": report.get("status") or "missing", "summary": summary}
+
+
+def _read_json_or_default(path: Path, default: ImplementationDocument | None) -> ImplementationDocument:
+    if not path.exists():
+        return default if default is not None else {}
+    value = read_json(path)
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
+
+
+def _read_optional_json(path: Path) -> ImplementationDocument:
+    if not path.exists():
+        return {}
+    try:
+        value = read_json(path)
+    except Exception:
+        return {}
+    return sanitize_metadata(_as_document(value), blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS)
+
+
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
+    return write_json(path, sanitize_metadata(data, blocked_keys=PORTFOLIO_GOVERNANCE_REVIEWER_PACK_BLOCKED_KEYS))
+
+
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
+    rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
+    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
+
+
+def _zip_entries(export_dir: Path) -> list[tuple[Path, str]]:
+    entries: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+    for file in sorted(export_dir.rglob("*")):
+        if not file.is_file() or file.is_symlink():
+            continue
+        resolved = file.resolve()
+        _ensure_within(export_dir.resolve(), resolved)
+        entry = _validate_relative_path(resolved.relative_to(export_dir.resolve()).as_posix())
+        if entry in seen:
+            raise ReleasePortfolioGovernanceReviewerPackStateError(f"Duplicate Portfolio Governance Reviewer Pack ZIP entry: {entry}.")
+        seen.add(entry)
+        entries.append((resolved, entry))
+    return entries
+
+
+def _validate_relative_path(value: str) -> str:
+    text = str(value or "")
+    if "\\" in text or not text or text.startswith("/") or text.startswith("//") or text.endswith("/"):
+        raise ReleasePortfolioGovernanceReviewerPackStateError(f"Unsafe relative path: {value}.")
+    parts = text.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ReleasePortfolioGovernanceReviewerPackStateError(f"Unsafe relative path: {value}.")
+    if ":" in parts[0]:
+        raise ReleasePortfolioGovernanceReviewerPackStateError(f"Unsafe relative path: {value}.")
+    return text
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise ReleasePortfolioGovernanceReviewerPackStateError("Refusing to operate outside Portfolio Governance Reviewer Pack boundaries.") from exc
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _redaction_summary(value: Any) -> ImplementationDocument:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    findings = []
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            findings.append({"pattern": replacement, "excerpt": sanitize_sensitive_text(match.group(0))[:120]})
+    return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
+
+
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
+    return {"check_id": check_id, "severity": "blocking", "message": message}
+
+
+def _warning(check_id: str, message: str) -> ImplementationDocument:
+    return {"check_id": check_id, "severity": "warning", "message": message}

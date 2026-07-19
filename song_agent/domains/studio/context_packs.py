@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
 
 import json as json
 import re as re
@@ -44,15 +44,15 @@ class ContextPack:
     description: str = ""
     created_at: str = ""
     updated_at: str = ""
-    created_from: ImplementationDocument = field(default_factory=dict)
-    query: ImplementationDocument = field(default_factory=dict)
-    asset_refs: list[ImplementationDocument] = field(default_factory=list)
-    reference_refs: list[ImplementationDocument] = field(default_factory=list)
-    selection: ImplementationDocument = field(default_factory=dict)
+    created_from: dict[str, Any] = field(default_factory=dict)
+    query: dict[str, Any] = field(default_factory=dict)
+    asset_refs: list[dict[str, Any]] = field(default_factory=list)
+    reference_refs: list[dict[str, Any]] = field(default_factory=list)
+    selection: dict[str, Any] = field(default_factory=dict)
     hidden: bool = False
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ContextPack":
+    def from_dict(cls, data: dict[str, Any]) -> "ContextPack":
         pack_id = validate_context_pack_id(str(data.get("pack_id") or "pack-001"))
         asset_refs = _clean_asset_refs(data.get("asset_refs"))
         reference_refs = _clean_reference_refs(data.get("reference_refs"))
@@ -71,7 +71,7 @@ class ContextPack:
             hidden=bool(data.get("hidden", False)),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -100,7 +100,7 @@ class ContextPackStore:
             raise FileNotFoundError(pack_id)
         return ContextPack.from_dict(read_json(path))
 
-    def create_pack(self, payload: DomainDocument, *, asset_store: AssetStore, reference_store: ReferenceStore, now: str | None = None) -> ContextPack:
+    def create_pack(self, payload: dict[str, Any], *, asset_store: AssetStore, reference_store: ReferenceStore, now: str | None = None) -> ContextPack:
         now = now or now_iso()
         asset_refs, reference_refs = prepare_context_pack_refs(payload, asset_store, reference_store)
         with self.lock:
@@ -153,7 +153,7 @@ class ContextPackStore:
                 raise ValueError("Refusing to delete symlink context pack.")
             shutil.rmtree(resolved)
 
-    def apply_preview(self, pack_id: str, *, asset_store: AssetStore, reference_store: ReferenceStore, captured_at: str | None = None) -> DomainDocument:
+    def apply_preview(self, pack_id: str, *, asset_store: AssetStore, reference_store: ReferenceStore, captured_at: str | None = None) -> dict[str, Any]:
         pack = self.read_pack(pack_id)
         return apply_context_pack(pack, asset_store=asset_store, reference_store=reference_store, captured_at=captured_at)
 
@@ -170,7 +170,7 @@ class ContextPackStore:
             raise ValueError("Refusing to operate outside context packs.") from exc
         return target
 
-    def append_event(self, pack_id: str, event_type: str, payload: DomainDocument, *, now: str | None = None) -> None:
+    def append_event(self, pack_id: str, event_type: str, payload: dict[str, Any], *, now: str | None = None) -> None:
         with self.lock:
             pack_dir = self.pack_dir(pack_id)
             pack_dir.mkdir(parents=True, exist_ok=True)
@@ -195,7 +195,7 @@ class ContextPackStore:
         raise RuntimeError("Could not allocate context pack id.")
 
 
-def prepare_context_pack_refs(payload: DomainDocument, asset_store: AssetStore, reference_store: ReferenceStore) -> tuple[list[DomainDocument], list[DomainDocument]]:
+def prepare_context_pack_refs(payload: dict[str, Any], asset_store: AssetStore, reference_store: ReferenceStore) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     raw_asset_refs = payload.get("asset_refs") or []
     raw_reference_refs = payload.get("reference_refs") or []
     asset_snapshot = asset_refs_snapshot(asset_store, raw_asset_refs)
@@ -215,7 +215,7 @@ def prepare_context_pack_refs(payload: DomainDocument, asset_store: AssetStore, 
     return asset_refs, reference_refs
 
 
-def apply_context_pack(pack: ContextPack, *, asset_store: AssetStore, reference_store: ReferenceStore, captured_at: str | None = None) -> DomainDocument:
+def apply_context_pack(pack: ContextPack, *, asset_store: AssetStore, reference_store: ReferenceStore, captured_at: str | None = None) -> dict[str, Any]:
     if pack.hidden:
         raise ContextPackStaleError("Context pack is hidden.")
     warnings: list[_InferenceType] = []
@@ -250,7 +250,7 @@ def apply_context_pack(pack: ContextPack, *, asset_store: AssetStore, reference_
     }
 
 
-def merge_context_refs(explicit_refs: Any, pack_refs: list[DomainDocument], id_key: str, limit: int) -> list[DomainDocument]:
+def merge_context_refs(explicit_refs: Any, pack_refs: list[dict[str, Any]], id_key: str, limit: int) -> list[dict[str, Any]]:
     merged = []
     seen = set()
     for source in (_as_list(explicit_refs), pack_refs):
@@ -269,7 +269,7 @@ def merge_context_refs(explicit_refs: Any, pack_refs: list[DomainDocument], id_k
     return merged
 
 
-def context_pack_snapshot(pack: ContextPack, applied: DomainDocument, *, captured_at: str | None = None) -> DomainDocument:
+def context_pack_snapshot(pack: ContextPack, applied: dict[str, Any], *, captured_at: str | None = None) -> dict[str, Any]:
     return sanitize_metadata(
         {
             "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
@@ -283,11 +283,11 @@ def context_pack_snapshot(pack: ContextPack, applied: DomainDocument, *, capture
     )
 
 
-def write_context_pack_snapshot(run_dir: Path, snapshot: DomainDocument) -> Path:
+def write_context_pack_snapshot(run_dir: Path, snapshot: dict[str, Any]) -> Path:
     return write_json(run_dir / "data" / "context-pack.json", snapshot)
 
 
-def context_pack_summary(pack: ContextPack, *, used_by_versions: list[str] | None = None) -> DomainDocument:
+def context_pack_summary(pack: ContextPack, *, used_by_versions: list[str] | None = None) -> dict[str, Any]:
     return sanitize_metadata(
         {
             "pack_id": pack.pack_id,
@@ -303,7 +303,7 @@ def context_pack_summary(pack: ContextPack, *, used_by_versions: list[str] | Non
     )
 
 
-def context_pack_public_dict(pack: ContextPack) -> DomainDocument:
+def context_pack_public_dict(pack: ContextPack) -> dict[str, Any]:
     return sanitize_metadata(pack.to_dict())
 
 

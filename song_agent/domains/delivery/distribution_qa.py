@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import csv as csv
 import io as io
@@ -35,7 +35,7 @@ def build_distribution_qa_report(
     release_id: str,
     target: DistributionTarget,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     release = store.release_store.get_release(release_id)
     source = distribution_source_state(store=store, release=release, target=target)
@@ -69,7 +69,7 @@ def build_distribution_qa_report(
     return sanitize_metadata(report, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def distribution_source_state(*, store: DistributionStore, release: ReleaseDocument, target: DistributionTarget) -> DomainDocument:
+def distribution_source_state(*, store: DistributionStore, release: ReleaseDocument, target: DistributionTarget) -> dict[str, Any]:
     export_manifest = _safe_release_export_manifest(store, release.release_id)
     release_zip_path = store.release_store.zip_path(release.release_id)
     release_signoff = store.release_store.read_signoff(release.release_id, default={})
@@ -133,7 +133,7 @@ def distribution_source_state(*, store: DistributionStore, release: ReleaseDocum
     )
 
 
-def distribution_qa_summary(report: DomainDocument | None) -> DomainDocument:
+def distribution_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -150,7 +150,7 @@ def distribution_qa_summary(report: DomainDocument | None) -> DomainDocument:
     )
 
 
-def distribution_qa_allows_export(report: DomainDocument | None, *, current_source_hash: str | None = None) -> bool:
+def distribution_qa_allows_export(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> bool:
     if not isinstance(report, dict):
         return False
     if report.get("status") not in {"passed", "warning"}:
@@ -160,7 +160,7 @@ def distribution_qa_allows_export(report: DomainDocument | None, *, current_sour
     return True
 
 
-def mark_distribution_qa_stale(report: DomainDocument | None, *, current_source_hash: str | None = None) -> DomainDocument:
+def mark_distribution_qa_stale(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> dict[str, Any]:
     data = dict(report or {})
     data["status"] = "stale"
     data["stale"] = True
@@ -174,8 +174,8 @@ def mark_distribution_qa_stale(report: DomainDocument | None, *, current_source_
     return sanitize_metadata(data, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def csv_formula_cells(text: str) -> list[DomainDocument]:
-    findings: list[ImplementationDocument] = []
+def csv_formula_cells(text: str) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
     try:
         rows = list(csv.reader(io.StringIO(text)))
     except csv.Error:
@@ -187,8 +187,8 @@ def csv_formula_cells(text: str) -> list[DomainDocument]:
     return findings
 
 
-def raw_metadata_formula_findings(value: Any) -> list[DomainDocument]:
-    findings: list[ImplementationDocument] = []
+def raw_metadata_formula_findings(value: Any) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
 
     def walk(item: Any, path: str) -> None:
         if isinstance(item, dict):
@@ -221,7 +221,7 @@ def _encoded_audio_summary_for_layout(store: DistributionStore, release_id: str,
 
 def _checks(store: DistributionStore, release: ReleaseDocument, target: DistributionTarget, source: ImplementationDocument) -> list[ImplementationDocument]:
     options = _as_document(target.options)
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     export_manifest = _safe_release_export_manifest(store, release.release_id)
     release_zip_path = store.release_store.zip_path(release.release_id)
     release_signoff = store.release_store.read_signoff(release.release_id, default={})
@@ -317,7 +317,7 @@ def _mapping_checks(metadata: ImplementationDocument, template: ImplementationDo
     mapping = template_mapping(template)
     rows = _as_list(mapping.get("platform_csv"))
     tracks = _as_list(metadata.get("tracks"))
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     missing_required: list[str] = []
     missing_optional = 0
     for row in rows:
@@ -347,7 +347,7 @@ def _mapping_checks(metadata: ImplementationDocument, template: ImplementationDo
 def _identifier_checks(metadata: ImplementationDocument, options: ImplementationDocument) -> list[ImplementationDocument]:
     release_meta = _as_document(metadata.get("release"))
     tracks = _as_list(metadata.get("tracks"))
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     if bool(options.get("require_upc", False)):
         checks.append(_check("upc_required", not str(release_meta.get("upc") or "").strip(), "blocking", "UPC is required for this profile."))
     if bool(options.get("require_isrc", False)):

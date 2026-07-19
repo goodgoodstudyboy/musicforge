@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import importlib
 import json
 import tempfile
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from song_agent.architecture_guardrails import build_architecture_snapshot
 from song_agent.capabilities import capability_registry
@@ -34,8 +34,8 @@ DOMAIN_CONTRACTS = {
 def evaluate_v14_domain_vertical_slices(
     root: Path,
     *,
-    snapshot: DomainDocument | None = None,
-) -> DomainDocument:
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     migration = _read_json(root / "architecture-v14-domain-migration.json")
     retirement = _read_json(root / "architecture-v14-compatibility-retirement.json")
     architecture_snapshot = snapshot or build_architecture_snapshot(root)
@@ -113,8 +113,8 @@ def evaluate_v14_domain_vertical_slices(
 def evaluate_v14_verification_lifecycle_security(
     root: Path,
     *,
-    snapshot: DomainDocument | None = None,
-) -> DomainDocument:
+    snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     architecture_snapshot = snapshot or build_architecture_snapshot(root)
     verification = run_verification_kernel_smoke(root)
     shared = run_shared_kernel_security_smoke(root)
@@ -152,7 +152,7 @@ def evaluate_v14_verification_lifecycle_security(
     }
 
 
-def evaluate_v14_migration_rollback() -> DomainDocument:
+def evaluate_v14_migration_rollback() -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="musicforge-v14-migration-smoke-") as temp:
         workspace = Path(temp) / ".musicforge"
         source = workspace / "unified-release-programs" / "release-001"
@@ -223,7 +223,7 @@ def _module_path(root: Path, module: str) -> Path | None:
     return package if package.is_file() else None
 
 
-def _read_json(path: Path) -> ImplementationDocument:
+def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError(f"Expected JSON object: {path}")

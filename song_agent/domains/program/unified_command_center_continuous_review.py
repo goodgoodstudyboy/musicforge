@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import shutil as shutil
 import threading as threading
@@ -31,9 +30,8 @@ class UnifiedCommandCenterContinuousReviewNotFoundError(UnifiedCommandCenterCont
     pass
 
 
-from song_agent.domains.program import v142_ucccr_readiness as _v142_ucccr_readiness
-from song_agent.domains.program.v142_ucccr_readiness import UnifiedCommandCenterContinuousReviewStateError as UnifiedCommandCenterContinuousReviewStateError, _input_binding as _input_binding, _external_evidence_rows as _external_evidence_rows, _evidence_status as _evidence_status, _evidence_is_blocking as _evidence_is_blocking, _report_binding as _report_binding, _review_payload_projection as _review_payload_projection, _drift_report as _drift_report, _drift_row as _drift_row, _external_evidence_hash as _external_evidence_hash, _incident_board as _incident_board, _recovery_drill_report as _recovery_drill_report, _runbook as _runbook, _runbook_result as _runbook_result, _change_request_drafts as _change_request_drafts, _package_fingerprints as _package_fingerprints, _readme as _readme, _gate_failed as _gate_failed, _read_json_if_exists as _read_json_if_exists, _ucc_zip_summary as _ucc_zip_summary, read_json_from_zip as read_json_from_zip, _bounded as _bounded, _safe_id as _safe_id, _file_record as _file_record, _integrity_ok as _integrity_ok, _integrity_hash as _integrity_hash, _sha256_path as _sha256_path
-
+class UnifiedCommandCenterContinuousReviewStateError(UnifiedCommandCenterContinuousReviewError):
+    pass
 
 
 class UnifiedCommandCenterContinuousReviewStore:
@@ -91,7 +89,7 @@ class UnifiedCommandCenterContinuousReviewStore:
     def verification_report_path(self, center_id: str, review_id: str) -> Path:
         return self.review_dir(center_id, review_id) / "continuous-review-verification-report.json"
 
-    def list_reviews(self, center_id: str) -> list[DomainDocument]:
+    def list_reviews(self, center_id: str) -> list[dict[str, Any]]:
         if not self.reviews_dir(center_id).exists():
             return []
         rows = []
@@ -101,13 +99,13 @@ class UnifiedCommandCenterContinuousReviewStore:
                 rows.append(read_json(plan))
         return rows
 
-    def read_plan(self, center_id: str, review_id: str) -> DomainDocument:
+    def read_plan(self, center_id: str, review_id: str) -> dict[str, Any]:
         path = self.plan_path(center_id, review_id)
         if not path.exists():
             raise UnifiedCommandCenterContinuousReviewNotFoundError(f"Unified Command Center Continuous Review not found: {review_id}.")
         return read_json(path)
 
-    def read_review(self, center_id: str, review_id: str) -> DomainDocument:
+    def read_review(self, center_id: str, review_id: str) -> dict[str, Any]:
         plan = self.read_plan(center_id, review_id)
         docs = {"plan": plan}
         for key, path_func in (
@@ -125,7 +123,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             docs[key] = read_json(path) if path.exists() else {}
         return docs
 
-    def create_plan(self, center_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def create_plan(self, center_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             state = self.center_store.latest_signoff_state(center_id)
@@ -188,7 +186,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             write_json(self.plan_path(center_id, review_id), plan)
             return plan
 
-    def run_review(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def run_review(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             plan = self.read_plan(center_id, review_id)
@@ -212,7 +210,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             write_json(self.plan_path(center_id, review_id), plan)
             return {"status": drift.get("status"), "review_id": review_id, "source": source, "drift_report": drift, "incident_board": incidents, "recovery_drill": drill, "summary": drift.get("summary", {})}
 
-    def export_package(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def export_package(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             docs = self._read_required_docs(center_id, review_id)
@@ -226,7 +224,7 @@ class UnifiedCommandCenterContinuousReviewStore:
             self._write_export_manifest(center_id, review_id, docs)
             return {"status": docs["drift_report"].get("status"), "center_id": center_id, "review_id": review_id, "export_dir": str(self.review_dir(center_id, review_id)), "manifest": read_json(self.manifest_path(center_id, review_id))}
 
-    def build_zip(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def build_zip(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
             exported = self.export_package(center_id, review_id, payload or {})
             review_dir = self.review_dir(center_id, review_id)
@@ -250,7 +248,7 @@ class UnifiedCommandCenterContinuousReviewStore:
                         archive.write(path, path.name)
             return {"status": exported.get("status"), "center_id": center_id, "review_id": review_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_package(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def verify_package(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         report = verify_unified_command_center_continuous_review_package(
             self.zip_path(center_id, review_id),
@@ -286,7 +284,7 @@ class UnifiedCommandCenterContinuousReviewStore:
         command_center_zip_path: Path | str | None = None,
         command_center_verification_report_path: Path | str | None = None,
         signoff_binding_path: Path | str | None = None,
-    ) -> DomainDocument:
+    ) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
         rid = review_id or self._latest_review_id(center_id)
@@ -378,8 +376,8 @@ class UnifiedCommandCenterContinuousReviewStore:
         ucc_external = _read_json_if_exists(ucc_report_path)
         ucc_runtime = _ucc_zip_summary(ucc_zip)
         include_handoff = bool(scope.get("include_handoff", True))
-        handoff_external: ImplementationDocument = {}
-        handoff_runtime: ImplementationDocument = {"status": "not_required"}
+        handoff_external: dict[str, Any] = {}
+        handoff_runtime: dict[str, Any] = {"status": "not_required"}
         if include_handoff:
             handoff_external = _read_json_if_exists(handoff_report_path)
             handoff_runtime = verify_unified_command_center_handoff_package(
@@ -488,10 +486,372 @@ class UnifiedCommandCenterContinuousReviewStore:
         write_json(self.manifest_path(center_id, review_id), manifest)
 
 
+def _input_binding(component: str, zip_path: Path, external: ImplementationDocument, runtime: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "component": component,
+        "status": "passed" if external.get("status") == "passed" and runtime.get("status") == "passed" else "failed",
+        "zip_sha256": _sha256_path(zip_path),
+        "zip_size_bytes": zip_path.stat().st_size if zip_path.exists() else None,
+        "manifest_hash": runtime.get("manifest_hash") or external.get("manifest_hash"),
+        "verification_hash": external.get("integrity_hash"),
+        "verification_status": external.get("status"),
+        "runtime_status": runtime.get("status"),
+        "blockers": sorted(set((external.get("blockers") or []) + (runtime.get("blockers") or []))),
+    }
 
 
+def _external_evidence_rows(payload: ImplementationDocument) -> list[ImplementationDocument]:
+    rows = []
+    for value in payload.get("external_evidence", []) if isinstance(payload.get("external_evidence"), list) else []:
+        if isinstance(value, dict):
+            rows.append(sanitize_metadata(value))
+    return rows
 
 
 PASSING_EVIDENCE_STATUSES = {"passed", "ready", "clear", "signed", "accepted", "ok"}
 
-_v142_ucccr_readiness.bind_globals(globals())
+
+def _evidence_status(value: Any) -> str:
+    raw = value
+    if isinstance(value, dict):
+        raw = value.get("status")
+        if raw is None and value.get("ok") is True:
+            raw = "passed"
+    normalized = str(raw or "unknown").strip().lower()
+    return "passed" if normalized in PASSING_EVIDENCE_STATUSES else normalized
+
+
+def _evidence_is_blocking(status: Any) -> bool:
+    normalized = _evidence_status(status)
+    return normalized not in {"passed", "not_configured", "not_required", "skipped"}
+
+
+def _report_binding(path_value: Any) -> ImplementationDocument:
+    if not path_value:
+        return {"status": "not_configured", "report_hash": None}
+    path = Path(path_value)
+    if not path.exists():
+        return {"status": "missing", "report_hash": None}
+    try:
+        payload = read_json(path)
+        return {"status": _evidence_status(payload), "report_hash": _integrity_hash(payload) if "integrity_hash" not in payload else payload.get("integrity_hash"), "path_hash": _sha256_path(path)}
+    except Exception as exc:
+        return {"status": "failed", "error": sanitize_sensitive_text(str(exc)), "report_hash": None}
+
+
+def _review_payload_projection(payload: ImplementationDocument) -> ImplementationDocument:
+    keys = (
+        "archive_zip",
+        "archive_zip_path",
+        "archive_verification_report",
+        "archive_verification_report_path",
+        "handoff_zip",
+        "handoff_zip_path",
+        "handoff_verification_report",
+        "handoff_verification_report_path",
+        "command_center_zip",
+        "command_center_zip_path",
+        "unified_command_center_zip",
+        "command_center_verification_report",
+        "command_center_verification_report_path",
+        "unified_command_center_verification_report",
+        "signoff_binding",
+        "signoff_binding_path",
+        "ga_report",
+        "ga_readiness_report",
+        "ga_readiness_report_path",
+        "release_check_report",
+        "release_check_report_path",
+    )
+    projection: dict[str, Any] = {}
+    for key in keys:
+        if key in payload and payload.get(key) is not None:
+            projection[key] = str(payload.get(key))
+    if isinstance(payload.get("external_evidence"), list):
+        projection["external_evidence"] = sanitize_metadata(payload.get("external_evidence"))
+    return projection
+
+
+def _drift_report(center_id: str, review_id: str, plan: ImplementationDocument, source: ImplementationDocument) -> ImplementationDocument:
+    drifts: list[dict[str, Any]] = []
+    baseline = _as_document(plan.get("source"))
+    inputs = source.get("inputs", {})
+    comparisons = (
+        ("archive", "archive_zip_sha256", inputs.get("archive", {}).get("zip_sha256")),
+        ("archive", "archive_verification_hash", inputs.get("archive", {}).get("verification_hash")),
+        ("handoff", "handoff_zip_sha256", inputs.get("handoff", {}).get("zip_sha256")),
+        ("handoff", "handoff_verification_hash", inputs.get("handoff", {}).get("verification_hash")),
+        ("ga", "ga_report_hash", inputs.get("ga", {}).get("report_hash")),
+        ("ga", "ga_path_hash", inputs.get("ga", {}).get("path_hash")),
+        ("release_check", "release_check_report_hash", inputs.get("release_check", {}).get("report_hash")),
+        ("release_check", "release_check_path_hash", inputs.get("release_check", {}).get("path_hash")),
+        ("external_evidence", "external_evidence_hash", _external_evidence_hash(inputs.get("external_evidence", []))),
+    )
+    for component, key, actual in comparisons:
+        expected = baseline.get(key)
+        if expected and actual and expected != actual:
+            drifts.append(_drift_row(len(drifts) + 1, component, "verification_mismatch", key, expected, actual, "critical"))
+    for component in ("archive", "handoff", "ucc"):
+        item = inputs.get(component, {})
+        if item.get("status") == "failed":
+            drifts.append(_drift_row(len(drifts) + 1, component, "verification_failed", "status", "passed", item.get("status"), "critical" if component in {"archive", "handoff"} else "high"))
+    ga = _as_document(inputs.get("ga"))
+    if _evidence_is_blocking(ga.get("status")):
+        drifts.append(_drift_row(len(drifts) + 1, "ga", "external_evidence_failed", "status", "passed", ga.get("status"), "high"))
+    release_check = _as_document(inputs.get("release_check"))
+    if _evidence_is_blocking(release_check.get("status")):
+        drifts.append(_drift_row(len(drifts) + 1, "release_check", "external_evidence_failed", "status", "passed", release_check.get("status"), "high"))
+    external_rows = _as_list(inputs.get("external_evidence"))
+    for index, row in enumerate([item for item in external_rows if isinstance(item, dict)], start=1):
+        if _evidence_is_blocking(row.get("status")):
+            component = str(row.get("component") or row.get("component_type") or row.get("evidence_type") or f"external_evidence_{index}")
+            drift = _drift_row(len(drifts) + 1, component, "external_evidence_failed", "status", "passed", row.get("status"), "high")
+            drift["component_id"] = str(row.get("component_id") or row.get("evidence_id") or component)
+            drifts.append(drift)
+    blocking = sum(1 for row in drifts if row.get("severity") in {"critical", "high"} and row.get("status") == "open")
+    checked_count = 6 + 2 + len(external_rows)
+    doc = sanitize_metadata(
+        {
+            "schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION,
+            "package_type": "musicforge_unified_command_center_drift_report",
+            "review_id": review_id,
+            "center_id": center_id,
+            "generated_at": now_iso(),
+            "status": "failed" if blocking else "passed",
+            "summary": {"checked_count": checked_count, "drift_count": len(drifts), "blocking_drift_count": blocking, "warning_count": 0},
+            "drifts": drifts,
+            "source_hash": source.get("source_hash"),
+        }
+    )
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
+def _drift_row(index: int, component: str, kind: str, field: str, expected: Any, actual: Any, severity: str) -> ImplementationDocument:
+    return {
+        "drift_id": f"drift-{index:06d}",
+        "component_type": component,
+        "component_id": component,
+        "severity": severity,
+        "status": "open",
+        "kind": kind,
+        "message": f"{component} {field} changed or failed.",
+        "expected": {field: expected},
+        "actual": {field: actual},
+        "recommended_action": "create_change_request",
+    }
+
+
+def _external_evidence_hash(rows: Any) -> str | None:
+    if not isinstance(rows, list):
+        return None
+    return stable_hash(sanitize_metadata(rows))
+
+
+def _incident_board(center_id: str, review_id: str, drift: ImplementationDocument) -> ImplementationDocument:
+    incidents = []
+    for index, row in enumerate([item for item in drift.get("drifts", []) if item.get("severity") in {"critical", "high"}], start=1):
+        incidents.append(
+            {
+                "incident_id": f"uccinc-{index:06d}",
+                "source_drift_id": row.get("drift_id"),
+                "severity": row.get("severity"),
+                "status": "open",
+                "component_type": row.get("component_type"),
+                "component_id": row.get("component_id"),
+                "created_at": now_iso(),
+                "recommended_action": row.get("recommended_action"),
+                "change_request_draft_id": f"ucccr-draft-{index:06d}",
+            }
+        )
+    doc = sanitize_metadata(
+        {
+            "schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION,
+            "package_type": "musicforge_unified_command_center_continuous_review_incident_board",
+            "review_id": review_id,
+            "center_id": center_id,
+            "status": "clear" if not incidents else "open",
+            "summary": {"open_count": len(incidents), "critical_count": sum(1 for row in incidents if row.get("severity") == "critical"), "change_request_draft_count": len(incidents)},
+            "incidents": incidents,
+            "source_hash": drift.get("source_hash"),
+        }
+    )
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
+def _recovery_drill_report(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
+    inputs = source.get("inputs", {})
+    steps = []
+    for component, step_id in (("archive", "verify_archive"), ("handoff", "verify_handoff"), ("ucc", "verify_ucc")):
+        item = inputs.get(component, {})
+        if component == "handoff" and item.get("required") is False:
+            steps.append({"step_id": step_id, "status": "skipped", "details": {"reason": "handoff not required"}})
+        else:
+            steps.append({"step_id": step_id, "status": "passed" if item.get("status") == "passed" else "failed", "details": {"zip_sha256": item.get("zip_sha256"), "manifest_hash": item.get("manifest_hash"), "verification_hash": item.get("verification_hash")}})
+    failed = sum(1 for row in steps if row.get("status") == "failed")
+    doc = sanitize_metadata(
+        {
+            "schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION,
+            "package_type": "musicforge_unified_command_center_recovery_drill_report",
+            "review_id": review_id,
+            "center_id": center_id,
+            "status": "failed" if failed else "passed",
+            "started_at": now_iso(),
+            "finished_at": now_iso(),
+            "steps": steps,
+            "summary": {"step_count": len(steps), "failed_count": failed},
+            "source_hash": source.get("source_hash"),
+        }
+    )
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
+def _runbook(center_id: str, review_id: str, source: ImplementationDocument, drift: ImplementationDocument, incidents: ImplementationDocument) -> ImplementationDocument:
+    items = [
+        {"item_id": "uccrv-safe-001", "action": "continuous_review.run", "safe": True, "status": "completed"},
+        {"item_id": "uccrv-safe-002", "action": "continuous_review.verify", "safe": True, "status": "pending"},
+    ]
+    for index, row in enumerate(incidents.get("incidents", []), start=1):
+        items.append({"item_id": f"uccrv-manual-{index:03d}", "action": "create_change_request_draft", "safe": False, "status": "manual_required", "source_incident_id": row.get("incident_id")})
+    doc = sanitize_metadata(
+        {
+            "schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION,
+            "package_type": "musicforge_unified_command_center_continuous_review_runbook",
+            "review_id": review_id,
+            "center_id": center_id,
+            "created_at": now_iso(),
+            "source_hash": source.get("source_hash"),
+            "items": items,
+            "summary": {"action_count": len(items), "safe_action_count": sum(1 for row in items if row.get("safe")), "manual_action_count": sum(1 for row in items if not row.get("safe"))},
+        }
+    )
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
+def _runbook_result(center_id: str, review_id: str, source_hash: str | None, results: list[ImplementationDocument]) -> ImplementationDocument:
+    doc = sanitize_metadata(
+        {
+            "schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION,
+            "package_type": "musicforge_unified_command_center_continuous_review_runbook_result",
+            "review_id": review_id,
+            "center_id": center_id,
+            "created_at": now_iso(),
+            "source_hash": source_hash,
+            "results": results,
+            "summary": {"completed_count": sum(1 for row in results if row.get("status") == "completed"), "failed_count": sum(1 for row in results if row.get("status") == "failed"), "manual_required_count": sum(1 for row in results if row.get("status") == "manual_required")},
+        }
+    )
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
+def _change_request_drafts(center_id: str, review_id: str, incidents: ImplementationDocument) -> ImplementationDocument:
+    drafts = []
+    for row in incidents.get("incidents", []):
+        drafts.append(
+            {
+                "draft_id": row.get("change_request_draft_id"),
+                "title": f"Resolve {row.get('component_type')} drift",
+                "reason": f"Continuous Review incident {row.get('incident_id')} requires human change control.",
+                "source_drift_id": row.get("source_drift_id"),
+                "source_incident_id": row.get("incident_id"),
+                "component_type": row.get("component_type"),
+                "component_id": row.get("component_id"),
+                "status": "draft",
+            }
+        )
+    doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_continuous_review_change_request_drafts", "review_id": review_id, "center_id": center_id, "items": drafts, "summary": {"draft_count": len(drafts)}, "source_hash": incidents.get("source_hash")})
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
+def _package_fingerprints(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
+    inputs = source.get("inputs", {})
+    items = []
+    for component in ("archive", "handoff", "ucc"):
+        item = inputs.get(component, {})
+        items.append({"component": component, "zip_sha256": item.get("zip_sha256"), "manifest_hash": item.get("manifest_hash"), "verification_hash": item.get("verification_hash"), "status": item.get("status"), "required": item.get("required", True)})
+    doc = sanitize_metadata({"schema_version": UNIFIED_COMMAND_CENTER_CONTINUOUS_REVIEW_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_continuous_review_package_fingerprints", "review_id": review_id, "center_id": center_id, "source_hash": source.get("source_hash"), "items": items})
+    doc["integrity_hash"] = _integrity_hash(doc)
+    return doc
+
+
+def _readme(drift: ImplementationDocument, incidents: ImplementationDocument) -> str:
+    return "\n".join(
+        [
+            "MusicForge Unified Command Center Continuous Review",
+            "",
+            f"Status: {drift.get('status')}",
+            f"Open incidents: {(incidents.get('summary') or {}).get('open_count', 0)}",
+            "",
+            "Verify with verify-unified-command-center-continuous-review-package and the current UCC Archive/Handoff evidence.",
+            "",
+        ]
+    )
+
+
+def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
+    return {"status": "failed", "hard_block": True, "message": message, **extra}
+
+
+def _read_json_if_exists(path: Path) -> ImplementationDocument:
+    if not path.exists():
+        return {"status": "missing"}
+    return read_json(path)
+
+
+def _ucc_zip_summary(zip_path: Path) -> ImplementationDocument:
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            manifest = read_json_from_zip(archive, "manifest.json")
+            return {
+                "status": "passed" if _integrity_ok(manifest) else "failed",
+                "zip_sha256": _sha256_path(zip_path),
+                "manifest_hash": manifest.get("integrity_hash"),
+                "blockers": [] if _integrity_ok(manifest) else ["ucc_manifest_integrity"],
+            }
+    except Exception:
+        return {"status": "failed", "zip_sha256": _sha256_path(zip_path), "manifest_hash": None, "blockers": ["ucc_zip_readable"]}
+
+
+def read_json_from_zip(archive: zipfile.ZipFile, name: str) -> dict[str, Any]:
+    import json
+
+    return json.loads(archive.read(name).decode("utf-8"))
+
+
+def _bounded(value: Any, limit: int) -> str:
+    return sanitize_sensitive_text(str(value or ""))[:limit]
+
+
+def _safe_id(value: str) -> str:
+    import re
+
+    return re.sub(r"[^A-Za-z0-9_.:-]+", "-", str(value)).strip("-")
+
+
+def _file_record(path: Path, rel: str) -> ImplementationDocument:
+    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
+
+
+def _integrity_ok(payload: ImplementationDocument) -> bool:
+    return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
+
+
+def _integrity_hash(payload: ImplementationDocument) -> str:
+    return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
+
+
+def _sha256_path(path: Path | str | None) -> str | None:
+    if not path or not Path(path).exists() or not Path(path).is_file():
+        return None
+    import hashlib
+
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -60,7 +59,7 @@ def verify_trust_operations_assurance_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     verifier = _AssuranceVerifier(
         Path(zip_path),
         strict=strict,
@@ -88,11 +87,11 @@ def verify_trust_operations_assurance_package(
     return verifier.run()
 
 
-def write_trust_operations_assurance_verification_report(report: DomainDocument, path: Path | str) -> Path:
+def write_trust_operations_assurance_verification_report(report: dict[str, Any], path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_trust_operations_assurance_verification_report(report: DomainDocument) -> None:
+def print_trust_operations_assurance_verification_report(report: dict[str, Any]) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Continuous Assurance verification")
     print(f"status: {report.get('status')}")
@@ -102,7 +101,7 @@ def print_trust_operations_assurance_verification_report(report: DomainDocument)
     print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
-def trust_operations_assurance_verification_exit_code(report: DomainDocument) -> int:
+def trust_operations_assurance_verification_exit_code(report: dict[str, Any]) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -131,8 +130,8 @@ class _AssuranceVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
+        self.checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -140,18 +139,18 @@ class _AssuranceVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.manifest: ImplementationDocument = {}
-        self.run_doc: ImplementationDocument = {}
-        self.report: ImplementationDocument = {}
-        self.policy: ImplementationDocument = {}
-        self.evidence_index: ImplementationDocument = {}
-        self.external_summary: ImplementationDocument = {}
-        self.history_events: list[ImplementationDocument] = []
-        self.external_reports: dict[str, list[ImplementationDocument]] = {}
-        self.external_manifests: dict[str, ImplementationDocument] = {}
-        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: dict[str, Any] = {}
+        self.run_doc: dict[str, Any] = {}
+        self.report: dict[str, Any] = {}
+        self.policy: dict[str, Any] = {}
+        self.evidence_index: dict[str, Any] = {}
+        self.external_summary: dict[str, Any] = {}
+        self.history_events: list[dict[str, Any]] = []
+        self.external_reports: dict[str, list[dict[str, Any]]] = {}
+        self.external_manifests: dict[str, dict[str, Any]] = {}
+        self.redaction_findings: list[dict[str, Any]] = []
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -318,7 +317,7 @@ class _AssuranceVerifier:
 
     def _read_external_sources(self) -> None:
         for evidence_type, (archive_path, report_path) in self.core_paths.items():
-            reports: list[ImplementationDocument] = []
+            reports: list[dict[str, Any]] = []
             if report_path:
                 reports.append(_read_json_file(report_path))
             elif self.require_current or CORE_EVIDENCE_SPECS.get(evidence_type, {}).get("required"):
@@ -375,7 +374,7 @@ class _AssuranceVerifier:
         self._add_check("requirements", "toa_require_passed", "passed" if passed or not self.require_passed else "failed", "blocking", "Assurance report passed." if passed else "Assurance report is not passed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[ImplementationDocument] = []
+        findings: list[dict[str, Any]] = []
         for info in self.entry_infos:
             name = info.filename
             if not _is_text_scan_entry(name) or int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
@@ -518,7 +517,91 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
         return {}
 
 
-from song_agent.domains.trust import v142_tocav_readiness as _v142_tocav_readiness
-from song_agent.domains.trust.v142_tocav_readiness import _sha256_file as _sha256_file, _sha256_entry as _sha256_entry, _is_forbidden_entry as _is_forbidden_entry, _is_text_scan_entry as _is_text_scan_entry, _contains_sensitive_text as _contains_sensitive_text, _walk_json_values as _walk_json_values, _counts as _counts, _path_list as _path_list, _delivery_types as _delivery_types, _safe_id as _safe_id, _fs_path as _fs_path
+def _sha256_file(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    try:
+        digest = hashlib.sha256()
+        with open(_fs_path(path), "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return None
 
-_v142_tocav_readiness.bind_globals(globals())
+
+def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
+    digest = hashlib.sha256()
+    with archive.open(info, "r") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _is_forbidden_entry(name: str) -> bool:
+    lower = name.lower()
+    return lower.startswith(".musicforge/") or lower.endswith(".zip")
+
+
+def _is_text_scan_entry(name: str) -> bool:
+    return name.lower().endswith((".json", ".jsonl", ".txt", ".md"))
+
+
+def _contains_sensitive_text(text: str) -> bool:
+    for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
+        if pattern.search(text):
+            return True
+    for item in LOCAL_PATH_VALUE_PATTERNS:
+        pattern = item[0] if isinstance(item, tuple) else item
+        if pattern.search(text):
+            return True
+    return False
+
+
+def _walk_json_values(value: Any, prefix: str = "$"):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from _walk_json_values(child, f"{prefix}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _walk_json_values(child, f"{prefix}[{index}]")
+    else:
+        yield prefix, value
+
+
+def _counts(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _path_list(value: Any) -> list[Path]:
+    if value is None:
+        return []
+    if isinstance(value, (str, Path)):
+        return [Path(value)]
+    if isinstance(value, (list, tuple)):
+        return [Path(item) for item in value if item]
+    return []
+
+
+def _delivery_types() -> set[str]:
+    return {str(spec["component_type"]) for spec in DELIVERY_VERIFICATION_COMPONENTS}
+
+
+def _safe_id(value: str) -> str:
+    value = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in str(value).strip())
+    return value.strip("-") or "item"
+
+
+def _fs_path(path: Path) -> str:
+    value = os.fspath(path)
+    if os.name == "nt":
+        absolute = os.path.abspath(value)
+        if absolute.startswith("\\\\?\\"):
+            return absolute
+        if absolute.startswith("\\\\"):
+            return "\\\\?\\UNC\\" + absolute[2:]
+        return "\\\\?\\" + absolute
+    return value

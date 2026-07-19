@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 from copy import deepcopy as deepcopy
 from dataclasses import replace as replace
@@ -35,7 +34,7 @@ def generate_multinode_song_plan(
     request: SongRequest,
     *,
     provider_config: ProviderConfig | None = None,
-    provider_snapshot: DomainDocument | None = None,
+    provider_snapshot: dict[str, Any] | None = None,
     node_store: NodeStore,
     control: ControlFn | None = None,
     client: Any | None = None,
@@ -56,7 +55,7 @@ def rerun_multinode_from_node(
     node_name: str,
     *,
     provider_config: ProviderConfig | None = None,
-    provider_snapshot: DomainDocument | None = None,
+    provider_snapshot: dict[str, Any] | None = None,
     node_store: NodeStore,
     control: ControlFn | None = None,
     client: Any | None = None,
@@ -474,39 +473,420 @@ def build_song_plan(
     return attach_quality(plan)
 
 
-from song_agent.domains.creation.agent import v142_mp_readiness as _v142_mp_readiness
-from song_agent.domains.creation.agent.v142_mp_readiness import critic_report_for_plan as critic_report_for_plan, repair_song_plan as repair_song_plan, load_node_prompt as load_node_prompt, _run_schema_node as _run_schema_node, _schema_node_value as _schema_node_value, _node_value as _node_value, _run_node as _run_node, _next_node_counts as _next_node_counts, _node_provider_snapshot as _node_provider_snapshot, _node_output_summary as _node_output_summary, _song_plan_summary as _song_plan_summary, _style_tags as _style_tags, _issue as _issue, _track_role as _track_role, _clamp_int as _clamp_int, _utc_now as _utc_now
+def critic_report_for_plan(plan: SongPlan) -> CriticReport:
+    issues: list[CriticIssue] = []
+    if not plan.sections:
+        issues.append(_issue("error", "missing_sections", "SongPlan has no sections.", "sections"))
+    if not plan.tracks:
+        issues.append(_issue("error", "missing_tracks", "SongPlan has no tracks.", "tracks"))
+
+    normalized_roles = {_track_role(track.name) for track in plan.tracks}
+    for role in sorted(REQUIRED_TRACKS - normalized_roles):
+        issues.append(
+            _issue("error", f"missing_{role}", f"SongPlan is missing {role}.", "tracks")
+        )
+
+    total_bars = sum(section.bars for section in plan.sections)
+    total_beats = total_bars * 4
+    for track_index, track in enumerate(plan.tracks):
+        if not track.notes:
+            issues.append(
+                _issue(
+                    "error",
+                    "empty_track",
+                    f"Track {track.name} has no notes.",
+                    f"tracks.{track_index}.notes",
+                )
+            )
+        for note_index, note in enumerate(track.notes):
+            target = f"tracks.{track_index}.notes.{note_index}"
+            if note.pitch < 0 or note.pitch > 127:
+                issues.append(_issue("error", "pitch_out_of_range", "Pitch is outside 0..127.", target))
+            if note.velocity < 1 or note.velocity > 127:
+                issues.append(
+                    _issue("error", "velocity_out_of_range", "Velocity is outside 1..127.", target)
+                )
+            if note.duration_beats <= 0:
+                issues.append(
+                    _issue("error", "non_positive_duration", "Duration must be positive.", target)
+                )
+            if total_beats and note.start_beat + note.duration_beats > total_beats + 0.001:
+                issues.append(
+                    _issue("error", "note_beyond_song", "Note extends beyond song length.", target)
+                )
+
+    score = max(0, 100 - len([issue for issue in issues if issue.severity == "error"]) * 20)
+    quality = analyze_song_quality(plan)
+    quality_issues = quality_issues_for_plan(plan)
+    issues.extend(
+        issue
+        for issue in quality_issues
+        if issue.code not in {existing.code for existing in issues}
+    )
+    score = quality.scores.overall if quality.scores else score
+    dimension_scores = quality.scores.to_dict() if quality.scores else {}
+    dimension_scores.pop("overall", None)
+    return CriticReport(
+        passed=not any(issue.severity == "error" for issue in issues),
+        score=score,
+        issues=issues,
+        dimension_scores=dimension_scores,
+        summary=quality.summary,
+    )
 
 
+def repair_song_plan(plan: SongPlan, critic: CriticReport) -> tuple[SongPlan, RepairPlan]:
+    repaired = deepcopy(plan)
+    actions: list[RepairAction] = []
+
+    tracks = list(repaired.tracks)
+    normalized_roles = {_track_role(track.name) for track in tracks}
+    total_bars = sum(section.bars for section in repaired.sections) or 1
+    if "bass" not in normalized_roles:
+        tracks.append(TrackPlan("bass", "electric bass", _make_bass_notes(repaired.sections)))
+        actions.append(RepairAction("tracks", "add_bass", "SongPlan was missing bass."))
+    if "drums" not in normalized_roles:
+        tracks.append(TrackPlan("drums", "gm drums", _make_drum_notes(total_bars)))
+        actions.append(RepairAction("tracks", "add_drums", "SongPlan was missing drums."))
+
+    fixed_tracks: list[TrackPlan] = []
+    for track_index, track in enumerate(tracks):
+        fixed_notes: list[NoteEvent] = []
+        for note_index, note in enumerate(track.notes):
+            fixed_note = note
+            if fixed_note.pitch < 0 or fixed_note.pitch > 127:
+                fixed_note = replace(fixed_note, pitch=_clamp_int(fixed_note.pitch, 0, 127))
+                actions.append(
+                    RepairAction(
+                        f"tracks.{track_index}.notes.{note_index}.pitch",
+                        "clamp",
+                        "Pitch was outside 0..127.",
+                    )
+                )
+            if fixed_note.velocity < 1 or fixed_note.velocity > 127:
+                fixed_note = replace(fixed_note, velocity=_clamp_int(fixed_note.velocity, 1, 127))
+                actions.append(
+                    RepairAction(
+                        f"tracks.{track_index}.notes.{note_index}.velocity",
+                        "clamp",
+                        "Velocity was outside 1..127.",
+                    )
+                )
+            if fixed_note.duration_beats <= 0:
+                fixed_note = replace(fixed_note, duration_beats=1)
+                actions.append(
+                    RepairAction(
+                        f"tracks.{track_index}.notes.{note_index}.duration_beats",
+                        "set_duration",
+                        "Duration was non-positive.",
+                    )
+                )
+            fixed_notes.append(fixed_note)
+        fixed_tracks.append(
+            TrackPlan(name=track.name, instrument=track.instrument, notes=fixed_notes)
+        )
+
+    repaired = SongPlan(
+        title=repaired.title,
+        key=repaired.key,
+        tempo_bpm=repaired.tempo_bpm,
+        meter=repaired.meter,
+        sections=repaired.sections,
+        tracks=fixed_tracks,
+        quality=repaired.quality,
+    )
+    repaired, quality_actions = repair_quality_metadata(repaired)
+    for action in quality_actions:
+        actions.append(RepairAction("quality", action, "Applied low-risk quality metadata repair."))
+    return repaired, RepairPlan(applied=bool(actions), actions=actions)
 
 
+def load_node_prompt(node_name: str) -> str:
+    path = NODE_PROMPT_DIR / f"{node_name}.md"
+    return path.read_text(encoding="utf-8")
 
 
+def _run_schema_node(
+    node_name: str,
+    schema: Any,
+    deterministic: Callable[[], Any],
+    *,
+    node_store: NodeStore,
+    request: SongRequest,
+    input_summary: ImplementationDocument,
+    provider_config: ProviderConfig | None,
+    provider_snapshot: ImplementationDocument | None,
+    provider_input: ImplementationDocument,
+    client: Any | None,
+    control: ControlFn | None,
+    retrying: bool = False,
+) -> Any:
+    def produce() -> Any:
+        if provider_config is None or node_name not in PROVIDER_BACKED_NODES:
+            return deterministic()
+        if client is None:
+            raise ProviderOutputError("Provider client is required for provider-backed nodes.")
+        try:
+            data = client.generate_node_json(
+                node_name,
+                provider_input,
+                provider_config,
+                load_node_prompt(node_name),
+            )
+            return schema.from_dict(data)
+        except ProviderOutputError:
+            raise
+        except ValueError as exc:
+            raise ProviderOutputError(
+                f"Provider node {node_name} output did not match schema: {exc}"
+            ) from exc
+
+    return _run_node(
+        node_name,
+        produce,
+        node_store=node_store,
+        input_summary=input_summary,
+        output_summary=_node_output_summary,
+        provider_snapshot=_node_provider_snapshot(
+            node_name,
+            request,
+            provider_config,
+            provider_snapshot,
+        ),
+        control=control,
+        retrying=retrying,
+    )
 
 
+def _schema_node_value(
+    node_name: str,
+    schema: Any,
+    deterministic: Callable[[], Any],
+    *,
+    affected_nodes: set[str],
+    retrying: bool,
+    node_store: NodeStore,
+    request: SongRequest,
+    input_summary: ImplementationDocument,
+    provider_config: ProviderConfig | None,
+    provider_snapshot: ImplementationDocument | None,
+    provider_input: ImplementationDocument,
+    client: Any | None,
+    control: ControlFn | None,
+) -> Any:
+    if retrying and node_name not in affected_nodes:
+        return schema.from_dict(node_store.read_required_output(node_name))
+    return _run_schema_node(
+        node_name,
+        schema,
+        deterministic,
+        node_store=node_store,
+        request=request,
+        input_summary=input_summary,
+        provider_config=provider_config,
+        provider_snapshot=provider_snapshot,
+        provider_input=provider_input,
+        client=client,
+        control=control,
+        retrying=retrying,
+    )
 
 
+def _node_value(
+    node_name: str,
+    schema: Any,
+    produce: Callable[[], Any],
+    *,
+    affected_nodes: set[str],
+    retrying: bool,
+    node_store: NodeStore,
+    input_summary: ImplementationDocument,
+    output_summary: Callable[[Any], ImplementationDocument],
+    provider_snapshot: ImplementationDocument,
+    control: ControlFn | None,
+    success_status: str = "completed",
+) -> Any:
+    if retrying and node_name not in affected_nodes:
+        return schema.from_dict(node_store.read_required_output(node_name))
+    return _run_node(
+        node_name,
+        produce,
+        node_store=node_store,
+        input_summary=input_summary,
+        output_summary=output_summary,
+        provider_snapshot=provider_snapshot,
+        control=control,
+        success_status=success_status,
+        retrying=retrying,
+    )
 
 
+def _run_node(
+    node_name: str,
+    produce: Callable[[], Any],
+    *,
+    node_store: NodeStore,
+    input_summary: ImplementationDocument,
+    output_summary: Callable[[Any], ImplementationDocument],
+    provider_snapshot: ImplementationDocument,
+    control: ControlFn | None,
+    success_status: str = "completed",
+    retrying: bool = False,
+) -> Any:
+    if control is not None:
+        control("before_node", node_name)
+    started_at = _utc_now()
+    attempt_count, retry_count, last_error = _next_node_counts(
+        node_store,
+        node_name,
+        retrying=retrying,
+    )
+    node_store.write_node(
+        NodeRecord(
+            node=node_name,
+            status="running",
+            started_at=started_at,
+            attempt_count=attempt_count,
+            provider_snapshot=provider_snapshot,
+            input_summary=input_summary,
+            retry_count=retry_count,
+            last_error=last_error,
+            depends_on=NODE_DEPENDENCIES.get(node_name, []),
+        )
+    )
+    try:
+        output = produce()
+        output_data = output.to_dict() if hasattr(output, "to_dict") else output
+        record = NodeRecord(
+            node=node_name,
+            status=success_status,
+            started_at=started_at,
+            finished_at=_utc_now(),
+            attempt_count=attempt_count,
+            provider_snapshot=provider_snapshot,
+            input_summary=input_summary,
+            output_summary=output_summary(output),
+            output=output_data,
+            retry_count=retry_count,
+            last_error=last_error,
+            depends_on=NODE_DEPENDENCIES.get(node_name, []),
+        )
+        node_store.write_node(record)
+    except Exception as exc:
+        node_store.write_node(
+            NodeRecord(
+                node=node_name,
+                status="failed",
+                started_at=started_at,
+                finished_at=_utc_now(),
+                attempt_count=attempt_count,
+                provider_snapshot=provider_snapshot,
+                input_summary=input_summary,
+                error=str(exc),
+                retry_count=retry_count,
+                last_error=last_error,
+                depends_on=NODE_DEPENDENCIES.get(node_name, []),
+            )
+        )
+        raise
+    if control is not None:
+        control("after_node", node_name)
+    return output
 
 
+def _next_node_counts(
+    node_store: NodeStore,
+    node_name: str,
+    *,
+    retrying: bool,
+) -> tuple[int, int, str | None]:
+    try:
+        previous = node_store.read_node(node_name)
+    except FileNotFoundError:
+        return 1, 0, None
+    attempt_count = previous.attempt_count + 1
+    retry_count = previous.retry_count + 1 if retrying else previous.retry_count
+    last_error = previous.error or previous.last_error
+    return attempt_count, retry_count, last_error
 
 
+def _node_provider_snapshot(
+    node_name: str,
+    request: SongRequest,
+    provider_config: ProviderConfig | None,
+    provider_snapshot: ImplementationDocument | None,
+) -> ImplementationDocument:
+    if provider_config is not None and node_name in PROVIDER_BACKED_NODES:
+        return provider_snapshot or provider_config.to_snapshot("provider", _utc_now())
+    return {
+        "mode": "local",
+        "summary": "Deterministic node",
+        "request_title": request.title,
+    }
 
 
+def _node_output_summary(output: Any) -> ImplementationDocument:
+    if isinstance(output, SongBrief):
+        return {"title": output.title, "tempo_bpm": output.tempo_bpm, "key": output.key}
+    if isinstance(output, SonicPalette):
+        return {
+            "genre_count": len(output.genre_tags),
+            "instrument_count": len(output.instrumentation),
+            "lead_instrument": output.lead_instrument,
+        }
+    if isinstance(output, StructurePlan):
+        return {"meter": output.meter, "section_count": len(output.sections)}
+    if isinstance(output, LyricPlan):
+        return {"language": output.language, "section_count": len(output.sections)}
+    if isinstance(output, HarmonyPlan):
+        return {"key": output.key, "section_count": len(output.progressions)}
+    if isinstance(output, MelodyPlan):
+        return {
+            "lead_instrument": output.lead_instrument,
+            "phrase_count": len(output.phrases),
+            "note_count": sum(len(phrase.notes) for phrase in output.phrases),
+        }
+    if isinstance(output, ArrangementPlan):
+        return {
+            "track_count": len(output.tracks),
+            "note_count": sum(len(track.notes) for track in output.tracks),
+        }
+    return {}
 
 
+def _song_plan_summary(plan: SongPlan) -> ImplementationDocument:
+    return {
+        "title": plan.title,
+        "tempo_bpm": plan.tempo_bpm,
+        "key": plan.key,
+        "section_count": len(plan.sections),
+        "track_count": len(plan.tracks),
+        "note_count": sum(len(track.notes) for track in plan.tracks),
+    }
 
 
+def _style_tags(style: str) -> list[str]:
+    return [tag.strip().lower() for tag in style.split(",") if tag.strip()]
 
 
+def _issue(severity: str, code: str, message: str, target: str | None = None) -> CriticIssue:
+    return CriticIssue(severity=severity, code=code, message=message, target=target)
 
 
+def _track_role(name: str) -> str:
+    lower_name = name.lower()
+    for role in REQUIRED_TRACKS:
+        if role in lower_name:
+            return role
+    return lower_name.strip()
 
 
+def _clamp_int(value: int, low: int, high: int) -> int:
+    return max(low, min(high, int(value)))
 
 
-
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 __all__ = [
@@ -527,5 +907,3 @@ __all__ = [
     "repair_song_plan",
     "rerun_multinode_from_node",
 ]
-
-_v142_mp_readiness.bind_globals(globals())

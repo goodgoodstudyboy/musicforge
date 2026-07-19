@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import hashlib
 import json
 import re
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from song_agent import __version__
 from song_agent.architecture_guardrails import build_architecture_snapshot
@@ -57,7 +57,7 @@ def build_v14_reviewer_package(
     repo_root: Path,
     target: Path,
     *,
-    runtime: DomainDocument | None = None,
+    runtime: dict[str, Any] | None = None,
     final_sha: str = "",
 ) -> Path:
     root = repo_root.resolve()
@@ -134,7 +134,7 @@ def verify_v14_reviewer_package(
     *,
     expected_sha: str = "",
     require_final: bool = False,
-) -> DomainDocument:
+) -> dict[str, Any]:
     package = package_dir.resolve()
     root = repo_root.resolve()
     blockers: list[str] = []
@@ -180,7 +180,7 @@ def verify_v14_reviewer_package(
     }
 
 
-def preflight_runtime(root: Path, sha: str) -> DomainDocument:
+def preflight_runtime(root: Path, sha: str) -> dict[str, Any]:
     passed = {"status": "passed", "sha": sha, "evidence_kind": "local_preflight"}
     return {
         "schema_version": 1,
@@ -232,7 +232,7 @@ def _source_report_blockers(package: Path, root: Path) -> list[str]:
     return blockers
 
 
-def _final_runtime_blockers(runtime: ImplementationDocument, sha: str) -> list[str]:
+def _final_runtime_blockers(runtime: dict[str, Any], sha: str) -> list[str]:
     blockers: list[str] = []
     if runtime.get("status") != "passed" or runtime.get("p1_blockers"):
         blockers.append("v14_reviewer_runtime_final")
@@ -254,7 +254,7 @@ def _final_runtime_blockers(runtime: ImplementationDocument, sha: str) -> list[s
     return blockers
 
 
-def _capability_inventory() -> ImplementationDocument:
+def _capability_inventory() -> dict[str, Any]:
     rows = []
     for row in capability_registry.all():
         rows.append(
@@ -278,7 +278,7 @@ def _capability_inventory() -> ImplementationDocument:
     return {"schema_version": 1, "status": "passed", "capability_count": len(rows), "rows": rows}
 
 
-def _source_comparison(root: Path, snapshot: ImplementationDocument, compatibility: ImplementationDocument) -> ImplementationDocument:
+def _source_comparison(root: Path, snapshot: dict[str, Any], compatibility: dict[str, Any]) -> dict[str, Any]:
     baseline = _read_json(root / "architecture-v14-migration.json").get("architecture") or {}
     current_paths = {str(row.get("path")): str(row.get("layer")) for row in snapshot.get("modules") or []}
     active_lines = compatibility_lines = 0
@@ -324,7 +324,7 @@ def _contains_sensitive(package: Path) -> bool:
     return False
 
 
-def _file_row(path: Path, root: Path) -> ImplementationDocument:
+def _file_row(path: Path, root: Path) -> dict[str, Any]:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
@@ -338,7 +338,7 @@ def _git_head(root: Path) -> str:
     ).stdout.strip().lower()
 
 
-def _read_json(path: Path) -> ImplementationDocument:
+def _read_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -346,7 +346,7 @@ def _read_json(path: Path) -> ImplementationDocument:
     return value if isinstance(value, dict) else {}
 
 
-def _write_json(path: Path, value: ImplementationDocument) -> None:
+def _write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 

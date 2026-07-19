@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import shutil as shutil
@@ -70,11 +69,18 @@ BLOCKED_ASSET_METADATA_KEYS = {
 }
 
 
-from song_agent.domains.studio import v142_pr_readiness as _v142_pr_readiness
-from song_agent.domains.studio.v142_pr_readiness import JobLike as JobLike, ProjectSummaryProvider as ProjectSummaryProvider, _empty_project_summary as _empty_project_summary, quality_score_for_run as quality_score_for_run, now_iso as now_iso, _artifact_exists as _artifact_exists, _find_version as _find_version, _version_or_none as _version_or_none, _version_ref as _version_ref, _lineage_info as _lineage_info, _artifact_flags as _artifact_flags, _edit_info as _edit_info, _mix_info as _mix_info, _section_info as _section_info, _track_info as _track_info, _version_song_plan as _version_song_plan, _average_velocity as _average_velocity, _diff_dict as _diff_dict, _diff_optional as _diff_optional, _validate_project_id as _validate_project_id, _validate_version_id as _validate_version_id, _optional_version_id as _optional_version_id, _validate_variant_type as _validate_variant_type, _version_index as _version_index, _clean as _clean, _optional_str as _optional_str, _optional_int as _optional_int, _collect_project_asset_refs as _collect_project_asset_refs, _collect_project_reference_refs as _collect_project_reference_refs
-from song_agent.domains.studio import v142_pr_evidence as _v142_pr_evidence
-from song_agent.domains.studio.v142_pr_evidence import _collect_project_context_packs as _collect_project_context_packs, _sanitize_asset_metadata
-
+class JobLike(Protocol):
+    job_id: str
+    title: str
+    output_dir: str
+    status: str
+    created_at: str
+    updated_at: str
+    summary: dict[str, Any]
+    input_payload: dict[str, Any]
+    generation_mode: str
+    pipeline_mode: str
+    artifacts: dict[str, str]
 
 
 @dataclass
@@ -94,7 +100,7 @@ class ProjectState:
     best_quality_score: int | None = None
     tags: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "project_id": self.project_id,
             "name": self.name,
@@ -113,7 +119,7 @@ class ProjectState:
         }
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ProjectState":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectState":
         created_at = str(data.get("created_at") or now_iso())
         status = str(data.get("status") or "active")
         if status not in PROJECT_STATUSES:
@@ -147,10 +153,10 @@ class ProjectVersion:
     status: str
     created_at: str
     updated_at: str
-    request: ImplementationDocument = field(default_factory=dict)
+    request: dict[str, Any] = field(default_factory=dict)
     generation_mode: str = "local"
     pipeline_mode: str = "single"
-    summary: ImplementationDocument = field(default_factory=dict)
+    summary: dict[str, Any] = field(default_factory=dict)
     quality_score: int | None = None
     has_midi: bool = False
     has_audio: bool = False
@@ -167,7 +173,7 @@ class ProjectVersion:
     quality_gate_warnings: list[str] = field(default_factory=list)
     final_export_path: str | None = None
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version_id": self.version_id,
             "project_id": self.project_id,
@@ -200,7 +206,7 @@ class ProjectVersion:
         }
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ProjectVersion":
+    def from_dict(cls, data: dict[str, Any]) -> "ProjectVersion":
         created_at = str(data.get("created_at") or now_iso())
         version_id = _validate_version_id(str(data.get("version_id") or "v001"))
         status = str(data.get("status") or "queued")
@@ -249,15 +255,26 @@ class ProjectDocument:
     state: ProjectState
     versions: list[ProjectVersion] = field(default_factory=list)
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "project": self.state.to_dict(),
             "versions": [version.to_dict() for version in self.versions],
         }
 
 
+class ProjectSummaryProvider(Protocol):
+    def __call__(
+        self,
+        project_dir: Path,
+        document: ProjectDocument,
+    ) -> ImplementationDocument: ...
 
 
+def _empty_project_summary(
+    project_dir: Path,
+    document: ProjectDocument,
+) -> ImplementationDocument:
+    return {}
 
 
 class ProjectStore:
@@ -519,13 +536,13 @@ class ProjectStore:
             raise FileNotFoundError(project_id)
         shutil.rmtree(project_dir)
 
-    def export_project(self, project_id: str) -> DomainDocument:
+    def export_project(self, project_id: str) -> dict[str, Any]:
         export = self.project_export_snapshot(project_id)
         write_json(self.project_dir(project_id) / "export.json", export)
         self.append_event(project_id, "project_exported", {"version_count": len(export.get("versions", []))})
         return export
 
-    def project_export_snapshot(self, project_id: str) -> DomainDocument:
+    def project_export_snapshot(self, project_id: str) -> dict[str, Any]:
         document = self.get_project(project_id)
         project_dir = self.project_dir(project_id)
         snapshot = {
@@ -541,7 +558,7 @@ class ProjectStore:
         snapshot.update(self.summary_provider(project_dir, document))
         return snapshot
 
-    def diff_versions(self, project_id: str, left_id: str, right_id: str) -> DomainDocument:
+    def diff_versions(self, project_id: str, left_id: str, right_id: str) -> dict[str, Any]:
         document = self.get_project(project_id)
         left = _find_version(document, left_id)
         right = _find_version(document, right_id)
@@ -569,7 +586,7 @@ class ProjectStore:
                 return document
         return self.create_project(clean_name)
 
-    def append_event(self, project_id: str, event_type: str, payload: DomainDocument) -> None:
+    def append_event(self, project_id: str, event_type: str, payload: dict[str, Any]) -> None:
         project_dir = self.project_dir(project_id)
         project_dir.mkdir(parents=True, exist_ok=True)
         event = {
@@ -580,7 +597,7 @@ class ProjectStore:
         with (project_dir / "events.jsonl").open("a", encoding="utf-8") as file:
             file.write(json.dumps(event, ensure_ascii=False) + "\n")
 
-    def read_events(self, project_id: str) -> list[DomainDocument]:
+    def read_events(self, project_id: str) -> list[dict[str, Any]]:
         events_path = self.project_dir(project_id) / "events.jsonl"
         if not events_path.exists():
             return []
@@ -597,7 +614,7 @@ class ProjectStore:
     def delivery_qa_path(self, project_id: str) -> Path:
         return self.project_dir(project_id) / "delivery-qa.json"
 
-    def read_delivery_qa(self, project_id: str, default: DomainDocument | None = None) -> DomainDocument:
+    def read_delivery_qa(self, project_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.delivery_qa_path(project_id)
         if not path.exists():
             if default is not None:
@@ -606,7 +623,7 @@ class ProjectStore:
         data = read_json(path)
         return _sanitize_asset_metadata(_as_document(data))
 
-    def write_delivery_qa(self, project_id: str, report: DomainDocument, *, now: str | None = None) -> DomainDocument:
+    def write_delivery_qa(self, project_id: str, report: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         self.get_project(project_id)
         clean = _sanitize_asset_metadata(_as_document(report))
         if now:
@@ -620,7 +637,7 @@ class ProjectStore:
     def delivery_signoff_history_path(self, project_id: str) -> Path:
         return self.project_dir(project_id) / "delivery-signoff-history.jsonl"
 
-    def read_delivery_signoff(self, project_id: str, default: DomainDocument | None = None) -> DomainDocument:
+    def read_delivery_signoff(self, project_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.delivery_signoff_path(project_id)
         if not path.exists():
             if default is not None:
@@ -629,7 +646,7 @@ class ProjectStore:
         data = read_json(path)
         return _sanitize_asset_metadata(_as_document(data))
 
-    def write_delivery_signoff(self, project_id: str, record: DomainDocument, *, now: str | None = None) -> DomainDocument:
+    def write_delivery_signoff(self, project_id: str, record: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
         self.get_project(project_id)
         clean = _sanitize_asset_metadata(_as_document(record))
         if now:
@@ -637,7 +654,7 @@ class ProjectStore:
         write_json(self.delivery_signoff_path(project_id), clean)
         return clean
 
-    def reset_delivery_signoff(self, project_id: str, history_event: DomainDocument) -> DomainDocument:
+    def reset_delivery_signoff(self, project_id: str, history_event: dict[str, Any]) -> dict[str, Any]:
         existing = self.read_delivery_signoff(project_id, default={})
         if not existing:
             raise FileNotFoundError("Delivery signoff does not exist.")
@@ -704,5 +721,485 @@ class ProjectStore:
             "mix": _mix_info(version),
         }
 
-_v142_pr_readiness.bind_globals(globals())
-_v142_pr_evidence.bind_globals(globals())
+
+def quality_score_for_run(run_dir: Path) -> int | None:
+    plan_path = run_dir / "data" / "song-plan.json"
+    if not plan_path.exists():
+        return None
+    try:
+        plan = SongPlan.from_dict(read_json(plan_path))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    if plan.quality and plan.quality.scores:
+        return plan.quality.scores.overall
+    try:
+        return score_song_plan(plan).overall
+    except (ValueError, TypeError):
+        return None
+
+
+def now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _artifact_exists(job: JobLike, artifact_key: str, fallback: Path) -> bool:
+    artifact = job.artifacts.get(artifact_key)
+    if artifact and Path(artifact).exists():
+        return True
+    return fallback.exists()
+
+
+def _find_version(document: ProjectDocument, version_id: str) -> ProjectVersion:
+    version_id = _validate_version_id(version_id)
+    for version in document.versions:
+        if version.version_id == version_id:
+            return version
+    raise FileNotFoundError(version_id)
+
+
+def _version_or_none(document: ProjectDocument, version_id: str | None) -> ImplementationDocument | None:
+    if not version_id:
+        return None
+    try:
+        return _find_version(document, version_id).to_dict()
+    except FileNotFoundError:
+        return None
+
+
+def _version_ref(version: ProjectVersion) -> ImplementationDocument:
+    return {
+        "version_id": version.version_id,
+        "job_id": version.job_id,
+        "name": version.name,
+        "status": version.status,
+        "parent_version_id": version.parent_version_id,
+        "variant_type": version.variant_type,
+    }
+
+
+def _lineage_info(version: ProjectVersion) -> ImplementationDocument:
+    return {
+        "parent_version_id": version.parent_version_id,
+        "variant_type": version.variant_type,
+        "change_summary": version.change_summary,
+    }
+
+
+def _artifact_flags(version: ProjectVersion) -> dict[str, bool]:
+    return {
+        "midi": version.has_midi,
+        "audio": version.has_audio,
+        "stems": version.has_stems,
+        "stem_audio": version.has_stem_audio,
+    }
+
+
+def _edit_info(version: ProjectVersion) -> ImplementationDocument | None:
+    path = Path(version.output_dir) / "data" / "edit-metadata.json"
+    if not path.exists():
+        return None
+    try:
+        metadata = read_json(path)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return {
+        "schema_version": metadata.get("schema_version"),
+        "edit_source": metadata.get("edit_source"),
+        "edit_type": metadata.get("edit_type"),
+        "target": metadata.get("target") or {},
+        "instruction": metadata.get("instruction") or "",
+        "preserve": metadata.get("preserve") or [],
+        "strength": metadata.get("strength"),
+        "preview_id": metadata.get("preview_id"),
+        "operation_count": metadata.get("operation_count"),
+        "changed_sections": metadata.get("changed_sections") or [],
+        "changed_tracks": metadata.get("changed_tracks") or [],
+        "clip_inserts": metadata.get("clip_inserts") or [],
+        "template_inserts": metadata.get("template_inserts") or [],
+        "audition_summary": _as_document(metadata.get("audition_summary")),
+        "review_edit": _as_document(metadata.get("review_edit")),
+        "review_summary": _as_document(metadata.get("review_summary")),
+        "review_task": _as_document(metadata.get("review_task")),
+        "review_candidate": _as_document(metadata.get("review_candidate")),
+        "review_candidate_source": _as_document(metadata.get("review_candidate_source")),
+        "review_provider_patch": _as_document(metadata.get("review_provider_patch")),
+        "review_decision": _as_document(metadata.get("review_decision")),
+        "review_sprint": _as_document(metadata.get("review_sprint")),
+        "review_sprint_recommendation": _as_document(metadata.get("review_sprint_recommendation")),
+        "review_sprint_action_queue": _as_document(metadata.get("review_sprint_action_queue")),
+        "review_judge": _as_document(metadata.get("review_judge")),
+        "review_candidate_intents": _as_list(metadata.get("review_candidate_intents")),
+        "summary": metadata.get("summary") or {},
+        "structure": metadata.get("structure") or {},
+        "warnings": metadata.get("warnings") or [],
+    }
+
+
+def _mix_info(version: ProjectVersion) -> ImplementationDocument:
+    run_dir = Path(version.output_dir)
+    summary: dict[str, Any] = {}
+    state_path = run_dir / "data" / "mix-state.json"
+    patch_path = run_dir / "data" / "mix-patch.json"
+    stem_health_path = run_dir / "stems" / "stem-health.json"
+    if state_path.exists():
+        try:
+            from song_agent.domains.quality.mix_controls import mix_state_hash, mix_state_integrity_ok
+
+            state = read_json(state_path)
+            ok = mix_state_integrity_ok(state)
+            summary["mix_state"] = {"exists": True, "integrity_ok": ok, "mix_state_hash": mix_state_hash(state) if ok else None}
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            summary["mix_state"] = {"exists": True, "integrity_ok": False}
+    if patch_path.exists():
+        try:
+            from song_agent.domains.quality.mix_controls import mix_patch_hash, mix_patch_integrity_ok
+
+            patch = read_json(patch_path)
+            ok = mix_patch_integrity_ok(patch)
+            summary["mix_patch"] = {
+                "exists": True,
+                "patch_id": patch.get("patch_id"),
+                "operation_count": len(patch.get("operations", [])) if isinstance(patch.get("operations"), list) else 0,
+                "integrity_ok": ok,
+                "mix_patch_hash": mix_patch_hash(patch) if ok else None,
+            }
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            summary["mix_patch"] = {"exists": True, "integrity_ok": False}
+    if stem_health_path.exists():
+        try:
+            from song_agent.domains.creation.stem_health import stem_health_integrity_ok, stem_health_summary
+
+            report = read_json(stem_health_path)
+            summary["stem_health"] = {**stem_health_summary(report), "integrity_ok": stem_health_integrity_ok(report)}
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            summary["stem_health"] = {"status": "invalid", "integrity_ok": False}
+    return summary
+
+
+def _section_info(version: ProjectVersion) -> dict[str, ImplementationDocument]:
+    plan = _version_song_plan(version)
+    if plan is None:
+        return {}
+    return {
+        section.name: {
+            "chords": list(section.chords),
+            "lyrics": section.lyrics,
+        }
+        for section in plan.sections
+    }
+
+
+def _track_info(version: ProjectVersion) -> dict[str, ImplementationDocument]:
+    plan = _version_song_plan(version)
+    if plan is None:
+        return {}
+    return {
+        track.name: {
+            "instrument": track.instrument,
+            "note_count": len(track.notes),
+            "average_velocity": _average_velocity(track),
+        }
+        for track in plan.tracks
+    }
+
+
+def _version_song_plan(version: ProjectVersion) -> SongPlan | None:
+    path = Path(version.output_dir) / "data" / "song-plan.json"
+    if not path.exists():
+        return None
+    try:
+        return SongPlan.from_dict(read_json(path))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _average_velocity(track: Any) -> float:
+    if not track.notes:
+        return 0.0
+    return round(sum(note.velocity for note in track.notes) / len(track.notes), 2)
+
+
+def _diff_dict(left: ImplementationDocument, right: ImplementationDocument) -> dict[str, ImplementationDocument]:
+    keys = sorted(set(left) | set(right))
+    return {
+        key: {"left": left.get(key), "right": right.get(key)}
+        for key in keys
+        if left.get(key) != right.get(key)
+    }
+
+
+def _diff_optional(left: Any, right: Any) -> ImplementationDocument:
+    if left == right:
+        return {}
+    return {"left": left, "right": right}
+
+
+def _validate_project_id(project_id: str) -> str:
+    project_id = _clean(project_id)
+    if not project_id or slugify(project_id) != project_id:
+        raise ValueError("Invalid project_id.")
+    return project_id
+
+
+def _validate_version_id(version_id: str) -> str:
+    version_id = _clean(version_id)
+    if len(version_id) < 4 or not version_id.startswith("v") or not version_id[1:].isdigit():
+        raise ValueError("Invalid version_id.")
+    return version_id
+
+
+def _optional_version_id(value: Any) -> str | None:
+    if value is None or str(value).strip() == "":
+        return None
+    return _validate_version_id(str(value))
+
+
+def _validate_variant_type(value: str) -> str:
+    value = _clean(value) or "original"
+    if value not in VARIANT_TYPES:
+        raise ValueError(f"variant_type must be one of: {', '.join(sorted(VARIANT_TYPES))}.")
+    return value
+
+
+def _version_index(version_id: str) -> int:
+    return int(_validate_version_id(version_id)[1:])
+
+
+def _clean(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _optional_str(value: Any) -> str | None:
+    if value is None or str(value).strip() == "":
+        return None
+    return str(value)
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or str(value).strip() == "":
+        return None
+    return int(value)
+
+
+def _collect_project_asset_refs(project_dir: Path, document: ProjectDocument) -> list[ImplementationDocument]:
+    refs: dict[str, dict[str, Any]] = {}
+
+    def add_ref(ref: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None) -> None:
+        asset_id = str(ref.get("asset_id") or "").strip()
+        if not asset_id:
+            return
+        content_summary = _sanitize_asset_metadata(ref.get("content_summary")) if isinstance(ref.get("content_summary"), dict) else {}
+        source = _sanitize_asset_metadata(ref.get("source")) if isinstance(ref.get("source"), dict) else {}
+        record = refs.setdefault(
+            asset_id,
+            {
+                "asset_id": asset_id,
+                "asset_type": str(ref.get("asset_type") or ""),
+                "name": str(ref.get("name") or asset_id),
+                "roles": [],
+                "used_by_versions": [],
+                "used_by_candidate_groups": [],
+                "content_summary": content_summary,
+                "source": source,
+            },
+        )
+        if ref.get("asset_type") and not record.get("asset_type"):
+            record["asset_type"] = str(ref.get("asset_type"))
+        if ref.get("name") and record.get("name") == asset_id:
+            record["name"] = str(ref.get("name"))
+        role = str(ref.get("role") or "").strip()
+        if role and role not in record["roles"]:
+            record["roles"].append(role)
+        if content_summary and not record.get("content_summary"):
+            record["content_summary"] = content_summary
+        if source and not record.get("source"):
+            record["source"] = source
+        if version_id and version_id not in record["used_by_versions"]:
+            record["used_by_versions"].append(version_id)
+        if candidate_group_id and candidate_group_id not in record["used_by_candidate_groups"]:
+            record["used_by_candidate_groups"].append(candidate_group_id)
+
+    for version in document.versions:
+        path = Path(version.output_dir) / "data" / "asset-refs.json"
+        if not path.exists():
+            continue
+        try:
+            data = read_json(path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        for ref in data.get("asset_refs", []) if isinstance(data, dict) else []:
+            if isinstance(ref, dict):
+                add_ref(ref, version_id=version.version_id)
+
+    candidate_root = project_dir / "candidate-groups"
+    if candidate_root.exists():
+        for group_json in candidate_root.glob("*/group.json"):
+            try:
+                data = read_json(group_json)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            if not isinstance(source, dict):
+                continue
+            for ref in source.get("asset_refs", []):
+                if isinstance(ref, dict):
+                    add_ref(ref, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
+
+    return sorted(refs.values(), key=lambda item: item["asset_id"])
+
+
+def _collect_project_reference_refs(project_dir: Path, document: ProjectDocument) -> list[ImplementationDocument]:
+    refs: dict[str, dict[str, Any]] = {}
+
+    def add_ref(ref: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None, linked: bool = False) -> None:
+        reference_id = str(ref.get("reference_id") or "").strip()
+        if not reference_id:
+            return
+        metadata_summary = _sanitize_asset_metadata(ref.get("metadata_summary")) if isinstance(ref.get("metadata_summary"), dict) else {}
+        record = refs.setdefault(
+            reference_id,
+            {
+                "reference_id": reference_id,
+                "reference_type": str(ref.get("reference_type") or ""),
+                "title": str(ref.get("title") or reference_id),
+                "roles": [],
+                "used_by_versions": [],
+                "used_by_candidate_groups": [],
+                "linked_to_project": linked,
+                "metadata_summary": metadata_summary,
+                "analysis_summary": _sanitize_asset_metadata(ref.get("analysis_summary")) if isinstance(ref.get("analysis_summary"), dict) else {},
+            },
+        )
+        if ref.get("reference_type") and not record.get("reference_type"):
+            record["reference_type"] = str(ref.get("reference_type"))
+        if ref.get("title") and record.get("title") == reference_id:
+            record["title"] = str(ref.get("title"))
+        role = str(ref.get("role") or "").strip()
+        if role and role not in record["roles"]:
+            record["roles"].append(role)
+        if metadata_summary and not record.get("metadata_summary"):
+            record["metadata_summary"] = metadata_summary
+        analysis_summary = _sanitize_asset_metadata(ref.get("analysis_summary")) if isinstance(ref.get("analysis_summary"), dict) else {}
+        if analysis_summary and not record.get("analysis_summary"):
+            record["analysis_summary"] = analysis_summary
+        if linked:
+            record["linked_to_project"] = True
+        if version_id and version_id not in record["used_by_versions"]:
+            record["used_by_versions"].append(version_id)
+        if candidate_group_id and candidate_group_id not in record["used_by_candidate_groups"]:
+            record["used_by_candidate_groups"].append(candidate_group_id)
+
+    reference_root = Path(".musicforge") / "references"
+    if reference_root.exists():
+        for path in reference_root.glob("*/reference.json"):
+            try:
+                data = read_json(path)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            linked_project_ids = _as_list(data.get("linked_project_ids")) if isinstance(data, dict) else []
+            if document.state.project_id in linked_project_ids:
+                add_ref(
+                    {
+                        "reference_id": data.get("reference_id"),
+                        "reference_type": data.get("reference_type"),
+                        "title": data.get("title"),
+                        "metadata_summary": {
+                            "description": data.get("description"),
+                            "tags": data.get("tags"),
+                            "tempo_bpm": data.get("tempo_bpm"),
+                            "key": data.get("key"),
+                            "meter": data.get("meter"),
+                            "source_note": data.get("source_note"),
+                            "license_note": data.get("license_note"),
+                            "text_excerpt": data.get("text_excerpt"),
+                        },
+                    },
+                    linked=True,
+                )
+
+    for version in document.versions:
+        path = Path(version.output_dir) / "data" / "reference-refs.json"
+        if not path.exists():
+            continue
+        try:
+            data = read_json(path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        for ref in data.get("reference_refs", []) if isinstance(data, dict) else []:
+            if isinstance(ref, dict):
+                add_ref(ref, version_id=version.version_id)
+
+    candidate_root = project_dir / "candidate-groups"
+    if candidate_root.exists():
+        for group_json in candidate_root.glob("*/group.json"):
+            try:
+                data = read_json(group_json)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            if not isinstance(source, dict):
+                continue
+            for ref in source.get("reference_refs", []):
+                if isinstance(ref, dict):
+                    add_ref(ref, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
+
+    return sorted(refs.values(), key=lambda item: item["reference_id"])
+
+
+def _collect_project_context_packs(project_dir: Path, document: ProjectDocument) -> list[ImplementationDocument]:
+    packs: dict[str, dict[str, Any]] = {}
+
+    def add_pack(data: dict[str, Any], *, version_id: str | None = None, candidate_group_id: str | None = None) -> None:
+        pack_id = str(data.get("pack_id") or "").strip()
+        if not pack_id:
+            return
+        record = packs.setdefault(
+            pack_id,
+            {
+                "pack_id": pack_id,
+                "name": str(data.get("name") or pack_id),
+                "asset_count": len(data.get("asset_refs") or []) if isinstance(data.get("asset_refs"), list) else int(data.get("asset_count") or 0),
+                "reference_count": len(data.get("reference_refs") or []) if isinstance(data.get("reference_refs"), list) else int(data.get("reference_count") or 0),
+                "created_from": _sanitize_asset_metadata(data.get("created_from")) if isinstance(data.get("created_from"), dict) else {},
+                "query": _sanitize_asset_metadata(data.get("query")) if isinstance(data.get("query"), dict) else {},
+                "used_by_versions": [],
+                "used_by_candidate_groups": [],
+            },
+        )
+        if data.get("name") and record.get("name") == pack_id:
+            record["name"] = str(data.get("name"))
+        if version_id and version_id not in record["used_by_versions"]:
+            record["used_by_versions"].append(version_id)
+        if candidate_group_id and candidate_group_id not in record["used_by_candidate_groups"]:
+            record["used_by_candidate_groups"].append(candidate_group_id)
+
+    for version in document.versions:
+        path = Path(version.output_dir) / "data" / "context-pack.json"
+        if not path.exists():
+            continue
+        try:
+            data = read_json(path)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict):
+            add_pack(data, version_id=version.version_id)
+
+    candidate_root = project_dir / "candidate-groups"
+    if candidate_root.exists():
+        for group_json in candidate_root.glob("*/group.json"):
+            try:
+                data = read_json(group_json)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                continue
+            source = data.get("source") if isinstance(data, dict) else None
+            context_pack = source.get("context_pack") if isinstance(source, dict) else None
+            if isinstance(context_pack, dict):
+                add_pack(context_pack, candidate_group_id=str(data.get("group_id") or group_json.parent.name))
+
+    return sorted((_sanitize_asset_metadata(record) for record in packs.values()), key=lambda item: item["pack_id"])
+
+
+def _sanitize_asset_metadata(value: Any) -> Any:
+    return sanitize_metadata(value, blocked_keys=BLOCKED_ASSET_METADATA_KEYS)

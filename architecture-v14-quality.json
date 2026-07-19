@@ -1,15 +1,15 @@
 {
   "complexity": {
     "aggregate_debt": {
-      "architecture_decision": "docs/architecture/ADR-015-v141-complexity-ratchet.md",
+      "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
       "expires_version": "14.3.0",
-      "max_largest_module_lines": 738,
-      "max_modules_over_1000_lines": 0,
-      "max_oversized_module_count": 14,
-      "max_total_oversized_module_lines": 8884,
+      "max_largest_module_lines": 2226,
+      "max_modules_over_1000_lines": 37,
+      "max_oversized_module_count": 137,
+      "max_total_oversized_module_lines": 124043,
       "previous_oversized_module_count": 137,
-      "previous_total_oversized_module_lines": 124039,
-      "required_total_line_reduction": 115155
+      "previous_total_oversized_module_lines": 124211,
+      "required_total_line_reduction": 168
     },
     "application_max_lines": 150,
     "domain_max_lines": 200,
@@ -28,80 +28,695 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "90c4615919d913d914cca0feaa2eeb2e76f4774cf26073192d31954f3e5d8935",
-    "source_tree_hash": "d9617453f5c7908b0ce38d5cdfde9b552a77422428a072bbaaa276aea58db56a"
+    "report_sha256": "12cd8727bca4ace7eedda1c9310c3dcee27a779ed5a6d8ba8bde9aa289dea0b4",
+    "source_tree_hash": "c93293338374cf505b9ed9a823ba9a7904d198eee383934f61dc0b78989929d5"
   },
-  "integrity_hash": "7a812dde655dac4b96b5eb16bdb8fdc7913b2f513ee73c99922d5ccb6042f2d6",
+  "integrity_hash": "f5d14977ad635487285a60c914c0d6c24d4993132fbc58c9c6d7b4ced977bb3d",
   "module_size_debt": [
     {
       "expires_version": "14.3.0",
-      "max_lines": 649,
-      "path": "song_agent/domains/creation/v142_prs_readiness.py"
+      "max_lines": 909,
+      "path": "song_agent/domains/creation/agent/multinode_pipeline.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 614,
-      "path": "song_agent/domains/delivery/v142_se_evidence.py"
+      "max_lines": 1107,
+      "path": "song_agent/domains/creation/encoded_audio_acceptance.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 633,
-      "path": "song_agent/domains/delivery/v142_se_readiness.py"
+      "max_lines": 1078,
+      "path": "song_agent/domains/creation/final_export.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 604,
-      "path": "song_agent/domains/program/v142_urpca_evidence.py"
+      "max_lines": 715,
+      "path": "song_agent/domains/creation/planning_rule_governance.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 646,
-      "path": "song_agent/domains/program/v142_urpcccav_readiness.py"
+      "max_lines": 811,
+      "path": "song_agent/domains/creation/planning_rule_impact.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 704,
-      "path": "song_agent/domains/quality/acceptance_fix_sprints.py"
+      "max_lines": 1014,
+      "path": "song_agent/domains/creation/planning_rule_simulation.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 738,
-      "path": "song_agent/domains/studio/project_repository.py"
+      "max_lines": 688,
+      "path": "song_agent/domains/creation/provider_edits.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 649,
-      "path": "song_agent/domains/studio/v142_se_evidence.py"
+      "max_lines": 964,
+      "path": "song_agent/domains/delivery/delivery_qa.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 682,
+      "path": "song_agent/domains/delivery/distribution.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 645,
+      "path": "song_agent/domains/delivery/distribution_export.py"
     },
     {
       "expires_version": "14.3.0",
       "max_lines": 611,
-      "path": "song_agent/domains/trust/v142_ptc_readiness.py"
+      "path": "song_agent/domains/delivery/distribution_layout.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 767,
+      "path": "song_agent/domains/delivery/distribution_templates.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 948,
+      "path": "song_agent/domains/delivery/distribution_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1011,
+      "path": "song_agent/domains/delivery/format_decisions.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 687,
+      "path": "song_agent/domains/delivery/release_export.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 843,
+      "path": "song_agent/domains/delivery/release_metadata.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1562,
+      "path": "song_agent/domains/delivery/release_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 832,
+      "path": "song_agent/domains/delivery/releases.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1114,
+      "path": "song_agent/domains/delivery/rights_clearance.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1326,
+      "path": "song_agent/domains/delivery/submission_evidence.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 887,
+      "path": "song_agent/domains/delivery/submissions.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 825,
+      "path": "song_agent/domains/program/unified_command_center.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 857,
+      "path": "song_agent/domains/program/unified_command_center_continuous_review.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 790,
+      "path": "song_agent/domains/program/unified_command_center_drift_response.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 836,
+      "path": "song_agent/domains/program/unified_command_center_evidence_review.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 630,
+      "path": "song_agent/domains/program/unified_command_center_evidence_review_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 984,
+      "path": "song_agent/domains/program/unified_command_center_release_train.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 941,
+      "path": "song_agent/domains/program/unified_command_center_release_train_handoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 701,
+      "path": "song_agent/domains/program/unified_command_center_release_train_handoff_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 631,
+      "path": "song_agent/domains/program/unified_command_center_release_train_lifecycle.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 982,
+      "path": "song_agent/domains/program/unified_command_center_reviewer_decision_board.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 922,
+      "path": "song_agent/domains/program/unified_command_center_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1205,
+      "path": "song_agent/domains/program/unified_release_program.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 881,
+      "path": "song_agent/domains/program/unified_release_program_continuity.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1066,
+      "path": "song_agent/domains/program/unified_release_program_continuity_acceptance.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 774,
+      "path": "song_agent/domains/program/unified_release_program_continuity_acceptance_change.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 650,
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1537,
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1154,
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 764,
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1071,
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1014,
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_signoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 605,
+      "path": "song_agent/domains/program/unified_release_program_continuity_command_center_signoff_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1450,
+      "path": "song_agent/domains/program/unified_release_program_handoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 875,
+      "path": "song_agent/domains/program/unified_release_program_handoff_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 804,
+      "path": "song_agent/domains/program/unified_release_program_operations.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 666,
+      "path": "song_agent/domains/program/unified_release_program_vault.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 986,
+      "path": "song_agent/domains/program/unified_release_program_vault_operations.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 668,
+      "path": "song_agent/domains/program/unified_release_program_vault_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1167,
+      "path": "song_agent/domains/quality/acceptance_analytics.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 813,
+      "path": "song_agent/domains/quality/acceptance_fix_plan_reviews.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 783,
+      "path": "song_agent/domains/quality/acceptance_fix_planning.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 957,
+      "path": "song_agent/domains/quality/acceptance_fix_sprints.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 761,
+      "path": "song_agent/domains/quality/acceptance_kb.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 786,
+      "path": "song_agent/domains/quality/audio_campaign_remediation.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 875,
+      "path": "song_agent/domains/quality/audio_campaigns.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 897,
+      "path": "song_agent/domains/quality/audio_encoding.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 934,
+      "path": "song_agent/domains/quality/audio_fix_sprints.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1023,
+      "path": "song_agent/domains/quality/audio_lab.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1049,
+      "path": "song_agent/domains/quality/audio_review_evidence.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1525,
+      "path": "song_agent/domains/quality/audio_revision.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 617,
+      "path": "song_agent/domains/quality/candidate_groups.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 935,
+      "path": "song_agent/domains/quality/human_review_pack.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1041,
+      "path": "song_agent/domains/quality/mastering_qa.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 712,
+      "path": "song_agent/domains/quality/mix_controls.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1410,
+      "path": "song_agent/domains/quality/music_acceptance.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 742,
+      "path": "song_agent/domains/quality/release_audio_certification.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 737,
+      "path": "song_agent/domains/quality/release_audio_command_center.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 653,
+      "path": "song_agent/domains/quality/release_audio_command_center_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 704,
+      "path": "song_agent/domains/quality/release_audio_quality_action_signoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 734,
+      "path": "song_agent/domains/quality/release_audio_quality_actions.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 744,
+      "path": "song_agent/domains/quality/release_audio_regression_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 798,
+      "path": "song_agent/domains/quality/release_audio_timeline.py"
     },
     {
       "expires_version": "14.3.0",
       "max_lines": 602,
-      "path": "song_agent/domains/trust/v142_ptcdka_readiness.py"
+      "path": "song_agent/domains/quality/review_edits.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 613,
-      "path": "song_agent/domains/trust/v142_ptcp_readiness.py"
+      "max_lines": 608,
+      "path": "song_agent/domains/quality/review_sprint_actions.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 602,
-      "path": "song_agent/domains/trust/v142_roa_readiness.py"
+      "max_lines": 677,
+      "path": "song_agent/domains/quality/review_sprint_closeout.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1003,
+      "path": "song_agent/domains/quality/review_sprint_metrics.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 802,
+      "path": "song_agent/domains/quality/review_sprints.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1638,
+      "path": "song_agent/domains/quality/review_tasks.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 843,
+      "path": "song_agent/domains/studio/assets.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 688,
+      "path": "song_agent/domains/studio/editor_audition.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 898,
+      "path": "song_agent/domains/studio/editor_clips.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1057,
+      "path": "song_agent/domains/studio/editor_templates.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 798,
+      "path": "song_agent/domains/studio/library_index.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1205,
+      "path": "song_agent/domains/studio/project_repository.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 729,
+      "path": "song_agent/domains/studio/reference_analysis.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 731,
+      "path": "song_agent/domains/studio/references.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1638,
+      "path": "song_agent/domains/studio/song_editor.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 2130,
+      "path": "song_agent/domains/trust/ga_readiness.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 2226,
+      "path": "song_agent/domains/trust/ga_readiness_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1828,
+      "path": "song_agent/domains/trust/public_trust_center.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1372,
+      "path": "song_agent/domains/trust/public_trust_center_acceptance_board.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 637,
+      "path": "song_agent/domains/trust/public_trust_center_acceptance_board_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 661,
+      "path": "song_agent/domains/trust/public_trust_center_anchor_registry.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 679,
+      "path": "song_agent/domains/trust/public_trust_center_anchor_transparency.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1350,
+      "path": "song_agent/domains/trust/public_trust_center_core_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 866,
+      "path": "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1045,
+      "path": "song_agent/domains/trust/public_trust_center_publication.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1069,
+      "path": "song_agent/domains/trust/public_trust_center_publication_monitoring.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 720,
+      "path": "song_agent/domains/trust/public_trust_center_publication_monitoring_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 697,
+      "path": "song_agent/domains/trust/public_trust_center_publication_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1040,
+      "path": "song_agent/domains/trust/release_operations.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 817,
+      "path": "song_agent/domains/trust/release_operations_audit.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 738,
+      "path": "song_agent/domains/trust/release_operations_runbook.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 741,
+      "path": "song_agent/domains/trust/release_operations_signoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 932,
+      "path": "song_agent/domains/trust/release_portfolio_audit.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1005,
+      "path": "song_agent/domains/trust/release_portfolio_governance.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 639,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 717,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 729,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 624,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 648,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 672,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_registry.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 754,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 962,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 629,
+      "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 799,
+      "path": "song_agent/domains/trust/release_portfolio_governance_audit.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 940,
+      "path": "song_agent/domains/trust/release_portfolio_governance_evidence_vault.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 996,
+      "path": "song_agent/domains/trust/release_portfolio_governance_final_board.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 797,
+      "path": "song_agent/domains/trust/release_portfolio_governance_reviewer_pack.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 830,
+      "path": "song_agent/domains/trust/release_portfolio_governance_signoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 852,
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 765,
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch_signoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 661,
+      "path": "song_agent/domains/trust/trust_operations_assurance_watch_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 781,
+      "path": "song_agent/domains/trust/trust_operations_continuous_assurance.py"
     },
     {
       "expires_version": "14.3.0",
       "max_lines": 607,
-      "path": "song_agent/domains/trust/v142_rpg_readiness.py"
+      "path": "song_agent/domains/trust/trust_operations_continuous_assurance_verifier.py"
     },
     {
       "expires_version": "14.3.0",
-      "max_lines": 612,
-      "path": "song_agent/domains/trust/v142_rpgata_readiness.py"
+      "max_lines": 759,
+      "path": "song_agent/domains/trust/trust_operations_control_signoff.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 658,
+      "path": "song_agent/domains/trust/trust_operations_controls.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 722,
+      "path": "song_agent/domains/trust/trust_operations_controls_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 882,
+      "path": "song_agent/domains/trust/trust_operations_final_readiness.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 716,
+      "path": "song_agent/domains/trust/trust_operations_final_readiness_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1118,
+      "path": "song_agent/domains/trust/trust_operations_hub.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 606,
+      "path": "song_agent/domains/trust/trust_operations_hub_incident_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1171,
+      "path": "song_agent/domains/trust/trust_operations_hub_incidents.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 1297,
+      "path": "song_agent/domains/trust/trust_operations_hub_verifier.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 724,
+      "path": "song_agent/domains/trust/trust_operations_incident_knowledge.py"
+    },
+    {
+      "expires_version": "14.3.0",
+      "max_lines": 651,
+      "path": "song_agent/domains/trust/trust_operations_incident_knowledge_verifier.py"
     }
   ],
   "mypy": {
@@ -117,182 +732,367 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.2.0",
+  "release_version": "14.2.1",
   "schema_version": 1,
+  "stabilization": {
+    "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
+    "collector_migration": {
+      "from_schema_version": 2,
+      "previous_explicit_any_count": 11744,
+      "recovered_explicit_any_count": 12040,
+      "to_schema_version": 4
+    },
+    "explicit_any_file_budgets_hash": "943ec95971b6106c83d3923ca6e74898aa9f86f6c49b685b61fe3a5f7dce7d11",
+    "hard_limits": {
+      "active_python_file_max_count": 700,
+      "explicit_any_affected_file_max_count": 470,
+      "explicit_any_layer_max_counts": {
+        "application": 72,
+        "capabilities": 13,
+        "domains": 6545,
+        "interfaces": 5214,
+        "platform": 196
+      },
+      "explicit_any_max_count": 12040,
+      "implementation_document_max_count": 7118,
+      "largest_module_max_lines": 2226,
+      "modules_over_1000_max_count": 37,
+      "oversized_module_max_count": 137,
+      "raw_dict_str_any_max_count": 5605,
+      "total_oversized_module_max_lines": 124043
+    },
+    "module_debt_ceilings_hash": "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b",
+    "strategy": "rollback_generated_v142_split_to_v14.1.2_structure"
+  },
   "typing": {
     "activation_baseline_dict_str_any_count": 12535,
-    "explicit_any_collector_schema_version": 3,
+    "explicit_any_affected_file_max_count": 470,
+    "explicit_any_collector_schema_version": 4,
     "explicit_any_file_budgets": {
-      "song_agent/application/audio_campaigns/release_coverage.py": 5,
+      "song_agent/application/audio_campaigns/release_coverage.py": 7,
+      "song_agent/application/evidence_policy_gate.py": 1,
       "song_agent/application/interface_persistence.py": 3,
-      "song_agent/application/legacy/release_signoff.py": 1,
+      "song_agent/application/jobs/model.py": 7,
+      "song_agent/application/legacy/release_signoff.py": 2,
+      "song_agent/application/policy_compatibility.py": 14,
       "song_agent/application/program/http.py": 2,
       "song_agent/application/program/http_context.py": 27,
-      "song_agent/application/program/policy_gate.py": 1,
-      "song_agent/application/program/service.py": 4,
-      "song_agent/domains/creation/agent/multinode_pipeline.py": 3,
+      "song_agent/application/program/policy_gate.py": 3,
+      "song_agent/application/program/service.py": 6,
+      "song_agent/capabilities/model.py": 12,
+      "song_agent/capabilities/registry.py": 1,
+      "song_agent/domains/creation/agent/multinode_pipeline.py": 22,
       "song_agent/domains/creation/agent/provider_pipeline.py": 2,
-      "song_agent/domains/creation/batching.py": 5,
-      "song_agent/domains/creation/edit_presets.py": 7,
-      "song_agent/domains/creation/edits.py": 3,
-      "song_agent/domains/creation/encoded_audio_acceptance.py": 2,
-      "song_agent/domains/creation/final_export.py": 2,
-      "song_agent/domains/creation/node_store.py": 3,
-      "song_agent/domains/creation/provider_edits.py": 2,
-      "song_agent/domains/creation/provider_usage.py": 2,
-      "song_agent/domains/creation/providers/mock.py": 5,
-      "song_agent/domains/creation/providers/openai_compatible.py": 2,
-      "song_agent/domains/creation/renderers/audio.py": 2,
-      "song_agent/domains/creation/runtime_views.py": 15,
-      "song_agent/domains/creation/schemas/agent_nodes.py": 5,
-      "song_agent/domains/creation/schemas/song.py": 6,
-      "song_agent/domains/creation/stems.py": 1,
-      "song_agent/domains/delivery/delivery_qa.py": 6,
-      "song_agent/domains/delivery/distribution_checklist.py": 4,
-      "song_agent/domains/delivery/distribution_export.py": 3,
-      "song_agent/domains/delivery/distribution_layout.py": 5,
-      "song_agent/domains/delivery/distribution_qa.py": 1,
-      "song_agent/domains/delivery/distribution_templates.py": 2,
-      "song_agent/domains/delivery/distribution_verifier.py": 1,
-      "song_agent/domains/delivery/format_decisions.py": 2,
-      "song_agent/domains/delivery/release_qa.py": 2,
-      "song_agent/domains/delivery/release_verifier.py": 2,
-      "song_agent/domains/delivery/rights_clearance.py": 1,
-      "song_agent/domains/delivery/submission_evidence.py": 8,
-      "song_agent/domains/delivery/submission_evidence_verifier.py": 3,
-      "song_agent/domains/delivery/submission_verifier.py": 1,
+      "song_agent/domains/creation/batching.py": 13,
+      "song_agent/domains/creation/edit_presets.py": 17,
+      "song_agent/domains/creation/edits.py": 13,
+      "song_agent/domains/creation/encoded_audio_acceptance.py": 54,
+      "song_agent/domains/creation/final_export.py": 21,
+      "song_agent/domains/creation/lts_backup.py": 12,
+      "song_agent/domains/creation/lts_backup_verifier.py": 11,
+      "song_agent/domains/creation/lts_maintenance.py": 12,
+      "song_agent/domains/creation/midi_analysis.py": 9,
+      "song_agent/domains/creation/music_health.py": 8,
+      "song_agent/domains/creation/node_store.py": 11,
+      "song_agent/domains/creation/planning_rule_governance.py": 40,
+      "song_agent/domains/creation/planning_rule_governance_source.py": 4,
+      "song_agent/domains/creation/planning_rule_impact.py": 31,
+      "song_agent/domains/creation/planning_rule_projections.py": 8,
+      "song_agent/domains/creation/planning_rule_simulation.py": 37,
+      "song_agent/domains/creation/provider.py": 3,
+      "song_agent/domains/creation/provider_contracts.py": 6,
+      "song_agent/domains/creation/provider_edits.py": 38,
+      "song_agent/domains/creation/provider_usage.py": 19,
+      "song_agent/domains/creation/providers/mock.py": 15,
+      "song_agent/domains/creation/providers/openai_compatible.py": 8,
+      "song_agent/domains/creation/regression_songbook.py": 5,
+      "song_agent/domains/creation/renderers/audio.py": 8,
+      "song_agent/domains/creation/runtime_views.py": 26,
+      "song_agent/domains/creation/schemas/agent_nodes.py": 37,
+      "song_agent/domains/creation/schemas/song.py": 24,
+      "song_agent/domains/creation/stem_health.py": 18,
+      "song_agent/domains/creation/stems.py": 5,
+      "song_agent/domains/delivery/delivery_qa.py": 35,
+      "song_agent/domains/delivery/distribution.py": 48,
+      "song_agent/domains/delivery/distribution_artwork.py": 10,
+      "song_agent/domains/delivery/distribution_checklist.py": 25,
+      "song_agent/domains/delivery/distribution_export.py": 17,
+      "song_agent/domains/delivery/distribution_layout.py": 34,
+      "song_agent/domains/delivery/distribution_profiles.py": 7,
+      "song_agent/domains/delivery/distribution_qa.py": 16,
+      "song_agent/domains/delivery/distribution_templates.py": 50,
+      "song_agent/domains/delivery/distribution_verifier.py": 30,
+      "song_agent/domains/delivery/format_decisions.py": 64,
+      "song_agent/domains/delivery/release_export.py": 12,
+      "song_agent/domains/delivery/release_export_manifest.py": 1,
+      "song_agent/domains/delivery/release_metadata.py": 37,
+      "song_agent/domains/delivery/release_metadata_qa.py": 6,
+      "song_agent/domains/delivery/release_qa.py": 27,
+      "song_agent/domains/delivery/release_verifier.py": 28,
+      "song_agent/domains/delivery/releases.py": 42,
+      "song_agent/domains/delivery/rights_clearance.py": 62,
+      "song_agent/domains/delivery/submission_evidence.py": 55,
+      "song_agent/domains/delivery/submission_evidence_verifier.py": 22,
+      "song_agent/domains/delivery/submission_export.py": 12,
+      "song_agent/domains/delivery/submission_qa.py": 8,
+      "song_agent/domains/delivery/submission_verifier.py": 20,
+      "song_agent/domains/delivery/submissions.py": 49,
       "song_agent/domains/program/model.py": 3,
-      "song_agent/domains/program/unified_command_center_continuous_review_verifier.py": 2,
-      "song_agent/domains/program/unified_command_center_drift_response.py": 1,
-      "song_agent/domains/program/unified_command_center_evidence_review_verifier.py": 1,
-      "song_agent/domains/program/unified_command_center_handoff.py": 1,
-      "song_agent/domains/program/unified_command_center_release_train.py": 4,
-      "song_agent/domains/program/unified_command_center_release_train_change_control.py": 4,
-      "song_agent/domains/program/unified_command_center_release_train_handoff.py": 3,
-      "song_agent/domains/program/unified_command_center_release_train_lifecycle.py": 3,
-      "song_agent/domains/program/unified_command_center_signoff.py": 2,
-      "song_agent/domains/program/unified_release_program_continuity.py": 2,
-      "song_agent/domains/program/unified_release_program_continuity_acceptance.py": 3,
-      "song_agent/domains/program/unified_release_program_continuity_acceptance_change_verifier.py": 5,
-      "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance.py": 5,
-      "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change.py": 1,
-      "song_agent/domains/program/unified_release_program_continuity_command_center_signoff.py": 3,
-      "song_agent/domains/program/unified_release_program_continuity_distribution.py": 3,
-      "song_agent/domains/program/unified_release_program_handoff.py": 3,
-      "song_agent/domains/program/unified_release_program_operations.py": 2,
-      "song_agent/domains/program/unified_release_program_vault.py": 1,
-      "song_agent/domains/program/unified_release_program_vault_operations.py": 2,
-      "song_agent/domains/quality/acceptance_diff.py": 2,
-      "song_agent/domains/quality/acceptance_fix_plan_runtime.py": 1,
-      "song_agent/domains/quality/acceptance_fix_planning.py": 1,
-      "song_agent/domains/quality/acceptance_kb.py": 1,
-      "song_agent/domains/quality/audio_artifacts.py": 2,
-      "song_agent/domains/quality/audio_campaign_analytics.py": 1,
-      "song_agent/domains/quality/audio_campaign_governance.py": 3,
-      "song_agent/domains/quality/audio_campaign_planner.py": 4,
-      "song_agent/domains/quality/audio_campaign_remediation.py": 1,
-      "song_agent/domains/quality/audio_campaigns.py": 1,
-      "song_agent/domains/quality/audio_encoding_profiles.py": 6,
-      "song_agent/domains/quality/audio_lab.py": 4,
-      "song_agent/domains/quality/audio_profiles.py": 1,
-      "song_agent/domains/quality/audio_review_evidence.py": 4,
-      "song_agent/domains/quality/audio_revision.py": 2,
-      "song_agent/domains/quality/human_review_verifier.py": 1,
-      "song_agent/domains/quality/mastering_profiles.py": 2,
-      "song_agent/domains/quality/mix_render.py": 12,
+      "song_agent/domains/program/unified_command_center.py": 35,
+      "song_agent/domains/program/unified_command_center_archive_verifier.py": 9,
+      "song_agent/domains/program/unified_command_center_continuous_review.py": 27,
+      "song_agent/domains/program/unified_command_center_continuous_review_verifier.py": 9,
+      "song_agent/domains/program/unified_command_center_drift_response.py": 23,
+      "song_agent/domains/program/unified_command_center_drift_response_verifier.py": 8,
+      "song_agent/domains/program/unified_command_center_evidence_review.py": 31,
+      "song_agent/domains/program/unified_command_center_evidence_review_verifier.py": 17,
+      "song_agent/domains/program/unified_command_center_handoff.py": 9,
+      "song_agent/domains/program/unified_command_center_handoff_verifier.py": 5,
+      "song_agent/domains/program/unified_command_center_release_train.py": 32,
+      "song_agent/domains/program/unified_command_center_release_train_change_control.py": 21,
+      "song_agent/domains/program/unified_command_center_release_train_change_control_verifier.py": 8,
+      "song_agent/domains/program/unified_command_center_release_train_handoff.py": 25,
+      "song_agent/domains/program/unified_command_center_release_train_handoff_verifier.py": 17,
+      "song_agent/domains/program/unified_command_center_release_train_lifecycle.py": 17,
+      "song_agent/domains/program/unified_command_center_release_train_lifecycle_verifier.py": 12,
+      "song_agent/domains/program/unified_command_center_release_train_verifier.py": 12,
+      "song_agent/domains/program/unified_command_center_reviewer_decision_board.py": 32,
+      "song_agent/domains/program/unified_command_center_reviewer_decision_board_verifier.py": 7,
+      "song_agent/domains/program/unified_command_center_signoff.py": 19,
+      "song_agent/domains/program/unified_command_center_verifier.py": 31,
+      "song_agent/domains/program/unified_release_program.py": 34,
+      "song_agent/domains/program/unified_release_program_continuity.py": 26,
+      "song_agent/domains/program/unified_release_program_continuity_acceptance.py": 31,
+      "song_agent/domains/program/unified_release_program_continuity_acceptance_change.py": 26,
+      "song_agent/domains/program/unified_release_program_continuity_acceptance_change_verifier.py": 19,
+      "song_agent/domains/program/unified_release_program_continuity_acceptance_verifier.py": 10,
+      "song_agent/domains/program/unified_release_program_continuity_command_center.py": 18,
+      "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance.py": 43,
+      "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change.py": 28,
+      "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py": 25,
+      "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_verifier.py": 23,
+      "song_agent/domains/program/unified_release_program_continuity_command_center_signoff.py": 36,
+      "song_agent/domains/program/unified_release_program_continuity_command_center_signoff_verifier.py": 15,
+      "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py": 11,
+      "song_agent/domains/program/unified_release_program_continuity_distribution.py": 22,
+      "song_agent/domains/program/unified_release_program_continuity_distribution_verifier.py": 6,
+      "song_agent/domains/program/unified_release_program_continuity_verifier.py": 7,
+      "song_agent/domains/program/unified_release_program_handoff.py": 47,
+      "song_agent/domains/program/unified_release_program_handoff_verifier.py": 21,
+      "song_agent/domains/program/unified_release_program_operations.py": 32,
+      "song_agent/domains/program/unified_release_program_operations_verifier.py": 10,
+      "song_agent/domains/program/unified_release_program_vault.py": 16,
+      "song_agent/domains/program/unified_release_program_vault_operations.py": 35,
+      "song_agent/domains/program/unified_release_program_vault_operations_verifier.py": 8,
+      "song_agent/domains/program/unified_release_program_vault_verifier.py": 18,
+      "song_agent/domains/program/unified_release_program_verifier.py": 10,
+      "song_agent/domains/quality/acceptance_analytics.py": 25,
+      "song_agent/domains/quality/acceptance_diff.py": 5,
+      "song_agent/domains/quality/acceptance_fix_plan_reviews.py": 23,
+      "song_agent/domains/quality/acceptance_fix_plan_runtime.py": 2,
+      "song_agent/domains/quality/acceptance_fix_planning.py": 34,
+      "song_agent/domains/quality/acceptance_fix_sprints.py": 43,
+      "song_agent/domains/quality/acceptance_kb.py": 40,
+      "song_agent/domains/quality/acceptance_profiles.py": 3,
+      "song_agent/domains/quality/audio_artifacts.py": 16,
+      "song_agent/domains/quality/audio_campaign_analytics.py": 9,
+      "song_agent/domains/quality/audio_campaign_archive_verifier.py": 6,
+      "song_agent/domains/quality/audio_campaign_governance.py": 22,
+      "song_agent/domains/quality/audio_campaign_planner.py": 26,
+      "song_agent/domains/quality/audio_campaign_remediation.py": 29,
+      "song_agent/domains/quality/audio_campaign_remediation_verifier.py": 4,
+      "song_agent/domains/quality/audio_campaign_verifier.py": 11,
+      "song_agent/domains/quality/audio_campaigns.py": 24,
+      "song_agent/domains/quality/audio_encoding.py": 52,
+      "song_agent/domains/quality/audio_encoding_profiles.py": 14,
+      "song_agent/domains/quality/audio_fix_sprints.py": 22,
+      "song_agent/domains/quality/audio_health.py": 10,
+      "song_agent/domains/quality/audio_lab.py": 40,
+      "song_agent/domains/quality/audio_profiles.py": 7,
+      "song_agent/domains/quality/audio_review_evidence.py": 58,
+      "song_agent/domains/quality/audio_revision.py": 50,
+      "song_agent/domains/quality/candidate_groups.py": 27,
+      "song_agent/domains/quality/candidate_scoring.py": 4,
+      "song_agent/domains/quality/human_review_pack.py": 24,
+      "song_agent/domains/quality/human_review_verifier.py": 21,
+      "song_agent/domains/quality/mastering_profiles.py": 10,
+      "song_agent/domains/quality/mastering_qa.py": 53,
+      "song_agent/domains/quality/mix_controls.py": 34,
+      "song_agent/domains/quality/mix_render.py": 22,
+      "song_agent/domains/quality/music_acceptance.py": 56,
       "song_agent/domains/quality/quality.py": 2,
-      "song_agent/domains/quality/release_audio_baseline_governance.py": 3,
-      "song_agent/domains/quality/release_audio_baseline_governance_verifier.py": 2,
-      "song_agent/domains/quality/release_audio_certification.py": 2,
-      "song_agent/domains/quality/release_audio_quality_action_signoff.py": 3,
-      "song_agent/domains/quality/release_audio_quality_action_signoff_verifier.py": 1,
-      "song_agent/domains/quality/release_audio_quality_actions.py": 1,
-      "song_agent/domains/quality/release_audio_quality_actions_verifier.py": 3,
-      "song_agent/domains/quality/release_audio_quality_observatory.py": 3,
-      "song_agent/domains/quality/release_audio_quality_observatory_semantics.py": 4,
-      "song_agent/domains/quality/release_audio_quality_observatory_verifier.py": 1,
-      "song_agent/domains/quality/release_audio_regression.py": 2,
-      "song_agent/domains/quality/release_audio_regression_response.py": 4,
-      "song_agent/domains/quality/release_audio_timeline.py": 7,
-      "song_agent/domains/quality/release_audio_timeline_verifier.py": 6,
-      "song_agent/domains/quality/review_edits.py": 1,
-      "song_agent/domains/quality/review_judge.py": 12,
-      "song_agent/domains/quality/review_sprint_closeout.py": 7,
-      "song_agent/domains/quality/review_sprint_metrics.py": 3,
-      "song_agent/domains/quality/review_sprint_recommendations.py": 5,
-      "song_agent/domains/studio/assets.py": 6,
-      "song_agent/domains/studio/context_packs.py": 5,
-      "song_agent/domains/studio/editor_review.py": 15,
-      "song_agent/domains/studio/editor_view.py": 4,
-      "song_agent/domains/studio/library_index.py": 1,
-      "song_agent/domains/studio/project_compare.py": 4,
-      "song_agent/domains/studio/project_export_enrichment.py": 3,
-      "song_agent/domains/studio/project_quality.py": 3,
-      "song_agent/domains/studio/project_repository.py": 2,
-      "song_agent/domains/studio/projectio.py": 1,
-      "song_agent/domains/studio/prompt_templates.py": 5,
-      "song_agent/domains/studio/reference_analysis.py": 15,
+      "song_agent/domains/quality/release_audio.py": 12,
+      "song_agent/domains/quality/release_audio_baseline_governance.py": 29,
+      "song_agent/domains/quality/release_audio_baseline_governance_verifier.py": 11,
+      "song_agent/domains/quality/release_audio_certification.py": 39,
+      "song_agent/domains/quality/release_audio_certification_verifier.py": 6,
+      "song_agent/domains/quality/release_audio_command_center.py": 24,
+      "song_agent/domains/quality/release_audio_command_center_verifier.py": 11,
+      "song_agent/domains/quality/release_audio_quality_action_semantics.py": 5,
+      "song_agent/domains/quality/release_audio_quality_action_signoff.py": 24,
+      "song_agent/domains/quality/release_audio_quality_action_signoff_verifier.py": 11,
+      "song_agent/domains/quality/release_audio_quality_actions.py": 24,
+      "song_agent/domains/quality/release_audio_quality_actions_verifier.py": 10,
+      "song_agent/domains/quality/release_audio_quality_observatory.py": 20,
+      "song_agent/domains/quality/release_audio_quality_observatory_semantics.py": 16,
+      "song_agent/domains/quality/release_audio_quality_observatory_verifier.py": 8,
+      "song_agent/domains/quality/release_audio_regression.py": 19,
+      "song_agent/domains/quality/release_audio_regression_response.py": 25,
+      "song_agent/domains/quality/release_audio_regression_response_verifier.py": 6,
+      "song_agent/domains/quality/release_audio_regression_verifier.py": 23,
+      "song_agent/domains/quality/release_audio_timeline.py": 32,
+      "song_agent/domains/quality/release_audio_timeline_verifier.py": 17,
+      "song_agent/domains/quality/review_edits.py": 15,
+      "song_agent/domains/quality/review_judge.py": 31,
+      "song_agent/domains/quality/review_sprint_actions.py": 27,
+      "song_agent/domains/quality/review_sprint_closeout.py": 32,
+      "song_agent/domains/quality/review_sprint_metrics.py": 34,
+      "song_agent/domains/quality/review_sprint_recommendations.py": 13,
+      "song_agent/domains/quality/review_sprints.py": 48,
+      "song_agent/domains/quality/review_tasks.py": 60,
+      "song_agent/domains/studio/assets.py": 34,
+      "song_agent/domains/studio/context_packs.py": 27,
+      "song_agent/domains/studio/editor_audition.py": 23,
+      "song_agent/domains/studio/editor_clips.py": 18,
+      "song_agent/domains/studio/editor_review.py": 41,
+      "song_agent/domains/studio/editor_templates.py": 42,
+      "song_agent/domains/studio/editor_view.py": 8,
+      "song_agent/domains/studio/library_index.py": 31,
+      "song_agent/domains/studio/project_compare.py": 5,
+      "song_agent/domains/studio/project_export_enrichment.py": 5,
+      "song_agent/domains/studio/project_planning_read_models.py": 4,
+      "song_agent/domains/studio/project_quality.py": 9,
+      "song_agent/domains/studio/project_repository.py": 42,
+      "song_agent/domains/studio/projectio.py": 3,
+      "song_agent/domains/studio/prompt_ab.py": 3,
+      "song_agent/domains/studio/prompt_templates.py": 11,
+      "song_agent/domains/studio/reference_analysis.py": 36,
       "song_agent/domains/studio/reference_paths.py": 1,
-      "song_agent/domains/studio/references.py": 5,
-      "song_agent/domains/trust/attestation_store_ports.py": 22,
-      "song_agent/domains/trust/ga_readiness.py": 12,
-      "song_agent/domains/trust/public_trust_center.py": 12,
-      "song_agent/domains/trust/public_trust_center_acceptance_board.py": 5,
-      "song_agent/domains/trust/public_trust_center_acceptance_board_signoff_verifier.py": 4,
-      "song_agent/domains/trust/public_trust_center_acceptance_board_verifier.py": 5,
-      "song_agent/domains/trust/public_trust_center_anchor_registry_verifier.py": 5,
-      "song_agent/domains/trust/public_trust_center_anchor_transparency_verifier.py": 5,
-      "song_agent/domains/trust/public_trust_center_contracts.py": 5,
-      "song_agent/domains/trust/public_trust_center_core_verifier.py": 2,
-      "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance_verifier.py": 4,
-      "song_agent/domains/trust/public_trust_center_distribution_kit_core_verifier.py": 5,
+      "song_agent/domains/studio/references.py": 31,
+      "song_agent/domains/studio/song_editor.py": 31,
+      "song_agent/domains/trust/attestation_store_ports.py": 26,
+      "song_agent/domains/trust/ga_readiness.py": 48,
+      "song_agent/domains/trust/ga_readiness_contracts.py": 2,
+      "song_agent/domains/trust/ga_readiness_verifier.py": 4,
+      "song_agent/domains/trust/public_trust_center.py": 75,
+      "song_agent/domains/trust/public_trust_center_acceptance_board.py": 55,
+      "song_agent/domains/trust/public_trust_center_acceptance_board_contracts.py": 8,
+      "song_agent/domains/trust/public_trust_center_acceptance_board_signoff_verifier.py": 25,
+      "song_agent/domains/trust/public_trust_center_acceptance_board_verifier.py": 26,
+      "song_agent/domains/trust/public_trust_center_anchor_registry.py": 31,
+      "song_agent/domains/trust/public_trust_center_anchor_registry_contracts.py": 10,
+      "song_agent/domains/trust/public_trust_center_anchor_registry_verifier.py": 23,
+      "song_agent/domains/trust/public_trust_center_anchor_transparency.py": 25,
+      "song_agent/domains/trust/public_trust_center_anchor_transparency_contracts.py": 9,
+      "song_agent/domains/trust/public_trust_center_anchor_transparency_verifier.py": 24,
+      "song_agent/domains/trust/public_trust_center_contracts.py": 24,
+      "song_agent/domains/trust/public_trust_center_core_verifier.py": 40,
+      "song_agent/domains/trust/public_trust_center_distribution_kit.py": 18,
+      "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance.py": 39,
+      "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance_contracts.py": 3,
+      "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance_verifier.py": 22,
+      "song_agent/domains/trust/public_trust_center_distribution_kit_contracts.py": 2,
+      "song_agent/domains/trust/public_trust_center_distribution_kit_core_verifier.py": 27,
       "song_agent/domains/trust/public_trust_center_distribution_kit_verifier.py": 3,
-      "song_agent/domains/trust/public_trust_center_publication.py": 3,
-      "song_agent/domains/trust/public_trust_center_publication_monitoring.py": 3,
-      "song_agent/domains/trust/public_trust_center_publication_monitoring_verifier.py": 4,
+      "song_agent/domains/trust/public_trust_center_publication.py": 36,
+      "song_agent/domains/trust/public_trust_center_publication_contracts.py": 4,
+      "song_agent/domains/trust/public_trust_center_publication_monitoring.py": 33,
+      "song_agent/domains/trust/public_trust_center_publication_monitoring_contracts.py": 3,
+      "song_agent/domains/trust/public_trust_center_publication_monitoring_verifier.py": 33,
+      "song_agent/domains/trust/public_trust_center_publication_verifier.py": 27,
       "song_agent/domains/trust/public_trust_center_verifier.py": 3,
-      "song_agent/domains/trust/release_operations_archive_verifier.py": 2,
-      "song_agent/domains/trust/release_operations_audit_verifier.py": 2,
-      "song_agent/domains/trust/release_operations_reviewer_pack.py": 2,
-      "song_agent/domains/trust/release_operations_reviewer_pack_verifier.py": 1,
-      "song_agent/domains/trust/release_operations_runbook_verifier.py": 2,
-      "song_agent/domains/trust/release_operations_verifier.py": 2,
-      "song_agent/domains/trust/release_portfolio_audit_verifier.py": 1,
-      "song_agent/domains/trust/release_portfolio_governance.py": 2,
-      "song_agent/domains/trust/release_portfolio_governance_archive_verifier.py": 4,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence.py": 1,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_verifier.py": 5,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_verifier.py": 4,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_portal_verifier.py": 4,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_registry_verifier.py": 7,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement.py": 1,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_verifier.py": 4,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_verifier.py": 4,
-      "song_agent/domains/trust/release_portfolio_governance_attestation_verifier.py": 5,
-      "song_agent/domains/trust/release_portfolio_governance_audit_verifier.py": 1,
-      "song_agent/domains/trust/release_portfolio_governance_evidence_vault.py": 3,
-      "song_agent/domains/trust/release_portfolio_governance_evidence_vault_verifier.py": 4,
-      "song_agent/domains/trust/release_portfolio_governance_final_board.py": 5,
-      "song_agent/domains/trust/release_portfolio_governance_final_board_verifier.py": 3,
-      "song_agent/domains/trust/release_portfolio_governance_reviewer_pack_verifier.py": 1,
-      "song_agent/domains/trust/release_portfolio_governance_signoff.py": 2,
-      "song_agent/domains/trust/release_portfolio_governance_verifier.py": 1,
-      "song_agent/domains/trust/trust_operations_assurance_watch_signoff.py": 3,
-      "song_agent/domains/trust/trust_operations_assurance_watch_signoff_verifier.py": 5,
-      "song_agent/domains/trust/trust_operations_assurance_watch_verifier.py": 2,
-      "song_agent/domains/trust/trust_operations_continuous_assurance.py": 3,
-      "song_agent/domains/trust/trust_operations_continuous_assurance_verifier.py": 4,
-      "song_agent/domains/trust/trust_operations_control_signoff.py": 2,
-      "song_agent/domains/trust/trust_operations_control_signoff_verifier.py": 5,
-      "song_agent/domains/trust/trust_operations_controls_verifier.py": 4,
-      "song_agent/domains/trust/trust_operations_final_readiness.py": 4,
-      "song_agent/domains/trust/trust_operations_hub.py": 4,
-      "song_agent/domains/trust/trust_operations_hub_incident_verifier.py": 6,
-      "song_agent/domains/trust/trust_operations_hub_incidents.py": 5,
-      "song_agent/domains/trust/trust_operations_hub_runbook.py": 2,
-      "song_agent/domains/trust/trust_operations_hub_runbook_verifier.py": 6,
-      "song_agent/domains/trust/trust_operations_hub_verifier.py": 1,
-      "song_agent/domains/trust/trust_operations_incident_knowledge_verifier.py": 4,
+      "song_agent/domains/trust/release_operations.py": 37,
+      "song_agent/domains/trust/release_operations_archive_verifier.py": 22,
+      "song_agent/domains/trust/release_operations_audit.py": 37,
+      "song_agent/domains/trust/release_operations_audit_contracts.py": 5,
+      "song_agent/domains/trust/release_operations_audit_verifier.py": 24,
+      "song_agent/domains/trust/release_operations_contracts.py": 1,
+      "song_agent/domains/trust/release_operations_retrospective.py": 8,
+      "song_agent/domains/trust/release_operations_retrospective_contracts.py": 1,
+      "song_agent/domains/trust/release_operations_reviewer_pack.py": 17,
+      "song_agent/domains/trust/release_operations_reviewer_pack_contracts.py": 2,
+      "song_agent/domains/trust/release_operations_reviewer_pack_verifier.py": 17,
+      "song_agent/domains/trust/release_operations_runbook.py": 21,
+      "song_agent/domains/trust/release_operations_runbook_contracts.py": 2,
+      "song_agent/domains/trust/release_operations_runbook_verifier.py": 20,
+      "song_agent/domains/trust/release_operations_signoff.py": 35,
+      "song_agent/domains/trust/release_operations_signoff_contracts.py": 4,
+      "song_agent/domains/trust/release_operations_verifier.py": 21,
+      "song_agent/domains/trust/release_portfolio_audit.py": 38,
+      "song_agent/domains/trust/release_portfolio_audit_contracts.py": 4,
+      "song_agent/domains/trust/release_portfolio_audit_verifier.py": 19,
+      "song_agent/domains/trust/release_portfolio_governance.py": 33,
+      "song_agent/domains/trust/release_portfolio_governance_archive_verifier.py": 26,
+      "song_agent/domains/trust/release_portfolio_governance_attestation.py": 26,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence.py": 23,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_contracts.py": 4,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_read_model.py": 3,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_accepted_evidence_verifier.py": 21,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_contracts.py": 5,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_portal.py": 20,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_portal_contracts.py": 6,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review.py": 24,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_contracts.py": 9,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_verifier.py": 33,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_portal_verifier.py": 19,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_registry.py": 34,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_registry_contracts.py": 8,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_registry_verifier.py": 27,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency.py": 29,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement.py": 46,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py": 7,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_verifier.py": 18,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_contracts.py": 10,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_verifier.py": 24,
+      "song_agent/domains/trust/release_portfolio_governance_attestation_verifier.py": 19,
+      "song_agent/domains/trust/release_portfolio_governance_audit.py": 37,
+      "song_agent/domains/trust/release_portfolio_governance_audit_contracts.py": 5,
+      "song_agent/domains/trust/release_portfolio_governance_audit_verifier.py": 25,
+      "song_agent/domains/trust/release_portfolio_governance_contracts.py": 5,
+      "song_agent/domains/trust/release_portfolio_governance_evidence_vault.py": 40,
+      "song_agent/domains/trust/release_portfolio_governance_evidence_vault_contracts.py": 7,
+      "song_agent/domains/trust/release_portfolio_governance_evidence_vault_verifier.py": 22,
+      "song_agent/domains/trust/release_portfolio_governance_final_board.py": 46,
+      "song_agent/domains/trust/release_portfolio_governance_final_board_contracts.py": 6,
+      "song_agent/domains/trust/release_portfolio_governance_final_board_verifier.py": 26,
+      "song_agent/domains/trust/release_portfolio_governance_reviewer_pack.py": 42,
+      "song_agent/domains/trust/release_portfolio_governance_reviewer_pack_contracts.py": 5,
+      "song_agent/domains/trust/release_portfolio_governance_reviewer_pack_verifier.py": 20,
+      "song_agent/domains/trust/release_portfolio_governance_signoff.py": 32,
+      "song_agent/domains/trust/release_portfolio_governance_signoff_contracts.py": 4,
+      "song_agent/domains/trust/release_portfolio_governance_verifier.py": 20,
+      "song_agent/domains/trust/trust_operations_assurance_watch.py": 27,
+      "song_agent/domains/trust/trust_operations_assurance_watch_contracts.py": 2,
+      "song_agent/domains/trust/trust_operations_assurance_watch_signoff.py": 26,
+      "song_agent/domains/trust/trust_operations_assurance_watch_signoff_contracts.py": 4,
+      "song_agent/domains/trust/trust_operations_assurance_watch_signoff_verifier.py": 26,
+      "song_agent/domains/trust/trust_operations_assurance_watch_verifier.py": 24,
+      "song_agent/domains/trust/trust_operations_continuous_assurance.py": 32,
+      "song_agent/domains/trust/trust_operations_continuous_assurance_contracts.py": 2,
+      "song_agent/domains/trust/trust_operations_continuous_assurance_verifier.py": 25,
+      "song_agent/domains/trust/trust_operations_control_signoff.py": 27,
+      "song_agent/domains/trust/trust_operations_control_signoff_contracts.py": 2,
+      "song_agent/domains/trust/trust_operations_control_signoff_verifier.py": 23,
+      "song_agent/domains/trust/trust_operations_controls.py": 20,
+      "song_agent/domains/trust/trust_operations_controls_contracts.py": 2,
+      "song_agent/domains/trust/trust_operations_controls_verifier.py": 37,
+      "song_agent/domains/trust/trust_operations_final_readiness.py": 36,
+      "song_agent/domains/trust/trust_operations_final_readiness_contracts.py": 5,
+      "song_agent/domains/trust/trust_operations_final_readiness_verifier.py": 27,
+      "song_agent/domains/trust/trust_operations_hub.py": 29,
+      "song_agent/domains/trust/trust_operations_hub_contracts.py": 2,
+      "song_agent/domains/trust/trust_operations_hub_incident_verifier.py": 32,
+      "song_agent/domains/trust/trust_operations_hub_incidents.py": 28,
+      "song_agent/domains/trust/trust_operations_hub_incidents_contracts.py": 2,
+      "song_agent/domains/trust/trust_operations_hub_runbook.py": 12,
+      "song_agent/domains/trust/trust_operations_hub_runbook_contracts.py": 1,
+      "song_agent/domains/trust/trust_operations_hub_runbook_verifier.py": 22,
+      "song_agent/domains/trust/trust_operations_hub_verifier.py": 49,
+      "song_agent/domains/trust/trust_operations_incident_knowledge.py": 24,
+      "song_agent/domains/trust/trust_operations_incident_knowledge_contracts.py": 2,
+      "song_agent/domains/trust/trust_operations_incident_knowledge_verifier.py": 31,
+      "song_agent/interfaces/api/request.py": 1,
+      "song_agent/interfaces/api/response.py": 1,
       "song_agent/interfaces/api/route_contexts/core.py": 112,
       "song_agent/interfaces/api/route_contexts/creation.py": 90,
       "song_agent/interfaces/api/route_contexts/delivery.py": 75,
@@ -303,69 +1103,154 @@
       "song_agent/interfaces/api/route_contexts/studio_dispatch.py": 99,
       "song_agent/interfaces/api/route_contexts/trust.py": 46,
       "song_agent/interfaces/api/route_contexts/trust_portfolio.py": 24,
+      "song_agent/interfaces/api/routes/creation.py": 1,
+      "song_agent/interfaces/api/routes/creation_parts/audition_context_pack.py": 1,
+      "song_agent/interfaces/api/routes/creation_parts/batch.py": 2,
       "song_agent/interfaces/api/routes/creation_parts/library_recommend.py": 2,
       "song_agent/interfaces/api/routes/creation_parts/project_candidate_artifact.py": 6,
-      "song_agent/interfaces/api/routes/creation_parts/project_candidate_groups_list.py": 1,
+      "song_agent/interfaces/api/routes/creation_parts/project_candidate_groups_list.py": 2,
+      "song_agent/interfaces/api/routes/creation_parts/project_edit.py": 4,
       "song_agent/interfaces/api/routes/creation_parts/project_editor_audition_next_action.py": 7,
       "song_agent/interfaces/api/routes/creation_parts/project_final_export.py": 4,
-      "song_agent/interfaces/api/routes/creation_parts/project_review_task.py": 10,
-      "song_agent/interfaces/api/routes/creation_parts/provider.py": 8,
+      "song_agent/interfaces/api/routes/creation_parts/project_mix.py": 1,
+      "song_agent/interfaces/api/routes/creation_parts/project_review_sprint.py": 1,
+      "song_agent/interfaces/api/routes/creation_parts/project_review_task.py": 11,
+      "song_agent/interfaces/api/routes/creation_parts/project_section_template_create.py": 2,
+      "song_agent/interfaces/api/routes/creation_parts/provider.py": 9,
+      "song_agent/interfaces/api/routes/creation_parts/reference.py": 2,
       "song_agent/interfaces/api/routes/creation_parts/save_review_sprint_recommendation_context_pack.py": 12,
+      "song_agent/interfaces/api/routes/delivery_parts/distribution.py": 1,
       "song_agent/interfaces/api/routes/delivery_parts/distribution_profiles.py": 10,
       "song_agent/interfaces/api/routes/delivery_parts/get_or_refresh_distribution_qa.py": 1,
       "song_agent/interfaces/api/routes/delivery_parts/get_or_refresh_submission_qa.py": 3,
-      "song_agent/interfaces/api/routes/delivery_parts/release_operations_reviewer_pack.py": 1,
+      "song_agent/interfaces/api/routes/delivery_parts/release.py": 1,
+      "song_agent/interfaces/api/routes/delivery_parts/release_operations_reviewer_pack.py": 3,
+      "song_agent/interfaces/api/routes/delivery_parts/submission.py": 1,
       "song_agent/interfaces/api/routes/program_parts/program_application.py": 24,
+      "song_agent/interfaces/api/routes/program_parts/unified_command_center_release_trains.py": 1,
       "song_agent/interfaces/api/routes/program_registry.py": 1,
-      "song_agent/interfaces/api/routes/quality_parts/acceptance_suites.py": 34,
+      "song_agent/interfaces/api/routes/quality_parts/acceptance.py": 1,
+      "song_agent/interfaces/api/routes/quality_parts/acceptance_fix_sprint.py": 1,
+      "song_agent/interfaces/api/routes/quality_parts/acceptance_suites.py": 35,
+      "song_agent/interfaces/api/routes/quality_parts/audio_fix_sprint.py": 1,
+      "song_agent/interfaces/api/routes/quality_parts/audio_quality_actions.py": 1,
       "song_agent/interfaces/api/routes/quality_parts/release_acceptance_fix_sprint_gate.py": 1,
-      "song_agent/interfaces/api/routes/quality_parts/release_acceptance_gate.py": 2,
+      "song_agent/interfaces/api/routes/quality_parts/release_acceptance_gate.py": 4,
+      "song_agent/interfaces/api/routes/quality_parts/release_audio_revisions.py": 1,
+      "song_agent/interfaces/api/routes/quality_parts/release_audio_timeline.py": 1,
+      "song_agent/interfaces/api/routes/quality_parts/release_encoded_audio.py": 3,
+      "song_agent/interfaces/api/routes/quality_parts/release_encoded_audio_acceptance_export_gate.py": 2,
       "song_agent/interfaces/api/routes/quality_parts/release_format_decisions.py": 1,
       "song_agent/interfaces/api/routes/quality_parts/render_editor_preview_audio.py": 1,
-      "song_agent/interfaces/api/routes/studio_parts/apply_review_task_candidate.py": 33,
-      "song_agent/interfaces/api/routes/studio_parts/edit_presets.py": 20,
+      "song_agent/interfaces/api/routes/studio_parts/apply_review_task_candidate.py": 34,
+      "song_agent/interfaces/api/routes/studio_parts/edit_presets.py": 22,
       "song_agent/interfaces/api/routes/studio_parts/get_or_refresh_sprint_judge_summary.py": 21,
-      "song_agent/interfaces/api/routes/studio_parts/review_sprint_action_queue.py": 28,
+      "song_agent/interfaces/api/routes/studio_parts/review_sprint_action_queue.py": 29,
+      "song_agent/interfaces/api/routes/trust_parts/public_trust_center_acceptance_board.py": 1,
       "song_agent/interfaces/api/routes/trust_parts/trust_operations.py": 29,
+      "song_agent/interfaces/api/routes/trust_parts/trust_operations_knowledge.py": 2,
+      "song_agent/interfaces/api/routes/trust_portfolio_parts/acknowledgement.py": 1,
       "song_agent/interfaces/api/runtime_parts/batch_runner_context.py": 32,
       "song_agent/interfaces/api/runtime_parts/batch_runner_parts/recover_existing_batches.py": 3,
       "song_agent/interfaces/api/runtime_parts/batch_runner_parts/sync_running_items.py": 2,
-      "song_agent/interfaces/api/runtime_parts/helpers/api_info.py": 2,
+      "song_agent/interfaces/api/runtime_parts/helpers/acceptance_fix_sprint.py": 3,
+      "song_agent/interfaces/api/runtime_parts/helpers/api_info.py": 7,
       "song_agent/interfaces/api/runtime_parts/helpers/context_pack.py": 1,
-      "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py": 3,
-      "song_agent/interfaces/api/runtime_parts/helpers/job_artifacts.py": 4,
+      "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py": 8,
+      "song_agent/interfaces/api/runtime_parts/helpers/job_artifacts.py": 5,
       "song_agent/interfaces/api/runtime_parts/job_store_context.py": 30,
+      "song_agent/interfaces/api/runtime_parts/job_store_parts/load_existing_jobs.py": 11,
       "song_agent/interfaces/api/runtime_parts/job_store_parts/node_retry.py": 1,
-      "song_agent/interfaces/api/runtime_parts/job_store_parts/retry_job.py": 2,
-      "song_agent/interfaces/api/server.py": 1,
-      "song_agent/interfaces/cli/bindings.py": 1,
-      "song_agent/interfaces/cli/commands/creation_parts/generation_commands_and_presenter_adapters.py": 4,
+      "song_agent/interfaces/api/runtime_parts/job_store_parts/retry_job.py": 7,
+      "song_agent/interfaces/api/server.py": 2,
+      "song_agent/interfaces/cli/bindings.py": 265,
+      "song_agent/interfaces/cli/commands/creation_parts/cross_domain_adapters.py": 330,
+      "song_agent/interfaces/cli/commands/creation_parts/generation_commands_and_presenter_adapters.py": 106,
+      "song_agent/interfaces/cli/commands/creation_parts/program_trust_parser_adapters.py": 330,
+      "song_agent/interfaces/cli/commands/delivery_parts/cross_domain_adapters.py": 330,
+      "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py": 5,
+      "song_agent/interfaces/cli/commands/delivery_parts/release_train_handoff_payload_from_args.py": 6,
+      "song_agent/interfaces/cli/commands/delivery_parts/verify_release.py": 1,
+      "song_agent/interfaces/cli/commands/delivery_parts/verify_release_and_adapters.py": 87,
+      "song_agent/interfaces/cli/commands/maintenance_parts/cross_domain_adapters.py": 330,
+      "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py": 90,
+      "song_agent/interfaces/cli/commands/maintenance_parts/program_parser_adapters.py": 330,
       "song_agent/interfaces/cli/commands/program_context.py": 3,
-      "song_agent/interfaces/cli/commands/program_parts/program_component_and_cross_domain_adapters.py": 1,
-      "song_agent/interfaces/cli/commands/quality_parts/release_audio_command_center_command.py": 1,
-      "song_agent/platform/contracts/coercion.py": 11,
+      "song_agent/interfaces/cli/commands/program_parts/program_component_and_cross_domain_adapters.py": 328,
+      "song_agent/interfaces/cli/commands/program_parts/program_evidence_args_and_adapters.py": 138,
+      "song_agent/interfaces/cli/commands/program_parts/unified_command_center_drift_response_command.py": 1,
+      "song_agent/interfaces/cli/commands/program_parts/unified_command_center_release_train_change_control_command.py": 1,
+      "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_command_center_acceptance_change.py": 1,
+      "song_agent/interfaces/cli/commands/program_parts/unified_release_program_handoff_command.py": 1,
+      "song_agent/interfaces/cli/commands/quality_parts/audio_fix_sprint.py": 1,
+      "song_agent/interfaces/cli/commands/quality_parts/audio_fix_sprint_command.py": 1,
+      "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py": 210,
+      "song_agent/interfaces/cli/commands/quality_parts/cross_domain_adapters.py": 330,
+      "song_agent/interfaces/cli/commands/quality_parts/planning_ruleset.py": 5,
+      "song_agent/interfaces/cli/commands/quality_parts/release_audio_command_center_command.py": 8,
+      "song_agent/interfaces/cli/commands/release_check_parts/cross_domain_adapters.py": 330,
+      "song_agent/interfaces/cli/commands/release_check_parts/ga_check.py": 1,
+      "song_agent/interfaces/cli/commands/release_check_parts/program_parser_adapters.py": 330,
+      "song_agent/interfaces/cli/commands/release_check_parts/release_check_commands_and_presenter_adapters.py": 91,
+      "song_agent/interfaces/cli/commands/release_check_parts/verify_ga_readiness.py": 2,
+      "song_agent/interfaces/cli/commands/studio.py": 3,
+      "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py": 4,
+      "song_agent/interfaces/cli/commands/trust_parts/portfolio_parsers_and_cross_domain_adapters.py": 129,
+      "song_agent/interfaces/cli/commands/trust_parts/public_trust_center.py": 3,
+      "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py": 6,
+      "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_audit.py": 5,
+      "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_attestation_accepted_evidence.py": 5,
+      "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_reviewer_pack.py": 6,
+      "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_signoff.py": 13,
+      "song_agent/interfaces/cli/commands/trust_parts/trust_operations_control_signoff.py": 2,
+      "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py": 5,
+      "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py": 2,
+      "song_agent/interfaces/cli/output.py": 2,
+      "song_agent/platform/contracts/coercion.py": 14,
+      "song_agent/platform/contracts/errors.py": 1,
+      "song_agent/platform/contracts/evidence.py": 2,
+      "song_agent/platform/contracts/evidence_manifest.py": 2,
+      "song_agent/platform/contracts/lifecycle.py": 4,
       "song_agent/platform/contracts/packages.py": 1,
-      "song_agent/platform/evidence_graph/builder.py": 9,
-      "song_agent/platform/lifecycle/event_ledger.py": 3,
-      "song_agent/platform/persistence/file_artifacts.py": 1,
-      "song_agent/platform/persistence/program.py": 4,
-      "song_agent/platform/persistence/v14_migration.py": 21,
-      "song_agent/platform/verification/hashing.py": 1,
+      "song_agent/platform/contracts/policy.py": 3,
+      "song_agent/platform/contracts/run_state.py": 4,
+      "song_agent/platform/evidence_graph/builder.py": 22,
+      "song_agent/platform/evidence_graph/model.py": 4,
+      "song_agent/platform/lifecycle/archive.py": 2,
+      "song_agent/platform/lifecycle/change_control.py": 7,
+      "song_agent/platform/lifecycle/event_ledger.py": 16,
+      "song_agent/platform/lifecycle/generation.py": 3,
+      "song_agent/platform/lifecycle/registry.py": 3,
+      "song_agent/platform/lifecycle/signoff.py": 4,
+      "song_agent/platform/persistence/file_artifacts.py": 10,
+      "song_agent/platform/persistence/migrations.py": 5,
+      "song_agent/platform/persistence/program.py": 13,
+      "song_agent/platform/persistence/recovery.py": 3,
+      "song_agent/platform/persistence/unit_of_work.py": 5,
+      "song_agent/platform/persistence/v13_migration.py": 10,
+      "song_agent/platform/persistence/v14_migration.py": 25,
+      "song_agent/platform/policy/engine.py": 1,
+      "song_agent/platform/verification/engine.py": 5,
+      "song_agent/platform/verification/external_bindings.py": 1,
+      "song_agent/platform/verification/hashing.py": 3,
+      "song_agent/platform/verification/history.py": 3,
+      "song_agent/platform/verification/manifest.py": 2,
+      "song_agent/platform/verification/model.py": 9,
       "song_agent/platform/verification/redaction.py": 2,
-      "song_agent/platform/verification/registry.py": 2,
+      "song_agent/platform/verification/registry.py": 5,
       "song_agent/platform/verification/sanitization.py": 2
     },
     "explicit_any_layer_budgets": {
-      "application": 43,
-      "capabilities": 0,
-      "domains": 588,
-      "interfaces": 969,
-      "platform": 57
+      "application": 72,
+      "capabilities": 13,
+      "domains": 6545,
+      "interfaces": 5214,
+      "platform": 196
     },
-    "explicit_any_max_count": 1657,
-    "implementation_document_max_count": 5366,
+    "explicit_any_max_count": 12040,
+    "implementation_document_max_count": 7118,
     "public_implementation_document_max_count": 0,
-    "raw_dict_str_any_max_count": 8,
+    "raw_dict_str_any_max_count": 5605,
     "untyped_public_function_max_count": 0
   }
 }

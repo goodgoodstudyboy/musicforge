@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -94,7 +93,7 @@ class AnalyticsScope:
             project_id=_optional_id(project_id),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "type": self.type,
             "project_id": self.project_id,
@@ -140,9 +139,9 @@ class CaseFact:
     notes: str
     issues: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
-    markers: list[ImplementationDocument] = field(default_factory=list)
-    health_warnings: list[ImplementationDocument] = field(default_factory=list)
-    health_blockers: list[ImplementationDocument] = field(default_factory=list)
+    markers: list[dict[str, Any]] = field(default_factory=list)
+    health_warnings: list[dict[str, Any]] = field(default_factory=list)
+    health_blockers: list[dict[str, Any]] = field(default_factory=list)
     project_id: str = ""
     version_id: str = ""
     quality_overall: int | None = None
@@ -185,20 +184,20 @@ class AcceptanceAnalyticsStore:
     def latest_path(self, scope: AnalyticsScope) -> Path:
         return self.scope_dir(scope) / "latest.json"
 
-    def latest_report(self, scope: AnalyticsScope) -> DomainDocument:
+    def latest_report(self, scope: AnalyticsScope) -> dict[str, Any]:
         path = self.latest_path(scope)
         if not path.exists():
             return self.refresh(scope)
         report = read_json(path)
         return self._with_stale(report)
 
-    def get_report(self, report_id: str) -> DomainDocument:
+    def get_report(self, report_id: str) -> dict[str, Any]:
         path = self.report_dir(report_id) / "report.json"
         if not path.exists():
             raise AcceptanceAnalyticsNotFoundError(report_id)
         return self._with_stale(read_json(path))
 
-    def refresh(self, scope: AnalyticsScope | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh(self, scope: AnalyticsScope | None = None, *, now: str | None = None) -> dict[str, Any]:
         scope = scope or AnalyticsScope()
         now = now or now_iso()
         with self.lock:
@@ -218,7 +217,7 @@ class AcceptanceAnalyticsStore:
             write_json(self.latest_path(scope), report)
             return report
 
-    def source_state(self, scope: AnalyticsScope | None = None) -> DomainDocument:
+    def source_state(self, scope: AnalyticsScope | None = None) -> dict[str, Any]:
         scope = scope or AnalyticsScope()
         suite_ids = self._suite_ids_for_scope(scope)
         suites: list[ImplementationDocument] = []
@@ -266,7 +265,7 @@ class AcceptanceAnalyticsStore:
             }
         )
 
-    def create_review_task_from_recommendation(self, report_id: str, recommendation_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def create_review_task_from_recommendation(self, report_id: str, recommendation_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         report = self.get_report(report_id)
         if report.get("stale") is True:
@@ -427,10 +426,742 @@ class AcceptanceAnalyticsStore:
         return {"release_id": release.release_id, "name": release.name, "track_project_ids": [track.project_id for track in release.tracks], "signoff": signoff}
 
 
-from song_agent.domains.quality import v142_aa_readiness as _v142_aa_readiness
-from song_agent.domains.quality.v142_aa_readiness import build_acceptance_analytics_report as build_acceptance_analytics_report, acceptance_analytics_summary as acceptance_analytics_summary, release_acceptance_analytics_evidence as release_acceptance_analytics_evidence, write_acceptance_analytics_summary as write_acceptance_analytics_summary, _case_facts as _case_facts, _songbook_heatmap as _songbook_heatmap, _style_breakdown as _style_breakdown, _issue_taxonomy as _issue_taxonomy, _reviewer_breakdown as _reviewer_breakdown, _trend as _trend, _trend_summary as _trend_summary, _weakness_ranking as _weakness_ranking, _recommendations as _recommendations, _summary as _summary
-from song_agent.domains.quality import v142_aa_evidence as _v142_aa_evidence
-from song_agent.domains.quality.v142_aa_evidence import _source_summary as _source_summary, _warnings as _warnings, _readiness as _readiness, _fact_issue_types as _fact_issue_types, _issue_sources as _issue_sources, _classify_text as _classify_text, _issue_excerpt as _issue_excerpt, _weakness_score as _weakness_score, _latest_fact as _latest_fact, _open_task_count as _open_task_count, _top_strings as _top_strings, _first_text as _first_text, _suite_source as _suite_source, _case_source as _case_source, _review_source as _review_source, _health_source as _health_source, _report_source as _report_source, _case_in_scope as _case_in_scope, _scope_project_ids as _scope_project_ids, _suite_matches_release as _suite_matches_release, _release_acceptance_suite_id as _release_acceptance_suite_id, _release_ids_for_project as _release_ids_for_project, _scope_from_report as _scope_from_report, _report_id as _report_id, _optional_id as _optional_id, _safe_storage_key as _safe_storage_key, _optional_int as _optional_int, _bounded as _bounded, _append_event as _append_event, _matching_open_review_task as _matching_open_review_task
+def build_acceptance_analytics_report(source: dict[str, Any], *, scope: AnalyticsScope, report_id: str, generated_at: str) -> dict[str, Any]:
+    facts = _case_facts(source)
+    tasks = [item for item in source.get("review_tasks", []) if isinstance(item, dict)]
+    source_hash = stable_hash(source)
+    heatmap = _songbook_heatmap(facts, tasks)
+    style_breakdown = _style_breakdown(heatmap)
+    taxonomy = _issue_taxonomy(facts)
+    trend = _trend(source, facts)
+    ranking = _weakness_ranking(heatmap, style_breakdown, taxonomy)
+    recommendations = _recommendations(heatmap, taxonomy)
+    summary = _summary(facts, tasks, taxonomy, recommendations)
+    warnings = _warnings(source, facts, summary)
+    readiness = _readiness(summary, recommendations, warnings)
+    summary["readiness_status"] = readiness
+    report = {
+        "schema_version": ACCEPTANCE_ANALYTICS_SCHEMA_VERSION,
+        "report_id": report_id,
+        "scope": scope.to_dict(),
+        "generated_at": generated_at,
+        "source_hash": source_hash,
+        "source_summary": _source_summary(source, facts, tasks),
+        "summary": summary,
+        "songbook_heatmap": heatmap,
+        "style_breakdown": style_breakdown,
+        "issue_taxonomy": taxonomy,
+        "reviewer_breakdown": _reviewer_breakdown(facts),
+        "trend": trend,
+        "trend_summary": _trend_summary(trend),
+        "weakness_ranking": ranking,
+        "recommendations": recommendations,
+        "warnings": warnings,
+        "stale": False,
+    }
+    return sanitize_metadata(report)
 
-_v142_aa_readiness.bind_globals(globals())
-_v142_aa_evidence.bind_globals(globals())
+
+def acceptance_analytics_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
+    weaknesses = _as_list(data.get("weakness_ranking"))
+    issues = _as_list(data.get("issue_taxonomy"))
+    return sanitize_metadata(
+        {
+            "status": "generated" if data else "missing",
+            "report_id": data.get("report_id"),
+            "scope": _as_document(data.get("scope")),
+            "source_hash": data.get("source_hash"),
+            "stale": bool(data.get("stale", False)),
+            "readiness_status": summary.get("readiness_status") or "missing",
+            "manual_coverage_rate": summary.get("manual_coverage_rate", 0.0),
+            "average_rating": summary.get("average_rating"),
+            "issue_count": summary.get("issue_count", 0),
+            "open_review_task_count": summary.get("open_review_task_count", 0),
+            "top_weaknesses": weaknesses[:5],
+            "top_issues": issues[:5],
+            "recommendation_count": len(data.get("recommendations", [])) if isinstance(data.get("recommendations"), list) else 0,
+            "warnings": data.get("warnings", []) if isinstance(data.get("warnings"), list) else [],
+        }
+    )
+
+
+def release_acceptance_analytics_evidence(report: dict[str, Any] | None) -> dict[str, Any]:
+    summary = acceptance_analytics_summary(report)
+    return sanitize_metadata(
+        {
+            "report_id": summary.get("report_id"),
+            "source_hash": summary.get("source_hash"),
+            "stale": summary.get("stale"),
+            "readiness_status": summary.get("readiness_status"),
+            "manual_coverage_rate": summary.get("manual_coverage_rate"),
+            "average_rating": summary.get("average_rating"),
+            "top_weaknesses": summary.get("top_weaknesses", [])[:3],
+            "warnings": summary.get("warnings", []),
+        }
+    )
+
+
+def write_acceptance_analytics_summary(path: Path, report: dict[str, Any]) -> dict[str, Any]:
+    summary = acceptance_analytics_summary(report)
+    write_json(path, summary)
+    return summary
+
+
+def _case_facts(source: ImplementationDocument) -> list[CaseFact]:
+    facts: list[CaseFact] = []
+    for suite_row in source.get("suites", []):
+        if not isinstance(suite_row, dict):
+            continue
+        suite = _as_document(suite_row.get("suite"))
+        for case_row in suite_row.get("cases", []):
+            if not isinstance(case_row, dict):
+                continue
+            case = _as_document(case_row.get("case"))
+            review = _as_document(case_row.get("review"))
+            health = _as_document(case_row.get("health"))
+            request = _as_document(case.get("request_summary"))
+            health_summary = _as_document(health.get("summary"))
+            facts.append(
+                CaseFact(
+                    suite_id=str(suite.get("suite_id") or ""),
+                    suite_name=str(suite.get("name") or ""),
+                    suite_created_at=str(suite.get("created_at") or ""),
+                    suite_updated_at=str(suite.get("updated_at") or ""),
+                    profile_id=str(suite.get("profile_id") or ""),
+                    release_ready_profile=bool(suite.get("release_ready_profile", False)),
+                    case_id=str(case.get("case_id") or ""),
+                    song_id=str(case.get("song_id") or case.get("case_id") or ""),
+                    songbook_id=str(case.get("songbook_id") or ""),
+                    songbook_version=str(case.get("songbook_version") or ""),
+                    title=str(request.get("title") or case.get("name") or case.get("case_id") or ""),
+                    style=str(request.get("style") or ""),
+                    status=str(case.get("status") or ""),
+                    health_status=str(health.get("status") or "missing"),
+                    review_status=str(review.get("status") or "missing"),
+                    rating=_optional_int(review.get("rating")),
+                    playback_confirmed=bool(review.get("playback_confirmed", False)),
+                    review_mode=str(review.get("review_mode") or "manual"),
+                    review_source_type=str((review.get("source") or {}).get("source_type") or "") if isinstance(review.get("source"), dict) else "",
+                    review_pack_id=str((review.get("source") or {}).get("pack_id") or "") if isinstance(review.get("source"), dict) else "",
+                    review_import_id=str((review.get("source") or {}).get("import_id") or "") if isinstance(review.get("source"), dict) else "",
+                    listened_by=str(review.get("listened_by") or ""),
+                    listened_at=str(review.get("listened_at") or ""),
+                    notes=str(review.get("notes") or ""),
+                    issues=[str(item) for item in review.get("issues", []) if str(item).strip()] if isinstance(review.get("issues"), list) else [],
+                    tags=[str(item) for item in review.get("tags", []) if str(item).strip()] if isinstance(review.get("tags"), list) else [],
+                    markers=[item for item in review.get("markers", []) if isinstance(item, dict)] if isinstance(review.get("markers"), list) else [],
+                    health_warnings=[item for item in health.get("warnings", []) if isinstance(item, dict)] if isinstance(health.get("warnings"), list) else [],
+                    health_blockers=[item for item in health.get("blockers", []) if isinstance(item, dict)] if isinstance(health.get("blockers"), list) else [],
+                    project_id=str(case.get("project_id") or ""),
+                    version_id=str(case.get("version_id") or ""),
+                    quality_overall=_optional_int(health_summary.get("quality_overall")),
+                )
+            )
+    return facts
+
+
+def _songbook_heatmap(facts: list[CaseFact], tasks: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    songbook = {song["song_id"]: song for song in builtin_songbook().get("songs", []) if isinstance(song, dict)}
+    grouped: dict[str, list[CaseFact]] = {song_id: [] for song_id in songbook}
+    for fact in facts:
+        grouped.setdefault(fact.song_id, []).append(fact)
+    rows = []
+    for song_id in sorted(grouped):
+        items = grouped[song_id]
+        song = songbook.get(song_id, {})
+        latest = _latest_fact(items)
+        ratings = [fact.rating for fact in items if isinstance(fact.rating, int)]
+        issue_types = []
+        for fact in items:
+            issue_types.extend(_fact_issue_types(fact))
+        issue_counts = {issue: issue_types.count(issue) for issue in sorted(set(issue_types))}
+        manual_count = sum(1 for fact in items if fact.review_mode == "manual" and fact.review_status in {"accepted", "needs_fix", "rejected", "waived"})
+        synthetic_count = sum(1 for fact in items if fact.review_mode == "synthetic")
+        open_tasks = _open_task_count(tasks, song_id)
+        latest_status = latest.review_status if latest else "missing"
+        recurring = sum(1 for count in issue_counts.values() if count > 1)
+        row = {
+            "song_id": song_id,
+            "title": song.get("title") or (latest.title if latest else song_id),
+            "style": song.get("style") or (latest.style if latest else ""),
+            "case_ids": sorted({fact.case_id for fact in items if fact.case_id}),
+            "suite_ids": sorted({fact.suite_id for fact in items if fact.suite_id}),
+            "project_id": _first_text([fact.project_id for fact in items]),
+            "version_id": _first_text([fact.version_id for fact in items]),
+            "case_count": len(items),
+            "manual_review_count": manual_count,
+            "synthetic_review_count": synthetic_count,
+            "latest_status": latest_status,
+            "accepted_count": sum(1 for fact in items if fact.review_status == "accepted"),
+            "needs_fix_count": sum(1 for fact in items if fact.review_status == "needs_fix"),
+            "rejected_count": sum(1 for fact in items if fact.review_status == "rejected"),
+            "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
+            "issue_count": len(issue_types),
+            "recurring_issue_count": recurring,
+            "top_issues": sorted(issue_counts, key=lambda issue: (-issue_counts[issue], issue))[:3],
+            "open_review_task_count": open_tasks,
+            "manual_coverage_rate": round(manual_count / len(items), 4) if items else 0.0,
+            "weakness_score": 0,
+            "warnings": [],
+        }
+        warnings = []
+        if items and manual_count == 0 and synthetic_count > 0:
+            warnings.append("synthetic_only_review")
+        if not items:
+            warnings.append("missing_songbook_case")
+        row["warnings"] = warnings
+        row["weakness_score"] = _weakness_score(row)
+        rows.append(row)
+    return sorted(rows, key=lambda item: (-int(item.get("weakness_score") or 0), -STATUS_SEVERITY.get(str(item.get("latest_status")), 0), -int(item.get("issue_count") or 0), str(item.get("song_id") or "")))
+
+
+def _style_breakdown(heatmap: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in heatmap:
+        groups.setdefault(str(row.get("style") or "unknown"), []).append(row)
+    output: list[ImplementationDocument] = []
+    for style, rows in groups.items():
+        ratings: list[float] = [float(value) for row in rows if isinstance((value := row.get("average_rating")), (int, float))]
+        case_count = sum(int(row.get("case_count") or 0) for row in rows)
+        manual_count = sum(int(row.get("manual_review_count") or 0) for row in rows)
+        accepted = sum(int(row.get("accepted_count") or 0) for row in rows)
+        issues: list[str] = []
+        for row in rows:
+            issues.extend([str(item) for item in row.get("top_issues", [])])
+        output.append(
+            {
+                "style": style,
+                "song_count": len(rows),
+                "case_count": case_count,
+                "manual_coverage_rate": round(manual_count / case_count, 4) if case_count else 0.0,
+                "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
+                "acceptance_rate": round(accepted / case_count, 4) if case_count else 0.0,
+                "top_issues": _top_strings(issues, limit=3),
+                "weakness_score": max([int(row.get("weakness_score") or 0) for row in rows] or [0]),
+            }
+        )
+    return sorted(output, key=lambda item: (-int(item.get("weakness_score") or 0), str(item.get("style") or "")))
+
+
+def _issue_taxonomy(facts: list[CaseFact]) -> list[ImplementationDocument]:
+    buckets: dict[str, dict[str, Any]] = {}
+    for fact in facts:
+        for issue_type in _fact_issue_types(fact):
+            bucket = buckets.setdefault(issue_type, {"issue_type": issue_type, "count": 0, "song_ids": set(), "source_types": set(), "examples": []})
+            bucket["count"] += 1
+            bucket["song_ids"].add(fact.song_id)
+            bucket["source_types"].update(_issue_sources(fact, issue_type))
+            example = _issue_excerpt(fact)
+            if example:
+                bucket["examples"].append(example)
+    rows = []
+    for issue_type, bucket in buckets.items():
+        count = int(bucket["count"])
+        rows.append(
+            {
+                "issue_type": issue_type,
+                "count": count,
+                "severity": "high" if count >= 4 or issue_type == "rendering" else "medium" if count >= 2 else "low",
+                "song_ids": sorted(bucket["song_ids"]),
+                "example_excerpt": str((bucket["examples"] or [""])[0])[:160],
+                "source_types": sorted(bucket["source_types"]),
+            }
+        )
+    return sorted(rows, key=lambda item: (-int(item.get("count") or 0), str(item.get("issue_type") or "")))
+
+
+def _reviewer_breakdown(facts: list[CaseFact]) -> list[ImplementationDocument]:
+    groups: dict[str, list[CaseFact]] = {}
+    for fact in facts:
+        reviewer = fact.listened_by or "unknown"
+        if fact.review_status == "missing":
+            continue
+        groups.setdefault(reviewer, []).append(fact)
+    rows = []
+    for reviewer, items in groups.items():
+        ratings = [item.rating for item in items if isinstance(item.rating, int)]
+        rows.append(
+            {
+                "reviewer": reviewer[:120],
+                "review_count": len(items),
+                "manual_review_count": sum(1 for item in items if item.review_mode == "manual"),
+                "synthetic_review_count": sum(1 for item in items if item.review_mode == "synthetic"),
+                "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
+                "needs_fix_count": sum(1 for item in items if item.review_status == "needs_fix"),
+                "rejected_count": sum(1 for item in items if item.review_status == "rejected"),
+            }
+        )
+    return sorted(rows, key=lambda item: (-int(item.get("review_count") or 0), str(item.get("reviewer") or "")))
+
+
+def _trend(source: ImplementationDocument, facts: list[CaseFact]) -> list[ImplementationDocument]:
+    by_suite: dict[str, list[CaseFact]] = {}
+    suite_meta: dict[str, dict[str, Any]] = {}
+    for suite_row in source.get("suites", []):
+        if isinstance(suite_row, dict) and isinstance(suite_row.get("suite"), dict):
+            suite_meta[str(suite_row["suite"].get("suite_id") or "")] = suite_row["suite"]
+    for fact in facts:
+        by_suite.setdefault(fact.suite_id, []).append(fact)
+    rows = []
+    previous: dict[str, Any] | None = None
+    for suite_id, items in sorted(by_suite.items(), key=lambda pair: str(suite_meta.get(pair[0], {}).get("created_at") or suite_meta.get(pair[0], {}).get("updated_at") or pair[0])):
+        ratings = [item.rating for item in items if isinstance(item.rating, int)]
+        issue_count = sum(len(_fact_issue_types(item)) for item in items)
+        accepted = sum(1 for item in items if item.review_status == "accepted")
+        manual = sum(1 for item in items if item.review_mode == "manual" and item.review_status != "missing")
+        average = round(sum(ratings) / len(ratings), 2) if ratings else None
+        row = {
+            "suite_id": suite_id,
+            "generated_at": suite_meta.get(suite_id, {}).get("created_at") or suite_meta.get(suite_id, {}).get("updated_at"),
+            "case_count": len(items),
+            "accepted_rate": round(accepted / len(items), 4) if items else 0.0,
+            "average_rating": average,
+            "manual_coverage_rate": round(manual / len(items), 4) if items else 0.0,
+            "issue_count": issue_count,
+            "readiness_status": "ready" if items and accepted == len(items) and manual == len(items) else "watch",
+            "trend_status": "flat",
+        }
+        if previous:
+            prev_rating = previous.get("average_rating")
+            if isinstance(average, (int, float)) and isinstance(prev_rating, (int, float)) and average > prev_rating and issue_count < int(previous.get("issue_count") or 0):
+                row["trend_status"] = "improving"
+            elif (isinstance(average, (int, float)) and isinstance(prev_rating, (int, float)) and average < prev_rating) or issue_count > int(previous.get("issue_count") or 0):
+                row["trend_status"] = "regressing"
+        previous = row
+        rows.append(row)
+    return rows
+
+
+def _trend_summary(trend: list[ImplementationDocument]) -> ImplementationDocument:
+    latest = trend[-1] if trend else {}
+    return {"status": latest.get("trend_status") or "none", "suite_count": len(trend)}
+
+
+def _weakness_ranking(heatmap: list[ImplementationDocument], styles: list[ImplementationDocument], taxonomy: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    rows: list[dict[str, Any]] = []
+    for row in heatmap:
+        if int(row.get("weakness_score") or 0) <= 0:
+            continue
+        rows.append(
+            {
+                "type": "song",
+                "id": row.get("song_id"),
+                "song_id": row.get("song_id"),
+                "style": row.get("style"),
+                "weakness_score": row.get("weakness_score"),
+                "latest_status": row.get("latest_status"),
+                "issue_count": row.get("issue_count", 0),
+                "top_issues": row.get("top_issues", []),
+            }
+        )
+    for style in styles:
+        if int(style.get("weakness_score") or 0) >= 40:
+            rows.append(
+                {
+                    "type": "style",
+                    "id": style.get("style"),
+                    "style": style.get("style"),
+                    "weakness_score": style.get("weakness_score"),
+                    "issue_count": len(style.get("top_issues", [])),
+                    "top_issues": style.get("top_issues", []),
+                }
+            )
+    for issue in taxonomy:
+        score = min(100, int(issue.get("count") or 0) * 12)
+        if score >= 24:
+            rows.append(
+                {
+                    "type": "issue",
+                    "id": issue.get("issue_type"),
+                    "issue_type": issue.get("issue_type"),
+                    "weakness_score": score,
+                    "issue_count": issue.get("count", 0),
+                    "top_issues": [issue.get("issue_type")],
+                }
+            )
+    return sorted(rows, key=lambda item: (-int(item.get("weakness_score") or 0), -int(item.get("issue_count") or 0), str(item.get("type") or ""), str(item.get("id") or "")))[:20]
+
+
+def _recommendations(heatmap: list[ImplementationDocument], taxonomy: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    rows = []
+    index = 1
+    for item in heatmap:
+        score = int(item.get("weakness_score") or 0)
+        if score < 30:
+            continue
+        issue_types = [str(issue) for issue in item.get("top_issues", [])]
+        rec_type = "create_review_task" if item.get("open_review_task_count", 0) == 0 and issue_types else "run_manual_review_again"
+        severity = "high" if score >= 60 or item.get("latest_status") == "rejected" else "medium"
+        rows.append(
+            {
+                "recommendation_id": f"rec-{index:03d}",
+                "type": rec_type,
+                "severity": severity,
+                "title": f"{'Fix' if rec_type == 'create_review_task' else 'Review'} {item.get('song_id')} acceptance weakness",
+                "reason": _bounded(f"{item.get('song_id')} has weakness score {score}, latest status {item.get('latest_status')}, and top issues {', '.join(issue_types) or 'none'}.", 300),
+                "target": {"song_id": item.get("song_id"), "style": item.get("style"), "project_id": item.get("project_id"), "version_id": item.get("version_id")},
+                "evidence": {"case_ids": item.get("case_ids", []), "suite_ids": item.get("suite_ids", []), "issue_types": issue_types},
+                "manual_required": True,
+                "created_review_task_id": None,
+            }
+        )
+        index += 1
+    for issue in taxonomy[:3]:
+        if int(issue.get("count") or 0) < 2:
+            continue
+        rows.append(
+            {
+                "recommendation_id": f"rec-{index:03d}",
+                "type": "create_fix_sprint_later",
+                "severity": "medium",
+                "title": f"Plan follow-up for recurring {issue.get('issue_type')} issues",
+                "reason": _bounded(f"{issue.get('issue_type')} appears in {issue.get('count')} acceptance signals across {len(issue.get('song_ids', []))} song(s).", 300),
+                "target": {"issue_type": issue.get("issue_type")},
+                "evidence": {"song_ids": issue.get("song_ids", []), "issue_types": [issue.get("issue_type")]},
+                "manual_required": True,
+                "created_review_task_id": None,
+            }
+        )
+        index += 1
+    return rows[:20]
+
+
+def _summary(facts: list[CaseFact], tasks: list[ImplementationDocument], taxonomy: list[ImplementationDocument], recommendations: list[ImplementationDocument]) -> ImplementationDocument:
+    ratings = [fact.rating for fact in facts if isinstance(fact.rating, int)]
+    manual_reviews = [fact for fact in facts if fact.review_mode == "manual" and fact.review_status != "missing"]
+    manual_accepted = sum(1 for fact in facts if fact.review_mode == "manual" and fact.review_status == "accepted")
+    synthetic_accepted = sum(1 for fact in facts if fact.review_mode == "synthetic" and fact.review_status == "accepted")
+    critical_issues = [item for item in taxonomy if item.get("severity") == "high"]
+    open_tasks = [task for task in tasks if task.get("status") in OPEN_TASK_STATUSES]
+    return {
+        "readiness_status": "empty",
+        "accepted_count": sum(1 for fact in facts if fact.review_status == "accepted"),
+        "manual_accepted_count": manual_accepted,
+        "synthetic_accepted_count": synthetic_accepted,
+        "needs_fix_count": sum(1 for fact in facts if fact.review_status == "needs_fix"),
+        "rejected_count": sum(1 for fact in facts if fact.review_status == "rejected"),
+        "waived_count": sum(1 for fact in facts if fact.review_status == "waived"),
+        "case_count": len(facts),
+        "manual_review_count": len(manual_reviews),
+        "synthetic_review_count": sum(1 for fact in facts if fact.review_mode == "synthetic"),
+        "manual_coverage_rate": round(len(manual_reviews) / len(facts), 4) if facts else 0.0,
+        "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
+        "issue_count": sum(int(item.get("count") or 0) for item in taxonomy),
+        "critical_issue_count": len(critical_issues),
+        "open_review_task_count": len(open_tasks),
+        "recommendation_count": len(recommendations),
+    }
+
+
+def _source_summary(source: ImplementationDocument, facts: list[CaseFact], tasks: list[ImplementationDocument]) -> ImplementationDocument:
+    suites = _as_list(source.get("suites"))
+    pack_count = 0
+    import_count = 0
+    for suite in suites:
+        if isinstance(suite, dict):
+            pack_count += len(suite.get("human_review_packs", [])) if isinstance(suite.get("human_review_packs"), list) else 0
+            import_count += len(suite.get("human_review_imports", [])) if isinstance(suite.get("human_review_imports"), list) else 0
+    return {
+        "suite_count": len(suites),
+        "case_count": len(facts),
+        "manual_review_count": sum(1 for fact in facts if fact.review_mode == "manual" and fact.review_status != "missing"),
+        "synthetic_review_count": sum(1 for fact in facts if fact.review_mode == "synthetic"),
+        "human_review_pack_count": pack_count,
+        "human_review_import_count": import_count,
+        "review_task_count": len(tasks),
+    }
+
+
+def _warnings(source: ImplementationDocument, facts: list[CaseFact], summary: ImplementationDocument) -> list[str]:
+    warnings = []
+    if not source.get("suites"):
+        warnings.append("no_acceptance_suites")
+    if facts and summary.get("manual_coverage_rate", 0.0) < 1.0:
+        warnings.append("manual_review_coverage_incomplete")
+    if any(fact.release_ready_profile and fact.review_mode == "synthetic" and fact.review_status == "accepted" for fact in facts):
+        warnings.append("release_ready_suite_contains_synthetic_review")
+    return warnings
+
+
+def _readiness(summary: ImplementationDocument, recommendations: list[ImplementationDocument], warnings: list[str]) -> str:
+    if int(summary.get("case_count") or 0) == 0:
+        return "empty"
+    if int(summary.get("rejected_count") or 0) > 0 or int(summary.get("critical_issue_count") or 0) > 0:
+        return "blocked"
+    if int(summary.get("needs_fix_count") or 0) > 0 or any(item.get("severity") == "high" for item in recommendations):
+        return "needs_work"
+    if warnings or float(summary.get("manual_coverage_rate") or 0.0) < 1.0:
+        return "watch"
+    return "ready"
+
+
+def _fact_issue_types(fact: CaseFact) -> list[str]:
+    values: list[tuple[str, str]] = []
+    for tag in fact.tags:
+        values.append(("tag", tag))
+    for marker in fact.markers:
+        values.append(("marker", f"{marker.get('label', '')} {marker.get('note', '')}"))
+    for issue in fact.issues:
+        values.append(("issue", issue))
+    for item in [*fact.health_warnings, *fact.health_blockers]:
+        values.append(("health", f"{item.get('check_id', '')} {item.get('message', '')}"))
+    if fact.review_status in {"needs_fix", "rejected"}:
+        values.append(("status", fact.review_status))
+    values.append(("notes", fact.notes))
+    found: set[str] = set()
+    for _source_type, text in values:
+        for issue_type in _classify_text(text):
+            found.add(issue_type)
+    return sorted(found) if found else (["other"] if fact.review_status in {"needs_fix", "rejected"} else [])
+
+
+def _issue_sources(fact: CaseFact, issue_type: str) -> list[str]:
+    sources = []
+    if any(issue_type in _classify_text(tag) for tag in fact.tags):
+        sources.append("tag")
+    if any(issue_type in _classify_text(f"{marker.get('label', '')} {marker.get('note', '')}") for marker in fact.markers):
+        sources.append("marker")
+    if issue_type in _classify_text(fact.notes):
+        sources.append("notes")
+    if fact.health_warnings or fact.health_blockers:
+        sources.append("health")
+    if fact.review_status in {"needs_fix", "rejected"}:
+        sources.append("review_status")
+    return sorted(set(sources or ["manual_review"]))
+
+
+def _classify_text(value: str) -> list[str]:
+    text = sanitize_sensitive_text(str(value or "")).lower()
+    found = []
+    for issue_type, keywords in ISSUE_KEYWORDS.items():
+        if any(keyword.lower() in text for keyword in keywords):
+            found.append(issue_type)
+    return found
+
+
+def _issue_excerpt(fact: CaseFact) -> str:
+    for value in [*fact.issues, fact.notes, *[str(marker.get("note") or marker.get("label") or "") for marker in fact.markers]]:
+        text = _bounded(value, 160)
+        if text:
+            return text
+    return ""
+
+
+def _weakness_score(row: ImplementationDocument) -> int:
+    score = 0
+    latest = str(row.get("latest_status") or "")
+    if latest == "rejected":
+        score += 35
+    elif latest in {"needs_fix", "failed"}:
+        score += 25
+    rating = row.get("average_rating")
+    if isinstance(rating, (int, float)):
+        if rating < 3.0:
+            score += 20
+        elif rating < 4.0:
+            score += 10
+    score += min(int(row.get("issue_count") or 0) * 4, 20)
+    score += min(int(row.get("recurring_issue_count") or 0) * 8, 20)
+    if float(row.get("manual_coverage_rate") or 0.0) < 1.0:
+        score += 10
+    if int(row.get("open_review_task_count") or 0) > 0:
+        score += 10
+    return min(score, 100)
+
+
+def _latest_fact(items: list[CaseFact]) -> CaseFact | None:
+    if not items:
+        return None
+    return sorted(items, key=lambda fact: (fact.listened_at or fact.suite_updated_at or fact.suite_created_at, fact.case_id))[-1]
+
+
+def _open_task_count(tasks: list[ImplementationDocument], song_id: str) -> int:
+    count = 0
+    for task in tasks:
+        if task.get("status") not in OPEN_TASK_STATUSES:
+            continue
+        payload = json.dumps({"source": task.get("source"), "target": task.get("target"), "title": task.get("title")}, ensure_ascii=False)
+        if song_id and song_id in payload:
+            count += 1
+    return count
+
+
+def _top_strings(values: list[str], *, limit: int) -> list[str]:
+    counts = {value: values.count(value) for value in set(values) if value}
+    return sorted(counts, key=lambda value: (-counts[value], value))[:limit]
+
+
+def _first_text(values: list[str]) -> str | None:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _suite_source(data: ImplementationDocument) -> ImplementationDocument:
+    keys = (
+        "suite_id",
+        "name",
+        "status",
+        "mode",
+        "profile_id",
+        "songbook_id",
+        "songbook_version",
+        "require_manual_review",
+        "allow_synthetic_review",
+        "release_ready_profile",
+        "min_rating",
+        "created_at",
+        "updated_at",
+    )
+    return {key: data.get(key) for key in keys}
+
+
+def _case_source(data: ImplementationDocument) -> ImplementationDocument:
+    keys = (
+        "case_id",
+        "suite_id",
+        "name",
+        "source_type",
+        "status",
+        "song_id",
+        "songbook_id",
+        "songbook_version",
+        "expectations",
+        "request_summary",
+        "project_id",
+        "version_id",
+        "health_summary",
+        "created_at",
+        "updated_at",
+    )
+    return {key: data.get(key) for key in keys}
+
+
+def _review_source(data: ImplementationDocument) -> ImplementationDocument:
+    keys = ("case_id", "status", "rating", "playback_confirmed", "listened_by", "listened_at", "audio_mode", "notes", "issues", "waivers", "review_mode", "source", "tags", "markers")
+    return {key: data.get(key) for key in keys}
+
+
+def _health_source(data: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "status": data.get("status"),
+        "summary": _as_document(data.get("summary")),
+        "warnings": _as_list(data.get("warnings")),
+        "blockers": _as_list(data.get("blockers")),
+    }
+
+
+def _report_source(data: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "suite_id": data.get("suite_id"),
+        "status": data.get("status"),
+        "source_hash": data.get("source_hash"),
+        "profile_id": data.get("profile_id"),
+        "songbook_id": data.get("songbook_id"),
+        "songbook_version": data.get("songbook_version"),
+        "summary": _as_document(data.get("summary")),
+        "blockers": _as_list(data.get("blockers")),
+    }
+
+
+def _case_in_scope(case: ImplementationDocument, scope: AnalyticsScope) -> bool:
+    if scope.type == "project" and scope.project_id:
+        return str(case.get("project_id") or "") == scope.project_id
+    return True
+
+
+def _scope_project_ids(scope: AnalyticsScope, release_store: ReleaseStore, project_store: ProjectStore) -> set[str]:
+    if scope.type == "project" and scope.project_id:
+        return {scope.project_id}
+    if scope.type == "release" and scope.release_id:
+        release = release_store.get_release(scope.release_id)
+        return {track.project_id for track in release.tracks}
+    return set()
+
+
+def _suite_matches_release(suite_id: str, project_ids: set[str], store: AcceptanceStore) -> bool:
+    if not project_ids:
+        return False
+    return any(case.project_id in project_ids for case in store.list_cases(suite_id))
+
+
+def _release_acceptance_suite_id(signoff: ImplementationDocument) -> str:
+    gate = _as_document(signoff.get("acceptance_gate"))
+    return str(gate.get("suite_id") or "")
+
+
+def _release_ids_for_project(project_id: str, release_store: ReleaseStore) -> list[str]:
+    rows = []
+    for release in release_store.list_releases(include_hidden=True):
+        if any(track.project_id == project_id for track in release.tracks):
+            rows.append(release.release_id)
+    return sorted(rows)
+
+
+def _scope_from_report(report: ImplementationDocument) -> AnalyticsScope:
+    scope = _as_document(report.get("scope"))
+    return AnalyticsScope.from_values(
+        scope_type=str(scope.get("type") or "global"),
+        suite_id=scope.get("suite_id"),
+        release_id=scope.get("release_id"),
+        project_id=scope.get("project_id"),
+    )
+
+
+def _report_id(scope: AnalyticsScope, source: ImplementationDocument, now: str) -> str:
+    digits = re.sub(r"[^0-9]", "", now)[:14].ljust(14, "0")
+    return f"analytics-{digits}-{stable_hash({'scope': scope.to_dict(), 'source': source})[:8]}"
+
+
+def _optional_id(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if not re.match(r"^[A-Za-z0-9_.:-]+$", text):
+        raise AcceptanceAnalyticsError("Invalid analytics scope id.")
+    return text
+
+
+def _safe_storage_key(prefix: str, value: str | None) -> str:
+    text = value or "missing"
+    return f"{prefix}-{re.sub(r'[^A-Za-z0-9_.-]+', '-', text).strip('-') or 'missing'}"
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bounded(value: Any, limit: int) -> str:
+    return sanitize_sensitive_text(str(value or "")).strip()[:limit]
+
+
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    event = sanitize_metadata({"timestamp": now_iso(), "event": event_type, **payload})
+    with path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def _matching_open_review_task(project_dir: Path, song_id: str, issue_types: list[str]) -> ReviewTask | None:
+    store = ReviewTaskStore(project_dir)
+    for task in store.list_tasks(include_archived=True):
+        if task.status not in OPEN_TASK_STATUSES:
+            continue
+        source = _as_document(task.source)
+        if source.get("source_type") != "acceptance_analytics":
+            continue
+        if song_id and source.get("song_id") != song_id:
+            continue
+        existing_issues = [str(item) for item in source.get("issue_types", [])] if isinstance(source.get("issue_types"), list) else []
+        if sorted(existing_issues) == sorted(issue_types):
+            return task
+    return None

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -44,7 +44,7 @@ def verify_release_operations_runbook_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     verifier = _RunbookVerifier(
         Path(zip_path),
         strict=strict,
@@ -58,7 +58,7 @@ def verify_release_operations_runbook_package(
     return verifier.run()
 
 
-def release_operations_runbook_verification_summary(report: DomainDocument) -> DomainDocument:
+def release_operations_runbook_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
     summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
@@ -74,11 +74,11 @@ def release_operations_runbook_verification_summary(report: DomainDocument) -> D
     )
 
 
-def write_release_operations_runbook_verification_report(report: DomainDocument, path: Path | str) -> Path:
+def write_release_operations_runbook_verification_report(report: dict[str, Any], path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_release_operations_runbook_verification_report(report: DomainDocument) -> None:
+def print_release_operations_runbook_verification_report(report: dict[str, Any]) -> None:
     summary = release_operations_runbook_verification_summary(report)
     print("MusicForge release operations runbook package verification")
     print(f"status: {summary.get('status')}")
@@ -97,7 +97,7 @@ def print_release_operations_runbook_verification_report(report: DomainDocument)
             print(f"  [{item.get('check_id', 'unknown')}] {item.get('message', '')}")
 
 
-def release_operations_runbook_verification_exit_code(report: DomainDocument) -> int:
+def release_operations_runbook_verification_exit_code(report: dict[str, Any]) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -111,14 +111,14 @@ class _RunbookVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
-        self.redaction_findings: list[ImplementationDocument] = []
-        self.manifest: ImplementationDocument = {}
-        self.runbook: ImplementationDocument = {}
-        self.execution: ImplementationDocument = {}
-        self.operations_before: ImplementationDocument = {}
-        self.operations_after: ImplementationDocument = {}
+        self.checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
+        self.redaction_findings: list[dict[str, Any]] = []
+        self.manifest: dict[str, Any] = {}
+        self.runbook: dict[str, Any] = {}
+        self.execution: dict[str, Any] = {}
+        self.operations_before: dict[str, Any] = {}
+        self.operations_after: dict[str, Any] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -127,7 +127,7 @@ class _RunbookVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -186,7 +186,7 @@ class _RunbookVerifier:
             return
         self._add_check("manifest", "runbook_manifest_exists", "passed", "blocking", "runbook-manifest.json exists.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[ImplementationDocument] = []
+        valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -354,7 +354,7 @@ def _counts(values: list[str]) -> dict[str, int]:
 
 
 def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
-    findings: list[ImplementationDocument] = []
+    findings: list[dict[str, Any]] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         for match in pattern.finditer(text):
             findings.append({"path": path, "kind": kind, "pattern": pattern.pattern[:80], "excerpt": match.group(0)[:120]})
@@ -369,7 +369,7 @@ def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(path: str, value: Any, *, prefix: str = "") -> list[ImplementationDocument]:
-    findings: list[ImplementationDocument] = []
+    findings: list[dict[str, Any]] = []
     if isinstance(value, dict):
         for key, child in value.items():
             full = f"{prefix}.{key}" if prefix else str(key)

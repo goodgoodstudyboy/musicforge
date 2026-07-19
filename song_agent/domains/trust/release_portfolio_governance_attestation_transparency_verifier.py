@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -57,7 +56,7 @@ def verify_release_portfolio_governance_attestation_transparency(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     verifier = _TransparencyVerifier(
         Path(zip_path),
         strict=strict,
@@ -73,11 +72,11 @@ def verify_release_portfolio_governance_attestation_transparency(
     return verifier.run()
 
 
-def write_release_portfolio_governance_attestation_transparency_verification_report(report: DomainDocument, path: Path | str) -> Path:
+def write_release_portfolio_governance_attestation_transparency_verification_report(report: dict[str, Any], path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_release_portfolio_governance_attestation_transparency_verification_report(report: DomainDocument) -> None:
+def print_release_portfolio_governance_attestation_transparency_verification_report(report: dict[str, Any]) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge release portfolio governance attestation transparency verification")
     print(f"status: {report.get('status')}")
@@ -89,7 +88,7 @@ def print_release_portfolio_governance_attestation_transparency_verification_rep
     print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
-def release_portfolio_governance_attestation_transparency_verification_exit_code(report: DomainDocument) -> int:
+def release_portfolio_governance_attestation_transparency_verification_exit_code(report: dict[str, Any]) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -118,23 +117,23 @@ class _TransparencyVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
-        self.redaction_findings: list[ImplementationDocument] = []
+        self.checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
+        self.redaction_findings: list[dict[str, Any]] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
         self.entry_map: dict[str, zipfile.ZipInfo] = {}
-        self.manifest: ImplementationDocument = {}
-        self.feed_doc: ImplementationDocument = {}
-        self.report_doc: ImplementationDocument = {}
-        self.data_docs: dict[str, ImplementationDocument] = {}
-        self.notice_docs: dict[str, ImplementationDocument] = {}
+        self.manifest: dict[str, Any] = {}
+        self.feed_doc: dict[str, Any] = {}
+        self.report_doc: dict[str, Any] = {}
+        self.data_docs: dict[str, dict[str, Any]] = {}
+        self.notice_docs: dict[str, dict[str, Any]] = {}
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -196,7 +195,7 @@ class _TransparencyVerifier:
         self._add_hash_check("manifest", "transparency_manifest_integrity", self.manifest.get("integrity_hash"), transparency_manifest_hash(self.manifest), "Attestation Transparency manifest integrity")
         self._add_check("manifest", "transparency_manifest_package_type", "passed" if self.manifest.get("package_type") == TRANSPARENCY_PACKAGE_TYPE else "failed", "blocking", "Manifest package_type is valid." if self.manifest.get("package_type") == TRANSPARENCY_PACKAGE_TYPE else "Manifest package_type is invalid.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[ImplementationDocument] = []
+        valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -511,7 +510,120 @@ def _transparency_report_hash(report: ImplementationDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in {"integrity_hash", "generated_at", "updated_at"}})
 
 
-from song_agent.domains.trust import v142_rpgatv_readiness as _v142_rpgatv_readiness
-from song_agent.domains.trust.v142_rpgatv_readiness import _event_semantics as _event_semantics, _notice_semantics as _notice_semantics, _semantic_mismatches as _semantic_mismatches, _reference_subset_matches as _reference_subset_matches, _is_forbidden_entry as _is_forbidden_entry, _counts as _counts, _sha256_file as _sha256_file, _sha256_entry as _sha256_entry, _redaction_findings as _redaction_findings, _blocked_key_findings as _blocked_key_findings
+def _event_semantics(event: ImplementationDocument) -> ImplementationDocument:
+    source = _as_document(event.get("source"))
+    summary = _as_document(event.get("summary"))
+    return {
+        "event_id": event.get("event_id"),
+        "event_type": event.get("event_type"),
+        "severity": event.get("severity"),
+        "portfolio_id": event.get("portfolio_id"),
+        "attestation_profile": event.get("attestation_profile"),
+        "source": {
+            "public_state_hash": source.get("public_state_hash"),
+            "registry_current_entry_id": source.get("registry_current_entry_id"),
+            "current_certificate_id": source.get("current_certificate_id"),
+            "portal_manifest_hash": source.get("portal_manifest_hash"),
+            "accepted_evidence_id": source.get("accepted_evidence_id"),
+        },
+        "public_references": _as_document(summary.get("public_references")),
+    }
 
-_v142_rpgatv_readiness.bind_globals(globals())
+
+def _notice_semantics(notice: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "notice_id": notice.get("notice_id"),
+        "notice_type": notice.get("notice_type"),
+        "severity": notice.get("severity"),
+        "portfolio_id": notice.get("portfolio_id"),
+        "attestation_profile": notice.get("attestation_profile"),
+        "source_event_ids": list(notice.get("source_event_ids") or []) if isinstance(notice.get("source_event_ids"), list) else [],
+        "public_references": _as_document(notice.get("public_references")),
+    }
+
+
+def _semantic_mismatches(kind: str, expected: list[ImplementationDocument], actual: list[ImplementationDocument]) -> list[str]:
+    problems: list[str] = []
+    if len(actual) != len(expected):
+        problems.append(f"{kind} count {len(actual)} != expected {len(expected)}")
+    for index, expected_item in enumerate(expected):
+        if index >= len(actual):
+            problems.append(f"{kind}[{index}] missing")
+            continue
+        actual_item = actual[index]
+        for key, expected_value in expected_item.items():
+            actual_value = actual_item.get(key)
+            if key == "public_references" and kind == "notice":
+                if not _reference_subset_matches(expected_value, actual_value, notice_type=str(expected_item.get("notice_type") or "")):
+                    problems.append(f"{kind}[{index}].{key} mismatch")
+                continue
+            if actual_value != expected_value:
+                problems.append(f"{kind}[{index}].{key} mismatch")
+    return problems
+
+
+def _reference_subset_matches(expected: Any, actual: Any, *, notice_type: str) -> bool:
+    expected_refs = _as_document(expected)
+    actual_refs = _as_document(actual)
+    for key, value in expected_refs.items():
+        if actual_refs.get(key) != value:
+            return False
+    extra_keys = set(actual_refs) - set(expected_refs)
+    return not extra_keys or (notice_type == "public_state_refreshed" and extra_keys <= {"previous_state_hash"})
+
+
+def _is_forbidden_entry(name: str) -> bool:
+    lowered = str(name or "").lower()
+    return lowered.endswith(".zip") or lowered.startswith("nested/") or ".musicforge/" in lowered or lowered.startswith(".musicforge/")
+
+
+def _counts(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
+    digest = hashlib.sha256()
+    with archive.open(info, "r") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
+    rows: list[dict[str, Any]] = []
+    for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            rows.append({"path": path, "type": kind, "excerpt": match.group(0)[:120]})
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            rows.append({"path": path, "type": "sensitive_value", "pattern": replacement, "excerpt": match.group(0)[:120]})
+    return rows
+
+
+def _blocked_key_findings(path: str, value: Any) -> list[ImplementationDocument]:
+    rows: list[dict[str, Any]] = []
+
+    def walk(current: Any, trail: str) -> None:
+        if isinstance(current, dict):
+            for key, item in current.items():
+                lowered = str(key).lower()
+                if any(marker in lowered for marker in ("api_key", "access_token", "token", "secret", "password", "provider-snapshot", "renderer.json", "source_path", "local_path", "file_path")):
+                    rows.append({"path": path, "type": "blocked_key", "key": f"{trail}.{key}" if trail else str(key)})
+                walk(item, f"{trail}.{key}" if trail else str(key))
+        elif isinstance(current, list):
+            for index, item in enumerate(current):
+                walk(item, f"{trail}[{index}]")
+
+    walk(value, "")
+    return rows

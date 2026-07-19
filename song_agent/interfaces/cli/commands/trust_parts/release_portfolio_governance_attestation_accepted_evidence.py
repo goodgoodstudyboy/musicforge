@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InterfaceType
 
 from . import dependencies as _commands_trust_parts_dependencies
 
@@ -21,7 +21,7 @@ def _execute_release_portfolio_governance_attestation_accepted_evidence(argv: li
     review_store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
     store = ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore(review_store=review_store)
     portfolio_id = args.portfolio_id
-    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
     if args.refresh:
         payload = {"profile": args.profile}
         if args.response_id:
@@ -74,7 +74,7 @@ def _execute_release_portfolio_governance_attestation_transparency(argv: list[st
         accepted_evidence_store=accepted_store,
     )
     portfolio_id = args.portfolio_id
-    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
     if args.refresh:
         feed = store.refresh_feed(portfolio_id, {"profile": args.profile, "require_accepted_evidence": args.require_accepted_evidence})
         result.update({"feed": feed, "summary": transparency_summary(feed), "stale": False})
@@ -138,7 +138,7 @@ def _execute_release_portfolio_governance_attestation_transparency_acknowledgeme
     )
     store = ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore(transparency_store=transparency_store)
     portfolio_id = args.portfolio_id
-    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
     if args.refresh_pack:
         pack = store.refresh_pack(portfolio_id, {"profile": args.profile})
         result.update({"pack": pack, "summary": {"status": pack.get("status"), "pack_id": pack.get("pack_id"), "source_hash": pack.get("source_hash")}})
@@ -159,7 +159,7 @@ def _execute_release_portfolio_governance_attestation_transparency_acknowledgeme
         write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report, store.pack_verification_report_path(portfolio_id, args.profile))
         result["pack_verification"] = report
     if args.import_response:
-        payload: ImplementationDocument = {"profile": args.profile}
+        payload: dict[str, _InterfaceType] = {"profile": args.profile}
         if args.content_base64:
             payload["content_base64"] = args.content_base64
         imported = store.import_response(portfolio_id, payload)
@@ -225,7 +225,7 @@ def _execute_public_trust_center_publication(argv: list[str]) -> None:
         acceptance_store=acceptance_store,
         acceptance_board_store=board_store,
     )
-    result: ImplementationDocument = {"ok": True, "center_id": args.center_id, "channel_id": args.channel_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "center_id": args.center_id, "channel_id": args.channel_id}
     if args.create_channel:
         result["channel"] = store.create_channel(args.center_id, {"channel_id": args.channel_id, "name": args.channel_name, "channel_type": args.channel_type})
     else:

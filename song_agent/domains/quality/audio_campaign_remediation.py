@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -24,15 +23,20 @@ from song_agent.domains.quality.audio_campaign_remediation_contracts import AUDI
 HIGH_SEVERITIES = {"high", "critical"}
 
 
-from song_agent.domains.quality import v142_acr_readiness as _v142_acr_readiness
-from song_agent.domains.quality.v142_acr_readiness import AudioCampaignRemediationError as AudioCampaignRemediationError, AudioCampaignRemediationNotFoundError as AudioCampaignRemediationNotFoundError, AudioCampaignRemediationStateError as AudioCampaignRemediationStateError, AudioCampaignRemediationValidationError as AudioCampaignRemediationValidationError, _issues_from_campaign as _issues_from_campaign, _issue_closeout as _issue_closeout, _sprint_state as _sprint_state, _action as _action, _release_track_current_row as _release_track_current_row, _track_identity as _track_identity, _issue_severity as _issue_severity, _issue_category as _issue_category, _marker_public as _marker_public, _plan_summary as _plan_summary, _queue_summary as _queue_summary, _linked_fix_sprints as _linked_fix_sprints, _readme as _readme, _file_record as _file_record, _sha256_path as _sha256_path, _bounded as _bounded, _integrity_hash as _integrity_hash, _append_event as _append_event
+class AudioCampaignRemediationError(ValueError):
+    pass
 
 
+class AudioCampaignRemediationNotFoundError(AudioCampaignRemediationError):
+    pass
 
 
+class AudioCampaignRemediationStateError(AudioCampaignRemediationError):
+    pass
 
 
-
+class AudioCampaignRemediationValidationError(AudioCampaignRemediationError):
+    pass
 
 
 class AudioCampaignRemediationStore:
@@ -79,21 +83,21 @@ class AudioCampaignRemediationStore:
     def events_path(self, release_id: str) -> Path:
         return self.remediation_dir(release_id) / "events.jsonl"
 
-    def read_plan(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_plan(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         if not self.plan_path(release_id).exists():
             if default is not None:
                 return default
             raise AudioCampaignRemediationNotFoundError(f"Audio Campaign remediation plan not found: {release_id}.")
         return sanitize_metadata(read_json(self.plan_path(release_id)))
 
-    def read_queue(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_queue(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         if not self.queue_path(release_id).exists():
             if default is not None:
                 return default
             raise AudioCampaignRemediationNotFoundError(f"Audio Campaign remediation queue not found: {release_id}.")
         return sanitize_metadata(read_json(self.queue_path(release_id)))
 
-    def read_closeout(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_closeout(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         if not self.closeout_path(release_id).exists():
             if default is not None:
                 return default
@@ -159,7 +163,7 @@ class AudioCampaignRemediationStore:
             "source": source,
         }
 
-    def refresh_plan(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def refresh_plan(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         del payload
         with self.lock:
             state = self._current_source_state(release_id, refresh_campaign=True)
@@ -217,11 +221,11 @@ class AudioCampaignRemediationStore:
             raise AudioCampaignRemediationStateError("Audio Campaign remediation source is stale. Refresh and re-sign before using remediation evidence.")
         return {"signoff": signoff, "closeout": closeout, "plan": plan, "queue": queue, "current_source": state.get("source", {})}
 
-    def build_action_queue(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def build_action_queue(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         del payload
         with self.lock:
             plan = self.refresh_plan(release_id)
-            actions: list[ImplementationDocument] = []
+            actions: list[dict[str, Any]] = []
             index = 1
             for issue in plan.get("issues", []):
                 sprint_id = str(issue.get("fix_sprint_id") or "")
@@ -277,13 +281,13 @@ class AudioCampaignRemediationStore:
             write_json(self.queue_path(release_id), queue)
             return queue
 
-    def run_safe_actions(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def run_safe_actions(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             plan = self.refresh_plan(release_id)
             if plan.get("status") == "blocked":
                 raise AudioCampaignRemediationStateError("Audio Campaign remediation source is blocked. Refresh Release Audio Campaign evidence before running safe actions.")
-            results: list[ImplementationDocument] = []
+            results: list[dict[str, Any]] = []
             campaign_id = str(plan.get("campaign_id") or "")
             for _ in range(8):
                 queue = self.build_action_queue(release_id)
@@ -334,7 +338,7 @@ class AudioCampaignRemediationStore:
             _append_event(self.events_path(release_id), "audio_campaign_remediation_safe_actions_run", {"result_count": len(results), "queue_status": queue.get("status"), "closeout_status": closeout.get("status")})
             return {"status": "completed_with_warnings" if any(row.get("status") == "blocked" for row in results) else "completed", "results": results, "queue": queue, "closeout": closeout}
 
-    def closeout_report(self, release_id: str) -> DomainDocument:
+    def closeout_report(self, release_id: str) -> dict[str, Any]:
         with self.lock:
             plan = self.refresh_plan(release_id)
             queue = self.build_action_queue(release_id)
@@ -375,7 +379,7 @@ class AudioCampaignRemediationStore:
             write_json(self.closeout_path(release_id), report)
             return report
 
-    def signoff(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def signoff(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             if self.signoff_path(release_id).exists():
@@ -404,7 +408,7 @@ class AudioCampaignRemediationStore:
             _append_event(self.events_path(release_id), "audio_campaign_remediation_signed", {"signoff_hash": signoff.get("integrity_hash")})
             return {"status": "signed", "signoff": signoff, "closeout": closeout}
 
-    def export_package(self, release_id: str) -> DomainDocument:
+    def export_package(self, release_id: str) -> dict[str, Any]:
         with self.lock:
             if self.signoff_path(release_id).exists():
                 signed_snapshot = self._assert_signed_current(release_id)
@@ -417,9 +421,9 @@ class AudioCampaignRemediationStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[ImplementationDocument] = []
+            files: list[dict[str, Any]] = []
 
-            def write_entry(rel: str, payload: DomainDocument | str) -> None:
+            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
                 path = export_dir / rel
                 if isinstance(payload, str):
                     path.parent.mkdir(parents=True, exist_ok=True)
@@ -455,7 +459,7 @@ class AudioCampaignRemediationStore:
             write_json(export_dir / "manifest.json", manifest)
             return {"status": closeout.get("status"), "manifest": manifest, "export_dir": str(export_dir)}
 
-    def build_zip(self, release_id: str) -> DomainDocument:
+    def build_zip(self, release_id: str) -> dict[str, Any]:
         if self.signoff_path(release_id).exists():
             self._assert_signed_current(release_id)
         exported = self.export_package(release_id)
@@ -480,7 +484,7 @@ class AudioCampaignRemediationStore:
                     zf.write(path, path.relative_to(export_dir).as_posix())
         return {"status": exported.get("status"), "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_zip(self, release_id: str, **kwargs: Any) -> DomainDocument:
+    def verify_zip(self, release_id: str, **kwargs: Any) -> dict[str, Any]:
         from song_agent.domains.quality.audio_campaign_remediation_verifier import verify_audio_campaign_remediation_package, write_audio_campaign_remediation_verification_report
 
         if self.signoff_path(release_id).exists():
@@ -491,7 +495,7 @@ class AudioCampaignRemediationStore:
         write_audio_campaign_remediation_verification_report(report, self.verification_report_path(release_id))
         return report
 
-    def gate(self, release_id: str, *, required: bool, require_signed: bool = False) -> DomainDocument:
+    def gate(self, release_id: str, *, required: bool, require_signed: bool = False) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
         try:
@@ -519,4 +523,264 @@ class AudioCampaignRemediationStore:
         if queue.get("plan_source_hash") != plan.get("source_hash"):
             raise AudioCampaignRemediationStateError("Audio Campaign remediation queue is stale. Refresh before running safe actions.")
 
-_v142_acr_readiness.bind_globals(globals())
+
+def _issues_from_campaign(campaign: ImplementationDocument, report: ImplementationDocument, case_index: ImplementationDocument) -> list[ImplementationDocument]:
+    case_rows = {str(row.get("case_id")): row for row in case_index.get("cases", []) if isinstance(row, dict)}
+    report_rows = {str(row.get("case_id")): row for row in report.get("cases", []) if isinstance(row, dict)}
+    issues = []
+    for case in campaign.get("cases", []):
+        if not isinstance(case, dict):
+            continue
+        report_row = report_rows.get(str(case.get("case_id")), {})
+        blockers = set(str(item) for item in report_row.get("blockers", []) if str(item))
+        review = _as_document(case.get("review"))
+        markers = [marker for marker in case.get("markers", []) if isinstance(marker, dict)]
+        requires_fix = review.get("status") in {"needs_fix", "rejected"} or any(str(marker.get("severity") or "") in HIGH_SEVERITIES for marker in markers) or bool(blockers & {"case_needs_fix", "case_rejected", "open_high_or_critical_marker", "fix_sprint_missing", "fix_sprint_not_closed", "fix_sprint_closeout_failed"})
+        if not requires_fix:
+            continue
+        case_index_row = case_rows.get(str(case.get("case_id")), {})
+        issue = sanitize_metadata(
+            {
+                "issue_id": f"racr-{case.get('case_id')}",
+                "case_id": case.get("case_id"),
+                "session_id": case.get("session_id"),
+                "item_id": case.get("item_id"),
+                "song_id": case.get("song_id"),
+                "title": case.get("title"),
+                "project_id": case.get("project_id"),
+                "version_id": case.get("version_id"),
+                "final_export_hash": case.get("final_export_hash"),
+                "review_status": review.get("status"),
+                "severity": _issue_severity(review, markers),
+                "category": _issue_category(markers),
+                "markers": [_marker_public(marker) for marker in markers],
+                "blockers": sorted(blockers),
+                "fix_sprint_id": case.get("fix", {}).get("fix_sprint_id") if isinstance(case.get("fix"), dict) else case_index_row.get("fix_sprint_id"),
+                "source_hash": stable_hash({"case_source_hash": case.get("source_hash"), "report_blockers": sorted(blockers), "case_index_row": case_index_row}),
+            }
+        )
+        issues.append(issue)
+    return sorted(issues, key=lambda row: ({"critical": 0, "high": 1, "medium": 2, "low": 3}.get(str(row.get("severity") or ""), 9), str(row.get("case_id") or "")))
+
+
+def _issue_closeout(issue: ImplementationDocument, fix_store: AudioFixSprintStore) -> ImplementationDocument:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    sprint_id = str(issue.get("fix_sprint_id") or "")
+    sprint: dict[str, Any] = {}
+    closeout: dict[str, Any] = {}
+    if not sprint_id:
+        blockers.append("fix_sprint_missing")
+    else:
+        try:
+            sprint = fix_store.read_sprint(sprint_id)
+            closeout = fix_store.closeout_report(sprint_id)
+        except Exception:
+            blockers.append("fix_sprint_missing")
+        if sprint:
+            state = _sprint_state(sprint, fix_store, sprint_id)
+            if not state.get("manual_ab_reviewed"):
+                blockers.append("manual_ab_review_missing")
+            if not state.get("selected_candidate"):
+                blockers.append("selected_candidate_missing")
+            if not state.get("manual_recheck_accepted"):
+                blockers.append("manual_recheck_missing")
+            if state.get("test_fake_count", 0) > 0:
+                blockers.append("test_fake_audio_not_release_ready")
+            if state.get("release_ready_audio_count", 0) <= 0:
+                blockers.append("release_ready_recheck_audio_missing")
+            if closeout.get("status") != "passed":
+                blockers.append("fix_sprint_closeout_failed")
+            if sprint.get("status") != "closed":
+                blockers.append("fix_sprint_not_closed")
+    return {
+        "issue_id": issue.get("issue_id"),
+        "case_id": issue.get("case_id"),
+        "fix_sprint_id": sprint_id or None,
+        "status": "passed" if not blockers else "failed",
+        "blockers": sorted(set(blockers)),
+        "warnings": sorted(set(warnings)),
+        "sprint_status": sprint.get("status"),
+        "closeout_status": closeout.get("status"),
+        "closeout_hash": closeout.get("integrity_hash"),
+    }
+
+
+def _sprint_state(sprint: ImplementationDocument, fix_store: AudioFixSprintStore, sprint_id: str) -> ImplementationDocument:
+    selected = False
+    manual_ab = False
+    candidate_count = 0
+    for item in sprint.get("items", []):
+        if not isinstance(item, dict):
+            continue
+        candidates = [row for row in item.get("candidates", []) if isinstance(row, dict)]
+        candidate_count += len(candidates)
+        selected = selected or bool(item.get("selected_candidate_id"))
+        for candidate in candidates:
+            review = _as_document(candidate.get("review"))
+            if review.get("review_mode") == "manual" and review.get("playback_confirmed") is True:
+                manual_ab = True
+    recheck = fix_store._read_recheck_session(sprint_id, missing_ok=True)
+    manual_recheck = False
+    release_ready_audio_count = 0
+    test_fake_count = 0
+    if recheck:
+        for item in recheck.get("items", []):
+            if not isinstance(item, dict):
+                continue
+            review = _as_document(item.get("review"))
+            renderer = _as_document(item.get("renderer"))
+            if review.get("review_mode") == "manual" and review.get("status") == "accepted" and review.get("playback_confirmed") is True:
+                manual_recheck = True
+            if renderer.get("runner_kind") == "real" and renderer.get("release_ready") is True:
+                release_ready_audio_count += 1
+            if renderer.get("runner_kind") == "test_fake" or renderer.get("release_ready") is not True:
+                test_fake_count += 1
+    try:
+        closeout = fix_store.closeout_report(sprint_id)
+    except Exception:
+        closeout = {}
+    return {
+        "sprint_status": sprint.get("status"),
+        "candidate_count": candidate_count,
+        "manual_ab_reviewed": manual_ab,
+        "selected_candidate": selected,
+        "recheck_created": bool(recheck),
+        "manual_recheck_accepted": manual_recheck,
+        "release_ready_audio_count": release_ready_audio_count,
+        "test_fake_count": test_fake_count,
+        "closeout_status": closeout.get("status"),
+        "closeout_hash": closeout.get("integrity_hash"),
+    }
+
+
+def _action(index: int, issue: ImplementationDocument, action_type: str, kind: str, status: str, *, sprint_id: str | None = None) -> ImplementationDocument:
+    return {
+        "action_id": f"racra-{index:06d}",
+        "issue_id": issue.get("issue_id"),
+        "case_id": issue.get("case_id"),
+        "fix_sprint_id": sprint_id,
+        "action_type": action_type,
+        "kind": kind,
+        "status": status,
+        "created_at": now_iso(),
+    }
+
+
+def _release_track_current_row(project_store: ProjectStore, track: Any) -> ImplementationDocument:
+    project_id = str(getattr(track, "project_id", "") or "")
+    manifest_path = final_export_dir(project_store.project_dir(project_id)) / "manifest.json"
+    current_hash = _sha256_path(manifest_path) if manifest_path.exists() else None
+    expected_hash = str(getattr(track, "final_export_hash", "") or "")
+    return {
+        "track_id": getattr(track, "track_id", None),
+        "project_id": project_id,
+        "version_id": getattr(track, "version_id", None),
+        "expected_hash": expected_hash,
+        "current_hash": current_hash,
+        "status": "passed" if expected_hash and current_hash and expected_hash == current_hash else "failed",
+    }
+
+
+def _track_identity(track: Any) -> ImplementationDocument:
+    return {"track_id": getattr(track, "track_id", None), "project_id": getattr(track, "project_id", None), "version_id": getattr(track, "version_id", None), "final_export_hash": getattr(track, "final_export_hash", None)}
+
+
+def _issue_severity(review: ImplementationDocument, markers: list[ImplementationDocument]) -> str:
+    values = [str(marker.get("severity") or "") for marker in markers]
+    if review.get("status") == "rejected":
+        values.append("critical")
+    if review.get("status") == "needs_fix":
+        values.append("high")
+    for severity in ("critical", "high", "medium", "low"):
+        if severity in values:
+            return severity
+    return "medium"
+
+
+def _issue_category(markers: list[ImplementationDocument]) -> str:
+    for marker in markers:
+        category = str(marker.get("category") or "").strip()
+        if category:
+            return category
+    return "other"
+
+
+def _marker_public(marker: ImplementationDocument) -> ImplementationDocument:
+    return sanitize_metadata({key: marker.get(key) for key in ("marker_id", "time_seconds", "category", "severity", "message", "source_hash")})
+
+
+def _plan_summary(issues: list[ImplementationDocument], blockers: list[ImplementationDocument]) -> ImplementationDocument:
+    return {
+        "issue_count": len(issues),
+        "critical_count": sum(1 for issue in issues if issue.get("severity") == "critical"),
+        "high_count": sum(1 for issue in issues if issue.get("severity") == "high"),
+        "linked_fix_sprint_count": len({issue.get("fix_sprint_id") for issue in issues if issue.get("fix_sprint_id")}),
+        "blocker_count": len(blockers),
+    }
+
+
+def _queue_summary(actions: list[ImplementationDocument]) -> ImplementationDocument:
+    return {
+        "action_count": len(actions),
+        "safe_count": sum(1 for action in actions if action.get("kind") == "safe"),
+        "manual_required_count": sum(1 for action in actions if action.get("kind") == "manual_required"),
+        "pending_count": sum(1 for action in actions if action.get("status") == "pending"),
+    }
+
+
+def _linked_fix_sprints(plan: ImplementationDocument, fix_store: AudioFixSprintStore) -> list[ImplementationDocument]:
+    rows = []
+    for sprint_id in sorted({str(issue.get("fix_sprint_id") or "") for issue in plan.get("issues", []) if issue.get("fix_sprint_id")}):
+        try:
+            sprint = fix_store.read_sprint(sprint_id)
+            closeout = fix_store.closeout_report(sprint_id)
+            rows.append({"fix_sprint_id": sprint_id, "status": sprint.get("status"), "source_hash": sprint.get("source_hash"), "closeout_status": closeout.get("status"), "closeout_hash": closeout.get("integrity_hash")})
+        except Exception as exc:
+            rows.append({"fix_sprint_id": sprint_id, "status": "missing", "error": str(exc)})
+    return rows
+
+
+def _readme(plan: ImplementationDocument, closeout: ImplementationDocument) -> str:
+    return "\n".join(
+        [
+            "MusicForge Audio Campaign Remediation",
+            f"release_id: {plan.get('release_id')}",
+            f"campaign_id: {plan.get('campaign_id')}",
+            f"status: {closeout.get('status')}",
+            "This package records safe remediation orchestration only. Manual A/B review, candidate selection, campaign signoff, and release signoff remain explicit manual steps.",
+            "",
+        ]
+    )
+
+
+def _file_record(path: Path, root: Path, rel: str) -> ImplementationDocument:
+    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
+
+
+def _sha256_path(path: Path) -> str | None:
+    if not path.exists() or not path.is_file():
+        return None
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _bounded(value: Any, limit: int) -> str:
+    text = sanitize_sensitive_text(str(value or "").strip())
+    return text[:limit]
+
+
+def _integrity_hash(payload: ImplementationDocument) -> str:
+    return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
+
+
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    event = sanitize_metadata({"event_type": event_type, "created_at": now_iso(), **payload})
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")

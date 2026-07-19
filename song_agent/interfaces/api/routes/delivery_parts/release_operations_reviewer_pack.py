@@ -258,7 +258,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
             document = self.release_store.get_release(release_id)
         except Exception as exc:
             return {"status": "failed", "message": f"Release is unavailable: {sanitize_sensitive_text(str(exc))}"}
-        tracks: list[ImplementationDocument] = []
+        tracks: list[dict[str, Any]] = []
         blockers: list[str] = []
         for track in document.tracks:
             project_dir = self.project_store.project_dir(track.project_id)

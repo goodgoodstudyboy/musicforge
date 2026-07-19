@@ -1,9 +1,8 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -94,20 +93,20 @@ class ReleasePortfolioGovernanceAttestationStore:
     def verification_report_path(self, portfolio_id: str, profile: str = "public_summary") -> Path:
         return self.root_dir(portfolio_id, profile) / "verification-report.json"
 
-    def read_report(self, portfolio_id: str, *, profile: str = "public_summary", default: DomainDocument | None = None) -> DomainDocument:
+    def read_report(self, portfolio_id: str, *, profile: str = "public_summary", default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.report_path(portfolio_id, profile), default=default)
 
-    def read_certificate(self, portfolio_id: str, *, profile: str = "public_summary", default: DomainDocument | None = None) -> DomainDocument:
+    def read_certificate(self, portfolio_id: str, *, profile: str = "public_summary", default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.certificate_path(portfolio_id, profile), default=default)
 
-    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         path = self.export_dir(portfolio_id, profile) / "manifest.json"
         if not path.exists():
             raise ReleasePortfolioGovernanceAttestationNotFoundError("Portfolio Governance Public Attestation export has not been generated.")
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
-    def refresh_report(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh_report(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             payload = payload or {}
@@ -142,7 +141,7 @@ class ReleasePortfolioGovernanceAttestationStore:
             self._append_history(portfolio_id, profile, "report_refreshed", {"status": report["status"], "report_id": report["report_id"], "source_hash": report["source_hash"], "profile": profile}, now=now)
             return sanitize_metadata(report, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
-    def build_source(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def build_source(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         profile = _validate_profile(profile)
         portfolio = self.portfolio_store.get_portfolio(portfolio_id)
         portfolio_report = self.portfolio_store.read_report(portfolio_id, default={})
@@ -196,7 +195,7 @@ class ReleasePortfolioGovernanceAttestationStore:
         }
         return sanitize_metadata(source, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
-    def report_is_stale(self, portfolio_id: str, report: DomainDocument | None = None, *, profile: str = "public_summary") -> bool:
+    def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
         data = _document_or(report, self.read_report(portfolio_id, profile=profile, default={}))
         if not data:
             return False
@@ -206,7 +205,7 @@ class ReleasePortfolioGovernanceAttestationStore:
             return True
         return stable_hash(source) != str(data.get("source_hash") or "")
 
-    def export_attestation(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def export_attestation(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             payload = payload or {}
@@ -254,7 +253,7 @@ class ReleasePortfolioGovernanceAttestationStore:
             self._append_history(portfolio_id, profile, "attestation_exported", {"profile": profile, **triple, "manifest_hash": manifest["integrity_hash"], "file_count": len(files)}, now=now)
             return sanitize_metadata(manifest, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
-    def build_zip(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             payload = payload or {}
@@ -299,7 +298,7 @@ class ReleasePortfolioGovernanceAttestationStore:
             self._append_history(portfolio_id, profile, "attestation_zip_built", {"profile": profile, **triple, "sha256": info["sha256"], "entry_count": len(entries)}, now=now)
             return sanitize_metadata(info, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
-    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         report = self.read_report(portfolio_id, profile=profile, default={})
         certificate = self.read_certificate(portfolio_id, profile=profile, default={})
         verification = _read_json_default(self.verification_report_path(portfolio_id, profile), default={})
@@ -314,9 +313,9 @@ class ReleasePortfolioGovernanceAttestationStore:
         return sanitize_metadata(summary, blocked_keys=ATTESTATION_BLOCKED_KEYS)
 
     def _findings(self, source: ImplementationDocument, payload: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
-        blockers: list[ImplementationDocument] = []
-        warnings: list[ImplementationDocument] = []
-        checks: list[ImplementationDocument] = []
+        blockers: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+        checks: list[dict[str, Any]] = []
 
         def check(check_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
             status = "passed" if passed else "warning" if warning else "failed"
@@ -397,7 +396,7 @@ class ReleasePortfolioGovernanceAttestationStore:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def build_certificate(*, report: DomainDocument, generated_at: str, profile: str) -> DomainDocument:
+def build_certificate(*, report: dict[str, Any], generated_at: str, profile: str) -> dict[str, Any]:
     source = _as_document(report.get("source"))
     certificate: _InferenceType = {
         "schema_version": ATTESTATION_SCHEMA_VERSION,
@@ -429,7 +428,7 @@ def build_certificate(*, report: DomainDocument, generated_at: str, profile: str
 
 
 
-def attestation_report_integrity_ok(report: DomainDocument | None) -> bool:
+def attestation_report_integrity_ok(report: dict[str, Any] | None) -> bool:
     data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == attestation_report_integrity_hash(data)
 
@@ -437,7 +436,7 @@ def attestation_report_integrity_ok(report: DomainDocument | None) -> bool:
 
 
 
-def attestation_certificate_integrity_ok(certificate: DomainDocument | None) -> bool:
+def attestation_certificate_integrity_ok(certificate: dict[str, Any] | None) -> bool:
     data = _as_document(certificate)
     return bool(data.get("payload_hash")) and str(data.get("payload_hash")) == attestation_certificate_hash(data)
 
@@ -445,12 +444,12 @@ def attestation_certificate_integrity_ok(certificate: DomainDocument | None) -> 
 
 
 
-def attestation_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
+def attestation_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
     data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == attestation_manifest_hash(data)
 
 
-def attestation_summary(report: DomainDocument | None) -> DomainDocument:
+def attestation_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     if not data:
         return {"status": "missing", "integrity_ok": False}
@@ -511,7 +510,130 @@ def _manifest_triple(manifest: ImplementationDocument) -> dict[str, str]:
     }
 
 
-from song_agent.domains.trust import v142_rpga_readiness as _v142_rpga_readiness
-from song_agent.domains.trust.v142_rpga_readiness import _certificate_markdown as _certificate_markdown, _certificate_html as _certificate_html, _write_readme as _write_readme, _file_record as _file_record, _zip_entries as _zip_entries, _read_zip_json as _read_zip_json, _read_json_default as _read_json_default, _write_json as _write_json, _sha256 as _sha256, _ensure_within as _ensure_within, _redaction_summary as _redaction_summary, _blocker as _blocker, _warning as _warning, _validate_profile as _validate_profile
+def _certificate_markdown(certificate: ImplementationDocument) -> str:
+    final_board = _as_document(certificate.get("final_board"))
+    vault = _as_document(certificate.get("evidence_vault"))
+    coverage = _as_document(certificate.get("coverage"))
+    return "\n".join(
+        [
+            "# MusicForge Portfolio Governance Public Attestation",
+            "",
+            f"Certificate ID: `{certificate.get('certificate_id')}`",
+            f"Portfolio ID: `{certificate.get('portfolio_id')}`",
+            f"Governance status: `{certificate.get('governance_status')}`",
+            f"Final Board signoff status: `{final_board.get('signoff_status')}`",
+            f"Final Board signoff hash: `{final_board.get('signoff_hash')}`",
+            f"Evidence Vault ZIP SHA-256: `{vault.get('zip_sha256')}`",
+            f"Evidence Vault verification: `{vault.get('verification_status')}` / deep `{vault.get('deep_verification_status')}`",
+            f"Signed governance queues: `{coverage.get('signed_queue_count')}`",
+            f"Force-signed governance queues: `{coverage.get('force_signed_queue_count')}`",
+            "",
+            "This public attestation contains hash fingerprints and summary evidence only. Request the full Evidence Vault for deep nested package verification.",
+            "",
+        ]
+    )
 
-_v142_rpga_readiness.bind_globals(globals())
+
+def _certificate_html(certificate: ImplementationDocument) -> str:
+    text = _certificate_markdown(certificate)
+    escaped = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    return f"<!doctype html><html><head><meta charset=\"utf-8\"><title>MusicForge Public Attestation</title></head><body><pre>{escaped}</pre></body></html>"
+
+
+def _write_readme(export_dir: Path, certificate: ImplementationDocument) -> None:
+    (export_dir / "README.txt").write_text(
+        "\n".join(
+            [
+                "MusicForge Release Portfolio Governance Public Attestation",
+                "",
+                f"Certificate ID: {certificate.get('certificate_id')}",
+                "This package contains public summary evidence only.",
+                "It does not contain Evidence Vault nested ZIP packages.",
+                "Verify it with: python -m song_agent.cli verify-release-portfolio-governance-attestation portfolio-governance-public-attestation.zip --strict --require-vault --require-final-board --json",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
+    return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
+
+
+def _zip_entries(root: Path) -> list[tuple[Path, str]]:
+    rows: list[tuple[Path, str]] = []
+    for path in sorted(root.rglob("*")):
+        if path.is_file():
+            rows.append((path.resolve(), path.relative_to(root).as_posix()))
+    return rows
+
+
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
+    if not zip_path.exists():
+        return {}
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            return json.loads(archive.read(entry).decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
+    if not path.exists():
+        return dict(default or {})
+    try:
+        value = read_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return dict(default or {})
+    return _document_or(value, dict(default or {}))
+
+
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return write_json(path, payload)
+
+
+def _sha256(path: Path) -> str | None:
+    if not path.exists() or not path.is_file() or path.is_symlink():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise ReleasePortfolioGovernanceAttestationStateError("Resolved path escapes Public Attestation directory.") from exc
+
+
+def _redaction_summary(value: Any) -> ImplementationDocument:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    matches = []
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            matches.append({"pattern": replacement, "excerpt": sanitize_sensitive_text(match.group(0))[:120]})
+    return {"status": "failed" if matches else "passed", "matches": matches[:20]}
+
+
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
+    return {"check_id": check_id, "severity": "blocking", "message": message}
+
+
+def _warning(check_id: str, message: str) -> ImplementationDocument:
+    return {"check_id": check_id, "severity": "warning", "message": message}
+
+
+def _validate_profile(profile: str) -> str:
+    value = str(profile or "public_summary").strip()
+    if value not in ATTESTATION_PROFILES:
+        raise ReleasePortfolioGovernanceAttestationError(f"Unsupported attestation profile: {value}")
+    return value

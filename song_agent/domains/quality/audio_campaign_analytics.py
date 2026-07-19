@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 from pathlib import Path as Path
 from typing import Any as Any
@@ -25,14 +25,14 @@ class AudioCampaignAnalyticsStore:
     def report_path(self, campaign_id: str) -> Path:
         return self.analytics_dir(campaign_id) / "analytics-report.json"
 
-    def refresh(self, campaign_id: str) -> DomainDocument:
+    def refresh(self, campaign_id: str) -> dict[str, Any]:
         campaign = self.campaign_store.read_campaign(campaign_id)
         report = self.campaign_store.refresh_report(campaign_id)
         analytics = build_audio_campaign_analytics(campaign, report)
         write_json(self.report_path(campaign_id), analytics)
         return analytics
 
-    def read(self, campaign_id: str, default: DomainDocument | None = None) -> DomainDocument:
+    def read(self, campaign_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.report_path(campaign_id)
         if not path.exists():
             if default is not None:
@@ -41,10 +41,10 @@ class AudioCampaignAnalyticsStore:
         return read_json(path)
 
 
-def build_audio_campaign_analytics(campaign: DomainDocument, report: DomainDocument) -> DomainDocument:
+def build_audio_campaign_analytics(campaign: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
     cases = _as_list(campaign.get("cases"))
-    issue_counts: dict[str, ImplementationDocument] = {}
-    fix_effectiveness: list[ImplementationDocument] = []
+    issue_counts: dict[str, dict[str, Any]] = {}
+    fix_effectiveness: list[dict[str, Any]] = []
     ratings: list[int] = []
     high_count = 0
     critical_count = 0

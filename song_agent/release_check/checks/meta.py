@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
 import json
 from pathlib import Path
+from typing import Any
 
 from song_agent.release_check_architecture import run_architecture_guardrails_smoke, run_architecture_ratchet_smoke
 from song_agent.release_check.checks.legacy import delegated_check
@@ -32,6 +32,7 @@ from song_agent.release_check.v14_quality import (
     run_v14_interface_application_boundary_smoke,
     run_v14_typing_coverage_ratchet_smoke,
     run_v141_quality_debt_closure_smoke,
+    run_v1421_stabilization_rollback_smoke,
 )
 
 
@@ -66,7 +67,7 @@ def run_release_check_governance_smoke(root: Path) -> tuple[bool, str]:
             for row in current
         )
         empty = run_release_check_matrix(repo_root=root, profile="latest", since="99.0", run_tests=False)
-        details: ImplementationDocument = {
+        details: dict[str, Any] = {
             "expired_facade_removed": facade_removed,
             "facade_under_300": facade_removed,
             "legacy_preserved": legacy.is_file(),
@@ -112,6 +113,7 @@ CALLABLES = {
     "_v140_reviewer_package_smoke": run_v14_reviewer_package_smoke,
     "_v140_typing_coverage_ratchet_smoke": run_v14_typing_coverage_ratchet_smoke,
     "_v141_quality_debt_closure_smoke": run_v141_quality_debt_closure_smoke,
+    "_v1421_stabilization_rollback_smoke": run_v1421_stabilization_rollback_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

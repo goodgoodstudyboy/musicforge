@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -49,15 +48,57 @@ ROOT_ENTRIES = {
 }
 
 
-from song_agent.domains.trust import v142_ptcabv_readiness as _v142_ptcabv_readiness
-from song_agent.domains.trust.v142_ptcabv_readiness import verify_public_trust_center_acceptance_board_package as verify_public_trust_center_acceptance_board_package, write_public_trust_center_acceptance_board_verification_report as write_public_trust_center_acceptance_board_verification_report, print_public_trust_center_acceptance_board_verification_report as print_public_trust_center_acceptance_board_verification_report, public_trust_center_acceptance_board_verification_exit_code as public_trust_center_acceptance_board_verification_exit_code, _quorum_from_report as _quorum_from_report, _find_row as _find_row, _is_forbidden_entry as _is_forbidden_entry, _counts as _counts, _sha256_file as _sha256_file, _sha256_entry as _sha256_entry, _read_zip_json as _read_zip_json, _fs_path as _fs_path, _safe_id as _safe_id, _redaction_findings as _redaction_findings
+def verify_public_trust_center_acceptance_board_package(
+    zip_path: Path | str,
+    *,
+    strict: bool = False,
+    require_ready: bool = False,
+    require_quorum: bool = False,
+    require_no_conflicts: bool = False,
+    min_accepted_count: int = 0,
+    min_accepted_organizations: int = 0,
+    required_roles: list[str] | None = None,
+    distribution_kit_path: Path | str | None = None,
+    accepted_evidence_dir: Path | str | None = None,
+    max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
+    max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
+    max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
+    now: str | None = None,
+) -> dict[str, Any]:
+    verifier = _AcceptanceBoardVerifier(
+        Path(zip_path),
+        strict=strict,
+        require_ready=require_ready,
+        require_quorum=require_quorum,
+        require_no_conflicts=require_no_conflicts,
+        min_accepted_count=min_accepted_count,
+        min_accepted_organizations=min_accepted_organizations,
+        required_roles=required_roles or [],
+        distribution_kit_path=Path(distribution_kit_path) if distribution_kit_path else None,
+        accepted_evidence_dir=Path(accepted_evidence_dir) if accepted_evidence_dir else None,
+        max_zip_size_mb=max_zip_size_mb,
+        max_uncompressed_size_mb=max_uncompressed_size_mb,
+        max_entry_count=max_entry_count,
+        now=now,
+    )
+    return verifier.run()
 
 
+def write_public_trust_center_acceptance_board_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+    return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
+def print_public_trust_center_acceptance_board_verification_report(report: dict[str, Any]) -> None:
+    summary = _as_document(report.get("summary"))
+    print("MusicForge Public Trust Center Acceptance Board verification")
+    print(f"status: {report.get('status')}")
+    print(f"center: {summary.get('center_id') or 'unknown'}")
+    print(f"readiness: {summary.get('readiness') or 'unknown'}")
+    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
-
+def public_trust_center_acceptance_board_verification_exit_code(report: dict[str, Any]) -> int:
+    return 1 if report.get("status") == "failed" else 0
 
 
 class _AcceptanceBoardVerifier:
@@ -93,28 +134,28 @@ class _AcceptanceBoardVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
-        self.redaction_findings: list[ImplementationDocument] = []
+        self.checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
+        self.redaction_findings: list[dict[str, Any]] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
         self.entry_map: dict[str, zipfile.ZipInfo] = {}
-        self.manifest: ImplementationDocument = {}
-        self.report: ImplementationDocument = {}
-        self.policy: ImplementationDocument = {}
-        self.conflict: ImplementationDocument = {}
-        self.summary_doc: ImplementationDocument = {}
-        self.response_index: ImplementationDocument = {}
-        self.evidence_index: ImplementationDocument = {}
-        self.quorum: ImplementationDocument = {}
-        self.response_proofs: dict[str, ImplementationDocument] = {}
-        self.evidence_summaries: dict[str, ImplementationDocument] = {}
+        self.manifest: dict[str, Any] = {}
+        self.report: dict[str, Any] = {}
+        self.policy: dict[str, Any] = {}
+        self.conflict: dict[str, Any] = {}
+        self.summary_doc: dict[str, Any] = {}
+        self.response_index: dict[str, Any] = {}
+        self.evidence_index: dict[str, Any] = {}
+        self.quorum: dict[str, Any] = {}
+        self.response_proofs: dict[str, dict[str, Any]] = {}
+        self.evidence_summaries: dict[str, dict[str, Any]] = {}
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -199,7 +240,7 @@ class _AcceptanceBoardVerifier:
         unexpected = sorted(set(self.entry_names) - allowed_entries)
         self._add_check("zip", "ptcab_zip_allowed_entries", "failed" if unexpected else "passed", "blocking", "Unexpected Acceptance Board entries: " + ", ".join(unexpected[:5]) if unexpected else "Acceptance Board ZIP entries match report-derived allow-list.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[ImplementationDocument] = []
+        valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -513,4 +554,84 @@ class _AcceptanceBoardVerifier:
     def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str) -> None:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
-_v142_ptcabv_readiness.bind_globals(globals())
+
+def _quorum_from_report(report: ImplementationDocument) -> ImplementationDocument:
+    summary = _as_document(report.get("summary"))
+    policy = _as_document(report.get("policy"))
+    participants = _as_list(report.get("participants"))
+    counted = [str(item.get("response_id") or "") for item in participants if isinstance(item, dict) and item.get("counts_for_quorum")]
+    roles = {str(item.get("role") or "").lower(): "passed" for item in participants if isinstance(item, dict) and item.get("counts_for_quorum") and item.get("role")}
+    return {"schema_version": 1, "source_hash": report.get("source_hash"), "policy_hash": policy.get("policy_hash"), "decision": {"readiness": report.get("readiness"), "quorum_status": summary.get("quorum_status"), "required_roles_status": summary.get("required_roles_status"), "conflict_status": summary.get("conflict_status")}, "counted_response_ids": counted, "required_roles": roles}
+
+
+def _find_row(rows: Any, key: str, value: str) -> ImplementationDocument:
+    for item in _as_list(rows):
+        if isinstance(item, dict) and str(item.get(key) or "") == value:
+            return item
+    return {}
+
+
+def _is_forbidden_entry(name: str) -> bool:
+    lowered = str(name or "").lower()
+    return lowered.endswith(".zip") or lowered.startswith("nested/") or ".musicforge/" in lowered or lowered.startswith(".musicforge/")
+
+
+def _counts(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(_fs_path(path), "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
+    digest = hashlib.sha256()
+    with archive.open(info, "r") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
+    try:
+        with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
+            value = json.loads(archive.read(entry).decode("utf-8"))
+    except Exception:
+        return {}
+    return _as_document(value)
+
+
+def _fs_path(path: Path) -> str:
+    text = str(path.resolve())
+    if os.name != "nt" or text.startswith("\\\\?\\"):
+        return text
+    if text.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + text.lstrip("\\")
+    return "\\\\?\\" + text
+
+
+def _safe_id(value: str) -> str:
+    text = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in str(value or "item")).strip(".-")
+    return text or "item"
+
+
+def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
+    findings: list[dict[str, Any]] = []
+    for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
+        if pattern.search(text):
+            findings.append({"scope": scope, "kind": "sensitive_value", "message": "Sensitive value pattern found."})
+    for pattern, _kind in LOCAL_PATH_VALUE_PATTERNS:
+        if pattern.search(text):
+            findings.append({"scope": scope, "kind": "local_path", "message": "Local path pattern found."})
+    lowered = text.lower()
+    for marker in ("github" + "key", "x-access-" + "token", "api_" + "key", "access_" + "token", "source_" + "path", "local_" + "path", "file_" + "path"):
+        if marker in lowered:
+            findings.append({"scope": scope, "kind": "blocked_marker", "message": f"Blocked marker found: {marker}"})
+    return findings

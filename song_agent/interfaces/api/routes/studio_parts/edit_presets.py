@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.domains.creation.auth import AuthConfig
 from song_agent.platform.contracts.coercion import as_list as _as_list
 
 from typing import Any as _InterfaceType
@@ -10,6 +9,7 @@ from song_agent.interfaces.api.route_contexts.studio import StudioRouteContext
 from song_agent.platform.contracts.documents import ImplementationDocument
 
 from typing import Any
+
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -24,7 +24,7 @@ class StudioRoutesEditPresets(StudioRouteContext):
     def do_PATCH(self) -> None:
         self._handle_request("PATCH")
 
-    def log_message(self, format: str, *args: object) -> None:
+    def log_message(self, format: str, *args: Any) -> None:
         return
 
     @property
@@ -40,7 +40,7 @@ class StudioRoutesEditPresets(StudioRouteContext):
         return self.server.edit_preset_store
 
     @property
-    def auth_config(self) -> AuthConfig:
+    def auth_config(self) -> _InterfaceType:
         return self.server.auth_config
 
     def _handle_edit_presets_root(self, method: str) -> None:

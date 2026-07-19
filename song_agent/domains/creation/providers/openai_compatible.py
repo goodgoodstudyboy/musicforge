@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json as json
 import re as re
@@ -21,7 +21,7 @@ UrlOpen = Callable[..., Any]
 class OpenAICompatibleClient:
     opener: UrlOpen = urllib.request.urlopen
 
-    def test(self, config: ProviderConfig) -> DomainDocument:
+    def test(self, config: ProviderConfig) -> dict[str, Any]:
         config.validate_ready_for_provider()
         response = self._request(
             config,
@@ -38,7 +38,7 @@ class OpenAICompatibleClient:
         request: SongRequest,
         config: ProviderConfig,
         prompt: str,
-    ) -> DomainDocument:
+    ) -> dict[str, Any]:
         config.validate_ready_for_provider()
         response = self._request(
             config,
@@ -60,10 +60,10 @@ class OpenAICompatibleClient:
     def generate_node_json(
         self,
         node_name: str,
-        node_input: DomainDocument,
+        node_input: dict[str, Any],
         config: ProviderConfig,
         prompt: str,
-    ) -> DomainDocument:
+    ) -> dict[str, Any]:
         config.validate_ready_for_provider()
         response = self._request(
             config,
@@ -169,7 +169,7 @@ class OpenAICompatibleClient:
     def generate_review_judge_json(
         self,
         parent_plan: SongPlan,
-        judge_payload: DomainDocument,
+        judge_payload: dict[str, Any],
         config: ProviderConfig,
         prompt: str,
     ) -> ProviderEditResponse:
@@ -203,7 +203,7 @@ class OpenAICompatibleClient:
         max_tokens: int,
     ) -> ImplementationDocument:
         url = _join_url(config.base_url, "chat/completions")
-        payload: ImplementationDocument = {
+        payload: dict[str, Any] = {
             "model": config.model,
             "messages": messages,
             "max_tokens": max_tokens,

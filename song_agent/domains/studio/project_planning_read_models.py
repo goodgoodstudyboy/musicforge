@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 from song_agent.domains.creation.planning_rule_projections import governance_projection, planning_rule_impact_projection, planning_simulation_projection
 from song_agent.domains.creation.redaction import sanitize_metadata
@@ -17,7 +18,7 @@ PLANNING_RULE_IMPACT_ROOT = Path(".musicforge") / "planning-rule-impact"
 FIX_PLAN_ROOT = Path(".musicforge") / "fix-plans"
 
 
-def collect_planning_rule_simulation_summary(project_id: str) -> DomainDocument:
+def collect_planning_rule_simulation_summary(project_id: str) -> dict[str, Any]:
     rows = _read_rows(PLANNING_RULE_SIMULATION_ROOT / "simulations", "afpsim-*/simulation-report.json")
     matches = [row for row in rows if _simulation_matches_project(row, project_id) and row.get("status") != "archived"]
     if not matches:
@@ -25,7 +26,7 @@ def collect_planning_rule_simulation_summary(project_id: str) -> DomainDocument:
     return planning_simulation_projection(_latest(matches))
 
 
-def collect_planning_rule_governance_summary(project_id: str) -> DomainDocument:
+def collect_planning_rule_governance_summary(project_id: str) -> dict[str, Any]:
     active = _read_optional(PLANNING_RULE_GOVERNANCE_ROOT / "active.json")
     version_id = str(active.get("active_version_id") or "")
     if not version_id:
@@ -47,7 +48,7 @@ def collect_planning_rule_governance_summary(project_id: str) -> DomainDocument:
     return sanitize_metadata(summary)
 
 
-def collect_planning_rule_impact_summary(project_id: str) -> DomainDocument:
+def collect_planning_rule_impact_summary(project_id: str) -> dict[str, Any]:
     safe_project_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", project_id)
     direct = _read_optional(PLANNING_RULE_IMPACT_ROOT / f"latest-project-{safe_project_id}.json")
     if direct and _impact_matches_project(direct, project_id):
@@ -60,7 +61,7 @@ def collect_planning_rule_impact_summary(project_id: str) -> DomainDocument:
 
 
 def _read_rows(root: Path, pattern: str) -> list[ImplementationDocument]:
-    rows: list[ImplementationDocument] = []
+    rows: list[dict[str, Any]] = []
     if not root.exists():
         return rows
     for path in root.glob(pattern):

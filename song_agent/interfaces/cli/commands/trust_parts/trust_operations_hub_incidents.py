@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InterfaceType
 
 from . import dependencies as _commands_trust_parts_dependencies
 
@@ -16,7 +16,7 @@ def _execute_trust_operations_hub_incidents(argv: list[str]) -> None:
     args = parser.parse_args(raw_args[1:])
     hub_store = TrustOperationsHubStore()
     store = TrustOperationsIncidentStore(hub_store=hub_store)
-    result: ImplementationDocument = {"ok": True, "hub_id": args.hub_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "hub_id": args.hub_id}
     incident_id = args.incident_id
     if args.refresh:
         refreshed = store.refresh_board(args.hub_id, {"report_id": args.report_id} if args.report_id else {})
@@ -94,7 +94,7 @@ def _execute_trust_operations_incident_knowledge(argv: list[str]) -> None:
     hub_store = TrustOperationsHubStore()
     incident_store = TrustOperationsIncidentStore(hub_store=hub_store)
     store = TrustOperationsIncidentKnowledgeStore(hub_store=hub_store, incident_store=incident_store)
-    result: ImplementationDocument = {"ok": True, "hub_id": args.hub_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "hub_id": args.hub_id}
     if args.refresh:
         result.update(store.refresh(args.hub_id, {"incident_board_verification_report_path": args.incident_board_verification_report, "hub_verification_report_path": args.hub_verification_report}))
     if args.list_entries:

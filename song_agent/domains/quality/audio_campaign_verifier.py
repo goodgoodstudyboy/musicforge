@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -36,10 +36,10 @@ def verify_audio_campaign_package(
     max_zip_size_mb: int = 256,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 5000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {
         "zip_path": str(zip_path),
         "zip_sha256": None,
         "zip_size_bytes": 0,
@@ -47,9 +47,9 @@ def verify_audio_campaign_package(
         "campaign_id": None,
         "case_count": 0,
     }
-    manifest: ImplementationDocument = {}
-    report: ImplementationDocument = {}
-    signoff: ImplementationDocument | None = None
+    manifest: dict[str, Any] = {}
+    report: dict[str, Any] = {}
+    signoff: dict[str, Any] | None = None
 
     if not zip_path.exists():
         return _finish(checks, summary, _check("audio_campaign_zip_exists", False, "Audio Campaign ZIP does not exist."))
@@ -118,16 +118,16 @@ def verify_audio_campaign_package(
     return _finish(checks, summary)
 
 
-def write_audio_campaign_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_audio_campaign_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def audio_campaign_verification_exit_code(report: DomainDocument) -> int:
+def audio_campaign_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str], *, strict: bool) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     files = _as_list(manifest.get("files"))
     declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     checks.append(_check("audio_campaign_manifest_files_present", bool(files), "Manifest declares package files."))
@@ -153,7 +153,7 @@ def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, name
 
 
 def _signoff_checks(signoff: ImplementationDocument | None, report: ImplementationDocument, *, require_signed: bool) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     if signoff is None:
         checks.append(_check("audio_campaign_signoff_present", not require_signed, "Campaign signoff is present when required."))
         return checks
@@ -181,7 +181,7 @@ def _requirement_checks(
 ) -> list[ImplementationDocument]:
     summary = _as_document(report.get("summary"))
     case_count = int(summary.get("case_count") or 0)
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     checks.append(_check("audio_campaign_report_status", report.get("status") == "passed", "Campaign report status is passed."))
     if require_real_audio:
         checks.append(

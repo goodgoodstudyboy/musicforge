@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import hashlib
 import json
 import re
@@ -32,7 +31,7 @@ _DOM_ID = re.compile(r"(?:getElementById|querySelector)\(\s*[`\"']#?([A-Za-z][A-
 _API_LITERAL = re.compile(r"/api/[A-Za-z0-9_./${}:?-]+")
 
 
-def collect_current_contracts(root: Path) -> DomainDocument:
+def collect_current_contracts(root: Path) -> dict[str, Any]:
     commands = command_inventory()
     parsers = command_help_contract_rows(REGISTRY)
     state_actions = _state_cli_contract()
@@ -59,7 +58,7 @@ def collect_current_contracts(root: Path) -> DomainDocument:
     }
 
 
-def collect_v138_contracts(root: Path) -> DomainDocument:
+def collect_v138_contracts(root: Path) -> dict[str, Any]:
     web = _tag_web_contract(root, "v13.8.0")
     current = collect_current_contracts(root)
     state_actions = [row for row in current["cli"]["state_actions"] if row["name"] not in V14_STATE_ADDITIONS]
@@ -79,7 +78,7 @@ def collect_v138_contracts(root: Path) -> DomainDocument:
     }
 
 
-def build_v14_contract_document(root: Path) -> DomainDocument:
+def build_v14_contract_document(root: Path) -> dict[str, Any]:
     baseline = collect_v138_contracts(root)
     current = collect_current_contracts(root)
     diffs = _contract_diffs(baseline, current)
@@ -102,7 +101,7 @@ def verify_v14_public_contracts(
     root: Path,
     *,
     policy_path: Path | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     path = policy_path or root / CONTRACT_PATH
     blockers: list[str] = []
     try:
@@ -149,7 +148,7 @@ def verify_v14_public_contracts(
     }
 
 
-def _check_baseline_hashes(contracts: ImplementationDocument, blockers: list[str]) -> None:
+def _check_baseline_hashes(contracts: dict[str, Any], blockers: list[str]) -> None:
     cli = contracts.get("cli") or {}
     api = contracts.get("api") or {}
     web = contracts.get("web") or {}
@@ -167,7 +166,7 @@ def _check_baseline_hashes(contracts: ImplementationDocument, blockers: list[str
         blockers.append("v14_contract_baseline_web_contract")
 
 
-def _contract_diffs(baseline: ImplementationDocument, current: ImplementationDocument) -> dict[str, list[str]]:
+def _contract_diffs(baseline: dict[str, Any], current: dict[str, Any]) -> dict[str, list[str]]:
     cli_base = baseline.get("cli") or {}
     cli_current = current.get("cli") or {}
     api_base = baseline.get("api") or {}
@@ -193,7 +192,7 @@ def _contract_diffs(baseline: ImplementationDocument, current: ImplementationDoc
     return {"cli": cli, "api": api, "web": web}
 
 
-def _current_web_contract(root: Path) -> ImplementationDocument:
+def _current_web_contract(root: Path) -> dict[str, Any]:
     web_root = root / "song_agent" / "interfaces" / "web"
     modules = json.loads((web_root / "scripts" / "module-manifest.json").read_text(encoding="utf-8"))
     sources = [(web_root / "index.html").read_text(encoding="utf-8")]
@@ -208,7 +207,7 @@ def _current_web_contract(root: Path) -> ImplementationDocument:
     return _web_contract(sources, [str(value) for value in modules], panel_hash)
 
 
-def _state_cli_contract() -> list[ImplementationDocument]:
+def _state_cli_contract() -> list[dict[str, Any]]:
     parser = build_state_parser()
     subparsers = next(
         action for action in parser._actions if action.__class__.__name__ == "_SubParsersAction"
@@ -243,7 +242,7 @@ def _simple_value(value: Any) -> Any:
     return str(value)
 
 
-def _tag_web_contract(root: Path, tag: str) -> ImplementationDocument:
+def _tag_web_contract(root: Path, tag: str) -> dict[str, Any]:
     prefix = "song_agent/interfaces/web/"
     manifest = json.loads(_git_show(root, tag, prefix + "scripts/module-manifest.json"))
     sources = [_git_show(root, tag, prefix + "index.html")]
@@ -255,7 +254,7 @@ def _tag_web_contract(root: Path, tag: str) -> ImplementationDocument:
     return _web_contract(sources, [str(value) for value in manifest], hashlib.sha256(panel.encode("utf-8")).hexdigest())
 
 
-def _web_contract(sources: list[str], modules: list[str], panel_hash: str) -> ImplementationDocument:
+def _web_contract(sources: list[str], modules: list[str], panel_hash: str) -> dict[str, Any]:
     source = "\n".join(sources)
     controls = sorted(set(_CONTROL_ID.findall(source)) | set(_DOM_ID.findall(source)))
     endpoints = sorted(set(_API_LITERAL.findall(source)))

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 from datetime import datetime as datetime
 from typing import Any as Any
@@ -18,10 +18,10 @@ RETROSPECTIVE_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path"}
 def build_operations_retrospective_report(
     *,
     release_id: str,
-    audit_report: DomainDocument,
-    ledger_entries: list[DomainDocument],
+    audit_report: dict[str, Any],
+    ledger_entries: list[dict[str, Any]],
     generated_at: str,
-) -> DomainDocument:
+) -> dict[str, Any]:
     timeline = _timeline(ledger_entries)
     stage_durations = _stage_durations(timeline)
     risk_hotspots = _risk_hotspots(audit_report, ledger_entries)
@@ -61,12 +61,12 @@ def build_operations_retrospective_report(
 
 
 
-def operations_retrospective_integrity_ok(report: DomainDocument | None) -> bool:
+def operations_retrospective_integrity_ok(report: dict[str, Any] | None) -> bool:
     data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == operations_retrospective_integrity_hash(data)
 
 
-def retrospective_summary(report: DomainDocument | None) -> DomainDocument:
+def retrospective_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     return sanitize_metadata(
         {
@@ -137,7 +137,7 @@ def _stage_durations(timeline: list[ImplementationDocument]) -> list[Implementat
 
 
 def _risk_hotspots(audit_report: ImplementationDocument, entries: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    hotspots: list[ImplementationDocument] = []
+    hotspots: list[dict[str, Any]] = []
     if any(item.get("event_type") == "operations_change_request_applied" for item in entries):
         hotspots.append({"risk": "applied_change_request", "count": sum(1 for item in entries if item.get("event_type") == "operations_change_request_applied"), "severity": "warning"})
     if any(item.get("event_type") == "operations_signoff_signed" and "force" in str((item.get("source_ref") or {}).get("source_id") or "") for item in entries):
@@ -173,7 +173,7 @@ def _change_request_summary(entries: list[ImplementationDocument]) -> Implementa
 
 
 def _recommendations(stage_durations: list[ImplementationDocument], hotspots: list[ImplementationDocument], manual_summary: ImplementationDocument, change_summary: ImplementationDocument, verifier_outcomes: ImplementationDocument) -> list[ImplementationDocument]:
-    rows: list[ImplementationDocument] = []
+    rows: list[dict[str, Any]] = []
     if any(item.get("duration_status") == "unknown" for item in stage_durations):
         rows.append({"recommendation": "Add or preserve event timestamps so Operations retrospective durations can be computed.", "category": "observability"})
     if int(manual_summary.get("count") or 0) > 3:

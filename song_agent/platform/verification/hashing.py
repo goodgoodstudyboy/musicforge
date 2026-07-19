@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument
 import hashlib
 import json
 from pathlib import Path
@@ -14,11 +13,11 @@ def stable_hash(value: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def integrity_hash(document: DomainDocument) -> str:
+def integrity_hash(document: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in document.items() if key != "integrity_hash"})
 
 
-def integrity_ok(document: DomainDocument) -> bool:
+def integrity_ok(document: dict[str, Any]) -> bool:
     return bool(document) and bool(document.get("integrity_hash")) and document.get("integrity_hash") == integrity_hash(document)
 
 

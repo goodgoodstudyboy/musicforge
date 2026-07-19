@@ -4,7 +4,7 @@ from song_agent.platform.contracts.coercion import as_document as _as_document
 
 from typing import Any as _InterfaceType
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 from . import dependencies as _commands_quality_parts_dependencies
 
@@ -171,7 +171,7 @@ def run_acceptance_check(
     auto_review: bool,
     min_rating: int,
     manual_required: bool = False,
-) -> DomainDocument:
+) -> dict[str, _InterfaceType]:
     pass
     pass
     pass
@@ -235,7 +235,7 @@ def run_acceptance_check(
         report = store.read_report(suite.suite_id)
     return report
 
-def print_acceptance_check_report(report: DomainDocument) -> None:
+def print_acceptance_check_report(report: dict[str, _InterfaceType]) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge acceptance-check")
     print(f"status: {report.get('status')}")
@@ -246,7 +246,7 @@ def print_acceptance_check_report(report: DomainDocument) -> None:
     print(f"renderer: {summary.get('renderer_status')}")
     print(f"acceptance_status: {summary.get('acceptance_status')}")
 
-def print_acceptance_diff_report(report: DomainDocument) -> None:
+def print_acceptance_diff_report(report: dict[str, _InterfaceType]) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge acceptance-diff")
     print(f"status: {report.get('status')}")
@@ -256,7 +256,7 @@ def print_acceptance_diff_report(report: DomainDocument) -> None:
     print(f"new_blockers: {summary.get('new_blocker_count', 0)}")
     print(f"rating_regressions: {summary.get('rating_regression_count', 0)}")
 
-def print_release_audio_review_result(result: DomainDocument) -> None:
+def print_release_audio_review_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     review = _as_document(result.get("review"))
     print("MusicForge release-audio-review")
@@ -274,7 +274,7 @@ def print_release_audio_review_result(result: DomainDocument) -> None:
     if result.get("reviews") is not None:
         print(f"reviews: {len(result.get('reviews') or [])}")
 
-def print_acceptance_analytics_report(report: DomainDocument) -> None:
+def print_acceptance_analytics_report(report: dict[str, _InterfaceType]) -> None:
     summary = _as_document(report.get("summary"))
     source = _as_document(report.get("source_summary"))
     print("MusicForge acceptance-analytics")
@@ -288,7 +288,7 @@ def print_acceptance_analytics_report(report: DomainDocument) -> None:
     print(f"issues: {summary.get('issue_count', 0)}")
     print(f"recommendations: {summary.get('recommendation_count', 0)}")
 
-def print_acceptance_fix_sprint_result(result: DomainDocument) -> None:
+def print_acceptance_fix_sprint_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     sprint = _as_document(result.get("fix_sprint"))
     delta = _as_document(result.get("delta_report"))
@@ -306,7 +306,7 @@ def print_acceptance_fix_sprint_result(result: DomainDocument) -> None:
     if closeout:
         print(f"closeout_status: {closeout.get('status')}")
 
-def print_acceptance_fix_plan_result(result: DomainDocument) -> None:
+def print_acceptance_fix_plan_result(result: dict[str, _InterfaceType]) -> None:
     summary = _as_document(result.get("summary"))
     plan = result.get("fix_plan") or result.get("fix_plan_preview")
     plan = _as_document(plan)

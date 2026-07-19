@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import statistics as statistics
 from dataclasses import dataclass as dataclass, field as field
@@ -29,7 +29,7 @@ class MidiNote:
     end_tick: int
     velocity: int
 
-    def to_dict(self, ppq: int, *, start_beat_offset: float = 0.0) -> DomainDocument:
+    def to_dict(self, ppq: int, *, start_beat_offset: float = 0.0) -> dict[str, Any]:
         start = self.start_tick / ppq - start_beat_offset
         duration = max(1 / ppq, (self.end_tick - self.start_tick) / ppq)
         return {
@@ -128,7 +128,7 @@ def parse_midi(data: bytes, *, max_events: int = MAX_MIDI_EVENTS, max_notes: int
     )
 
 
-def midi_summary(midi: MidiFile) -> DomainDocument:
+def midi_summary(midi: MidiFile) -> dict[str, Any]:
     notes = midi.notes
     tempo = midi.tempos[0]["microseconds_per_quarter"] if midi.tempos else 500_000
     tempo_bpm = round(60_000_000 / tempo, 2) if tempo else 120.0
@@ -160,8 +160,8 @@ def midi_summary(midi: MidiFile) -> DomainDocument:
     }
 
 
-def suggest_slices(midi: MidiFile, *, max_slices: int = 24) -> list[DomainDocument]:
-    candidates: list[ImplementationDocument] = []
+def suggest_slices(midi: MidiFile, *, max_slices: int = 24) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
     for track in midi.tracks:
         if not track.notes:
             continue
@@ -202,7 +202,7 @@ def suggest_slices(midi: MidiFile, *, max_slices: int = 24) -> list[DomainDocume
             start += window
 
     candidates.sort(key=lambda item: (-int(item["quality_hint"]), int(item["track_index"]), float(item["start_beat"])))
-    selected: list[ImplementationDocument] = []
+    selected: list[dict[str, Any]] = []
     per_type: dict[str, int] = {}
     for item in candidates:
         if len(selected) >= max_slices:
@@ -217,7 +217,7 @@ def suggest_slices(midi: MidiFile, *, max_slices: int = 24) -> list[DomainDocume
     return sorted(selected, key=lambda item: item["slice_id"])
 
 
-def notes_for_slice(midi: MidiFile, slice_item: DomainDocument) -> list[DomainDocument]:
+def notes_for_slice(midi: MidiFile, slice_item: dict[str, Any]) -> list[dict[str, Any]]:
     track_index = int(slice_item.get("track_index", -1))
     start_beat = float(slice_item.get("start_beat") or 0)
     duration_beats = float(slice_item.get("duration_beats") or 0)
@@ -226,7 +226,7 @@ def notes_for_slice(midi: MidiFile, slice_item: DomainDocument) -> list[DomainDo
     if track is None:
         raise MidiParseError("Slice track is missing.")
     notes = _notes_in_window(track.notes, midi.ppq, start_beat, end_beat)
-    normalized: list[ImplementationDocument] = []
+    normalized: list[dict[str, Any]] = []
     for note in notes:
         start = max(start_beat, note.start_tick / midi.ppq)
         end = min(end_beat, note.end_tick / midi.ppq)
@@ -244,7 +244,7 @@ def notes_for_slice(midi: MidiFile, slice_item: DomainDocument) -> list[DomainDo
     return normalized
 
 
-def render_slice_midi(midi: MidiFile, slice_item: DomainDocument, output_path: Path, *, title: str = "Reference Slice") -> Path:
+def render_slice_midi(midi: MidiFile, slice_item: dict[str, Any], output_path: Path, *, title: str = "Reference Slice") -> Path:
     notes = [NoteEvent(int(note["pitch"]), float(note["start_beat"]), float(note["duration_beats"]), int(note["velocity"])) for note in notes_for_slice(midi, slice_item)]
     if not notes:
         raise MidiParseError("Slice has no notes.")

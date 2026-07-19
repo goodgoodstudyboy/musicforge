@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 from song_agent.interfaces.api.route_contexts.program import ProgramRouteContext
 
@@ -307,7 +307,7 @@ class ProgramRoutesUnifiedCommandCenterReleaseTrains(ProgramRouteContext):
         return (False, None)
 
     def _handle_unified_command_center_release_trains_route(self, method: str, path: str) -> None:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_unified_command_center_release_trains_route_part_01(method, path, _split_state)
             if _split_result[0]:

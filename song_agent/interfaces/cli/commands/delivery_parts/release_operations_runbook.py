@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InterfaceType
 
 from . import dependencies as _commands_delivery_parts_dependencies
 
@@ -25,7 +25,7 @@ def _execute_release_operations_runbook(argv: list[str]) -> None:
     evidence_store = SubmissionEvidenceStore(submission_store)
     operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
     store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
-    result: ImplementationDocument = {"ok": True, "release_id": args.release_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "release_id": args.release_id}
     if args.list:
         runbooks = store.list_runbooks(args.release_id, include_archived=True)
         result.update({"runbooks": runbooks, "summary": {"count": len(runbooks)}})
@@ -85,7 +85,7 @@ def _execute_release_operations_signoff(argv: list[str]) -> None:
     operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
     runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
     store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
-    result: ImplementationDocument = {"ok": True, "release_id": args.release_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "release_id": args.release_id}
     if args.reset:
         signoff = store.reset_signoff(args.release_id, {"reason": args.reason, "change_request_id": args.change_request_id})
     elif args.sign:
@@ -125,7 +125,7 @@ def _execute_release_operations_archive(argv: list[str]) -> None:
     operations_store = ReleaseOperationsStore(release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
     runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
     store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
-    result: ImplementationDocument = {"ok": True, "release_id": args.release_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "release_id": args.release_id}
     if args.export:
         result["manifest"] = store.export_archive(args.release_id)
     if args.zip:
@@ -165,7 +165,7 @@ def _execute_release_operations_audit(argv: list[str]) -> None:
     runbook_store = ReleaseOperationsRunbookStore(operations_store=operations_store, release_store=release_store, distribution_store=distribution_store, submission_store=submission_store, submission_evidence_store=evidence_store)
     signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
     store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
-    result: ImplementationDocument = {"ok": True, "release_id": args.release_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "release_id": args.release_id}
     if args.refresh:
         report = store.refresh(args.release_id)
         result.update({"report": report, "summary": audit_summary(report)})
@@ -219,7 +219,7 @@ def _execute_release_operations_reviewer_pack(argv: list[str]) -> None:
     signoff_store = ReleaseOperationsSignoffStore(operations_store=operations_store, runbook_store=runbook_store, release_store=release_store)
     audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
     store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
-    result: ImplementationDocument = {"ok": True, "release_id": args.release_id}
+    result: dict[str, _InterfaceType] = {"ok": True, "release_id": args.release_id}
     if args.refresh:
         report = store.refresh(args.release_id)
         result.update({"report": report, "summary": reviewer_pack_summary(report), "retrospective_summary": retrospective_summary(store.read_retrospective(args.release_id, default={}))})

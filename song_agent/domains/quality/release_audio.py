@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 from pathlib import Path as Path
@@ -31,9 +31,9 @@ def build_release_audio_qa_report(
     project_store: ProjectStore,
     require_audio: bool = True,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
-    tracks: list[ImplementationDocument] = []
+    tracks: list[dict[str, Any]] = []
     blockers: list[str] = []
     warnings: list[str] = []
     for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
@@ -116,7 +116,7 @@ def build_release_audio_qa_report(
 
 
 def release_audio_source_hash(release: ReleaseDocument, *, project_store: ProjectStore, release_store: ReleaseStore) -> str:
-    tracks: list[ImplementationDocument] = []
+    tracks: list[dict[str, Any]] = []
     for track in sorted(release.tracks, key=lambda item: (item.disc_number, item.track_number, item.track_id)):
         export_dir = final_export_dir(project_store.project_dir(track.project_id))
         wav_path = export_dir / "song.wav"
@@ -135,16 +135,16 @@ def release_audio_source_hash(release: ReleaseDocument, *, project_store: Projec
     return stable_hash({"release_source": release_source_hash(release, project_store=project_store, release_store=release_store), "tracks": tracks})
 
 
-def release_audio_report_hash(report: DomainDocument) -> str:
+def release_audio_report_hash(report: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in report.items() if key != "integrity_hash"})
 
 
-def release_audio_report_integrity_ok(report: DomainDocument) -> bool:
+def release_audio_report_integrity_ok(report: dict[str, Any]) -> bool:
     expected = str(report.get("integrity_hash") or "")
     return bool(expected) and expected == release_audio_report_hash(report)
 
 
-def release_audio_allows_signoff(report: DomainDocument, *, current_source_hash: str | None = None) -> bool:
+def release_audio_allows_signoff(report: dict[str, Any], *, current_source_hash: str | None = None) -> bool:
     if not report:
         return False
     if not release_audio_report_integrity_ok(report):
@@ -154,7 +154,7 @@ def release_audio_allows_signoff(report: DomainDocument, *, current_source_hash:
     return str(report.get("status") or "") in {"passed", "warning"}
 
 
-def release_audio_summary(report: DomainDocument | None) -> DomainDocument:
+def release_audio_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -175,7 +175,7 @@ def release_audio_summary(report: DomainDocument | None) -> DomainDocument:
     )
 
 
-def read_release_audio_qa(release_store: ReleaseStore, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+def read_release_audio_qa(release_store: ReleaseStore, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
     path = release_store.release_dir(release_id) / "release-audio-qa.json"
     if not path.exists():
         if default is not None:
@@ -184,7 +184,7 @@ def read_release_audio_qa(release_store: ReleaseStore, release_id: str, *, defau
     return sanitize_metadata(read_json(path), blocked_keys=BLOCKED_RELEASE_KEYS)
 
 
-def write_release_audio_qa(release_store: ReleaseStore, release_id: str, report: DomainDocument) -> DomainDocument:
+def write_release_audio_qa(release_store: ReleaseStore, release_id: str, report: dict[str, Any]) -> dict[str, Any]:
     release_store.get_release(release_id)
     clean = sanitize_metadata(report, blocked_keys=BLOCKED_RELEASE_KEYS)
     write_json(release_store.release_dir(release_id) / "release-audio-qa.json", clean)

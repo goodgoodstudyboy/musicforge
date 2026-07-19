@@ -7,35 +7,14 @@ from typing import Any
 CommandCallable = Callable[..., Any]
 
 
-def _unconfigured(*args: object, **kwargs: object) -> object:
+def _unconfigured(*args: Any, **kwargs: Any) -> Any:
     raise RuntimeError("CLI command bindings have not been configured.")
-
-
-class _LazyCommandBinding:
-    def __init__(self, section: object, name: str) -> None:
-        self._section = section
-        self._name = name
-
-    def __call__(self, *args: object, **kwargs: object) -> Any:
-        target = getattr(self._section, self._name)
-        if target is self:
-            raise RuntimeError("CLI command bindings have not been configured.")
-        if not callable(target):
-            raise RuntimeError("CLI command bindings have not been configured.")
-        return target(*args, **kwargs)
-
-
-def _install_lazy_bindings(section: object) -> None:
-    for name, value in list(vars(section).items()):
-        if value is _unconfigured:
-            setattr(section, name, _LazyCommandBinding(section, name))
 
 
 class CreationBindings:
     def __init__(self) -> None:
         self.build_parser: CommandCallable = _unconfigured
         self.build_serve_parser: CommandCallable = _unconfigured
-        _install_lazy_bindings(self)
 
 
 class DeliveryBindings:
@@ -64,7 +43,6 @@ class DeliveryBindings:
         self.print_release_operations_reviewer_pack_result: CommandCallable = _unconfigured
         self.print_release_operations_runbook_result: CommandCallable = _unconfigured
         self.print_release_operations_signoff_result: CommandCallable = _unconfigured
-        _install_lazy_bindings(self)
 
 
 class MaintenanceBindings:
@@ -75,7 +53,6 @@ class MaintenanceBindings:
         self.build_maintenance_parser: CommandCallable = _unconfigured
         self.build_verify_maintenance_backup_parser: CommandCallable = _unconfigured
         self.run_doctor: CommandCallable = _unconfigured
-        _install_lazy_bindings(self)
 
 
 class ProgramBindings:
@@ -152,7 +129,6 @@ class ProgramBindings:
         self.build_verify_unified_release_program_parser: CommandCallable = _unconfigured
         self.build_verify_unified_release_program_vault_operations_parser: CommandCallable = _unconfigured
         self.build_verify_unified_release_program_vault_parser: CommandCallable = _unconfigured
-        _install_lazy_bindings(self)
 
 
 class QualityBindings:
@@ -226,7 +202,6 @@ class QualityBindings:
         self.print_planning_simulation_result: CommandCallable = _unconfigured
         self.print_release_audio_review_result: CommandCallable = _unconfigured
         self.run_acceptance_check: CommandCallable = _unconfigured
-        _install_lazy_bindings(self)
 
 
 class ReleaseCheckBindings:
@@ -235,24 +210,16 @@ class ReleaseCheckBindings:
         self.build_release_check_parser: CommandCallable = _unconfigured
         self.build_verify_ga_readiness_parser: CommandCallable = _unconfigured
         self.print_ga_readiness_report: CommandCallable = _unconfigured
-        _install_lazy_bindings(self)
 
 
 class StudioBindings:
     def __init__(self) -> None:
         self._writable_status: CommandCallable = _unconfigured
         self.build_verify_human_review_pack_parser: CommandCallable = _unconfigured
-        _install_lazy_bindings(self)
 
 
 class TrustBindings:
     def __init__(self) -> None:
-        self._install_store_and_parser_bindings()
-        self._install_verifier_bindings()
-        self._install_printer_bindings()
-        _install_lazy_bindings(self)
-
-    def _install_store_and_parser_bindings(self) -> None:
         self._build_public_trust_center_publication_store: CommandCallable = _unconfigured
         self._build_public_trust_center_store: CommandCallable = _unconfigured
         self._build_release_portfolio_governance_attestation_portal_store: CommandCallable = _unconfigured
@@ -293,8 +260,6 @@ class TrustBindings:
         self.build_verify_public_trust_center_distribution_kit_accepted_evidence_parser: CommandCallable = _unconfigured
         self.build_verify_public_trust_center_distribution_kit_parser: CommandCallable = _unconfigured
         self.build_verify_public_trust_center_parser: CommandCallable = _unconfigured
-
-    def _install_verifier_bindings(self) -> None:
         self.build_verify_public_trust_center_publication_mirror_parser: CommandCallable = _unconfigured
         self.build_verify_public_trust_center_publication_monitoring_parser: CommandCallable = _unconfigured
         self.build_verify_public_trust_center_publication_parser: CommandCallable = _unconfigured
@@ -323,8 +288,6 @@ class TrustBindings:
         self.build_verify_trust_operations_hub_parser: CommandCallable = _unconfigured
         self.build_verify_trust_operations_hub_runbook_parser: CommandCallable = _unconfigured
         self.build_verify_trust_operations_incident_knowledge_parser: CommandCallable = _unconfigured
-
-    def _install_printer_bindings(self) -> None:
         self.print_public_trust_center_result: CommandCallable = _unconfigured
         self.print_release_portfolio_audit_result: CommandCallable = _unconfigured
         self.print_release_portfolio_governance_attestation_accepted_evidence_result: CommandCallable = _unconfigured

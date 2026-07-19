@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
 from song_agent.platform.contracts.coercion import document_or as _document_or
 
+from typing import Any as _InterfaceType
 
 from . import dependencies as _commands_trust_parts_dependencies
 
@@ -58,7 +58,7 @@ def _execute_release_portfolio_governance_attestation(argv: list[str]) -> None:
     store = ReleasePortfolioGovernanceAttestationStore(portfolio_store=portfolio_store, final_board_store=final_board_store, evidence_vault_store=vault_store)
     portfolio_id = args.portfolio_id
     payload = {"profile": args.profile, "require_no_force": args.require_no_force}
-    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
     if args.refresh:
         report = store.refresh_report(portfolio_id, payload)
         result.update({"report": report, "summary": portfolio_governance_attestation_summary(report), "stale": store.report_is_stale(portfolio_id, report, profile=args.profile)})
@@ -142,7 +142,7 @@ def _execute_release_portfolio_governance_attestation_registry(argv: list[str]) 
     store = ReleasePortfolioGovernanceAttestationRegistryStore(attestation_store=attestation_store)
     portfolio_id = args.portfolio_id
     payload = {"profile": args.profile}
-    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
     if args.register_current:
         registered = store.register_current_attestation(portfolio_id, {**payload, "public_url": args.public_url, "distribution_note": args.distribution_note})
         result.update({"entry": registered.get("entry"), "registry": registered.get("registry"), "existing": bool(registered.get("existing"))})
@@ -235,7 +235,7 @@ def _execute_release_portfolio_governance_attestation_portal(argv: list[str]) ->
     store = ReleasePortfolioGovernanceAttestationPortalStore(registry_store=registry_store, attestation_store=attestation_store)
     portfolio_id = args.portfolio_id
     payload = {"profile": args.profile}
-    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
     if args.refresh:
         report = store.refresh_report(portfolio_id, payload)
         result.update({"report": report, "summary": release_portfolio_governance_attestation_portal_summary(report), "stale": False})
@@ -282,7 +282,7 @@ def _execute_release_portfolio_governance_attestation_portal_review(argv: list[s
     portal_store = _build_release_portfolio_governance_attestation_portal_store()
     store = ReleasePortfolioGovernanceAttestationPortalReviewStore(portal_store=portal_store)
     portfolio_id = args.portfolio_id
-    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
+    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id, "profile": args.profile}
     if args.refresh_pack:
         pack = store.refresh_pack(portfolio_id, {"profile": args.profile})
         result.update({"review_pack": pack, "summary": release_portfolio_governance_attestation_portal_review_pack_summary(pack), "stale": False})

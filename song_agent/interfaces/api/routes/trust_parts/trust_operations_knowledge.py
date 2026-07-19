@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
@@ -113,7 +113,7 @@ class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
         return (False, None)
 
     def _handle_trust_operations_knowledge(self, method: str, hub_id: str, tail: str) -> None:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_trust_operations_knowledge_part_01(method, hub_id, tail, _split_state)
             if _split_result[0]:
@@ -234,7 +234,7 @@ class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
         return (False, None)
 
     def _handle_trust_operations_control_signoff(self, method: str, hub_id: str, tail: str) -> None:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         try:
             _split_result = self._handle_trust_operations_control_signoff_part_01(method, hub_id, tail, _split_state)
             if _split_result[0]:

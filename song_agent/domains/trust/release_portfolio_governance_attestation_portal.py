@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import html as html
 import hashlib as hashlib
@@ -79,17 +78,17 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
     def zip_path(self, portfolio_id: str, profile: str = "public_summary") -> Path:
         return self.root_dir(portfolio_id, profile) / "governance-attestation-portal.zip"
 
-    def read_report(self, portfolio_id: str, *, profile: str = "public_summary", default: DomainDocument | None = None) -> DomainDocument:
+    def read_report(self, portfolio_id: str, *, profile: str = "public_summary", default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.report_path(portfolio_id, profile), default=default)
 
-    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         path = self.export_dir(portfolio_id, profile) / "portal-manifest.json"
         if not path.exists():
             raise ReleasePortfolioGovernanceAttestationPortalNotFoundError("Attestation Portal export has not been generated.")
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=PORTAL_BLOCKED_KEYS)
 
-    def refresh_report(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh_report(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             profile = str((payload or {}).get("profile") or "public_summary")
@@ -118,7 +117,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
             self._append_history(portfolio_id, profile, "portal_report_refreshed", {"status": report["status"], "source_hash": report["source_hash"]}, now=now)
             return sanitize_metadata(report, blocked_keys=PORTAL_BLOCKED_KEYS)
 
-    def build_source(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def build_source(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         registry_zip = self.registry_store.zip_path(portfolio_id, profile)
         registry_verification = verify_release_portfolio_governance_attestation_registry(registry_zip, strict=True, require_current=True, require_published=True, require_no_revoked_current=True)
         registry_manifest = _read_zip_json(registry_zip, "portal-manifest.json") or _read_zip_json(registry_zip, "manifest.json")
@@ -162,7 +161,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         }
         return sanitize_metadata(source, blocked_keys=PORTAL_BLOCKED_KEYS)
 
-    def report_is_stale(self, portfolio_id: str, report: DomainDocument | None = None, *, profile: str = "public_summary") -> bool:
+    def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
         data = _document_or(report, self.read_report(portfolio_id, profile=profile, default={}))
         if not data:
             return False
@@ -172,7 +171,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
             return True
         return stable_hash(source) != str(data.get("source_hash") or "")
 
-    def export_portal(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def export_portal(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             profile = str((payload or {}).get("profile") or "public_summary")
@@ -230,7 +229,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
             self._append_history(portfolio_id, profile, "portal_exported", {**state, "manifest_hash": manifest["integrity_hash"]}, now=now)
             return sanitize_metadata(manifest, blocked_keys=PORTAL_BLOCKED_KEYS)
 
-    def build_zip(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             profile = str((payload or {}).get("profile") or "public_summary")
@@ -279,7 +278,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
             self._append_history(portfolio_id, profile, "portal_zip_built", {**state, "sha256": info["sha256"]}, now=now)
             return sanitize_metadata(info, blocked_keys=PORTAL_BLOCKED_KEYS)
 
-    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         report = self.read_report(portfolio_id, profile=profile, default={})
         verification = _read_json_default(self.verification_report_path(portfolio_id, profile), default={})
         summary = portal_summary(report) if report else {"status": "missing", "profile": profile}
@@ -287,9 +286,9 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
         return sanitize_metadata(summary, blocked_keys=PORTAL_BLOCKED_KEYS)
 
     def _findings(self, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
-        blockers: list[ImplementationDocument] = []
-        warnings: list[ImplementationDocument] = []
-        checks: list[ImplementationDocument] = []
+        blockers: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+        checks: list[dict[str, Any]] = []
 
         def check(check_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
             row = {"check_id": check_id, "status": "passed" if passed else "warning" if warning else "failed", "severity": "warning" if warning else "blocking", "message": message}
@@ -343,7 +342,7 @@ class ReleasePortfolioGovernanceAttestationPortalStore:
 
 
 
-def portal_report_integrity_ok(report: DomainDocument | None) -> bool:
+def portal_report_integrity_ok(report: dict[str, Any] | None) -> bool:
     data = _as_document(report)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == portal_report_hash(data)
 
@@ -351,7 +350,7 @@ def portal_report_integrity_ok(report: DomainDocument | None) -> bool:
 
 
 
-def portal_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
+def portal_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
     data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == portal_manifest_hash(data)
 
@@ -451,7 +450,268 @@ def _data_documents(report: ImplementationDocument) -> dict[str, ImplementationD
     }
 
 
-from song_agent.domains.trust import v142_rpgap_readiness as _v142_rpgap_readiness
-from song_agent.domains.trust.v142_rpgap_readiness import _html_pages as _html_pages, _html_shell as _html_shell, _links as _links, _kv as _kv, _hash_table as _hash_table, _external_review_label as _external_review_label, _registry_manifest_row as _registry_manifest_row, _attestation_manifest_row as _attestation_manifest_row, _state_triple as _state_triple, _manifest_state as _manifest_state, _page_record as _page_record, _file_record as _file_record, _zip_entries as _zip_entries, _read_json_default as _read_json_default, _read_zip_json as _read_zip_json, _write_json as _write_json, _sha256 as _sha256, _ensure_within as _ensure_within, _redaction_summary as _redaction_summary, _write_readme as _write_readme, _accepted_evidence_summary_for_portfolio_dir as _accepted_evidence_summary_for_portfolio_dir, _accepted_evidence_verification_summary_for_portfolio_dir as _accepted_evidence_verification_summary_for_portfolio_dir, _find_entry as _find_entry, _safe_profile as _safe_profile, _verification_hash as _verification_hash
+def _html_pages(report: ImplementationDocument, data_docs: dict[str, ImplementationDocument], *, external_review: ImplementationDocument | None = None) -> dict[str, str]:
+    source = _as_document(report.get("source"))
+    summary = _as_document(report.get("summary"))
+    external = _as_document(external_review)
+    base = _html_shell
+    hashes = {
+        "Registry ZIP": source.get("registry_zip_sha256"),
+        "Current Attestation ZIP": source.get("current_attestation_zip_sha256"),
+        "Evidence Vault ZIP": source.get("evidence_vault_zip_sha256"),
+        "Final Board Signoff": source.get("final_board_signoff_hash"),
+    }
+    index_body = [
+        "<h1>MusicForge Release Portfolio Governance Public Attestation Portal</h1>",
+        _kv("Portfolio ID", source.get("portfolio_id")),
+        _kv("Current certificate", source.get("current_certificate_id")),
+        _kv("Current entry", source.get("registry_current_entry_id")),
+        _kv("Registry status", source.get("registry_verification_status")),
+        _kv("Attestation status", source.get("attestation_verification_status")),
+        _kv("External Review", _external_review_label(external)),
+        _kv("Published / revoked / superseded", f"{source.get('published_count', 0)} / {source.get('revoked_count', 0)} / {source.get('superseded_count', 0)}"),
+        _hash_table(hashes),
+        _links(),
+    ]
+    current_body = [
+        "<h1>Current Public Attestation</h1>",
+        _kv("Certificate ID", source.get("current_certificate_id")),
+        _kv("Entry ID", source.get("registry_current_entry_id")),
+        _kv("Attestation profile", source.get("attestation_profile")),
+        _kv("Attestation verification", source.get("attestation_verification_status")),
+        _kv("Evidence Vault deep verification", source.get("evidence_vault_deep_verification_status")),
+        _kv("External Review", _external_review_label(external)),
+        _kv("Final Board signoff hash", source.get("final_board_signoff_hash")),
+        "<p>This page is a summary. Run verifier for evidence validation.</p>",
+        _links(),
+    ]
+    registry_body = [
+        "<h1>Registry Lifecycle Summary</h1>",
+        _kv("Current entry", summary.get("current_entry_id")),
+        _kv("Current certificate", summary.get("current_certificate_id")),
+        _kv("Published count", summary.get("published_count")),
+        _kv("Revoked count", summary.get("revoked_count")),
+        _kv("Superseded count", summary.get("superseded_count")),
+        _links(),
+    ]
+    revocations_body = [
+        "<h1>Revocations and Supersedes</h1>",
+        _kv("Revoked entries", source.get("revoked_count", 0)),
+        _kv("Superseded entries", source.get("superseded_count", 0)),
+        "<p>Detailed lifecycle evidence is available in the Attestation Registry package.</p>",
+        _links(),
+    ]
+    verify_body = [
+        "<h1>Offline Verification</h1>",
+        "<pre>python -m song_agent.cli verify-release-portfolio-governance-attestation-portal governance-attestation-portal.zip --strict --require-current --json</pre>",
+        "<p>This Portal ZIP contains summaries only. Full deep audit requires the Evidence Vault ZIP.</p>",
+        '<p><a href="data/verification-commands.json">verification-commands.json</a></p>',
+        _links(),
+    ]
+    pages = {
+        "index.html": base("index.html", "Overview", "".join(index_body), report),
+        "current.html": base("current.html", "Current", "".join(current_body), report),
+        "registry.html": base("registry.html", "Registry", "".join(registry_body), report),
+        "revocations.html": base("revocations.html", "Revocations", "".join(revocations_body), report),
+        "verify.html": base("verify.html", "Verify", "".join(verify_body), report),
+    }
+    del data_docs
+    return pages
 
-_v142_rpgap_readiness.bind_globals(globals())
+
+def _html_shell(page: str, title: str, body: str, report: ImplementationDocument) -> str:
+    source_hash = html.escape(str(report.get("source_hash") or ""))
+    return (
+        "<!doctype html>\n"
+        '<html lang="en">\n'
+        "<head>\n"
+        '<meta charset="utf-8">\n'
+        f"<title>{html.escape(title)} - MusicForge Attestation Portal</title>\n"
+        "<style>body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.45;color:#17202a;background:#fff}nav a{margin-right:1rem}table{border-collapse:collapse}td,th{border:1px solid #bbb;padding:.35rem .55rem}code,pre{background:#f4f4f4;padding:.2rem .35rem}</style>\n"
+        "</head>\n"
+        f'<body data-source-hash="{source_hash}" data-page="{html.escape(page)}">\n'
+        f"<nav>{_links()}</nav>\n"
+        f"{body}\n"
+        "</body>\n"
+        "</html>\n"
+    )
+
+
+def _links() -> str:
+    return '<a href="index.html">Overview</a><a href="current.html">Current</a><a href="registry.html">Registry</a><a href="revocations.html">Revocations</a><a href="verify.html">Verify</a>'
+
+
+def _kv(label: str, value: Any) -> str:
+    return f"<p><strong>{html.escape(label)}:</strong> {html.escape(str(value if value is not None else 'missing'))}</p>"
+
+
+def _hash_table(rows: ImplementationDocument) -> str:
+    body = "".join(f"<tr><th>{html.escape(str(key))}</th><td><code>{html.escape(str(value or 'missing')[:16])}</code></td></tr>" for key, value in rows.items())
+    return f"<table>{body}</table>"
+
+
+def _external_review_label(external: ImplementationDocument) -> str:
+    status = str(external.get("external_review_status") or external.get("status") or "missing")
+    if status == "accepted":
+        reviewer = str(external.get("reviewer_label") or "external reviewer")
+        reviewed_at = str(external.get("reviewed_at") or "")
+        return f"Accepted by {reviewer}" + (f" at {reviewed_at}" if reviewed_at else "")
+    if status == "stale":
+        return "Stale evidence"
+    return status
+
+
+def _registry_manifest_row(source: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "zip_sha256": source.get("registry_zip_sha256"),
+        "zip_size_bytes": source.get("registry_zip_size_bytes"),
+        "manifest_hash": source.get("registry_manifest_hash"),
+        "verification_hash": source.get("registry_verification_hash"),
+        "verification_status": source.get("registry_verification_status"),
+        "current_entry_id": source.get("registry_current_entry_id"),
+        "current_entry_hash": source.get("registry_current_entry_hash"),
+    }
+
+
+def _attestation_manifest_row(source: ImplementationDocument) -> ImplementationDocument:
+    return {
+        "certificate_id": source.get("current_certificate_id"),
+        "zip_sha256": source.get("current_attestation_zip_sha256"),
+        "zip_size_bytes": source.get("current_attestation_zip_size_bytes"),
+        "manifest_hash": source.get("current_attestation_manifest_hash"),
+        "verification_hash": source.get("current_attestation_verification_hash"),
+        "verification_status": source.get("attestation_verification_status"),
+    }
+
+
+def _state_triple(report: ImplementationDocument) -> dict[str, str]:
+    source = _as_document(report.get("source"))
+    return {"source_hash": str(report.get("source_hash") or ""), "current_entry_hash": str(source.get("registry_current_entry_hash") or ""), "registry_zip_sha256": str(source.get("registry_zip_sha256") or "")}
+
+
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
+    registry = _as_document(manifest.get("registry"))
+    external = _as_document(manifest.get("external_review"))
+    external_verification = _as_document(manifest.get("external_review_verification"))
+    return {"source_hash": str(manifest.get("source_hash") or ""), "current_entry_hash": str(registry.get("current_entry_hash") or ""), "registry_zip_sha256": str(registry.get("zip_sha256") or ""), "external_review_hash": stable_hash(external), "external_review_verification_hash": stable_hash(external_verification)}
+
+
+def _page_record(root: Path, path: str, source_hash: Any) -> ImplementationDocument:
+    resolved = root / path
+    return {"path": path, "content_hash": _sha256(resolved), "source_hash": source_hash}
+
+
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
+    return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
+
+
+def _zip_entries(root: Path) -> list[tuple[Path, str]]:
+    return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
+
+
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
+    if not path.exists():
+        return dict(default or {})
+    try:
+        value = read_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return dict(default or {})
+    return _document_or(value, dict(default or {}))
+
+
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            value = json.loads(archive.read(entry).decode("utf-8"))
+            return _as_document(value)
+    except Exception:
+        return {}
+
+
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return write_json(path, sanitize_metadata(payload, blocked_keys=PORTAL_BLOCKED_KEYS))
+
+
+def _sha256(path: Path) -> str | None:
+    if not path.exists() or not path.is_file() or path.is_symlink():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise ReleasePortfolioGovernanceAttestationPortalStateError("Resolved path escapes Attestation Portal directory.") from exc
+
+
+def _redaction_summary(value: Any) -> ImplementationDocument:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    matches = []
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            matches.append({"pattern": replacement, "excerpt": sanitize_sensitive_text(match.group(0))[:120]})
+    return {"status": "failed" if matches else "passed", "matches": matches[:20]}
+
+
+def _write_readme(export_dir: Path, report: ImplementationDocument) -> None:
+    summary = _as_document(report.get("summary"))
+    (export_dir / "README.txt").write_text(
+        "\n".join(
+            [
+                "MusicForge Release Portfolio Governance Attestation Portal Snapshot",
+                "",
+                f"Portfolio ID: {report.get('portfolio_id')}",
+                f"Current entry: {summary.get('current_entry_id') or 'none'}",
+                f"Current certificate: {summary.get('current_certificate_id') or 'none'}",
+                "This static portal is offline and does not publish anything to the internet.",
+                "Run verify-release-portfolio-governance-attestation-portal before relying on it.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def _accepted_evidence_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> ImplementationDocument:
+    try:
+        from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_read_model import accepted_evidence_public_summary_from_portfolio_dir
+
+        return accepted_evidence_public_summary_from_portfolio_dir(portfolio_dir, profile=profile)
+    except Exception:
+        return {"status": "missing", "external_review_status": "missing"}
+
+
+def _accepted_evidence_verification_summary_for_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> ImplementationDocument:
+    try:
+        from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_read_model import accepted_evidence_verification_summary_from_portfolio_dir
+
+        return accepted_evidence_verification_summary_from_portfolio_dir(portfolio_dir, profile=profile)
+    except Exception:
+        return {
+            "package_type": "release_portfolio_governance_attestation_accepted_evidence_verification_summary",
+            "profile": profile,
+            "accepted_evidence_status": "missing",
+            "external_review_status": "missing",
+            "accepted_evidence_verification_status": "missing",
+        }
+
+
+def _find_entry(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
+    for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
+        if isinstance(entry, dict) and entry.get("entry_id") == entry_id:
+            return entry
+    return {}
+
+
+def _safe_profile(profile: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(profile or "public_summary"))[:80]
+
+
+def _verification_hash(report: ImplementationDocument) -> str:
+    return stable_hash({key: value for key, value in (report or {}).items() if key != "generated_at"})

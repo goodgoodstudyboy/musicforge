@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import json as json
 import math as math
@@ -56,19 +55,19 @@ class EditorAuditionManifest:
     status: str = "completed"
     created_at: str = ""
     updated_at: str = ""
-    range: ImplementationDocument = field(default_factory=dict)
+    range: dict[str, Any] = field(default_factory=dict)
     track_mode: str = "all"
     track_ids: list[str] = field(default_factory=list)
     track_count: int = 0
     note_count: int = 0
     duration_beats: float = 0.0
-    midi: ImplementationDocument = field(default_factory=dict)
-    audio: ImplementationDocument = field(default_factory=dict)
-    review: ImplementationDocument = field(default_factory=default_review)
+    midi: dict[str, Any] = field(default_factory=dict)
+    audio: dict[str, Any] = field(default_factory=dict)
+    review: dict[str, Any] = field(default_factory=default_review)
     warnings: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "EditorAuditionManifest":
+    def from_dict(cls, data: dict[str, Any]) -> "EditorAuditionManifest":
         if not isinstance(data, dict):
             raise EditorAuditionError("audition manifest must be an object.")
         source = str(data.get("source") or "preview").strip()
@@ -103,7 +102,7 @@ class EditorAuditionManifest:
             warnings=[sanitize_sensitive_text(str(item)) for item in data.get("warnings", [])],
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -119,8 +118,8 @@ class EditorAuditionStore:
         project_id: str,
         preview: EditorPreview,
         source_plan: SongPlan,
-        editor_state: DomainDocument | None = None,
-        payload: DomainDocument,
+        editor_state: dict[str, Any] | None = None,
+        payload: dict[str, Any],
         now: str | None = None,
     ) -> EditorAuditionManifest:
         if not isinstance(payload, dict):
@@ -285,11 +284,11 @@ class EditorAuditionStore:
                     continue
             return sorted(auditions, key=lambda item: (item.updated_at or item.created_at, item.audition_id), reverse=True)
 
-    def review_board(self, preview_id: str | None = None, filters: DomainDocument | None = None) -> DomainDocument:
+    def review_board(self, preview_id: str | None = None, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         auditions = self.list_auditions(preview_id) if preview_id else self.list_all_auditions()
         return review_board(auditions, filters=filters)
 
-    def update_review(self, preview_id: str, audition_id: str, patch: DomainDocument, now: str | None = None) -> EditorAuditionManifest:
+    def update_review(self, preview_id: str, audition_id: str, patch: dict[str, Any], now: str | None = None) -> EditorAuditionManifest:
         now = now or now_iso()
         with self.lock:
             manifest = self.read_audition(preview_id, audition_id)
@@ -298,7 +297,7 @@ class EditorAuditionStore:
             _append_audition_event(self.audition_dir(preview_id, audition_id), "editor_audition_review_updated", _review_event_payload(updated), now)
             return updated
 
-    def add_marker(self, preview_id: str, audition_id: str, payload: DomainDocument, now: str | None = None) -> EditorAuditionManifest:
+    def add_marker(self, preview_id: str, audition_id: str, payload: dict[str, Any], now: str | None = None) -> EditorAuditionManifest:
         now = now or now_iso()
         with self.lock:
             manifest = self.read_audition(preview_id, audition_id)
@@ -308,7 +307,7 @@ class EditorAuditionStore:
             _append_audition_event(self.audition_dir(preview_id, audition_id), "editor_audition_marker_added", {"marker_id": marker.get("marker_id"), "kind": marker.get("kind")}, now)
             return updated
 
-    def update_marker(self, preview_id: str, audition_id: str, marker_id: str, patch: DomainDocument, now: str | None = None) -> EditorAuditionManifest:
+    def update_marker(self, preview_id: str, audition_id: str, marker_id: str, patch: dict[str, Any], now: str | None = None) -> EditorAuditionManifest:
         now = now or now_iso()
         with self.lock:
             manifest = self.read_audition(preview_id, audition_id)
@@ -397,12 +396,12 @@ class EditorAuditionStore:
 def build_audition_plan(
     plan: SongPlan,
     *,
-    editor_state: DomainDocument | None = None,
-    range_payload: DomainDocument | None = None,
+    editor_state: dict[str, Any] | None = None,
+    range_payload: dict[str, Any] | None = None,
     track_mode: str = "all",
     track_ids: list[str] | None = None,
     changed_sections: list[str] | None = None,
-) -> tuple[SongPlan, DomainDocument]:
+) -> tuple[SongPlan, dict[str, Any]]:
     range_payload = _document_or(range_payload, {"mode": "full_song"})
     track_ids = track_ids or []
     state = _document_or(editor_state, build_editor_state(plan))
@@ -460,13 +459,13 @@ def render_audition_midi(plan: SongPlan, output_path: Path) -> Path:
     return output_path
 
 
-def audition_summary_for_preview(project_dir: Path | str, preview_id: str) -> DomainDocument:
+def audition_summary_for_preview(project_dir: Path | str, preview_id: str) -> dict[str, Any]:
     store = EditorAuditionStore(project_dir)
     auditions = store.list_auditions(preview_id)
     return audition_summary(auditions)
 
 
-def audition_summary(auditions: list[EditorAuditionManifest]) -> DomainDocument:
+def audition_summary(auditions: list[EditorAuditionManifest]) -> dict[str, Any]:
     sources = sorted({item.source for item in auditions})
     track_modes = sorted({item.track_mode for item in auditions})
     ranges = sorted({str(item.range.get("mode") or "") for item in auditions if isinstance(item.range, dict)})
@@ -489,7 +488,201 @@ def audition_summary(auditions: list[EditorAuditionManifest]) -> DomainDocument:
     )
 
 
-from song_agent.domains.studio import v142_ea_readiness as _v142_ea_readiness
-from song_agent.domains.studio.v142_ea_readiness import _resolve_range as _resolve_range, _resolve_tracks as _resolve_tracks, _clip_sections as _clip_sections, _clip_notes as _clip_notes, _track_ids as _track_ids, _artifact_status as _artifact_status, _audition_status as _audition_status, _bounded_label as _bounded_label, _float as _float, _render_report as _render_report, _lock_for_project as _lock_for_project, _append_audition_event as _append_audition_event, _review_event_payload as _review_event_payload
+def _resolve_range(state: ImplementationDocument, payload: ImplementationDocument, changed_sections: list[str]) -> tuple[float, float, ImplementationDocument]:
+    mode = str(payload.get("mode") or "full_song").strip()
+    if mode not in AUDITION_RANGE_MODES:
+        raise EditorAuditionError("range.mode must be full_song, section, changed_sections, or custom.")
+    total_beats = float(state["song"]["total_bars"]) * float(state["song"]["beats_per_bar"])
+    if mode == "full_song":
+        return 0.0, total_beats, {"mode": mode, "start_beat": 0.0, "end_beat": total_beats}
+    if mode == "section":
+        section_id = str(payload.get("section_id") or "").strip()
+        section = next((item for item in state.get("sections", []) if item.get("section_id") == section_id), None)
+        if section is None:
+            raise EditorAuditionError("Unknown section_id.")
+        start = float(section["start_beat"])
+        end = float(section["end_beat"])
+        return start, end, {"mode": mode, "section_id": section_id, "section_name": section.get("name"), "start_beat": start, "end_beat": end}
+    if mode == "changed_sections":
+        names = {str(item).strip() for item in changed_sections if str(item).strip()}
+        sections = [item for item in state.get("sections", []) if str(item.get("name") or "") in names]
+        if not sections:
+            raise EditorAuditionUnavailableError("Preview has no changed sections for audition.")
+        start = min(float(item["start_beat"]) for item in sections)
+        end = max(float(item["end_beat"]) for item in sections)
+        return start, end, {"mode": mode, "section_names": sorted(names), "start_beat": start, "end_beat": end}
+    start = _float(payload.get("start_beat"), "range.start_beat")
+    end = _float(payload.get("end_beat"), "range.end_beat")
+    if start < 0:
+        raise EditorAuditionError("range.start_beat must be >= 0.")
+    if end <= start:
+        raise EditorAuditionError("range.end_beat must be greater than start_beat.")
+    if end - start < 0.25:
+        raise EditorAuditionError("audition range must be at least 0.25 beat.")
+    if end > total_beats + 0.001:
+        raise EditorAuditionError("range.end_beat exceeds song length.")
+    return start, end, {"mode": mode, "start_beat": start, "end_beat": end}
 
-_v142_ea_readiness.bind_globals(globals())
+
+def _resolve_tracks(state: ImplementationDocument, track_mode: str, track_ids: list[str]) -> tuple[list[int], list[str]]:
+    if track_mode not in AUDITION_TRACK_MODES:
+        raise EditorAuditionError("track_mode must be all, solo, or mute.")
+    tracks = list(state.get("tracks", []))
+    ids = [str(track.get("track_id") or "") for track in tracks]
+    if any(str(track_id).startswith("derived-") for track_id in track_ids):
+        raise EditorAuditionError("derived track ids are not accepted for audition.")
+    unknown = sorted(set(track_ids) - set(ids))
+    if unknown:
+        raise EditorAuditionError(f"Unknown track ids: {', '.join(unknown[:5])}.")
+    if track_mode == "all":
+        selected_ids = ids
+    elif track_mode == "solo":
+        if not track_ids:
+            raise EditorAuditionError("track_ids are required for solo audition.")
+        selected_ids = [track_id for track_id in ids if track_id in set(track_ids)]
+    else:
+        if not track_ids:
+            raise EditorAuditionError("track_ids are required for mute audition.")
+        muted = set(track_ids)
+        selected_ids = [track_id for track_id in ids if track_id not in muted]
+    indexes = [ids.index(track_id) for track_id in selected_ids]
+    if not indexes:
+        raise EditorAuditionUnavailableError("Audition produced no notes.")
+    return indexes, selected_ids
+
+
+def _clip_sections(plan: SongPlan, state: ImplementationDocument, start_beat: float, end_beat: float) -> list[SongSection]:
+    beats_per_bar = int(state["song"]["beats_per_bar"])
+    sections: list[SongSection] = []
+    next_start_bar = 1
+    for index, section_state in enumerate(state.get("sections", [])):
+        section_start = float(section_state["start_beat"])
+        section_end = float(section_state["end_beat"])
+        overlap_start = max(start_beat, section_start)
+        overlap_end = min(end_beat, section_end)
+        if overlap_end <= overlap_start:
+            continue
+        bars = max(1, int(math.ceil((overlap_end - overlap_start) / beats_per_bar)))
+        source = plan.sections[index]
+        sections.append(SongSection(source.name, next_start_bar, bars, list(source.chords), source.lyrics))
+        next_start_bar += bars
+    if sections:
+        return sections
+    source = plan.sections[0]
+    bars = max(1, int(math.ceil((end_beat - start_beat) / beats_per_bar)))
+    return [SongSection(source.name or "audition", 1, bars, list(source.chords), source.lyrics)]
+
+
+def _clip_notes(notes: list[NoteEvent], start_beat: float, end_beat: float) -> list[NoteEvent]:
+    clipped: list[NoteEvent] = []
+    for note in notes:
+        note_start = float(note.start_beat)
+        note_end = note_start + float(note.duration_beats)
+        overlap_start = max(start_beat, note_start)
+        overlap_end = min(end_beat, note_end)
+        if overlap_end <= overlap_start:
+            continue
+        clipped.append(
+            NoteEvent(
+                pitch=note.pitch,
+                start_beat=round(overlap_start - start_beat, 6),
+                duration_beats=round(overlap_end - overlap_start, 6),
+                velocity=note.velocity,
+            )
+        )
+    return sorted(clipped, key=lambda item: (item.start_beat, item.pitch, item.duration_beats, item.velocity))
+
+
+def _track_ids(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise EditorAuditionError("track_ids must be a list.")
+    ids = [str(item).strip() for item in value if str(item).strip()]
+    if len(ids) != len(value):
+        raise EditorAuditionError("track_ids must not contain empty ids.")
+    if len(ids) > 32:
+        raise EditorAuditionError("track_ids supports at most 32 ids.")
+    if any(not re.match(r"^track-[0-9]{3}$", item) for item in ids):
+        raise EditorAuditionError("track_ids must contain real track ids.")
+    return ids
+
+
+def _artifact_status(value: Any, *, status_key: str) -> ImplementationDocument:
+    data = _as_document(value)
+    status = str(data.get("status") or status_key).strip()
+    if status not in {"not_started", "running", "completed", "failed"}:
+        status = status_key
+    return sanitize_metadata(
+        {
+            "status": status,
+            "exists": bool(data.get("exists", False)),
+            "size_bytes": max(0, int(data.get("size_bytes") or 0)),
+            "url": str(data.get("url") or ""),
+            "error": sanitize_sensitive_text(str(data.get("error") or "")) if data.get("error") else None,
+        }
+    )
+
+
+def _audition_status(value: Any) -> str:
+    status = str(value or "completed").strip()
+    if status not in {"not_started", "running", "completed", "failed", "deleted"}:
+        return "completed"
+    return status
+
+
+def _bounded_label(value: Any) -> str:
+    text = sanitize_sensitive_text(str(value or "")).strip()
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", text)
+    return text[:MAX_AUDITION_LABEL_LENGTH].rstrip()
+
+
+def _float(value: Any, name: str) -> float:
+    try:
+        return round(float(value), 6)
+    except (TypeError, ValueError) as exc:
+        raise EditorAuditionError(f"{name} must be a number.") from exc
+
+
+def _render_report(manifest: EditorAuditionManifest) -> ImplementationDocument:
+    return {
+        "status": manifest.status,
+        "audition_id": manifest.audition_id,
+        "source": manifest.source,
+        "range": manifest.range,
+        "track_mode": manifest.track_mode,
+        "track_count": manifest.track_count,
+        "note_count": manifest.note_count,
+        "midi": manifest.midi,
+        "audio": manifest.audio,
+        "updated_at": manifest.updated_at,
+    }
+
+
+def _lock_for_project(project_dir: Path) -> threading.RLock:
+    key = str(project_dir)
+    with _LOCKS_GUARD:
+        lock = _STORE_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _STORE_LOCKS[key] = lock
+        return lock
+
+
+def _append_audition_event(audition_dir: Path, event_type: str, payload: ImplementationDocument, now: str | None = None) -> None:
+    event = {"timestamp": now or now_iso(), "event": event_type, **sanitize_metadata(payload)}
+    path = audition_dir / "events.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
+def _review_event_payload(manifest: EditorAuditionManifest) -> ImplementationDocument:
+    row = audition_review_row(manifest)
+    review = _as_document(row.get("review"))
+    return {
+        "rating": review.get("rating", 0),
+        "status": review.get("status", "unreviewed"),
+        "favorite": bool(review.get("favorite", False)),
+        "marker_count": len(review.get("markers") or []),
+    }

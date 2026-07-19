@@ -1,14 +1,13 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import hashlib as hashlib
 import re as re
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
 from pathlib import Path as Path
-from typing import Any as Any, Protocol as Protocol, cast as cast
+from typing import Any as Any
 
 from song_agent.domains.creation.edits import EditIntent as EditIntent, EditedSongPlanResult as EditedSongPlanResult, SUPPORTED_HARMONY_CHORDS as SUPPORTED_HARMONY_CHORDS, apply_edit_intent as apply_edit_intent, validate_edit_intent as validate_edit_intent
 from song_agent.domains.creation.music_quality import attach_quality as attach_quality
@@ -39,29 +38,6 @@ ALLOWED_OPS = {
 BLOCKED_KEYS = {"path", "file", "absolute_path", "local_path", "token", "api_key", "secret", "password", "credential"}
 
 
-class _ProviderEditClient(Protocol):
-    def generate_edit_patch_json(
-        self,
-        parent_plan: SongPlan,
-        instruction: str,
-        config: ProviderConfig,
-        *,
-        prompt: str,
-    ) -> object:
-        ...
-
-    def generate_edit_candidates_json(
-        self,
-        parent_plan: SongPlan,
-        instruction: str,
-        config: ProviderConfig,
-        *,
-        candidate_count: int,
-        prompt: str,
-    ) -> object:
-        ...
-
-
 class ProviderEditError(ValueError):
     pass
 
@@ -79,7 +55,7 @@ class ProviderEditOperation:
     preserve: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ProviderEditOperation":
+    def from_dict(cls, data: dict[str, Any]) -> "ProviderEditOperation":
         if not isinstance(data, dict):
             raise ProviderEditError("provider edit operation must be an object.")
         _scan_blocked_fields(data)
@@ -110,7 +86,7 @@ class ProviderEditOperation:
         if self.op == "rewrite_section_lyrics" and not self.lyrics:
             raise ProviderEditError("rewrite_section_lyrics requires lyrics.")
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -123,7 +99,7 @@ class ProviderEditPatch:
     confidence: float = 0.0
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ProviderEditPatch":
+    def from_dict(cls, data: dict[str, Any]) -> "ProviderEditPatch":
         if not isinstance(data, dict):
             raise ProviderEditError("provider edit patch must be an object.")
         _scan_blocked_fields(data)
@@ -147,7 +123,7 @@ class ProviderEditPatch:
         )
         return patch
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "summary": self.summary,
@@ -163,7 +139,7 @@ class ProviderEditCandidateSet:
     candidates: list[ProviderEditPatch]
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "ProviderEditCandidateSet":
+    def from_dict(cls, data: dict[str, Any]) -> "ProviderEditCandidateSet":
         if not isinstance(data, dict):
             raise ProviderEditError("provider edit candidate set must be an object.")
         _scan_blocked_fields(data)
@@ -183,7 +159,7 @@ class ProviderEditCandidateSet:
             candidates = candidates[:MAX_CANDIDATE_COUNT]
         return cls(schema_version=schema_version, candidates=candidates)
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "candidates": [candidate.to_dict() for candidate in self.candidates],
@@ -200,16 +176,16 @@ class ProviderEditPreview:
     template_id: str
     status: str
     created_at: str
-    patch: ImplementationDocument
-    summary: ImplementationDocument
-    source: ImplementationDocument = field(default_factory=dict)
-    quality: ImplementationDocument | None = None
-    validator: ImplementationDocument = field(default_factory=dict)
-    provider_usage: ImplementationDocument = field(default_factory=dict)
+    patch: dict[str, Any]
+    summary: dict[str, Any]
+    source: dict[str, Any] = field(default_factory=dict)
+    quality: dict[str, Any] | None = None
+    validator: dict[str, Any] = field(default_factory=dict)
+    provider_usage: dict[str, Any] = field(default_factory=dict)
     provider_request_id: str | None = None
     error: str | None = None
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -222,7 +198,7 @@ def provider_patch_to_intents(patch: ProviderEditPatch, parent_plan: SongPlan) -
 
 def apply_provider_edit_patch(parent_plan: SongPlan, patch: ProviderEditPatch) -> EditedSongPlanResult:
     current = parent_plan
-    summaries: list[ImplementationDocument] = []
+    summaries: list[dict[str, Any]] = []
     warnings = list(patch.warnings)
     for intent in provider_patch_to_intents(patch, current):
         result = apply_edit_intent(current, intent)
@@ -249,10 +225,10 @@ def generate_provider_edit_patch(
     instruction: str,
     template: PromptTemplate,
     config: ProviderConfig,
-    asset_references: list[DomainDocument] | None = None,
-    reference_references: list[DomainDocument] | None = None,
+    asset_references: list[dict[str, Any]] | None = None,
+    reference_references: list[dict[str, Any]] | None = None,
     client: Any | None = None,
-) -> tuple[ProviderEditPatch, DomainDocument]:
+) -> tuple[ProviderEditPatch, dict[str, Any]]:
     config.validate_ready_for_provider()
     asset_references = list(asset_references or [])
     reference_references = list(reference_references or [])
@@ -267,7 +243,7 @@ def generate_provider_edit_patch(
             "reference_references": reference_references,
         },
     )
-    client = cast(_ProviderEditClient, client or _client_for_config(config))
+    client = client or _client_for_config(config)
     try:
         if config.wire_api == "mock":
             response = client.generate_edit_patch_json(parent_plan, instruction, config, prompt=prompt)
@@ -302,10 +278,10 @@ def generate_provider_edit_candidates(
     template: PromptTemplate,
     config: ProviderConfig,
     candidate_count: int,
-    asset_references: list[DomainDocument] | None = None,
-    reference_references: list[DomainDocument] | None = None,
+    asset_references: list[dict[str, Any]] | None = None,
+    reference_references: list[dict[str, Any]] | None = None,
     client: Any | None = None,
-) -> tuple[list[ProviderEditPatch], DomainDocument]:
+) -> tuple[list[ProviderEditPatch], dict[str, Any]]:
     count = _candidate_count(candidate_count)
     config.validate_ready_for_provider()
     asset_references = list(asset_references or [])
@@ -322,7 +298,7 @@ def generate_provider_edit_candidates(
             "reference_references": reference_references,
         },
     )
-    client = cast(_ProviderEditClient, client or _client_for_config(config))
+    client = client or _client_for_config(config)
     try:
         if hasattr(client, "generate_edit_candidates_json"):
             response = client.generate_edit_candidates_json(parent_plan, instruction, config, candidate_count=count, prompt=prompt)
@@ -374,11 +350,11 @@ def create_provider_edit_preview(
     template: PromptTemplate,
     patch: ProviderEditPatch,
     now: str | None = None,
-    provider_usage: DomainDocument | None = None,
+    provider_usage: dict[str, Any] | None = None,
     provider_request_id: str | None = None,
-    asset_refs: list[DomainDocument] | None = None,
-    reference_refs: list[DomainDocument] | None = None,
-    context_pack: DomainDocument | None = None,
+    asset_refs: list[dict[str, Any]] | None = None,
+    reference_refs: list[dict[str, Any]] | None = None,
+    context_pack: dict[str, Any] | None = None,
 ) -> ProviderEditPreview:
     now = now or now_iso()
     preview_root = project_dir / "edit-previews"
@@ -495,7 +471,218 @@ def preview_stale(preview: ProviderEditPreview, parent_plan: SongPlan) -> bool:
     return bool(expected and expected != song_plan_hash(parent_plan))
 
 
-from song_agent.domains.creation import v142_pe_readiness as _v142_pe_readiness
-from song_agent.domains.creation.v142_pe_readiness import _operation_to_intent as _operation_to_intent, _client_for_config as _client_for_config, _provider_edit_response_parts as _provider_edit_response_parts, _scan_blocked_fields as _scan_blocked_fields, _optional_text as _optional_text, _bounded_text as _bounded_text, _optional_float as _optional_float, _optional_strength as _optional_strength, _chord_list as _chord_list, _string_list as _string_list, _confidence as _confidence, _candidate_count as _candidate_count, _merge_usage as _merge_usage, _next_preview_id as _next_preview_id, _safe_preview_dir as _safe_preview_dir
+def _operation_to_intent(operation: ProviderEditOperation) -> EditIntent:
+    preserve = list(operation.preserve)
+    strength = operation.strength or 6
+    if operation.op == "set_section_energy":
+        if operation.energy is not None:
+            strength = 8 if operation.energy >= 0.55 else 3
+        return EditIntent.from_dict(
+            {
+                "edit_type": "section_energy",
+                "target": {"section_name": operation.section_name},
+                "strength": strength,
+                "provider_mode": "local",
+                "preserve": preserve,
+            }
+        )
+    if operation.op == "set_section_chords":
+        return EditIntent.from_dict(
+            {
+                "edit_type": "section_harmony",
+                "target": {"section_name": operation.section_name, "field": "chords"},
+                "payload": {"chords": operation.chords},
+                "strength": strength,
+                "provider_mode": "local",
+                "preserve": preserve,
+            }
+        )
+    if operation.op == "set_track_density":
+        return EditIntent.from_dict(
+            {
+                "edit_type": "track_density",
+                "target": {"section_name": operation.section_name, "track_name": operation.track_name},
+                "strength": strength,
+                "provider_mode": "local",
+                "preserve": preserve,
+            }
+        )
+    if operation.op == "rewrite_section_lyrics":
+        return EditIntent.from_dict(
+            {
+                "edit_type": "lyrics_rewrite",
+                "target": {"section_name": operation.section_name, "field": "lyrics"},
+                "payload": {"lyrics": operation.lyrics},
+                "strength": strength,
+                "provider_mode": "local",
+                "preserve": preserve,
+            }
+        )
+    if operation.op == "melody_variation":
+        return EditIntent.from_dict(
+            {
+                "edit_type": "melody_variation",
+                "target": {"section_name": operation.section_name},
+                "strength": strength,
+                "provider_mode": "local",
+                "preserve": preserve,
+            }
+        )
+    if operation.op == "arrangement_variation":
+        target: dict[str, Any] = {}
+        if operation.section_name:
+            target["section_name"] = operation.section_name
+        if operation.track_name:
+            target["track_name"] = operation.track_name
+        payload = {"instrument": operation.instrument} if operation.instrument else {}
+        return EditIntent.from_dict(
+            {
+                "edit_type": "arrangement_variation",
+                "target": target,
+                "payload": payload,
+                "strength": strength,
+                "provider_mode": "local",
+                "preserve": preserve,
+            }
+        )
+    raise ProviderEditError(f"Unsupported provider edit operation: {operation.op}.")
 
-_v142_pe_readiness.bind_globals(globals())
+
+def _client_for_config(config: ProviderConfig) -> Any:
+    if config.wire_api == "mock":
+        from song_agent.domains.creation.providers.mock import MockProviderClient
+
+        return MockProviderClient()
+    if config.wire_api == "openai_chat_completions":
+        from song_agent.domains.creation.providers.openai_compatible import OpenAICompatibleClient
+
+        return OpenAICompatibleClient()
+    raise ProviderConfigError(f"Unsupported provider wire_api: {config.wire_api}.")
+
+
+def _provider_edit_response_parts(response: Any) -> tuple[ImplementationDocument, ImplementationDocument, str | None]:
+    if isinstance(response, ProviderEditResponse):
+        return response.data, dict(response.usage or {}), response.request_id
+    if isinstance(response, dict) and "data" in response and isinstance(response.get("data"), dict):
+        usage = _as_document(response.get("usage"))
+        request_id = response.get("request_id")
+        return response["data"], dict(usage), None if request_id is None else str(request_id)
+    if isinstance(response, dict):
+        return response, {}, None
+    raise ProviderEditError("provider edit response must be a JSON object.")
+
+
+def _scan_blocked_fields(value: Any) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            lowered = str(key).lower()
+            if lowered in BLOCKED_KEYS or lowered.endswith("_path"):
+                raise ProviderEditError(f"provider edit patch contains unsupported path or secret field: {key}.")
+            _scan_blocked_fields(item)
+    elif isinstance(value, list):
+        for item in value:
+            _scan_blocked_fields(item)
+
+
+def _optional_text(value: Any, field_name: str, max_length: int) -> str | None:
+    if value is None or str(value).strip() == "":
+        return None
+    return _bounded_text(value, field_name, max_length)
+
+
+def _bounded_text(value: Any, field_name: str, max_length: int) -> str:
+    text = str(value or "").strip()
+    if len(text) > max_length:
+        raise ProviderEditError(f"{field_name} must be {max_length} characters or fewer.")
+    return text
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or str(value).strip() == "":
+        return None
+    number = float(value)
+    if number < 0.0 or number > 1.0:
+        raise ProviderEditError("energy must be between 0.0 and 1.0.")
+    return number
+
+
+def _optional_strength(value: Any) -> int | None:
+    if value is None or str(value).strip() == "":
+        return None
+    strength = int(value)
+    if strength < 1 or strength > 10:
+        raise ProviderEditError("strength must be between 1 and 10.")
+    return strength
+
+
+def _chord_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ProviderEditError("chords must be a list.")
+    result = []
+    invalid = []
+    supported = {chord.lower(): chord for chord in SUPPORTED_HARMONY_CHORDS}
+    for item in value:
+        text = str(item).strip()
+        if not text:
+            continue
+        chord = supported.get(text.lower())
+        if chord is None:
+            invalid.append(text)
+        else:
+            result.append(chord)
+    if invalid:
+        raise ProviderEditError(f"Unsupported chord names: {', '.join(invalid)}.")
+    return result[:8]
+
+
+def _string_list(value: Any, field_name: str, *, max_items: int) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ProviderEditError(f"{field_name} must be a list.")
+    return [str(item).strip() for item in value if str(item).strip()][:max_items]
+
+
+def _confidence(value: Any) -> float:
+    if value is None or str(value).strip() == "":
+        return 0.0
+    number = float(value)
+    if number < 0.0 or number > 1.0:
+        raise ProviderEditError("confidence must be between 0.0 and 1.0.")
+    return number
+
+
+def _candidate_count(value: Any) -> int:
+    count = int(value or MIN_CANDIDATE_COUNT)
+    if count < MIN_CANDIDATE_COUNT or count > MAX_CANDIDATE_COUNT:
+        raise ProviderEditError(f"candidate_count must be between {MIN_CANDIDATE_COUNT} and {MAX_CANDIDATE_COUNT}.")
+    return count
+
+
+def _merge_usage(left: ImplementationDocument, right: ImplementationDocument) -> ImplementationDocument:
+    result = dict(left)
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        result[key] = int(result.get(key) or 0) + int(right.get(key) or 0)
+    return result
+
+
+def _next_preview_id(preview_root: Path) -> str:
+    for index in range(1, 10_000):
+        preview_id = f"preview-{index:03d}"
+        if not (preview_root / preview_id).exists():
+            return preview_id
+    raise RuntimeError("Could not allocate a provider edit preview id.")
+
+
+def _safe_preview_dir(project_dir: Path, preview_id: str) -> Path:
+    if not re.match(r"^preview-[0-9]{3,5}$", preview_id):
+        raise ValueError("Invalid preview id.")
+    base = (project_dir / "edit-previews").resolve()
+    target = (base / preview_id).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError as exc:
+        raise ValueError("Refusing to operate outside edit-previews.") from exc
+    return target

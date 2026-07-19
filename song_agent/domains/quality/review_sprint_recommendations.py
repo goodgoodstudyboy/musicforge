@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import json as json
 from typing import Any as Any
@@ -36,7 +36,7 @@ def build_review_sprint_recommendation_report(
     library_index: LibraryIndex | None = None,
     project_document: Any | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
     task_ids = _included_task_ids(sprint)
@@ -89,11 +89,11 @@ def recommend_review_sprint_task_action(
     *,
     task: ReviewTask,
     candidates: list[ReviewCandidate],
-    decision_report: DomainDocument | None,
-    conflicts: list[DomainDocument],
-    context_pack_preview: DomainDocument | None = None,
+    decision_report: dict[str, Any] | None,
+    conflicts: list[dict[str, Any]],
+    context_pack_preview: dict[str, Any] | None = None,
     ref_order: int = 9999,
-) -> DomainDocument:
+) -> dict[str, Any]:
     conflict_summary = _conflict_summary(conflicts)
     provider_summary = review_candidate_source_breakdown(candidates)
     ready = [candidate for candidate in candidates if candidate.status in {"ready", "applied"}]
@@ -156,7 +156,7 @@ def review_task_context_recommendation_query(
     sprint: ReviewSprint,
     task: ReviewTask,
     project_document: Any | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     request = _song_request_for_task(project_document, task)
     target = _as_document(task.target)
     role = str(target.get("role") or target.get("track_name") or "")
@@ -197,7 +197,7 @@ def review_task_context_recommendation_query(
     )
 
 
-def recommendation_report_summary(report: DomainDocument | None) -> DomainDocument:
+def recommendation_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict):
         return {}
     actions = [item for item in report.get("recommended_actions", []) if isinstance(item, dict)]

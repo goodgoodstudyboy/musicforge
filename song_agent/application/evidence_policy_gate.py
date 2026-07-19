@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument
 import re
 from pathlib import Path
+from typing import Any
 
 from song_agent.capabilities import capability_registry
 from song_agent.platform.evidence_graph import build_evidence_graph
@@ -43,7 +43,7 @@ def evaluate_evidence_policy_gate(
     manifest_path: Path | str,
     *,
     allowed_root: Path | str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     graph = build_evidence_graph(manifest_path, registry=capability_registry, allowed_root=allowed_root)
     gate = evaluate_policy(get_policy_profile(policy_id), graph)
     return {

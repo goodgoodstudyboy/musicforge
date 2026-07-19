@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document, document_or as _document_or
+from typing import Any
 from pathlib import Path
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import hashlib
 import json
@@ -13,12 +14,12 @@ from song_agent.domains.delivery.releases import stable_hash
 from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence_contracts import ACCEPTED_EVIDENCE_BLOCKED_KEYS, accepted_evidence_hash, accepted_evidence_summary
 
 
-def accepted_evidence_integrity_ok(evidence: DomainDocument | None) -> bool:
+def accepted_evidence_integrity_ok(evidence: dict[str, Any] | None) -> bool:
     data = _as_document(evidence)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == accepted_evidence_hash(data)
 
 
-def accepted_evidence_public_summary_from_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> DomainDocument:
+def accepted_evidence_public_summary_from_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
     root = portfolio_dir / "governance-attestation-accepted-evidence"
     if profile != "public_summary":
         root = root / "profiles" / _safe_profile(profile)
@@ -74,7 +75,7 @@ def _missing_public_summary() -> ImplementationDocument:
     }
 
 
-def accepted_evidence_verification_summary_from_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> DomainDocument:
+def accepted_evidence_verification_summary_from_portfolio_dir(portfolio_dir: Path, *, profile: str = "public_summary") -> dict[str, Any]:
     root = portfolio_dir / "governance-attestation-accepted-evidence"
     if profile != "public_summary":
         root = root / "profiles" / _safe_profile(profile)

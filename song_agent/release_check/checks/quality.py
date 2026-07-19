@@ -1,7 +1,7 @@
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any
 
 
 DOMAIN = "quality"
 GROUPS = frozenset({"acceptance", "audio", "quality"})
 TAGS = frozenset({"acceptance", "audio", "quality", "review"})
-CALLABLES: ImplementationDocument = {}
+CALLABLES: dict[str, Any] = {}

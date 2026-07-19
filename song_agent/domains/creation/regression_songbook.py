@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument
 from dataclasses import dataclass as dataclass
 from typing import Any as Any
 
@@ -26,7 +25,7 @@ class RegressionSong:
     min_quality: int = 75
     min_rating: int = 3
 
-    def request(self) -> DomainDocument:
+    def request(self) -> dict[str, Any]:
         return sanitize_metadata(
             {
                 "title": self.title,
@@ -37,7 +36,7 @@ class RegressionSong:
             }
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return sanitize_metadata(
             {
                 "song_id": self.song_id,
@@ -74,7 +73,7 @@ BUILTIN_REGRESSION_SONGS: tuple[RegressionSong, ...] = (
 )
 
 
-def builtin_songbook() -> DomainDocument:
+def builtin_songbook() -> dict[str, Any]:
     return sanitize_metadata(
         {
             "schema_version": REGRESSION_SONGBOOK_SCHEMA_VERSION,
@@ -86,14 +85,14 @@ def builtin_songbook() -> DomainDocument:
     )
 
 
-def list_regression_songs(limit: int | None = None) -> list[DomainDocument]:
+def list_regression_songs(limit: int | None = None) -> list[dict[str, Any]]:
     songs = [song.to_dict() for song in BUILTIN_REGRESSION_SONGS]
     if limit is None:
         return songs
     return songs[: max(0, min(len(songs), int(limit)))]
 
 
-def get_regression_song(song_id: str) -> DomainDocument:
+def get_regression_song(song_id: str) -> dict[str, Any]:
     for song in BUILTIN_REGRESSION_SONGS:
         if song.song_id == song_id:
             return song.to_dict()

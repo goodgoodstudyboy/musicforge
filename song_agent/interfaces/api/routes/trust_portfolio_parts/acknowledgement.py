@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
 
@@ -170,7 +170,7 @@ class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
         return (False, None)
 
     def _dispatch_portfolio_acknowledgement(self, method, parts, portfolio_id, action) -> bool:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._dispatch_portfolio_acknowledgement_part_01(method, parts, portfolio_id, action, _split_state)
         if _split_result[0]:
             return _split_result[1]

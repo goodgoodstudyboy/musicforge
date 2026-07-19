@@ -48,6 +48,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v136.policy_gate_cutover_smoke" in {definition.check_id for definition in definitions}
     assert "v140.architecture_cutover_smoke" in {definition.check_id for definition in definitions}
     assert "v141.quality_debt_closure_smoke" in {definition.check_id for definition in definitions}
+    assert "v1421.stabilization_rollback_smoke" in {definition.check_id for definition in definitions}
     assert by_id["v1212.receiver_acceptance_change_control_zip_security"].duration_budget_seconds == 90
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
@@ -100,6 +101,7 @@ def test_release_check_profile_and_filters() -> None:
         "v140.public_contract_compatibility_smoke",
         "v140.reviewer_package_smoke",
         "v141.quality_debt_closure_smoke",
+        "v1421.stabilization_rollback_smoke",
     ]
     assert "v75.release_check_matrix_smoke" not in {definition.check_id for definition in ga}
     assert [definition.check_id for definition in v10] == [

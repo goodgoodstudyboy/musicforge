@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path, list_or as _list_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path, list_or as _list_or
 
 import json as json
 import shutil as shutil
@@ -64,20 +64,20 @@ class ReleaseAudioBaselineGovernanceStore:
     def verification_report_path(self) -> Path:
         return self.root / "exports" / "baseline-registry-verification-report.json"
 
-    def list_baselines(self) -> list[DomainDocument]:
+    def list_baselines(self) -> list[dict[str, Any]]:
         return [self.read_baseline(path.parent.name) for path in sorted((self.root / "baselines").glob("*/baseline.json"))]
 
-    def read_baseline(self, baseline_id: str) -> DomainDocument:
+    def read_baseline(self, baseline_id: str) -> dict[str, Any]:
         path = self.baseline_path(baseline_id)
         if not path.exists():
             raise ReleaseAudioBaselineGovernanceNotFoundError(f"Release Audio Baseline not found: {baseline_id}.")
         return read_json(path)
 
-    def read_registry(self) -> DomainDocument:
+    def read_registry(self) -> dict[str, Any]:
         self._ensure_registry()
         return read_json(self.registry_path())
 
-    def create_from_release(self, release_id: str, payload: DomainDocument) -> DomainDocument:
+    def create_from_release(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
             self._ensure_registry()
             baseline_id = self._next_id()
@@ -117,7 +117,7 @@ class ReleaseAudioBaselineGovernanceStore:
             self._write_registry()
             return baseline
 
-    def approve(self, baseline_id: str, payload: DomainDocument) -> DomainDocument:
+    def approve(self, baseline_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
             baseline = self.read_baseline(baseline_id)
             if baseline.get("status") in {"revoked", "superseded"}:
@@ -138,7 +138,7 @@ class ReleaseAudioBaselineGovernanceStore:
             self._write_registry()
             return baseline
 
-    def activate(self, baseline_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def activate(self, baseline_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             baseline = self.read_baseline(baseline_id)
@@ -162,7 +162,7 @@ class ReleaseAudioBaselineGovernanceStore:
             self._write_registry()
             return baseline
 
-    def revoke(self, baseline_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def revoke(self, baseline_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             baseline = self.read_baseline(baseline_id)
@@ -178,7 +178,7 @@ class ReleaseAudioBaselineGovernanceStore:
             self._write_registry()
             return baseline
 
-    def preflight_release(self, release_id: str, baseline_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def preflight_release(self, release_id: str, baseline_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         baseline = self.read_baseline(baseline_id)
         compatible = baseline.get("status") in {"approved", "active"}
@@ -187,9 +187,9 @@ class ReleaseAudioBaselineGovernanceStore:
             reasons.append("baseline_not_approved_or_active")
         if baseline.get("status") == "revoked":
             reasons.append("baseline_revoked")
-        current_binding: ImplementationDocument = {}
-        current_tracks: list[ImplementationDocument] = []
-        current_track_set: ImplementationDocument = {}
+        current_binding: dict[str, Any] = {}
+        current_tracks: list[dict[str, Any]] = []
+        current_track_set: dict[str, Any] = {}
         try:
             current_binding = self._current_binding_for_release(release_id, payload)
             current_tracks = _tracks_from_binding(current_binding)
@@ -214,7 +214,7 @@ class ReleaseAudioBaselineGovernanceStore:
             },
         }
 
-    def gate(self, release_id: str, *, baseline_id: str | None = None, required: bool = True, evidence: DomainDocument | None = None) -> DomainDocument:
+    def gate(self, release_id: str, *, baseline_id: str | None = None, required: bool = True, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
         if not required:
             return {"status": "not_required", "hard_block": False}
         try:
@@ -226,16 +226,16 @@ class ReleaseAudioBaselineGovernanceStore:
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": sanitize_sensitive_text(str(exc))}
 
-    def export_registry(self) -> DomainDocument:
+    def export_registry(self) -> dict[str, Any]:
         with self.lock:
             self._write_registry()
             export_dir = self.export_dir()
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[ImplementationDocument] = []
+            files: list[dict[str, Any]] = []
 
-            def write_entry(rel: str, payload: DomainDocument | str) -> None:
+            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
                 path = export_dir / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
                 if isinstance(payload, str):
@@ -267,7 +267,7 @@ class ReleaseAudioBaselineGovernanceStore:
             write_json(export_dir / "manifest.json", manifest)
             return {"status": report.get("status"), "export_dir": str(export_dir), "manifest": manifest}
 
-    def build_zip(self) -> DomainDocument:
+    def build_zip(self) -> dict[str, Any]:
         with self.lock:
             exported = self.export_registry()
             export_dir = self.export_dir()
@@ -291,7 +291,7 @@ class ReleaseAudioBaselineGovernanceStore:
                         archive.write(path, path.relative_to(export_dir).as_posix())
             return {"status": exported.get("status"), "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_zip(self, *, strict: bool = True, require_active: bool = False, baseline_evidence: dict[str, DomainDocument] | None = None) -> DomainDocument:
+    def verify_zip(self, *, strict: bool = True, require_active: bool = False, baseline_evidence: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         if not self.zip_path().exists():
             self.build_zip()
         report = verify_release_audio_baseline_registry_package(self.zip_path(), strict=strict, require_active=require_active, baseline_evidence=baseline_evidence)
@@ -397,7 +397,7 @@ def _scope_from_payload(payload: ImplementationDocument) -> ImplementationDocume
 def _tracks_from_binding(binding: ImplementationDocument) -> list[ImplementationDocument]:
     facts = binding.get("facts")
     tracks = facts.get("tracks") if isinstance(facts, dict) else _as_list(facts)
-    output: list[ImplementationDocument] = []
+    output: list[dict[str, Any]] = []
     for index, track in enumerate(_as_list(tracks), start=1):
         title = str(track.get("title") or track.get("track_id") or f"track-{index:03d}")
         output.append(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument
 from functools import lru_cache
 from typing import Any
 
@@ -63,7 +62,7 @@ def check_domain(*, group: str, tags: tuple[str, ...] = (), callable_name: str |
     return matches[0]
 
 
-def provider_inventory() -> list[DomainDocument]:
+def provider_inventory() -> list[dict[str, Any]]:
     return [
         {
             "domain": provider.DOMAIN,

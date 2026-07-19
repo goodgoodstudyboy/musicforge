@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
-from song_agent.platform.contracts import as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json
 from pathlib import Path
@@ -31,9 +30,9 @@ class EvidenceGraphBuildError(RuntimeError):
 def write_evidence_graph_manifest(
     path: Path | str,
     *,
-    items: list[DomainDocument],
-    edges: list[DomainDocument] | None = None,
-) -> DomainDocument:
+    items: list[dict[str, Any]],
+    edges: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     document = json.loads(json.dumps({
         "schema_version": 1,
         "package_type": EVIDENCE_GRAPH_MANIFEST_PACKAGE_TYPE,
@@ -318,7 +317,7 @@ def _read_external_report(path: Path | None, package_type: str, blockers: list[s
 
 def _resolve_proofs(row: ImplementationDocument, root: Path, allowed_root: Path | None, spec: Any, blockers: list[str]) -> dict[str, Path]:
     proof_value = row.get("proofs")
-    proofs: ImplementationDocument = _as_document(proof_value)
+    proofs: dict[str, Any] = _as_document(proof_value)
     resolved: dict[str, Path] = {}
     for key, _argument in spec.proof_arguments:
         raw_path = proofs.get(key) or row.get(key)
@@ -331,7 +330,7 @@ def _resolve_proofs(row: ImplementationDocument, root: Path, allowed_root: Path 
 
 
 def _run_runtime(package_path: Path | None, proofs: dict[str, Path], spec: Any, blockers: list[str]) -> ImplementationDocument:
-    runtime: ImplementationDocument = {}
+    runtime: dict[str, Any] = {}
     if package_path is not None and package_path.is_file() and not any(item.startswith("evidence_proof_missing:") for item in blockers):
         kwargs = dict(spec.defaults)
         kwargs.update({argument: proofs[key] for key, argument in spec.proof_arguments if key in proofs})
@@ -455,9 +454,9 @@ def _dependency_cycle(edges: tuple[EvidenceEdge, ...]) -> bool:
 
 def _verification_fingerprint(report: ImplementationDocument) -> ImplementationDocument:
     summary_value = report.get("summary")
-    summary: ImplementationDocument = _as_document(summary_value)
+    summary: dict[str, Any] = _as_document(summary_value)
     verification_value = summary.get("verification")
-    verification: ImplementationDocument = _as_document(verification_value)
+    verification: dict[str, Any] = _as_document(verification_value)
     return {
         "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256") or verification.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes") or summary.get("zip_size_bytes") or verification.get("zip_size_bytes"),
@@ -468,7 +467,7 @@ def _verification_fingerprint(report: ImplementationDocument) -> ImplementationD
 
 def _public_runtime_summary(report: ImplementationDocument) -> ImplementationDocument:
     summary_value = report.get("summary")
-    summary: ImplementationDocument = _as_document(summary_value)
+    summary: dict[str, Any] = _as_document(summary_value)
     allowed = {
         "status",
         "readiness",
@@ -488,7 +487,7 @@ def _public_runtime_summary(report: ImplementationDocument) -> ImplementationDoc
 
 def _lifecycle_status(report: ImplementationDocument) -> str:
     summary_value = report.get("summary")
-    summary: ImplementationDocument = _as_document(summary_value)
+    summary: dict[str, Any] = _as_document(summary_value)
     for key in ("signoff_status", "lifecycle_status", "readiness", "status"):
         value = summary.get(key)
         if isinstance(value, str) and value:

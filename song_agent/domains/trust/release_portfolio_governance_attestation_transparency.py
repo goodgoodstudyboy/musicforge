@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -41,13 +40,16 @@ TRANSPARENCY_REPORT_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "upda
 
 
 
-from song_agent.domains.trust import v142_rpgat_readiness as _v142_rpgat_readiness
-from song_agent.domains.trust.v142_rpgat_readiness import ReleasePortfolioGovernanceAttestationTransparencyError as ReleasePortfolioGovernanceAttestationTransparencyError, ReleasePortfolioGovernanceAttestationTransparencyNotFoundError as ReleasePortfolioGovernanceAttestationTransparencyNotFoundError, ReleasePortfolioGovernanceAttestationTransparencyStateError as ReleasePortfolioGovernanceAttestationTransparencyStateError, transparency_feed_integrity_ok as transparency_feed_integrity_ok, transparency_report_hash as transparency_report_hash, transparency_report_integrity_ok as transparency_report_integrity_ok, transparency_manifest_integrity_ok as transparency_manifest_integrity_ok, transparency_notice_integrity_ok as transparency_notice_integrity_ok, _report_from_feed as _report_from_feed, _feed_summary as _feed_summary, _data_documents as _data_documents, _state_tuple as _state_tuple, _manifest_state as _manifest_state, _event_chain_valid as _event_chain_valid, _readme as _readme, _find_entry as _find_entry, _file_record as _file_record, _zip_entries as _zip_entries, _read_json_default as _read_json_default, _read_zip_json as _read_zip_json, _write_json as _write_json, _sha256 as _sha256, _verification_hash as _verification_hash, _ensure_within as _ensure_within, _redaction_summary as _redaction_summary, _safe_profile as _safe_profile
+class ReleasePortfolioGovernanceAttestationTransparencyError(ValueError):
+    pass
 
 
+class ReleasePortfolioGovernanceAttestationTransparencyNotFoundError(ReleasePortfolioGovernanceAttestationTransparencyError):
+    pass
 
 
-
+class ReleasePortfolioGovernanceAttestationTransparencyStateError(ReleasePortfolioGovernanceAttestationTransparencyError):
+    pass
 
 
 class ReleasePortfolioGovernanceAttestationTransparencyStore:
@@ -92,20 +94,20 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
     def zip_path(self, portfolio_id: str, profile: str = "public_summary") -> Path:
         return self.root_dir(portfolio_id, profile) / "governance-attestation-transparency.zip"
 
-    def read_feed(self, portfolio_id: str, *, profile: str = "public_summary", default: DomainDocument | None = None) -> DomainDocument:
+    def read_feed(self, portfolio_id: str, *, profile: str = "public_summary", default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.feed_path(portfolio_id, profile), default=default)
 
-    def read_report(self, portfolio_id: str, *, profile: str = "public_summary", default: DomainDocument | None = None) -> DomainDocument:
+    def read_report(self, portfolio_id: str, *, profile: str = "public_summary", default: dict[str, Any] | None = None) -> dict[str, Any]:
         return _read_json_default(self.report_path(portfolio_id, profile), default=default)
 
-    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def read_export_manifest(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         path = self.export_dir(portfolio_id, profile) / "transparency-manifest.json"
         if not path.exists():
             raise ReleasePortfolioGovernanceAttestationTransparencyNotFoundError("Attestation Transparency export has not been generated.")
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
-    def refresh_feed(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh_feed(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             payload = payload or {}
@@ -147,7 +149,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
             self._append_history(portfolio_id, profile, "transparency_feed_refreshed", {"source_hash": feed["source_hash"], "integrity_hash": feed["integrity_hash"], "status": feed["status"]}, now=now)
             return sanitize_metadata(feed, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
-    def build_public_state(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def build_public_state(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         self.attestation_store.portfolio_store.get_portfolio(portfolio_id)
         registry_zip = self.registry_store.zip_path(portfolio_id, profile)
         registry_verification = verify_release_portfolio_governance_attestation_registry(
@@ -257,7 +259,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
         }
         return sanitize_metadata(state, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
-    def build_source(self, portfolio_id: str, *, public_state: DomainDocument | None = None, profile: str = "public_summary") -> DomainDocument:
+    def build_source(self, portfolio_id: str, *, public_state: dict[str, Any] | None = None, profile: str = "public_summary") -> dict[str, Any]:
         state = _document_or(public_state, self.build_public_state(portfolio_id, profile=profile))
         registry = _as_document(state.get("registry"))
         attestation = _as_document(state.get("public_attestation"))
@@ -296,7 +298,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
         }
         return sanitize_metadata(source, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
-    def feed_is_stale(self, portfolio_id: str, feed: DomainDocument | None = None, *, profile: str = "public_summary") -> bool:
+    def feed_is_stale(self, portfolio_id: str, feed: dict[str, Any] | None = None, *, profile: str = "public_summary") -> bool:
         data = _document_or(feed, self.read_feed(portfolio_id, profile=profile, default={}))
         if not data:
             return False
@@ -306,7 +308,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
             return True
         return stable_hash(source) != str(data.get("source_hash") or "")
 
-    def export_transparency(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def export_transparency(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             payload = payload or {}
@@ -369,7 +371,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
             self._append_history(portfolio_id, profile, "transparency_exported", {**state, "manifest_hash": manifest["integrity_hash"]}, now=now)
             return sanitize_metadata(manifest, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
-    def build_zip(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def build_zip(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             payload = payload or {}
@@ -415,7 +417,7 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
             self._append_history(portfolio_id, profile, "transparency_zip_built", {**state, "sha256": info["sha256"]}, now=now)
             return sanitize_metadata(info, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
 
-    def verify_transparency(self, portfolio_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def verify_transparency(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         from song_agent.domains.trust.release_portfolio_governance_attestation_transparency_verifier import verify_release_portfolio_governance_attestation_transparency, write_release_portfolio_governance_attestation_transparency_verification_report
 
         payload = payload or {}
@@ -432,18 +434,18 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
         write_release_portfolio_governance_attestation_transparency_verification_report(report, self.verification_report_path(portfolio_id, profile))
         return report
 
-    def list_notices(self, portfolio_id: str, *, profile: str = "public_summary") -> list[DomainDocument]:
+    def list_notices(self, portfolio_id: str, *, profile: str = "public_summary") -> list[dict[str, Any]]:
         feed = self.read_feed(portfolio_id, profile=profile, default={})
         notices = _as_list(feed.get("notices"))
         return [sanitize_metadata(item, blocked_keys=TRANSPARENCY_BLOCKED_KEYS) for item in notices if isinstance(item, dict)]
 
-    def get_notice(self, portfolio_id: str, notice_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def get_notice(self, portfolio_id: str, notice_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         for notice in self.list_notices(portfolio_id, profile=profile):
             if notice.get("notice_id") == notice_id:
                 return notice
         raise ReleasePortfolioGovernanceAttestationTransparencyNotFoundError("Attestation Transparency notice not found.")
 
-    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> DomainDocument:
+    def summary(self, portfolio_id: str, *, profile: str = "public_summary") -> dict[str, Any]:
         feed = self.read_feed(portfolio_id, profile=profile, default={})
         report = self.read_report(portfolio_id, profile=profile, default={})
         verification = _read_json_default(self.verification_report_path(portfolio_id, profile), default={})
@@ -463,9 +465,9 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
         *,
         require_accepted: bool,
     ) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
-        blockers: list[ImplementationDocument] = []
-        warnings: list[ImplementationDocument] = []
-        checks: list[ImplementationDocument] = []
+        blockers: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+        checks: list[dict[str, Any]] = []
 
         def check(check_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
             row = {"check_id": check_id, "status": "passed" if passed else "warning" if warning else "failed", "severity": "warning" if warning else "blocking", "message": message}
@@ -522,4 +524,231 @@ class ReleasePortfolioGovernanceAttestationTransparencyStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
-_v142_rpgat_readiness.bind_globals(globals())
+
+
+
+
+def transparency_feed_integrity_ok(feed: dict[str, Any] | None) -> bool:
+    data = _as_document(feed)
+    return bool(data.get("integrity_hash")) and data.get("integrity_hash") == transparency_feed_hash(data)
+
+
+def transparency_report_hash(report: dict[str, Any]) -> str:
+    return stable_hash({key: value for key, value in (report or {}).items() if key not in TRANSPARENCY_REPORT_HASH_EXCLUDE_KEYS})
+
+
+def transparency_report_integrity_ok(report: dict[str, Any] | None) -> bool:
+    data = _as_document(report)
+    return bool(data.get("integrity_hash")) and data.get("integrity_hash") == transparency_report_hash(data)
+
+
+
+
+
+def transparency_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
+    data = _as_document(manifest)
+    return bool(data.get("integrity_hash")) and data.get("integrity_hash") == transparency_manifest_hash(data)
+
+
+
+
+
+
+
+
+def transparency_notice_integrity_ok(notice: dict[str, Any] | None) -> bool:
+    data = _as_document(notice)
+    return bool(data.get("integrity_hash")) and data.get("integrity_hash") == transparency_notice_hash(data)
+
+
+
+
+
+def _report_from_feed(feed: ImplementationDocument, *, now: str) -> ImplementationDocument:
+    source = {
+        "feed_hash": feed.get("integrity_hash"),
+        "feed_source_hash": feed.get("source_hash"),
+        "public_state_hash": (_as_document(feed.get("source"))).get("public_state_hash"),
+        "registry_manifest_hash": (_as_document(feed.get("source"))).get("registry_manifest_hash"),
+        "portal_manifest_hash": (_as_document(feed.get("source"))).get("portal_manifest_hash"),
+        "accepted_evidence_manifest_hash": (_as_document(feed.get("source"))).get("accepted_evidence_manifest_hash"),
+    }
+    report = {
+        "schema_version": TRANSPARENCY_SCHEMA_VERSION,
+        "package_type": TRANSPARENCY_REPORT_PACKAGE_TYPE,
+        "portfolio_id": feed.get("portfolio_id"),
+        "attestation_profile": feed.get("attestation_profile"),
+        "generated_at": now,
+        "status": "failed" if feed.get("status") == "failed" else "warning" if feed.get("status") == "warning" else "passed",
+        "readiness": feed.get("readiness"),
+        "source": source,
+        "source_hash": stable_hash(source),
+        "summary": _as_document(feed.get("summary")),
+        "checks": _as_list(feed.get("checks")),
+        "blockers": _as_list(feed.get("blockers")),
+        "warnings": _as_list(feed.get("warnings")),
+    }
+    report["integrity_hash"] = transparency_report_hash(report)
+    return sanitize_metadata(report, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
+
+
+def _feed_summary(public_state: ImplementationDocument, events: list[ImplementationDocument], notices: list[ImplementationDocument], blockers: list[ImplementationDocument], warnings: list[ImplementationDocument]) -> ImplementationDocument:
+    registry = _as_document(public_state.get("registry"))
+    accepted = _as_document(public_state.get("accepted_evidence"))
+    return sanitize_metadata(
+        {
+            "event_count": len(events),
+            "notice_count": len(notices),
+            "current_entry_id": registry.get("current_entry_id"),
+            "current_certificate_id": registry.get("current_certificate_id"),
+            "external_review_status": accepted.get("external_review_status") or "missing",
+            "latest_notice_type": notices[-1].get("notice_type") if notices else None,
+            "blocker_count": len(blockers),
+            "warning_count": len(warnings),
+        },
+        blocked_keys=TRANSPARENCY_BLOCKED_KEYS,
+    )
+
+
+
+
+
+
+
+
+def _data_documents(feed: ImplementationDocument) -> dict[str, ImplementationDocument]:
+    state = _as_document(feed.get("current_public_state"))
+    source = _as_document(feed.get("source"))
+    registry = _as_document(state.get("registry"))
+    portal = _as_document(state.get("portal"))
+    attestation = _as_document(state.get("public_attestation"))
+    accepted = _as_document(state.get("accepted_evidence"))
+    docs = {
+        "current-public-state.json": {"source_hash": feed.get("source_hash"), "public_state_hash": source.get("public_state_hash"), "current_public_state": state},
+        "package-fingerprints.json": {"source_hash": feed.get("source_hash"), **source},
+        "registry-binding-summary.json": {"source_hash": feed.get("source_hash"), **registry},
+        "portal-binding-summary.json": {"source_hash": feed.get("source_hash"), **portal},
+        "attestation-binding-summary.json": {"source_hash": feed.get("source_hash"), **attestation},
+    }
+    if accepted:
+        docs["accepted-evidence-binding-summary.json"] = {"feed_source_hash": feed.get("source_hash"), **accepted}
+    return sanitize_metadata(docs, blocked_keys=TRANSPARENCY_BLOCKED_KEYS)
+
+
+def _state_tuple(feed: ImplementationDocument) -> dict[str, str]:
+    return {"source_hash": str(feed.get("source_hash") or ""), "integrity_hash": str(feed.get("integrity_hash") or "")}
+
+
+def _manifest_state(manifest: ImplementationDocument) -> dict[str, str]:
+    feed_row = _as_document(manifest.get("feed"))
+    return {"source_hash": str(manifest.get("source_hash") or ""), "integrity_hash": str(feed_row.get("integrity_hash") or "")}
+
+
+def _event_chain_valid(events: list[ImplementationDocument]) -> bool:
+    previous = ""
+    seen: set[str] = set()
+    for event in events:
+        event_id = str(event.get("event_id") or "")
+        if not event_id or event_id in seen:
+            return False
+        seen.add(event_id)
+        if event.get("previous_event_hash") != previous:
+            return False
+        if event.get("event_hash") != transparency_event_hash(event):
+            return False
+        previous = str(event.get("event_hash") or "")
+    return True
+
+
+
+
+
+def _readme(feed: ImplementationDocument) -> str:
+    summary = _as_document(feed.get("summary"))
+    return "\n".join(
+        [
+            "MusicForge Release Portfolio Governance Attestation Transparency Feed",
+            "",
+            f"Portfolio ID: {feed.get('portfolio_id')}",
+            f"Profile: {feed.get('attestation_profile')}",
+            f"Status: {feed.get('status')}",
+            f"Events: {summary.get('event_count', 0)}",
+            f"Notices: {summary.get('notice_count', 0)}",
+            "This package contains public-safe transparency summaries only.",
+            "It does not contain nested Registry, Portal, Public Attestation, Evidence Vault, or Accepted Evidence ZIP files.",
+            "",
+        ]
+    )
+
+
+def _find_entry(registry: ImplementationDocument, entry_id: str) -> ImplementationDocument:
+    for entry in registry.get("entries", []) if isinstance(registry.get("entries"), list) else []:
+        if isinstance(entry, dict) and entry.get("entry_id") == entry_id:
+            return entry
+    return {}
+
+
+def _file_record(root: Path, path: Path) -> ImplementationDocument:
+    return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
+
+
+def _zip_entries(root: Path) -> list[tuple[Path, str]]:
+    return [(path.resolve(), path.relative_to(root).as_posix()) for path in sorted(root.rglob("*")) if path.is_file()]
+
+
+def _read_json_default(path: Path, *, default: ImplementationDocument | None = None) -> ImplementationDocument:
+    if not path.exists():
+        return dict(default or {})
+    try:
+        value = read_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return dict(default or {})
+    return _document_or(value, dict(default or {}))
+
+
+def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            value = json.loads(archive.read(entry).decode("utf-8"))
+            return _as_document(value)
+    except Exception:
+        return {}
+
+
+def _write_json(path: Path, payload: ImplementationDocument) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return write_json(path, sanitize_metadata(payload, blocked_keys=TRANSPARENCY_BLOCKED_KEYS))
+
+
+def _sha256(path: Path) -> str | None:
+    if not path.exists() or not path.is_file() or path.is_symlink():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verification_hash(report: ImplementationDocument) -> str:
+    return stable_hash({key: value for key, value in (report or {}).items() if key != "generated_at"})
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise ReleasePortfolioGovernanceAttestationTransparencyStateError("Resolved path escapes Attestation Transparency directory.") from exc
+
+
+def _redaction_summary(value: Any) -> ImplementationDocument:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    matches = []
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            matches.append({"pattern": replacement, "excerpt": sanitize_sensitive_text(match.group(0))[:120]})
+    return {"status": "failed" if matches else "passed", "matches": matches[:20]}
+
+
+def _safe_profile(profile: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in str(profile or "public_summary"))[:80] or "public_summary"

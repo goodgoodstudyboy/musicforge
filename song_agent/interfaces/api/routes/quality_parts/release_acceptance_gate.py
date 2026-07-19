@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -156,7 +157,7 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
         return (False, None)
 
     def _release_acceptance_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._release_acceptance_gate_part_01(payload, _split_state)
         if _split_result[0]:
             return _split_result[1]
@@ -266,7 +267,7 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": f"Release Audio QA is unavailable: {sanitize_sensitive_text(str(exc))}"}
         summary = _interfaces_api_runtime.release_audio_summary(report)
-        evidence: ImplementationDocument = {
+        evidence: dict[str, Any] = {
             **summary,
             "require_audio_health": require_health,
             "require_human_audio_review": require_human,

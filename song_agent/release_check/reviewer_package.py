@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import hashlib
 import json
 from pathlib import Path
@@ -40,7 +39,7 @@ _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 def write_reviewer_manifest(package_dir: Path | str, *, final_sha: str = "") -> Path:
     root = Path(package_dir)
     files = [_file_row(path, root) for path in sorted(root.iterdir()) if path.is_file() and path.name != MANIFEST_NAME]
-    payload: ImplementationDocument = {
+    payload: dict[str, Any] = {
         "schema_version": 1,
         "package_type": "musicforge_v13_reviewer_package_manifest",
         "final_sha": final_sha,
@@ -57,9 +56,9 @@ def verify_reviewer_package(
     *,
     expected_sha: str = "",
     require_final: bool = True,
-) -> DomainDocument:
+) -> dict[str, Any]:
     root = Path(package_dir)
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     manifest = _read_json(root / MANIFEST_NAME)
     entries = {path.name for path in root.iterdir() if path.is_file()} if root.is_dir() else set()
     expected_entries = REQUIRED_DOCUMENTS | {MANIFEST_NAME}
@@ -97,7 +96,7 @@ def verify_reviewer_package(
     }
 
 
-def _final_checks(checks: list[ImplementationDocument], root: Path, runtime: ImplementationDocument, final_sha: str) -> None:
+def _final_checks(checks: list[dict[str, Any]], root: Path, runtime: dict[str, Any], final_sha: str) -> None:
     ci = _read_json(root / "ci-matrix.json")
     release_checks = _read_json(root / "release-check-reports.json")
     certification = _read_json(root / "lts-certification.json")
@@ -160,7 +159,7 @@ def _final_checks(checks: list[ImplementationDocument], root: Path, runtime: Imp
     _release_evidence_checks(checks, root, final_sha)
 
 
-def _release_evidence_checks(checks: list[ImplementationDocument], root: Path, final_sha: str) -> None:
+def _release_evidence_checks(checks: list[dict[str, Any]], root: Path, final_sha: str) -> None:
     migration = _read_json(root / "migration-rollback.json")
     performance = _read_json(root / "performance.json")
     alignment = _read_json(root / "release-alignment.json")
@@ -184,15 +183,15 @@ def _release_evidence_checks(checks: list[ImplementationDocument], root: Path, f
     )
 
 
-def _file_row(path: Path, root: Path) -> ImplementationDocument:
+def _file_row(path: Path, root: Path) -> dict[str, Any]:
     return {"path": path.relative_to(root).as_posix(), "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
-def _check(checks: list[ImplementationDocument], check_id: str, passed: bool, **detail: Any) -> None:
+def _check(checks: list[dict[str, Any]], check_id: str, passed: bool, **detail: Any) -> None:
     checks.append({"check_id": check_id, "status": "passed" if passed else "failed", **detail})
 
 
-def _read_json(path: Path) -> ImplementationDocument:
+def _read_json(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -200,7 +199,7 @@ def _read_json(path: Path) -> ImplementationDocument:
     return payload if isinstance(payload, dict) else {}
 
 
-def _integrity_ok(payload: ImplementationDocument) -> bool:
+def _integrity_ok(payload: dict[str, Any]) -> bool:
     return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _stable_hash(
         {key: value for key, value in payload.items() if key != "integrity_hash"}
     )

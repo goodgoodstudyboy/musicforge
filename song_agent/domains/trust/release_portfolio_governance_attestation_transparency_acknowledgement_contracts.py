@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument
 from song_agent.platform.contracts.coercion import as_document as _as_document
+from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
@@ -31,19 +31,19 @@ ACK_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", 
 ACK_EVIDENCE_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at"}
 
 
-def ack_pack_hash(pack: DomainDocument) -> str:
+def ack_pack_hash(pack: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (pack or {}).items() if key not in ACK_PACK_HASH_EXCLUDE_KEYS})
 
 
-def ack_manifest_hash(manifest: DomainDocument) -> str:
+def ack_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in ACK_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def ack_evidence_hash(evidence: DomainDocument) -> str:
+def ack_evidence_hash(evidence: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in (evidence or {}).items() if key not in ACK_EVIDENCE_HASH_EXCLUDE_KEYS})
 
 
-def acknowledgement_summary(evidence: DomainDocument | None) -> DomainDocument:
+def acknowledgement_summary(evidence: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(evidence)
     public = _as_document(data.get("public_summary"))
     return {
@@ -56,7 +56,7 @@ def acknowledgement_summary(evidence: DomainDocument | None) -> DomainDocument:
     }
 
 
-def response_template(pack: DomainDocument) -> DomainDocument:
+def response_template(pack: dict[str, Any]) -> dict[str, Any]:
     source = _as_document(pack.get("source"))
     return {
         "schema_version": ACK_SCHEMA_VERSION,

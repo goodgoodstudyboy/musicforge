@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument
 import re
 import zipfile
+from typing import Any
 
 from song_agent.platform.verification.hashing import sha256_bytes
 from song_agent.platform.verification.model import build_check
@@ -10,11 +10,11 @@ from song_agent.platform.verification.model import build_check
 
 def manifest_file_checks(
     archive: zipfile.ZipFile,
-    manifest: DomainDocument,
+    manifest: dict[str, Any],
     *,
     expected_files: set[str],
     check_prefix: str,
-) -> list[DomainDocument]:
+) -> list[dict[str, Any]]:
     rows = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     paths = {str(row.get("path") or "") for row in rows}
     checks = [

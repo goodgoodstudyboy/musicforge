@@ -7,14 +7,18 @@ import pytest
 
 from song_agent.release_check.v14_quality import (
     _mypy_blockers,
+    _policy_blockers,
     _typing_blockers,
     active_source_tree_hash,
+    collect_v1421_static_violations,
     collect_complexity_metrics,
     collect_typing_metrics,
     evaluate_v14_quality,
     run_v141_quality_debt_closure_smoke,
+    run_v1421_stabilization_rollback_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
+from song_agent.platform.verification.hashing import stable_hash
 from song_agent.interfaces.api.runtime_parts.helpers import api_info
 from tools.adopt_v141_composition_types import adopt_composition_types
 from tools.adopt_v141_document_coercions import adopt_document_coercions
@@ -143,7 +147,7 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     configured = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert policy["release_version"] == "14.2.0"
+    assert policy["release_version"] == "14.2.1"
     assert policy["mypy"]["max_total_errors"] == 0
     assert policy["mypy"]["error_budgets"] == {}
     typing = collect_typing_metrics(ROOT)
@@ -185,13 +189,9 @@ def test_v1412_explicit_any_collector_counts_alias_module_nested_and_quoted_anno
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 3
+    assert typing["collector_schema_version"] == 4
     assert typing["explicit_any_count"] == 11
-    assert typing["explicit_any_by_layer"]["interfaces"] == 11
-    assert typing["explicit_any_by_layer"]["platform"] == 0
-    assert typing["explicit_any_by_layer"]["application"] == 0
-    assert typing["explicit_any_by_layer"]["capabilities"] == 0
-    assert typing["explicit_any_by_layer"]["domains"] == 0
+    assert typing["explicit_any_by_layer"] == {"interfaces": 11}
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/sample.py": 11}
 
 
@@ -223,6 +223,83 @@ def test_v1412_explicit_any_alias_growth_is_not_hidden_from_ratchet(tmp_path: Pa
     assert any("typing_explicit_any" in value for value in blockers)
     assert any("typing_explicit_any_layer" in value for value in blockers)
     assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+def test_v1421_explicit_any_collector_counts_function_bodies_and_nested_scopes(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "nested.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        """from typing import Any as Alias, TYPE_CHECKING, TypeAlias
+import typing as t
+
+if TYPE_CHECKING:
+    from typing_extensions import Any as CheckedAlias
+
+DocumentAlias: TypeAlias = Alias
+
+def outer(value: Alias) -> t.Any:
+    local: Alias
+
+    def nested(item: CheckedAlias) -> DocumentAlias:
+        nested_local: t.Any
+        return item
+
+    return value
+
+class Handler:
+    from typing import Any as ScopedAlias
+
+    def method(self, value: ScopedAlias) -> None:
+        method_local: ScopedAlias
+
+async def async_handler() -> Alias:
+    return None
+""",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["collector_schema_version"] == 4
+    assert typing["explicit_any_count"] == 9
+    assert typing["explicit_any_affected_file_count"] == 1
+
+
+def test_v1421_explicit_any_local_growth_is_not_hidden_from_ratchet(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "local_growth.py"
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"    local_{index}: Alias" for index in range(100))
+    target.write_text(f"from typing import Any as Alias\n\ndef route() -> None:\n{annotations}\n", encoding="utf-8")
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 100
+    assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/local_growth.py": 100}
+
+
+def test_v1421_static_gate_detects_generated_split_suppressions_and_mypy_exclusion(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "domains" / "v142_generated.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("# mypy: ignore-errors\n# ruff: noqa\nbind_globals(globals())\n", encoding="utf-8")
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "split_v142_oversized_modules.py").write_text("# forbidden\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        """[tool.mypy]
+files = ["song_agent/platform"]
+exclude = "v142_.*\\\\.py$"
+""",
+        encoding="utf-8",
+    )
+
+    violations = collect_v1421_static_violations(tmp_path)
+
+    assert violations["generated_modules"] == ["song_agent/domains/v142_generated.py"]
+    assert violations["splitter_present"] is True
+    assert violations["suppressions"] == ["song_agent/domains/v142_generated.py"]
+    assert violations["runtime_global_binders"] == ["song_agent/domains/v142_generated.py"]
+    assert violations["mypy_roots_complete"] is False
+    assert violations["mypy_exclude"]
 
 
 def test_v141_quality_debt_closure_smoke_is_self_consistent() -> None:
@@ -281,8 +358,9 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
     assert policy["typing"] == {
         "raw_dict_str_any_max_count": 5,
         "implementation_document_max_count": 6,
-        "explicit_any_collector_schema_version": 3,
+        "explicit_any_collector_schema_version": 4,
         "explicit_any_max_count": 3,
+        "explicit_any_affected_file_max_count": 0,
         "explicit_any_layer_budgets": {"application": 3},
         "explicit_any_file_budgets": {"song_agent/application/a.py": 2, "song_agent/application/b.py": 1},
     }
@@ -341,6 +419,30 @@ def test_v14_complexity_ratchet_rejects_file_growth_even_when_total_decreases(tm
 
     with pytest.raises(RuntimeError, match="cannot grow registered modules"):
         _ratchet_complexity_policy(policy, root)
+
+
+def test_v1421_stabilization_rollback_smoke_is_self_consistent() -> None:
+    passed, detail = run_v1421_stabilization_rollback_smoke(ROOT)
+
+    assert passed, detail
+
+
+def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() -> None:
+    baseline = json.loads((ROOT / "architecture-v14-quality.json").read_text(encoding="utf-8"))
+    typing_forged = json.loads(json.dumps(baseline))
+    typing_path = next(iter(typing_forged["typing"]["explicit_any_file_budgets"]))
+    typing_forged["typing"]["explicit_any_file_budgets"][typing_path] += 1
+    typing_forged["integrity_hash"] = stable_hash(
+        {key: value for key, value in typing_forged.items() if key != "integrity_hash"}
+    )
+    module_forged = json.loads(json.dumps(baseline))
+    module_forged["module_size_debt"][0]["max_lines"] += 1
+    module_forged["integrity_hash"] = stable_hash(
+        {key: value for key, value in module_forged.items() if key != "integrity_hash"}
+    )
+
+    assert "v14_quality_policy_stabilization_typing_file_budgets" in _policy_blockers(typing_forged)
+    assert "v14_quality_policy_stabilization_module_debt" in _policy_blockers(module_forged)
 
 
 def test_v14_source_tree_hash_is_independent_of_line_endings(tmp_path: Path) -> None:

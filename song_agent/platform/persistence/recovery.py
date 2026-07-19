@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts.documents import ImplementationDocument
 
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from song_agent.platform.persistence.database import MusicForgeDatabase
 from song_agent.platform.persistence.file_artifacts import FileArtifactStore, sha256_path
@@ -19,7 +20,7 @@ class PersistenceRecovery:
         self.database.initialize()
         self.artifacts = FileArtifactStore(self.workspace_root)
 
-    def inspect(self) -> list[DomainDocument]:
+    def inspect(self) -> list[dict[str, Any]]:
         if not self.artifacts.transactions_root.exists():
             return []
         rows = []
@@ -35,7 +36,7 @@ class PersistenceRecovery:
                 rows.append(intent)
         return rows
 
-    def recover(self) -> DomainDocument:
+    def recover(self) -> dict[str, Any]:
         recovered: list[str] = []
         rolled_back: list[str] = []
         with WorkspaceLock(self.workspace_root, operation="persistence-recovery"):
@@ -47,7 +48,7 @@ class PersistenceRecovery:
                 raw_files = intent.get("files")
                 if not isinstance(raw_files, list) or not raw_files or not all(isinstance(row, dict) for row in raw_files):
                     raise RuntimeError(f"Recovery file ledger is invalid for transaction {transaction_id}.")
-                files: list[ImplementationDocument] = raw_files
+                files: list[dict[str, Any]] = raw_files
                 if generation.exists():
                     if not self.artifacts.verify_tree(generation, files):
                         raise RuntimeError(f"Recovery integrity failure for transaction {transaction_id}.")

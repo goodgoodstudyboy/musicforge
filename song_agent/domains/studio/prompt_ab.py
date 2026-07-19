@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import re as re
 import shutil as shutil
 import threading as threading
@@ -27,10 +26,10 @@ class PromptABExperiment:
     status: str
     created_at: str
     updated_at: str
-    notes: ImplementationDocument = field(default_factory=dict)
+    notes: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "PromptABExperiment":
+    def from_dict(cls, data: dict[str, Any]) -> "PromptABExperiment":
         return cls(
             ab_id=validate_ab_id(str(data.get("ab_id") or "")),
             project_id=str(data.get("project_id") or ""),
@@ -45,7 +44,7 @@ class PromptABExperiment:
             notes=dict(data.get("notes") or {}),
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 

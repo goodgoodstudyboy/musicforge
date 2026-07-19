@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -69,10 +69,10 @@ def verify_unified_command_center_release_train_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(checks, summary, _check("ucc_train_zip_exists", False, "Release Train ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -166,16 +166,16 @@ def verify_unified_command_center_release_train_package(
     return _finish(checks, summary)
 
 
-def write_unified_command_center_release_train_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_unified_command_center_release_train_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_command_center_release_train_verification_exit_code(report: DomainDocument) -> int:
+def unified_command_center_release_train_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _external_evidence_manifest_checks(path: Path | str | None, inventory: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     if not path:
         if require:
             return [_check("ucc_train_external_evidence_manifest_required", False, "External evidence manifest is required.")]
@@ -208,7 +208,7 @@ def _external_evidence_manifest_checks(path: Path | str | None, inventory: Imple
 
 def _external_row_checks(key: str, expected: ImplementationDocument, external_row: ImplementationDocument) -> list[ImplementationDocument]:
     prefix = "ucc_train_external_evidence_binding"
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     zip_path = Path(str(external_row.get("zip_path") or ""))
     report_path = Path(str(external_row.get("verification_report_path") or ""))
     checks.append(_check(f"{prefix}_{_safe_check_key(key)}_zip_exists", zip_path.exists() and zip_path.is_file(), "External ZIP exists.", {"key": key}))
@@ -314,7 +314,7 @@ def _external_signoff_binding_checks(
 
 
 def _dependency_semantics_checks(dependency: ImplementationDocument, readiness: ImplementationDocument, report: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     items = [row for row in readiness.get("items", []) if isinstance(row, dict)]
     item_status = {str(row.get("item_id")): str(row.get("status")) for row in items}
     edges = [row for row in dependency.get("edges", []) if isinstance(row, dict)]
@@ -337,9 +337,9 @@ def _dependency_semantics_checks(dependency: ImplementationDocument, readiness: 
 
 
 def _history_checks(history: list[ImplementationDocument], signoff: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     previous = ""
-    signoff_event: ImplementationDocument | None = None
+    signoff_event: dict[str, Any] | None = None
     for index, event in enumerate(history):
         payload_hash = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         event_hash = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
@@ -393,7 +393,7 @@ def _signoff_binding_checks(binding: ImplementationDocument, signoff: Implementa
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     files = [row for row in manifest.get("files", []) if isinstance(row, dict)]
     declared = {str(row.get("path") or "") for row in files}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
@@ -466,7 +466,7 @@ def _read_json_file(path: Path | str) -> ImplementationDocument:
 
 
 def _parse_jsonl(text: str) -> list[ImplementationDocument]:
-    rows: list[ImplementationDocument] = []
+    rows: list[dict[str, Any]] = []
     for line in text.splitlines():
         if line.strip():
             rows.append(json.loads(line))

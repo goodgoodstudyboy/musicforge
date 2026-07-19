@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -104,7 +103,7 @@ class ProgramApplicationService:
         operation = ProgramOperation(ProgramComponent(component), action, arguments, options)
         return self.execute(operation).value
 
-    def evaluate_gate(self, program_id: str, payload: DomainDocument) -> DomainDocument:
+    def evaluate_gate(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         from song_agent.application.program.policy_gate import ProgramPolicyGate
 
         return ProgramPolicyGate(self.component(ProgramComponent.PROGRAM)).evaluate(program_id, payload)

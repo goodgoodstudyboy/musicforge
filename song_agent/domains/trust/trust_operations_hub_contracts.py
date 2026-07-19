@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-from song_agent.platform.contracts import DomainDocument
+from typing import Any
 
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -76,9 +75,9 @@ DELIVERY_VERIFICATION_COMPONENTS = (
 )
 
 
-def hub_hash(doc: DomainDocument) -> str:
+def hub_hash(doc: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in TRUST_OPERATIONS_HASH_EXCLUDE_KEYS})
 
 
-def hub_manifest_hash(manifest: DomainDocument) -> str:
+def hub_manifest_hash(manifest: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key not in {"integrity_hash", "generated_at", "zip"}})

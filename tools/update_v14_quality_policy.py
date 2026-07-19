@@ -7,6 +7,10 @@ from pathlib import Path
 from song_agent.platform.verification.hashing import stable_hash
 from song_agent.release_check.v14_quality import (
     EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+    V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH,
+    V1421_MODULE_DEBT_CEILINGS_HASH,
+    V1421_RECOVERY_LIMITS,
+    V1421_STABILIZATION_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
     collect_complexity_metrics,
@@ -42,7 +46,7 @@ def main() -> int:
         _ratchet_typing_policy(document, collect_typing_metrics(root))
     if args.ratchet_complexity:
         _ratchet_complexity_policy(document, root)
-    document["release_version"] = "14.2.0"
+    _apply_v1421_stabilization_policy(document)
     if report is not None:
         output = (root / args.tracked_coverage_output).resolve()
         _write_compact_coverage(report, output, root)
@@ -97,18 +101,22 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
     raw = int(metrics.get("raw_dict_str_any_count") or 0)
     implementation = int(metrics.get("implementation_document_count") or 0)
     explicit_any = int(metrics.get("explicit_any_count") or 0)
+    affected_files = int(metrics.get("explicit_any_affected_file_count") or 0)
     previous_raw = int(policy.get("raw_dict_str_any_max_count") or 0)
     previous_implementation = int(policy.get("implementation_document_max_count") or 0)
     has_explicit_any_budget = "explicit_any_max_count" in policy
     collector_schema = int(policy.get("explicit_any_collector_schema_version") or 0)
     collector_upgrade = collector_schema != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     previous_explicit_any = int(policy.get("explicit_any_max_count") or explicit_any)
+    previous_affected_files = int(policy.get("explicit_any_affected_file_max_count") or affected_files)
     if int(metrics.get("public_implementation_document_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot expose implementation documents publicly.")
     if int(metrics.get("untyped_public_function_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot introduce untyped public functions.")
     if explicit_any > previous_explicit_any and not collector_upgrade:
         raise RuntimeError(f"Typing explicit Any cannot grow: {explicit_any}>{previous_explicit_any}.")
+    if affected_files > previous_affected_files and not collector_upgrade:
+        raise RuntimeError(f"Typing explicit Any affected files cannot grow: {affected_files}>{previous_affected_files}.")
     previous_layers = {
         str(key): int(value)
         for key, value in (policy.get("explicit_any_layer_budgets") or {}).items()
@@ -146,6 +154,7 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
     policy["implementation_document_max_count"] = implementation
     policy["explicit_any_collector_schema_version"] = EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     policy["explicit_any_max_count"] = explicit_any
+    policy["explicit_any_affected_file_max_count"] = affected_files
     policy["explicit_any_layer_budgets"] = dict(sorted(current_layers.items()))
     policy["explicit_any_file_budgets"] = dict(sorted(current_files.items()))
 
@@ -180,7 +189,7 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
     ]
     aggregate = dict(metrics["aggregate"])
     complexity["aggregate_debt"] = {
-        "architecture_decision": "docs/architecture/ADR-015-v141-complexity-ratchet.md",
+        "architecture_decision": V1421_STABILIZATION_ADR,
         "expires_version": "14.3.0",
         "previous_oversized_module_count": len(previous),
         "previous_total_oversized_module_lines": previous_total,
@@ -189,6 +198,42 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
         "max_modules_over_1000_lines": aggregate["modules_over_1000_lines"],
         "max_largest_module_lines": aggregate["largest_module_lines"],
         "max_total_oversized_module_lines": aggregate["total_oversized_module_lines"],
+    }
+
+
+def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
+    document["release_version"] = "14.2.1"
+    rows = document.get("module_size_debt")
+    complexity = document.get("complexity")
+    if not isinstance(rows, list) or not isinstance(complexity, dict):
+        raise RuntimeError("Existing v14 complexity policy is invalid.")
+    for row in rows:
+        if isinstance(row, dict):
+            row["expires_version"] = "14.3.0"
+    aggregate = dict(complexity.get("aggregate_debt") or {})
+    aggregate.update(
+        {
+            "architecture_decision": V1421_STABILIZATION_ADR,
+            "expires_version": "14.3.0",
+            "max_oversized_module_count": V1421_RECOVERY_LIMITS["oversized_module_max_count"],
+            "max_modules_over_1000_lines": V1421_RECOVERY_LIMITS["modules_over_1000_max_count"],
+            "max_largest_module_lines": V1421_RECOVERY_LIMITS["largest_module_max_lines"],
+            "max_total_oversized_module_lines": V1421_RECOVERY_LIMITS["total_oversized_module_max_lines"],
+        }
+    )
+    complexity["aggregate_debt"] = aggregate
+    document["stabilization"] = {
+        "architecture_decision": V1421_STABILIZATION_ADR,
+        "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
+        "collector_migration": {
+            "from_schema_version": 2,
+            "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "previous_explicit_any_count": 11744,
+            "recovered_explicit_any_count": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
+        },
+        "hard_limits": V1421_RECOVERY_LIMITS,
+        "explicit_any_file_budgets_hash": V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH,
+        "module_debt_ceilings_hash": V1421_MODULE_DEBT_CEILINGS_HASH,
     }
 
 

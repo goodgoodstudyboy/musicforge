@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import threading as threading
@@ -67,14 +67,14 @@ class AudioCampaignGovernanceStore:
     def archive_verification_report_path(self, campaign_id: str) -> Path:
         return self.archive_dir(campaign_id) / "audio-campaign-archive-verification-report.json"
 
-    def refresh_governance_report(self, campaign_id: str) -> DomainDocument:
+    def refresh_governance_report(self, campaign_id: str) -> dict[str, Any]:
         with self.lock:
             source = self._source_state(campaign_id, ensure_zip=True, ensure_verification=True)
             report = _build_governance_report(campaign_id, source)
             write_json(self.report_path(campaign_id), report)
             return report
 
-    def read_governance_report(self, campaign_id: str, default: DomainDocument | None = None) -> DomainDocument:
+    def read_governance_report(self, campaign_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.report_path(campaign_id)
         if not path.exists():
             if default is not None:
@@ -82,7 +82,7 @@ class AudioCampaignGovernanceStore:
             raise AudioCampaignGovernanceNotFoundError(f"Audio Campaign governance report not found: {campaign_id}.")
         return read_json(path)
 
-    def create_change_request(self, campaign_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def create_change_request(self, campaign_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             source = self._source_state(campaign_id, ensure_zip=False, ensure_verification=False)
@@ -116,7 +116,7 @@ class AudioCampaignGovernanceStore:
             write_json(self.change_request_dir(campaign_id) / f"{cr_id}.json", cr)
             return cr
 
-    def list_change_requests(self, campaign_id: str) -> list[DomainDocument]:
+    def list_change_requests(self, campaign_id: str) -> list[dict[str, Any]]:
         rows = []
         for path in sorted(self.change_request_dir(campaign_id).glob("acrq-*.json")):
             try:
@@ -125,7 +125,7 @@ class AudioCampaignGovernanceStore:
                 continue
         return rows
 
-    def approve_change_request(self, campaign_id: str, change_request_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def approve_change_request(self, campaign_id: str, change_request_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             cr = self._read_change_request(campaign_id, change_request_id)
@@ -141,7 +141,7 @@ class AudioCampaignGovernanceStore:
             write_json(self.change_request_dir(campaign_id) / f"{change_request_id}.json", cr)
             return cr
 
-    def reset_signoff(self, campaign_id: str, change_request_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def reset_signoff(self, campaign_id: str, change_request_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             campaign = self.campaign_store._read_raw_campaign(campaign_id)
@@ -184,10 +184,10 @@ class AudioCampaignGovernanceStore:
             write_json(self.change_request_dir(campaign_id) / f"{change_request_id}.json", cr)
             return {"campaign": self.campaign_store.read_campaign(campaign_id), "change_request": cr, "reset_event": event, "status": "reset"}
 
-    def refresh_analytics(self, campaign_id: str) -> DomainDocument:
+    def refresh_analytics(self, campaign_id: str) -> dict[str, Any]:
         return self.analytics_store.refresh(campaign_id)
 
-    def export_archive(self, campaign_id: str) -> DomainDocument:
+    def export_archive(self, campaign_id: str) -> dict[str, Any]:
         with self.lock:
             source = self._source_state(campaign_id, ensure_zip=True, ensure_verification=True)
             self._ensure_archive_mutable(campaign_id, source)
@@ -200,9 +200,9 @@ class AudioCampaignGovernanceStore:
             write_json(self.report_path(campaign_id), governance)
             archive_dir = self.archive_dir(campaign_id)
             archive_dir.mkdir(parents=True, exist_ok=True)
-            files: list[ImplementationDocument] = []
+            files: list[dict[str, Any]] = []
 
-            def write_entry(rel: str, payload: DomainDocument | str) -> None:
+            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
                 path = archive_dir / rel
                 if isinstance(payload, str):
                     path.parent.mkdir(parents=True, exist_ok=True)
@@ -245,7 +245,7 @@ class AudioCampaignGovernanceStore:
             write_json(self.archive_manifest_path(campaign_id), manifest)
             return manifest
 
-    def build_archive_zip(self, campaign_id: str) -> DomainDocument:
+    def build_archive_zip(self, campaign_id: str) -> dict[str, Any]:
         with self.lock:
             source = self._source_state(campaign_id, ensure_zip=True, ensure_verification=True)
             self._ensure_archive_mutable(campaign_id, source)
@@ -275,7 +275,7 @@ class AudioCampaignGovernanceStore:
             _append_jsonl(self.reset_history_path(campaign_id), event)
             return {"zip_path": str(zip_path), "zip_sha256": final_sha, "manifest": manifest, "status": "passed"}
 
-    def verify_archive(self, campaign_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def verify_archive(self, campaign_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         report = verify_audio_campaign_archive_package(
             self.archive_zip_path(campaign_id),
@@ -286,7 +286,7 @@ class AudioCampaignGovernanceStore:
         write_audio_campaign_archive_verification_report(report, self.archive_verification_report_path(campaign_id))
         return report
 
-    def gate(self, campaign_id: str, *, required: bool = True, archive_zip_path: Path | str | None = None, archive_verification_report_path: Path | str | None = None) -> DomainDocument:
+    def gate(self, campaign_id: str, *, required: bool = True, archive_zip_path: Path | str | None = None, archive_verification_report_path: Path | str | None = None) -> dict[str, Any]:
         try:
             source = self._source_state(campaign_id, ensure_zip=True, ensure_verification=True)
             archive_zip = Path(archive_zip_path) if archive_zip_path else self.archive_zip_path(campaign_id)
@@ -421,7 +421,7 @@ def _build_governance_report(campaign_id: str, source: ImplementationDocument) -
     summary = _as_document(report.get("summary"))
     verification = _as_document(source.get("verification"))
     signoff = _as_document(source.get("signoff"))
-    blockers: list[ImplementationDocument] = []
+    blockers: list[dict[str, Any]] = []
     checks = [
         _check("audio_campaign_governance.signed", signoff.get("status") == "signed"),
         _check("audio_campaign_governance.report_passed", report.get("status") == "passed"),

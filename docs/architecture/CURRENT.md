@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.0 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.1 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -189,3 +189,14 @@ boundary violations, dependency exceptions, or compatibility imports.
 - ADR-015 keeps ARCH-014 open through v14.2 and v14.1.1 enforces per-file
   no-growth ceilings so aggregate module shrinkage cannot mask one module
   growing.
+
+## v14.2.1 Stabilization
+
+- The generated v14.2.0 module split was rejected during independent review
+  and has been rolled back to the v14.1.2 production structure.
+- No active `v142_*.py` modules, mechanical splitter, mypy exclusion,
+  file-wide suppression, or runtime global binder remains.
+- Explicit Any collector schema 4 covers local and nested lexical scopes in
+  addition to direct, aliased, module-qualified, and quoted annotations.
+- ADR-016 records immutable recovery ceilings and keeps ARCH-014 and TYPE-003
+  open through v14.3.0. The original v14.2 numerical targets are not claimed.

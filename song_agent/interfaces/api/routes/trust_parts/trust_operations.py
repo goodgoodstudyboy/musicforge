@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any as _InterfaceType
 
-
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
 

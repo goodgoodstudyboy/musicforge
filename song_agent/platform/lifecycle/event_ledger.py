@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
-from song_agent.platform.contracts import as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json
 import shutil
@@ -21,12 +20,12 @@ HistoryHashMode = Literal["event", "payload"]
 @dataclass(frozen=True)
 class HistoryValidation:
     valid: bool
-    rows: tuple[ImplementationDocument, ...]
+    rows: tuple[dict[str, Any], ...]
     error_index: int | None = None
     error_code: str = ""
 
     @property
-    def latest(self) -> DomainDocument | None:
+    def latest(self) -> dict[str, Any] | None:
         return self.rows[-1] if self.rows else None
 
 
@@ -41,7 +40,7 @@ class HistoryMigrationReport:
     target_schema_version: int
     row_count: int
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "source_path": self.source_path,
             "target_path": self.target_path,
@@ -66,10 +65,10 @@ class HistoryChain:
         self.sanitizer = sanitizer
         self.hash_mode = hash_mode
 
-    def read(self) -> list[DomainDocument]:
+    def read(self) -> list[dict[str, Any]]:
         if not self.path.is_file():
             return []
-        rows: list[ImplementationDocument] = []
+        rows: list[dict[str, Any]] = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
@@ -99,7 +98,7 @@ class HistoryChain:
             previous = str(row.get("event_hash") or "")
         return HistoryValidation(True, tuple(rows))
 
-    def append(self, payload: DomainDocument) -> DomainDocument:
+    def append(self, payload: dict[str, Any]) -> dict[str, Any]:
         validation = self.validate()
         if not validation.valid:
             raise ValueError(f"Cannot append to invalid history: {validation.error_code}")
@@ -115,7 +114,7 @@ class HistoryChain:
         return event
 
     @staticmethod
-    def build_event(payload: DomainDocument, *, previous_event_hash: str = "", sanitizer: Sanitizer = sanitize_metadata) -> DomainDocument:
+    def build_event(payload: dict[str, Any], *, previous_event_hash: str = "", sanitizer: Sanitizer = sanitize_metadata) -> dict[str, Any]:
         event = sanitizer({**payload, "previous_event_hash": previous_event_hash})
         event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
@@ -133,16 +132,16 @@ class HistoryChain:
             return stable_hash(payload)
         return stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
 
-    def through(self, event_hash: str) -> list[DomainDocument]:
-        rows: list[ImplementationDocument] = []
+    def through(self, event_hash: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
         for row in self.read():
             rows.append(row)
             if row.get("event_hash") == event_hash:
                 return rows
         raise ValueError("History event was not found.")
 
-    def latest_state(self, event_states: dict[str, str], *, default: str = "unsigned") -> DomainDocument:
-        state: ImplementationDocument = {"status": default, "event": None}
+    def latest_state(self, event_states: dict[str, str], *, default: str = "unsigned") -> dict[str, Any]:
+        state: dict[str, Any] = {"status": default, "event": None}
         for row in self.read():
             event_type = str(row.get("event_type") or "")
             if event_type in event_states:

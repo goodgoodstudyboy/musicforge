@@ -1,9 +1,8 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -40,17 +39,17 @@ class AcceptanceKnowledgeBaseNotFoundError(AcceptanceKnowledgeBaseError):
 class KnowledgeEntry:
     entry_id: str
     status: str
-    source: ImplementationDocument
-    target: ImplementationDocument
-    problem: ImplementationDocument
-    fix: ImplementationDocument
-    outcome: ImplementationDocument
-    evidence: ImplementationDocument
+    source: dict[str, Any]
+    target: dict[str, Any]
+    problem: dict[str, Any]
+    fix: dict[str, Any]
+    outcome: dict[str, Any]
+    evidence: dict[str, Any]
     warnings: list[str] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         status = self.status if self.status in ENTRY_STATUSES else "active"
         return sanitize_metadata(
             {
@@ -70,7 +69,7 @@ class KnowledgeEntry:
         )
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "KnowledgeEntry":
+    def from_dict(cls, data: dict[str, Any]) -> "KnowledgeEntry":
         now = now_iso()
         return cls(
             entry_id=_validate_id(str(data.get("entry_id") or "akb-000001"), "akb"),
@@ -121,7 +120,7 @@ class AcceptanceKnowledgeBaseStore:
     def latest_path(self) -> Path:
         return self.reports_dir() / "latest.json"
 
-    def refresh(self, scope: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def refresh(self, scope: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         now = now or now_iso()
         with self.lock:
             self.entries_dir().mkdir(parents=True, exist_ok=True)
@@ -157,13 +156,13 @@ class AcceptanceKnowledgeBaseStore:
             write_json(self.latest_path(), report)
             return report
 
-    def latest_report(self) -> DomainDocument:
+    def latest_report(self) -> dict[str, Any]:
         path = self.latest_path()
         if not path.exists():
             return self.refresh()
         return self._with_stale(read_json(path))
 
-    def get_report(self, report_id: str) -> DomainDocument:
+    def get_report(self, report_id: str) -> dict[str, Any]:
         path = self.report_dir(report_id) / "knowledge-report.json"
         if not path.exists():
             raise AcceptanceKnowledgeBaseNotFoundError(report_id)
@@ -197,7 +196,7 @@ class AcceptanceKnowledgeBaseStore:
             self._write_entry(updated)
             return updated
 
-    def search_entries(self, query: DomainDocument | None = None, *, include_hidden: bool = False) -> list[KnowledgeEntry]:
+    def search_entries(self, query: dict[str, Any] | None = None, *, include_hidden: bool = False) -> list[KnowledgeEntry]:
         query = query or {}
         issue_type = _normalize_issue(query.get("issue_type") or query.get("issue_types"))
         style = _normalize_text(query.get("style"))
@@ -224,7 +223,7 @@ class AcceptanceKnowledgeBaseStore:
             rows.append(entry)
         return sorted(rows, key=lambda entry: (-int(entry.outcome.get("effectiveness_score") or 0), str(entry.entry_id)))
 
-    def recommend(self, payload: DomainDocument | None = None) -> DomainDocument:
+    def recommend(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         matches = self.search_entries(payload)[:8]
         effective = [entry for entry in matches if entry.outcome.get("outcome_status") == "effective"]
@@ -257,8 +256,8 @@ class AcceptanceKnowledgeBaseStore:
             }
         )
 
-    def summary(self, *, project_id: str | None = None, release_id: str | None = None) -> DomainDocument:
-        query: ImplementationDocument = {}
+    def summary(self, *, project_id: str | None = None, release_id: str | None = None) -> dict[str, Any]:
+        query: dict[str, Any] = {}
         if project_id:
             query["project_id"] = project_id
         if release_id:
@@ -345,10 +344,10 @@ def build_entry_from_sources(
     *,
     entry_id: str,
     sprint: AcceptanceFixSprint,
-    items: list[DomainDocument],
-    delta: DomainDocument,
-    closeout: DomainDocument,
-    task_sources: list[DomainDocument],
+    items: list[dict[str, Any]],
+    delta: dict[str, Any],
+    closeout: dict[str, Any],
+    task_sources: list[dict[str, Any]],
     source_fingerprint: str,
     created_at: str,
     now: str,
@@ -423,7 +422,7 @@ def build_entry_from_sources(
     )
 
 
-def effectiveness_score(delta_summary: DomainDocument, *, task_statuses: list[str], open_item_count: int, waived_count: int, forced: bool) -> int:
+def effectiveness_score(delta_summary: dict[str, Any], *, task_statuses: list[str], open_item_count: int, waived_count: int, forced: bool) -> int:
     score = 0
     before = str(delta_summary.get("before_readiness") or "missing")
     after = str(delta_summary.get("after_readiness") or "missing")
@@ -454,7 +453,7 @@ def effectiveness_score(delta_summary: DomainDocument, *, task_statuses: list[st
     return max(0, min(100, score))
 
 
-def outcome_status_for_score(score: int, delta_summary: DomainDocument) -> str:
+def outcome_status_for_score(score: int, delta_summary: dict[str, Any]) -> str:
     if not delta_summary:
         return "unknown"
     if score >= 70:
@@ -464,7 +463,299 @@ def outcome_status_for_score(score: int, delta_summary: DomainDocument) -> str:
     return "ineffective"
 
 
-from song_agent.domains.quality import v142_ak_readiness as _v142_ak_readiness
-from song_agent.domains.quality.v142_ak_readiness import build_knowledge_report as build_knowledge_report, knowledge_report_summary as knowledge_report_summary, write_acceptance_kb_summary as write_acceptance_kb_summary, knowledge_entry_summary as knowledge_entry_summary, _issue_patterns as _issue_patterns, _style_patterns as _style_patterns, _song_patterns as _song_patterns, _fix_patterns as _fix_patterns, _knowledge_recommendations as _knowledge_recommendations, _entries_source_hash as _entries_source_hash, _sprint_source as _sprint_source, _item_source as _item_source, _delta_source as _delta_source, _closeout_source as _closeout_source, _issue_types_from_item as _issue_types_from_item, _issue_types_from_text as _issue_types_from_text, _issue_types_from_payload as _issue_types_from_payload, _normalize_issue as _normalize_issue, _style_from_items as _style_from_items, _safe_scope as _safe_scope, _risk_for_items as _risk_for_items, _top_values as _top_values, _bounded as _bounded, _normalize_text as _normalize_text, _safe_dict as _safe_dict, _float_or_none as _float_or_none, _int_or_none as _int_or_none, _validate_id as _validate_id, _append_event as _append_event
+def build_knowledge_report(entries: list[KnowledgeEntry], *, scope: dict[str, Any], report_id: str, generated_at: str, warnings: list[str] | None = None) -> dict[str, Any]:
+    active = [entry for entry in entries if entry.status == "active"]
+    scores = [int(entry.outcome.get("effectiveness_score") or 0) for entry in active if str(entry.outcome.get("outcome_status") or "") != "unknown"]
+    issue_patterns = _issue_patterns(active)
+    style_patterns = _style_patterns(active)
+    song_patterns = _song_patterns(active)
+    recommendations = _knowledge_recommendations(issue_patterns, style_patterns, song_patterns)
+    report = {
+        "schema_version": ACCEPTANCE_KB_REPORT_SCHEMA_VERSION,
+        "report_id": report_id,
+        "scope": _safe_scope(scope),
+        "generated_at": generated_at,
+        "source_hash": _entries_source_hash(active),
+        "summary": {
+            "entry_count": len(active),
+            "effective_count": sum(1 for entry in active if entry.outcome.get("outcome_status") == "effective"),
+            "mixed_count": sum(1 for entry in active if entry.outcome.get("outcome_status") == "mixed"),
+            "ineffective_count": sum(1 for entry in active if entry.outcome.get("outcome_status") == "ineffective"),
+            "waived_count": sum(int(entry.fix.get("waived_count") or 0) for entry in active),
+            "average_effectiveness_score": round(sum(scores) / len(scores), 2) if scores else None,
+            "recurring_issue_count": len([item for item in issue_patterns if int(item.get("entry_count") or 0) > 1]),
+        },
+        "issue_patterns": issue_patterns,
+        "style_patterns": style_patterns,
+        "song_patterns": song_patterns,
+        "fix_patterns": _fix_patterns(active),
+        "recommendations": recommendations,
+        "warnings": sorted(set(_bounded(item, 180) for item in (warnings or []) if str(item).strip())),
+        "stale": False,
+    }
+    return sanitize_metadata(report)
 
-_v142_ak_readiness.bind_globals(globals())
+
+def knowledge_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+    data = _as_document(report)
+    summary = _as_document(data.get("summary"))
+    issue_patterns = [item for item in data.get("issue_patterns", []) if isinstance(item, dict)]
+    warnings = [str(item) for item in data.get("warnings", []) if str(item).strip()] if isinstance(data.get("warnings"), list) else []
+    return sanitize_metadata(
+        {
+            "status": "available" if data and int(summary.get("entry_count") or 0) > 0 else "missing",
+            "report_id": data.get("report_id"),
+            "entry_count": summary.get("entry_count", 0),
+            "effective_count": summary.get("effective_count", 0),
+            "mixed_count": summary.get("mixed_count", 0),
+            "ineffective_count": summary.get("ineffective_count", 0),
+            "waived_count": summary.get("waived_count", 0),
+            "average_effectiveness_score": summary.get("average_effectiveness_score"),
+            "recurring_issue_count": summary.get("recurring_issue_count", 0),
+            "top_recurring_issues": [item.get("issue_type") for item in issue_patterns[:5] if item.get("issue_type")],
+            "warning_count": len(warnings),
+            "warnings": warnings[:5],
+            "stale": bool(data.get("stale", False)),
+        }
+    )
+
+
+def write_acceptance_kb_summary(path: Path, store: AcceptanceKnowledgeBaseStore, *, release_id: str | None = None, project_id: str | None = None) -> dict[str, Any]:
+    summary = store.summary(release_id=release_id, project_id=project_id)
+    write_json(path, summary)
+    return summary
+
+
+def knowledge_entry_summary(entry: KnowledgeEntry | dict[str, Any]) -> dict[str, Any]:
+    data = entry.to_dict() if isinstance(entry, KnowledgeEntry) else _as_document(entry)
+    target = _as_document(data.get("target"))
+    outcome = _as_document(data.get("outcome"))
+    fix = _as_document(data.get("fix"))
+    return sanitize_metadata(
+        {
+            "entry_id": data.get("entry_id"),
+            "status": data.get("status"),
+            "fix_sprint_id": (_as_document(data.get("source"))).get("fix_sprint_id"),
+            "project_id": target.get("project_id"),
+            "release_id": target.get("release_id"),
+            "song_id": target.get("song_id"),
+            "style": target.get("style"),
+            "issue_types": _as_list(target.get("issue_types")),
+            "outcome_status": outcome.get("outcome_status"),
+            "effectiveness_score": outcome.get("effectiveness_score"),
+            "waived_count": fix.get("waived_count", 0),
+            "warnings": _as_list(data.get("warnings")),
+        }
+    )
+
+
+def _issue_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
+    grouped: dict[str, list[KnowledgeEntry]] = {}
+    for entry in entries:
+        for issue in entry.target.get("issue_types", []) if isinstance(entry.target.get("issue_types"), list) else ["other"]:
+            grouped.setdefault(str(issue or "other"), []).append(entry)
+    rows = []
+    for issue, items in grouped.items():
+        scores = [int(entry.outcome.get("effectiveness_score") or 0) for entry in items]
+        rows.append(
+            {
+                "issue_type": issue,
+                "entry_count": len(items),
+                "effective_count": sum(1 for entry in items if entry.outcome.get("outcome_status") == "effective"),
+                "average_effectiveness_score": round(sum(scores) / len(scores), 2) if scores else None,
+                "top_styles": _top_values([entry.target.get("style") for entry in items]),
+                "common_resolution_types": _top_values([status for entry in items for status in entry.fix.get("resolution_types", [])]),
+                "risk": _risk_for_items(items),
+            }
+        )
+    return sorted(rows, key=lambda item: (-int(item.get("entry_count") or 0), str(item.get("issue_type") or "")))
+
+
+def _style_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
+    grouped: dict[str, list[KnowledgeEntry]] = {}
+    for entry in entries:
+        grouped.setdefault(str(entry.target.get("style") or "unknown"), []).append(entry)
+    rows = []
+    for style, items in grouped.items():
+        scores = [int(entry.outcome.get("effectiveness_score") or 0) for entry in items]
+        recurring = _top_values([issue for entry in items for issue in entry.target.get("issue_types", [])], limit=5)
+        average = round(sum(scores) / len(scores), 2) if scores else None
+        rows.append({"style": style, "entry_count": len(items), "recurring_issues": recurring, "average_effectiveness_score": average, "stability_status": "stable" if average is not None and average >= 70 else "watch"})
+    return sorted(rows, key=lambda item: (-int(item.get("entry_count") or 0), str(item.get("style") or "")))
+
+
+def _song_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
+    grouped: dict[str, list[KnowledgeEntry]] = {}
+    for entry in entries:
+        grouped.setdefault(str(entry.target.get("song_id") or "unknown"), []).append(entry)
+    rows = []
+    for song_id, items in grouped.items():
+        latest = sorted(items, key=lambda entry: entry.updated_at, reverse=True)[0]
+        rows.append(
+            {
+                "song_id": song_id,
+                "entry_count": len(items),
+                "recurring_issues": _top_values([issue for entry in items for issue in entry.target.get("issue_types", [])], limit=5),
+                "latest_outcome": latest.outcome.get("outcome_status"),
+                "stability_status": "needs_monitoring" if len(items) > 1 or latest.outcome.get("outcome_status") != "effective" else "stable",
+            }
+        )
+    return sorted(rows, key=lambda item: (-int(item.get("entry_count") or 0), str(item.get("song_id") or "")))
+
+
+def _fix_patterns(entries: list[KnowledgeEntry]) -> list[ImplementationDocument]:
+    return [
+        {
+            "pattern": "manual_review_task_resolution",
+            "entry_count": len(entries),
+            "resolved_task_count": sum(len([status for status in entry.fix.get("resolution_types", []) if status == "resolved"]) for entry in entries),
+            "waived_count": sum(int(entry.fix.get("waived_count") or 0) for entry in entries),
+        }
+    ] if entries else []
+
+
+def _knowledge_recommendations(issue_patterns: list[ImplementationDocument], style_patterns: list[ImplementationDocument], song_patterns: list[ImplementationDocument]) -> list[ImplementationDocument]:
+    rows = []
+    if issue_patterns:
+        weakest = sorted(issue_patterns, key=lambda item: float(item.get("average_effectiveness_score") or 0))[0]
+        rows.append({"recommendation_id": "akbr-rec-001", "type": "monitor_issue", "issue_type": weakest.get("issue_type"), "reason": f"Historical {weakest.get('issue_type')} fixes average {weakest.get('average_effectiveness_score')} effectiveness.", "manual_required": True})
+    if style_patterns:
+        watch = [item for item in style_patterns if item.get("stability_status") == "watch"]
+        if watch:
+            rows.append({"recommendation_id": "akbr-rec-002", "type": "review_style", "style": watch[0].get("style"), "reason": f"{watch[0].get('style')} remains in watch status.", "manual_required": True})
+    if song_patterns:
+        needs = [item for item in song_patterns if item.get("stability_status") == "needs_monitoring"]
+        if needs:
+            rows.append({"recommendation_id": "akbr-rec-003", "type": "monitor_song", "song_id": needs[0].get("song_id"), "reason": f"{needs[0].get('song_id')} has recurring acceptance history.", "manual_required": True})
+    return rows
+
+
+def _entries_source_hash(entries: list[KnowledgeEntry]) -> str:
+    payload = [knowledge_entry_summary(entry) | {"source_fingerprint": entry.source.get("source_fingerprint")} for entry in sorted(entries, key=lambda item: item.entry_id)]
+    return stable_hash(payload)
+
+
+def _sprint_source(sprint: AcceptanceFixSprint) -> ImplementationDocument:
+    return {"fix_sprint_id": sprint.fix_sprint_id, "status": sprint.status, "scope": sprint.scope, "source": sprint.source, "recheck": sprint.recheck, "delta_summary": sprint.delta_summary, "closeout_summary": sprint.closeout_summary}
+
+
+def _item_source(item: ImplementationDocument) -> ImplementationDocument:
+    return {"item_id": item.get("item_id"), "status": item.get("status"), "source": item.get("source"), "target": item.get("target"), "review_task_id": item.get("review_task_id"), "resolution": item.get("resolution")}
+
+
+def _delta_source(delta: ImplementationDocument) -> ImplementationDocument:
+    return {"source": delta.get("source"), "recheck": delta.get("recheck"), "summary": delta.get("summary"), "issue_deltas": delta.get("issue_deltas"), "song_deltas": delta.get("song_deltas")}
+
+
+def _closeout_source(closeout: ImplementationDocument) -> ImplementationDocument:
+    return {"status": closeout.get("status"), "forced": closeout.get("forced"), "checks": closeout.get("checks"), "summary": closeout.get("summary")}
+
+
+def _issue_types_from_item(item: ImplementationDocument) -> list[str]:
+    target = _as_document(item.get("target"))
+    source = _as_document(item.get("source"))
+    evidence = _as_document(item.get("evidence"))
+    values: list[_InferenceType] = []
+    for container in (target, evidence, source):
+        raw = container.get("issue_types")
+        if isinstance(raw, list):
+            values.extend(str(item).strip().lower() for item in raw if str(item).strip())
+    if not values:
+        text = f"{item.get('title') or ''} {item.get('summary') or ''}"
+        values = _issue_types_from_text(text)
+    return sorted(set(values or ["other"]))
+
+
+def _issue_types_from_text(text: str) -> list[str]:
+    lower = str(text or "").lower()
+    found = []
+    for issue in ("hook", "melody", "harmony", "rhythm", "arrangement", "structure", "lyrics", "sound", "mix", "performance", "rendering", "metadata", "workflow"):
+        if issue in lower:
+            found.append(issue)
+    return found or ["other"]
+
+
+def _issue_types_from_payload(payload: ImplementationDocument) -> list[str]:
+    raw = payload.get("issue_types")
+    if isinstance(raw, list):
+        return [str(item).strip().lower() for item in raw if str(item).strip()]
+    issue = str(payload.get("issue_type") or "").strip().lower()
+    return [issue] if issue else []
+
+
+def _normalize_issue(value: Any) -> str:
+    if isinstance(value, list):
+        return str(value[0] if value else "").strip().lower()
+    return str(value or "").strip().lower()
+
+
+def _style_from_items(items: list[ImplementationDocument]) -> str:
+    for item in items:
+        target = _as_document(item.get("target"))
+        if target.get("style"):
+            return str(target.get("style"))
+    return "unknown"
+
+
+def _safe_scope(scope: ImplementationDocument) -> ImplementationDocument:
+    return {"type": str(scope.get("type") or "global"), "project_id": scope.get("project_id"), "release_id": scope.get("release_id"), "song_id": scope.get("song_id"), "style": scope.get("style"), "issue_type": scope.get("issue_type")}
+
+
+def _risk_for_items(items: list[KnowledgeEntry]) -> str:
+    average = sum(int(entry.outcome.get("effectiveness_score") or 0) for entry in items) / max(1, len(items))
+    if average < 40:
+        return "high"
+    if average < 70 or len(items) > 3:
+        return "medium"
+    return "low"
+
+
+def _top_values(values: list[Any], *, limit: int = 3) -> list[str]:
+    counts: dict[str, int] = {}
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        counts[text] = counts.get(text, 0) + 1
+    return [key for key, _count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]]
+
+
+def _bounded(value: Any, limit: int = 300) -> str:
+    text = sanitize_sensitive_text(str(value or "").strip())
+    return text[:limit]
+
+
+def _normalize_text(value: Any) -> str:
+    return re.sub(r"[^a-z0-9_ -]+", "", str(value or "").lower()).strip()
+
+
+def _safe_dict(value: Any) -> ImplementationDocument:
+    return sanitize_metadata(_as_document(value))
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _validate_id(value: str, prefix: str) -> str:
+    value = str(value or "").strip()
+    if not re.fullmatch(rf"{re.escape(prefix)}-\d{{6}}", value):
+        raise AcceptanceKnowledgeBaseError(f"Invalid {prefix} id.")
+    return value
+
+
+def _append_event(path: Path, event_type: str, payload: ImplementationDocument, now: str | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    event = sanitize_metadata({"event_type": event_type, "created_at": now or now_iso(), "payload": payload})
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")

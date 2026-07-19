@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
 
 from typing import Any as _InterfaceType
 
@@ -68,7 +69,7 @@ class StudioRoutesApplyReviewTaskCandidate(StudioRouteContext):
         return (False, None)
 
     def _apply_review_task_candidate(self, project_id: str, task_store: _InterfaceType, task: Any, candidate: Any, parent: Any, parent_job: _InterfaceType, parent_plan: _InterfaceType, payload: ImplementationDocument) -> tuple[Any, Any, Any, _InterfaceType, Any]:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._apply_review_task_candidate_part_01(project_id, task_store, task, candidate, parent, parent_job, parent_plan, payload, _split_state)
         if _split_result[0]:
             return _split_result[1]

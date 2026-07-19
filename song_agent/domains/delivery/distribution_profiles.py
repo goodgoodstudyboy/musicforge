@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
 from dataclasses import dataclass as dataclass, field as field
@@ -19,9 +18,9 @@ class DistributionProfile:
     profile_id: str
     name: str
     description: str
-    options: ImplementationDocument = field(default_factory=dict)
+    options: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         payload = {
             "schema_version": DISTRIBUTION_PROFILE_SCHEMA_VERSION,
             "profile_id": self.profile_id,
@@ -98,11 +97,11 @@ BUILTIN_DISTRIBUTION_PROFILES: dict[str, DistributionProfile] = {
 }
 
 
-def list_distribution_profiles() -> list[DomainDocument]:
+def list_distribution_profiles() -> list[dict[str, Any]]:
     return [profile.to_dict() for profile in BUILTIN_DISTRIBUTION_PROFILES.values()]
 
 
-def get_distribution_profile(profile_id: str) -> DomainDocument:
+def get_distribution_profile(profile_id: str) -> dict[str, Any]:
     key = str(profile_id or "").strip() or "generic_dsp"
     profile = BUILTIN_DISTRIBUTION_PROFILES.get(key)
     if profile is None:
@@ -110,7 +109,7 @@ def get_distribution_profile(profile_id: str) -> DomainDocument:
     return profile.to_dict()
 
 
-def merge_profile_options(profile: DomainDocument, overrides: DomainDocument | None = None) -> DomainDocument:
+def merge_profile_options(profile: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     base = dict(_as_document(profile.get("options")))
     overrides = _as_document(overrides)
     allowed = set(base) | {"artwork_id", "submission_note"}

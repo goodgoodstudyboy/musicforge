@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -56,10 +56,10 @@ def verify_unified_command_center_archive_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(checks, summary, _check("ucc_archive_zip_exists", False, "Unified Command Center Archive ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -138,16 +138,16 @@ def verify_unified_command_center_archive_package(
     return _finish(checks, summary)
 
 
-def write_unified_command_center_archive_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_unified_command_center_archive_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_command_center_archive_verification_exit_code(report: DomainDocument) -> int:
+def unified_command_center_archive_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _current_ucc_checks(zip_path: Path | str | None, report_path: Path | str | None, signoff: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     if not zip_path:
         return [_check("ucc_archive_current_ucc_zip_required", False, "Current UCC ZIP is required.")]
     if not report_path:
@@ -184,9 +184,9 @@ def _zip_manifest_hash(zip_path: Path | str) -> str | None:
 
 
 def _history_checks(history: list[ImplementationDocument], signoff: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     previous = ""
-    created_event: ImplementationDocument | None = None
+    created_event: dict[str, Any] | None = None
     for index, event in enumerate(history):
         payload_hash = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         expected_event_hash = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
@@ -312,7 +312,7 @@ def _read_json_file(path: Path) -> ImplementationDocument:
 
 
 def _parse_jsonl(text: str) -> list[ImplementationDocument]:
-    rows: list[ImplementationDocument] = []
+    rows: list[dict[str, Any]] = []
     for line in text.splitlines():
         if not line.strip():
             continue

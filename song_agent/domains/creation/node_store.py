@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import re as re
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
@@ -21,10 +21,10 @@ class NodeRecord:
     started_at: str | None = None
     finished_at: str | None = None
     attempt_count: int = 0
-    provider_snapshot: ImplementationDocument = field(default_factory=dict)
-    input_summary: ImplementationDocument = field(default_factory=dict)
-    output_summary: ImplementationDocument = field(default_factory=dict)
-    output: ImplementationDocument = field(default_factory=dict)
+    provider_snapshot: dict[str, Any] = field(default_factory=dict)
+    input_summary: dict[str, Any] = field(default_factory=dict)
+    output_summary: dict[str, Any] = field(default_factory=dict)
+    output: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     invalidated_at: str | None = None
     invalidated_by: str | None = None
@@ -33,7 +33,7 @@ class NodeRecord:
     depends_on: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: DomainDocument) -> "NodeRecord":
+    def from_dict(cls, data: dict[str, Any]) -> "NodeRecord":
         return cls(
             node=str(data["node"]),
             status=str(data["status"]),
@@ -58,10 +58,10 @@ class NodeRecord:
             depends_on=[str(item) for item in _list_or_empty(data.get("depends_on"))],
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
-    def to_summary_dict(self) -> DomainDocument:
+    def to_summary_dict(self) -> dict[str, Any]:
         return {
             "node": self.node,
             "status": self.status,
@@ -135,7 +135,7 @@ class NodeStore:
             invalidated.append(record)
         return invalidated
 
-    def read_required_output(self, node_name: str) -> DomainDocument:
+    def read_required_output(self, node_name: str) -> dict[str, Any]:
         record = self.read_node(node_name)
         if record.status not in {"completed", "skipped", "repaired"}:
             raise ValueError(f"Node {node_name} is not completed.")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -96,10 +96,10 @@ def verify_unified_release_program_continuity_distribution_package(
     max_zip_size_mb: int = 4096,
     max_uncompressed_size_mb: int = 8192,
     max_entry_count: int = 2000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -222,11 +222,11 @@ def verify_unified_release_program_continuity_distribution_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_continuity_distribution_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_unified_release_program_continuity_distribution_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_release_program_continuity_distribution_verification_exit_code(report: DomainDocument) -> int:
+def unified_release_program_continuity_distribution_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -322,7 +322,7 @@ def _source_binding_checks(
 
 
 def _deep_checks(archive: zipfile.ZipFile, verification_docs: dict[str, ImplementationDocument], binding_docs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="mf-urpcdk-") as temp:
         root = Path(temp).resolve()
         extracted: dict[str, Path] = {}

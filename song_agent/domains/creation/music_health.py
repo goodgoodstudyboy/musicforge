@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import math as math
 import wave as wave
@@ -24,14 +24,14 @@ def analyze_music_health(
     case_id: str | None = None,
     midi_path: Path | None = None,
     wav_path: Path | None = None,
-    validator_report: DomainDocument | None = None,
-    quality_report: DomainDocument | None = None,
+    validator_report: dict[str, Any] | None = None,
+    quality_report: dict[str, Any] | None = None,
     renderer_configured: bool = False,
     audio_not_required_status: str = "skipped_renderer_not_configured",
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     """Run deterministic checks that catch obvious broken music artifacts."""
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     notes = _all_notes(plan)
     section_summary = _section_summary(plan)
     track_summary = _track_summary(plan)
@@ -81,7 +81,7 @@ def analyze_music_health(
     checks.append(_check("quality_score_minimum", quality_overall is None or quality_overall >= 75, "warning", f"Quality score is {quality_overall if quality_overall is not None else 'not available'}."))
 
     midi_status = "missing"
-    midi_info: ImplementationDocument = {}
+    midi_info: dict[str, Any] = {}
     if midi_path is None:
         checks.append(_check("midi_exists", False, "blocking", "MIDI path was not provided."))
     elif not midi_path.exists():
@@ -155,7 +155,7 @@ def analyze_music_health(
     )
 
 
-def music_health_summary(report: DomainDocument | None) -> DomainDocument:
+def music_health_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -173,7 +173,7 @@ def music_health_summary(report: DomainDocument | None) -> DomainDocument:
     )
 
 
-def music_health_allows_review(report: DomainDocument | None) -> bool:
+def music_health_allows_review(report: dict[str, Any] | None) -> bool:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return data.get("status") in {"passed", "warning"} and int(summary.get("blocking_failed", 0) or 0) == 0

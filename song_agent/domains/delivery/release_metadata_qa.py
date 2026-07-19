@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import re as re
 from typing import Any as Any
@@ -23,9 +23,9 @@ EXPLICIT_WORDS = re.compile(r"(?i)\b(fuck|shit|bitch|explicit)\b")
 def build_release_metadata_qa_report(
     *,
     release: ReleaseDocument,
-    metadata: DomainDocument | None,
+    metadata: dict[str, Any] | None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     metadata = _as_document(metadata)
     release_checks = _release_checks(release, metadata)
@@ -56,7 +56,7 @@ def build_release_metadata_qa_report(
     return sanitize_metadata(report, blocked_keys=METADATA_BLOCKED_KEYS)
 
 
-def release_metadata_qa_summary(report: DomainDocument | None) -> DomainDocument:
+def release_metadata_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -72,7 +72,7 @@ def release_metadata_qa_summary(report: DomainDocument | None) -> DomainDocument
     )
 
 
-def mark_release_metadata_qa_stale(report: DomainDocument | None, *, current_source_hash: str | None = None) -> DomainDocument:
+def mark_release_metadata_qa_stale(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> dict[str, Any]:
     data = dict(report or {})
     data["status"] = "stale"
     data["stale"] = True

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -37,14 +37,14 @@ def build_release_qa_report(
     release: ReleaseDocument,
     release_store: ReleaseStore,
     project_store: ProjectStore,
-    options: DomainDocument | None = None,
+    options: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     options = options or {}
     source = release_source_state(release, project_store=project_store, release_store=release_store)
     checks = _release_checks(release, options, source)
-    track_checks: list[ImplementationDocument] = []
+    track_checks: list[dict[str, Any]] = []
     for track in release.tracks:
         track_checks.extend(_track_checks(track, project_store=project_store, options=options, source=source["tracks"].get(track.track_id, {})))
     checks.extend(_cross_track_checks(release))
@@ -80,8 +80,8 @@ def release_source_state(
     *,
     project_store: ProjectStore,
     release_store: ReleaseStore | None = None,
-) -> DomainDocument:
-    tracks: ImplementationDocument = {}
+) -> dict[str, Any]:
+    tracks: dict[str, Any] = {}
     for track in release.tracks:
         tracks[track.track_id] = _track_source_state(track, project_store)
     return sanitize_metadata(
@@ -103,11 +103,11 @@ def release_source_hash(
     return release_source_hash_from_state(release_source_state(release, project_store=project_store, release_store=release_store))
 
 
-def release_source_hash_from_state(source: DomainDocument) -> str:
+def release_source_hash_from_state(source: dict[str, Any]) -> str:
     return stable_hash(source)
 
 
-def release_qa_summary(report: DomainDocument | None) -> DomainDocument:
+def release_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -123,7 +123,7 @@ def release_qa_summary(report: DomainDocument | None) -> DomainDocument:
     )
 
 
-def release_qa_allows_export(report: DomainDocument | None, *, current_source_hash: str | None = None) -> bool:
+def release_qa_allows_export(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> bool:
     if not isinstance(report, dict):
         return False
     if report.get("status") not in {"passed", "warning"}:
@@ -133,11 +133,11 @@ def release_qa_allows_export(report: DomainDocument | None, *, current_source_ha
     return True
 
 
-def release_qa_allows_signoff(report: DomainDocument | None, *, current_source_hash: str | None = None) -> bool:
+def release_qa_allows_signoff(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> bool:
     return release_qa_allows_export(report, current_source_hash=current_source_hash)
 
 
-def mark_release_qa_stale(report: DomainDocument | None, *, current_source_hash: str | None = None) -> DomainDocument:
+def mark_release_qa_stale(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> dict[str, Any]:
     data = dict(report or {})
     data["status"] = "stale"
     data["stale"] = True
@@ -149,11 +149,11 @@ def mark_release_qa_stale(report: DomainDocument | None, *, current_source_hash:
 def build_release_signoff_record(
     *,
     release: ReleaseDocument,
-    report: DomainDocument,
-    payload: DomainDocument | None = None,
-    export_manifest: DomainDocument | None = None,
+    report: dict[str, Any],
+    payload: dict[str, Any] | None = None,
+    export_manifest: dict[str, Any] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     payload = payload or {}
     force = bool(payload.get("force", False))
@@ -181,7 +181,7 @@ def build_release_signoff_record(
     return sanitize_metadata(record, blocked_keys=BLOCKED_RELEASE_KEYS)
 
 
-def release_signoff_summary(record: DomainDocument | None) -> DomainDocument:
+def release_signoff_summary(record: dict[str, Any] | None) -> dict[str, Any]:
     data = _as_document(record)
     return sanitize_metadata(
         {
@@ -198,7 +198,7 @@ def release_signoff_summary(record: DomainDocument | None) -> DomainDocument:
     )
 
 
-def signoff_history_event(record: DomainDocument, *, reason: str, now: str | None = None) -> DomainDocument:
+def signoff_history_event(record: dict[str, Any], *, reason: str, now: str | None = None) -> dict[str, Any]:
     return sanitize_metadata(
         {
             "timestamp": now or now_iso(),
@@ -210,8 +210,8 @@ def signoff_history_event(record: DomainDocument, *, reason: str, now: str | Non
     )
 
 
-def scan_release_payload_for_sensitive_values(payload: Any) -> list[DomainDocument]:
-    findings: list[ImplementationDocument] = []
+def scan_release_payload_for_sensitive_values(payload: Any) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
 
     def walk(value: Any, path: str) -> None:
         if isinstance(value, dict):
@@ -237,7 +237,7 @@ def scan_release_payload_for_sensitive_values(payload: Any) -> list[DomainDocume
 
 
 def _track_source_state(track: ReleaseTrack, project_store: ProjectStore) -> ImplementationDocument:
-    state: ImplementationDocument = {"track_id": track.track_id, "project_id": track.project_id, "version_id": track.version_id}
+    state: dict[str, Any] = {"track_id": track.track_id, "project_id": track.project_id, "version_id": track.version_id}
     try:
         document = project_store.get_project(track.project_id)
         project_dir = project_store.project_dir(track.project_id)
@@ -285,7 +285,7 @@ def _release_checks(release: ReleaseDocument, options: ImplementationDocument, s
 
 
 def _track_checks(track: ReleaseTrack, *, project_store: ProjectStore, options: ImplementationDocument, source: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     try:
         document = project_store.get_project(track.project_id)
         project_dir = project_store.project_dir(track.project_id)

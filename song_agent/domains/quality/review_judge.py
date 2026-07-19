@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -30,9 +30,9 @@ def build_review_judge_prompt_payload(
     task: ReviewTask,
     candidates: list[ReviewCandidate],
     parent_plan: SongPlan,
-    decision_report: DomainDocument | None = None,
+    decision_report: dict[str, Any] | None = None,
     note: str = "",
-) -> DomainDocument:
+) -> dict[str, Any]:
     ready = _ready_candidates(candidates)
     payload = {
         "task": {
@@ -67,11 +67,11 @@ def run_provider_review_judge(
     parent_plan: SongPlan,
     template: PromptTemplate,
     config: ProviderConfig,
-    decision_report: DomainDocument | None = None,
+    decision_report: dict[str, Any] | None = None,
     note: str = "",
     now: str | None = None,
     client: Any | None = None,
-) -> tuple[DomainDocument, DomainDocument]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     now = now or now_iso()
     config.validate_ready_for_provider()
     if not template.enabled:
@@ -126,10 +126,10 @@ def build_judge_report(
     candidates: list[ReviewCandidate],
     parent_plan: SongPlan,
     template: PromptTemplate,
-    provider_output: DomainDocument,
-    provider_snapshot: DomainDocument,
+    provider_output: dict[str, Any],
+    provider_snapshot: dict[str, Any],
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     if not isinstance(provider_output, dict):
         raise ReviewJudgeError("Provider judge output must be a JSON object.")
@@ -214,7 +214,7 @@ def judge_source_hash(*, task: ReviewTask, candidates: list[ReviewCandidate], pa
 
 
 def judge_report_stale(
-    report: DomainDocument | None,
+    report: dict[str, Any] | None,
     *,
     task: ReviewTask,
     candidates: list[ReviewCandidate],
@@ -236,7 +236,7 @@ def read_judge_report_with_stale(
     candidates: list[ReviewCandidate] | None = None,
     parent_plan: SongPlan | None = None,
     template: PromptTemplate | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     report = task_store.read_judge_report(task.task_id, default={})
     if not report:
         return {}
@@ -249,7 +249,7 @@ def read_judge_report_with_stale(
     return mark_judge_report_stale(report, stale=stale)
 
 
-def mark_judge_report_stale(report: DomainDocument | None, *, stale: bool) -> DomainDocument:
+def mark_judge_report_stale(report: dict[str, Any] | None, *, stale: bool) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
     data = dict(report)
@@ -259,7 +259,7 @@ def mark_judge_report_stale(report: DomainDocument | None, *, stale: bool) -> Do
     return sanitize_metadata(data)
 
 
-def judge_report_summary(report: DomainDocument | None) -> DomainDocument:
+def judge_report_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {"status": "not_started", "manual_review_required": True}
     scores = _as_list(report.get("candidate_scores"))
@@ -286,10 +286,10 @@ def judge_report_summary(report: DomainDocument | None) -> DomainDocument:
 def sprint_judge_summary(
     *,
     sprint_id: str,
-    task_reports: list[DomainDocument],
-    provider_usage_records: list[DomainDocument] | None = None,
+    task_reports: list[dict[str, Any]],
+    provider_usage_records: list[dict[str, Any]] | None = None,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     now = now or now_iso()
     reports = [report for report in task_reports if isinstance(report, dict) and report]
     completed = [report for report in reports if report.get("status") == "completed"]
@@ -328,7 +328,7 @@ def sprint_judge_summary(
     )
 
 
-def judge_summary_for_apply(report: DomainDocument | None, *, candidate_id: str, stale: bool = False) -> DomainDocument:
+def judge_summary_for_apply(report: dict[str, Any] | None, *, candidate_id: str, stale: bool = False) -> dict[str, Any]:
     if not isinstance(report, dict) or not report:
         return {}
     summary = judge_report_summary(mark_judge_report_stale(report, stale=stale))

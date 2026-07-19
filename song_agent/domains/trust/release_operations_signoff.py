@@ -1,7 +1,6 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -31,13 +30,16 @@ OPERATIONS_CHANGE_REQUEST_SCHEMA_VERSION = 1
 
 
 
-from song_agent.domains.trust import v142_ros_readiness as _v142_ros_readiness
-from song_agent.domains.trust.v142_ros_readiness import ReleaseOperationsSignoffError as ReleaseOperationsSignoffError, ReleaseOperationsSignoffNotFoundError as ReleaseOperationsSignoffNotFoundError, ReleaseOperationsSignoffStateError as ReleaseOperationsSignoffStateError, operations_signoff_integrity_ok as operations_signoff_integrity_ok, operations_signoff_summary as operations_signoff_summary, operations_archive_manifest_integrity_ok as operations_archive_manifest_integrity_ok, _latest_runbook as _latest_runbook, _runbook_gate as _runbook_gate, _verifier_summary_from_report as _verifier_summary_from_report, _failed_verifier_summaries as _failed_verifier_summaries, _missing_submission_evidence as _missing_submission_evidence, _package_ledger_complete as _package_ledger_complete, _missing_package_count as _missing_package_count, _change_request_impact as _change_request_impact, _report_reference as _report_reference, _maybe_block as _maybe_block, _blocker as _blocker, _warning as _warning, _redaction_summary as _redaction_summary, _write_archive_readme as _write_archive_readme, _write_json as _write_json, _file_record as _file_record, _zip_entries as _zip_entries, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _sha256 as _sha256, _safe_text as _safe_text, _validate_change_request_id as _validate_change_request_id
+class ReleaseOperationsSignoffError(ValueError):
+    pass
 
 
+class ReleaseOperationsSignoffNotFoundError(ReleaseOperationsSignoffError):
+    pass
 
 
-
+class ReleaseOperationsSignoffStateError(ReleaseOperationsSignoffError):
+    pass
 
 
 class ReleaseOperationsSignoffStore:
@@ -77,24 +79,24 @@ class ReleaseOperationsSignoffStore:
     def archive_zip_path(self, release_id: str) -> Path:
         return self.operations_dir(release_id) / "operations-archive.zip"
 
-    def read_signoff(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
+    def read_signoff(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.signoff_path(release_id)
         if not path.exists():
             return default if default is not None else {}
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
-    def get_signoff(self, release_id: str) -> DomainDocument:
+    def get_signoff(self, release_id: str) -> dict[str, Any]:
         signoff = self.read_signoff(release_id, default={})
         if not signoff:
             raise ReleaseOperationsSignoffNotFoundError("Release Operations Signoff does not exist.")
         return signoff
 
-    def signoff_summary(self, release_id: str, *, signoff: DomainDocument | None = None) -> DomainDocument:
+    def signoff_summary(self, release_id: str, *, signoff: dict[str, Any] | None = None) -> dict[str, Any]:
         signoff = signoff if signoff is not None else self.read_signoff(release_id, default={})
         return operations_signoff_summary(signoff, current_report=self.operations_store.build_report(release_id, persist=False) if signoff else None)
 
-    def gate(self, release_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def gate(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         now = now or now_iso()
         report = self.operations_store.read_report(release_id, default={}) or self.operations_store.refresh(release_id, now=now)
@@ -103,8 +105,8 @@ class ReleaseOperationsSignoffStore:
         package_ledger = self.package_ledger(release_id, current_report=current)
         verifier_summary = _verifier_summary_from_report(current)
         change_summary = self.change_request_summary(release_id)
-        blockers: list[ImplementationDocument] = []
-        warnings: list[ImplementationDocument] = []
+        blockers: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
 
         force = bool(payload.get("force", False))
         override_reason = sanitize_sensitive_text(str(payload.get("override_reason") or "").strip())
@@ -164,7 +166,7 @@ class ReleaseOperationsSignoffStore:
             blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS,
         )
 
-    def signoff(self, release_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def signoff(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             now = now or now_iso()
@@ -202,7 +204,7 @@ class ReleaseOperationsSignoffStore:
             self.operations_store.refresh(release_id, now=now)
             return signoff
 
-    def reset_signoff(self, release_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def reset_signoff(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         reason = sanitize_sensitive_text(str(payload.get("reason") or "").strip())
         if len(reason) < 8:
@@ -249,7 +251,7 @@ class ReleaseOperationsSignoffStore:
             self.operations_store.refresh(release_id, now=now)
             return reset
 
-    def package_ledger(self, release_id: str, *, current_report: DomainDocument | None = None) -> DomainDocument:
+    def package_ledger(self, release_id: str, *, current_report: dict[str, Any] | None = None) -> dict[str, Any]:
         report = current_report or self.operations_store.build_report(release_id, persist=False)
         packages = _as_document(report.get("package_summaries"))
         release_zip = _as_document(packages.get("release_zip"))
@@ -274,7 +276,7 @@ class ReleaseOperationsSignoffStore:
         ledger["ledger_hash"] = stable_hash({key: value for key, value in ledger.items() if key != "ledger_hash"})
         return sanitize_metadata(ledger, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
-    def export_archive(self, release_id: str, *, now: str | None = None) -> DomainDocument:
+    def export_archive(self, release_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             signoff = self.get_signoff(release_id)
@@ -325,7 +327,7 @@ class ReleaseOperationsSignoffStore:
             self.release_store.append_event(release_id, "operations_archive_exported", {"status": summary.get("status")})
             return sanitize_metadata(manifest, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
-    def build_archive_zip(self, release_id: str, *, now: str | None = None) -> DomainDocument:
+    def build_archive_zip(self, release_id: str, *, now: str | None = None) -> dict[str, Any]:
         with self.lock:
             now = now or now_iso()
             export_dir = self.archive_export_dir(release_id).resolve()
@@ -354,16 +356,16 @@ class ReleaseOperationsSignoffStore:
             info = {"created_at": now, "filename": zip_path.name, "size_bytes": zip_path.stat().st_size, "sha256": _sha256(zip_path), "entry_count": len(entries), "entries": [entry for _path, entry in entries]}
             return sanitize_metadata(info, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
-    def read_archive_manifest(self, release_id: str) -> DomainDocument:
+    def read_archive_manifest(self, release_id: str) -> dict[str, Any]:
         path = self.archive_export_dir(release_id) / "operations-archive-manifest.json"
         if not path.exists():
             raise FileNotFoundError("Operations Archive export has not been generated.")
         value = read_json(path)
         return sanitize_metadata(_as_document(value), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
-    def list_change_requests(self, release_id: str, *, include_cancelled: bool = True) -> list[DomainDocument]:
+    def list_change_requests(self, release_id: str, *, include_cancelled: bool = True) -> list[dict[str, Any]]:
         root = self.change_requests_root(release_id)
-        rows: list[ImplementationDocument] = []
+        rows: list[dict[str, Any]] = []
         for path in sorted(root.glob("ocr-*.json")) if root.exists() else []:
             try:
                 item = sanitize_metadata(read_json(path), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
@@ -374,13 +376,13 @@ class ReleaseOperationsSignoffStore:
             rows.append(item)
         return sorted(rows, key=lambda item: str(item.get("updated_at") or item.get("created_at") or ""), reverse=True)
 
-    def get_change_request(self, release_id: str, change_request_id: str) -> DomainDocument:
+    def get_change_request(self, release_id: str, change_request_id: str) -> dict[str, Any]:
         path = self.change_request_path(release_id, change_request_id)
         if not path.exists():
             raise ReleaseOperationsSignoffNotFoundError("Operations Change Request does not exist.")
         return sanitize_metadata(read_json(path), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
 
-    def create_change_request(self, release_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def create_change_request(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         reason = sanitize_sensitive_text(str(payload.get("reason") or "").strip())
         if len(reason) < 8:
@@ -414,7 +416,7 @@ class ReleaseOperationsSignoffStore:
             self._append_change_event(release_id, "created", item, now=now)
             return item
 
-    def update_change_request_status(self, release_id: str, change_request_id: str, action: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def update_change_request_status(self, release_id: str, change_request_id: str, action: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         with self.lock:
             now = now or now_iso()
@@ -455,7 +457,7 @@ class ReleaseOperationsSignoffStore:
             self._append_change_event(release_id, action, item, now=now)
             return item
 
-    def change_request_summary(self, release_id: str) -> DomainDocument:
+    def change_request_summary(self, release_id: str) -> dict[str, Any]:
         rows = self.list_change_requests(release_id)
         counts: dict[str, int] = {}
         for item in rows:
@@ -496,4 +498,244 @@ class ReleaseOperationsSignoffStore:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
-_v142_ros_readiness.bind_globals(globals())
+
+
+
+
+def operations_signoff_integrity_ok(signoff: dict[str, Any] | None) -> bool:
+    data = _as_document(signoff)
+    return bool(data.get("payload_hash")) and str(data.get("payload_hash")) == operations_signoff_hash(data)
+
+
+def operations_signoff_summary(signoff: dict[str, Any] | None, *, current_report: dict[str, Any] | None = None) -> dict[str, Any]:
+    data = _as_document(signoff)
+    if not data:
+        return {"status": "not_signed", "integrity_ok": False, "payload_hash_ok": False, "stale": False}
+    payload_hash_ok = operations_signoff_integrity_ok(data)
+    current_source_hash = current_report.get("source_hash") if isinstance(current_report, dict) else None
+    stale = bool(current_source_hash and data.get("source_hash") and str(current_source_hash) != str(data.get("source_hash")))
+    gate = _as_document(data.get("gate"))
+    operations_report = _as_document(data.get("operations_report"))
+    return sanitize_metadata(
+        {
+            "status": data.get("status") or "missing",
+            "release_id": data.get("release_id"),
+            "signed_at": data.get("signed_at"),
+            "signed_by": data.get("signed_by"),
+            "force": bool(data.get("force")),
+            "payload_hash": data.get("payload_hash"),
+            "payload_hash_ok": payload_hash_ok,
+            "integrity_ok": payload_hash_ok,
+            "stale": stale,
+            "source_hash": data.get("source_hash"),
+            "current_source_hash": current_source_hash,
+            "operations_report_id": operations_report.get("report_id"),
+            "current_stage": operations_report.get("current_stage"),
+            "blocker_count": len(gate.get("blockers", [])) if isinstance(gate.get("blockers"), list) else 0,
+            "warning_count": len(gate.get("warnings", [])) if isinstance(gate.get("warnings"), list) else 0,
+        },
+        blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS,
+    )
+
+
+
+
+
+
+
+
+
+
+
+def operations_archive_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
+    data = _as_document(manifest)
+    return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == operations_archive_manifest_hash(data)
+
+
+def _latest_runbook(runbook_store: ReleaseOperationsRunbookStore, release_id: str) -> ImplementationDocument:
+    rows = runbook_store.list_runbooks(release_id, include_archived=True)
+    return rows[0] if rows else {}
+
+
+def _runbook_gate(runbook: ImplementationDocument, current_report: ImplementationDocument) -> ImplementationDocument:
+    if not runbook:
+        return {"status": "warning", "message": "No Release Operations Runbook exists.", "runbook_id": None}
+    summary = runbook_summary(runbook)
+    source = _as_document(runbook.get("source"))
+    stale = str(source.get("operations_source_hash") or "") != str(current_report.get("source_hash") or "")
+    failed_safe_count = sum(1 for item in runbook.get("items", []) if isinstance(item, dict) and item.get("risk") == "auto_safe" and item.get("status") == "failed")
+    pending_safe_count = sum(1 for item in runbook.get("items", []) if isinstance(item, dict) and item.get("risk") == "auto_safe" and item.get("status") in {"pending", "running"})
+    integrity_ok = runbook_integrity_ok(runbook)
+    status = "failed" if stale or failed_safe_count or pending_safe_count or not integrity_ok else "passed" if runbook.get("status") in {"completed", "blocked"} else "warning"
+    message = "Runbook evidence is current."
+    if stale:
+        message = "Release Operations Runbook is stale."
+    elif not integrity_ok:
+        message = "Release Operations Runbook integrity failed."
+    elif failed_safe_count:
+        message = "Release Operations Runbook has failed auto-safe items."
+    elif pending_safe_count:
+        message = "Release Operations Runbook still has pending auto-safe items."
+    return sanitize_metadata({**summary, "status": status, "stale": stale, "integrity_ok": integrity_ok, "failed_safe_count": failed_safe_count, "pending_safe_count": pending_safe_count, "message": message}, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
+
+
+def _verifier_summary_from_report(report: ImplementationDocument) -> ImplementationDocument:
+    return sanitize_metadata(_as_document(report.get("verifier_summaries")), blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS)
+
+
+def _failed_verifier_summaries(value: Any) -> list[ImplementationDocument]:
+    failed: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if isinstance(item, dict):
+                if item.get("status") not in {"passed", "warning", "missing"}:
+                    failed.append({"scope": key, **item})
+            elif isinstance(item, list):
+                failed.extend(_failed_verifier_summaries(item))
+    elif isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict) and item.get("status") not in {"passed", "warning", "missing"}:
+                failed.append(item)
+            elif isinstance(item, (list, dict)):
+                failed.extend(_failed_verifier_summaries(item))
+    return failed
+
+
+def _missing_submission_evidence(report: ImplementationDocument) -> bool:
+    domain = report.get("domains", {}).get("submission_evidence") if isinstance(report.get("domains"), dict) else {}
+    if not isinstance(domain, dict) or not domain.get("required"):
+        return False
+    summary = _as_document(domain.get("summary"))
+    return int(summary.get("accepted_count") or 0) <= 0 or domain.get("status") not in {"passed", "warning"}
+
+
+def _package_ledger_complete(ledger: ImplementationDocument) -> bool:
+    summary = _as_document(ledger.get("summary"))
+    return bool(summary.get("release_zip_exists")) and int(summary.get("missing_count") or 0) == 0
+
+
+def _missing_package_count(packages: ImplementationDocument) -> int:
+    missing = 0
+    release_zip = _as_document(packages.get("release_zip"))
+    if not release_zip.get("exists"):
+        missing += 1
+    for key in ("distribution_packages", "submission_packages", "submission_evidence_packages"):
+        for item in packages.get(key, []) if isinstance(packages.get(key), list) else []:
+            if isinstance(item, dict) and not item.get("exists"):
+                missing += 1
+    return missing
+
+
+def _change_request_impact(scope: list[str]) -> dict[str, bool]:
+    values = set(scope)
+    return {
+        "requires_release_signoff_reset": bool(values & {"metadata", "release_export", "release", "audio", "rights", "format_decision"}),
+        "requires_distribution_signoff_reset": bool(values & {"distribution", "release_export", "audio", "rights", "format_decision"}),
+        "requires_submission_signoff_reset": bool(values & {"submission", "distribution", "release_export"}),
+        "requires_operations_signoff_reset": True,
+    }
+
+
+def _report_reference(report: ImplementationDocument) -> ImplementationDocument:
+    return {"report_id": report.get("report_id"), "status": report.get("status"), "current_stage": report.get("current_stage"), "source_hash": report.get("source_hash"), "integrity_hash": report.get("integrity_hash"), "blocker_count": report.get("summary", {}).get("blocker_count") if isinstance(report.get("summary"), dict) else None, "warning_count": report.get("summary", {}).get("warning_count") if isinstance(report.get("summary"), dict) else None}
+
+
+def _maybe_block(blockers: list[ImplementationDocument], check_id: str, condition: bool, message: str) -> None:
+    if condition:
+        blockers.append(_blocker(check_id, message))
+
+
+def _blocker(check_id: str, message: str) -> ImplementationDocument:
+    return {"check_id": check_id, "severity": "blocking", "message": message}
+
+
+def _warning(check_id: str, message: str) -> ImplementationDocument:
+    return {"check_id": check_id, "severity": "warning", "message": message}
+
+
+def _redaction_summary(value: Any) -> ImplementationDocument:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    findings = []
+    from song_agent.domains.creation.redaction import SENSITIVE_VALUE_PATTERNS
+
+    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            findings.append({"pattern": replacement, "excerpt": sanitize_sensitive_text(match.group(0))[:120]})
+    return {"status": "failed" if findings else "passed", "finding_count": len(findings), "findings": findings[:20]}
+
+
+def _write_archive_readme(export_dir: Path, signoff: ImplementationDocument, report: ImplementationDocument) -> None:
+    lines = [
+        "MusicForge Release Operations Archive",
+        "",
+        f"Release ID: {signoff.get('release_id')}",
+        f"Signoff Status: {signoff.get('status')}",
+        f"Signed At: {signoff.get('signed_at') or '-'}",
+        f"Current Stage: {report.get('current_stage') or '-'}",
+        "",
+        "This archive contains summary evidence only. It does not include audio, artwork, package ZIPs, credentials, or platform account data.",
+    ]
+    (export_dir / "README.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_json(path: Path, data: ImplementationDocument) -> Path:
+    return write_json(path, sanitize_metadata(data, blocked_keys=OPERATIONS_SIGNOFF_BLOCKED_KEYS))
+
+
+def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
+    rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
+    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256(path)}
+
+
+def _zip_entries(export_dir: Path) -> list[tuple[Path, str]]:
+    entries: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+    for file in sorted(export_dir.rglob("*")):
+        if not file.is_file() or file.is_symlink():
+            continue
+        resolved = file.resolve()
+        _ensure_within(export_dir.resolve(), resolved)
+        entry = _validate_relative_path(resolved.relative_to(export_dir.resolve()).as_posix())
+        if entry in seen:
+            raise ReleaseOperationsSignoffStateError(f"Duplicate ZIP entry: {entry}.")
+        seen.add(entry)
+        entries.append((resolved, entry))
+    return entries
+
+
+def _validate_relative_path(value: str) -> str:
+    text = str(value or "")
+    if "\\" in text or not text or text.startswith("/") or text.startswith("//") or text.endswith("/"):
+        raise ReleaseOperationsSignoffStateError(f"Unsafe relative path: {value}.")
+    parts = text.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ReleaseOperationsSignoffStateError(f"Unsafe relative path: {value}.")
+    if ":" in parts[0]:
+        raise ReleaseOperationsSignoffStateError(f"Unsafe relative path: {value}.")
+    return text
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise ReleaseOperationsSignoffStateError("Refusing to operate outside release operations boundaries.") from exc
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_text(value: Any, limit: int) -> str:
+    return sanitize_sensitive_text(str(value or "").strip())[:limit]
+
+
+def _validate_change_request_id(value: str) -> str:
+    text = str(value or "")
+    if not text.startswith("ocr-") or not text.replace("ocr-", "", 1).isdigit():
+        raise ReleaseOperationsSignoffNotFoundError("Invalid Operations Change Request id.")
+    return text

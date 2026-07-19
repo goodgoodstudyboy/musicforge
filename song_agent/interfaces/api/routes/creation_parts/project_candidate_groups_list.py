@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any as _InferenceType
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -60,7 +61,7 @@ class CreationRoutesProjectCandidateGroupsList(CreationRouteContext):
         return (False, None)
 
     def _create_project_candidate_group(self, project_id: str, version_id: str, payload: ImplementationDocument, *, mark_asset_usage: bool=True) -> Any:
-        _split_state: ImplementationDocument = {}
+        _split_state: dict[str, _InferenceType] = {}
         _split_result = self._create_project_candidate_group_part_01(project_id, version_id, payload, mark_asset_usage, _split_state)
         if _split_result[0]:
             return _split_result[1]

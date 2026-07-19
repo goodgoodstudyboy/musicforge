@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -38,14 +38,14 @@ def verify_release_audio_baseline_registry_package(
     *,
     strict: bool = False,
     require_active: bool = False,
-    baseline_evidence: dict[str, DomainDocument] | None = None,
+    baseline_evidence: dict[str, dict[str, Any]] | None = None,
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> DomainDocument:
+) -> dict[str, Any]:
     zip_path = Path(zip_path)
-    checks: list[ImplementationDocument] = []
-    summary: ImplementationDocument = {
+    checks: list[dict[str, Any]] = []
+    summary: dict[str, Any] = {
         "zip_path": str(zip_path),
         "zip_sha256": None,
         "zip_size_bytes": 0,
@@ -115,11 +115,11 @@ def verify_release_audio_baseline_registry_package(
     return _finish(checks, summary)
 
 
-def write_release_audio_baseline_registry_verification_report(report: DomainDocument, path: Path | str) -> None:
+def write_release_audio_baseline_registry_verification_report(report: dict[str, Any], path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def release_audio_baseline_registry_verification_exit_code(report: DomainDocument) -> int:
+def release_audio_baseline_registry_verification_exit_code(report: dict[str, Any]) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -130,7 +130,7 @@ def build_baseline_source_binding(
     timeline_report_path: Path | str,
     certification_path: Path | str,
     certification_report_path: Path | str,
-) -> DomainDocument:
+) -> dict[str, Any]:
     facts = _external_facts(
         "baseline",
         timeline_path=timeline_path,
@@ -150,7 +150,7 @@ def build_baseline_source_binding(
 
 
 def _read_baselines(archive: zipfile.ZipFile, names: list[str]) -> list[ImplementationDocument]:
-    baselines: list[ImplementationDocument] = []
+    baselines: list[dict[str, Any]] = []
     for name in sorted(names):
         if name.startswith("baselines/") and name.endswith("/baseline.json"):
             baselines.append(_read_json_entry(archive, name))
@@ -158,7 +158,7 @@ def _read_baselines(archive: zipfile.ZipFile, names: list[str]) -> list[Implemen
 
 
 def _baseline_checks(baselines: list[ImplementationDocument], evidence: dict[str, ImplementationDocument], *, require_active: bool) -> list[ImplementationDocument]:
-    checks: list[ImplementationDocument] = []
+    checks: list[dict[str, Any]] = []
     active_baselines = [baseline for baseline in baselines if baseline.get("status") == "active"]
     if require_active:
         checks.append(_check("audio_baseline_registry_require_active", bool(active_baselines), "At least one active baseline exists."))

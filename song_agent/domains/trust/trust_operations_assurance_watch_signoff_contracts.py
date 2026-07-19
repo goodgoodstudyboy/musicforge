@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-from song_agent.platform.contracts import DomainDocument
+from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
@@ -46,17 +45,17 @@ ASSURANCE_WATCH_SIGNOFF_ARCHIVE_ENTRIES = {
 }
 
 
-def watch_signoff_hash(doc: DomainDocument) -> str:
+def watch_signoff_hash(doc: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in TRUST_OPERATIONS_ASSURANCE_WATCH_SIGNOFF_HASH_EXCLUDE_KEYS})
 
 
-def watch_signoff_manifest_hash(doc: DomainDocument) -> str:
+def watch_signoff_manifest_hash(doc: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in {"integrity_hash", "generated_at", "zip"}})
 
 
-def watch_signoff_history_event_payload_hash(event: DomainDocument) -> str:
+def watch_signoff_history_event_payload_hash(event: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
 
 
-def watch_signoff_history_event_hash(event: DomainDocument) -> str:
+def watch_signoff_history_event_hash(event: dict[str, Any]) -> str:
     return stable_hash({key: value for key, value in event.items() if key != "event_hash"})

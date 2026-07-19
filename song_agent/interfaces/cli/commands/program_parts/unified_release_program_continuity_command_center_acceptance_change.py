@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any as _InterfaceType
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
@@ -88,7 +89,7 @@ def _unified_command_center_requirements_from_args(args: argparse.Namespace) -> 
     return requirements
 
 def _unified_command_center_evidence_from_args(args: argparse.Namespace) -> ImplementationDocument:
-    evidence: ImplementationDocument = {
+    evidence: dict[str, _InterfaceType] = {
         "release": {
             "zip": getattr(args, "release_zip", None),
             "verification_report": getattr(args, "release_verification_report", None),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument
+from typing import Any as _InferenceType
 
 
 from . import dependencies as _commands_quality_parts_dependencies
@@ -232,7 +232,7 @@ def _build_audio_campaign_parser_part_02(_split_state):
     return (False, None)
 
 def build_audio_campaign_parser() -> argparse.ArgumentParser:
-    _split_state: ImplementationDocument = {}
+    _split_state: dict[str, _InferenceType] = {}
     _split_result = _build_audio_campaign_parser_part_01(_split_state)
     if _split_result[0]:
         return _split_result[1]

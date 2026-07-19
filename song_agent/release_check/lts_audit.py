@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import ast
 import io
 import json
@@ -8,6 +7,7 @@ import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from song_agent import __version__
 from song_agent.architecture_guardrails import build_architecture_snapshot, evaluate_architecture
@@ -49,7 +49,7 @@ ACTIVE_LIFECYCLE_STORES = (
 )
 
 
-def build_lts_audit(repo_root: Path | str = ".") -> DomainDocument:
+def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
     root = Path(repo_root).resolve()
     snapshot = build_architecture_snapshot(root)
     architecture = evaluate_architecture(root)
@@ -124,17 +124,17 @@ def build_lts_audit(repo_root: Path | str = ".") -> DomainDocument:
 
 def _lts_checks(
     root: Path,
-    source: ImplementationDocument,
+    source: dict[str, Any],
     *,
-    verifier_rows: list[ImplementationDocument],
-    lifecycle_rows: list[ImplementationDocument],
-    persistence_rows: list[ImplementationDocument],
-    module_limits: list[ImplementationDocument],
-    function_limits: list[ImplementationDocument],
+    verifier_rows: list[dict[str, Any]],
+    lifecycle_rows: list[dict[str, Any]],
+    persistence_rows: list[dict[str, Any]],
+    module_limits: list[dict[str, Any]],
+    function_limits: list[dict[str, Any]],
     expired_exceptions: list[str],
     expired_deprecations: list[str],
-    architecture: ImplementationDocument,
-    comparison: ImplementationDocument,
+    architecture: dict[str, Any],
+    comparison: dict[str, Any],
 ) -> dict[str, bool]:
     return {
         "production_cycles_zero": source["production_cycle_count"] == 0,
@@ -172,7 +172,7 @@ def _lts_checks(
 
 
 def _source_reduction_target(
-    comparison: ImplementationDocument,
+    comparison: dict[str, Any],
     version: str = __version__,
     *,
     root: Path | None = None,
@@ -194,7 +194,7 @@ def _source_reduction_target(
     return isinstance(previous.get("lines"), int) and isinstance(active_lines, int) and int(active_lines) <= int(previous["lines"])
 
 
-def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime: DomainDocument | None = None) -> Path:
+def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime: dict[str, Any] | None = None) -> Path:
     root = Path(repo_root).resolve()
     output = Path(target)
     output.mkdir(parents=True, exist_ok=True)
@@ -272,7 +272,7 @@ def write_reviewer_package(repo_root: Path | str, target: Path | str, *, runtime
     return output
 
 
-def _persistence_adoption_rows(root: Path) -> list[ImplementationDocument]:
+def _persistence_adoption_rows(root: Path) -> list[dict[str, Any]]:
     rows = []
     for capability in active_lifecycle_registry.all():
         relative = capability.module.replace(".", "/") + ".py"
@@ -292,7 +292,7 @@ def _persistence_adoption_rows(root: Path) -> list[ImplementationDocument]:
     return rows
 
 
-def _structured_limits(root: Path) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
+def _structured_limits(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     v14_policy = root / "architecture-v14-quality.json"
     if v14_policy.is_file():
         from song_agent.release_check.v14_quality import collect_complexity_metrics
@@ -310,8 +310,8 @@ def _structured_limits(root: Path) -> tuple[list[ImplementationDocument], list[I
             if "function_size" in blocker
         ]
         return module_rows, function_rows
-    module_rows: list[ImplementationDocument] = []
-    function_rows: list[ImplementationDocument] = []
+    module_rows: list[dict[str, Any]] = []
+    function_rows: list[dict[str, Any]] = []
     roots = ("platform", "application", "capabilities", "domains", "release_check")
     for path in sorted((root / "song_agent").rglob("*.py")):
         relative = path.relative_to(root / "song_agent")
@@ -431,7 +431,7 @@ def _deprecated_surface_exists(root: Path, value: str) -> bool:
     return False
 
 
-def _v1213_comparison(root: Path, *, snapshot: ImplementationDocument | None = None) -> ImplementationDocument:
+def _v1213_comparison(root: Path, *, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     current_files = list((root / "song_agent").rglob("*.py"))
     current_lines = {
         path.relative_to(root).as_posix(): len(path.read_text(encoding="utf-8").splitlines())
@@ -474,7 +474,7 @@ def _v1213_comparison(root: Path, *, snapshot: ImplementationDocument | None = N
     }
 
 
-def _security_matrix() -> ImplementationDocument:
+def _security_matrix() -> dict[str, Any]:
     attacks = (
         "declared_extra",
         "duplicate_entry",

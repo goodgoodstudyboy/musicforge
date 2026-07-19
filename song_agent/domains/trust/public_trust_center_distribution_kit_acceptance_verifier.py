@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -56,7 +56,7 @@ def verify_public_trust_center_distribution_kit_accepted_evidence_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> DomainDocument:
+) -> dict[str, Any]:
     verifier = _AcceptedEvidenceVerifier(
         Path(zip_path),
         strict=strict,
@@ -70,11 +70,11 @@ def verify_public_trust_center_distribution_kit_accepted_evidence_package(
     return verifier.run()
 
 
-def write_public_trust_center_distribution_kit_accepted_evidence_verification_report(report: DomainDocument, path: Path | str) -> Path:
+def write_public_trust_center_distribution_kit_accepted_evidence_verification_report(report: dict[str, Any], path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_public_trust_center_distribution_kit_accepted_evidence_verification_report(report: DomainDocument) -> None:
+def print_public_trust_center_distribution_kit_accepted_evidence_verification_report(report: dict[str, Any]) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Distribution Kit Accepted Evidence verification")
     print(f"status: {report.get('status')}")
@@ -83,7 +83,7 @@ def print_public_trust_center_distribution_kit_accepted_evidence_verification_re
     print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
-def public_trust_center_distribution_kit_accepted_evidence_verification_exit_code(report: DomainDocument) -> int:
+def public_trust_center_distribution_kit_accepted_evidence_verification_exit_code(report: dict[str, Any]) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -108,26 +108,26 @@ class _AcceptedEvidenceVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[ImplementationDocument] = []
-        self.files: list[ImplementationDocument] = []
-        self.redaction_findings: list[ImplementationDocument] = []
+        self.checks: list[dict[str, Any]] = []
+        self.files: list[dict[str, Any]] = []
+        self.redaction_findings: list[dict[str, Any]] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
         self.entry_map: dict[str, zipfile.ZipInfo] = {}
-        self.manifest: ImplementationDocument = {}
-        self.evidence: ImplementationDocument = {}
-        self.public_response: ImplementationDocument = {}
-        self.binding_summary: ImplementationDocument = {}
-        self.response_verification: ImplementationDocument = {}
-        self.response_verification_report_summary: ImplementationDocument = {}
-        self.response_binding_proof: ImplementationDocument = {}
-        self.distribution_kit_summary: ImplementationDocument = {}
+        self.manifest: dict[str, Any] = {}
+        self.evidence: dict[str, Any] = {}
+        self.public_response: dict[str, Any] = {}
+        self.binding_summary: dict[str, Any] = {}
+        self.response_verification: dict[str, Any] = {}
+        self.response_verification_report_summary: dict[str, Any] = {}
+        self.response_binding_proof: dict[str, Any] = {}
+        self.distribution_kit_summary: dict[str, Any] = {}
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> DomainDocument:
+    def run(self) -> dict[str, Any]:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -199,7 +199,7 @@ class _AcceptedEvidenceVerifier:
         self._add_hash_check("manifest", "ptcdkae_manifest_integrity", self.manifest.get("integrity_hash"), accepted_evidence_manifest_hash(self.manifest), "Accepted Evidence manifest integrity")
         self._add_exact_check("manifest", "ptcdkae_manifest_package_type", self.manifest.get("package_type"), ACCEPTED_EVIDENCE_PACKAGE_TYPE, "Manifest package_type")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[ImplementationDocument] = []
+        valid: list[dict[str, Any]] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -375,7 +375,7 @@ def _fs_path(path: Path) -> str:
 
 
 def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
-    findings: list[ImplementationDocument] = []
+    findings: list[dict[str, Any]] = []
     for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
         if pattern.search(text):
             findings.append({"scope": scope, "kind": "sensitive_value", "message": "Sensitive value pattern found."})

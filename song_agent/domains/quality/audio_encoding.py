@@ -1,9 +1,8 @@
-# ruff: noqa: E402,F401
 from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -54,7 +53,7 @@ class AudioEncoderConfig:
     fake_runner: bool = False
 
     @classmethod
-    def from_dict(cls, data: DomainDocument | None, *, allow_fake_runner: bool = False) -> "AudioEncoderConfig":
+    def from_dict(cls, data: dict[str, Any] | None, *, allow_fake_runner: bool = False) -> "AudioEncoderConfig":
         data = _as_document(data)
         return cls(
             engine=str(data.get("engine") or "ffmpeg").strip().lower(),
@@ -65,7 +64,7 @@ class AudioEncoderConfig:
             fake_runner=bool(data.get("fake_runner", False)) if allow_fake_runner else False,
         )
 
-    def to_dict(self) -> DomainDocument:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "engine": self.engine,
             "ffmpeg_path": self.ffmpeg_path,
@@ -74,7 +73,7 @@ class AudioEncoderConfig:
             "max_parallel": self.max_parallel,
         }
 
-    def public_summary(self) -> DomainDocument:
+    def public_summary(self) -> dict[str, Any]:
         return sanitize_metadata(
             {
                 "engine": self.engine,
@@ -89,12 +88,12 @@ class AudioEncoderConfig:
 
 
 class EncoderRunner(Protocol):
-    def encode(self, *, source: Path, target: Path, profile: AudioEncodingProfile, config: AudioEncoderConfig) -> DomainDocument:
+    def encode(self, *, source: Path, target: Path, profile: AudioEncodingProfile, config: AudioEncoderConfig) -> dict[str, Any]:
         ...
 
 
 class FfmpegEncoderRunner:
-    def encode(self, *, source: Path, target: Path, profile: AudioEncodingProfile, config: AudioEncoderConfig) -> DomainDocument:
+    def encode(self, *, source: Path, target: Path, profile: AudioEncodingProfile, config: AudioEncoderConfig) -> dict[str, Any]:
         argv = build_ffmpeg_command(source=source, target=target, profile=profile, config=config)
         try:
             completed = subprocess.run(
@@ -121,7 +120,7 @@ class FfmpegEncoderRunner:
 
 
 class FakeEncoderRunner:
-    def encode(self, *, source: Path, target: Path, profile: AudioEncodingProfile, config: AudioEncoderConfig) -> DomainDocument:
+    def encode(self, *, source: Path, target: Path, profile: AudioEncodingProfile, config: AudioEncoderConfig) -> dict[str, Any]:
         target.parent.mkdir(parents=True, exist_ok=True)
         if profile.format == "wav":
             shutil.copy2(source, target)
@@ -181,35 +180,35 @@ class AudioEncodingStore:
             return AudioEncoderConfig.from_dict({})
         return AudioEncoderConfig.from_dict(read_json(self.config_path))
 
-    def write_config(self, payload: DomainDocument) -> DomainDocument:
+    def write_config(self, payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(payload, dict) and bool(payload.get("fake_runner", False)):
             raise AudioEncodingError("fake_runner is test-only and cannot be persisted through the public audio encoding config.")
         config = AudioEncoderConfig.from_dict(payload)
         write_json(self.config_path, config.to_dict())
         return config.public_summary()
 
-    def reset_config(self) -> DomainDocument:
+    def reset_config(self) -> dict[str, Any]:
         if self.config_path.exists():
             self.config_path.unlink()
         return self.read_config().public_summary()
 
-    def test_config(self) -> DomainDocument:
+    def test_config(self) -> dict[str, Any]:
         config = self.read_config()
         ffmpeg_ok = _executable_exists(config.ffmpeg_path)
         status = "passed" if ffmpeg_ok else "failed"
         message = "Encoder config is usable." if status == "passed" else "Encoder executable was not found."
         return {"status": status, "message": message, "config": config.public_summary()}
 
-    def get_summary(self, release_id: str, *, now: str | None = None, current: bool = True) -> DomainDocument:
+    def get_summary(self, release_id: str, *, now: str | None = None, current: bool = True) -> dict[str, Any]:
         self.release_store.get_release(release_id)
         manifests = self.list_manifests(release_id, current=current)
         summary = build_encoded_audio_summary(release_id, manifests, now=now)
         write_json(self.summary_path(release_id), summary)
         return summary
 
-    def list_manifests(self, release_id: str, *, current: bool = True) -> list[DomainDocument]:
+    def list_manifests(self, release_id: str, *, current: bool = True) -> list[dict[str, Any]]:
         self.release_store.get_release(release_id)
-        rows: list[ImplementationDocument] = []
+        rows: list[dict[str, Any]] = []
         if not self.formats_dir(release_id).exists():
             return rows
         for path in sorted(self.formats_dir(release_id).glob("*/manifest.json")):
@@ -228,7 +227,7 @@ class AudioEncodingStore:
                 continue
         return rows
 
-    def read_manifest(self, release_id: str, profile_id: str, default: DomainDocument | None = None) -> DomainDocument:
+    def read_manifest(self, release_id: str, profile_id: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
         path = self.manifest_path(release_id, profile_id)
         if not path.exists():
             if default is not None:
@@ -237,7 +236,7 @@ class AudioEncodingStore:
         data = read_json(path)
         return self.with_current_state(release_id, _as_document(data))
 
-    def render(self, release_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def render(self, release_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         profile_ids = payload.get("profile_ids")
         if isinstance(profile_ids, str):
@@ -249,7 +248,7 @@ class AudioEncodingStore:
             manifests.append(self.render_format(release_id, str(profile_id), payload, now=now))
         return {"release_id": release_id, "formats": manifests, "summary": self.get_summary(release_id, now=now)}
 
-    def render_format(self, release_id: str, profile_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
+    def render_format(self, release_id: str, profile_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
         payload = payload or {}
         now = now or now_iso()
         self._ensure_release_mutable(release_id)
@@ -303,7 +302,7 @@ class AudioEncodingStore:
             self.get_summary(release_id, now=now)
             return manifest
 
-    def verify(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def verify(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
         required = normalize_required_profiles(payload.get("required_audio_format_profiles") or payload.get("profile_ids") or payload.get("profiles") or [])
         if bool(payload.get("require_encoded_audio", False)) and not required:
@@ -311,7 +310,7 @@ class AudioEncodingStore:
         gate = encoded_audio_gate(self, release_id, required_profiles=required, required=bool(payload.get("require_encoded_audio", False)))
         return {"release_id": release_id, "gate": gate, "summary": self.get_summary(release_id)}
 
-    def reset(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
+    def reset(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         self._ensure_release_mutable(release_id)
         root = self.root_dir(release_id)
         if root.exists():
@@ -319,7 +318,7 @@ class AudioEncodingStore:
         self.release_store.append_event(release_id, "release_encoded_audio_reset", {"reason": sanitize_sensitive_text(str((payload or {}).get("reason") or ""))[:240]})
         return {"status": "reset", "release_id": release_id}
 
-    def with_current_state(self, release_id: str, manifest: DomainDocument) -> DomainDocument:
+    def with_current_state(self, release_id: str, manifest: dict[str, Any]) -> dict[str, Any]:
         clean = sanitize_metadata(manifest, blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS)
         reasons: list[str] = []
         profile_id = str(clean.get("profile_id") or "")
@@ -373,7 +372,7 @@ class AudioEncodingStore:
         output_path = (self.root_dir(release_id) / validate_relative_path(output_rel)).resolve()
         _ensure_within(self.root_dir(release_id).resolve(), output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        run_result: ImplementationDocument
+        run_result: dict[str, Any]
         if profile.engine == "passthrough":
             shutil.copy2(source_path, output_path)
             run_result = {"status": "completed", "returncode": 0, "message": "WAV master copied without re-encoding."}
@@ -420,10 +419,479 @@ class AudioEncodingStore:
             raise ReleaseStateError("Signed releases cannot mutate encoded audio. Reset signoff before encoding again.")
 
 
-from song_agent.domains.quality import v142_ae_readiness as _v142_ae_readiness
-from song_agent.domains.quality.v142_ae_readiness import encoded_audio_source_state as encoded_audio_source_state, build_encoded_audio_summary as build_encoded_audio_summary, release_export_audio_source_hash as release_export_audio_source_hash, encoded_audio_gate as encoded_audio_gate, export_encoded_audio_summary as export_encoded_audio_summary, encoded_manifest_hash as encoded_manifest_hash, encoded_manifest_integrity_ok as encoded_manifest_integrity_ok, encoded_audio_summary_hash as encoded_audio_summary_hash, encoded_audio_summary_integrity_ok as encoded_audio_summary_integrity_ok, normalize_required_profiles as normalize_required_profiles, resolve_target_audio_format_profiles as resolve_target_audio_format_profiles, primary_target_audio_format_profile as primary_target_audio_format_profile, build_ffmpeg_command as build_ffmpeg_command, encoder_manifest_payload as encoder_manifest_payload, encoder_runner_kind as encoder_runner_kind, encoder_runner_is_fake as encoder_runner_is_fake, encoded_manifest_uses_fake as encoded_manifest_uses_fake, encoded_audio_summary_uses_fake as encoded_audio_summary_uses_fake, detect_audio_header as detect_audio_header, detect_audio_format_bytes as detect_audio_format_bytes, validate_relative_path as validate_relative_path, encoded_audio_file_record as encoded_audio_file_record, _profile_source as _profile_source, _track_result as _track_result, _encoder_result_public as _encoder_result_public, _validate_profile_id as _validate_profile_id, _validate_track_id as _validate_track_id, _ensure_within as _ensure_within, _sha256_file as _sha256_file, _wav_duration_seconds as _wav_duration_seconds
-from song_agent.domains.quality import v142_ae_evidence as _v142_ae_evidence
-from song_agent.domains.quality.v142_ae_evidence import _executable_exists as _executable_exists, _int_range as _int_range
+def encoded_audio_source_state(release_store: ReleaseStore, release_id: str, profile: AudioEncodingProfile) -> dict[str, Any]:
+    from song_agent.domains.delivery.release_export_manifest import read_release_export_manifest
 
-_v142_ae_readiness.bind_globals(globals())
-_v142_ae_evidence.bind_globals(globals())
+    try:
+        manifest = read_release_export_manifest(release_store, release_id)
+    except FileNotFoundError:
+        return {"release_id": release_id, "profile": _profile_source(profile), "status": "missing", "message": "Release Export is missing."}
+    export_dir = release_store.export_dir(release_id)
+    tracks = _as_list(manifest.get("tracks"))
+    mastering = _as_document(manifest.get("mastering"))
+    export_hash = release_export_audio_source_hash(manifest)
+    source_tracks: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for track in tracks:
+        if not isinstance(track, dict):
+            continue
+        track_id = str(track.get("track_id") or "")
+        directory = str(track.get("directory") or "").strip("/")
+        rel = validate_relative_path(f"{directory}/song.wav" if directory else "song.wav")
+        wav_path = (export_dir / rel).resolve()
+        try:
+            _ensure_within(export_dir.resolve(), wav_path)
+        except AudioEncodingStateError:
+            missing.append(rel)
+            continue
+        if not wav_path.exists() or not wav_path.is_file() or wav_path.is_symlink():
+            missing.append(rel)
+            continue
+        header = detect_audio_header(wav_path, expected_format="wav")
+        if not header.get("valid"):
+            missing.append(rel)
+            continue
+        source_tracks.append(
+            {
+                "track_id": _validate_track_id(track_id),
+                "directory": directory,
+                "source_path": rel,
+                "source_wav_sha256": _sha256_file(wav_path),
+                "source_size_bytes": wav_path.stat().st_size,
+                "duration_seconds": _wav_duration_seconds(wav_path),
+            }
+        )
+    status = "current"
+    message = "Release Export audio source is current."
+    if missing:
+        status = "missing"
+        message = "Release Export is missing selected mastered WAV track audio."
+    if mastering.get("status") not in {"passed", "warning"} or not mastering.get("selected_candidate_hash"):
+        status = "missing"
+        message = "Mastering QA evidence is missing."
+    return sanitize_metadata(
+        {
+            "release_id": release_id,
+            "status": status,
+            "message": message,
+            "release_export_manifest_hash": export_hash,
+            "mastering": {
+                "summary_hash": mastering.get("summary_hash") or mastering_summary_hash(mastering) if mastering else None,
+                "analysis_hash": mastering.get("analysis_hash"),
+                "plan_hash": mastering.get("plan_hash"),
+                "selected_candidate_id": mastering.get("selected_candidate_id"),
+                "selected_candidate_hash": mastering.get("selected_candidate_hash"),
+                "status": mastering.get("status"),
+            },
+            "profile": _profile_source(profile),
+            "command_policy_version": COMMAND_POLICY_VERSION,
+            "tracks": source_tracks,
+            "missing_tracks": missing,
+        },
+        blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
+    )
+
+
+def build_encoded_audio_summary(release_id: str, manifests: list[dict[str, Any]], *, now: str | None = None) -> dict[str, Any]:
+    now = now or now_iso()
+    profiles = []
+    missing: list[_InferenceType] = []
+    stale = []
+    failed = []
+    for manifest in manifests:
+        profile_id = str(manifest.get("profile_id") or "")
+        summary = _as_document(manifest.get("summary"))
+        row = {
+            "profile_id": profile_id,
+            "status": "stale" if manifest.get("stale") else summary.get("status") or "missing",
+            "format": manifest.get("format"),
+            "extension": manifest.get("extension"),
+            "encoder_engine": (manifest.get("encoder") or {}).get("engine") if isinstance(manifest.get("encoder"), dict) else None,
+            "encoder_runner_kind": ((manifest.get("encoder") or {}).get("runner") or {}).get("kind") if isinstance((manifest.get("encoder") or {}).get("runner"), dict) else None,
+            "fake_evidence": encoded_manifest_uses_fake(manifest),
+            "track_count": summary.get("track_count", 0),
+            "completed_count": summary.get("completed_count", 0),
+            "failed_count": summary.get("failed_count", 0),
+            "source_hash": manifest.get("source_hash"),
+            "manifest_hash": manifest.get("integrity_hash"),
+        }
+        profiles.append(row)
+        if manifest.get("stale"):
+            stale.append(profile_id)
+        if summary.get("status") == "failed":
+            failed.append(profile_id)
+    status = "failed" if failed else "stale" if stale else "completed" if profiles else "missing"
+    summary = {
+        "schema_version": AUDIO_ENCODING_SCHEMA_VERSION,
+        "release_id": release_id,
+        "generated_at": now,
+        "status": status,
+        "profile_count": len(profiles),
+        "profiles": profiles,
+        "completed_profiles": [row["profile_id"] for row in profiles if row.get("status") == "completed"],
+        "missing_profiles": missing,
+        "stale_profiles": stale,
+        "failed_profiles": failed,
+    }
+    summary["integrity_hash"] = encoded_audio_summary_hash(summary)
+    return sanitize_metadata(summary, blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS)
+
+
+def release_export_audio_source_hash(manifest: dict[str, Any]) -> str:
+    mastering = _as_document(manifest.get("mastering"))
+    return stable_hash(
+        sanitize_metadata(
+            {
+                "schema_version": manifest.get("schema_version"),
+                "release_id": manifest.get("release_id"),
+                "release_name": manifest.get("release_name"),
+                "tracks": [
+                    {
+                        "track_id": item.get("track_id"),
+                        "disc_number": item.get("disc_number"),
+                        "track_number": item.get("track_number"),
+                        "project_id": item.get("project_id"),
+                        "version_id": item.get("version_id"),
+                        "directory": item.get("directory"),
+                    }
+                    for item in (_as_list(manifest.get("tracks")))
+                    if isinstance(item, dict)
+                ],
+                "mastering": {
+                    "status": mastering.get("status"),
+                    "analysis_hash": mastering.get("analysis_hash"),
+                    "plan_hash": mastering.get("plan_hash"),
+                    "selected_candidate_id": mastering.get("selected_candidate_id"),
+                    "selected_candidate_hash": mastering.get("selected_candidate_hash"),
+                    "summary_hash": mastering.get("summary_hash"),
+                },
+            },
+            blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
+        )
+    )
+
+
+def encoded_audio_gate(store: AudioEncodingStore, release_id: str, *, required_profiles: list[str], required: bool, force: bool = False) -> dict[str, Any]:
+    required_profiles = normalize_required_profiles(required_profiles)
+    if required and not required_profiles:
+        required_profiles = ["wav_master"]
+    if not required:
+        summary = store.get_summary(release_id)
+        return {**summary, "require_encoded_audio": False, "status": "passed" if summary.get("status") in {"completed", "missing"} else summary.get("status")}
+    missing: list[str] = []
+    stale: list[str] = []
+    failed: list[str] = []
+    fake: list[str] = []
+    warnings: list[str] = []
+    profile_summaries: list[dict[str, Any]] = []
+    for profile_id in required_profiles:
+        manifest = store.read_manifest(release_id, profile_id, default={})
+        if not manifest:
+            missing.append(profile_id)
+            continue
+        row = {
+            "profile_id": profile_id,
+            "status": "stale" if manifest.get("stale") else (manifest.get("summary") or {}).get("status"),
+            "source_hash": manifest.get("source_hash"),
+            "manifest_hash": manifest.get("integrity_hash"),
+            "encoder_engine": (manifest.get("encoder") or {}).get("engine") if isinstance(manifest.get("encoder"), dict) else None,
+            "encoder_runner_kind": ((manifest.get("encoder") or {}).get("runner") or {}).get("kind") if isinstance((manifest.get("encoder") or {}).get("runner"), dict) else None,
+            "fake_evidence": encoded_manifest_uses_fake(manifest),
+        }
+        profile_summaries.append(row)
+        if manifest.get("stale") or not encoded_manifest_integrity_ok(manifest):
+            stale.append(profile_id)
+        if encoded_manifest_uses_fake(manifest):
+            fake.append(profile_id)
+        if (manifest.get("summary") or {}).get("status") == "failed":
+            failed.append(profile_id)
+        elif (manifest.get("summary") or {}).get("status") == "warning":
+            warnings.append(profile_id)
+    hard = bool(missing or stale or failed or fake)
+    warning_block = bool(warnings and not force)
+    return sanitize_metadata(
+        {
+            "status": "failed" if hard or warning_block else "passed",
+            "hard_block": hard,
+            "require_encoded_audio": True,
+            "required_audio_format_profiles": required_profiles,
+            "profiles": profile_summaries,
+            "missing_profiles": missing,
+            "stale_profiles": stale,
+            "failed_profiles": failed,
+            "fake_profiles": fake,
+            "warning_profiles": warnings,
+            "message": "Encoded audio gate failed." if hard or warning_block else "Encoded audio gate passed.",
+        },
+        blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
+    )
+
+
+def export_encoded_audio_summary(release_store: ReleaseStore, release_id: str, export_dir: Path, *, store: AudioEncodingStore | None = None) -> dict[str, Any]:
+    store = store or AudioEncodingStore(release_store, project_store=release_store.project_store)
+    summary = store.get_summary(release_id, current=False)
+    target = export_dir / "encoded-audio-summary.json"
+    write_json(target, summary)
+    return {
+        **summary,
+        "summary_path": "encoded-audio-summary.json",
+        "summary_hash": encoded_audio_summary_hash(summary),
+    }
+
+
+def encoded_manifest_hash(manifest: dict[str, Any]) -> str:
+    return stable_hash(sanitize_metadata({key: value for key, value in manifest.items() if key not in AUDIO_ENCODING_INTEGRITY_EXCLUDE}, blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS))
+
+
+def encoded_manifest_integrity_ok(manifest: dict[str, Any]) -> bool:
+    expected = str(manifest.get("integrity_hash") or "")
+    return bool(expected) and expected == encoded_manifest_hash(manifest)
+
+
+def encoded_audio_summary_hash(summary: dict[str, Any]) -> str:
+    return stable_hash(sanitize_metadata({key: value for key, value in summary.items() if key not in AUDIO_ENCODING_SUMMARY_INTEGRITY_EXCLUDE}, blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS))
+
+
+def encoded_audio_summary_integrity_ok(summary: dict[str, Any]) -> bool:
+    expected = str(summary.get("integrity_hash") or "")
+    return bool(expected) and expected == encoded_audio_summary_hash(summary)
+
+
+def normalize_required_profiles(value: Any) -> list[str]:
+    if isinstance(value, str):
+        raw = [item.strip() for item in value.split(",")]
+    elif isinstance(value, list):
+        raw = [str(item).strip() for item in value]
+    else:
+        raw = []
+    result: list[str] = []
+    for item in raw:
+        if not item or item in result:
+            continue
+        result.append(_validate_profile_id(item))
+    return result
+
+
+def resolve_target_audio_format_profiles(target: Any, template: dict[str, Any] | None = None) -> list[str]:
+    options = getattr(target, "options", None)
+    options = _as_document(options)
+    rules = template.get("rules") if isinstance(template, dict) and isinstance(template.get("rules"), dict) else {}
+    profiles = normalize_required_profiles(options.get("audio_format_profiles"))
+    if not profiles:
+        profiles = normalize_required_profiles(_as_document(rules).get("required_audio_formats"))
+    if not profiles:
+        primary = str(options.get("primary_audio_format") or _as_document(rules).get("primary_audio_format") or "").strip()
+        profiles = normalize_required_profiles(primary)
+    return profiles or ["wav_master"]
+
+
+def primary_target_audio_format_profile(target: Any, template: dict[str, Any] | None = None) -> str:
+    options = getattr(target, "options", None)
+    options = _as_document(options)
+    rules = template.get("rules") if isinstance(template, dict) and isinstance(template.get("rules"), dict) else {}
+    primary = str(options.get("primary_audio_format") or _as_document(rules).get("primary_audio_format") or "").strip()
+    if primary:
+        return _validate_profile_id(primary)
+    return resolve_target_audio_format_profiles(target, template)[0]
+
+
+def build_ffmpeg_command(*, source: Path, target: Path, profile: AudioEncodingProfile, config: AudioEncoderConfig) -> list[str]:
+    argv = [config.ffmpeg_path, "-y", "-hide_banner", "-nostdin", "-i", str(source), "-vn"]
+    if profile.sample_rate:
+        argv.extend(["-ar", str(profile.sample_rate)])
+    if profile.channels:
+        argv.extend(["-ac", str(profile.channels)])
+    if profile.codec:
+        argv.extend(["-codec:a", profile.codec])
+    if profile.bitrate_kbps:
+        argv.extend(["-b:a", f"{profile.bitrate_kbps}k"])
+    if profile.quality is not None and profile.format == "mp3":
+        argv.extend(["-q:a", str(profile.quality)])
+    if profile.compression_level is not None and profile.format == "flac":
+        argv.extend(["-compression_level", str(profile.compression_level)])
+    if profile.container:
+        argv.extend(["-f", profile.container])
+    argv.append(str(target))
+    return argv
+
+
+def encoder_manifest_payload(profile: AudioEncodingProfile, config: AudioEncoderConfig, *, runner_kind: str | None = None, fake_evidence: bool = False) -> dict[str, Any]:
+    command_template = build_ffmpeg_command(source=Path("{source}"), target=Path("{target}"), profile=profile, config=AudioEncoderConfig(ffmpeg_path="{ffmpeg}", ffprobe_path="{ffprobe}", timeout_seconds=config.timeout_seconds, max_parallel=config.max_parallel))
+    return sanitize_metadata(
+        {
+            "engine": profile.engine,
+            "profile_id": profile.profile_id,
+            "profile_hash": audio_encoding_profile_hash(profile),
+            "command_template_hash": stable_hash(command_template),
+            "command_policy_version": COMMAND_POLICY_VERSION,
+            "ffmpeg": {"basename": Path(config.ffmpeg_path).name if profile.engine == "ffmpeg" else None},
+            "runner": {"kind": runner_kind or "unknown", "fake": bool(fake_evidence)},
+        },
+        blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
+    )
+
+
+def encoder_runner_kind(*, runner: EncoderRunner, profile: AudioEncodingProfile) -> str:
+    if profile.engine == "passthrough":
+        return "passthrough"
+    if profile.engine == "fake":
+        return "fake"
+    if isinstance(runner, FakeEncoderRunner):
+        return "fake"
+    if isinstance(runner, FfmpegEncoderRunner):
+        return "ffmpeg"
+    return "custom"
+
+
+def encoder_runner_is_fake(*, runner: EncoderRunner | None = None, profile: AudioEncodingProfile | None = None, manifest: dict[str, Any] | None = None, summary_row: dict[str, Any] | None = None) -> bool:
+    if manifest is not None:
+        encoder = _as_document(manifest.get("encoder"))
+        runner_doc = _as_document(encoder.get("runner"))
+        return bool(encoder.get("engine") == "fake" or runner_doc.get("kind") == "fake" or runner_doc.get("fake"))
+    if summary_row is not None:
+        return bool(summary_row.get("fake_evidence") or summary_row.get("encoder_engine") == "fake" or summary_row.get("encoder_runner_kind") == "fake")
+    return bool((profile and profile.engine == "fake") or isinstance(runner, FakeEncoderRunner))
+
+
+def encoded_manifest_uses_fake(manifest: dict[str, Any]) -> bool:
+    return encoder_runner_is_fake(manifest=manifest)
+
+
+def encoded_audio_summary_uses_fake(summary: dict[str, Any]) -> bool:
+    profiles = _as_list(summary.get("profiles"))
+    return any(encoder_runner_is_fake(summary_row=row) for row in profiles if isinstance(row, dict))
+
+
+def detect_audio_header(path: Path, *, expected_format: str | None = None) -> dict[str, Any]:
+    try:
+        data = path.read_bytes()[:32]
+    except OSError:
+        return {"valid": False, "detected_format": "missing"}
+    detected = detect_audio_format_bytes(data)
+    expected = str(expected_format or "").lower()
+    valid = bool(detected and (not expected or detected == expected or (expected == "aac" and detected in {"aac", "m4a"})))
+    return {"valid": valid, "detected_format": detected or "unknown", "expected_format": expected or None}
+
+
+def detect_audio_format_bytes(data: bytes) -> str | None:
+    if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WAVE":
+        return "wav"
+    if data.startswith(b"fLaC"):
+        return "flac"
+    if data.startswith(b"ID3") or (len(data) >= 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0):
+        return "mp3"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        major = data[8:12].decode("ascii", errors="ignore").strip().lower()
+        if major in {"m4a", "m4a ", "isom", "mp42", "mp41"} or "m4a" in data[:32].decode("ascii", errors="ignore").lower():
+            return "aac"
+    return None
+
+
+def validate_relative_path(path: str) -> str:
+    raw = str(path or "")
+    if "\\" in raw:
+        raise AudioEncodingStateError("Unsafe relative path.")
+    parts = [part for part in raw.split("/") if part]
+    if not parts or raw.startswith("/") or raw.startswith("//") or raw.endswith("/") or any(part in {"..", "."} for part in parts) or ":" in parts[0]:
+        raise AudioEncodingStateError("Unsafe relative path.")
+    return PurePosixPath(*parts).as_posix()
+
+
+def encoded_audio_file_record(root: Path, path: Path) -> dict[str, Any]:
+    rel = validate_relative_path(path.resolve().relative_to(root.resolve()).as_posix())
+    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_file(path)}
+
+
+def _profile_source(profile: AudioEncodingProfile) -> ImplementationDocument:
+    return {"profile_id": profile.profile_id, "profile_hash": audio_encoding_profile_hash(profile), "format": profile.format, "extension": profile.extension}
+
+
+def _track_result(profile: AudioEncodingProfile, track_id: str, source_row: ImplementationDocument, *, status: str, message: str) -> ImplementationDocument:
+    return sanitize_metadata(
+        {
+            "track_id": track_id,
+            "status": status,
+            "source_path": source_row.get("source_path"),
+            "source_wav_sha256": source_row.get("source_wav_sha256"),
+            "output_rel": f"formats/{profile.profile_id}/tracks/{track_id}/song.{profile.extension}",
+            "message": message,
+            "failures": ["source_missing"],
+            "warnings": [],
+        },
+        blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
+    )
+
+
+def _encoder_result_public(result: ImplementationDocument) -> ImplementationDocument:
+    return sanitize_metadata(
+        {
+            "status": result.get("status"),
+            "returncode": result.get("returncode"),
+            "message": sanitize_sensitive_text(str(result.get("message") or ""))[:300],
+            "stderr_summary": sanitize_sensitive_text(str(result.get("stderr_summary") or ""))[:500],
+        },
+        blocked_keys=AUDIO_ENCODING_BLOCKED_KEYS,
+    )
+
+
+def _validate_profile_id(value: str) -> str:
+    text = str(value or "").strip()
+    if not text or not all(ch.isalnum() or ch in {"_", "-"} for ch in text) or len(text) > 100:
+        raise AudioEncodingStateError("Invalid audio encoding profile id.")
+    return text
+
+
+def _validate_track_id(value: str) -> str:
+    text = str(value or "").strip()
+    if not text or not all(ch.isalnum() or ch in {"_", "-"} for ch in text) or len(text) > 100:
+        raise AudioEncodingStateError("Invalid track id.")
+    return text
+
+
+def _ensure_within(root: Path, target: Path) -> None:
+    try:
+        target.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise AudioEncodingStateError("Refusing to operate outside audio encoding boundaries.") from exc
+
+
+def _sha256_file(path: Path) -> str | None:
+    try:
+        digest = hashlib.sha256()
+        with path.open("rb") as file:
+            for chunk in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def _wav_duration_seconds(path: Path) -> float | None:
+    import wave
+
+    try:
+        with wave.open(str(path), "rb") as wav:
+            rate = wav.getframerate()
+            return round(wav.getnframes() / rate, 6) if rate else None
+    except (OSError, EOFError, wave.Error):
+        return None
+
+
+def _executable_exists(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if any(sep in text for sep in ("/", "\\")):
+        path = Path(text)
+        return path.exists() and path.is_file()
+    return shutil.which(text) is not None
+
+
+def _int_range(value: Any, field: str, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise AudioEncodingError(f"{field} must be an integer.") from exc
+    if parsed < minimum or parsed > maximum:
+        raise AudioEncodingError(f"{field} must be between {minimum} and {maximum}.")
+    return parsed
