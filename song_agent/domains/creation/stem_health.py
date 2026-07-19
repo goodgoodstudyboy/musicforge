@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import json as json
 from pathlib import Path as Path
@@ -27,10 +27,10 @@ def build_stem_health_report(
     run_dir: Path,
     project_id: str,
     version_id: str,
-    mix_state: dict[str, Any] | None = None,
+    mix_state: DomainDocument | None = None,
     require_wav: bool = False,
     now: str,
-) -> dict[str, Any]:
+) -> DomainDocument:
     run_dir = run_dir.resolve()
     plan_path = run_dir / "data" / "song-plan.json"
     if not plan_path.exists():
@@ -41,7 +41,7 @@ def build_stem_health_report(
         raise StemHealthError("Stem manifest is missing. Render stems first.")
     blockers: list[str] = []
     warnings: list[str] = []
-    stems: list[dict[str, Any]] = []
+    stems: list[ImplementationDocument] = []
     for stem in manifest.stems:
         stem_blockers: list[str] = []
         stem_warnings: list[str] = []
@@ -49,7 +49,7 @@ def build_stem_health_report(
         midi_sha256 = ""
         wav_exists = False
         wav_sha256 = ""
-        health: dict[str, Any] = {}
+        health: ImplementationDocument = {}
         try:
             midi_file = stem_midi_path(run_dir, manifest, stem.stem_id)
             midi_exists = midi_file.exists() and midi_file.is_file() and not midi_file.is_symlink()
@@ -129,13 +129,13 @@ def build_stem_health_report(
     return sanitize_metadata(report)
 
 
-def write_stem_health_report(run_dir: Path, report: dict[str, Any]) -> dict[str, Any]:
+def write_stem_health_report(run_dir: Path, report: DomainDocument) -> DomainDocument:
     clean = sanitize_metadata(report)
     write_json(stem_health_path(run_dir), clean)
     return clean
 
 
-def read_stem_health_report(run_dir: Path, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def read_stem_health_report(run_dir: Path, *, default: DomainDocument | None = None) -> DomainDocument:
     path = stem_health_path(run_dir)
     if not path.exists():
         if default is not None:
@@ -148,12 +148,12 @@ def stem_health_path(run_dir: Path) -> Path:
     return run_dir / "stems" / "stem-health.json"
 
 
-def stem_health_source_state(*, run_dir: Path, project_id: str, version_id: str, plan: SongPlan, mix_state: dict[str, Any] | None = None) -> dict[str, Any]:
+def stem_health_source_state(*, run_dir: Path, project_id: str, version_id: str, plan: SongPlan, mix_state: DomainDocument | None = None) -> DomainDocument:
     manifest = read_stem_manifest(run_dir)
     midi_path = run_dir / "renders" / "song.mid"
     if not midi_path.exists():
         midi_path = run_dir / "song.mid"
-    stem_files: list[dict[str, Any]] = []
+    stem_files: list[ImplementationDocument] = []
     if manifest is not None:
         for stem in manifest.stems:
             try:
@@ -183,16 +183,16 @@ def stem_health_source_state(*, run_dir: Path, project_id: str, version_id: str,
     }
 
 
-def stem_health_integrity_hash(report: dict[str, Any]) -> str:
+def stem_health_integrity_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in report.items() if key not in STEM_HEALTH_INTEGRITY_EXCLUDE_KEYS})
 
 
-def stem_health_integrity_ok(report: dict[str, Any]) -> bool:
+def stem_health_integrity_ok(report: DomainDocument) -> bool:
     expected = str(report.get("integrity_hash") or "")
     return bool(expected) and expected == stem_health_integrity_hash(report)
 
 
-def stem_health_stale_reasons(report: dict[str, Any], *, run_dir: Path, project_id: str, version_id: str, mix_state: dict[str, Any] | None = None) -> list[str]:
+def stem_health_stale_reasons(report: DomainDocument, *, run_dir: Path, project_id: str, version_id: str, mix_state: DomainDocument | None = None) -> list[str]:
     reasons = []
     if not stem_health_integrity_ok(report):
         reasons.append("stem_health_integrity")
@@ -206,7 +206,7 @@ def stem_health_stale_reasons(report: dict[str, Any], *, run_dir: Path, project_
     return reasons
 
 
-def stem_health_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+def stem_health_summary(report: DomainDocument | None) -> DomainDocument:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -225,7 +225,7 @@ def stem_health_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def stem_health_allows_signoff(report: dict[str, Any], *, current_source_hash: str | None = None) -> bool:
+def stem_health_allows_signoff(report: DomainDocument, *, current_source_hash: str | None = None) -> bool:
     if not report or not stem_health_integrity_ok(report):
         return False
     if current_source_hash is not None and report.get("source_hash") != current_source_hash:

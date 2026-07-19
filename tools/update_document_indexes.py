@@ -23,7 +23,7 @@ def build_material_index() -> dict[str, object]:
                 "path": relative,
                 "title": heading,
                 "version": version,
-                "status": "active" if "v14.0.0-MusicForge领域纵向迁移兼容层清退" in path.name else "historical",
+                "status": "active" if "v14.2.0-MusicForge类型精度收敛与大模块职责拆分" in path.name else "historical",
             }
         )
     return {"schema_version": 1, "archive_policy": "original_paths_preserved", "documents": rows}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import re as re
 import threading as threading
@@ -29,7 +29,7 @@ class AudioEncodingProfileNotFoundError(AudioEncodingProfileError):
     pass
 
 
-BUILTIN_AUDIO_ENCODING_PROFILES: dict[str, dict[str, Any]] = {
+BUILTIN_AUDIO_ENCODING_PROFILES: dict[str, ImplementationDocument] = {
     "wav_master": {
         "name": "WAV Master",
         "engine": "passthrough",
@@ -131,7 +131,7 @@ class AudioEncodingProfile:
     updated_at: str
     integrity_hash: str
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "schema_version": self.schema_version,
             "profile_id": self.profile_id,
@@ -156,7 +156,7 @@ class AudioEncodingProfile:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AudioEncodingProfile":
+    def from_dict(cls, data: DomainDocument) -> "AudioEncodingProfile":
         fmt = _safe_format(data.get("format"))
         extension = _safe_extension(data.get("extension") or fmt)
         profile = cls(
@@ -226,7 +226,7 @@ class AudioEncodingProfileStore:
             raise AudioEncodingProfileError("Audio encoding profile integrity failed.")
         return profile
 
-    def create_profile(self, payload: dict[str, Any], *, now: str | None = None) -> AudioEncodingProfile:
+    def create_profile(self, payload: DomainDocument, *, now: str | None = None) -> AudioEncodingProfile:
         now = now or now_iso()
         with self.lock:
             profile_id = str(payload.get("profile_id") or self._reserve_profile_id())
@@ -236,7 +236,7 @@ class AudioEncodingProfileStore:
             self._write_profile(profile)
             return profile
 
-    def update_profile(self, profile_id: str, payload: dict[str, Any], *, now: str | None = None) -> AudioEncodingProfile:
+    def update_profile(self, profile_id: str, payload: DomainDocument, *, now: str | None = None) -> AudioEncodingProfile:
         now = now or now_iso()
         profile_id = _validate_profile_id(profile_id)
         if profile_id in BUILTIN_AUDIO_ENCODING_PROFILES:
@@ -247,7 +247,7 @@ class AudioEncodingProfileStore:
         self._write_profile(profile)
         return profile
 
-    def clone_profile(self, profile_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> AudioEncodingProfile:
+    def clone_profile(self, profile_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> AudioEncodingProfile:
         now = now or now_iso()
         source = self.get_profile(profile_id)
         payload = payload or {}
@@ -311,12 +311,12 @@ def builtin_profile(profile_id: str) -> AudioEncodingProfile:
     return _profile_from_payload(payload, now=now)
 
 
-def audio_encoding_profile_hash(profile: AudioEncodingProfile | dict[str, Any]) -> str:
+def audio_encoding_profile_hash(profile: AudioEncodingProfile | DomainDocument) -> str:
     data = profile.to_dict() if isinstance(profile, AudioEncodingProfile) else profile
     return stable_hash(sanitize_metadata({key: value for key, value in data.items() if key not in PROFILE_INTEGRITY_EXCLUDE}, blocked_keys=BLOCKED_RELEASE_KEYS))
 
 
-def audio_encoding_profile_integrity_ok(profile: dict[str, Any]) -> bool:
+def audio_encoding_profile_integrity_ok(profile: DomainDocument) -> bool:
     expected = str(profile.get("integrity_hash") or "")
     return bool(expected) and expected == audio_encoding_profile_hash(profile)
 

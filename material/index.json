@@ -393,9 +393,15 @@
     },
     {
       "path": "material/v14.0.0-MusicForge领域纵向迁移兼容层清退与接口收敛施工图-2026-07-15.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.0.0 MusicForge 领域纵向迁移、兼容层清退与接口收敛施工图",
       "version": "14.0.0"
+    },
+    {
+      "path": "material/v14.2.0-MusicForge类型精度收敛与大模块职责拆分施工图-2026-07-19.md",
+      "status": "active",
+      "title": "v14.2.0 MusicForge 类型精度收敛与大模块职责拆分施工图",
+      "version": "14.2.0"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",

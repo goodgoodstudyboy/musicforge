@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -66,7 +66,7 @@ def verify_release_portfolio_governance_attestation_transparency_acknowledgement
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _AckVerifier(
         Path(zip_path),
         strict=strict,
@@ -82,11 +82,11 @@ def verify_release_portfolio_governance_attestation_transparency_acknowledgement
     return verifier.run()
 
 
-def write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report: dict[str, Any]) -> None:
+def print_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(report: DomainDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge release portfolio governance attestation transparency acknowledgement verification")
     print(f"status: {report.get('status')}")
@@ -96,7 +96,7 @@ def print_release_portfolio_governance_attestation_transparency_acknowledgement_
     print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
-def release_portfolio_governance_attestation_transparency_acknowledgement_verification_exit_code(report: dict[str, Any]) -> int:
+def release_portfolio_governance_attestation_transparency_acknowledgement_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -125,17 +125,17 @@ class _AckVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
         self.entry_map: dict[str, zipfile.ZipInfo] = {}
-        self.manifest: dict[str, Any] = {}
-        self.main_doc: dict[str, Any] = {}
-        self.summary_doc: dict[str, Any] = {}
-        self.data_docs: dict[str, dict[str, Any]] = {}
+        self.manifest: ImplementationDocument = {}
+        self.main_doc: ImplementationDocument = {}
+        self.summary_doc: ImplementationDocument = {}
+        self.data_docs: dict[str, ImplementationDocument] = {}
         self.package_type = ""
         self.manifest_name = ""
         self.main_name = ""
@@ -145,7 +145,7 @@ class _AckVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -223,7 +223,7 @@ class _AckVerifier:
         self._add_hash_check("manifest", f"{self.check_prefix}_manifest_integrity", self.manifest.get("integrity_hash"), ack_manifest_hash(self.manifest), "Acknowledgement manifest integrity")
         self._add_check("manifest", f"{self.check_prefix}_manifest_package_type", "passed" if self.manifest.get("package_type") == expected_type else "failed", "blocking", "Manifest package_type is valid." if self.manifest.get("package_type") == expected_type else "Manifest package_type is invalid.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[dict[str, Any]] = []
+        valid: list[ImplementationDocument] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -469,7 +469,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 
 
 def _redaction_findings(scope: str, text: str) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
         if pattern.search(text):
             findings.append({"scope": scope, "kind": "sensitive_value", "message": "Sensitive value pattern found."})

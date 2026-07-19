@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import hashlib as hashlib
 import json as json
@@ -39,11 +39,11 @@ _SENSITIVE_BYTES_PATTERNS = (
 )
 
 
-def maintenance_backup_manifest_hash(manifest: dict[str, Any]) -> str:
+def maintenance_backup_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
 
 
-def maintenance_backup_manifest_integrity_ok(manifest: dict[str, Any]) -> bool:
+def maintenance_backup_manifest_integrity_ok(manifest: DomainDocument) -> bool:
     expected = str(manifest.get("integrity_hash") or "")
     return bool(expected) and expected == maintenance_backup_manifest_hash(manifest)
 
@@ -55,10 +55,10 @@ def verify_maintenance_backup_zip(
     max_zip_size_mb: int = 512,
     max_uncompressed_size_mb: int = 2048,
     max_entry_count: int = 20000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     target = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    manifest: dict[str, Any] = {}
+    checks: list[ImplementationDocument] = []
+    manifest: ImplementationDocument = {}
     entries: list[zipfile.ZipInfo] = []
     entry_names: list[str] = []
 
@@ -95,15 +95,15 @@ def verify_maintenance_backup_zip(
     return _report(target, checks, manifest)
 
 
-def write_maintenance_backup_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_maintenance_backup_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), report)
 
 
-def maintenance_backup_verification_exit_code(report: dict[str, Any]) -> int:
+def maintenance_backup_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") != "failed" else 1
 
 
-def print_maintenance_backup_verification_report(report: dict[str, Any]) -> None:
+def print_maintenance_backup_verification_report(report: DomainDocument) -> None:
     print(f"MusicForge maintenance backup verification: {report.get('status')}")
     for check in report.get("checks", []):
         marker = "ok" if check.get("status") == "passed" else check.get("status")
@@ -216,8 +216,8 @@ def _verify_manifest_entries(checks: list[ImplementationDocument], archive: zipf
         "Manifest files match ZIP entries." if not missing and not extra else "Manifest files do not match ZIP entries.",
         {"missing": missing[:20], "extra": extra[:20]},
     )
-    hash_mismatches: list[dict[str, Any]] = []
-    size_mismatches: list[dict[str, Any]] = []
+    hash_mismatches: list[ImplementationDocument] = []
+    size_mismatches: list[ImplementationDocument] = []
     for item in manifest_files:
         path = str(item.get("path") or "")
         if path not in actual:
@@ -248,7 +248,7 @@ def _verify_manifest_entries(checks: list[ImplementationDocument], archive: zipf
 
 
 def _verify_redaction(checks: list[ImplementationDocument], archive: zipfile.ZipFile, entries: list[zipfile.ZipInfo]) -> None:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     for info in entries:
         if info.is_dir() or info.file_size > 10 * 1024 * 1024:
             continue

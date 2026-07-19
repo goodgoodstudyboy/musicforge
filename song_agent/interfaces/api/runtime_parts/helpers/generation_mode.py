@@ -24,8 +24,8 @@ def _variation_request_payload(
     parent_request: ImplementationDocument,
     request_patch: ImplementationDocument,
     *,
-    generation_mode: Any = None,
-    pipeline_mode: Any = None,
+    generation_mode: object = None,
+    pipeline_mode: object = None,
 ) -> ImplementationDocument:
     unknown = sorted(set(request_patch) - VARIATION_REQUEST_FIELDS)
     if unknown:
@@ -100,7 +100,7 @@ def _content_disposition_filename(filename: str) -> str:
     utf8_name = "".join(char for char in str(filename) if ord(char) >= 32 and char not in {'"', "\r", "\n"})
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{_rfc5987_quote(utf8_name)}"
 
-def _dict_or_empty(value: Any) -> ImplementationDocument:
+def _dict_or_empty(value: object) -> ImplementationDocument:
     return _as_document(value)
 
 def _server_file_sha256(path: Path) -> str | None:
@@ -118,14 +118,14 @@ def _safe_read_release_export_manifest(release_store: Any, release_id: str) -> I
     except FileNotFoundError:
         return {}
 
-def _string_list(value: Any) -> list[str]:
+def _string_list(value: object) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list):
         raise ValueError("tags must be a list.")
     return [str(item).strip() for item in value if str(item).strip()]
 
-def _clean_title(value: Any) -> str:
+def _clean_title(value: object) -> str:
     return str(value or "").strip()
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:

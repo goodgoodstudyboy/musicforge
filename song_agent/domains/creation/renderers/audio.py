@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import os as os
 import subprocess as subprocess
 from dataclasses import asdict as asdict, dataclass as dataclass
@@ -37,7 +38,7 @@ class RendererConfig:
     gain: float = 0.6
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RendererConfig":
+    def from_dict(cls, data: DomainDocument) -> "RendererConfig":
         config = cls(
             renderer_type=str(data.get("renderer_type", "fluidsynth") or "").strip(),
             fluidsynth_path=str(data.get("fluidsynth_path", "fluidsynth") or "").strip(),
@@ -68,10 +69,10 @@ class RendererConfig:
         if not Path(self.soundfont_path).exists():
             raise RendererConfigError("SoundFont file does not exist.")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
-    def to_public_dict(self, sources: dict[str, str] | None = None) -> dict[str, Any]:
+    def to_public_dict(self, sources: dict[str, str] | None = None) -> DomainDocument:
         soundfont = Path(self.soundfont_path) if self.soundfont_path else None
         data = {
             "renderer_type": self.renderer_type,
@@ -96,7 +97,7 @@ def load_renderer_config(
     env: dict[str, str] | None = None,
 ) -> tuple[RendererConfig, dict[str, str]]:
     env_data = env if env is not None else os.environ
-    data: dict[str, Any] = {}
+    data: ImplementationDocument = {}
     sources = {field: "default" for field in RendererConfig.__dataclass_fields__}
 
     if path.exists():
@@ -119,7 +120,7 @@ def save_renderer_config(config: RendererConfig, path: Path = CONFIG_PATH) -> Pa
     return write_json(path, config.to_dict())
 
 
-def save_renderer_config_from_dict(data: dict[str, Any], path: Path = CONFIG_PATH) -> RendererConfig:
+def save_renderer_config_from_dict(data: DomainDocument, path: Path = CONFIG_PATH) -> RendererConfig:
     config = RendererConfig.from_dict(data)
     save_renderer_config(config, path)
     return config
@@ -146,7 +147,7 @@ def test_renderer_config(
     *,
     runner: Runner | None = None,
     timeout_seconds: int = 10,
-) -> dict[str, Any]:
+) -> DomainDocument:
     config.validate_ready_for_render()
     runner = runner or subprocess.run
     cmd = [config.fluidsynth_path, "--version"]

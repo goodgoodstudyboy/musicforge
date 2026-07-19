@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from collections import Counter as Counter
 from typing import Any as Any
@@ -19,8 +19,8 @@ def build_editor_view(
     *,
     section_identity: dict[str, str | None] | None = None,
     track_identity: dict[str, str | None] | None = None,
-    note_identity: dict[str, dict[str, dict[str, Any]]] | None = None,
-) -> dict[str, Any]:
+    note_identity: dict[str, dict[str, DomainDocument]] | None = None,
+) -> DomainDocument:
     state = build_editor_state(plan)
     sections = _stable_sections(state["sections"], section_identity)
     tracks = []
@@ -70,7 +70,7 @@ def build_editor_view(
     }
 
 
-def build_editor_view_from_result(result: EditorPatchResult) -> dict[str, Any]:
+def build_editor_view_from_result(result: EditorPatchResult) -> DomainDocument:
     return build_editor_view(
         result.plan,
         section_identity=result.summary.get("section_identity") or None,
@@ -79,7 +79,7 @@ def build_editor_view_from_result(result: EditorPatchResult) -> dict[str, Any]:
     )
 
 
-def build_editor_diff(parent: SongPlan, edited: SongPlan, patch: EditorPatch) -> dict[str, Any]:
+def build_editor_diff(parent: SongPlan, edited: SongPlan, patch: EditorPatch) -> DomainDocument:
     parent_state = build_editor_state(parent)
     edited_state = build_editor_state(edited)
     parent_sections = parent_state["sections"]

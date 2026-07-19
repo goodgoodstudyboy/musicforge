@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import threading as threading
 from dataclasses import asdict as asdict, dataclass as dataclass
@@ -35,7 +35,7 @@ class MixPreview:
     status: str
     created_at: str
     updated_at: str
-    summary: dict[str, Any]
+    summary: ImplementationDocument
     midi_path: str
     audio_path: str | None = None
     audio_status: str = "not_started"
@@ -45,7 +45,7 @@ class MixPreview:
     integrity_hash: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "MixPreview":
+    def from_dict(cls, data: DomainDocument) -> "MixPreview":
         return cls(
             schema_version=int(data.get("schema_version", MIX_PREVIEW_SCHEMA_VERSION) or MIX_PREVIEW_SCHEMA_VERSION),
             preview_id=_validate_preview_id(str(data.get("preview_id") or "mixprev-000001")),
@@ -68,7 +68,7 @@ class MixPreview:
             integrity_hash=str(data.get("integrity_hash") or ""),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -99,7 +99,7 @@ class MixRenderStore:
         *,
         project_id: str,
         version_id: str,
-        payload: dict[str, Any],
+        payload: DomainDocument,
         now: str | None = None,
     ) -> tuple[MixPreview, MixPatch, Path]:
         now = now or now_iso()
@@ -182,7 +182,7 @@ class MixRenderStore:
         project_id: str,
         version_id: str,
         preview_id: str,
-        payload: dict[str, Any] | None = None,
+        payload: DomainDocument | None = None,
         now: str | None = None,
     ) -> tuple[dict[str, Any], Any, Any]:
         now = now or now_iso()
@@ -301,7 +301,7 @@ class MixRenderStore:
             self.project_store.append_event(project_id, "mix_preview_applied", {"parent_version_id": parent.version_id, "preview_id": preview.preview_id, "version_id": version.version_id, "job_id": job.job_id})
             return document.to_dict(), version, job
 
-    def render_stems(self, *, project_id: str, version_id: str, require_wav: bool = False, render_wav: bool = False, force: bool = False, now: str | None = None) -> dict[str, Any]:
+    def render_stems(self, *, project_id: str, version_id: str, require_wav: bool = False, render_wav: bool = False, force: bool = False, now: str | None = None) -> DomainDocument:
         now = now or now_iso()
         _document, version, _job, plan, _midi = _project_version_context(self.project_store, self.job_store, project_id, version_id)
         run_dir = Path(version.output_dir)
@@ -339,7 +339,7 @@ class MixRenderStore:
         report = write_stem_health_report(run_dir, report)
         return {"ok": True, "project_id": project_id, "version_id": version.version_id, "manifest": manifest.to_dict(), "stem_health": report, "summary": stem_health_summary(report)}
 
-    def marker_mix_patch_draft(self, *, release_store: Any, audio_review_store: Any, release_id: str, review_id: str, marker_id: str, payload: dict[str, Any] | None = None, now: str | None = None) -> dict[str, Any]:
+    def marker_mix_patch_draft(self, *, release_store: Any, audio_review_store: Any, release_id: str, review_id: str, marker_id: str, payload: DomainDocument | None = None, now: str | None = None) -> DomainDocument:
         now = now or now_iso()
         review = audio_review_store.read_review(release_id, review_id)
         if review.get("stale"):
@@ -391,14 +391,14 @@ def with_preview_integrity(preview: MixPreview) -> MixPreview:
     return MixPreview.from_dict(data)
 
 
-def mix_preview_hash(preview: MixPreview | dict[str, Any]) -> str:
+def mix_preview_hash(preview: MixPreview | DomainDocument) -> str:
     data = preview.to_dict() if isinstance(preview, MixPreview) else dict(preview)
     from song_agent.domains.delivery.releases import stable_hash
 
     return stable_hash({key: value for key, value in data.items() if key not in MIX_PREVIEW_INTEGRITY_EXCLUDE_KEYS})
 
 
-def mix_preview_integrity_ok(preview: MixPreview | dict[str, Any]) -> bool:
+def mix_preview_integrity_ok(preview: MixPreview | DomainDocument) -> bool:
     data = preview.to_dict() if isinstance(preview, MixPreview) else dict(preview)
     expected = str(data.get("integrity_hash") or "")
     return bool(expected) and expected == mix_preview_hash(data)

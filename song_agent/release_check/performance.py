@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import os
 from typing import Any, Iterable
 
@@ -47,7 +48,7 @@ def performance_summary(
     profile: str,
     duration_ms: int,
     slow_check_seconds: float = DEFAULT_SLOW_CHECK_SECONDS,
-) -> dict[str, Any]:
+) -> DomainDocument:
     rows = list(results)
     slow_threshold_ms = int(float(slow_check_seconds) * 1000)
     slow_checks = [
@@ -89,7 +90,7 @@ def _profile_duration_budget(profile: str) -> float | None:
     return PROFILE_DURATION_BUDGET_SECONDS.get(profile)
 
 
-def _performance_row(result: Any) -> dict[str, Any]:
+def _performance_row(result: Any) -> ImplementationDocument:
     return {
         "check_id": str(getattr(result, "check_id", "")),
         "name": str(getattr(result, "name", "")),

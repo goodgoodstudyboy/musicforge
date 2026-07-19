@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
 from dataclasses import dataclass as dataclass
@@ -14,12 +15,12 @@ from song_agent.domains.creation.schemas.song import SongPlan as SongPlan, SongR
 class MockProviderClient:
     mode: str = "ok"
 
-    def test(self) -> dict[str, Any]:
+    def test(self) -> DomainDocument:
         if self.mode == "request_error":
             raise ProviderRequestError("Mock provider request failed.")
         return {"ok": True, "message": "Mock provider test completed."}
 
-    def generate_song_plan_json(self, request: SongRequest, config: Any) -> dict[str, Any]:
+    def generate_song_plan_json(self, request: SongRequest, config: Any) -> DomainDocument:
         if self.mode == "request_error":
             raise ProviderRequestError("Mock provider request failed.")
         if self.mode == "invalid_schema":
@@ -32,7 +33,7 @@ class MockProviderClient:
         instruction: str,
         config: Any,
         prompt: str = "",
-    ) -> dict[str, Any]:
+    ) -> DomainDocument:
         if self.mode == "request_error":
             raise ProviderRequestError("Mock provider request failed.")
         if self.mode == "invalid_schema":
@@ -40,7 +41,7 @@ class MockProviderClient:
         section_name = _target_section(parent_plan, instruction)
         lower = instruction.lower()
         if "chord" in lower or "harmony" in lower:
-            operation: dict[str, Any] = {
+            operation: ImplementationDocument = {
                 "op": "set_section_chords",
                 "section_name": section_name,
                 "chords": ["Cmaj7", "Am7", "Fmaj7", "G7"],
@@ -84,7 +85,7 @@ class MockProviderClient:
         config: Any,
         candidate_count: int = 3,
         prompt: str = "",
-    ) -> dict[str, Any]:
+    ) -> DomainDocument:
         if self.mode == "request_error":
             raise ProviderRequestError("Mock provider request failed.")
         if self.mode == "invalid_schema":
@@ -166,10 +167,10 @@ class MockProviderClient:
     def generate_review_judge_json(
         self,
         parent_plan: SongPlan,
-        judge_payload: dict[str, Any],
+        judge_payload: DomainDocument,
         config: Any,
         prompt: str = "",
-    ) -> dict[str, Any]:
+    ) -> DomainDocument:
         if self.mode == "request_error":
             raise ProviderRequestError("Mock provider request failed.")
         candidates = [item for item in judge_payload.get("candidates", []) if isinstance(item, dict)]
@@ -188,7 +189,7 @@ class MockProviderClient:
                 "manual_review_required": True,
                 "warnings": ["no ready candidates"],
             }
-        scores: list[dict[str, Any]] = []
+        scores: list[ImplementationDocument] = []
         for index, candidate in enumerate(candidates):
             candidate_id = str(candidate.get("candidate_id") or "")
             local_scores = _as_document(candidate.get("scores"))
@@ -234,10 +235,10 @@ class MockProviderClient:
     def generate_node_json(
         self,
         node_name: str,
-        node_input: dict[str, Any],
+        node_input: DomainDocument,
         config: Any,
         prompt: str = "",
-    ) -> dict[str, Any]:
+    ) -> DomainDocument:
         if self.mode == "request_error":
             raise ProviderRequestError("Mock provider request failed.")
         if self.mode == "invalid_schema":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import as_document as _as_document
 
 import json
 import os

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
-from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -51,11 +50,11 @@ KNOWLEDGE_EXPORT_ENTRIES = {
 }
 
 
-def knowledge_hash(doc: dict[str, Any]) -> str:
+def knowledge_hash(doc: DomainDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in TRUST_OPERATIONS_KNOWLEDGE_HASH_EXCLUDE_KEYS})
 
 
-def knowledge_manifest_hash(manifest: dict[str, Any]) -> str:
+def knowledge_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key != "integrity_hash"})
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 from pathlib import Path as Path
@@ -31,7 +31,7 @@ def checklist_path(store: DistributionStore, release_id: str, target_id: str) ->
     return checklist_dir(store, release_id) / f"{target_id}-checklist.json"
 
 
-def read_distribution_checklist(store: DistributionStore, release_id: str, target_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+def read_distribution_checklist(store: DistributionStore, release_id: str, target_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
     path = checklist_path(store, release_id, target_id)
     if not path.exists():
         return default if default is not None else {}
@@ -43,10 +43,10 @@ def initialize_distribution_checklist(
     store: DistributionStore,
     release_id: str,
     target: Any,
-    template: dict[str, Any],
+    template: DomainDocument,
     *,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     store.ensure_target_mutable(release_id, target)
     return reconcile_distribution_checklist(store, release_id, target, template, now=now, write=True)
 
@@ -55,16 +55,16 @@ def reconcile_distribution_checklist(
     store: DistributionStore,
     release_id: str,
     target: Any,
-    template: dict[str, Any],
+    template: DomainDocument,
     *,
     now: str | None = None,
     write: bool = False,
-) -> dict[str, Any]:
+) -> DomainDocument:
     now = now or now_iso()
     existing = read_distribution_checklist(store, release_id, target.target_id, default={})
     existing_items = {str(item.get("item_id")): item for item in existing.get("items", []) if isinstance(item, dict)}
     template_items = _as_list(template.get("checklist"))
-    items: list[dict[str, Any]] = []
+    items: list[ImplementationDocument] = []
     for item in template_items:
         if not isinstance(item, dict):
             continue
@@ -111,12 +111,12 @@ def update_distribution_checklist_item(
     store: DistributionStore,
     release_id: str,
     target: Any,
-    template: dict[str, Any],
+    template: DomainDocument,
     item_id: str,
-    payload: dict[str, Any],
+    payload: DomainDocument,
     *,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     store.ensure_target_mutable(release_id, target)
     now = now or now_iso()
     document = reconcile_distribution_checklist(store, release_id, target, template, now=now, write=False)
@@ -148,7 +148,7 @@ def update_distribution_checklist_item(
     return document
 
 
-def checklist_summary(document: dict[str, Any] | None) -> dict[str, Any]:
+def checklist_summary(document: DomainDocument | None) -> DomainDocument:
     data = _as_document(document)
     items = _as_list(data.get("items"))
     counts = {status: 0 for status in CHECKLIST_STATUSES}
@@ -185,10 +185,10 @@ def checklist_summary(document: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def checklist_checks(document: dict[str, Any] | None) -> list[dict[str, Any]]:
+def checklist_checks(document: DomainDocument | None) -> list[DomainDocument]:
     data = _as_document(document)
     summary = checklist_summary(data)
-    checks: list[dict[str, Any]] = [
+    checks: list[ImplementationDocument] = [
         _check("checklist_exists", not bool(data), "blocking", "Submission checklist exists."),
         _check("checklist_required_pending", int(summary.get("required_pending_count") or 0) > 0, "blocking", "Required checklist items are still pending.", count=int(summary.get("required_pending_count") or 0)),
         _check("checklist_required_blocked", int(summary.get("required_blocked_count") or 0) > 0, "blocking", "Required checklist items are blocked.", count=int(summary.get("required_blocked_count") or 0)),
@@ -198,7 +198,7 @@ def checklist_checks(document: dict[str, Any] | None) -> list[dict[str, Any]]:
     return checks
 
 
-def checklist_payload_hash(document: dict[str, Any] | None) -> str:
+def checklist_payload_hash(document: DomainDocument | None) -> str:
     data = _as_document(document)
     return stable_hash(
         {
@@ -221,7 +221,7 @@ def checklist_payload_hash(document: dict[str, Any] | None) -> str:
     )
 
 
-def checklist_export_payload(document: dict[str, Any], template: dict[str, Any]) -> dict[str, Any]:
+def checklist_export_payload(document: DomainDocument, template: DomainDocument) -> DomainDocument:
     return sanitize_metadata(
         {
             **document,
@@ -233,7 +233,7 @@ def checklist_export_payload(document: dict[str, Any], template: dict[str, Any])
     )
 
 
-def checklist_markdown(document: dict[str, Any], template: dict[str, Any]) -> str:
+def checklist_markdown(document: DomainDocument, template: DomainDocument) -> str:
     summary = checklist_summary(document)
     lines = [
         f"# Distribution Checklist - {template.get('name') or template.get('slug') or 'Template'}",

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import ImplementationDocument
 import json
 import stat
 import tempfile
 import warnings
 import zipfile
 from pathlib import Path
-from typing import Any
 
 from song_agent.capabilities import CapabilityRegistry, CapabilitySpec, RuntimeVerificationSpec
 from song_agent.platform.contracts.lifecycle import ResetAuthorization
@@ -200,7 +200,7 @@ def _wrong_manifest_size_rejected(base: Path) -> bool:
     return report["status"] == "failed" and "v1301_kernel_manifest_file_data_json_size" in report["blockers"]
 
 
-def _kernel_manifest(payloads: dict[str, bytes]) -> dict[str, Any]:
+def _kernel_manifest(payloads: dict[str, bytes]) -> ImplementationDocument:
     document = {
         "schema_version": 1,
         "package_type": "musicforge_v1301_kernel_package",
@@ -300,11 +300,11 @@ def _forged_evidence_identity_rejected(base: Path) -> bool:
     }.issubset(blockers)
 
 
-def _identity_runtime_verifier(package_path: Path | str, *, strict: bool = True) -> dict[str, Any]:
+def _identity_runtime_verifier(package_path: Path | str, *, strict: bool = True) -> ImplementationDocument:
     del strict
     target = Path(package_path)
     fingerprint = sha256_file(target)
-    report: dict[str, Any] = {
+    report: ImplementationDocument = {
         "package_type": "musicforge_v1301_identity_verification",
         "status": "passed" if target.is_file() else "failed",
         "zip_sha256": fingerprint,
@@ -323,7 +323,7 @@ def _identity_runtime_verifier(package_path: Path | str, *, strict: bool = True)
     return report
 
 
-def _with_integrity(document: dict[str, Any]) -> dict[str, Any]:
+def _with_integrity(document: ImplementationDocument) -> ImplementationDocument:
     result = dict(document)
     result["integrity_hash"] = integrity_hash(result)
     return result
@@ -356,5 +356,5 @@ def _write_package_without_file_index(path: Path, entries: dict[str, bytes], pac
     return path
 
 
-def _verify(path: Path, spec: PackageSpec) -> dict[str, Any]:
+def _verify(path: Path, spec: PackageSpec) -> ImplementationDocument:
     return verify_package_envelope(path, spec, strict=True)

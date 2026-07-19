@@ -2,8 +2,8 @@
 
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
-| ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.2.0 | ADR-015 freezes per-file ceilings plus aggregate module count, thousand-line count, largest-module size, and total oversized lines. |
-| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.2.0 | `architecture-v14-quality.json` freezes alias-aware total, layer, and per-file explicit-`Any` budgets; no file, layer, or total budget may grow. |
+| ARCH-014 | Residual migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.3.0 | v14.2 lowered the debt below the hard interim target; the remaining per-file ceilings, oversized-module count, thousand-line count, largest-module size, and total oversized lines may not grow. |
+| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations in a bounded residual set. | Platform, application, interface, and bounded-context owners | v14.3.0 | v14.2 lowered explicit `Any` below the hard interim target with schema-v3 alias-aware counting; no file, layer, or total budget may grow. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -75,3 +75,17 @@ same ratchet.
 ARCH-014 is not closed. ADR-015 formally reapproves it through v14.2.0 after a
 measured aggregate reduction. v14.1.1 adds the missing per-file no-growth
 updater check so aggregate reductions cannot hide individual module growth.
+
+## v14.2 Closure
+
+v14.2 meets the interim cleanup targets without claiming total debt removal.
+The explicit-`Any` collector is schema v3 and counts direct `Any`, imported
+aliases, `typing` and `typing_extensions` module aliases, nested annotations,
+and quoted annotations. TYPE-003 is reduced below the v14.2 target and remains
+under total, layer, and file no-growth budgets.
+
+ARCH-014 is reduced below the v14.2 target: no migrated domain module remains
+over 1000 lines, the largest migrated domain module is below 800 lines, and the
+residual over-600-line set is explicitly listed in `architecture-v14-quality.json`.
+The remaining residual debt is reapproved through v14.3.0 under the same
+no-growth ratchet.

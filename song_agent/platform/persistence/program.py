@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import json
 import os
@@ -56,7 +56,7 @@ class ProgramStateRepository:
     def write_projection(
         self,
         path: Path | str,
-        document: dict[str, Any],
+        document: DomainDocument,
         *,
         crash_hook: ProgramCrashHook | None = None,
     ) -> Path:
@@ -84,7 +84,7 @@ class ProgramStateRepository:
             self._commit_index(relative, version, transaction_id)
         return target
 
-    def read_projection(self, path: Path | str) -> dict[str, Any]:
+    def read_projection(self, path: Path | str) -> DomainDocument:
         self._ensure_database()
         target, relative = self._target(path)
         with WorkspaceLock(self.workspace_root, operation=f"program-read:{relative}"):
@@ -123,7 +123,7 @@ class ProgramStateRepository:
         self,
         connection: Any,
         relative_path: str,
-        document: dict[str, Any],
+        document: DomainDocument,
         payload: bytes,
         *,
         migration_id: str,
@@ -299,7 +299,7 @@ class ProgramStateRepository:
             hook(stage)
 
 
-def write_program_json(path: Path, data: dict[str, Any]) -> Path:
+def write_program_json(path: Path, data: DomainDocument) -> Path:
     workspace = _program_workspace(path)
     if workspace is None:
         _write_bytes_atomic(path, _json_bytes(data))
@@ -307,21 +307,21 @@ def write_program_json(path: Path, data: dict[str, Any]) -> Path:
     return _cached_repository(str(workspace)).write_projection(path, data)
 
 
-def read_program_json(path: Path) -> dict[str, Any]:
+def read_program_json(path: Path) -> DomainDocument:
     workspace = _program_workspace(path)
     if workspace is None:
         return _read_json(path)
     return _cached_repository(str(workspace)).read_projection(path)
 
 
-def program_json_facade(error_type: type[Exception]) -> tuple[Callable[[Path], dict[str, Any]], Callable[[Path, dict[str, Any]], Path]]:
-    def read(path: Path) -> dict[str, Any]:
+def program_json_facade(error_type: type[Exception]) -> tuple[Callable[[Path], DomainDocument], Callable[[Path, DomainDocument], Path]]:
+    def read(path: Path) -> DomainDocument:
         try:
             return read_program_json(path)
         except ProgramPersistenceError as exc:
             raise error_type(str(exc)) from exc
 
-    def write(path: Path, data: dict[str, Any]) -> Path:
+    def write(path: Path, data: DomainDocument) -> Path:
         try:
             return write_program_json(path, data)
         except ProgramPersistenceError as exc:

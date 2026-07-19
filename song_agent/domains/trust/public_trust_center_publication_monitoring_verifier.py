@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -62,7 +63,7 @@ def verify_public_trust_center_publication_monitoring_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _MonitoringVerifier(
         Path(zip_path),
         strict=strict,
@@ -81,11 +82,11 @@ def verify_public_trust_center_publication_monitoring_package(
     return verifier.run()
 
 
-def write_public_trust_center_publication_monitoring_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_public_trust_center_publication_monitoring_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_public_trust_center_publication_monitoring_verification_report(report: dict[str, Any]) -> None:
+def print_public_trust_center_publication_monitoring_verification_report(report: DomainDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Publication Monitoring verification")
     print(f"status: {report.get('status')}")
@@ -95,7 +96,7 @@ def print_public_trust_center_publication_monitoring_verification_report(report:
     print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
-def public_trust_center_publication_monitoring_verification_exit_code(report: dict[str, Any]) -> int:
+def public_trust_center_publication_monitoring_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -130,9 +131,9 @@ class _MonitoringVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -140,22 +141,22 @@ class _MonitoringVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.manifest: dict[str, Any] = {}
-        self.run_doc: dict[str, Any] = {}
-        self.probe_results: dict[str, Any] = {}
-        self.drift_report: dict[str, Any] = {}
-        self.incident_report: dict[str, Any] = {}
-        self.incident_events: list[dict[str, Any]] = []
-        self.rebuilt_incidents: list[dict[str, Any]] = []
+        self.manifest: ImplementationDocument = {}
+        self.run_doc: ImplementationDocument = {}
+        self.probe_results: ImplementationDocument = {}
+        self.drift_report: ImplementationDocument = {}
+        self.incident_report: ImplementationDocument = {}
+        self.incident_events: list[ImplementationDocument] = []
+        self.rebuilt_incidents: list[ImplementationDocument] = []
         self.rebuilt_incident_summary: dict[str, int] = {}
-        self.channel_state_snapshot: dict[str, Any] = {}
-        self.file_index: dict[str, Any] = {}
-        self.checksum_json: dict[str, Any] = {}
-        self.publication_verification: dict[str, Any] = {}
-        self.mirror_verification: dict[str, Any] = {}
-        self.external_channel_state: dict[str, Any] = {}
+        self.channel_state_snapshot: ImplementationDocument = {}
+        self.file_index: ImplementationDocument = {}
+        self.checksum_json: ImplementationDocument = {}
+        self.publication_verification: ImplementationDocument = {}
+        self.mirror_verification: ImplementationDocument = {}
+        self.external_channel_state: ImplementationDocument = {}
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -381,7 +382,7 @@ class _MonitoringVerifier:
             self._add_check("requirements", "ptcpm_require_no_revoked", "passed" if status not in {"revoked", "superseded"} else "failed", "blocking", f"External channel state status is {status}.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[dict[str, Any]] = []
+        findings: list[ImplementationDocument] = []
         for info in self.entry_infos:
             if int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
                 continue
@@ -425,7 +426,7 @@ class _MonitoringVerifier:
         except (OSError, UnicodeDecodeError) as exc:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be read: {exc}")
             return []
-        rows: list[dict[str, Any]] = []
+        rows: list[ImplementationDocument] = []
         bad_lines: list[int] = []
         for index, line in enumerate(text.splitlines(), start=1):
             if not line.strip():
@@ -495,226 +496,24 @@ def _probe(probe_results: ImplementationDocument, target_type: str) -> Implement
     return {}
 
 
-def _rebuild_incidents_from_events(events: list[ImplementationDocument], *, center_id: str, channel_id: str, monitor_id: str, publication_id: Any) -> tuple[list[ImplementationDocument], dict[str, int], list[str]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    invalid: list[str] = []
-    for event in events:
-        incident_id = str(event.get("incident_id") or "")
-        if not incident_id:
-            invalid.append("<missing-incident-id>")
-            continue
-        grouped.setdefault(incident_id, []).append(event)
-    rows: list[dict[str, Any]] = []
-    for incident_id, incident_events in sorted(grouped.items()):
-        ordered = sorted(incident_events, key=lambda item: int(item.get("sequence") or 0))
-        if not _incident_event_chain_valid(ordered):
-            invalid.append(incident_id)
-        row = _incident_from_events(center_id, channel_id, monitor_id, incident_id, ordered)
-        if row:
-            row["publication_id"] = publication_id
-            row["event_count"] = len(ordered)
-            row["latest_event_hash"] = ordered[-1].get("event_hash") if ordered else None
-            row["event_chain_valid"] = _incident_event_chain_valid(ordered)
-            rows.append(row)
-    summary = {
-        "incident_count": len(rows),
-        "open_count": sum(1 for item in rows if item.get("status") == "open"),
-        "critical_count": sum(1 for item in rows if item.get("status") == "open" and item.get("severity") == "critical"),
-        "waived_count": sum(1 for item in rows if item.get("status") == "waived"),
-        "resolved_count": sum(1 for item in rows if item.get("status") == "resolved"),
-    }
-    return rows, summary, invalid
+from song_agent.domains.trust import v142_ptcpmv_readiness as _v142_ptcpmv_readiness
+from song_agent.domains.trust.v142_ptcpmv_readiness import (
+    _rebuild_incidents_from_events,
+    _incident_from_events,
+    _incident_comparable,
+    _incident_title,
+    _manual_action_for_drift,
+    _incident_event_chain_valid,
+    _publication_state_row,
+    _is_safe_entry,
+    _is_forbidden_entry,
+    _sha256_file,
+    _sha256_entry,
+    _read_json_file,
+    _counts,
+    _redaction_findings,
+    _blocked_key_findings,
+    _fs_path,
+)
 
-
-def _incident_from_events(center_id: str, channel_id: str, monitor_id: str, incident_id: str, events: list[ImplementationDocument]) -> ImplementationDocument:
-    if not events:
-        return {}
-    opened = next((event for event in events if event.get("event_type") == "opened"), events[0])
-    payload = _as_document(opened.get("payload"))
-    status = "open"
-    evidence = {
-        "drift_report_hash": payload.get("drift_report_hash"),
-        "probe_results_hash": payload.get("probe_results_hash"),
-        "channel_state_latest_event_hash": payload.get("channel_state_latest_event_hash"),
-    }
-    latest_run_id = payload.get("run_id")
-    for event in events:
-        event_type = str(event.get("event_type") or "")
-        epayload = _as_document(event.get("payload"))
-        if epayload.get("run_id"):
-            latest_run_id = epayload.get("run_id")
-        if event_type in {"opened", "reopened"}:
-            status = "open"
-        elif event_type == "acknowledged":
-            status = "open"
-        elif event_type == "resolved":
-            status = "resolved"
-        elif event_type == "waived":
-            status = "waived"
-    issue_type = str(payload.get("issue_type") or "monitoring_drift")
-    severity = str(payload.get("severity") or "critical")
-    return {
-        "schema_version": PUBLICATION_MONITORING_SCHEMA_VERSION,
-        "package_type": PUBLICATION_INCIDENT_REPORT_PACKAGE_TYPE,
-        "incident_id": incident_id,
-        "monitor_id": monitor_id,
-        "center_id": center_id,
-        "channel_id": channel_id,
-        "first_run_id": payload.get("run_id"),
-        "latest_run_id": latest_run_id,
-        "publication_id": None,
-        "status": status,
-        "severity": severity,
-        "issue_type": issue_type,
-        "title": _incident_title(issue_type),
-        "evidence": evidence,
-        "manual_actions": [{"action_type": _manual_action_for_drift(issue_type), "status": "manual_required", "reason": _incident_title(issue_type)}],
-    }
-
-
-def _incident_comparable(incident: ImplementationDocument) -> ImplementationDocument:
-    return {key: incident.get(key) for key in (
-        "schema_version",
-        "package_type",
-        "incident_id",
-        "monitor_id",
-        "center_id",
-        "channel_id",
-        "first_run_id",
-        "latest_run_id",
-        "publication_id",
-        "status",
-        "severity",
-        "issue_type",
-        "title",
-        "evidence",
-        "manual_actions",
-        "event_count",
-        "latest_event_hash",
-        "event_chain_valid",
-    )}
-
-
-def _incident_title(issue_type: str) -> str:
-    return {
-        "publication_revoked": "Published snapshot has been revoked",
-        "publication_superseded": "Published snapshot has been superseded",
-        "mirror_file_missing": "Publication mirror is missing files",
-        "mirror_file_hash_mismatch": "Publication mirror file hash mismatch",
-        "mirror_extra_file": "Publication mirror contains unexpected files",
-        "publication_zip_hash_mismatch": "Publication ZIP does not match channel state",
-    }.get(issue_type, "Publication monitoring drift detected")
-
-
-def _manual_action_for_drift(issue_type: str) -> str:
-    if issue_type.startswith("mirror_"):
-        return "refresh_publication_mirror"
-    if issue_type.startswith("publication_"):
-        return "review_publication_channel_state"
-    return "investigate_publication_monitoring_drift"
-
-
-def _incident_event_chain_valid(events: list[ImplementationDocument]) -> bool:
-    previous: str | None = None
-    for index, event in enumerate(events, start=1):
-        if int(event.get("sequence") or 0) != index:
-            return False
-        if event.get("previous_event_hash") != previous:
-            return False
-        payload = _as_document(event.get("payload"))
-        if event.get("payload_hash") != stable_hash(payload):
-            return False
-        expected = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        if event.get("event_hash") != expected:
-            return False
-        previous = str(event.get("event_hash") or "")
-    return True
-
-
-def _publication_state_row(channel_state: ImplementationDocument, publication_id: str) -> ImplementationDocument:
-    for row in channel_state.get("publications", []) if isinstance(channel_state.get("publications"), list) else []:
-        if isinstance(row, dict) and str(row.get("publication_id") or "") == str(publication_id):
-            return row
-    return {}
-
-
-def _is_safe_entry(name: str) -> bool:
-    if not name or "\\" in name:
-        return False
-    try:
-        path = PurePosixPath(name)
-    except ValueError:
-        return False
-    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
-        return False
-    return True
-
-
-def _is_forbidden_entry(name: str) -> bool:
-    lower = name.lower()
-    return lower.startswith(".musicforge/") or "/.musicforge/" in lower
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(_fs_path(path), "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
-    digest = hashlib.sha256()
-    with archive.open(info, "r") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _read_json_file(path: Path | None) -> ImplementationDocument:
-    if path is None:
-        return {}
-    try:
-        with open(_fs_path(Path(path)), "r", encoding="utf-8") as handle:
-            value = json.load(handle)
-    except (OSError, ValueError, json.JSONDecodeError):
-        return {}
-    return _as_document(value)
-
-
-def _counts(values: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
-    for pattern in [*SENSITIVE_VALUE_PATTERNS, *LOCAL_PATH_VALUE_PATTERNS]:
-        regex = pattern[0] if isinstance(pattern, tuple) else pattern
-        if regex.search(text):
-            findings.append({"path": name, "pattern": regex.pattern[:80]})
-    return findings
-
-
-def _blocked_key_findings(name: str, value: Any) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
-    if isinstance(value, dict):
-        for key, nested in value.items():
-            if str(key).lower() in VERIFIER_BLOCKED_KEYS:
-                findings.append({"path": name, "key": str(key)})
-            findings.extend(_blocked_key_findings(name, nested))
-    elif isinstance(value, list):
-        for nested in value:
-            findings.extend(_blocked_key_findings(name, nested))
-    return findings
-
-
-def _fs_path(path: Path) -> str:
-    text = str(Path(path).resolve())
-    if os.name != "nt" or text.startswith("\\\\?\\"):
-        return text
-    if text.startswith("\\\\"):
-        return "\\\\?\\UNC\\" + text.lstrip("\\")
-    return "\\\\?\\" + text
+_v142_ptcpmv_readiness.bind_globals(globals())

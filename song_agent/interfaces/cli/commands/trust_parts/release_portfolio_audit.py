@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from song_agent.platform.contracts import ImplementationDocument
 
 from . import dependencies as _commands_trust_parts_dependencies
 
@@ -35,7 +35,7 @@ def _execute_release_portfolio_audit(argv: list[str]) -> None:
     audit_store = ReleaseOperationsAuditStore(operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, release_store=release_store)
     reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
     store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, audit_store=audit_store, reviewer_pack_store=reviewer_store)
-    result: dict[str, _InterfaceType] = {"ok": True}
+    result: ImplementationDocument = {"ok": True}
     release_ids = [item.strip() for item in str(args.release_ids or "").split(",") if item.strip()]
     payload = {
         "name": args.name,
@@ -122,7 +122,7 @@ def _execute_release_portfolio_governance_queue(argv: list[str]) -> None:
     reviewer_store = ReleaseOperationsReviewerPackStore(audit_store=audit_store, signoff_store=signoff_store, release_store=release_store)
     portfolio_store = ReleasePortfolioAuditStore(release_store=release_store, operations_store=operations_store, runbook_store=runbook_store, signoff_store=signoff_store, audit_store=audit_store, reviewer_pack_store=reviewer_store)
     store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=reviewer_store, audit_store=audit_store, signoff_store=signoff_store)
-    result: dict[str, _InterfaceType] = {"ok": True}
+    result: ImplementationDocument = {"ok": True}
     if args.list:
         queues = store.list_queues(portfolio_id=args.portfolio_id or None, include_archived=True)
         result.update({"queues": queues, "summary": {"count": len(queues)}})
@@ -197,7 +197,7 @@ def _execute_release_portfolio_governance_signoff(argv: list[str]) -> None:
     governance_store = ReleasePortfolioGovernanceStore(portfolio_store=portfolio_store, reviewer_pack_store=reviewer_store, audit_store=audit_store, signoff_store=operations_signoff_store)
     store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
     queue_id = args.queue_id
-    result: dict[str, _InterfaceType] = {"ok": True, "queue_id": queue_id}
+    result: ImplementationDocument = {"ok": True, "queue_id": queue_id}
     if args.create_change_request:
         change = store.create_change_request(queue_id, {"reason": args.reason, "requested_by": args.signed_by})
         result.update({"change_request": change, "change_request_summary": store.change_request_summary(queue_id)})
@@ -275,13 +275,13 @@ def _execute_release_portfolio_governance_audit(argv: list[str]) -> None:
     signoff_store = ReleasePortfolioGovernanceSignoffStore(governance_store=governance_store)
     store = ReleasePortfolioGovernanceAuditStore(portfolio_store=portfolio_store, governance_store=governance_store, signoff_store=signoff_store)
     portfolio_id = args.portfolio_id
-    result: dict[str, _InterfaceType] = {"ok": True, "portfolio_id": portfolio_id}
+    result: ImplementationDocument = {"ok": True, "portfolio_id": portfolio_id}
     if args.refresh:
         report = store.refresh(portfolio_id)
         result.update({"report": report, "summary": portfolio_governance_audit_summary(report), "stale": store.report_is_stale(portfolio_id, report)})
     else:
         report = store.read_report(portfolio_id, default={})
-        summary: dict[str, _InterfaceType] = portfolio_governance_audit_summary(report) if report else {"status": "missing"}
+        summary: ImplementationDocument = portfolio_governance_audit_summary(report) if report else {"status": "missing"}
         if report:
             summary["stale"] = store.report_is_stale(portfolio_id, report)
         result.update({"report": report, "summary": summary, "stale": summary.get("stale", False)})

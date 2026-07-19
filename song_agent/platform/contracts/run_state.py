@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from typing import Any
 
 
 class StepStatus(StrEnum):
@@ -19,14 +19,14 @@ class ArtifactRef:
     path: str
     description: str = ""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
 @dataclass
 class RunState:
     run_id: str
-    request: dict[str, Any]
+    request: ImplementationDocument
     steps: dict[str, str] = field(default_factory=dict)
     artifacts: dict[str, ArtifactRef] = field(default_factory=dict)
 
@@ -36,7 +36,7 @@ class RunState:
     def add_artifact(self, name: str, artifact: ArtifactRef) -> None:
         self.artifacts[name] = artifact
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "run_id": self.run_id,
             "request": self.request,
@@ -47,7 +47,7 @@ class RunState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> RunState:
+    def from_dict(cls, data: DomainDocument) -> RunState:
         artifacts = {
             name: ArtifactRef(**artifact)
             for name, artifact in data.get("artifacts", {}).items()

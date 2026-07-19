@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 from song_agent.platform.contracts.coercion import as_document as _as_document
-from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
@@ -22,15 +22,15 @@ ACCEPTED_EVIDENCE_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", 
 ACCEPTED_EVIDENCE_STATUSES = {"current", "stale", "failed", "archived"}
 
 
-def accepted_evidence_hash(evidence: dict[str, Any]) -> str:
+def accepted_evidence_hash(evidence: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (evidence or {}).items() if key not in ACCEPTED_EVIDENCE_HASH_EXCLUDE_KEYS})
 
 
-def accepted_evidence_manifest_hash(manifest: dict[str, Any]) -> str:
+def accepted_evidence_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in ACCEPTED_EVIDENCE_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def accepted_evidence_summary(evidence: dict[str, Any] | None) -> dict[str, Any]:
+def accepted_evidence_summary(evidence: DomainDocument | None) -> DomainDocument:
     data = _as_document(evidence)
     public = _as_document(data.get("public_summary"))
     source = _as_document(data.get("source"))

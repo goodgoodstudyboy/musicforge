@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts import ImplementationDocument
 
 from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
 
@@ -276,7 +276,7 @@ class DeliveryRoutesRelease(DeliveryRouteContext):
         return (False, None)
 
     def _handle_release_route(self, method: str, release_id: str, tail: str, query_string: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: ImplementationDocument = {}
         try:
             _split_result = self._handle_release_route_part_01(method, release_id, tail, query_string, _split_state)
             if _split_result[0]:

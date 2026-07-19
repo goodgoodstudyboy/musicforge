@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
-from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
@@ -30,23 +29,23 @@ REGISTRY_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_
 ENTRY_STATUSES = {"draft", "published", "revoked", "superseded", "archived", "failed"}
 
 
-def registry_hash(registry: dict[str, Any]) -> str:
+def registry_hash(registry: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (registry or {}).items() if key not in REGISTRY_HASH_EXCLUDE_KEYS})
 
 
-def registry_entry_hash(entry: dict[str, Any]) -> str:
+def registry_entry_hash(entry: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (entry or {}).items() if key not in REGISTRY_ENTRY_HASH_EXCLUDE_KEYS})
 
 
-def registry_report_hash(report: dict[str, Any]) -> str:
+def registry_report_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in REGISTRY_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def registry_manifest_hash(manifest: dict[str, Any]) -> str:
+def registry_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in REGISTRY_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def registry_summary(registry: dict[str, Any] | None) -> dict[str, Any]:
+def registry_summary(registry: DomainDocument | None) -> DomainDocument:
     data = _as_document(registry)
     entries = _as_list(data.get("entries"))
     current = _find_entry(data, str(data.get("current_entry_id") or "")) if data.get("current_entry_id") else {}
@@ -66,7 +65,7 @@ def registry_summary(registry: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def registry_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def registry_verification_summary(report: DomainDocument) -> DomainDocument:
     summary = _as_document(report.get("summary"))
     return sanitize_metadata({"status": report.get("status"), "portfolio_id": summary.get("portfolio_id"), "current_entry_id": summary.get("current_entry_id"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash")}, blocked_keys=REGISTRY_BLOCKED_KEYS)
 

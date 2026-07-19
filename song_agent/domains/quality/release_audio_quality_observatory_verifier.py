@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -49,10 +49,10 @@ def verify_release_audio_quality_observatory_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {
         "zip_path": str(zip_path),
         "zip_sha256": None,
         "zip_size_bytes": 0,
@@ -151,11 +151,11 @@ def verify_release_audio_quality_observatory_package(
     return _finish(checks, summary)
 
 
-def write_release_audio_quality_observatory_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_release_audio_quality_observatory_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def release_audio_quality_observatory_verification_exit_code(report: dict[str, Any]) -> int:
+def release_audio_quality_observatory_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import ast
 from collections import Counter
 import hashlib
@@ -8,14 +9,14 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Iterable
+from typing import Iterable
 
 from song_agent.platform.verification.hashing import canonical_text_bytes, sha256_text_file, stable_hash
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.1.2"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 2
+QUALITY_POLICY_VERSION = "14.2.0"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 3
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -34,7 +35,7 @@ def evaluate_v14_quality(
     policy_path: Path | str = QUALITY_POLICY_PATH,
     run_mypy: bool = True,
     require_coverage: bool = True,
-) -> dict[str, Any]:
+) -> DomainDocument:
     root = Path(repo_root).resolve()
     policy = json.loads(_rooted(root, policy_path).read_text(encoding="utf-8"))
     blockers = _policy_blockers(policy)
@@ -61,13 +62,13 @@ def evaluate_v14_quality(
     }
 
 
-def collect_typing_metrics(root: Path) -> dict[str, Any]:
+def collect_typing_metrics(root: Path) -> DomainDocument:
     raw_count = 0
     implementation_count = 0
     explicit_any_by_file: Counter[str] = Counter()
     explicit_any_by_layer: Counter[str] = Counter()
-    public_dynamic: list[dict[str, Any]] = []
-    untyped_public: list[dict[str, Any]] = []
+    public_dynamic: list[ImplementationDocument] = []
+    untyped_public: list[ImplementationDocument] = []
     for path in _active_python_files(root):
         source = path.read_text(encoding="utf-8")
         raw_count += source.count("dict[str, Any]")
@@ -93,6 +94,8 @@ def collect_typing_metrics(root: Path) -> dict[str, Any]:
                 public_dynamic.append(
                     {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
                 )
+    for root_name in MYPY_ROOTS:
+        explicit_any_by_layer.setdefault(_typing_layer(root_name), 0)
     return {
         "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "raw_dict_str_any_count": raw_count,
@@ -107,7 +110,7 @@ def collect_typing_metrics(root: Path) -> dict[str, Any]:
     }
 
 
-def collect_mypy_metrics(root: Path) -> dict[str, Any]:
+def collect_mypy_metrics(root: Path) -> DomainDocument:
     command = [
         sys.executable,
         "-m",
@@ -150,9 +153,9 @@ def collect_mypy_metrics(root: Path) -> dict[str, Any]:
     }
 
 
-def collect_complexity_metrics(root: Path, policy: dict[str, Any]) -> dict[str, Any]:
-    oversized_functions: list[dict[str, Any]] = []
-    oversized_modules: list[dict[str, Any]] = []
+def collect_complexity_metrics(root: Path, policy: DomainDocument) -> DomainDocument:
+    oversized_functions: list[ImplementationDocument] = []
+    oversized_modules: list[ImplementationDocument] = []
     blockers: list[str] = []
     debt = {str(row["path"]): row for row in policy.get("module_size_debt") or []}
     for path in _active_python_files(root):
@@ -210,7 +213,7 @@ def collect_complexity_metrics(root: Path, policy: dict[str, Any]) -> dict[str, 
     }
 
 
-def collect_coverage_metrics(root: Path, policy: dict[str, Any]) -> dict[str, Any]:
+def collect_coverage_metrics(root: Path, policy: DomainDocument) -> DomainDocument:
     coverage_policy = policy.get("coverage") or {}
     report_path = _rooted(root, str(coverage_policy.get("report_path") or "runs/v14-quality/coverage.json"))
     blockers: list[str] = []
@@ -271,24 +274,26 @@ def active_source_tree_hash(root: Path) -> str:
     return digest.hexdigest()
 
 
-def coverage_semantic_hash(files: dict[str, Any]) -> str:
+def coverage_semantic_hash(files: DomainDocument) -> str:
     return stable_hash({"files": files})
 
 
-def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None) -> dict[str, Any]:
+def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None) -> DomainDocument:
     typing = collect_typing_metrics(root)
     mypy = collect_mypy_metrics(root)
-    module_debt: list[dict[str, Any]] = []
+    module_debt: list[ImplementationDocument] = []
     maximum = 600
     for path in _active_python_files(root):
         lines = len(path.read_text(encoding="utf-8").splitlines())
         if lines > maximum:
             module_debt.append(
-                {"path": path.relative_to(root).as_posix(), "max_lines": lines, "expires_version": "14.2.0"}
+                {"path": path.relative_to(root).as_posix(), "max_lines": lines, "expires_version": "14.3.0"}
             )
+    total_oversized_lines = sum(int(row["max_lines"]) for row in module_debt)
+    largest_module_lines = max((int(row["max_lines"]) for row in module_debt), default=0)
     report = coverage_report or root / "runs/v14-quality/coverage.json"
     coverage_bound = coverage_report is not None and report.is_file()
-    document: dict[str, Any] = {
+    document: ImplementationDocument = {
         "schema_version": 1,
         "package_type": "musicforge_v14_quality_policy",
         "release_version": QUALITY_POLICY_VERSION,
@@ -316,6 +321,17 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
             "domain_max_lines": 200,
             "module_default_max_lines": 600,
             "new_module_max_lines": 400,
+            "aggregate_debt": {
+                "architecture_decision": "docs/architecture/ADR-015-v141-complexity-ratchet.md",
+                "expires_version": "14.3.0",
+                "previous_oversized_module_count": 137,
+                "previous_total_oversized_module_lines": 124039,
+                "required_total_line_reduction": max(0, 124039 - total_oversized_lines),
+                "max_oversized_module_count": len(module_debt),
+                "max_modules_over_1000_lines": sum(1 for row in module_debt if int(row["max_lines"]) > 1000),
+                "max_largest_module_lines": largest_module_lines,
+                "max_total_oversized_module_lines": total_oversized_lines,
+            },
         },
         "module_size_debt": module_debt,
         "coverage": {
@@ -419,7 +435,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
     return passed, json.dumps(details, sort_keys=True)
 
 
-def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
+def _typing_blockers(metrics: ImplementationDocument, policy: ImplementationDocument) -> list[str]:
     limits = policy.get("typing") or {}
     blockers: list[str] = []
     if int(limits.get("explicit_any_collector_schema_version") or 0) != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION:
@@ -454,7 +470,7 @@ def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[st
     return blockers
 
 
-def _mypy_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
+def _mypy_blockers(metrics: ImplementationDocument, policy: ImplementationDocument) -> list[str]:
     expected = policy.get("mypy") or {}
     blockers: list[str] = []
     if metrics["status"] != "measured":
@@ -477,7 +493,7 @@ def _mypy_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]
     return blockers
 
 
-def _policy_blockers(policy: dict[str, Any]) -> list[str]:
+def _policy_blockers(policy: ImplementationDocument) -> list[str]:
     blockers: list[str] = []
     expected = stable_hash({key: value for key, value in policy.items() if key != "integrity_hash"})
     if policy.get("integrity_hash") != expected:
@@ -526,46 +542,161 @@ def _function_annotations(
     return annotations
 
 
-def _explicit_any_annotation_count(tree: ast.Module) -> int:
-    any_names, module_names = _typing_any_aliases(tree)
-    return sum(_annotation_any_count(annotation, any_names, module_names) for annotation in _annotation_nodes(tree))
+class _ExplicitAnyCollector(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.count = 0
+        self._scopes: list[dict[str, str]] = [{}]
 
+    def visit_Module(self, node: ast.Module) -> None:
+        self._scan_aliases_until_stable(node.body)
+        self.generic_visit(node)
 
-def _typing_any_aliases(tree: ast.Module) -> tuple[set[str], set[str]]:
-    any_names = {"Any"}
-    module_names = {"typing", "typing_extensions"}
-    for node in tree.body:
-        if isinstance(node, ast.Import):
-            for alias in node.names:
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._scopes.append({})
+        self._scan_aliases_until_stable(node.body)
+        self.generic_visit(node)
+        self._scopes.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._count_function_annotations(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._count_function_annotations(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        return
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if self._is_type_alias_annotation(node.annotation):
+            return
+        self.count += self._annotation_any_count(node.annotation)
+        if node.value is not None:
+            self.visit(node.value)
+
+    def visit_arg(self, node: ast.arg) -> None:
+        if node.annotation is not None:
+            self.count += self._annotation_any_count(node.annotation)
+
+    def _count_function_annotations(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        for annotation in _function_annotations(node, skip_receiver=False):
+            if annotation is not None:
+                self.count += self._annotation_any_count(annotation)
+        if node.returns is not None:
+            self.count += self._annotation_any_count(node.returns)
+
+    def _scan_aliases_until_stable(self, body: list[ast.stmt]) -> None:
+        changed = True
+        while changed:
+            changed = False
+            for statement in body:
+                changed = self._record_alias(statement) or changed
+
+    def _record_alias(self, statement: ast.stmt) -> bool:
+        before = dict(self._scopes[-1])
+        self._record_alias_once(statement)
+        return before != self._scopes[-1]
+
+    def _record_alias_once(self, statement: ast.stmt) -> None:
+        if isinstance(statement, ast.Import):
+            for alias in statement.names:
                 if alias.name in {"typing", "typing_extensions"}:
-                    module_names.add(alias.asname or alias.name)
-            continue
-        if isinstance(node, ast.ImportFrom) and node.module in {"typing", "typing_extensions"}:
-            for alias in node.names:
+                    self._scopes[-1][alias.asname or alias.name] = "typing-module"
+            return
+        if isinstance(statement, ast.ImportFrom) and statement.module in {"typing", "typing_extensions"}:
+            for alias in statement.names:
+                name = alias.asname or alias.name
                 if alias.name == "Any":
-                    any_names.add(alias.asname or alias.name)
-    return any_names, module_names
+                    self._scopes[-1][name] = "any"
+                elif alias.name == "TypeAlias":
+                    self._scopes[-1][name] = "type-alias-marker"
+            return
+        if isinstance(statement, ast.If) and self._is_type_checking_guard(statement.test):
+            self._scan_aliases_until_stable(statement.body)
+            return
+        if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
+            if self._annotation_any_count(statement.value) > 0:
+                self._scopes[-1][statement.targets[0].id] = "any"
+            return
+        if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            if self._is_type_alias_annotation(statement.annotation) and statement.value is not None:
+                if self._annotation_any_count(statement.value) > 0:
+                    self._scopes[-1][statement.target.id] = "any"
+            return
+        if hasattr(ast, "TypeAlias") and isinstance(statement, ast.TypeAlias):
+            name = getattr(statement, "name", None)
+            value = getattr(statement, "value", None)
+            if isinstance(name, ast.Name) and isinstance(value, ast.expr) and self._annotation_any_count(value) > 0:
+                self._scopes[-1][name.id] = "any"
+
+    def _annotation_any_count(self, annotation: ast.expr) -> int:
+        count = 0
+        for node in ast.walk(annotation):
+            if isinstance(node, ast.Name) and self._resolve_name(node.id) == "any":
+                count += 1
+            elif isinstance(node, ast.Attribute) and node.attr == "Any" and isinstance(node.value, ast.Name):
+                if self._resolve_name(node.value.id) == "typing-module":
+                    count += 1
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                count += _quoted_annotation_any_count(
+                    node.value,
+                    {
+                        name
+                        for scope in self._scopes
+                        for name, kind in scope.items()
+                        if kind == "any"
+                    }
+                    | {"Any"},
+                    {
+                        name
+                        for scope in self._scopes
+                        for name, kind in scope.items()
+                        if kind == "typing-module"
+                    }
+                    | {"typing", "typing_extensions"},
+                )
+        return count
+
+    def _is_type_alias_annotation(self, annotation: ast.expr) -> bool:
+        return isinstance(annotation, ast.Name) and self._resolve_name(annotation.id) == "type-alias-marker"
+
+    def _is_type_checking_guard(self, test: ast.expr) -> bool:
+        if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
+            return True
+        return (
+            isinstance(test, ast.Attribute)
+            and test.attr == "TYPE_CHECKING"
+            and isinstance(test.value, ast.Name)
+            and self._resolve_name(test.value.id) == "typing-module"
+        )
+
+    def _resolve_name(self, name: str) -> str:
+        for scope in reversed(self._scopes):
+            if name in scope:
+                return scope[name]
+        if name == "Any":
+            return "any"
+        if name in {"typing", "typing_extensions"}:
+            return "typing-module"
+        if name == "TypeAlias":
+            return "type-alias-marker"
+        return ""
 
 
-def _annotation_nodes(tree: ast.Module) -> Iterable[ast.expr]:
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            for annotation in _function_annotations(node, skip_receiver=False):
-                if annotation is not None:
-                    yield annotation
-            if node.returns is not None:
-                yield node.returns
-            continue
-        if isinstance(node, ast.AnnAssign):
-            yield node.annotation
-            continue
-        if hasattr(ast, "TypeAlias") and isinstance(node, ast.TypeAlias):
-            value = getattr(node, "value", None)
-            if isinstance(value, ast.expr):
-                yield value
+def _explicit_any_annotation_count(tree: ast.Module) -> int:
+    collector = _ExplicitAnyCollector()
+    collector.visit(tree)
+    return collector.count
 
 
-def _annotation_any_count(annotation: ast.expr, any_names: set[str], module_names: set[str]) -> int:
+def _quoted_annotation_any_count(value: str, any_names: set[str], module_names: set[str]) -> int:
+    try:
+        expression = ast.parse(value, mode="eval")
+    except SyntaxError:
+        return 0
+    return _legacy_annotation_any_count(expression.body, any_names, module_names)
+
+
+def _legacy_annotation_any_count(annotation: ast.expr, any_names: set[str], module_names: set[str]) -> int:
     count = 0
     for node in ast.walk(annotation):
         if isinstance(node, ast.Name) and node.id in any_names:
@@ -582,19 +713,12 @@ def _annotation_any_count(annotation: ast.expr, any_names: set[str], module_name
     return count
 
 
-def _quoted_annotation_any_count(value: str, any_names: set[str], module_names: set[str]) -> int:
-    try:
-        expression = ast.parse(value, mode="eval")
-    except SyntaxError:
-        return 0
-    return _annotation_any_count(expression.body, any_names, module_names)
-
-
 def _explicit_any_alias_probe() -> bool:
     tree = ast.parse(
         """
 from typing import Any, Any as _InterfaceType
 from typing_extensions import Any as _InferenceType
+from typing import TYPE_CHECKING, TypeAlias
 import typing as t
 import typing_extensions as tx
 
@@ -606,9 +730,19 @@ extension_module_alias: tx.Any
 nested: dict[str, list[_InterfaceType | t.Any]]
 quoted: "_InterfaceType"
 quoted_nested: "dict[str, tx.Any]"
+if TYPE_CHECKING:
+    from typing import Any as _CheckedAny
+checked: _CheckedAny
+TypeAliasAny: TypeAlias = _InterfaceType
+type_alias_value: TypeAliasAny
+AliasChain = TypeAliasAny
+alias_chain_value: AliasChain
+class Scoped:
+    from typing import Any as ScopedAny
+    value: ScopedAny
 """
     )
-    return _explicit_any_annotation_count(tree) == 9
+    return _explicit_any_annotation_count(tree) == 13
 
 
 def _typing_layer(relative: str) -> str:
@@ -630,7 +764,7 @@ def _active_python_files(root: Path) -> list[Path]:
     return sorted(path for relative in MYPY_ROOTS for path in (root / relative).rglob("*.py") if path.is_file())
 
 
-def _coverage_totals(report: dict[str, Any], roots: tuple[str, ...], *, exact: bool = False) -> dict[str, Any]:
+def _coverage_totals(report: ImplementationDocument, roots: tuple[str, ...], *, exact: bool = False) -> ImplementationDocument:
     statements = covered = 0
     normalized = tuple(value.replace("\\", "/") for value in roots)
     for raw_path, row in (report.get("files") or {}).items():

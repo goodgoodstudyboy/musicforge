@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -20,12 +21,26 @@ from song_agent.domains.delivery.releases import ReleaseStore as ReleaseStore, s
 from song_agent.domains.quality.release_audio_quality_action_semantics import RELEASE_AUDIO_QUALITY_ACTION_QUEUE_PACKAGE_TYPE as RELEASE_AUDIO_QUALITY_ACTION_QUEUE_PACKAGE_TYPE, RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION as RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION, ReleaseAudioQualityActionQueueError as ReleaseAudioQualityActionQueueError, ReleaseAudioQualityActionQueueValidationError as ReleaseAudioQualityActionQueueValidationError, _action_items_from_binding as _action_items_from_binding, _action_selection as _action_selection, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _read_json_entry as _read_json_entry, _recommendation_action as _recommendation_action, _risk_action as _risk_action, _selection_from_documents as _selection_from_documents, _sha256_path as _sha256_path, _source_binding_from_external as _source_binding_from_external, _with_action_selection as _with_action_selection, build_expected_action_documents_from_observatory as build_expected_action_documents_from_observatory
 
 
-class ReleaseAudioQualityActionQueueNotFoundError(ReleaseAudioQualityActionQueueError):
-    pass
+from song_agent.domains.quality import v142_raqa_readiness as _v142_raqa_readiness
+from song_agent.domains.quality.v142_raqa_readiness import (
+    ReleaseAudioQualityActionQueueNotFoundError,
+    ReleaseAudioQualityActionQueueStateError,
+    _execute_item,
+    _manual_action_from_item,
+    _build_summary,
+    _validate_queue_id,
+    _validate_observatory_id,
+    _bounded,
+    _semantic_hash,
+    _file_record,
+    _read_jsonl,
+    _history_chain_ok,
+    _safe_int,
+    _readme,
+)
 
 
-class ReleaseAudioQualityActionQueueStateError(ReleaseAudioQualityActionQueueError):
-    pass
+
 
 
 
@@ -87,8 +102,8 @@ class ReleaseAudioQualityActionQueueStore:
     def verification_report_path(self, queue_id: str) -> Path:
         return self.queue_dir(queue_id) / "verification-report.json"
 
-    def list_queues(self) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
+    def list_queues(self) -> list[DomainDocument]:
+        rows: list[ImplementationDocument] = []
         for queue_path in sorted(self.queues_dir().glob("*/action-queue.json")):
             try:
                 queue = read_json(queue_path)
@@ -107,8 +122,8 @@ class ReleaseAudioQualityActionQueueStore:
         include_risks: bool = True,
         include_recommendations: bool = True,
         severity_floor: str = "warning",
-        policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        policy: DomainDocument | None = None,
+    ) -> DomainDocument:
         with self.lock:
             observatory_id = _validate_observatory_id(observatory_id)
             queue_id = self._next_queue_id()
@@ -130,19 +145,19 @@ class ReleaseAudioQualityActionQueueStore:
             self._record_history_event(queue_id, "queue_created", {"source_hash": binding.get("source_hash"), "item_count": docs["summary"].get("summary", {}).get("item_count")})
             return docs["queue"]
 
-    def read_queue(self, queue_id: str) -> dict[str, Any]:
+    def read_queue(self, queue_id: str) -> DomainDocument:
         path = self.queue_path(queue_id)
         if not path.exists():
             raise ReleaseAudioQualityActionQueueNotFoundError(f"Audio Quality Action Queue not found: {queue_id}.")
         return read_json(path)
 
-    def read_summary(self, queue_id: str) -> dict[str, Any]:
+    def read_summary(self, queue_id: str) -> DomainDocument:
         path = self.summary_path(queue_id)
         if not path.exists():
             raise ReleaseAudioQualityActionQueueNotFoundError(f"Audio Quality Action Queue summary not found: {queue_id}.")
         return read_json(path)
 
-    def refresh_status(self, queue_id: str) -> dict[str, Any]:
+    def refresh_status(self, queue_id: str) -> DomainDocument:
         with self.lock:
             self._ensure_mutable(queue_id, "refresh status")
             docs = self._read_documents(queue_id)
@@ -158,7 +173,7 @@ class ReleaseAudioQualityActionQueueStore:
             write_json(self.summary_path(queue_id), summary)
             return summary
 
-    def run_safe(self, queue_id: str) -> dict[str, Any]:
+    def run_safe(self, queue_id: str) -> DomainDocument:
         with self.lock:
             self._ensure_mutable(queue_id, "run safe actions")
             docs = self._read_documents(queue_id)
@@ -167,8 +182,8 @@ class ReleaseAudioQualityActionQueueStore:
                 raise ReleaseAudioQualityActionQueueStateError("Audio Quality Action Queue source is stale. Refresh Observatory and create a new queue.")
             items = _as_list(docs["items"].get("items"))
             existing_results = {str(row.get("item_id")): row for row in docs["results"].get("results", []) if isinstance(row, dict)}
-            result_rows: list[dict[str, Any]] = []
-            manual_rows: list[dict[str, Any]] = []
+            result_rows: list[ImplementationDocument] = []
+            manual_rows: list[ImplementationDocument] = []
             for item in items:
                 if not isinstance(item, dict):
                     continue
@@ -201,7 +216,7 @@ class ReleaseAudioQualityActionQueueStore:
             self._record_history_event(queue_id, "queue_run_safe_completed", {"status": summary.get("status"), "summary_hash": summary.get("integrity_hash")})
             return {"status": summary.get("status"), "queue_id": queue_id, "summary": summary.get("summary", {}), "results": results, "manual_actions": manual_actions}
 
-    def export_package(self, queue_id: str) -> dict[str, Any]:
+    def export_package(self, queue_id: str) -> DomainDocument:
         with self.lock:
             self._ensure_mutable(queue_id, "export queue")
             docs = self._current_docs_for_export(queue_id)
@@ -209,9 +224,9 @@ class ReleaseAudioQualityActionQueueStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
+            files: list[ImplementationDocument] = []
 
-            def write_entry(rel: str, payload: dict[str, Any] | list[dict[str, Any]] | str) -> None:
+            def write_entry(rel: str, payload: DomainDocument | list[DomainDocument] | str) -> None:
                 path = export_dir / rel
                 if isinstance(payload, str):
                     path.write_text(payload, encoding="utf-8")
@@ -252,7 +267,7 @@ class ReleaseAudioQualityActionQueueStore:
             write_json(export_dir / "manifest.json", manifest)
             return {"status": docs["summary"].get("status"), "export_dir": str(export_dir), "manifest": manifest}
 
-    def build_zip(self, queue_id: str) -> dict[str, Any]:
+    def build_zip(self, queue_id: str) -> DomainDocument:
         with self.lock:
             self._ensure_mutable(queue_id, "build queue ZIP")
             exported = self.export_package(queue_id)
@@ -277,7 +292,7 @@ class ReleaseAudioQualityActionQueueStore:
                         archive.write(path, path.relative_to(export_dir).as_posix())
             return {"status": exported.get("status"), "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_zip(self, queue_id: str, **kwargs: Any) -> dict[str, Any]:
+    def verify_zip(self, queue_id: str, **kwargs: Any) -> DomainDocument:
         from song_agent.domains.quality.release_audio_quality_actions_verifier import verify_release_audio_quality_action_queue_package, write_release_audio_quality_action_queue_verification_report
 
         with self.lock:
@@ -293,7 +308,7 @@ class ReleaseAudioQualityActionQueueStore:
             write_release_audio_quality_action_queue_verification_report(report, self.verification_report_path(queue_id))
             return report
 
-    def gate(self, release_id: str, *, queue_id: str | None = None, required: bool, require_no_blocking: bool = True) -> dict[str, Any]:
+    def gate(self, release_id: str, *, queue_id: str | None = None, required: bool, require_no_blocking: bool = True) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         try:
@@ -520,215 +535,4 @@ class ReleaseAudioQualityActionQueueStore:
             return False
         return any(row.get("event_type") == "action_queue_signoff_created" for row in rows)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _execute_item(item: ImplementationDocument) -> ImplementationDocument:
-    started = now_iso()
-    item_id = str(item.get("item_id") or "")
-    action_type = str(item.get("action_type") or "")
-    execution_mode = str(item.get("execution_mode") or "")
-    if execution_mode == "manual_required" or bool(item.get("requires_manual")):
-        return {"item_id": item_id, "status": "manual_required", "action_type": action_type, "started_at": started, "finished_at": now_iso(), "result": {"manual_required": True}, "error": None}
-    safe_actions = {"refresh_observatory", "verify_observatory", "create_audio_quality_review_task", "create_audio_fix_sprint_draft", "create_regression_response_plan_draft"}
-    if action_type not in safe_actions or execution_mode != "safe":
-        return {"item_id": item_id, "status": "blocked", "action_type": action_type, "started_at": started, "finished_at": now_iso(), "result": {}, "error": "Action is not safe for automatic execution."}
-    created_type = {
-        "refresh_observatory": "observatory_refresh_request",
-        "verify_observatory": "observatory_verification_request",
-        "create_audio_quality_review_task": "review_task_draft",
-        "create_audio_fix_sprint_draft": "audio_fix_sprint_draft",
-        "create_regression_response_plan_draft": "regression_response_plan_draft",
-    }.get(action_type, "safe_action_result")
-    created_id = f"{created_type}-{item_id}"
-    return {"item_id": item_id, "status": "completed", "action_type": action_type, "started_at": started, "finished_at": now_iso(), "result": {"created_object_type": created_type, "created_object_id": created_id, "manual_required": action_type.startswith("create_")}, "error": None}
-
-
-def _manual_action_from_item(item: ImplementationDocument, index: int) -> ImplementationDocument:
-    return sanitize_metadata(
-        {
-            "manual_action_id": f"aqman-{index:06d}",
-            "item_id": item.get("item_id"),
-            "action_type": item.get("action_type"),
-            "reason": item.get("inputs", {}).get("reason") if isinstance(item.get("inputs"), dict) else "Manual action required.",
-            "target": item.get("target", {}),
-            "status": "manual_required",
-        }
-    )
-
-
-def _build_summary(queue: ImplementationDocument, source_binding: ImplementationDocument, items: ImplementationDocument, results: ImplementationDocument, manual_actions: ImplementationDocument, *, stale_reasons: list[str]) -> ImplementationDocument:
-    item_rows = [row for row in items.get("items", []) if isinstance(row, dict)]
-    result_rows = [row for row in results.get("results", []) if isinstance(row, dict)]
-    manual_rows = [row for row in manual_actions.get("manual_actions", []) if isinstance(row, dict)]
-    completed = sum(1 for row in result_rows if row.get("status") == "completed")
-    failed = sum(1 for row in result_rows if row.get("status") == "failed")
-    blocked = sum(1 for row in result_rows if row.get("status") == "blocked")
-    manual_required_ids = {str(row.get("item_id")) for row in manual_rows if row.get("item_id")}
-    manual_required_ids.update(str(row.get("item_id")) for row in result_rows if row.get("status") == "manual_required" and row.get("item_id"))
-    manual_required = len(manual_required_ids)
-    pending = max(0, len(item_rows) - len(result_rows))
-    critical_unhandled = sum(1 for row in item_rows if row.get("severity") in {"critical", "blocking"} and row.get("item_id") not in {result.get("item_id") for result in result_rows if result.get("status") in {"completed", "manual_required"}})
-    if stale_reasons:
-        status = "stale"
-        readiness = "blocked"
-    elif failed or blocked:
-        status = "failed"
-        readiness = "blocked"
-    elif pending:
-        status = "pending"
-        readiness = "pending"
-    elif manual_required:
-        status = "completed_with_manual_actions"
-        readiness = "manual_actions_required"
-    else:
-        status = "completed"
-        readiness = "ready"
-    summary = sanitize_metadata(
-        {
-            "schema_version": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION,
-            "package_type": "release_audio_quality_action_queue_summary",
-            "queue_id": queue.get("queue_id"),
-            "status": status,
-            "source_hash": source_binding.get("source_hash"),
-            "readiness": readiness,
-            "stale_reasons": stale_reasons,
-            "summary": {
-                "item_count": len(item_rows),
-                "completed_count": completed,
-                "manual_required_count": manual_required,
-                "blocked_count": blocked,
-                "failed_count": failed,
-                "pending_count": pending,
-                "critical_source_risk_count": _safe_int((source_binding.get("risk_register") or {}).get("summary", {}).get("critical_risk_count") if isinstance(source_binding.get("risk_register"), dict) else 0),
-                "critical_unhandled_count": critical_unhandled,
-                "release_ids": (source_binding.get("observatory") or {}).get("release_ids") or [],
-            },
-            "document_hashes": {
-                "action_queue": queue.get("integrity_hash"),
-                "source_binding": source_binding.get("integrity_hash"),
-                "action_items": items.get("integrity_hash"),
-                "action_results": results.get("integrity_hash"),
-                "manual_actions": manual_actions.get("integrity_hash"),
-            },
-            "created_at": now_iso(),
-        }
-    )
-    summary["integrity_hash"] = _integrity_hash(summary)
-    return summary
-
-
-def _validate_queue_id(value: str) -> str:
-    if not re.fullmatch(r"aqa-\d{6}", str(value or "")):
-        raise ReleaseAudioQualityActionQueueValidationError(f"Invalid queue_id: {value}.")
-    return str(value)
-
-
-def _validate_observatory_id(value: str) -> str:
-    if not re.fullmatch(r"aqo-\d{6}", str(value or "")):
-        raise ReleaseAudioQualityActionQueueValidationError(f"Invalid observatory_id: {value}.")
-    return str(value)
-
-
-def _bounded(value: Any, limit: int) -> str:
-    return sanitize_sensitive_text(str(value or "").strip())[:limit]
-
-
-
-
-
-
-
-
-def _semantic_hash(value: Any) -> str:
-    def scrub(item: Any) -> Any:
-        if isinstance(item, dict):
-            return {key: scrub(val) for key, val in sorted(item.items()) if key not in {"created_at", "updated_at", "generated_at", "integrity_hash"}}
-        if isinstance(item, list):
-            return [scrub(val) for val in item]
-        return item
-
-    return stable_hash(scrub(value))
-
-
-
-
-
-def _file_record(path: Path, rel: str) -> ImplementationDocument:
-    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
-
-
-def _read_jsonl(path: Path) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
-    if not path.exists():
-        return rows
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        item = json.loads(line)
-        if isinstance(item, dict):
-            rows.append(item)
-    return rows
-
-
-def _history_chain_ok(history: list[ImplementationDocument]) -> bool:
-    previous: str | None = None
-    for event in history:
-        payload = _as_document(event.get("payload"))
-        if event.get("previous_event_hash") != previous:
-            return False
-        if event.get("payload_hash") != stable_hash(payload):
-            return False
-        if event.get("event_hash") != stable_hash({key: value for key, value in event.items() if key != "event_hash"}):
-            return False
-        previous = str(event.get("event_hash") or "")
-    return bool(history)
-
-
-
-
-
-def _safe_int(value: Any) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _readme(queue: ImplementationDocument, summary: ImplementationDocument) -> str:
-    data = _as_document(summary.get("summary"))
-    return "\n".join(
-        [
-            "MusicForge Release Audio Quality Action Queue",
-            f"queue_id: {queue.get('queue_id')}",
-            f"status: {summary.get('status')}",
-            f"item_count: {data.get('item_count')}",
-            f"manual_required_count: {data.get('manual_required_count')}",
-            "",
-            "This package records safe and manual governance actions derived from Release Audio Quality Observatory evidence.",
-            "It does not modify music, signoffs, baselines, or provider state.",
-            "",
-        ]
-    )
+_v142_raqa_readiness.bind_globals(globals())

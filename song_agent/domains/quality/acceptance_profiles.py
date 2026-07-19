@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 from dataclasses import dataclass as dataclass
 from typing import Any as Any
 
@@ -23,7 +24,7 @@ class AcceptanceProfile:
     songbook_id: str = "builtin_v1"
     description: str = ""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return sanitize_metadata(
             {
                 "schema_version": ACCEPTANCE_PROFILE_SCHEMA_VERSION,
@@ -94,7 +95,7 @@ BUILTIN_ACCEPTANCE_PROFILES: dict[str, AcceptanceProfile] = {
 }
 
 
-def list_acceptance_profiles() -> list[dict[str, Any]]:
+def list_acceptance_profiles() -> list[DomainDocument]:
     return [profile.to_dict() for profile in BUILTIN_ACCEPTANCE_PROFILES.values()]
 
 
@@ -106,5 +107,5 @@ def get_acceptance_profile(profile_id: str | None) -> AcceptanceProfile:
         raise ValueError(f"Unknown acceptance profile: {key}.") from exc
 
 
-def profile_payload(profile: AcceptanceProfile) -> dict[str, Any]:
+def profile_payload(profile: AcceptanceProfile) -> DomainDocument:
     return profile.to_dict()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import DomainDocument
 from dataclasses import asdict, dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -29,11 +29,11 @@ class EvidenceRef:
             self.generation,
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "EvidenceRef":
+    def from_dict(cls, value: DomainDocument) -> "EvidenceRef":
         return cls(
             schema_version=int(value.get("schema_version") or 1),
             component_type=str(value.get("component_type") or ""),

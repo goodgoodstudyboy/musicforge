@@ -128,7 +128,7 @@ def test_v14_module_debt_is_registered_and_function_limits_are_hard() -> None:
 
     assert report["status"] == "passed", report["blockers"]
     assert report["registered_oversized_module_count"] == len(policy["module_size_debt"])
-    assert all(row["expires_version"] == "14.2.0" for row in policy["module_size_debt"])
+    assert all(row["expires_version"] == "14.3.0" for row in policy["module_size_debt"])
     aggregate = policy["complexity"]["aggregate_debt"]
     assert report["aggregate"]["oversized_module_count"] <= aggregate["max_oversized_module_count"]
     assert report["aggregate"]["modules_over_1000_lines"] <= aggregate["max_modules_over_1000_lines"]
@@ -143,7 +143,7 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     configured = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert policy["release_version"] == "14.1.2"
+    assert policy["release_version"] == "14.2.0"
     assert policy["mypy"]["max_total_errors"] == 0
     assert policy["mypy"]["error_budgets"] == {}
     typing = collect_typing_metrics(ROOT)
@@ -185,9 +185,13 @@ def test_v1412_explicit_any_collector_counts_alias_module_nested_and_quoted_anno
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 2
+    assert typing["collector_schema_version"] == 3
     assert typing["explicit_any_count"] == 11
-    assert typing["explicit_any_by_layer"] == {"interfaces": 11}
+    assert typing["explicit_any_by_layer"]["interfaces"] == 11
+    assert typing["explicit_any_by_layer"]["platform"] == 0
+    assert typing["explicit_any_by_layer"]["application"] == 0
+    assert typing["explicit_any_by_layer"]["capabilities"] == 0
+    assert typing["explicit_any_by_layer"]["domains"] == 0
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/sample.py": 11}
 
 
@@ -277,7 +281,7 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
     assert policy["typing"] == {
         "raw_dict_str_any_max_count": 5,
         "implementation_document_max_count": 6,
-        "explicit_any_collector_schema_version": 2,
+        "explicit_any_collector_schema_version": 3,
         "explicit_any_max_count": 3,
         "explicit_any_layer_budgets": {"application": 3},
         "explicit_any_file_budgets": {"song_agent/application/a.py": 2, "song_agent/application/b.py": 1},

@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import hashlib as hashlib
 import json as json
@@ -48,7 +49,7 @@ class SectionAutomation:
     velocity_scale: float = 1.0
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SectionAutomation":
+    def from_dict(cls, data: DomainDocument) -> "SectionAutomation":
         section_id = _validate_section_id(str(data.get("section_id") or ""))
         return cls(
             section_id=section_id,
@@ -56,7 +57,7 @@ class SectionAutomation:
             velocity_scale=_velocity_scale(data.get("velocity_scale", 1.0)),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -75,7 +76,7 @@ class MixTrackState:
     section_automation: list[SectionAutomation] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "MixTrackState":
+    def from_dict(cls, data: DomainDocument) -> "MixTrackState":
         return cls(
             track_id=_validate_track_id(str(data.get("track_id") or "")),
             role=sanitize_sensitive_text(str(data.get("role") or ""))[:80],
@@ -94,7 +95,7 @@ class MixTrackState:
             ][:256],
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         data = asdict(self)
         data["section_automation"] = [item.to_dict() for item in self.section_automation]
         return data
@@ -108,7 +109,7 @@ class MixState:
     version_id: str
     base_song_plan_hash: str
     base_midi_hash: str
-    source: dict[str, Any]
+    source: ImplementationDocument
     source_hash: str
     tracks: list[MixTrackState]
     created_at: str
@@ -116,7 +117,7 @@ class MixState:
     integrity_hash: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "MixState":
+    def from_dict(cls, data: DomainDocument) -> "MixState":
         return cls(
             schema_version=int(data.get("schema_version", MIX_STATE_SCHEMA_VERSION) or MIX_STATE_SCHEMA_VERSION),
             mix_state_id=_validate_mix_state_id(str(data.get("mix_state_id") or "mixstate-000001")),
@@ -132,7 +133,7 @@ class MixState:
             integrity_hash=str(data.get("integrity_hash") or ""),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "schema_version": self.schema_version,
             "mix_state_id": self.mix_state_id,
@@ -157,8 +158,8 @@ class MixPatch:
     version_id: str
     base_mix_state_hash: str
     base_song_plan_hash: str
-    operations: list[dict[str, Any]]
-    source: dict[str, Any]
+    operations: list[ImplementationDocument]
+    source: ImplementationDocument
     source_hash: str
     created_at: str
     updated_at: str
@@ -166,7 +167,7 @@ class MixPatch:
     integrity_hash: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "MixPatch":
+    def from_dict(cls, data: DomainDocument) -> "MixPatch":
         if not isinstance(data, dict):
             raise MixControlError("mix patch must be an object.")
         operations = data.get("operations")
@@ -193,7 +194,7 @@ class MixPatch:
             integrity_hash=str(data.get("integrity_hash") or ""),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -203,7 +204,7 @@ class MixPatchResult:
     plan: SongPlan
     track_pans: dict[int, int]
     track_volumes: dict[int, int]
-    summary: dict[str, Any]
+    summary: ImplementationDocument
     warnings: list[str] = field(default_factory=list)
 
 
@@ -311,8 +312,8 @@ def build_mix_patch(
     version_id: str,
     state: MixState,
     plan: SongPlan,
-    operations: list[dict[str, Any]],
-    source: dict[str, Any] | None = None,
+    operations: list[DomainDocument],
+    source: DomainDocument | None = None,
     label: str = "",
     now: str,
 ) -> MixPatch:
@@ -395,7 +396,7 @@ def apply_mix_patch_to_state(state: MixState, patch: MixPatch, plan: SongPlan, *
     return with_mix_state_integrity(updated)
 
 
-def apply_mix_state_to_plan(plan: SongPlan, state: MixState, *, ignore_solo: bool = False) -> tuple[SongPlan, dict[int, int], dict[int, int], dict[str, Any]]:
+def apply_mix_state_to_plan(plan: SongPlan, state: MixState, *, ignore_solo: bool = False) -> tuple[SongPlan, dict[int, int], dict[int, int], DomainDocument]:
     tracks_by_id = {track.track_id: track for track in state.tracks}
     any_solo = any(track.solo for track in state.tracks)
     changed_tracks: list[str] = []
@@ -434,7 +435,7 @@ def apply_patch_and_render_plan(state: MixState, patch: MixPatch, plan: SongPlan
     return MixPatchResult(state=updated, plan=mixed_plan, track_pans=track_pans, track_volumes=track_volumes, summary=summary, warnings=[])
 
 
-def marker_to_mix_patch_operations(marker: dict[str, Any], review: dict[str, Any], plan: SongPlan, payload: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def marker_to_mix_patch_operations(marker: DomainDocument, review: DomainDocument, plan: SongPlan, payload: DomainDocument | None = None) -> list[DomainDocument]:
     payload = payload or {}
     text = " ".join(
         [
@@ -445,7 +446,7 @@ def marker_to_mix_patch_operations(marker: dict[str, Any], review: dict[str, Any
     ).lower()
     mapped = _as_document(marker.get("mapped"))
     section_id = str(payload.get("section_id") or mapped.get("section_id") or "")
-    operations: list[dict[str, Any]] = []
+    operations: list[ImplementationDocument] = []
     target = _first_track(plan, preferred_roles=_roles_from_payload(payload))
     if any(token in text for token in ("鼓太大", "drums loud", "kick loud", "snare loud", "drum loud")):
         target = _first_track(plan, preferred_roles=["drums"])
@@ -469,244 +470,50 @@ def marker_to_mix_patch_operations(marker: dict[str, Any], review: dict[str, Any
     return operations[:16]
 
 
-def mix_state_hash(state: MixState | dict[str, Any]) -> str:
+def mix_state_hash(state: MixState | DomainDocument) -> str:
     data = state.to_dict() if isinstance(state, MixState) else dict(state)
     return stable_hash({key: value for key, value in data.items() if key not in MIX_STATE_INTEGRITY_EXCLUDE_KEYS})
 
 
-def mix_state_integrity_hash(state: MixState | dict[str, Any]) -> str:
+def mix_state_integrity_hash(state: MixState | DomainDocument) -> str:
     return mix_state_hash(state)
 
 
-def mix_state_integrity_ok(state: MixState | dict[str, Any]) -> bool:
+def mix_state_integrity_ok(state: MixState | DomainDocument) -> bool:
     data = state.to_dict() if isinstance(state, MixState) else dict(state)
     expected = str(data.get("integrity_hash") or "")
     return bool(expected) and expected == mix_state_integrity_hash(data)
 
 
-def with_mix_state_integrity(state: MixState) -> MixState:
-    data = state.to_dict()
-    data["integrity_hash"] = mix_state_integrity_hash(data)
-    return MixState.from_dict(data)
+from song_agent.domains.quality import v142_mc_readiness as _v142_mc_readiness
+from song_agent.domains.quality.v142_mc_readiness import (
+    with_mix_state_integrity,
+    mix_patch_hash,
+    mix_patch_integrity_ok,
+    with_mix_patch_integrity,
+    mix_state_stale_reasons,
+    source_state_for_version,
+    song_plan_hash,
+    file_sha256,
+    stable_hash,
+    track_role,
+    pan_to_midi_cc,
+    _source_state,
+    _clean_operation,
+    _automation_for_note,
+    _scaled_velocity,
+    _replace_track,
+    _first_track,
+    _roles_from_payload,
+    _volume_db,
+    _volume_db_delta,
+    _pan,
+    _velocity_scale,
+    _validate_track_id,
+    _validate_section_id,
+    _validate_mix_state_id,
+    _validate_mix_patch_id,
+    _validate_version_id,
+)
 
-
-def mix_patch_hash(patch: MixPatch | dict[str, Any]) -> str:
-    data = patch.to_dict() if isinstance(patch, MixPatch) else dict(patch)
-    return stable_hash({key: value for key, value in data.items() if key not in MIX_PATCH_INTEGRITY_EXCLUDE_KEYS})
-
-
-def mix_patch_integrity_ok(patch: MixPatch | dict[str, Any]) -> bool:
-    data = patch.to_dict() if isinstance(patch, MixPatch) else dict(patch)
-    expected = str(data.get("integrity_hash") or "")
-    return bool(expected) and expected == mix_patch_hash(data)
-
-
-def with_mix_patch_integrity(patch: MixPatch) -> MixPatch:
-    data = patch.to_dict()
-    data["integrity_hash"] = mix_patch_hash(data)
-    return MixPatch.from_dict(data)
-
-
-def mix_state_stale_reasons(state: MixState | dict[str, Any], *, plan: SongPlan, midi_path: Path) -> list[str]:
-    data = state.to_dict() if isinstance(state, MixState) else dict(state)
-    reasons = []
-    if not mix_state_integrity_ok(data):
-        reasons.append("mix_state_integrity")
-    if data.get("base_song_plan_hash") != song_plan_hash(plan):
-        reasons.append("base_song_plan_hash")
-    if data.get("base_midi_hash") != file_sha256(midi_path):
-        reasons.append("base_midi_hash")
-    source = _as_document(data.get("source"))
-    expected_source = _source_state(plan=plan, midi_path=midi_path, project_id=str(data.get("project_id") or ""), version_id=str(data.get("version_id") or ""))
-    if any(source.get(key) != value for key, value in expected_source.items()):
-        reasons.append("source_state")
-    if data.get("source_hash") != stable_hash(source):
-        reasons.append("source_hash")
-    return reasons
-
-
-def source_state_for_version(*, project_id: str, version_id: str, plan_path: Path, midi_path: Path) -> dict[str, Any]:
-    return _source_state(plan=SongPlan.from_dict(read_json(plan_path)), midi_path=midi_path, project_id=project_id, version_id=version_id)
-
-
-def song_plan_hash(plan: SongPlan) -> str:
-    payload = json.dumps(plan.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def file_sha256(path: Path) -> str:
-    if not path.exists() or not path.is_file() or path.is_symlink():
-        return ""
-    digest = hashlib.sha256()
-    with path.open("rb") as file:
-        for chunk in iter(lambda: file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def stable_hash(value: Any) -> str:
-    clean = sanitize_metadata(value)
-    payload = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def track_role(name: str) -> str:
-    lower = str(name or "").lower()
-    for role in ("melody", "chords", "bass", "drums", "pad", "harmony"):
-        if role in lower:
-            return role
-    return re.sub(r"[^a-z0-9]+", "-", lower).strip("-") or "track"
-
-
-def pan_to_midi_cc(pan: int) -> int:
-    return int(round((_pan(pan) + 100) * 127 / 200))
-
-
-def _source_state(*, plan: SongPlan, midi_path: Path, project_id: str, version_id: str) -> ImplementationDocument:
-    return {
-        "project_id": project_id,
-        "version_id": version_id,
-        "song_plan_hash": song_plan_hash(plan),
-        "midi_sha256": file_sha256(midi_path),
-        "track_count": len(plan.tracks),
-        "tracks": [{"track_id": track_id_for_index(index), "name": track.name, "role": track_role(track.name), "note_count": len(track.notes)} for index, track in enumerate(plan.tracks)],
-        "sections": [{"section_id": section_id_for_index(index), "name": section.name, "start_bar": section.start_bar, "bars": section.bars} for index, section in enumerate(plan.sections)],
-    }
-
-
-def _clean_operation(operation: ImplementationDocument) -> ImplementationDocument:
-    op = str(operation.get("op") or "").strip()
-    if op not in SUPPORTED_MIX_OPS:
-        raise MixControlError(f"Unsupported mix operation: {op}.")
-    cleaned: dict[str, Any] = {"op": op, "track_id": _validate_track_id(str(operation.get("track_id") or ""))}
-    if op == "set_track_volume":
-        cleaned["volume_db"] = _volume_db(operation.get("volume_db"))
-    elif op == "set_track_pan":
-        cleaned["pan"] = _pan(operation.get("pan"))
-    elif op == "set_track_mute":
-        cleaned["mute"] = bool(operation.get("mute", True))
-    elif op == "set_track_solo":
-        cleaned["solo"] = bool(operation.get("solo", True))
-    elif op == "set_track_velocity_scale":
-        cleaned["velocity_scale"] = _velocity_scale(operation.get("velocity_scale"))
-    elif op == "set_section_track_volume_delta":
-        cleaned["section_id"] = _validate_section_id(str(operation.get("section_id") or ""))
-        cleaned["volume_db_delta"] = _volume_db_delta(operation.get("volume_db_delta"))
-    elif op == "set_section_track_velocity_scale":
-        cleaned["section_id"] = _validate_section_id(str(operation.get("section_id") or ""))
-        cleaned["velocity_scale"] = _velocity_scale(operation.get("velocity_scale"))
-    elif op == "reset_section_track_mix":
-        cleaned["section_id"] = _validate_section_id(str(operation.get("section_id") or ""))
-    return cleaned
-
-
-def _automation_for_note(note: NoteEvent, plan: SongPlan, automation: dict[str, SectionAutomation]) -> SectionAutomation | None:
-    for index, section in enumerate(plan.sections):
-        start = max(0, section.start_bar - 1) * 4.0
-        end = start + max(0, section.bars) * 4.0
-        if start <= note.start_beat < end:
-            return automation.get(section_id_for_index(index))
-    return None
-
-
-def _scaled_velocity(note: NoteEvent, mix: MixTrackState, automation: SectionAutomation | None) -> int:
-    volume_db = mix.volume_db + (automation.volume_db_delta if automation else 0.0)
-    velocity_scale = mix.velocity_scale * (automation.velocity_scale if automation else 1.0)
-    gain = math.pow(10.0, volume_db / 20.0)
-    value = int(round(note.velocity * gain * velocity_scale))
-    return max(1, min(127, value))
-
-
-def _replace_track(track: MixTrackState, **changes: Any) -> MixTrackState:
-    data = track.to_dict()
-    data.update(changes)
-    if "section_automation" in data:
-        data["section_automation"] = [item.to_dict() if isinstance(item, SectionAutomation) else item for item in data["section_automation"]]
-    return MixTrackState.from_dict(data)
-
-
-def _first_track(plan: SongPlan, *, preferred_roles: list[str] | None = None) -> str:
-    preferred = [role.lower() for role in (preferred_roles or []) if role]
-    for role in preferred:
-        for index, track in enumerate(plan.tracks):
-            if role in track_role(track.name):
-                return track_id_for_index(index)
-    return track_id_for_index(0) if plan.tracks else "track-001"
-
-
-def _roles_from_payload(payload: ImplementationDocument) -> list[str]:
-    value = payload.get("target_roles")
-    if isinstance(value, list):
-        return [str(item) for item in value]
-    value = payload.get("target_role")
-    return [str(value)] if value else []
-
-
-def _volume_db(value: Any) -> float:
-    try:
-        number = round(float(value), 3)
-    except (TypeError, ValueError) as exc:
-        raise MixControlError("volume_db must be numeric.") from exc
-    if number < -36.0 or number > 12.0:
-        raise MixControlError("volume_db must be between -36 and 12.")
-    return number
-
-
-def _volume_db_delta(value: Any) -> float:
-    try:
-        number = round(float(value), 3)
-    except (TypeError, ValueError) as exc:
-        raise MixControlError("volume_db_delta must be numeric.") from exc
-    if number < -24.0 or number > 12.0:
-        raise MixControlError("volume_db_delta must be between -24 and 12.")
-    return number
-
-
-def _pan(value: Any) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError) as exc:
-        raise MixControlError("pan must be an integer.") from exc
-    if number < -100 or number > 100:
-        raise MixControlError("pan must be between -100 and 100.")
-    return number
-
-
-def _velocity_scale(value: Any) -> float:
-    try:
-        number = round(float(value), 4)
-    except (TypeError, ValueError) as exc:
-        raise MixControlError("velocity_scale must be numeric.") from exc
-    if number < 0.0 or number > 2.0:
-        raise MixControlError("velocity_scale must be between 0 and 2.")
-    return number
-
-
-def _validate_track_id(value: str) -> str:
-    if not re.match(r"^track-[0-9]{3}$", value):
-        raise MixControlError("track_id must look like track-001.")
-    return value
-
-
-def _validate_section_id(value: str) -> str:
-    if not re.match(r"^section-[0-9]{3}$", value):
-        raise MixControlError("section_id must look like section-001.")
-    return value
-
-
-def _validate_mix_state_id(value: str) -> str:
-    if not re.match(r"^mixstate-[0-9]{6}$|^mixstate-[0-9]{3}$", value):
-        raise MixControlError("Invalid mix_state_id.")
-    return value
-
-
-def _validate_mix_patch_id(value: str) -> str:
-    if not re.match(r"^mixpatch-[0-9]{6}$|^mixpatch-[0-9]{3}$", value):
-        raise MixControlError("Invalid mix_patch_id.")
-    return value
-
-
-def _validate_version_id(value: str) -> str:
-    if not re.match(r"^v[0-9]{3,}$", value):
-        raise MixControlError("Invalid version_id.")
-    return value
+_v142_mc_readiness.bind_globals(globals())

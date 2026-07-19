@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import ImplementationDocument
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from song_agent.capabilities import CapabilityRegistry, CapabilitySpec, RuntimeVerificationSpec, capability_registry
 from song_agent.platform.evidence_graph import build_evidence_graph
@@ -37,7 +37,7 @@ def _smoke_capability(component_type: str = "release") -> CapabilitySpec:
     )
 
 
-def _smoke_runtime_verifier(package_path: Path | str, *, strict: bool = False) -> dict[str, Any]:
+def _smoke_runtime_verifier(package_path: Path | str, *, strict: bool = False) -> ImplementationDocument:
     target = Path(package_path)
     fingerprint = sha256_file(target)
     report = {

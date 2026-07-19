@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 from dataclasses import dataclass, field
 from importlib import import_module
-from typing import Any, Callable
+from typing import Callable
 
 
 @dataclass(frozen=True)
@@ -28,11 +28,11 @@ class RuntimeIdentitySpec:
 
     def extract(
         self,
-        report: dict[str, Any],
+        report: DomainDocument,
         *,
         component_type: str,
         package_type: str,
-    ) -> dict[str, Any]:
+    ) -> DomainDocument:
         component_id = _first_report_value(report, self.component_id_fields)
         generation = _positive_int(
             _first_report_value(report, self.generation_fields),
@@ -65,15 +65,15 @@ class RuntimeVerificationSpec:
     function: str
     package_type: str
     verification_package_type: str
-    defaults: tuple[tuple[str, Any], ...] = ()
+    defaults: tuple[tuple[str, object], ...] = ()
     proof_arguments: tuple[tuple[str, str], ...] = ()
     required_proofs: tuple[str, ...] = ()
     identity: RuntimeIdentitySpec = field(default_factory=RuntimeIdentitySpec)
 
-    def verifier(self) -> Callable[..., dict[str, Any]]:
+    def verifier(self) -> Callable[..., DomainDocument]:
         return getattr(import_module(self.module), self.function)
 
-    def extract_identity(self, report: dict[str, Any], *, component_type: str) -> dict[str, Any]:
+    def extract_identity(self, report: DomainDocument, *, component_type: str) -> DomainDocument:
         return self.identity.extract(
             report,
             component_type=component_type,
@@ -100,15 +100,15 @@ def _report_containers(report: ImplementationDocument) -> tuple[ImplementationDo
     identity_value = report.get("identity")
     summary_value = report.get("summary")
     source_value = report.get("source")
-    identity: dict[str, Any] = _as_document(identity_value)
-    summary: dict[str, Any] = _as_document(summary_value)
+    identity: ImplementationDocument = _as_document(identity_value)
+    summary: ImplementationDocument = _as_document(summary_value)
     verification_value = summary.get("verification")
-    verification: dict[str, Any] = _as_document(verification_value)
-    source: dict[str, Any] = _as_document(source_value)
+    verification: ImplementationDocument = _as_document(verification_value)
+    source: ImplementationDocument = _as_document(source_value)
     return identity, summary, report, verification, source
 
 
-def _first_report_value(report: ImplementationDocument, fields: tuple[str, ...]) -> Any:
+def _first_report_value(report: ImplementationDocument, fields: tuple[str, ...]) -> object:
     for container in _report_containers(report):
         for name in fields:
             value = container.get(name)
@@ -117,7 +117,9 @@ def _first_report_value(report: ImplementationDocument, fields: tuple[str, ...])
     return None
 
 
-def _positive_int(value: Any, *, default: int) -> int:
+def _positive_int(value: object, *, default: int) -> int:
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return default
     try:
         number = int(value)
     except (TypeError, ValueError):

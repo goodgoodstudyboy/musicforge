@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.1.2 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.0 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained

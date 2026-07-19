@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 from pathlib import Path
-from typing import Any
 
 from song_agent.domains.creation.planning_rule_projections import governance_projection
 from song_agent.domains.creation.redaction import sanitize_metadata
@@ -17,7 +16,7 @@ PLANNING_RULE_SIMULATION_ROOT = Path(".musicforge") / "planning-rule-simulations
 
 def current_fix_plan_governance_source(
     root: Path | str = PLANNING_RULE_GOVERNANCE_ROOT,
-) -> dict[str, Any]:
+) -> DomainDocument:
     root = Path(root)
     active = _read_optional(root / "active.json")
     version_id = str(active.get("active_version_id") or "")
@@ -34,7 +33,7 @@ def current_fix_plan_governance_source(
     return fix_plan_governance_projection(summary)
 
 
-def fix_plan_governance_projection(summary: dict[str, Any]) -> dict[str, Any]:
+def fix_plan_governance_projection(summary: DomainDocument) -> DomainDocument:
     if summary.get("status") == "missing" or summary.get("stale"):
         return legacy_fix_plan_governance_source()
     return sanitize_metadata(
@@ -52,7 +51,7 @@ def fix_plan_governance_projection(summary: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def legacy_fix_plan_governance_source() -> dict[str, Any]:
+def legacy_fix_plan_governance_source() -> DomainDocument:
     return {
         "status": "legacy_default",
         "governance_status": "legacy_default",

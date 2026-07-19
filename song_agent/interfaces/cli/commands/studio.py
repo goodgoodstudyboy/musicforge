@@ -4,13 +4,11 @@ from song_agent.interfaces.cli.bindings import BINDINGS as CLI_BINDINGS
 import argparse
 import os
 from pathlib import Path
-from typing import Any
 from song_agent.domains.creation.auth import build_auth_config
 
 
 from song_agent.interfaces.cli.registry import CommandSpec
-def build_serve_parser(*args: Any, **kwargs: Any) -> Any:
-    return CLI_BINDINGS.creation.build_serve_parser(*args, **kwargs)
+build_serve_parser = CLI_BINDINGS.creation.build_serve_parser
 
 def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")

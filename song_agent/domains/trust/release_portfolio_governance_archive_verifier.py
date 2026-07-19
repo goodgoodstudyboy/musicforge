@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -57,7 +57,7 @@ def verify_release_portfolio_governance_archive_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _PortfolioGovernanceArchiveVerifier(
         Path(zip_path),
         strict=strict,
@@ -71,7 +71,7 @@ def verify_release_portfolio_governance_archive_package(
     return verifier.run()
 
 
-def release_portfolio_governance_archive_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def release_portfolio_governance_archive_verification_summary(report: DomainDocument) -> DomainDocument:
     summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
@@ -90,11 +90,11 @@ def release_portfolio_governance_archive_verification_summary(report: dict[str, 
     )
 
 
-def write_release_portfolio_governance_archive_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_release_portfolio_governance_archive_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_release_portfolio_governance_archive_verification_report(report: dict[str, Any]) -> None:
+def print_release_portfolio_governance_archive_verification_report(report: DomainDocument) -> None:
     summary = release_portfolio_governance_archive_verification_summary(report)
     print("MusicForge release portfolio governance archive verification")
     print(f"status: {summary.get('status')}")
@@ -113,7 +113,7 @@ def print_release_portfolio_governance_archive_verification_report(report: dict[
             print(f"  [{item.get('check_id', 'unknown')}] {item.get('message', '')}")
 
 
-def release_portfolio_governance_archive_verification_exit_code(report: dict[str, Any]) -> int:
+def release_portfolio_governance_archive_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -127,17 +127,17 @@ class _PortfolioGovernanceArchiveVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
-        self.manifest: dict[str, Any] = {}
-        self.queue: dict[str, Any] = {}
-        self.action_plan: dict[str, Any] = {}
-        self.execution_report: dict[str, Any] = {}
-        self.manual_actions: dict[str, Any] = {}
-        self.queue_verification: dict[str, Any] = {}
-        self.signoff: dict[str, Any] = {}
-        self.change_requests: dict[str, Any] = {}
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: ImplementationDocument = {}
+        self.queue: ImplementationDocument = {}
+        self.action_plan: ImplementationDocument = {}
+        self.execution_report: ImplementationDocument = {}
+        self.manual_actions: ImplementationDocument = {}
+        self.queue_verification: ImplementationDocument = {}
+        self.signoff: ImplementationDocument = {}
+        self.change_requests: ImplementationDocument = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -146,7 +146,7 @@ class _PortfolioGovernanceArchiveVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -209,7 +209,7 @@ class _PortfolioGovernanceArchiveVerifier:
         if self.manifest.get("package_type") != "release_portfolio_governance_archive":
             self._add_check("manifest", "portfolio_governance_archive_manifest_package_type", "failed", "blocking", "Manifest package_type is not release_portfolio_governance_archive.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[dict[str, Any]] = []
+        valid: list[ImplementationDocument] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -424,7 +424,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 
 
 def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
         if pattern.search(text):
             findings.append({"path": path, "kind": "sensitive_value", "pattern": pattern.pattern})
@@ -435,7 +435,7 @@ def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(path: str, value: Any) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
 
     def walk(node: Any, dotted: str) -> None:
         if isinstance(node, dict):

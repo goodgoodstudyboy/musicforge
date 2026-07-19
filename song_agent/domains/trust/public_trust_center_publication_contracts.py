@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any
+
+from song_agent.platform.contracts import DomainDocument
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
@@ -36,17 +37,17 @@ PUBLICATION_REQUIRED_PACKAGE_KEYS = {
 }
 
 
-def publication_channel_state_hash(state: dict[str, Any]) -> str:
+def publication_channel_state_hash(state: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (state or {}).items() if key not in PUBLICATION_CHANNEL_STATE_HASH_EXCLUDE_KEYS})
 
 
-def publication_report_hash(report: dict[str, Any]) -> str:
+def publication_report_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in PUBLICATION_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def publication_manifest_hash(manifest: dict[str, Any]) -> str:
+def publication_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in PUBLICATION_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def sidecar_hash(doc: dict[str, Any]) -> str:
+def sidecar_hash(doc: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (doc or {}).items() if key not in PUBLICATION_SIDECAR_HASH_EXCLUDE_KEYS})

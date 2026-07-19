@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from song_agent.platform.contracts import ImplementationDocument
 
 from . import dependencies as _commands_delivery_parts_dependencies
 
@@ -308,7 +308,7 @@ def _execute_release_operations(argv: list[str]) -> None:
         submission_store=submission_store,
         submission_evidence_store=SubmissionEvidenceStore(submission_store),
     )
-    result: dict[str, _InterfaceType] = {"ok": True, "release_id": args.release_id}
+    result: ImplementationDocument = {"ok": True, "release_id": args.release_id}
     if args.refresh:
         report = store.refresh(args.release_id)
         result.update({"report": report, "summary": operations_report_summary(report)})

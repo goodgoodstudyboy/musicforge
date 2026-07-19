@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 from song_agent.platform.contracts.coercion import as_document as _as_document
-from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
@@ -22,27 +22,27 @@ EVIDENCE_VAULT_INDEX_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "upd
 EVIDENCE_VAULT_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "created_at", "updated_at", "zip"}
 
 
-def evidence_vault_report_integrity_hash(report: dict[str, Any]) -> str:
+def evidence_vault_report_integrity_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in EVIDENCE_VAULT_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def evidence_vault_package_index_hash(index: dict[str, Any]) -> str:
+def evidence_vault_package_index_hash(index: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (index or {}).items() if key not in EVIDENCE_VAULT_INDEX_HASH_EXCLUDE_KEYS})
 
 
-def evidence_vault_verification_index_hash(index: dict[str, Any]) -> str:
+def evidence_vault_verification_index_hash(index: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (index or {}).items() if key not in EVIDENCE_VAULT_INDEX_HASH_EXCLUDE_KEYS})
 
 
-def evidence_vault_chain_hash(chain: dict[str, Any]) -> str:
+def evidence_vault_chain_hash(chain: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (chain or {}).items() if key not in EVIDENCE_VAULT_INDEX_HASH_EXCLUDE_KEYS})
 
 
-def evidence_vault_manifest_hash(manifest: dict[str, Any]) -> str:
+def evidence_vault_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in EVIDENCE_VAULT_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def evidence_vault_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def evidence_vault_verification_summary(report: DomainDocument) -> DomainDocument:
     summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {

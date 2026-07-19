@@ -3,7 +3,7 @@ from __future__ import annotations
 from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import html
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
@@ -45,19 +45,19 @@ _DELIVERY_COLLECTION_DOMAINS = (
 )
 
 
-def public_trust_center_report_hash(report: dict[str, Any]) -> str:
+def public_trust_center_report_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in report.items() if key not in PTC_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def public_trust_center_manifest_hash(manifest: dict[str, Any]) -> str:
+def public_trust_center_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key not in PTC_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
 def public_trust_center_data_documents(
-    report: dict[str, Any],
-    verification_sidecars: dict[str, dict[str, Any]] | None = None,
-    delivery_sidecars: dict[str, dict[str, Any]] | None = None,
-) -> dict[str, dict[str, Any]]:
+    report: DomainDocument,
+    verification_sidecars: dict[str, DomainDocument] | None = None,
+    delivery_sidecars: dict[str, DomainDocument] | None = None,
+) -> dict[str, DomainDocument]:
     source = _as_document(report.get("source"))
     source_hash = report.get("source_hash")
     release_index = {"source_hash": source_hash, "releases": report.get("release_readiness", [])}
@@ -120,7 +120,7 @@ def public_trust_center_data_documents(
     }
 
 
-def public_trust_center_html_pages(report: dict[str, Any], data_docs: dict[str, dict[str, Any]]) -> dict[str, str]:
+def public_trust_center_html_pages(report: DomainDocument, data_docs: dict[str, DomainDocument]) -> dict[str, str]:
     summary = _as_document(report.get("summary"))
     source_hash = str(report.get("source_hash") or "")
     report_hash = str(report.get("integrity_hash") or "")
@@ -197,10 +197,10 @@ def public_trust_center_html_pages(report: dict[str, Any], data_docs: dict[str, 
 
 
 def expected_public_trust_center_documents(
-    report: dict[str, Any],
-    verification_sidecars: dict[str, dict[str, Any]] | None = None,
-    delivery_sidecars: dict[str, dict[str, Any]] | None = None,
-) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    report: DomainDocument,
+    verification_sidecars: dict[str, DomainDocument] | None = None,
+    delivery_sidecars: dict[str, DomainDocument] | None = None,
+) -> tuple[dict[str, DomainDocument], dict[str, str]]:
     data_docs = public_trust_center_data_documents(report, verification_sidecars, delivery_sidecars)
     return data_docs, public_trust_center_html_pages(report, data_docs)
 
@@ -220,7 +220,7 @@ def _package_verification_sidecars(source: ImplementationDocument) -> list[Imple
         for item in source.get("verification_fingerprints", [])
         if isinstance(item, dict)
     }
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     for package in packages:
         verification = verifications.get(_fingerprint_key(package), {})
         rows.append(
@@ -259,7 +259,7 @@ def _package_verification_index_from_sidecars(source_hash: Any, sidecars: dict[s
 
 
 def _verification_sidecars_from_docs(sidecars: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     for doc in sidecars.values():
         if not isinstance(doc, dict):
             continue
@@ -286,7 +286,7 @@ def _verification_sidecars_from_docs(sidecars: dict[str, ImplementationDocument]
 
 
 def _delivery_verification_index_from_source(source_hash: Any, source: ImplementationDocument) -> ImplementationDocument:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     for collection, domain in _DELIVERY_COLLECTION_DOMAINS:
         for item in source.get(collection, []) if isinstance(source.get(collection), list) else []:
             if isinstance(item, dict):
@@ -295,9 +295,9 @@ def _delivery_verification_index_from_source(source_hash: Any, source: Implement
 
 
 def _delivery_verification_index_from_sidecars(source_hash: Any, sidecars: dict[str, ImplementationDocument] | None) -> ImplementationDocument:
-    summaries: list[dict[str, Any]] = []
-    rows: list[dict[str, Any]] = []
-    fingerprint_rows: list[dict[str, Any]] = []
+    summaries: list[ImplementationDocument] = []
+    rows: list[ImplementationDocument] = []
+    fingerprint_rows: list[ImplementationDocument] = []
     for path, doc in sorted((sidecars or {}).items()):
         if not isinstance(doc, dict):
             continue
@@ -426,7 +426,7 @@ def _verification_sidecars(source: ImplementationDocument) -> list[Implementatio
         for item in source.get("public_package_fingerprints", [])
         if isinstance(item, dict)
     }
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     for verification in _verification_index(source):
         package = packages.get(_fingerprint_key(verification), {})
         rows.append(

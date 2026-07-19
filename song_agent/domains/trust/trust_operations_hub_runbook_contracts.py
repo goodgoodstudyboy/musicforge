@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any
+
+from song_agent.platform.contracts import DomainDocument
 
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -30,5 +31,5 @@ RUNBOOK_EXPORT_ENTRIES = {
 }
 
 
-def runbook_hash(doc: dict[str, Any]) -> str:
+def runbook_hash(doc: DomainDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in TRUST_OPERATIONS_RUNBOOK_HASH_EXCLUDE_KEYS})

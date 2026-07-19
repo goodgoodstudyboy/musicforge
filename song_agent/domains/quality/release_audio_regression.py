@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -90,7 +90,7 @@ class ReleaseAudioRegressionStore:
     def verification_report_path(self, release_id: str) -> Path:
         return self.regression_dir(release_id) / "verification-report.json"
 
-    def configure_baseline(self, release_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def configure_baseline(self, release_id: str, payload: DomainDocument) -> DomainDocument:
         with self.lock:
             if self._has_active_signoff(release_id):
                 raise ReleaseAudioRegressionStateError("Signed Release Audio Regression cannot be reconfigured. Reset signoff before changing baseline.")
@@ -119,21 +119,21 @@ class ReleaseAudioRegressionStore:
             write_json(self.config_path(release_id), config)
             return config
 
-    def read_config(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    def read_config(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
         if not self.config_path(release_id).exists():
             if default is not None:
                 return default
             raise ReleaseAudioRegressionNotFoundError(f"Release Audio Regression config not found: {release_id}.")
         return read_json(self.config_path(release_id))
 
-    def read_report(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    def read_report(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
         if not self.report_path(release_id).exists():
             if default is not None:
                 return default
             raise ReleaseAudioRegressionNotFoundError(f"Release Audio Regression report not found: {release_id}.")
         return read_json(self.report_path(release_id))
 
-    def refresh_report(self, release_id: str) -> dict[str, Any]:
+    def refresh_report(self, release_id: str) -> DomainDocument:
         with self.lock:
             if self._has_active_signoff(release_id):
                 raise ReleaseAudioRegressionStateError("Signed Release Audio Regression cannot be refreshed. Reset signoff before refreshing.")
@@ -141,7 +141,7 @@ class ReleaseAudioRegressionStore:
             self._write_documents(release_id, docs)
             return docs["report"]
 
-    def signoff(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def signoff(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             if self._has_active_signoff(release_id):
@@ -194,16 +194,16 @@ class ReleaseAudioRegressionStore:
             )
             return {"status": "signed", "signoff": signoff, "report": docs["report"]}
 
-    def export_package(self, release_id: str) -> dict[str, Any]:
+    def export_package(self, release_id: str) -> DomainDocument:
         with self.lock:
             docs = self._current_docs_for_export(release_id)
             export_dir = self.export_dir(release_id)
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
+            files: list[ImplementationDocument] = []
 
-            def write_entry(rel: str, payload: dict[str, Any] | list[dict[str, Any]] | str) -> None:
+            def write_entry(rel: str, payload: DomainDocument | list[DomainDocument] | str) -> None:
                 path = export_dir / rel
                 if isinstance(payload, str):
                     path.write_text(payload, encoding="utf-8")
@@ -250,7 +250,7 @@ class ReleaseAudioRegressionStore:
             write_json(export_dir / "manifest.json", manifest)
             return {"status": docs["report"].get("status"), "export_dir": str(export_dir), "manifest": manifest}
 
-    def build_zip(self, release_id: str) -> dict[str, Any]:
+    def build_zip(self, release_id: str) -> DomainDocument:
         with self.lock:
             exported = self.export_package(release_id)
             export_dir = self.export_dir(release_id)
@@ -274,7 +274,7 @@ class ReleaseAudioRegressionStore:
                         archive.write(path, path.relative_to(export_dir).as_posix())
             return {"status": exported.get("status"), "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_zip(self, release_id: str, **kwargs: Any) -> dict[str, Any]:
+    def verify_zip(self, release_id: str, **kwargs: Any) -> DomainDocument:
         with self.lock:
             if not self.zip_path(release_id).exists():
                 self.build_zip(release_id)
@@ -284,7 +284,7 @@ class ReleaseAudioRegressionStore:
             write_release_audio_regression_verification_report(report, self.verification_report_path(release_id))
             return report
 
-    def gate(self, release_id: str, *, required: bool, require_signed: bool = False) -> dict[str, Any]:
+    def gate(self, release_id: str, *, required: bool, require_signed: bool = False) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         try:
@@ -480,7 +480,7 @@ def _default_policy(overrides: ImplementationDocument) -> ImplementationDocument
 
 
 def _read_jsonl(path: Path) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     if not path.exists():
         return rows
     for line in path.read_text(encoding="utf-8").splitlines():

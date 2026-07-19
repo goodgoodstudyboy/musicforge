@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import base64 as base64
 import hashlib as hashlib
@@ -29,20 +30,41 @@ DANGEROUS_RESPONSE_KEYS = {"source_path", "local_path", "absolute_path", "file",
 PACK_METADATA_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path"}
 
 
-class HumanReviewPackError(ValueError):
-    pass
+from song_agent.domains.quality import v142_hrp_readiness as _v142_hrp_readiness
+from song_agent.domains.quality.v142_hrp_readiness import (
+    HumanReviewPackError,
+    HumanReviewPackNotFoundError,
+    HumanReviewPackValidationError,
+    HumanReviewPackStateError,
+    human_review_evidence_summary,
+    _verification_summary,
+    validate_pack_id,
+    validate_import_id,
+    _pack_source_state,
+    _case_source_state,
+    _ensure_review_song_id_matches_pack,
+    _response_template,
+    _index_html,
+    _readme_text,
+    _response_from_payload,
+    _validate_markers,
+    _safe_markers,
+    _dangerous_key_paths,
+    _safe_case_artifact,
+    _is_safe_relpath,
+    _sha256_file,
+    _append_task_event,
+    _safe_text,
+    _validate_suite_id,
+    _validate_case_id,
+)
 
 
-class HumanReviewPackNotFoundError(HumanReviewPackError):
-    pass
 
 
-class HumanReviewPackValidationError(HumanReviewPackError):
-    pass
 
 
-class HumanReviewPackStateError(HumanReviewPackError):
-    pass
+
 
 
 @dataclass
@@ -55,12 +77,12 @@ class HumanReviewPack:
     created_at: str
     updated_at: str
     case_count: int = 0
-    zip_summary: dict[str, Any] = field(default_factory=dict)
-    verification_summary: dict[str, Any] = field(default_factory=dict)
-    latest_import_summary: dict[str, Any] = field(default_factory=dict)
-    cases: list[dict[str, Any]] = field(default_factory=list)
+    zip_summary: ImplementationDocument = field(default_factory=dict)
+    verification_summary: ImplementationDocument = field(default_factory=dict)
+    latest_import_summary: ImplementationDocument = field(default_factory=dict)
+    cases: list[ImplementationDocument] = field(default_factory=list)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return sanitize_metadata(
             {
                 "schema_version": self.schema_version,
@@ -79,7 +101,7 @@ class HumanReviewPack:
         )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "HumanReviewPack":
+    def from_dict(cls, data: DomainDocument) -> "HumanReviewPack":
         if not isinstance(data, dict):
             raise HumanReviewPackValidationError("Human review pack must be an object.")
         pack_id = validate_pack_id(str(data.get("pack_id") or "hrpack-000001"))
@@ -133,7 +155,7 @@ class HumanReviewPackStore:
     def import_path(self, suite_id: str, import_id: str) -> Path:
         return self.imports_dir(suite_id) / validate_import_id(import_id) / "review-import.json"
 
-    def list_packs(self, suite_id: str) -> list[dict[str, Any]]:
+    def list_packs(self, suite_id: str) -> list[DomainDocument]:
         self.acceptance_store.get_suite(suite_id)
         rows: list[HumanReviewPack] = []
         for path in self.packs_dir(suite_id).glob("hrpack-*/pack.json"):
@@ -143,7 +165,7 @@ class HumanReviewPackStore:
                 continue
         return [item.to_dict() for item in sorted(rows, key=lambda row: row.updated_at, reverse=True)]
 
-    def get_pack(self, suite_id: str, pack_id: str) -> dict[str, Any]:
+    def get_pack(self, suite_id: str, pack_id: str) -> DomainDocument:
         path = self.pack_path(suite_id, pack_id)
         if not path.exists():
             raise HumanReviewPackNotFoundError(pack_id)
@@ -151,7 +173,7 @@ class HumanReviewPackStore:
         pack["stale"] = self.current_source_hash(suite_id) != pack.get("source_hash")
         return sanitize_metadata(pack)
 
-    def list_imports(self, suite_id: str) -> list[dict[str, Any]]:
+    def list_imports(self, suite_id: str) -> list[DomainDocument]:
         self.acceptance_store.get_suite(suite_id)
         rows = []
         for path in self.imports_dir(suite_id).glob("review-import-*/review-import.json"):
@@ -163,7 +185,7 @@ class HumanReviewPackStore:
                 rows.append(sanitize_metadata(value))
         return sorted(rows, key=lambda row: str(row.get("imported_at") or row.get("created_at") or ""), reverse=True)
 
-    def get_import(self, suite_id: str, import_id: str) -> dict[str, Any]:
+    def get_import(self, suite_id: str, import_id: str) -> DomainDocument:
         path = self.import_path(suite_id, import_id)
         if not path.exists():
             raise HumanReviewPackNotFoundError(import_id)
@@ -173,7 +195,7 @@ class HumanReviewPackStore:
         suite = self.acceptance_store.get_suite(suite_id)
         return stable_hash(_pack_source_state(self.acceptance_store, suite))
 
-    def create_pack(self, suite_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create_pack(self, suite_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         suite = self.acceptance_store.get_suite(suite_id)
         try:
@@ -192,7 +214,7 @@ class HumanReviewPackStore:
         assets_dir.mkdir(parents=True, exist_ok=True)
         now = now_iso()
         source_hash = self.current_source_hash(suite_id)
-        case_rows: list[dict[str, Any]] = []
+        case_rows: list[ImplementationDocument] = []
         for case in cases:
             case_dir = self.acceptance_store.case_dir(suite_id, case.case_id)
             midi_src = _safe_case_artifact(case_dir, "song.mid")
@@ -251,7 +273,7 @@ class HumanReviewPackStore:
         self.acceptance_store.append_event(suite_id, "human_review_pack_created", {"pack_id": pack_id, "case_count": len(case_rows)})
         return {"pack": pack.to_dict(), "manifest": manifest}
 
-    def build_zip(self, suite_id: str, pack_id: str) -> dict[str, Any]:
+    def build_zip(self, suite_id: str, pack_id: str) -> DomainDocument:
         pack = HumanReviewPack.from_dict(self.get_pack(suite_id, pack_id))
         current_hash = self.current_source_hash(suite_id)
         if current_hash != pack.source_hash:
@@ -282,7 +304,7 @@ class HumanReviewPackStore:
         self.acceptance_store.append_event(suite_id, "human_review_pack_zipped", {"pack_id": pack_id, "entry_count": len(entries)})
         return {"pack": pack.to_dict(), "manifest": manifest, "zip": zip_summary}
 
-    def verify_pack(self, suite_id: str, pack_id: str, *, strict: bool = False) -> dict[str, Any]:
+    def verify_pack(self, suite_id: str, pack_id: str, *, strict: bool = False) -> DomainDocument:
         if not self.zip_path(suite_id, pack_id).exists():
             self.build_zip(suite_id, pack_id)
         report = verify_human_review_pack(self.zip_path(suite_id, pack_id), strict=strict)
@@ -294,7 +316,7 @@ class HumanReviewPackStore:
         self._write_manifest(suite_id, pack_id)
         return report
 
-    def import_response(self, suite_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def import_response(self, suite_id: str, payload: DomainDocument) -> DomainDocument:
         if not isinstance(payload, dict):
             raise HumanReviewPackValidationError("Import payload must be a JSON object.")
         if "source_path" in payload:
@@ -334,8 +356,8 @@ class HumanReviewPackStore:
                 raise HumanReviewPackValidationError(f"Unknown review case_id: {case_id}.")
             _ensure_review_song_id_matches_pack(case_id, review, pack_case_by_id[case_id])
         import_id = self._next_import_id(suite_id)
-        imported: list[dict[str, Any]] = []
-        created_review_tasks: list[dict[str, Any]] = []
+        imported: list[ImplementationDocument] = []
+        created_review_tasks: list[ImplementationDocument] = []
         accepted_count = 0
         needs_fix_count = 0
         rejected_count = 0
@@ -552,384 +574,4 @@ class HumanReviewPackStore:
         except Exception as exc:
             return {"case_id": case_id, "status": "creation_failed", "error": sanitize_sensitive_text(str(exc))[:300], "title": title}
 
-
-def human_review_evidence_summary(store: AcceptanceStore, suite_id: str) -> dict[str, Any]:
-    helper = HumanReviewPackStore(store)
-    try:
-        packs = helper.list_packs(suite_id)
-        imports = helper.list_imports(suite_id)
-    except (AcceptanceNotFoundError, HumanReviewPackError, OSError, ValueError):
-        return {"status": "missing", "pack_count": 0, "import_count": 0}
-    latest_pack = packs[0] if packs else {}
-    latest_import = imports[0] if imports else {}
-    summary = _as_document(latest_import.get("summary"))
-    return sanitize_metadata(
-        {
-            "status": "imported" if latest_import else "packaged" if latest_pack else "missing",
-            "pack_count": len(packs),
-            "import_count": len(imports),
-            "latest_pack_id": latest_pack.get("pack_id"),
-            "latest_pack_status": latest_pack.get("status"),
-            "latest_import_id": latest_import.get("import_id"),
-            "accepted_count": summary.get("accepted_count", 0),
-            "needs_fix_count": summary.get("needs_fix_count", 0),
-            "rejected_count": summary.get("rejected_count", 0),
-            "created_review_task_count": summary.get("created_review_task_count", 0),
-        }
-    )
-
-
-def _verification_summary(report: ImplementationDocument) -> ImplementationDocument:
-    summary = _as_document(report.get("summary"))
-    return sanitize_metadata(
-        {
-            "status": report.get("status"),
-            "suite_id": summary.get("suite_id"),
-            "pack_id": summary.get("pack_id"),
-            "case_count": summary.get("case_count", 0),
-            "entry_count": summary.get("entry_count", 0),
-            "blocker_count": summary.get("blocker_count", 0),
-            "warning_count": summary.get("warning_count", 0),
-            "verified_at": report.get("generated_at"),
-        }
-    )
-
-
-def validate_pack_id(value: str) -> str:
-    text = str(value or "").strip()
-    if not text.startswith("hrpack-") or not text.removeprefix("hrpack-").isdigit():
-        raise HumanReviewPackValidationError("Invalid human review pack id.")
-    return text
-
-
-def validate_import_id(value: str) -> str:
-    text = str(value or "").strip()
-    if not text.startswith("review-import-") or not text.removeprefix("review-import-").isdigit():
-        raise HumanReviewPackValidationError("Invalid human review import id.")
-    return text
-
-
-def _pack_source_state(store: AcceptanceStore, suite: Any) -> ImplementationDocument:
-    cases = [
-        _case_source_state(store, suite.suite_id, case.case_id)
-        for case in sorted(store.list_cases(suite.suite_id), key=lambda item: item.case_id)
-    ]
-    return sanitize_metadata(
-        {
-            "suite_id": suite.suite_id,
-            "name": suite.name,
-            "mode": suite.mode,
-            "profile_id": suite.profile_id,
-            "songbook_id": suite.songbook_id,
-            "songbook_version": suite.songbook_version,
-            "min_rating": suite.min_rating,
-            "require_audio_if_renderer_configured": suite.require_audio_if_renderer_configured,
-            "require_manual_review": suite.require_manual_review,
-            "allow_synthetic_review": suite.allow_synthetic_review,
-            "release_ready_profile": suite.release_ready_profile,
-            "cases": cases,
-        }
-    )
-
-
-def _case_source_state(store: AcceptanceStore, suite_id: str, case_id: str) -> ImplementationDocument:
-    case = store.get_case(suite_id, case_id)
-    case_dir = store.case_dir(suite_id, case_id)
-    return sanitize_metadata(
-        {
-            "case": {
-                "case_id": case.case_id,
-                "suite_id": case.suite_id,
-                "name": case.name,
-                "source_type": case.source_type,
-                "song_id": case.song_id,
-                "songbook_id": case.songbook_id,
-                "songbook_version": case.songbook_version,
-                "expectations": case.expectations,
-                "request_summary": case.request_summary,
-                "job_id": case.job_id,
-                "project_id": case.project_id,
-                "version_id": case.version_id,
-                "artifacts": case.artifacts,
-                "health_summary": case.health_summary,
-                "created_at": case.created_at,
-            },
-            "health": store.read_health(suite_id, case_id, default={}),
-            "midi_sha256": _sha256_file(case_dir / "song.mid") if (case_dir / "song.mid").exists() else "",
-            "wav_sha256": _sha256_file(case_dir / "song.wav") if (case_dir / "song.wav").exists() else "",
-        }
-    )
-
-
-def _ensure_review_song_id_matches_pack(case_id: str, review: ImplementationDocument, pack_case: ImplementationDocument) -> None:
-    if "song_id" not in review:
-        return
-    review_song_id = "" if review.get("song_id") is None else str(review.get("song_id"))
-    pack_song_id = "" if pack_case.get("song_id") is None else str(pack_case.get("song_id"))
-    if review_song_id != pack_song_id:
-        raise HumanReviewPackValidationError(f"{case_id} song_id does not match human review pack.")
-
-
-def _response_template(pack: ImplementationDocument) -> ImplementationDocument:
-    return sanitize_metadata(
-        {
-            "schema_version": 1,
-            "suite_id": pack.get("suite_id"),
-            "pack_id": pack.get("pack_id"),
-            "pack_source_hash": pack.get("source_hash"),
-            "reviewer": {"name": "", "organization": ""},
-            "reviewed_at": "",
-            "reviews": [
-                {
-                    "case_id": item.get("case_id"),
-                    "song_id": item.get("song_id"),
-                    "status": "",
-                    "rating": 0,
-                    "playback_confirmed": False,
-                    "audio_mode": item.get("audio_mode") or "midi",
-                    "notes": "",
-                    "issues": [],
-                    "tags": [],
-                    "markers": [],
-                }
-                for item in pack.get("cases", [])
-                if isinstance(item, dict)
-            ],
-        }
-    )
-
-
-def _index_html(pack: ImplementationDocument) -> str:
-    pack_json = json.dumps(pack, ensure_ascii=False)
-    template_json = json.dumps(_response_template(pack), ensure_ascii=False)
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MusicForge Human Review Pack</title>
-<style>
-body {{ font-family: system-ui, sans-serif; margin: 24px; color: #1f2933; background: #f8fafc; }}
-main {{ max-width: 1100px; margin: 0 auto; }}
-section {{ background: white; border: 1px solid #d9e2ec; border-radius: 8px; padding: 16px; margin: 12px 0; }}
-label {{ display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }}
-input, select, textarea {{ width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #bcccdc; border-radius: 6px; }}
-textarea {{ min-height: 90px; }}
-button {{ padding: 8px 12px; border: 1px solid #52606d; border-radius: 6px; background: #243b53; color: white; cursor: pointer; }}
-audio {{ width: 100%; margin-top: 8px; }}
-.meta {{ color: #52606d; font-size: 13px; }}
-.grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }}
-</style>
-</head>
-<body>
-<main>
-<h1>MusicForge Human Review Pack</h1>
-<p class="meta">Suite {pack.get('suite_id')} / Pack {pack.get('pack_id')}</p>
-<section>
-<div class="grid">
-<label>Reviewer name<input id="reviewerName" autocomplete="name"></label>
-<label>Organization<input id="reviewerOrg"></label>
-</div>
-<button type="button" onclick="downloadResponse()">Download review response JSON</button>
-</section>
-<div id="cases"></div>
-</main>
-<script>
-const PACK = {pack_json};
-const TEMPLATE = {template_json};
-const reviews = new Map(TEMPLATE.reviews.map(row => [row.case_id, row]));
-function renderCases() {{
-  const root = document.getElementById('cases');
-  root.innerHTML = '';
-  PACK.cases.forEach(item => {{
-    const row = document.createElement('section');
-    row.innerHTML = `
-      <h2>${{item.name || item.case_id}}</h2>
-      <p class="meta">${{item.song_id || ''}} ${{item.style || ''}}</p>
-      <audio controls src="${{item.wav_path || item.midi_path}}"></audio>
-      <label>Status<select data-field="status" data-case="${{item.case_id}}">
-        <option value="">Select</option><option value="accepted">Accepted</option><option value="needs_fix">Needs fix</option><option value="rejected">Rejected</option><option value="waived">Waived</option>
-      </select></label>
-      <label>Rating<input data-field="rating" data-case="${{item.case_id}}" type="number" min="1" max="5" value="0"></label>
-      <label><input data-field="playback_confirmed" data-case="${{item.case_id}}" type="checkbox" style="width:auto"> Playback confirmed</label>
-      <label>Notes<textarea data-field="notes" data-case="${{item.case_id}}"></textarea></label>
-      <label>Issues, comma separated<input data-field="issues" data-case="${{item.case_id}}"></label>
-    `;
-    root.appendChild(row);
-  }});
-}}
-document.addEventListener('input', event => {{
-  const target = event.target;
-  const caseId = target.getAttribute('data-case');
-  const field = target.getAttribute('data-field');
-  if (!caseId || !field) return;
-  const row = reviews.get(caseId);
-  if (field === 'rating') row[field] = Number(target.value || 0);
-  else if (field === 'playback_confirmed') row[field] = Boolean(target.checked);
-  else if (field === 'issues') row[field] = String(target.value || '').split(',').map(x => x.trim()).filter(Boolean);
-  else row[field] = target.value;
-}});
-function downloadResponse() {{
-  const response = {{
-    schema_version: 1,
-    suite_id: PACK.suite_id,
-    pack_id: PACK.pack_id,
-    pack_source_hash: PACK.source_hash,
-    reviewer: {{ name: document.getElementById('reviewerName').value, organization: document.getElementById('reviewerOrg').value }},
-    reviewed_at: new Date().toISOString(),
-    reviews: Array.from(reviews.values())
-  }};
-  const blob = new Blob([JSON.stringify(response, null, 2)], {{ type: 'application/json' }});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url; link.download = `${{PACK.suite_id}}-${{PACK.pack_id}}-review-response.json`; link.click();
-  URL.revokeObjectURL(url);
-}}
-renderCases();
-</script>
-</body>
-</html>
-"""
-
-
-def _readme_text(pack: ImplementationDocument) -> str:
-    return (
-        "MusicForge Human Review Pack\n\n"
-        f"Suite: {pack.get('suite_id')}\n"
-        f"Pack: {pack.get('pack_id')}\n"
-        f"Cases: {pack.get('case_count')}\n\n"
-        "Open index.html in a browser, listen to every case, then export the review response JSON.\n"
-        "Do not edit manifest.json or pack.json by hand.\n"
-    )
-
-
-def _response_from_payload(payload: ImplementationDocument) -> ImplementationDocument:
-    if isinstance(payload.get("response"), dict):
-        return dict(payload["response"])
-    if isinstance(payload.get("response_json"), dict):
-        return dict(payload["response_json"])
-    if isinstance(payload.get("response_base64"), str):
-        try:
-            raw = base64.b64decode(str(payload["response_base64"]), validate=True)
-            value = json.loads(raw.decode("utf-8"))
-        except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise HumanReviewPackValidationError(f"response_base64 is not valid JSON: {exc}") from exc
-        if not isinstance(value, dict):
-            raise HumanReviewPackValidationError("response_base64 must decode to a JSON object.")
-        return value
-    return dict(payload)
-
-
-def _validate_markers(review: ImplementationDocument, pack_case: ImplementationDocument) -> None:
-    markers = review.get("markers")
-    if markers is None:
-        return
-    if not isinstance(markers, list):
-        raise HumanReviewPackValidationError("markers must be a list.")
-    duration_seconds = int(pack_case.get("duration_seconds") or 90)
-    max_beat = max(4, duration_seconds * 4)
-    for index, marker in enumerate(markers[:100]):
-        if not isinstance(marker, dict):
-            raise HumanReviewPackValidationError(f"markers[{index}] must be an object.")
-        beat = marker.get("beat")
-        if beat is not None:
-            try:
-                beat_value = float(beat)
-            except (TypeError, ValueError) as exc:
-                raise HumanReviewPackValidationError(f"markers[{index}].beat must be numeric.") from exc
-            if beat_value < 0 or beat_value > max_beat:
-                raise HumanReviewPackValidationError(f"markers[{index}].beat is outside the case duration.")
-
-
-def _safe_markers(value: Any) -> list[ImplementationDocument]:
-    if not isinstance(value, list):
-        return []
-    rows = []
-    for marker in value[:100]:
-        if not isinstance(marker, dict):
-            continue
-        rows.append(
-            sanitize_metadata(
-                {
-                    "beat": marker.get("beat"),
-                    "time_seconds": marker.get("time_seconds"),
-                    "severity": _safe_text(marker.get("severity"), 40) or "note",
-                    "label": _safe_text(marker.get("label"), 120),
-                    "note": _safe_text(marker.get("note"), 500),
-                }
-            )
-        )
-    return rows
-
-
-def _dangerous_key_paths(value: Any, *, prefix: str = "") -> list[str]:
-    paths: list[str] = []
-    if isinstance(value, dict):
-        for key, item in value.items():
-            key_text = str(key)
-            child = f"{prefix}.{key_text}" if prefix else key_text
-            if key_text.lower() in DANGEROUS_RESPONSE_KEYS:
-                paths.append(child)
-            paths.extend(_dangerous_key_paths(item, prefix=child))
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            paths.extend(_dangerous_key_paths(item, prefix=f"{prefix}[{index}]"))
-    return paths
-
-
-def _safe_case_artifact(case_dir: Path, filename: str) -> Path:
-    if filename not in {"song.mid", "song.wav"}:
-        raise HumanReviewPackValidationError("Unsupported case artifact.")
-    base = case_dir.resolve()
-    target = (base / filename).resolve()
-    try:
-        target.relative_to(base)
-    except ValueError as exc:
-        raise HumanReviewPackValidationError("Refusing to operate outside acceptance case directory.") from exc
-    if target.is_symlink():
-        raise HumanReviewPackValidationError("Refusing to package symlink case artifact.")
-    return target
-
-
-def _is_safe_relpath(value: str) -> bool:
-    raw = str(value or "")
-    if "\\" in raw or not raw or raw.endswith("/") or raw.startswith("/") or raw.startswith("//"):
-        return False
-    parts = raw.split("/")
-    if any(part in {"", ".", ".."} for part in parts):
-        return False
-    if ":" in parts[0]:
-        return False
-    return True
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as file:
-        for chunk in iter(lambda: file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _append_task_event(task_dir: Path, event_type: str, payload: ImplementationDocument, now: str) -> None:
-    path = task_dir / "events.jsonl"
-    with path.open("a", encoding="utf-8") as file:
-        file.write(json.dumps(sanitize_metadata({"timestamp": now, "type": event_type, "payload": payload}), ensure_ascii=False) + "\n")
-
-
-def _safe_text(value: Any, limit: int) -> str:
-    return sanitize_sensitive_text(str(value or "")).strip()[:limit]
-
-
-def _validate_suite_id(value: str) -> str:
-    text = str(value or "").strip()
-    if not text.startswith("suite-") or not text.removeprefix("suite-").isdigit():
-        raise HumanReviewPackValidationError("Invalid suite_id.")
-    return text
-
-
-def _validate_case_id(value: str) -> str:
-    text = str(value or "").strip()
-    if not text.startswith("case-") or not text.removeprefix("case-").isdigit():
-        raise HumanReviewPackValidationError("Invalid case_id.")
-    return text
+_v142_hrp_readiness.bind_globals(globals())

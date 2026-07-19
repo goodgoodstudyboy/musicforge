@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -76,10 +76,10 @@ class PublicTrustCenterDistributionKitStore:
     def history_path(self, center_id: str = "ptc-default") -> Path:
         return self.root_dir(center_id) / "distribution-kit-history.json"
 
-    def read_report(self, center_id: str = "ptc-default", *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    def read_report(self, center_id: str = "ptc-default", *, default: DomainDocument | None = None) -> DomainDocument:
         return _read_json_default(self.report_path(center_id), default=default)
 
-    def refresh_report(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def refresh_report(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or now_iso()
             source = self._current_source(center_id)
@@ -102,7 +102,7 @@ class PublicTrustCenterDistributionKitStore:
             _write_json(self.report_path(center_id), report)
             return _sanitize(report)
 
-    def export_kit(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def export_kit(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or now_iso()
             del payload
@@ -158,7 +158,7 @@ class PublicTrustCenterDistributionKitStore:
             self._append_history(center_id, "distribution_kit_exported", {**state, "manifest_hash": manifest["integrity_hash"]}, now=now)
             return _sanitize(manifest)
 
-    def build_zip(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def build_zip(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or now_iso()
             del payload
@@ -191,7 +191,7 @@ class PublicTrustCenterDistributionKitStore:
             self._append_history(center_id, "distribution_kit_zip_built", {**state, "zip_sha256": info["sha256"], "manifest_hash": manifest["integrity_hash"]}, now=now)
             return _sanitize(info)
 
-    def verify_zip(self, center_id: str = "ptc-default", payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def verify_zip(self, center_id: str = "ptc-default", payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         from song_agent.domains.trust.public_trust_center_distribution_kit_verifier import verify_public_trust_center_distribution_kit_package, write_public_trust_center_distribution_kit_verification_report
 
         payload = payload or {}
@@ -216,7 +216,7 @@ class PublicTrustCenterDistributionKitStore:
         write_public_trust_center_distribution_kit_verification_report(report, self.verification_report_path(center_id))
         return report
 
-    def summary(self, center_id: str = "ptc-default") -> dict[str, Any]:
+    def summary(self, center_id: str = "ptc-default") -> DomainDocument:
         report = self.read_report(center_id, default={})
         verification = _read_json_default(self.verification_report_path(center_id), default={})
         return _sanitize(
@@ -368,9 +368,9 @@ class PublicTrustCenterDistributionKitStore:
         return report.get("source_hash")
 
     def _findings(self, source: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
-        checks: list[dict[str, Any]] = []
-        blockers: list[dict[str, Any]] = []
-        warnings: list[dict[str, Any]] = []
+        checks: list[ImplementationDocument] = []
+        blockers: list[ImplementationDocument] = []
+        warnings: list[ImplementationDocument] = []
 
         def check(check_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
             row = {"check_id": check_id, "status": "passed" if passed else "warning" if warning else "failed", "severity": "warning" if warning else "blocking", "message": message}
@@ -418,18 +418,18 @@ class PublicTrustCenterDistributionKitStore:
 
 
 
-def distribution_kit_report_integrity_ok(report: dict[str, Any]) -> bool:
+def distribution_kit_report_integrity_ok(report: DomainDocument) -> bool:
     return bool(report) and str(report.get("integrity_hash") or "") == distribution_kit_report_hash(report)
 
 
 
 
 
-def distribution_kit_manifest_integrity_ok(manifest: dict[str, Any]) -> bool:
+def distribution_kit_manifest_integrity_ok(manifest: DomainDocument) -> bool:
     return bool(manifest) and str(manifest.get("integrity_hash") or "") == distribution_kit_manifest_hash(manifest)
 
 
-def distribution_kit_summary(report: dict[str, Any]) -> dict[str, Any]:
+def distribution_kit_summary(report: DomainDocument) -> DomainDocument:
     summary = _as_document(report.get("summary"))
     return _sanitize({"status": report.get("status"), "center_id": report.get("center_id"), "blocker_count": summary.get("blocker_count", 0), "warning_count": summary.get("warning_count", 0), "source_hash": report.get("source_hash")})
 

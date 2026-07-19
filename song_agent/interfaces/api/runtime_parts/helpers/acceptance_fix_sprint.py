@@ -4,7 +4,7 @@ from song_agent.platform.contracts.documents import ImplementationDocument
 
 from song_agent.interfaces.api.runtime_parts.dependencies.program_dependencies import AnalyticsScope
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, json, parse_qs, unquote
+from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import json, parse_qs, unquote
 
 from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import sanitize_metadata
 
@@ -182,7 +182,7 @@ def _match_release_track_tail(tail: str) -> tuple[str, str] | None:
     return unquote(parts[1]), action
 
 def _merge_editor_patch_metadata(left: ImplementationDocument | None, right: ImplementationDocument | None) -> ImplementationDocument:
-    merged: dict[str, Any] = {}
+    merged: ImplementationDocument = {}
     for source in (left, right):
         if not isinstance(source, dict):
             continue
@@ -190,8 +190,8 @@ def _merge_editor_patch_metadata(left: ImplementationDocument | None, right: Imp
             if key in {"clip_inserts", "template_inserts"}:
                 continue
             merged[key] = value
-    inserts: list[dict[str, Any]] = []
-    template_inserts: list[dict[str, Any]] = []
+    inserts: list[ImplementationDocument] = []
+    template_inserts: list[ImplementationDocument] = []
     seen: set[str] = set()
     seen_templates: set[str] = set()
     for source in (left, right):

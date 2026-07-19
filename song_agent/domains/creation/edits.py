@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import re as re
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field, replace as replace
 from typing import Any as Any
@@ -41,7 +42,7 @@ class EditTarget:
     field: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any] | None) -> "EditTarget":
+    def from_dict(cls, data: DomainDocument | None) -> "EditTarget":
         if data is None:
             return cls()
         if not isinstance(data, dict):
@@ -55,7 +56,7 @@ class EditTarget:
             field=field_value,
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -67,10 +68,10 @@ class EditIntent:
     preserve: list[str] = field(default_factory=list)
     strength: int = 5
     provider_mode: str = "local"
-    payload: dict[str, Any] = field(default_factory=dict)
+    payload: ImplementationDocument = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "EditIntent":
+    def from_dict(cls, data: DomainDocument) -> "EditIntent":
         if not isinstance(data, dict):
             raise ValueError("edit intent must be an object.")
         edit_type = str(data.get("edit_type") or "").strip()
@@ -106,7 +107,7 @@ class EditIntent:
             payload=dict(payload),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "edit_type": self.edit_type,
             "target": self.target.to_dict(),
@@ -121,7 +122,7 @@ class EditIntent:
 @dataclass(frozen=True)
 class EditedSongPlanResult:
     plan: SongPlan
-    summary: dict[str, Any]
+    summary: ImplementationDocument
     warnings: list[str] = field(default_factory=list)
 
 
@@ -169,7 +170,7 @@ def edit_variant_type(edit_type: str) -> str:
     return EDIT_VARIANT_TYPES[edit_type]
 
 
-def edit_change_summary(intent: EditIntent, summary: dict[str, Any] | None = None) -> str:
+def edit_change_summary(intent: EditIntent, summary: DomainDocument | None = None) -> str:
     target = []
     if intent.target.section_name:
         target.append(f"section {intent.target.section_name}")
@@ -191,9 +192,9 @@ def build_edit_metadata(
     parent_job_id: str,
     intent: EditIntent,
     created_at: str,
-    summary: dict[str, Any] | None = None,
+    summary: DomainDocument | None = None,
     warnings: list[str] | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     return {
         "schema_version": SCHEMA_VERSION,
         "project_id": project_id,
@@ -206,7 +207,7 @@ def build_edit_metadata(
     }
 
 
-def build_edit_targets(plan: SongPlan) -> dict[str, Any]:
+def build_edit_targets(plan: SongPlan) -> DomainDocument:
     return {
         "sections": [
             {

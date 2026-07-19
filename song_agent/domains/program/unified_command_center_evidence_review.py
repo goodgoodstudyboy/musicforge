@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import base64 as base64
 import json as json
@@ -26,16 +27,44 @@ from song_agent.domains.program.unified_command_center_signoff import UnifiedCom
 from song_agent.domains.program.unified_command_center_verifier import verify_unified_command_center_package as verify_unified_command_center_package, write_unified_command_center_verification_report as write_unified_command_center_verification_report
 
 
-class UnifiedCommandCenterEvidenceReviewError(ValueError):
-    pass
+from song_agent.domains.program import v142_uccer_readiness as _v142_uccer_readiness
+from song_agent.domains.program.v142_uccer_readiness import (
+    UnifiedCommandCenterEvidenceReviewError,
+    UnifiedCommandCenterEvidenceReviewNotFoundError,
+    UnifiedCommandCenterEvidenceReviewStateError,
+    _source_document,
+    _evidence_index_document,
+    _proof_index_document,
+    _replay_plan_document,
+    _empty_replay_document,
+    _run_replay_document,
+    _narrative_document,
+    _checklist_document,
+    _manifest_document,
+    _reviewer_guide,
+    _review_verifier_kwargs,
+    _summary_from_path,
+    _generic_report,
+    _release_check_result,
+    _public_reviewer,
+    _findings,
+    _public_response,
+    _response_verification_summary,
+    _response_binding_summary,
+    _read_optional_json,
+    _path_or_none,
+    _integrity_hash,
+    _integrity_from_path,
+    _integrity_or_stable,
+    _sha256_path,
+    _zip_manifest_hash,
+    _safe_id,
+)
 
 
-class UnifiedCommandCenterEvidenceReviewNotFoundError(UnifiedCommandCenterEvidenceReviewError):
-    pass
 
 
-class UnifiedCommandCenterEvidenceReviewStateError(UnifiedCommandCenterEvidenceReviewError):
-    pass
+
 
 
 class UnifiedCommandCenterEvidenceReviewStore:
@@ -112,7 +141,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
     def accepted_evidence_verification_report_path(self, center_id: str, review_id: str, evidence_id: str) -> Path:
         return self.accepted_evidence_dir(center_id, review_id, evidence_id) / "acceptance-verification-report.json"
 
-    def list_reviews(self, center_id: str) -> list[dict[str, Any]]:
+    def list_reviews(self, center_id: str) -> list[DomainDocument]:
         if not self.reviews_dir(center_id).exists():
             return []
         rows = []
@@ -122,10 +151,10 @@ class UnifiedCommandCenterEvidenceReviewStore:
                 rows.append(read_json(source_path))
         return rows
 
-    def get_review(self, center_id: str, review_id: str) -> dict[str, Any]:
+    def get_review(self, center_id: str, review_id: str) -> DomainDocument:
         if not self.source_path(center_id, review_id).exists():
             raise UnifiedCommandCenterEvidenceReviewNotFoundError(f"Unified Command Center Evidence Review not found: {review_id}.")
-        docs: dict[str, Any] = {
+        docs: ImplementationDocument = {
             "source": read_json(self.source_path(center_id, review_id)),
             "evidence_index": _read_optional_json(self.evidence_index_path(center_id, review_id)),
             "external_proof_index": _read_optional_json(self.proof_index_path(center_id, review_id)),
@@ -139,7 +168,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
         }
         return docs
 
-    def create_review(self, center_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create_review(self, center_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             review_id = str(payload.get("review_id") or self._next_review_id(center_id))
@@ -152,7 +181,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             write_json(self.local_paths_path(center_id, review_id), local_paths)
             return docs
 
-    def refresh_review(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def refresh_review(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             current = self.get_review(center_id, review_id)["source"]
@@ -164,7 +193,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             write_json(self.local_paths_path(center_id, review_id), local_paths)
             return docs
 
-    def run_replay(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def run_replay(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             local_paths = self._merged_local_paths(center_id, review_id, payload)
@@ -173,7 +202,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             write_json(self.local_paths_path(center_id, review_id), local_paths)
             return docs["replay_result"]
 
-    def export_review(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def export_review(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             self._ensure_not_stale(center_id, review_id, payload)
@@ -214,7 +243,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             write_json(export_dir / "manifest.json", manifest)
             return {"status": docs["replay_result"].get("status"), "export_dir": str(export_dir), "manifest_hash": manifest.get("integrity_hash")}
 
-    def build_zip(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def build_zip(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             self.export_review(center_id, review_id, payload)
@@ -227,7 +256,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             report = self.verify_zip(center_id, review_id, payload)
             return {"status": report.get("status"), "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "verification_report": str(self.verification_report_path(center_id, review_id))}
 
-    def verify_zip(self, center_id: str, review_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_zip(self, center_id: str, review_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         local_paths = self._merged_local_paths(center_id, review_id, payload)
         report = verify_unified_command_center_evidence_review_package(
@@ -239,12 +268,12 @@ class UnifiedCommandCenterEvidenceReviewStore:
         write_unified_command_center_evidence_review_verification_report(report, self.verification_report_path(center_id, review_id))
         return report
 
-    def list_responses(self, center_id: str, review_id: str) -> list[dict[str, Any]]:
+    def list_responses(self, center_id: str, review_id: str) -> list[DomainDocument]:
         if not self.response_dir(center_id, review_id).exists():
             return []
         return [read_json(path) for path in sorted(self.response_dir(center_id, review_id).glob("*.json"))]
 
-    def import_response(self, center_id: str, review_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def import_response(self, center_id: str, review_id: str, payload: DomainDocument) -> DomainDocument:
         if any(key in payload for key in {"source_path", "local_path", "file_path"}):
             raise UnifiedCommandCenterEvidenceReviewStateError("Review response import does not accept local file paths.")
         response = payload.get("response") if isinstance(payload.get("response"), dict) else None
@@ -292,7 +321,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
             self._write_change_request_draft(center_id, review_id, response_doc)
         return response_doc
 
-    def create_acceptance_evidence(self, center_id: str, review_id: str, response_id: str) -> dict[str, Any]:
+    def create_acceptance_evidence(self, center_id: str, review_id: str, response_id: str) -> DomainDocument:
         response_path = self.response_dir(center_id, review_id) / f"{_safe_id(response_id)}.json"
         if not response_path.exists():
             raise UnifiedCommandCenterEvidenceReviewNotFoundError(f"Review response not found: {response_id}.")
@@ -342,7 +371,7 @@ class UnifiedCommandCenterEvidenceReviewStore:
         verification = self.verify_acceptance_evidence(center_id, review_id, evidence_id)
         return {"status": verification.get("status"), "evidence_id": evidence_id, "zip_path": str(zip_path), "verification_report": str(self.accepted_evidence_verification_report_path(center_id, review_id, evidence_id))}
 
-    def verify_acceptance_evidence(self, center_id: str, review_id: str, evidence_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_acceptance_evidence(self, center_id: str, review_id: str, evidence_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         response_verification = self.accepted_evidence_dir(center_id, review_id, evidence_id) / "response-verification-summary.json"
         report = verify_unified_command_center_evidence_review_acceptance_package(
@@ -368,8 +397,8 @@ class UnifiedCommandCenterEvidenceReviewStore:
         acceptance_zip_path: Path | str | None = None,
         acceptance_verification_report_path: Path | str | None = None,
         acceptance_response_verification_report_path: Path | str | None = None,
-        payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        payload: DomainDocument | None = None,
+    ) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         payload = payload or {}
@@ -534,303 +563,4 @@ class UnifiedCommandCenterEvidenceReviewStore:
         doc["integrity_hash"] = _integrity_hash(doc)
         write_json(path, doc)
 
-
-def _source_document(center_id: str, review_id: str, paths: ImplementationDocument, created_at: str) -> ImplementationDocument:
-    source = {
-        "ucc_zip_sha256": _sha256_path(paths.get("ucc_zip")),
-        "ucc_manifest_hash": _zip_manifest_hash(paths.get("ucc_zip")),
-        "ucc_verification_hash": _integrity_from_path(paths.get("ucc_verification_report")),
-        "archive_zip_sha256": _sha256_path(paths.get("archive_zip")),
-        "archive_manifest_hash": _zip_manifest_hash(paths.get("archive_zip")),
-        "archive_verification_hash": _integrity_from_path(paths.get("archive_verification_report")),
-        "handoff_zip_sha256": _sha256_path(paths.get("handoff_zip")),
-        "handoff_manifest_hash": _zip_manifest_hash(paths.get("handoff_zip")),
-        "handoff_verification_hash": _integrity_from_path(paths.get("handoff_verification_report")),
-        "continuous_review_zip_sha256": _sha256_path(paths.get("continuous_review_zip")),
-        "continuous_review_manifest_hash": _zip_manifest_hash(paths.get("continuous_review_zip")),
-        "continuous_review_verification_hash": _integrity_from_path(paths.get("continuous_review_verification_report")),
-        "drift_response_zip_sha256": _sha256_path(paths.get("drift_response_zip")),
-        "drift_response_manifest_hash": _zip_manifest_hash(paths.get("drift_response_zip")),
-        "drift_response_verification_hash": _integrity_from_path(paths.get("drift_response_verification_report")),
-        "cr_binding_report_hash": _integrity_from_path(paths.get("drift_change_request_binding_report")),
-        "ga_report_hash": _integrity_from_path(paths.get("ga_readiness_report")),
-        "release_check_report_hash": _integrity_from_path(paths.get("release_check_report")),
-    }
-    status = "draft"
-    doc = {
-        "schema_version": UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_SCHEMA_VERSION,
-        "package_type": "musicforge_unified_command_center_evidence_review_source",
-        "center_id": center_id,
-        "review_id": review_id,
-        "created_at": created_at,
-        "status": status,
-        "source": source,
-    }
-    doc["source_hash"] = stable_hash(source)
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _evidence_index_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
-    source_map = source.get("source", {})
-    items = []
-    for component, prefix, required in (
-        ("unified_command_center", "ucc", True),
-        ("unified_command_center_archive", "archive", True),
-        ("unified_command_center_handoff", "handoff", True),
-        ("continuous_review", "continuous_review", True),
-        ("drift_response", "drift_response", bool(source_map.get("drift_response_zip_sha256"))),
-        ("ga_readiness", "ga", bool(source_map.get("ga_report_hash"))),
-        ("release_check", "release_check", bool(source_map.get("release_check_report_hash"))),
-    ):
-        verification_hash = source_map.get(f"{prefix}_verification_hash") if prefix not in {"ga", "release_check"} else source_map.get(f"{prefix}_report_hash")
-        status = "passed" if verification_hash else "missing"
-        items.append({"component_type": component, "component_id": center_id if component.startswith("unified") else review_id, "role": "root" if component == "unified_command_center" else "supporting", "required": required, "verification_hash": verification_hash, "verification_status": status, "runtime_status": "pending", "external_report_required": required})
-    summary = {"required_count": len([row for row in items if row.get("required")]), "passed_count": len([row for row in items if row.get("verification_status") == "passed"]), "failed_count": len([row for row in items if row.get("required") and row.get("verification_status") != "passed"]), "manual_review_count": 1}
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_index", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "items": items, "summary": summary}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _proof_index_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
-    source_map = source.get("source", {})
-    proofs = []
-    if source_map.get("cr_binding_report_hash"):
-        proofs.append({"proof_type": "cr_binding_report", "component_type": "drift_response", "component_id": review_id, "proof_hash": source_map.get("cr_binding_report_hash")})
-    if source_map.get("ucc_verification_hash"):
-        proofs.append({"proof_type": "verification_report", "component_type": "unified_command_center", "component_id": center_id, "proof_hash": source_map.get("ucc_verification_hash")})
-    if source_map.get("archive_verification_hash"):
-        proofs.append({"proof_type": "verification_report", "component_type": "unified_command_center_archive", "component_id": center_id, "proof_hash": source_map.get("archive_verification_hash")})
-    summary = {"proof_count": len(proofs), "cr_proof_present": bool(source_map.get("cr_binding_report_hash"))}
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_external_proof_index", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "proofs": proofs, "summary": summary}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _replay_plan_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
-    source_map = source.get("source", {})
-    steps = [
-        {"step_id": "verify_ucc", "order": 10, "command": "verify-unified-command-center-package", "required": True, "inputs": ["ucc_zip", "ucc_verification_report"], "expected_status": "passed"},
-        {"step_id": "verify_archive", "order": 20, "command": "verify-unified-command-center-archive-package", "required": True, "inputs": ["archive_zip", "archive_verification_report"], "expected_status": "passed"},
-        {"step_id": "verify_handoff", "order": 30, "command": "verify-unified-command-center-handoff-package", "required": True, "inputs": ["handoff_zip", "handoff_verification_report"], "expected_status": "passed"},
-        {"step_id": "verify_continuous_review", "order": 40, "command": "verify-unified-command-center-continuous-review-package", "required": True, "inputs": ["continuous_review_zip", "continuous_review_verification_report"], "expected_status": "passed"},
-    ]
-    if source_map.get("drift_response_zip_sha256"):
-        steps.append({"step_id": "verify_drift_response", "order": 50, "command": "verify-unified-command-center-drift-response-package", "required": True, "inputs": ["drift_response_zip", "drift_response_verification_report", "change_request_binding_report"], "expected_status": "passed"})
-    steps.extend([
-        {"step_id": "verify_ga_readiness", "order": 60, "command": "verify-ga-readiness-report", "required": bool(source_map.get("ga_report_hash")), "inputs": ["ga_readiness_report"], "expected_status": "passed"},
-        {"step_id": "verify_release_check", "order": 70, "command": "release-check-report", "required": bool(source_map.get("release_check_report_hash")), "inputs": ["release_check_report"], "expected_status": "passed"},
-        {"step_id": "manual_reviewer_narrative", "order": 80, "command": "manual-review", "required": False, "inputs": ["reviewer-guide.md"], "expected_status": "manual_review"},
-    ])
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_replay_plan", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "steps": steps}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _empty_replay_document(center_id: str, review_id: str, source: ImplementationDocument, plan: ImplementationDocument) -> ImplementationDocument:
-    steps = [{"step_id": row.get("step_id"), "status": "pending", "blockers": [], "verification_hash": None} for row in plan.get("steps", [])]
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_replay_result", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "status": "pending", "steps": steps, "summary": {"total": len(steps), "passed": 0, "failed": 0, "manual_review": 1}}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _run_replay_document(center_id: str, review_id: str, source: ImplementationDocument, plan: ImplementationDocument, paths: ImplementationDocument) -> ImplementationDocument:
-    steps = []
-    for step in plan.get("steps", []):
-        step_id = step.get("step_id")
-        if step_id == "verify_ucc":
-            report = verify_unified_command_center_package(_as_path(paths.get("ucc_zip")), strict=True, release_check_report_path=paths.get("release_check_report"))
-        elif step_id == "verify_archive":
-            report = verify_unified_command_center_archive_package(_as_path(paths.get("archive_zip")), strict=True, require_signed=True, require_current_ucc=True, command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
-        elif step_id == "verify_handoff":
-            report = verify_unified_command_center_handoff_package(_as_path(paths.get("handoff_zip")), strict=True, require_archive=True, archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"))
-        elif step_id == "verify_continuous_review":
-            report = verify_unified_command_center_continuous_review_package(_as_path(paths.get("continuous_review_zip")), strict=True, require_clear=False, require_recovery_drill=False, require_current_review=True, archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"), handoff_zip_path=paths.get("handoff_zip"), handoff_verification_report_path=paths.get("handoff_verification_report"), command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
-        elif step_id == "verify_drift_response":
-            report = verify_unified_command_center_drift_response_package(_as_path(paths.get("drift_response_zip")), strict=True, require_closed=True, require_recheck_clear=True, require_current_review=True, source_review_zip_path=paths.get("source_review_zip") or paths.get("continuous_review_zip"), source_review_verification_report_path=paths.get("source_review_verification_report") or paths.get("continuous_review_verification_report"), recheck_review_zip_path=paths.get("recheck_review_zip") or paths.get("continuous_review_zip"), recheck_review_verification_report_path=paths.get("recheck_review_verification_report") or paths.get("continuous_review_verification_report"), change_request_binding_report_path=paths.get("drift_change_request_binding_report"), archive_zip_path=paths.get("archive_zip"), archive_verification_report_path=paths.get("archive_verification_report"), handoff_zip_path=paths.get("handoff_zip"), handoff_verification_report_path=paths.get("handoff_verification_report"), command_center_zip_path=paths.get("ucc_zip"), command_center_verification_report_path=paths.get("ucc_verification_report"), signoff_binding_path=paths.get("signoff_binding"))
-        elif step_id == "verify_ga_readiness":
-            report = _generic_report(paths.get("ga_readiness_report"))
-        elif step_id == "verify_release_check":
-            report = _release_check_result(paths.get("release_check_report"))
-        else:
-            report = {"status": "manual_review", "blockers": [], "integrity_hash": None}
-        steps.append({"step_id": step_id, "status": report.get("status"), "blockers": report.get("blockers", []), "verification_hash": report.get("integrity_hash"), "duration_ms": 0})
-    required_steps = {str(row.get("step_id")) for row in plan.get("steps", []) if isinstance(row, dict) and row.get("required")}
-    failed = [row for row in steps if row.get("step_id") in required_steps and row.get("status") != "passed"]
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_replay_result", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "status": "failed" if failed else "passed", "steps": steps, "summary": {"total": len(steps), "passed": len([row for row in steps if row.get("status") == "passed"]), "failed": len(failed), "manual_review": len([row for row in steps if row.get("status") == "manual_review"])}}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _narrative_document(center_id: str, review_id: str, source: ImplementationDocument, replay_result: ImplementationDocument) -> ImplementationDocument:
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_narrative", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "status": replay_result.get("status"), "summary": {"ucc_ready": bool(source.get("source", {}).get("ucc_verification_hash")), "archive_current": bool(source.get("source", {}).get("archive_verification_hash")), "handoff_current": bool(source.get("source", {}).get("handoff_verification_hash")), "drift_response_present": bool(source.get("source", {}).get("drift_response_verification_hash")), "manual_review_required": True}}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _checklist_document(center_id: str, review_id: str, source: ImplementationDocument) -> ImplementationDocument:
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_manual_checklist", "center_id": center_id, "review_id": review_id, "source_hash": source.get("source_hash"), "items": [{"item_id": "manual-001", "label": "Reviewer confirms UCC evidence chain narrative.", "required": True, "status": "manual_required"}]}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _manifest_document(center_id: str, review_id: str, source: ImplementationDocument, root: Path, entries: set[str], status: str, *, package_type: str = UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_PACKAGE_TYPE, evidence_id: str | None = None) -> ImplementationDocument:
-    files = []
-    for rel in sorted(entries - {"manifest.json"}):
-        path = root / rel
-        files.append({"path": rel, "sha256": _sha256_path(path), "size_bytes": path.stat().st_size if path.exists() else 0})
-    manifest = {"package_type": package_type, "schema_version": UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_SCHEMA_VERSION, "center_id": center_id, "review_id": review_id, "evidence_id": evidence_id, "source_hash": source.get("source_hash"), "files": files, "summary": {"replay_status": status, "required_evidence_status": status, "manual_review_required": True}, "source": {"review_source_hash": source.get("integrity_hash")}}
-    manifest["integrity_hash"] = _integrity_hash(manifest)
-    return manifest
-
-
-def _reviewer_guide(docs: ImplementationDocument) -> str:
-    source = docs.get("source", {})
-    replay = docs.get("replay_result", {})
-    return sanitize_sensitive_text(
-        "\n".join(
-            [
-                "# MusicForge Unified Command Center Evidence Review",
-                "",
-                f"Review: {source.get('review_id')}",
-                f"Replay status: {replay.get('status')}",
-                "Run the verifier with the external evidence arguments listed in the replay plan.",
-                "Accepted review responses must bind the current review pack hash and replay result hash.",
-            ]
-        )
-    )
-
-
-def _review_verifier_kwargs(paths: ImplementationDocument) -> ImplementationDocument:
-    return {
-        "ucc_zip_path": _path_or_none(paths.get("ucc_zip")),
-        "ucc_verification_report_path": _path_or_none(paths.get("ucc_verification_report")),
-        "archive_zip_path": _path_or_none(paths.get("archive_zip")),
-        "archive_verification_report_path": _path_or_none(paths.get("archive_verification_report")),
-        "handoff_zip_path": _path_or_none(paths.get("handoff_zip")),
-        "handoff_verification_report_path": _path_or_none(paths.get("handoff_verification_report")),
-        "continuous_review_zip_path": _path_or_none(paths.get("continuous_review_zip")),
-        "continuous_review_verification_report_path": _path_or_none(paths.get("continuous_review_verification_report")),
-        "drift_response_zip_path": _path_or_none(paths.get("drift_response_zip")),
-        "drift_response_verification_report_path": _path_or_none(paths.get("drift_response_verification_report")),
-        "drift_change_request_binding_report_path": _path_or_none(paths.get("drift_change_request_binding_report")),
-        "source_review_zip_path": _path_or_none(paths.get("source_review_zip")),
-        "source_review_verification_report_path": _path_or_none(paths.get("source_review_verification_report")),
-        "recheck_review_zip_path": _path_or_none(paths.get("recheck_review_zip")),
-        "recheck_review_verification_report_path": _path_or_none(paths.get("recheck_review_verification_report")),
-        "signoff_binding_path": _path_or_none(paths.get("signoff_binding")),
-        "ga_readiness_report_path": _path_or_none(paths.get("ga_readiness_report")),
-        "release_check_report_path": _path_or_none(paths.get("release_check_report")),
-    }
-
-
-def _summary_from_path(path: Any, label: str) -> ImplementationDocument:
-    if not path or not Path(path).exists():
-        doc: ImplementationDocument = {"package_type": f"musicforge_{label}_summary", "status": "not_applicable", "label": label}
-    else:
-        source = read_json(Path(path))
-        doc = {key: source.get(key) for key in ("package_type", "status", "zip_sha256", "zip_size_bytes", "manifest_hash", "integrity_hash") if key in source}
-        doc["label"] = label
-    doc["summary_hash"] = stable_hash(doc)
-    return doc
-
-
-def _generic_report(path: Any) -> ImplementationDocument:
-    if not path or not Path(path).exists():
-        return {"status": "not_applicable", "blockers": [], "integrity_hash": None}
-    report = read_json(Path(path))
-    status = str(report.get("status") or "")
-    if report.get("ok") is True:
-        status = "passed"
-    if status in {"ready", "warning"}:
-        status = "passed"
-    return {"status": status or "failed", "blockers": report.get("blockers", []), "integrity_hash": _integrity_or_stable(report)}
-
-
-def _release_check_result(path: Any) -> ImplementationDocument:
-    if not path or not Path(path).exists():
-        return {"status": "not_applicable", "blockers": [], "integrity_hash": None}
-    report = read_json(Path(path))
-    return {"status": "passed" if report.get("ok") is True else "failed", "blockers": [row.get("check_id") for row in report.get("results", []) if isinstance(row, dict) and not row.get("ok")], "integrity_hash": _integrity_or_stable(report)}
-
-
-def _public_reviewer(reviewer: ImplementationDocument) -> ImplementationDocument:
-    return {"name": sanitize_sensitive_text(str(reviewer.get("name") or "Reviewer"))[:120], "organization": sanitize_sensitive_text(str(reviewer.get("organization") or ""))[:120], "role": sanitize_sensitive_text(str(reviewer.get("role") or "reviewer"))[:80]}
-
-
-def _findings(value: Any) -> list[ImplementationDocument]:
-    rows = _as_list(value)
-    return [{"severity": sanitize_sensitive_text(str(row.get("severity") or "low"))[:40], "component": sanitize_sensitive_text(str(row.get("component") or ""))[:120], "message": sanitize_sensitive_text(str(row.get("message") or ""))[:1000]} for row in rows if isinstance(row, dict)]
-
-
-def _public_response(response: ImplementationDocument) -> ImplementationDocument:
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_response_public", "response_id": response.get("response_id"), "review_id": response.get("review_id"), "result": response.get("result"), "reviewer": response.get("reviewer"), "findings": response.get("findings", []), "signed_at": response.get("signed_at")}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _response_verification_summary(response: ImplementationDocument, public_response: ImplementationDocument) -> ImplementationDocument:
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_response_verification_summary", "response_id": response.get("response_id"), "status": response.get("status"), "result": response.get("result"), "response_payload_hash": response.get("payload_hash"), "response_integrity_hash": response.get("integrity_hash"), "response_public_hash": public_response.get("integrity_hash"), "bindings": response.get("bindings", {})}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _response_binding_summary(response: ImplementationDocument) -> ImplementationDocument:
-    bindings = response.get("bindings", {})
-    doc = {"package_type": "musicforge_unified_command_center_evidence_review_response_binding_summary", "response_id": response.get("response_id"), "review_pack_zip_sha256": bindings.get("review_pack_zip_sha256"), "review_pack_manifest_hash": bindings.get("review_pack_manifest_hash"), "review_pack_source_hash": bindings.get("review_pack_source_hash"), "replay_result_hash": bindings.get("replay_result_hash"), "response_payload_hash": response.get("payload_hash")}
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _read_optional_json(path: Path) -> ImplementationDocument:
-    return read_json(path) if path.exists() else {}
-
-
-def _path_or_none(value: Any) -> Path | None:
-    if not value:
-        return None
-    return Path(value)
-
-
-def _integrity_hash(payload: ImplementationDocument) -> str:
-    return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
-
-
-def _integrity_from_path(path: Any) -> str | None:
-    if not path or not Path(path).exists():
-        return None
-    data = read_json(Path(path))
-    return data.get("integrity_hash") or stable_hash(data)
-
-
-def _integrity_or_stable(payload: ImplementationDocument) -> str:
-    return str(payload.get("integrity_hash") or stable_hash(payload))
-
-
-def _sha256_path(path: Any) -> str | None:
-    if not path:
-        return None
-    path = Path(path)
-    if not path.exists() or not path.is_file():
-        return None
-    import hashlib
-
-    h = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _zip_manifest_hash(path: Any) -> str | None:
-    if not path or not Path(path).exists():
-        return None
-    try:
-        with zipfile.ZipFile(Path(path)) as archive:
-            return json.loads(archive.read("manifest.json").decode("utf-8")).get("integrity_hash")
-    except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError, ValueError):
-        return None
-
-
-def _safe_id(value: str) -> str:
-    return "".join(ch for ch in str(value) if ch.isalnum() or ch in {"-", "_"})[:80] or "item"
+_v142_uccer_readiness.bind_globals(globals())

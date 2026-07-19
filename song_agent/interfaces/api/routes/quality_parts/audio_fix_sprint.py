@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts import ImplementationDocument
 
 from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
 
@@ -292,7 +292,7 @@ class QualityRoutesAudioFixSprint(QualityRouteContext):
         return (False, None)
 
     def _handle_audio_campaign_route(self, method: str, path: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: ImplementationDocument = {}
         try:
             _split_result = self._handle_audio_campaign_route_part_01(method, path, _split_state)
             if _split_result[0]:

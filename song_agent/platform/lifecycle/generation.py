@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.platform.contracts.lifecycle import GenerationRef
 from song_agent.platform.verification.hashing import integrity_hash
@@ -19,9 +19,9 @@ class GenerationService:
         *,
         package_type: str,
         schema_version: int = 1,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        document: dict[str, Any] = {
+        extra: DomainDocument | None = None,
+    ) -> DomainDocument:
+        document: ImplementationDocument = {
             "schema_version": schema_version,
             "package_type": package_type,
             **reference.to_dict(),

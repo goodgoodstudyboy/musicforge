@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -79,10 +79,10 @@ def verify_unified_release_program_continuity_command_center_package(
     max_zip_size_mb: int = 256,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -192,7 +192,7 @@ def verify_unified_release_program_continuity_command_center_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_continuity_command_center_verification_report(report: dict[str, Any], path: Path | str) -> dict[str, Any]:
+def write_unified_release_program_continuity_command_center_verification_report(report: DomainDocument, path: Path | str) -> DomainDocument:
     output = dict(report)
     output["package_type"] = UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE
     output["integrity_hash"] = _integrity_hash(output)
@@ -200,12 +200,12 @@ def write_unified_release_program_continuity_command_center_verification_report(
     return output
 
 
-def unified_release_program_continuity_command_center_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_release_program_continuity_command_center_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_index: ImplementationDocument, evidence_manifest_path: Path | str | None, *, require: bool) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     if not evidence_manifest_path or not Path(evidence_manifest_path).exists():
         checks.append(_check("urpccc_external_manifest_required", not require, "External evidence manifest is provided for runtime verification."))
         return checks
@@ -332,7 +332,7 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
     return checks
 
 
-def runtime_verify_continuity_command_center_component(component_type: str, row: dict[str, Any], rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def runtime_verify_continuity_command_center_component(component_type: str, row: DomainDocument, rows: dict[str, DomainDocument]) -> DomainDocument:
     package = row.get("package_path")
     if component_type == "evidence_vault":
         return verify_unified_release_program_vault_package(_as_path(package), strict=True, deep=True, require_anchor=True, vault_anchor_path=row.get("anchor_path"))
@@ -391,7 +391,7 @@ def _acceptance_history_state(path: Path) -> ImplementationDocument:
     except (OSError, json.JSONDecodeError):
         return {"chain_valid": False, "status": "unreadable", "signoff_hash": None, "event_hash": None}
     previous = ""
-    state: dict[str, Any] = {"chain_valid": True, "status": "unsigned", "signoff_hash": None, "event_hash": None}
+    state: ImplementationDocument = {"chain_valid": True, "status": "unsigned", "signoff_hash": None, "event_hash": None}
     for row in rows:
         expected_payload = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})
         expected_event = stable_hash({key: value for key, value in row.items() if key != "event_hash"})

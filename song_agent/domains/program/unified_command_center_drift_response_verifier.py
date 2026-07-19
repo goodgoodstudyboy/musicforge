@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -68,10 +68,10 @@ def verify_unified_command_center_drift_response_package(
     max_zip_size_mb: int = 64,
     max_uncompressed_size_mb: int = 256,
     max_entry_count: int = 200,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(checks, summary, _check("ucc_drift_response_zip_exists", False, "Drift Response ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -174,11 +174,11 @@ def verify_unified_command_center_drift_response_package(
     return _finish(checks, summary)
 
 
-def write_unified_command_center_drift_response_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_command_center_drift_response_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_command_center_drift_response_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_command_center_drift_response_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -198,7 +198,7 @@ def _current_review_checks(
     command_center_verification_report_path: Path | str | None,
     signoff_binding_path: Path | str | None,
 ) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     source_binding = _as_document(source.get("source_review"))
     recheck_binding = _as_document(recheck.get("review"))
     if not source_review_zip_path:
@@ -267,7 +267,7 @@ def _current_review_checks(
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     files = _as_list(manifest.get("files"))
     declared = {str(row.get("entry") or row.get("path")) for row in files if isinstance(row, dict) and (row.get("entry") or row.get("path"))}
     expected = REQUIRED_ENTRIES - {"manifest.json"}
@@ -301,7 +301,7 @@ def _action_summary_ok(queue: ImplementationDocument, results: ImplementationDoc
 
 
 def _change_request_proof_checks(queue: ImplementationDocument, cr_bindings: ImplementationDocument, report_path: Path | str | None) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     manual_items = [row for row in queue.get("items", []) if isinstance(row, dict) and not row.get("safe")]
     if not manual_items:
         return checks

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import ImplementationDocument
 import json
 from pathlib import Path
 import tempfile
-from typing import Any
 
 from song_agent.release_check.reviewer_package import REQUIRED_DOCUMENTS, verify_reviewer_package, write_reviewer_manifest
 
@@ -38,7 +38,7 @@ def run_release_check_ci_docs_governance_smoke(root: Path) -> tuple[bool, str]:
         coverage = json.loads((root / "coverage-governance.json").read_text(encoding="utf-8"))
         material = json.loads((root / "material" / "index.json").read_text(encoding="utf-8"))
         reviewer = _reviewer_package_checks()
-        details: dict[str, Any] = {
+        details: ImplementationDocument = {
             "current_profile_legacy_callables": profiles,
             "current_profiles_active": all(not rows for rows in profiles.values()),
             "full_legacy_labelled": not unlabelled_full,
@@ -90,7 +90,7 @@ def _reviewer_package_checks() -> dict[str, bool]:
         }
 
 
-def _write_synthetic_package(root: Path, runtime: dict[str, Any]) -> None:
+def _write_synthetic_package(root: Path, runtime: ImplementationDocument) -> None:
     root.mkdir(parents=True, exist_ok=True)
     for path in root.iterdir():
         if path.is_file():
@@ -105,7 +105,7 @@ def _write_synthetic_package(root: Path, runtime: dict[str, Any]) -> None:
     write_reviewer_manifest(root, final_sha=str(runtime["final_sha"]))
 
 
-def _document_for(name: str, runtime: dict[str, Any]) -> dict[str, Any]:
+def _document_for(name: str, runtime: ImplementationDocument) -> ImplementationDocument:
     mapping = {
         "runtime-verification.json": runtime,
         "ci-matrix.json": runtime["ci"],
@@ -130,7 +130,7 @@ def _document_for(name: str, runtime: dict[str, Any]) -> dict[str, Any]:
     return mapping.get(name, {"schema_version": 1, "status": "passed"})
 
 
-def _valid_runtime(sha: str) -> dict[str, Any]:
+def _valid_runtime(sha: str) -> ImplementationDocument:
     passed = {"status": "passed", "sha": sha}
     ci_passed = {**passed, "evidence_kind": "local_equivalent"}
     return {

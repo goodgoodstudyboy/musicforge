@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import json as json
 from typing import Any as Any
@@ -22,7 +22,7 @@ def build_submission_qa_report(
     release_id: str,
     submission: SubmissionBatch,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     now = now or now_iso()
     source = submission_source_state(store=store, release_id=release_id, submission=submission)
     checks = _checks(store, release_id, submission, source)
@@ -56,7 +56,7 @@ def build_submission_qa_report(
     return sanitize_metadata(report, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def submission_source_state(*, store: SubmissionStore, release_id: str, submission: SubmissionBatch) -> dict[str, Any]:
+def submission_source_state(*, store: SubmissionStore, release_id: str, submission: SubmissionBatch) -> DomainDocument:
     release = store.release_store.get_release(release_id)
     release_signoff = store.release_store.read_signoff(release_id, default={})
     items = []
@@ -97,7 +97,7 @@ def submission_source_state(*, store: SubmissionStore, release_id: str, submissi
     )
 
 
-def submission_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+def submission_qa_summary(report: DomainDocument | None) -> DomainDocument:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -116,7 +116,7 @@ def submission_qa_summary(report: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def submission_qa_allows_export(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> bool:
+def submission_qa_allows_export(report: DomainDocument | None, *, current_source_hash: str | None = None) -> bool:
     if not isinstance(report, dict):
         return False
     if report.get("status") not in {"passed", "warning"}:
@@ -126,7 +126,7 @@ def submission_qa_allows_export(report: dict[str, Any] | None, *, current_source
     return True
 
 
-def mark_submission_qa_stale(report: dict[str, Any] | None, *, current_source_hash: str | None = None) -> dict[str, Any]:
+def mark_submission_qa_stale(report: DomainDocument | None, *, current_source_hash: str | None = None) -> DomainDocument:
     data = dict(report or {})
     data["status"] = "stale"
     data["stale"] = True
@@ -169,7 +169,7 @@ def _checks(store: SubmissionStore, release_id: str, submission: SubmissionBatch
 
 
 def _check(check_id: str, failed: bool, severity: str, message: str, *, count: int | None = None, extra: ImplementationDocument | None = None) -> ImplementationDocument:
-    item: dict[str, Any] = {
+    item: ImplementationDocument = {
         "check_id": check_id,
         "status": "failed" if failed else "passed",
         "severity": severity,

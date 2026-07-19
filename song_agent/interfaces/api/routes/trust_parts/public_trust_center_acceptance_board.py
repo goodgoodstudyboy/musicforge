@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts import ImplementationDocument
 
 from song_agent.platform.contracts.coercion import as_list as _as_list
 
@@ -102,7 +102,7 @@ class TrustRoutesPublicTrustCenterAcceptanceBoard(TrustRouteContext):
         return (False, None)
 
     def _handle_public_trust_center_acceptance_board(self, method: str, center_id: str, parts: list[str]) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: ImplementationDocument = {}
         try:
             _split_result = self._handle_public_trust_center_acceptance_board_part_01(method, center_id, parts, _split_state)
             if _split_result[0]:

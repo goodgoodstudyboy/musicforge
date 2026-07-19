@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import json as json
 from pathlib import Path as Path
@@ -12,7 +12,7 @@ from song_agent.domains.studio.project_repository import ProjectDocument as Proj
 from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 
 
-def compare_project_versions(document: ProjectDocument, left_id: str, right_id: str) -> dict[str, Any]:
+def compare_project_versions(document: ProjectDocument, left_id: str, right_id: str) -> DomainDocument:
     if not str(left_id or "").strip() or not str(right_id or "").strip():
         raise ValueError("left and right version ids are required.")
     left = _find_version(document, left_id)

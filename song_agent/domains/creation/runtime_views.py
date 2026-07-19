@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 from pathlib import Path as Path
 from typing import Any as Any
@@ -10,7 +10,7 @@ from song_agent.domains.studio.projectio import read_json as read_json
 from song_agent.domains.creation.schemas.song import SongPlan as SongPlan
 
 
-def build_summary_view(plan: Any) -> dict[str, Any]:
+def build_summary_view(plan: Any) -> DomainDocument:
     plan_data = _as_dict(plan)
     tracks = _as_list(plan_data.get("tracks", []))
     sections = _as_list(plan_data.get("sections", []))
@@ -27,7 +27,7 @@ def build_summary_view(plan: Any) -> dict[str, Any]:
     }
 
 
-def build_timeline_view(plan: Any) -> dict[str, Any]:
+def build_timeline_view(plan: Any) -> DomainDocument:
     plan_data = _as_dict(plan)
     tempo_bpm = _positive_float(plan_data.get("tempo_bpm"), "tempo_bpm")
     meter = str(plan_data.get("meter") or "4/4")
@@ -36,7 +36,7 @@ def build_timeline_view(plan: Any) -> dict[str, Any]:
     beats_per_bar, warnings = _beats_per_bar(meter)
     seconds_per_beat = 60 / tempo_bpm
 
-    section_views: list[dict[str, Any]] = []
+    section_views: list[ImplementationDocument] = []
     for index, section in enumerate(sections):
         section = _as_dict(section)
         start_bar = int(section.get("start_bar", 1))
@@ -76,13 +76,13 @@ def build_timeline_view(plan: Any) -> dict[str, Any]:
     }
 
 
-def build_tracks_view(plan: Any) -> dict[str, Any]:
+def build_tracks_view(plan: Any) -> DomainDocument:
     plan_data = _as_dict(plan)
     sections = _as_list(plan_data.get("sections", []))
     total_bars = _total_bars(sections)
     tracks = _as_list(plan_data.get("tracks", []))
 
-    track_views: list[dict[str, Any]] = []
+    track_views: list[ImplementationDocument] = []
     total_note_count = 0
     for index, track in enumerate(tracks):
         track = _as_dict(track)
@@ -127,9 +127,9 @@ def build_tracks_view(plan: Any) -> dict[str, Any]:
 
 
 def build_validator_view(
-    report: dict[str, Any] | None,
+    report: DomainDocument | None,
     plan: Any | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     quality_warnings = _quality_warnings(plan) if plan is not None else []
     if report is None:
         return {
@@ -159,7 +159,7 @@ def build_validator_view(
     }
 
 
-def build_quality_view(plan: Any, critic_report: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_quality_view(plan: Any, critic_report: DomainDocument | None = None) -> DomainDocument:
     quality = _quality_view_from_plan(plan)
     if critic_report:
         quality["critic"] = {
@@ -171,7 +171,7 @@ def build_quality_view(plan: Any, critic_report: dict[str, Any] | None = None) -
     return quality
 
 
-def build_runtime_views(plan_path: Path, validator_path: Path | None = None) -> dict[str, Any]:
+def build_runtime_views(plan_path: Path, validator_path: Path | None = None) -> DomainDocument:
     plan = read_json(plan_path)
     report = None
     if validator_path is not None and validator_path.exists():
@@ -282,7 +282,7 @@ def _quality_score(plan_data: ImplementationDocument) -> int | None:
 
 def _section_intents_by_name(plan_data: ImplementationDocument) -> dict[str, ImplementationDocument]:
     quality = plan_data.get("quality")
-    result: dict[str, dict[str, Any]] = {}
+    result: dict[str, ImplementationDocument] = {}
     if not isinstance(quality, dict):
         quality = {}
     intents = _as_list(quality.get("section_intents", []))

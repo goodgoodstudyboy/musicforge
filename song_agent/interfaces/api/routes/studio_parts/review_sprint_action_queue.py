@@ -36,7 +36,7 @@ class StudioRoutesReviewSprintActionQueue(StudioRouteContext):
         include_provider = bool(payload.get("include_provider", queue.settings.get("run_provider_actions", False)))
         rerun_failed = bool(payload.get("rerun_failed", False))
         stop_on_failure = bool(payload.get("stop_on_failure", queue.settings.get("stop_on_failure", False)))
-        results: list[dict[str, Any]] = []
+        results: list[ImplementationDocument] = []
         queue = queue_store.update_queue(_interfaces_api_runtime.replace(queue, status="running"), event="queue_run_started", payload={"selected_item_ids": selected_ids, "include_provider": include_provider}, now=_interfaces_api_runtime._utc_now())
         self.project_store.append_event(project_id, "review_sprint_action_queue_started", {"sprint_id": sprint.sprint_id, "queue_id": queue.queue_id})
         provider_runs = 0

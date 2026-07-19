@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import io as io
 import json as json
@@ -74,10 +75,10 @@ def verify_unified_release_program_vault_package(
     max_zip_size_mb: int = 512,
     max_uncompressed_size_mb: int = 2048,
     max_entry_count: int = 5000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -202,11 +203,11 @@ def verify_unified_release_program_vault_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_vault_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_release_program_vault_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_release_program_vault_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_release_program_vault_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -329,7 +330,7 @@ def _document_binding_checks(
 
 
 def _package_index_checks(archive: zipfile.ZipFile, package_index: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     seen_required: set[str] = set()
     for row in package_index.get("packages", []) or []:
         if not isinstance(row, dict):
@@ -367,7 +368,7 @@ def _package_index_checks(archive: zipfile.ZipFile, package_index: Implementatio
 
 
 def _verification_index_checks(archive: zipfile.ZipFile, verification_index: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     for row in verification_index.get("verifications", []) or []:
         if not isinstance(row, dict):
             continue
@@ -399,7 +400,7 @@ def _verification_index_checks(archive: zipfile.ZipFile, verification_index: Imp
 
 
 def _proof_index_checks(archive: zipfile.ZipFile, proof_index: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     for row in proof_index.get("proofs", []) or []:
         if not isinstance(row, dict):
             continue
@@ -470,199 +471,22 @@ def _anchor_checks(
     return checks
 
 
-def _deep_checks(
-    archive: zipfile.ZipFile,
-    package_index: ImplementationDocument,
-    verification_index: ImplementationDocument,
-    proof_index: ImplementationDocument,
-    *,
-    require_current_program: bool,
-    require_current_operations: bool,
-    require_current_handoff: bool,
-    require_accepted_evidence: bool,
-) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
-    with tempfile.TemporaryDirectory(prefix="mf-urpv-deep-") as temp:
-        root = Path(temp)
-        root_resolved = root.resolve()
-        for name in archive.namelist():
-            if name.endswith("/"):
-                continue
-            dest = (root / name).resolve()
-            if dest != root_resolved and root_resolved not in dest.parents:
-                checks.append(_check("urpv_deep_extract_containment", False, "Deep extraction target stays inside temp root.", {"entry": name}))
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(archive.read(name))
-        packages = {row.get("component_type"): row for row in package_index.get("packages", []) if isinstance(row, dict)}
-        verifications = {row.get("component_type"): row for row in verification_index.get("verifications", []) if isinstance(row, dict)}
-        proofs = {(row.get("component_type"), row.get("proof_type")): row for row in proof_index.get("proofs", []) if isinstance(row, dict)}
-        checks.extend(
-            _deep_program_checks(
-                root,
-                packages.get("program"),
-                verifications.get("program"),
-                proofs,
-                require_current=require_current_program,
-            )
-        )
-        checks.extend(
-            _deep_operations_checks(
-                root,
-                packages.get("operations"),
-                verifications.get("operations"),
-                proofs,
-                require_current=require_current_operations,
-            )
-        )
-        checks.extend(
-            _deep_handoff_checks(
-                root,
-                packages.get("handoff"),
-                verifications.get("handoff"),
-                proofs,
-                require_current=require_current_handoff,
-            )
-        )
-        accepted_rows = [row for row in package_index.get("packages", []) if isinstance(row, dict) and row.get("component_type") == "accepted_evidence"]
-        if require_accepted_evidence and not accepted_rows:
-            checks.append(_check("urpv_deep_accepted_evidence_required", False, "Accepted evidence packages are present."))
-        for row in accepted_rows:
-            checks.extend(_deep_accepted_evidence_checks(root, row, verification_index, proof_index, require=require_accepted_evidence))
-    return checks
+from song_agent.domains.program import v142_urpvv_readiness as _v142_urpvv_readiness
+from song_agent.domains.program.v142_urpvv_readiness import (
+    _deep_checks,
+    _deep_program_checks,
+    _deep_operations_checks,
+    _deep_handoff_checks,
+    _deep_accepted_evidence_checks,
+    _runtime_report_checks,
+    _proof_path,
+    _nested_manifest_package_type,
+    _has_blocking_failures,
+    _finish,
+    _read_json_entry,
+    _safe_identifier,
+    _redaction_check,
+    _safe_check_key,
+)
 
-
-def _deep_program_checks(root: Path, package_row: ImplementationDocument | None, verification_row: ImplementationDocument | None, proofs: dict[tuple[Any, Any], ImplementationDocument], *, require_current: bool) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
-    if not package_row or not verification_row:
-        return [_check("urpv_deep_program_required", False, "Program package and verification are indexed.")]
-    zip_path = root / str(package_row.get("path"))
-    report_path = root / str(verification_row.get("path"))
-    binding_path = _proof_path(root, proofs, "program", "signoff_binding")
-    manifest_path = _proof_path(root, proofs, "program", "external_evidence_manifest")
-    runtime = verify_unified_release_program_package(
-        zip_path,
-        strict=True,
-        require_current=require_current,
-        require_signed=True,
-        external_evidence_manifest_path=manifest_path if require_current else None,
-        program_signoff_binding_path=binding_path,
-    )
-    external = read_json(report_path)
-    checks.extend(_runtime_report_checks("urpv_deep_program", runtime, external, zip_path, UNIFIED_RELEASE_PROGRAM_VERIFICATION_PACKAGE_TYPE))
-    return checks
-
-
-def _deep_operations_checks(root: Path, package_row: ImplementationDocument | None, verification_row: ImplementationDocument | None, proofs: dict[tuple[Any, Any], ImplementationDocument], *, require_current: bool) -> list[ImplementationDocument]:
-    if not package_row or not verification_row:
-        return [_check("urpv_deep_operations_required", False, "Operations package and verification are indexed.")]
-    zip_path = root / str(package_row.get("path"))
-    report_path = root / str(verification_row.get("path"))
-    runtime = verify_unified_release_program_operations_package(
-        zip_path,
-        strict=True,
-        require_current=require_current,
-        require_signed_program=require_current,
-        require_continuous_review_clear=True,
-        require_lifecycle_audit=True,
-        program_zip_path=root / "packages/unified-release-program.zip",
-        program_verification_report_path=root / "proofs/program-verification-report.json",
-        program_signoff_binding_path=root / "proofs/program-signoff-binding-summary.json",
-        external_evidence_manifest_path=root / "proofs/program-external-evidence-manifest.json" if require_current else None,
-    )
-    external = read_json(report_path)
-    return _runtime_report_checks("urpv_deep_operations", runtime, external, zip_path, UNIFIED_RELEASE_PROGRAM_OPERATIONS_VERIFICATION_PACKAGE_TYPE)
-
-
-def _deep_handoff_checks(root: Path, package_row: ImplementationDocument | None, verification_row: ImplementationDocument | None, proofs: dict[tuple[Any, Any], ImplementationDocument], *, require_current: bool) -> list[ImplementationDocument]:
-    if not package_row or not verification_row:
-        return [_check("urpv_deep_handoff_required", False, "Handoff package and verification are indexed.")]
-    zip_path = root / str(package_row.get("path"))
-    report_path = root / str(verification_row.get("path"))
-    runtime = verify_unified_release_program_handoff_package(
-        zip_path,
-        strict=True,
-        require_current=require_current,
-        require_accepted=False,
-        require_signed=True,
-        external_evidence_manifest_path=root / "proofs/handoff-external-evidence-manifest.json" if require_current else None,
-        handoff_signoff_binding_path=root / "proofs/handoff-signoff-binding-summary.json",
-    )
-    external = read_json(report_path)
-    return _runtime_report_checks("urpv_deep_handoff", runtime, external, zip_path, UNIFIED_RELEASE_PROGRAM_HANDOFF_VERIFICATION_PACKAGE_TYPE)
-
-
-def _deep_accepted_evidence_checks(root: Path, package_row: ImplementationDocument, verification_index: ImplementationDocument, proof_index: ImplementationDocument, *, require: bool) -> list[ImplementationDocument]:
-    evidence_id = str(package_row.get("component_id") or package_row.get("evidence_id") or "")
-    verification_row = next((row for row in verification_index.get("verifications", []) if row.get("component_type") == "accepted_evidence" and str(row.get("component_id") or row.get("evidence_id") or "") == evidence_id), None)
-    response_report = next((row for row in proof_index.get("proofs", []) if row.get("component_type") == "accepted_evidence" and str(row.get("component_id") or row.get("evidence_id") or "") == evidence_id and row.get("proof_type") == "response_verification"), None)
-    response_binding = next((row for row in proof_index.get("proofs", []) if row.get("component_type") == "accepted_evidence" and str(row.get("component_id") or row.get("evidence_id") or "") == evidence_id and row.get("proof_type") == "response_binding"), None)
-    if not verification_row:
-        return [_check(f"urpv_deep_accepted_{_safe_check_key(evidence_id)}_verification_required", False, "Accepted evidence verification is indexed.")]
-    runtime = verify_unified_release_program_accepted_evidence_package(
-        root / str(package_row.get("path")),
-        strict=True,
-        require_accepted=require,
-        response_verification_report_path=root / str(response_report.get("path")) if response_report else None,
-        response_binding_summary_path=root / str(response_binding.get("path")) if response_binding else None,
-    )
-    external = read_json(root / str(verification_row.get("path")))
-    return _runtime_report_checks(f"urpv_deep_accepted_{_safe_check_key(evidence_id)}", runtime, external, root / str(package_row.get("path")), UNIFIED_RELEASE_PROGRAM_ACCEPTED_EVIDENCE_VERIFICATION_PACKAGE_TYPE)
-
-
-def _runtime_report_checks(prefix: str, runtime: ImplementationDocument, external: ImplementationDocument, zip_path: Path, package_type: str) -> list[ImplementationDocument]:
-    return [
-        _check(f"{prefix}_runtime_passed", runtime.get("status") == "passed", "Runtime verifier passed.", {"blockers": runtime.get("blockers", [])}),
-        _check(f"{prefix}_external_passed", external.get("status") == "passed", "External verification report passed.", {"blockers": external.get("blockers", [])}),
-        _check(f"{prefix}_external_integrity", _integrity_ok(external), "External verification integrity is valid."),
-        _check(f"{prefix}_external_package_type", external.get("package_type") == package_type, "External verification package type is valid."),
-        _check(f"{prefix}_zip_sha256", external.get("zip_sha256") == runtime.get("zip_sha256") == _sha256_path(zip_path), "Runtime and external ZIP hash match."),
-        _check(f"{prefix}_manifest_hash", external.get("manifest_hash") == runtime.get("manifest_hash"), "Runtime and external manifest hash match."),
-    ]
-
-
-def _proof_path(root: Path, proofs: dict[tuple[Any, Any], ImplementationDocument], component_type: str, proof_type: str) -> Path | None:
-    row = proofs.get((component_type, proof_type))
-    if not row:
-        return None
-    return root / str(row.get("path"))
-
-
-def _nested_manifest_package_type(data: bytes) -> str | None:
-    try:
-        with zipfile.ZipFile(io.BytesIO(data)) as nested:
-            manifest = json.loads(nested.read("manifest.json").decode("utf-8"))
-        return str(manifest.get("package_type") or "")
-    except Exception:
-        return None
-
-
-def _has_blocking_failures(checks: list[ImplementationDocument]) -> bool:
-    return any(check.get("status") == "failed" and check.get("severity") == "blocking" for check in checks)
-
-
-def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, first_check: ImplementationDocument | None = None) -> ImplementationDocument:
-    if first_check is not None:
-        checks.insert(0, first_check)
-    return build_verification_report(
-        package_type=UNIFIED_RELEASE_PROGRAM_VAULT_VERIFICATION_PACKAGE_TYPE,
-        checks=checks,
-        summary=summary,
-        schema_version=UNIFIED_RELEASE_PROGRAM_VAULT_SCHEMA_VERSION,
-    )
-
-
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
-    return json.loads(archive.read(name).decode("utf-8"))
-
-
-def _safe_identifier(value: str) -> bool:
-    return bool(value) and re.fullmatch(r"[A-Za-z0-9_.-]+", value) is not None and "/" not in value and "\\" not in value and ".." not in value.split(".")
-
-
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
-    return archive_redaction_check(archive, names, check_id="urpv_redaction_scan")
-
-
-def _safe_check_key(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_]+", "_", value.strip("/").replace("/", "_"))[:120] or "root"
+_v142_urpvv_readiness.bind_globals(globals())

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -44,7 +44,7 @@ def verify_public_trust_center_anchor_registry_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _AnchorRegistryVerifier(
         Path(zip_path),
         strict=strict,
@@ -59,11 +59,11 @@ def verify_public_trust_center_anchor_registry_package(
     return verifier.run()
 
 
-def write_public_trust_center_anchor_registry_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_public_trust_center_anchor_registry_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_public_trust_center_anchor_registry_verification_report(report: dict[str, Any]) -> None:
+def print_public_trust_center_anchor_registry_verification_report(report: DomainDocument) -> None:
     summary = anchor_registry_verification_summary(report)
     print("MusicForge Public Trust Center Anchor Registry verification")
     print(f"status: {summary.get('status')}")
@@ -80,7 +80,7 @@ def print_public_trust_center_anchor_registry_verification_report(report: dict[s
             print(f"  [{item.get('check_id', 'unknown')}] {item.get('message', '')}")
 
 
-def public_trust_center_anchor_registry_verification_exit_code(report: dict[str, Any]) -> int:
+def public_trust_center_anchor_registry_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -107,15 +107,15 @@ class _AnchorRegistryVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
-        self.manifest: dict[str, Any] = {}
-        self.registry: dict[str, Any] = {}
-        self.report_doc: dict[str, Any] = {}
-        self.chain: dict[str, Any] = {}
-        self.current_anchor: dict[str, Any] = {}
-        self.entries: dict[str, dict[str, Any]] = {}
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: ImplementationDocument = {}
+        self.registry: ImplementationDocument = {}
+        self.report_doc: ImplementationDocument = {}
+        self.chain: ImplementationDocument = {}
+        self.current_anchor: ImplementationDocument = {}
+        self.entries: dict[str, ImplementationDocument] = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -124,7 +124,7 @@ class _AnchorRegistryVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -186,7 +186,7 @@ class _AnchorRegistryVerifier:
         self._add_hash_check("manifest", "ptcar_manifest_integrity", self.manifest.get("integrity_hash"), anchor_registry_manifest_hash(self.manifest), "Anchor Registry manifest integrity")
         self._add_exact_check("manifest", "ptcar_manifest_package_type", self.manifest.get("package_type"), ANCHOR_REGISTRY_PACKAGE_TYPE, "Manifest package_type")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[dict[str, Any]] = []
+        valid: list[ImplementationDocument] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -449,7 +449,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 
 
 def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         for match in pattern.finditer(text):
             rows.append({"path": path, "type": kind, "excerpt": match.group(0)[:120]})
@@ -460,7 +460,7 @@ def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(path: str, value: Any) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
 
     def walk(current: Any, trail: str) -> None:
         if isinstance(current, dict):

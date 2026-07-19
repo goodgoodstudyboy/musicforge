@@ -10,107 +10,73 @@ from .cross_domain_adapters import _unified_command_center_evidence_from_args
 
 from .program_trust_parser_adapters import build_verify_unified_command_center_archive_parser, build_verify_unified_command_center_handoff_parser, build_verify_unified_command_center_parser
 Any, CommandSpec, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, evidence_to_verifier_kwargs, generate_request, human_review_verification_exit_code, json, load_provider_config, os, print_human_review_verification_report, provider_configured, read_json, sys, test_provider_config, unified_command_center_archive_verification_exit_code, unified_command_center_continuous_review_verification_exit_code, unified_command_center_drift_response_verification_exit_code, unified_command_center_evidence_review_verification_exit_code, unified_command_center_handoff_verification_exit_code, unified_command_center_reviewer_decision_board_verification_exit_code, unified_command_center_verification_exit_code, verify_human_review_pack, verify_unified_command_center_archive_package, verify_unified_command_center_continuous_review_package, verify_unified_command_center_drift_response_package, verify_unified_command_center_evidence_review_package, verify_unified_command_center_handoff_package, verify_unified_command_center_package, verify_unified_command_center_reviewer_decision_board_package, write_human_review_verification_report, write_interface_document, write_json, write_unified_command_center_archive_verification_report, write_unified_command_center_continuous_review_verification_report, write_unified_command_center_drift_response_verification_report, write_unified_command_center_evidence_review_verification_report, write_unified_command_center_handoff_verification_report, write_unified_command_center_reviewer_decision_board_verification_report, write_unified_command_center_verification_report = _commands_creation_parts_dependencies.Any, _commands_creation_parts_dependencies.CommandSpec, _commands_creation_parts_dependencies.Path, _commands_creation_parts_dependencies.ProviderConfig, _commands_creation_parts_dependencies.ProviderError, _commands_creation_parts_dependencies.SongRequest, _commands_creation_parts_dependencies.argparse, _commands_creation_parts_dependencies.build_auth_config, _commands_creation_parts_dependencies.evidence_to_verifier_kwargs, _commands_creation_parts_dependencies.generate_request, _commands_creation_parts_dependencies.human_review_verification_exit_code, _commands_creation_parts_dependencies.json, _commands_creation_parts_dependencies.load_provider_config, _commands_creation_parts_dependencies.os, _commands_creation_parts_dependencies.print_human_review_verification_report, _commands_creation_parts_dependencies.provider_configured, _commands_creation_parts_dependencies.read_json, _commands_creation_parts_dependencies.sys, _commands_creation_parts_dependencies.test_provider_config, _commands_creation_parts_dependencies.unified_command_center_archive_verification_exit_code, _commands_creation_parts_dependencies.unified_command_center_continuous_review_verification_exit_code, _commands_creation_parts_dependencies.unified_command_center_drift_response_verification_exit_code, _commands_creation_parts_dependencies.unified_command_center_evidence_review_verification_exit_code, _commands_creation_parts_dependencies.unified_command_center_handoff_verification_exit_code, _commands_creation_parts_dependencies.unified_command_center_reviewer_decision_board_verification_exit_code, _commands_creation_parts_dependencies.unified_command_center_verification_exit_code, _commands_creation_parts_dependencies.verify_human_review_pack, _commands_creation_parts_dependencies.verify_unified_command_center_archive_package, _commands_creation_parts_dependencies.verify_unified_command_center_continuous_review_package, _commands_creation_parts_dependencies.verify_unified_command_center_drift_response_package, _commands_creation_parts_dependencies.verify_unified_command_center_evidence_review_package, _commands_creation_parts_dependencies.verify_unified_command_center_handoff_package, _commands_creation_parts_dependencies.verify_unified_command_center_package, _commands_creation_parts_dependencies.verify_unified_command_center_reviewer_decision_board_package, _commands_creation_parts_dependencies.write_human_review_verification_report, _commands_creation_parts_dependencies.write_interface_document, _commands_creation_parts_dependencies.write_json, _commands_creation_parts_dependencies.write_unified_command_center_archive_verification_report, _commands_creation_parts_dependencies.write_unified_command_center_continuous_review_verification_report, _commands_creation_parts_dependencies.write_unified_command_center_drift_response_verification_report, _commands_creation_parts_dependencies.write_unified_command_center_evidence_review_verification_report, _commands_creation_parts_dependencies.write_unified_command_center_handoff_verification_report, _commands_creation_parts_dependencies.write_unified_command_center_reviewer_decision_board_verification_report, _commands_creation_parts_dependencies.write_unified_command_center_verification_report
-def print_acceptance_check_report(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_check_report(*args, **kwargs)
+print_acceptance_check_report = CLI_BINDINGS.quality.print_acceptance_check_report
 
-def print_acceptance_diff_report(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_diff_report(*args, **kwargs)
+print_acceptance_diff_report = CLI_BINDINGS.quality.print_acceptance_diff_report
 
-def print_acceptance_fix_plan_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_fix_plan_result(*args, **kwargs)
+print_acceptance_fix_plan_result = CLI_BINDINGS.quality.print_acceptance_fix_plan_result
 
-def print_acceptance_fix_sprint_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_fix_sprint_result(*args, **kwargs)
+print_acceptance_fix_sprint_result = CLI_BINDINGS.quality.print_acceptance_fix_sprint_result
 
-def print_acceptance_kb_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_kb_result(*args, **kwargs)
+print_acceptance_kb_result = CLI_BINDINGS.quality.print_acceptance_kb_result
 
-def print_ga_readiness_report(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.release_check.print_ga_readiness_report(*args, **kwargs)
+print_ga_readiness_report = CLI_BINDINGS.release_check.print_ga_readiness_report
 
-def print_planning_rule_governance_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_rule_governance_result(*args, **kwargs)
+print_planning_rule_governance_result = CLI_BINDINGS.quality.print_planning_rule_governance_result
 
-def print_planning_rule_impact_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_rule_impact_result(*args, **kwargs)
+print_planning_rule_impact_result = CLI_BINDINGS.quality.print_planning_rule_impact_result
 
-def print_planning_ruleset_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_ruleset_result(*args, **kwargs)
+print_planning_ruleset_result = CLI_BINDINGS.quality.print_planning_ruleset_result
 
-def print_planning_simulation_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_simulation_result(*args, **kwargs)
+print_planning_simulation_result = CLI_BINDINGS.quality.print_planning_simulation_result
 
-def print_public_trust_center_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_public_trust_center_result(*args, **kwargs)
+print_public_trust_center_result = CLI_BINDINGS.trust.print_public_trust_center_result
 
-def print_release_audio_review_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_release_audio_review_result(*args, **kwargs)
+print_release_audio_review_result = CLI_BINDINGS.quality.print_release_audio_review_result
 
-def print_release_operations_archive_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_archive_result(*args, **kwargs)
+print_release_operations_archive_result = CLI_BINDINGS.delivery.print_release_operations_archive_result
 
-def print_release_operations_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_audit_result(*args, **kwargs)
+print_release_operations_audit_result = CLI_BINDINGS.delivery.print_release_operations_audit_result
 
-def print_release_operations_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_result(*args, **kwargs)
+print_release_operations_result = CLI_BINDINGS.delivery.print_release_operations_result
 
-def print_release_operations_reviewer_pack_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_reviewer_pack_result(*args, **kwargs)
+print_release_operations_reviewer_pack_result = CLI_BINDINGS.delivery.print_release_operations_reviewer_pack_result
 
-def print_release_operations_runbook_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_runbook_result(*args, **kwargs)
+print_release_operations_runbook_result = CLI_BINDINGS.delivery.print_release_operations_runbook_result
 
-def print_release_operations_signoff_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_signoff_result(*args, **kwargs)
+print_release_operations_signoff_result = CLI_BINDINGS.delivery.print_release_operations_signoff_result
 
-def print_release_portfolio_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_audit_result(*args, **kwargs)
+print_release_portfolio_audit_result = CLI_BINDINGS.trust.print_release_portfolio_audit_result
 
-def print_release_portfolio_governance_attestation_accepted_evidence_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_accepted_evidence_result(*args, **kwargs)
+print_release_portfolio_governance_attestation_accepted_evidence_result = CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_accepted_evidence_result
 
-def print_release_portfolio_governance_attestation_portal_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_result(*args, **kwargs)
+print_release_portfolio_governance_attestation_portal_result = CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_result
 
-def print_release_portfolio_governance_attestation_portal_review_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_review_result(*args, **kwargs)
+print_release_portfolio_governance_attestation_portal_review_result = CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_review_result
 
-def print_release_portfolio_governance_attestation_registry_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_registry_result(*args, **kwargs)
+print_release_portfolio_governance_attestation_registry_result = CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_registry_result
 
-def print_release_portfolio_governance_attestation_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_result(*args, **kwargs)
+print_release_portfolio_governance_attestation_result = CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_result
 
-def print_release_portfolio_governance_attestation_transparency_acknowledgement_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_acknowledgement_result(*args, **kwargs)
+print_release_portfolio_governance_attestation_transparency_acknowledgement_result = CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_acknowledgement_result
 
-def print_release_portfolio_governance_attestation_transparency_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_result(*args, **kwargs)
+print_release_portfolio_governance_attestation_transparency_result = CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_result
 
-def print_release_portfolio_governance_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_audit_result(*args, **kwargs)
+print_release_portfolio_governance_audit_result = CLI_BINDINGS.trust.print_release_portfolio_governance_audit_result
 
-def print_release_portfolio_governance_evidence_vault_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_evidence_vault_result(*args, **kwargs)
+print_release_portfolio_governance_evidence_vault_result = CLI_BINDINGS.trust.print_release_portfolio_governance_evidence_vault_result
 
-def print_release_portfolio_governance_final_board_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_final_board_result(*args, **kwargs)
+print_release_portfolio_governance_final_board_result = CLI_BINDINGS.trust.print_release_portfolio_governance_final_board_result
 
-def print_release_portfolio_governance_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_result(*args, **kwargs)
+print_release_portfolio_governance_result = CLI_BINDINGS.trust.print_release_portfolio_governance_result
 
-def print_release_portfolio_governance_reviewer_pack_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_reviewer_pack_result(*args, **kwargs)
+print_release_portfolio_governance_reviewer_pack_result = CLI_BINDINGS.trust.print_release_portfolio_governance_reviewer_pack_result
 
-def print_release_portfolio_governance_signoff_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_signoff_result(*args, **kwargs)
+print_release_portfolio_governance_signoff_result = CLI_BINDINGS.trust.print_release_portfolio_governance_signoff_result
 
-def run_acceptance_check(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.run_acceptance_check(*args, **kwargs)
+run_acceptance_check = CLI_BINDINGS.quality.run_acceptance_check
 
-def run_doctor(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.maintenance.run_doctor(*args, **kwargs)
+run_doctor = CLI_BINDINGS.maintenance.run_doctor
 
 def _add_generate_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(

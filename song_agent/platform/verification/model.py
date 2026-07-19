@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.platform.verification.hashing import integrity_hash
 
@@ -9,11 +9,11 @@ def build_check(
     check_id: str,
     passed: bool,
     message: str,
-    details: dict[str, Any] | None = None,
+    details: DomainDocument | None = None,
     *,
     severity: str = "blocking",
-) -> dict[str, Any]:
-    row: dict[str, Any] = {
+) -> DomainDocument:
+    row: ImplementationDocument = {
         "check_id": str(check_id),
         "status": "passed" if passed else "failed",
         "severity": str(severity),
@@ -23,7 +23,7 @@ def build_check(
     return row
 
 
-def has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
+def has_blocking_failures(checks: list[DomainDocument]) -> bool:
     return any(
         row.get("status") == "failed" and row.get("severity", "blocking") == "blocking"
         for row in checks
@@ -33,12 +33,12 @@ def has_blocking_failures(checks: list[dict[str, Any]]) -> bool:
 def build_verification_report(
     *,
     package_type: str,
-    checks: list[dict[str, Any]],
-    summary: dict[str, Any],
+    checks: list[DomainDocument],
+    summary: DomainDocument,
     schema_version: int = 1,
-    extra: dict[str, Any] | None = None,
+    extra: DomainDocument | None = None,
     warning_status: bool = False,
-) -> dict[str, Any]:
+) -> DomainDocument:
     failed = [
         row for row in checks
         if row.get("status") == "failed" and row.get("severity", "blocking") == "blocking"
@@ -47,7 +47,7 @@ def build_verification_report(
         row for row in checks
         if row.get("status") == "failed" and row.get("severity", "blocking") != "blocking"
     ]
-    report: dict[str, Any] = {
+    report: ImplementationDocument = {
         "schema_version": int(schema_version),
         "package_type": str(package_type),
         "status": "failed" if failed else "warning" if warning_status and warnings else "passed",

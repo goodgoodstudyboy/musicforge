@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts import as_document as _as_document
 
 import json
 import shutil
@@ -8,7 +9,6 @@ import tempfile
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from song_agent.platform.contracts.packages import PackageSpec
 from song_agent.platform.persistence.database import MusicForgeDatabase, SCHEMA_VERSION
@@ -37,7 +37,7 @@ class V13MigrationOrchestrator:
         self.database = MusicForgeDatabase.from_workspace(self.workspace_root)
         self.migrator = LegacyWorkspaceMigrator(self.workspace_root, database=self.database)
 
-    def dry_run(self) -> dict[str, Any]:
+    def dry_run(self) -> DomainDocument:
         legacy = self.migrator.dry_run()
         document = {
             "schema_version": 1,
@@ -61,7 +61,7 @@ class V13MigrationOrchestrator:
         document["integrity_hash"] = integrity_hash(document)
         return document
 
-    def execute(self) -> dict[str, Any]:
+    def execute(self) -> DomainDocument:
         plan = self.dry_run()
         applied = self.migrator.execute()
         source_preserved = _source_rows(self.workspace_root, plan["files"]) == plan["files"]
@@ -94,7 +94,7 @@ class V13MigrationOrchestrator:
             raise RuntimeError("V13 migration post-verification failed.")
         return report
 
-    def rollback_rehearsal(self) -> dict[str, Any]:
+    def rollback_rehearsal(self) -> DomainDocument:
         with tempfile.TemporaryDirectory(prefix="musicforge-v13-rollback-") as temp:
             clone = Path(temp) / ".musicforge"
             for name in DEFAULT_LEGACY_ROOTS:
@@ -132,11 +132,11 @@ class V13MigrationOrchestrator:
 
     def build_evidence_archive(
         self,
-        plan: dict[str, Any],
-        report: dict[str, Any],
-        rollback: dict[str, Any],
+        plan: DomainDocument,
+        report: DomainDocument,
+        rollback: DomainDocument,
         target: Path | str,
-    ) -> tuple[Path, dict[str, Any]]:
+    ) -> tuple[Path, DomainDocument]:
         documents = {
             "migration-plan.json": _json_bytes(plan),
             "migration-report.json": _json_bytes(report),
@@ -200,7 +200,7 @@ def verify_v13_migration_evidence(
     *,
     anchor_path: Path | str | None = None,
     require_anchor: bool = False,
-) -> dict[str, Any]:
+) -> DomainDocument:
     target = Path(path)
     envelope = verify_package_envelope(target, V13_MIGRATION_SPEC, strict=True)
     anchor_target = Path(anchor_path) if anchor_path is not None else migration_anchor_path(target)
@@ -271,7 +271,7 @@ def _migration_anchor_checks(
     envelope: ImplementationDocument,
 ) -> list[ImplementationDocument]:
     exists = anchor_path.is_file()
-    anchor: dict[str, Any] = {}
+    anchor: ImplementationDocument = {}
     readable = False
     if exists:
         try:
@@ -281,7 +281,7 @@ def _migration_anchor_checks(
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             readable = False
     summary_value = envelope.get("summary")
-    summary: dict[str, Any] = _as_document(summary_value)
+    summary: ImplementationDocument = _as_document(summary_value)
     return [
         build_check("v13_migration_anchor_exists", exists, "External migration anchor exists."),
         build_check("v13_migration_anchor_readable", readable, "External migration anchor is a JSON object."),

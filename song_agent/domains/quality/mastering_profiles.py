@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import re as re
 import threading as threading
@@ -27,7 +27,7 @@ class MasteringProfileNotFoundError(MasteringProfileError):
     pass
 
 
-BUILTIN_MASTERING_PROFILES: dict[str, dict[str, Any]] = {
+BUILTIN_MASTERING_PROFILES: dict[str, ImplementationDocument] = {
     "streaming_balanced": {
         "name": "Streaming Balanced",
         "target_type": "streaming",
@@ -124,7 +124,7 @@ class MasteringProfile:
     updated_at: str
     integrity_hash: str
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "schema_version": self.schema_version,
             "profile_id": self.profile_id,
@@ -151,7 +151,7 @@ class MasteringProfile:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "MasteringProfile":
+    def from_dict(cls, data: DomainDocument) -> "MasteringProfile":
         profile = cls(
             schema_version=int(data.get("schema_version") or MASTERING_PROFILE_SCHEMA_VERSION),
             profile_id=_validate_profile_id(str(data.get("profile_id") or "")),
@@ -214,7 +214,7 @@ class MasteringProfileStore:
             raise MasteringProfileError("Mastering profile integrity failed.")
         return profile
 
-    def create_profile(self, payload: dict[str, Any], *, now: str | None = None) -> MasteringProfile:
+    def create_profile(self, payload: DomainDocument, *, now: str | None = None) -> MasteringProfile:
         now = now or now_iso()
         with self.lock:
             profile_id = str(payload.get("profile_id") or self._reserve_profile_id())
@@ -224,7 +224,7 @@ class MasteringProfileStore:
             self._write_profile(profile)
             return profile
 
-    def update_profile(self, profile_id: str, payload: dict[str, Any], *, now: str | None = None) -> MasteringProfile:
+    def update_profile(self, profile_id: str, payload: DomainDocument, *, now: str | None = None) -> MasteringProfile:
         now = now or now_iso()
         profile_id = _validate_profile_id(profile_id)
         if profile_id in BUILTIN_MASTERING_PROFILES:
@@ -235,7 +235,7 @@ class MasteringProfileStore:
         self._write_profile(profile)
         return profile
 
-    def clone_profile(self, profile_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> MasteringProfile:
+    def clone_profile(self, profile_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> MasteringProfile:
         now = now or now_iso()
         source = self.get_profile(profile_id)
         payload = payload or {}
@@ -300,12 +300,12 @@ def builtin_profile(profile_id: str) -> MasteringProfile:
     return _profile_from_payload(payload, now=now)
 
 
-def mastering_profile_hash(profile: MasteringProfile | dict[str, Any]) -> str:
+def mastering_profile_hash(profile: MasteringProfile | DomainDocument) -> str:
     data = profile.to_dict() if isinstance(profile, MasteringProfile) else profile
     return stable_hash(sanitize_metadata({key: value for key, value in data.items() if key not in PROFILE_INTEGRITY_EXCLUDE}, blocked_keys=BLOCKED_RELEASE_KEYS))
 
 
-def mastering_profile_integrity_ok(profile: dict[str, Any]) -> bool:
+def mastering_profile_integrity_ok(profile: DomainDocument) -> bool:
     expected = str(profile.get("integrity_hash") or "")
     return bool(expected) and expected == mastering_profile_hash(profile)
 

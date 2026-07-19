@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 from pathlib import Path as Path, PurePosixPath as PurePosixPath
 from typing import Any as Any
@@ -50,7 +51,7 @@ ARTWORK_VARIABLES = {"release_slug", "release_id", "upc", "profile_id", "target_
 KIND_VARIABLES = {"audio": AUDIO_VARIABLES, "lyrics": LYRICS_VARIABLES, "artwork": ARTWORK_VARIABLES}
 
 
-def effective_file_naming(template: dict[str, Any] | None) -> dict[str, str]:
+def effective_file_naming(template: DomainDocument | None) -> dict[str, str]:
     naming = dict(DEFAULT_FILE_NAMING)
     naming.update(template_file_naming(template) if template else {})
     return normalize_file_naming(naming)
@@ -69,18 +70,18 @@ def build_distribution_layout_plan(
     release_id: str,
     target: Any,
     release: Any | dict[str, Any],
-    release_manifest: dict[str, Any],
-    release_metadata: dict[str, Any] | None = None,
-    template: dict[str, Any] | None = None,
-    artwork: dict[str, Any] | None = None,
+    release_manifest: DomainDocument,
+    release_metadata: DomainDocument | None = None,
+    template: DomainDocument | None = None,
+    artwork: DomainDocument | None = None,
     release_export_dir: Path | None = None,
-    encoded_audio_summary: dict[str, Any] | None = None,
+    encoded_audio_summary: DomainDocument | None = None,
     encoded_audio_root: Path | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     release_metadata = _as_document(release_metadata)
     release_info = _release_info(release, release_metadata)
     target_info = _target_info(target)
-    naming_errors: list[dict[str, Any]] = []
+    naming_errors: list[ImplementationDocument] = []
     try:
         naming = effective_file_naming(template)
     except DistributionTemplateError as exc:
@@ -89,9 +90,9 @@ def build_distribution_layout_plan(
         naming = normalize_file_naming({key: str(raw.get(key) or DEFAULT_FILE_NAMING[key]) for key in DEFAULT_FILE_NAMING})
         naming_errors.append({"check_id": "file_naming_shape", "message": str(exc)})
     rules = _as_document(template.get("rules")) if isinstance(template, dict) else {}
-    entries: list[dict[str, Any]] = []
-    warnings: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = list(naming_errors)
+    entries: list[ImplementationDocument] = []
+    warnings: list[ImplementationDocument] = []
+    errors: list[ImplementationDocument] = list(naming_errors)
     used_paths: dict[str, str] = {}
     metadata_by_id = _metadata_tracks_by_id(release_metadata)
 
@@ -205,7 +206,7 @@ def build_distribution_layout_plan(
     return sanitize_metadata(plan, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def layout_summary(plan: dict[str, Any] | None) -> dict[str, Any]:
+def layout_summary(plan: DomainDocument | None) -> DomainDocument:
     data = _as_document(plan)
     entries = _as_list(data.get("entries"))
     warnings = _as_list(data.get("warnings"))
@@ -227,9 +228,9 @@ def layout_summary(plan: dict[str, Any] | None) -> dict[str, Any]:
     )
 
 
-def layout_manifest_payload(plan: dict[str, Any], file_records: list[dict[str, Any]]) -> dict[str, Any]:
+def layout_manifest_payload(plan: DomainDocument, file_records: list[DomainDocument]) -> DomainDocument:
     by_path = {str(item.get("path") or ""): item for item in file_records if isinstance(item, dict)}
-    entries: list[dict[str, Any]] = []
+    entries: list[ImplementationDocument] = []
     for entry in plan.get("entries", []) if isinstance(plan.get("entries"), list) else []:
         if not isinstance(entry, dict):
             continue
@@ -274,7 +275,7 @@ def layout_manifest_payload(plan: dict[str, Any], file_records: list[dict[str, A
     return sanitize_metadata(layout, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def layout_payload_hash(layout: dict[str, Any]) -> str:
+def layout_payload_hash(layout: DomainDocument) -> str:
     payload = sanitize_metadata({key: value for key, value in layout.items() if key != "payload_hash"}, blocked_keys=DISTRIBUTION_BLOCKED_KEYS - {"path"})
     data = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
@@ -282,14 +283,14 @@ def layout_payload_hash(layout: dict[str, Any]) -> str:
 
 def layout_file_tree_text(paths: list[str]) -> str:
     lines = ["Distribution Package Layout", ""]
-    tree: dict[str, Any] = {}
+    tree: ImplementationDocument = {}
     for path in sorted(paths):
         parts = [part for part in str(path).split("/") if part]
         node = tree
         for part in parts:
             node = node.setdefault(part, {})
 
-    def walk(node: dict[str, Any], depth: int) -> None:
+    def walk(node: DomainDocument, depth: int) -> None:
         for name, child in sorted(node.items()):
             suffix = "/" if child else ""
             lines.append("  " * depth + name + suffix)
@@ -300,7 +301,7 @@ def layout_file_tree_text(paths: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def layout_check_items(plan: dict[str, Any]) -> list[dict[str, Any]]:
+def layout_check_items(plan: DomainDocument) -> list[DomainDocument]:
     summary = layout_summary(plan)
     errors = _as_list(plan.get("errors"))
     warnings = _as_list(plan.get("warnings"))
@@ -393,7 +394,7 @@ def _add_entry(entries: list[ImplementationDocument], warnings: list[Implementat
 def _render_pattern(kind: str, pattern: str, *, track: ImplementationDocument | None, release_info: ImplementationDocument, target_info: ImplementationDocument, ext: str, audio_format: ImplementationDocument | None = None) -> str:
     _ensure_variables_allowed(kind, pattern)
     audio_format = _as_document(audio_format)
-    values: dict[str, Any] = {
+    values: ImplementationDocument = {
         "ext": ext.strip(".").lower(),
         "format": _slug_value(audio_format.get("format"), ext.strip(".").lower() or "audio"),
         "profile_id": _slug_value(audio_format.get("profile_id") or target_info.get("profile_id"), "profile"),
@@ -444,7 +445,7 @@ def validate_layout_path(path: str) -> str:
 
 
 def _pattern_errors(kind: str, pattern: str) -> list[ImplementationDocument]:
-    errors: list[dict[str, Any]] = []
+    errors: list[ImplementationDocument] = []
     try:
         _ensure_variables_allowed(kind, pattern)
         validate_layout_path(_replace_pattern_vars(pattern))
@@ -510,102 +511,22 @@ def _metadata_tracks_by_id(metadata: ImplementationDocument) -> dict[str, Implem
     return {str(item.get("track_id") or ""): item for item in tracks if isinstance(item, dict) and item.get("track_id")}
 
 
-def _track_context(track: ImplementationDocument, metadata: ImplementationDocument | None, release_info: ImplementationDocument) -> ImplementationDocument:
-    metadata = _as_document(metadata)
-    merged = {**track, **{key: value for key, value in metadata.items() if value not in (None, "", [])}}
-    merged["language"] = merged.get("language") or release_info.get("language")
-    return merged
+from song_agent.domains.delivery import v142_dl_readiness as _v142_dl_readiness
+from song_agent.domains.delivery.v142_dl_readiness import (
+    _track_context,
+    _audio_source_rel,
+    _encoded_profile_summary,
+    _target_audio_profile_ids,
+    _normalize_profile_ids,
+    _validate_profile_id,
+    _lyrics_source_rel,
+    _artwork_source_rel,
+    _source_exists,
+    _slug_value,
+    _attr,
+    _entry_hash_payload,
+    _layout_hash_payload,
+    _check,
+)
 
-
-def _audio_source_rel(root: Path | None, track: ImplementationDocument, *, target_info: ImplementationDocument, encoded_audio_summary: ImplementationDocument | None, encoded_audio_root: Path | None, profile_id: str) -> tuple[str, str, str, ImplementationDocument]:
-    profile_id = _validate_profile_id(profile_id or "wav_master")
-    if profile_id != "wav_master":
-        profile = _encoded_profile_summary(encoded_audio_summary, profile_id)
-        ext = str(profile.get("extension") or "").strip(".").lower()
-        if ext:
-            track_id = str(track.get("track_id") or "")
-            rel = validate_layout_path(f"formats/{profile_id}/tracks/{track_id}/song.{ext}")
-            return rel, ext, "encoded_audio", profile
-    directory = str(track.get("directory") or "").strip("/")
-    candidates = [f"{directory}/song.wav" if directory else "song.wav", f"{directory}/song.mid" if directory else "song.mid"]
-    for rel in candidates:
-        if _source_exists(root, rel):
-            return validate_layout_path(rel), Path(rel).suffix.lower().lstrip(".") or "wav", "release_export", {"profile_id": "wav_master", "format": "wav", "extension": "wav", "codec": "pcm_s16le"}
-    fallback = candidates[0]
-    return validate_layout_path(fallback), Path(fallback).suffix.lower().lstrip(".") or "wav", "release_export", {"profile_id": "wav_master", "format": "wav", "extension": "wav", "codec": "pcm_s16le"}
-
-
-def _encoded_profile_summary(summary: ImplementationDocument | None, profile_id: str) -> ImplementationDocument:
-    profiles = summary.get("profiles") if isinstance(summary, dict) and isinstance(summary.get("profiles"), list) else []
-    for row in _as_list(profiles):
-        if isinstance(row, dict) and row.get("profile_id") == profile_id:
-            return row
-    return {"profile_id": profile_id, "format": profile_id.split("_", 1)[0], "extension": profile_id.split("_", 1)[0], "codec": ""}
-
-
-def _target_audio_profile_ids(target_info: ImplementationDocument, rules: ImplementationDocument) -> list[str]:
-    options = _as_document(target_info.get("options"))
-    profiles = _normalize_profile_ids(options.get("audio_format_profiles"))
-    if not profiles:
-        profiles = _normalize_profile_ids(rules.get("required_audio_formats"))
-    if not profiles:
-        profiles = _normalize_profile_ids(options.get("primary_audio_format") or rules.get("primary_audio_format"))
-    return profiles or ["wav_master"]
-
-
-def _normalize_profile_ids(value: Any) -> list[str]:
-    return normalize_required_profiles(value)
-
-
-def _validate_profile_id(value: str) -> str:
-    return normalize_required_profiles([value])[0]
-
-
-def _lyrics_source_rel(track: ImplementationDocument) -> str:
-    title = slugify(str(track.get("title") or track.get("track_id") or "track"))[:60]
-    return validate_layout_path(f"lyrics/{int(track.get('track_number') or 1):02d}-{title}.txt")
-
-
-def _artwork_source_rel(artwork: ImplementationDocument | None) -> str:
-    if not artwork:
-        return "distribution-artwork/missing"
-    return validate_layout_path(f"distribution-artwork/{_slug_value(artwork.get('artwork_id') or artwork.get('stored_filename'), 'cover')}")
-
-
-def _source_exists(root: Path | None, rel: str) -> bool:
-    if root is None:
-        return False
-    try:
-        path = (root / validate_layout_path(rel)).resolve()
-        path.relative_to(root.resolve())
-    except (OSError, ValueError):
-        return False
-    return path.exists() and path.is_file() and not path.is_symlink()
-
-
-def _slug_value(value: Any, default: str) -> str:
-    return slugify(str(value or default))[:80] or default
-
-
-def _attr(value: Any, name: str) -> Any:
-    return getattr(value, name, None)
-
-
-def _entry_hash_payload(entry: ImplementationDocument) -> ImplementationDocument:
-    return {key: entry.get(key) for key in ("entry_id", "kind", "track_id", "source_rel", "source_kind", "path", "pattern", "ext", "audio_format", "required", "exists", "status", "collision", "original_path", "collision_index")}
-
-
-def _layout_hash_payload(plan: ImplementationDocument) -> ImplementationDocument:
-    return {
-        key: value
-        for key, value in plan.items()
-        if key not in {"layout_hash", "summary"}
-    }
-
-
-def _check(check_id: str, passed: bool, severity: str, message: str, *, count: int | None = None, warning_when_false: bool = False) -> ImplementationDocument:
-    status = "passed" if passed else "warning" if warning_when_false else "failed"
-    item: dict[str, Any] = {"scope": "layout", "check_id": check_id, "status": status, "severity": severity, "message": message}
-    if count is not None:
-        item["count"] = count
-    return sanitize_metadata(item, blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
+_v142_dl_readiness.bind_globals(globals())

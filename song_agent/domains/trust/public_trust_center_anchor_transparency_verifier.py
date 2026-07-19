@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -57,7 +57,7 @@ def verify_public_trust_center_anchor_transparency_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _AnchorTransparencyVerifier(
         Path(zip_path),
         strict=strict,
@@ -74,11 +74,11 @@ def verify_public_trust_center_anchor_transparency_package(
     return verifier.run()
 
 
-def write_public_trust_center_anchor_transparency_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_public_trust_center_anchor_transparency_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_public_trust_center_anchor_transparency_verification_report(report: dict[str, Any]) -> None:
+def print_public_trust_center_anchor_transparency_verification_report(report: DomainDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Public Trust Center Anchor Transparency verification")
     print(f"status: {report.get('status')}")
@@ -95,7 +95,7 @@ def print_public_trust_center_anchor_transparency_verification_report(report: di
             print(f"  [{item.get('check_id', 'unknown')}] {item.get('message', '')}")
 
 
-def public_trust_center_anchor_transparency_verification_exit_code(report: dict[str, Any]) -> int:
+def public_trust_center_anchor_transparency_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -126,17 +126,17 @@ class _AnchorTransparencyVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
-        self.manifest: dict[str, Any] = {}
-        self.report_doc: dict[str, Any] = {}
-        self.ledger_events: list[dict[str, Any]] = []
-        self.current_checkpoint: dict[str, Any] = {}
-        self.external_checkpoint: dict[str, Any] = {}
-        self.registry_verification_summary: dict[str, Any] = {}
-        self.registry_summary: dict[str, Any] = {}
-        self.chain: dict[str, Any] = {}
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: ImplementationDocument = {}
+        self.report_doc: ImplementationDocument = {}
+        self.ledger_events: list[ImplementationDocument] = []
+        self.current_checkpoint: ImplementationDocument = {}
+        self.external_checkpoint: ImplementationDocument = {}
+        self.registry_verification_summary: ImplementationDocument = {}
+        self.registry_summary: ImplementationDocument = {}
+        self.chain: ImplementationDocument = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -145,7 +145,7 @@ class _AnchorTransparencyVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -207,7 +207,7 @@ class _AnchorTransparencyVerifier:
         self._add_hash_check("manifest", "ptcat_manifest_integrity", self.manifest.get("integrity_hash"), anchor_transparency_manifest_hash(self.manifest), "Anchor Transparency manifest integrity")
         self._add_exact_check("manifest", "ptcat_manifest_package_type", self.manifest.get("package_type"), ANCHOR_TRANSPARENCY_PACKAGE_TYPE, "Manifest package_type")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[dict[str, Any]] = []
+        valid: list[ImplementationDocument] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -469,7 +469,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 
 
 def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     for pattern in SENSITIVE_VALUE_PATTERNS + LOCAL_PATH_VALUE_PATTERNS:
         compiled = pattern[0] if isinstance(pattern, tuple) and pattern else pattern
         label = pattern[1] if isinstance(pattern, tuple) and len(pattern) > 1 else getattr(compiled, "pattern", str(compiled))
@@ -479,7 +479,7 @@ def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(name: str, value: Any, prefix: str = "") -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     if isinstance(value, dict):
         for key, item in value.items():
             path = f"{prefix}.{key}" if prefix else str(key)

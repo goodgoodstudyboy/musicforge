@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import shutil as shutil
 from pathlib import Path as Path
@@ -100,7 +100,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
     def receiver_receipt_path(self, program_id: str, receipt_id: str) -> Path:
         return self.receiver_receipts_dir(program_id) / f"{_safe_id(receipt_id)}.json"
 
-    def get_kit(self, program_id: str) -> dict[str, Any]:
+    def get_kit(self, program_id: str) -> DomainDocument:
         return {
             "package_index": _read_optional_json(self.package_index_path(program_id)),
             "verification_index": _read_optional_json(self.verification_index_path(program_id)),
@@ -111,7 +111,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             "zip_path": str(self.kit_zip_path(program_id)),
         }
 
-    def prepare_kit(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def prepare_kit(self, program_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = _sanitize_payload(payload or {})
         with self.lock:
             context = self._current_context(program_id, payload, require_passed=True)
@@ -125,7 +125,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             write_json(self.receipt_template_path(program_id), docs["receipt_template"])
             return docs["source_binding"]
 
-    def export_kit(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def export_kit(self, program_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = _sanitize_payload(payload or {})
         with self.lock:
             context = self._current_context(program_id, payload, require_passed=True)
@@ -134,9 +134,9 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
+            files: list[ImplementationDocument] = []
 
-            def write_doc(rel: str, value: dict[str, Any] | str) -> None:
+            def write_doc(rel: str, value: DomainDocument | str) -> None:
                 path = export_dir / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
                 if isinstance(value, str):
@@ -176,7 +176,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             self.prepare_kit(program_id, payload)
             return manifest
 
-    def build_kit_zip(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def build_kit_zip(self, program_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = _sanitize_payload(payload or {})
         with self.lock:
             self.export_kit(program_id, payload)
@@ -193,7 +193,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             ArchiveBuilder.build_directory_zip(export_dir, zip_path)
             return {"status": "passed", "program_id": program_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": manifest.get("integrity_hash")}
 
-    def verify_kit(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_kit(self, program_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = _sanitize_payload(payload or {})
         report = verify_unified_release_program_continuity_distribution_package(
             payload.get("kit_zip") or payload.get("zip_path") or self.kit_zip_path(program_id),
@@ -207,7 +207,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             write_unified_release_program_continuity_distribution_verification_report(report, self.verification_report_path(program_id))
         return report
 
-    def create_receiver_receipt_template(self, program_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create_receiver_receipt_template(self, program_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         _sanitize_payload(payload or {})
         with self.lock:
             if not self.kit_zip_path(program_id).exists():
@@ -232,7 +232,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
             write_json(self.receipt_template_path(program_id), template)
             return template
 
-    def import_receiver_receipt(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def import_receiver_receipt(self, program_id: str, payload: DomainDocument) -> DomainDocument:
         payload = _sanitize_payload(payload or {})
         required = ("kit_sha256", "kit_manifest_hash", "verification_report_hash", "decision")
         missing = [key for key in required if not payload.get(key)]
@@ -260,7 +260,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
         write_json(self.receiver_receipt_path(program_id, receipt_id), receipt)
         return receipt
 
-    def verify_receiver_receipt(self, program_id: str, receipt_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_receiver_receipt(self, program_id: str, receipt_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         _sanitize_payload(payload or {})
         receipt_path = self.receiver_receipt_path(program_id, receipt_id)
         report = verify_unified_release_program_continuity_distribution_package(
@@ -283,7 +283,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
         receiver_receipt_path: Path | str | None = None,
         require_receiver_receipt: bool = False,
         **_: Any,
-    ) -> dict[str, Any]:
+    ) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         zip_path = Path(kit_zip_path) if kit_zip_path else self.kit_zip_path(program_id)
@@ -370,7 +370,7 @@ class UnifiedReleaseProgramContinuityDistributionStore:
         now = now_iso()
         package_rows = []
         verification_rows = []
-        source: dict[str, Any] = {
+        source: ImplementationDocument = {
             "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_DISTRIBUTION_SCHEMA_VERSION,
             "package_type": "musicforge_unified_release_program_continuity_distribution_source_binding",
             "program_id": program_id,

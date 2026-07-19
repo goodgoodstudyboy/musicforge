@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -79,10 +80,10 @@ def verify_unified_release_program_continuity_command_center_signoff_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {
         "zip_sha256": None,
         "zip_size_bytes": 0,
         "manifest_hash": None,
@@ -209,8 +210,8 @@ def verify_unified_release_program_continuity_command_center_signoff_package(
 
 
 def write_unified_release_program_continuity_command_center_signoff_verification_report(
-    report: dict[str, Any], path: Path | str
-) -> dict[str, Any]:
+    report: DomainDocument, path: Path | str
+) -> DomainDocument:
     output = dict(report)
     output["package_type"] = COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE
     output["integrity_hash"] = _integrity_hash(output)
@@ -229,10 +230,10 @@ def verify_unified_release_program_continuity_command_center_final_handoff_packa
     command_center_zip_path: Path | str | None = None,
     command_center_verification_report_path: Path | str | None = None,
     command_center_external_evidence_manifest_path: Path | str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -316,8 +317,8 @@ def verify_unified_release_program_continuity_command_center_final_handoff_packa
 
 
 def write_unified_release_program_continuity_command_center_final_handoff_verification_report(
-    report: dict[str, Any], path: Path | str
-) -> dict[str, Any]:
+    report: DomainDocument, path: Path | str
+) -> DomainDocument:
     output = dict(report)
     output["package_type"] = COMMAND_CENTER_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE
     output["integrity_hash"] = _integrity_hash(output)
@@ -325,7 +326,7 @@ def write_unified_release_program_continuity_command_center_final_handoff_verifi
     return output
 
 
-def command_center_signoff_verification_exit_code(report: dict[str, Any]) -> int:
+def command_center_signoff_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -383,10 +384,10 @@ def _internal_binding_checks(
 
 
 def _history_checks(history: list[ImplementationDocument]) -> tuple[list[ImplementationDocument], ImplementationDocument | None, ImplementationDocument | None]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     previous = ""
-    latest_state: dict[str, Any] | None = None
-    latest_signoff: dict[str, Any] | None = None
+    latest_state: ImplementationDocument | None = None
+    latest_signoff: ImplementationDocument | None = None
     for index, event in enumerate(history):
         payload_hash = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         event_hash = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
@@ -435,7 +436,7 @@ def _current_command_center_checks(
     *,
     require: bool,
 ) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     if not zip_value or not report_value or not evidence_value:
         return [_check("urpcccs_current_command_center_evidence_required", not require, "Current Command Center ZIP, verification report, and evidence manifest are provided.")]
     zip_path, report_path, evidence_path = Path(zip_value), Path(report_value), Path(evidence_value)
@@ -492,46 +493,21 @@ def _current_command_center_checks(
     return checks
 
 
-def _external_archive_checks(
-    archive_zip_value: Path | str | None,
-    report_value: Path | str | None,
-    binding_value: Path | str | None,
-    command_center_zip_value: Path | str | None,
-    command_center_report_value: Path | str | None,
-    evidence_value: Path | str | None,
-    packaged_summary: ImplementationDocument,
-) -> list[ImplementationDocument]:
-    if not archive_zip_value or not report_value or not binding_value:
-        return [_check("urpccch_external_archive_required", False, "External Archive ZIP, verification report, and signoff binding are required.")]
-    archive_path, report_path = Path(archive_zip_value), Path(report_value)
-    checks = [
-        _check("urpccch_external_archive_exists", archive_path.is_file(), "External Archive ZIP exists."),
-        _check("urpccch_external_archive_report_exists", report_path.is_file(), "External Archive verification report exists."),
-    ]
-    if _has_blockers(checks):
-        return checks
-    external = read_json(report_path)
-    runtime = verify_unified_release_program_continuity_command_center_signoff_package(
-        archive_path,
-        strict=True,
-        require_signed=True,
-        signoff_binding_path=binding_value,
-        command_center_zip_path=command_center_zip_value,
-        command_center_verification_report_path=command_center_report_value,
-        command_center_external_evidence_manifest_path=evidence_value,
-    )
-    checks.extend(
-        [
-            _check("urpccch_external_archive_report_integrity", _integrity_ok(external), "External Archive verification report integrity is valid."),
-            _check("urpccch_external_archive_report_package_type", external.get("package_type") == COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE, "External Archive verification report package type is valid."),
-            _check("urpccch_external_archive_report_status", external.get("status") == "passed", "External Archive verification report passed."),
-            _check("urpccch_external_archive_runtime", runtime.get("status") == "passed", "External Archive runtime verification passed.", {"blockers": runtime.get("blockers") or []}),
-            _check("urpccch_external_archive_zip_binding", packaged_summary.get("zip_sha256") == external.get("zip_sha256") == runtime.get("zip_sha256") == _sha256_path(archive_path), "Handoff binds current Archive ZIP."),
-            _check("urpccch_external_archive_manifest_binding", packaged_summary.get("manifest_hash") == external.get("manifest_hash") == runtime.get("manifest_hash"), "Handoff binds current Archive manifest."),
-            _check("urpccch_external_archive_verification_binding", packaged_summary.get("verification_report_hash") == external.get("integrity_hash"), "Handoff binds external Archive verification report."),
-        ]
-    )
-    return checks
+from song_agent.domains.program import v142_urpcccsv_readiness as _v142_urpcccsv_readiness
+from song_agent.domains.program.v142_urpcccsv_readiness import (
+    _external_archive_checks,
+    _source_projection,
+    _manifest_checks,
+    _redaction_check,
+    _finish_archive,
+    _finish_handoff,
+    _finish,
+    _read_json_entry,
+    _parse_jsonl,
+    _safe_check_key,
+    _has_blockers,
+)
+
 
 
 _SOURCE_FIELDS = (
@@ -546,60 +522,4 @@ _SOURCE_FIELDS = (
     "acceptance_history_event_hash",
 )
 
-
-def _source_projection(value: ImplementationDocument) -> ImplementationDocument:
-    return {field: value.get(field) for field in _SOURCE_FIELDS}
-
-
-def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, required: set[str], prefix: str) -> list[ImplementationDocument]:
-    files = _as_list(manifest.get("files"))
-    declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
-    expected = required - {"manifest.json"}
-    checks = [_check(f"{prefix}_manifest_files_exact", declared == expected, "Manifest files match fixed package entries.", {"extra": sorted(declared - expected), "missing": sorted(expected - declared)})]
-    for row in files:
-        if not isinstance(row, dict):
-            continue
-        rel = str(row.get("path") or "")
-        if rel not in expected:
-            continue
-        data = archive.read(rel)
-        checks.append(_check(f"{prefix}_manifest_file_{_safe_check_key(rel)}", row.get("sha256") == _sha256_bytes(data) and int(row.get("size_bytes") or -1) == len(data), "Manifest file hash and size match ZIP entry."))
-    return checks
-
-
-def _redaction_check(archive: zipfile.ZipFile, names: list[str], check_id: str) -> ImplementationDocument:
-    return archive_redaction_check(archive, names, check_id=check_id)
-
-
-def _finish_archive(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
-    return _finish(checks, summary, COMMAND_CENTER_SIGNOFF_ARCHIVE_VERIFICATION_PACKAGE_TYPE, *extra)
-
-
-def _finish_handoff(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
-    return _finish(checks, summary, COMMAND_CENTER_FINAL_HANDOFF_VERIFICATION_PACKAGE_TYPE, *extra)
-
-
-def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, package_type: str, *extra: ImplementationDocument) -> ImplementationDocument:
-    checks.extend(extra)
-    return build_verification_report(
-        package_type=package_type,
-        checks=checks,
-        summary=summary,
-        schema_version=COMMAND_CENTER_SIGNOFF_SCHEMA_VERSION,
-    )
-
-
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
-    return json.loads(archive.read(name).decode("utf-8"))
-
-
-def _parse_jsonl(value: str) -> list[ImplementationDocument]:
-    return [json.loads(line) for line in value.splitlines() if line.strip()]
-
-
-def _safe_check_key(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_]+", "_", value.strip("/").replace("/", "_"))[:120] or "root"
-
-
-def _has_blockers(checks: list[ImplementationDocument]) -> bool:
-    return any(row.get("status") == "failed" for row in checks)
+_v142_urpcccsv_readiness.bind_globals(globals())

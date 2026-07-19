@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 import json as json
 import os as os
 import re as re
@@ -77,11 +78,11 @@ def write_json(path: Path, data: Any) -> Path:
     return path
 
 
-def read_json(path: Path) -> dict[str, Any]:
+def read_json(path: Path) -> DomainDocument:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def append_event(paths: ProjectPaths, event: dict[str, Any]) -> None:
+def append_event(paths: ProjectPaths, event: DomainDocument) -> None:
     event = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **event,

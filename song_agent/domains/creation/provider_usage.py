@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import json as json
 from pathlib import Path as Path
@@ -27,10 +27,10 @@ SENSITIVE_USAGE_KEYS = {
 def build_provider_usage_report(
     *,
     scope: str,
-    records: list[dict[str, Any]],
+    records: list[DomainDocument],
     project_id: str | None = None,
     pricing_path: Path = PRICING_PATH,
-) -> dict[str, Any]:
+) -> DomainDocument:
     pricing = load_provider_pricing(pricing_path)
     normalized = [normalize_provider_usage_record(record, pricing=pricing) for record in records]
     totals = _aggregate_records(normalized)
@@ -54,8 +54,8 @@ def build_provider_usage_report(
     return report
 
 
-def collect_project_provider_usage_records(project_id: str, versions: list[Any], project_dir: Path) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
+def collect_project_provider_usage_records(project_id: str, versions: list[Any], project_dir: Path) -> list[DomainDocument]:
+    records: list[ImplementationDocument] = []
     for version in versions:
         usage_path = Path(version.output_dir) / "data" / "provider-usage.json"
         record = usage_record_from_file(
@@ -107,7 +107,7 @@ def collect_project_provider_usage_records(project_id: str, versions: list[Any],
     return records
 
 
-def collect_candidate_group_provider_usage_records(project_id: str, group_id: str, project_dir: Path) -> list[dict[str, Any]]:
+def collect_candidate_group_provider_usage_records(project_id: str, group_id: str, project_dir: Path) -> list[DomainDocument]:
     usage_path = project_dir / "candidate-groups" / group_id / "provider-usage.json"
     record = usage_record_from_file(
         usage_path,
@@ -128,7 +128,7 @@ def usage_record_from_file(
     version_id: str | None = None,
     job_id: str | None = None,
     group_id: str | None = None,
-) -> dict[str, Any] | None:
+) -> DomainDocument | None:
     if not path.exists():
         return None
     try:
@@ -148,7 +148,7 @@ def usage_record_from_file(
     }
 
 
-def normalize_provider_usage_record(record: dict[str, Any], *, pricing: dict[str, Any] | None = None) -> dict[str, Any]:
+def normalize_provider_usage_record(record: DomainDocument, *, pricing: DomainDocument | None = None) -> DomainDocument:
     usage = _document_or(record.get("usage"), record)
     nested_usage = _as_document(usage.get("usage"))
     prompt_tokens = _usage_int(usage, "prompt_tokens") or _usage_int(nested_usage, "prompt_tokens")
@@ -186,8 +186,8 @@ def normalize_provider_usage_record(record: dict[str, Any], *, pricing: dict[str
     }
 
 
-def aggregate_provider_usage(records: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
-    buckets: dict[str, list[dict[str, Any]]] = {}
+def aggregate_provider_usage(records: list[DomainDocument], key: str) -> list[DomainDocument]:
+    buckets: dict[str, list[ImplementationDocument]] = {}
     for record in records:
         bucket = str(record.get(key) or "unknown")
         buckets.setdefault(bucket, []).append(record)
@@ -210,7 +210,7 @@ def aggregate_provider_usage(records: list[dict[str, Any]], key: str) -> list[di
     return sorted(rows, key=lambda item: (-int(item.get("total_tokens") or 0), str(item.get(key) or "")))
 
 
-def load_provider_pricing(path: Path = PRICING_PATH) -> dict[str, Any]:
+def load_provider_pricing(path: Path = PRICING_PATH) -> DomainDocument:
     if not path.exists():
         return {}
     try:
@@ -229,7 +229,7 @@ def estimate_provider_cost(
     prompt_tokens: int,
     completion_tokens: int,
     total_tokens: int,
-    pricing: dict[str, Any],
+    pricing: DomainDocument,
 ) -> tuple[float | None, str | None]:
     model_pricing = pricing.get(model)
     if not isinstance(model_pricing, dict):
@@ -248,8 +248,8 @@ def estimate_provider_cost(
     return round(input_cost + output_cost, 8), currency
 
 
-def sanitize_provider_usage(value: dict[str, Any]) -> dict[str, Any]:
-    cleaned: dict[str, Any] = {}
+def sanitize_provider_usage(value: DomainDocument) -> DomainDocument:
+    cleaned: ImplementationDocument = {}
     for key, item in value.items():
         lowered = str(key).lower()
         if lowered in SENSITIVE_USAGE_KEYS:

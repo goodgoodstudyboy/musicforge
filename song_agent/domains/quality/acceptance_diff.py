@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from typing import Any as Any
 
@@ -10,7 +10,7 @@ from song_agent.platform.verification.redaction import sanitize_metadata as sani
 ACCEPTANCE_DIFF_SCHEMA_VERSION = 1
 
 
-def build_acceptance_diff(left_report: dict[str, Any], right_report: dict[str, Any]) -> dict[str, Any]:
+def build_acceptance_diff(left_report: DomainDocument, right_report: DomainDocument) -> DomainDocument:
     left_cases = _cases_by_song(left_report)
     right_cases = _cases_by_song(right_report)
     song_ids = sorted(set(left_cases) | set(right_cases))

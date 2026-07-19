@@ -35,7 +35,7 @@ def _job_artifacts(
 def _read_events(path: Path) -> list[ImplementationDocument]:
     if not path.exists():
         return []
-    events: list[dict[str, Any]] = []
+    events: list[ImplementationDocument] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             events.append(json.loads(line))

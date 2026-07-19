@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, document_or as _document_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, document_or as _document_or
 
 import json as json
 import re as re
@@ -41,8 +41,8 @@ class EditPreset:
     description: str
     edit_type: str
     strength: float = 0.5
-    target_defaults: dict[str, Any] = field(default_factory=dict)
-    payload: dict[str, Any] = field(default_factory=dict)
+    target_defaults: ImplementationDocument = field(default_factory=dict)
+    payload: ImplementationDocument = field(default_factory=dict)
     preserve: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     built_in: bool = False
@@ -50,7 +50,7 @@ class EditPreset:
     updated_at: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], *, built_in: bool | None = None) -> "EditPreset":
+    def from_dict(cls, data: DomainDocument, *, built_in: bool | None = None) -> "EditPreset":
         if not isinstance(data, dict):
             raise ValueError("preset must be an object.")
         preset = cls(
@@ -70,10 +70,10 @@ class EditPreset:
         preset.validate()
         return preset
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
-    def public_ref(self) -> dict[str, Any]:
+    def public_ref(self) -> DomainDocument:
         return {
             "preset_id": self.preset_id,
             "name": self.name,
@@ -115,7 +115,7 @@ class EditPresetStore:
         with self.lock:
             return [*BUILT_IN_PRESETS, *self._read_user_presets()]
 
-    def to_response(self) -> dict[str, Any]:
+    def to_response(self) -> DomainDocument:
         presets = self.list_presets()
         return {
             "schema_version": SCHEMA_VERSION,
@@ -131,7 +131,7 @@ class EditPresetStore:
                 return preset
         raise FileNotFoundError(preset_id)
 
-    def save_preset(self, data: dict[str, Any], *, preset_id: str | None = None) -> EditPreset:
+    def save_preset(self, data: DomainDocument, *, preset_id: str | None = None) -> EditPreset:
         with self.lock:
             merged = dict(data)
             if preset_id is not None:
@@ -188,10 +188,10 @@ class EditPresetStore:
         )
 
 
-def merge_preset_intent(preset: EditPreset, payload: dict[str, Any], plan: SongPlan) -> dict[str, Any]:
+def merge_preset_intent(preset: EditPreset, payload: DomainDocument, plan: SongPlan) -> DomainDocument:
     explicit_intent = payload.get("intent")
     source = _document_or(explicit_intent, payload)
-    merged: dict[str, Any] = {
+    merged: ImplementationDocument = {
         "edit_type": preset.edit_type,
         "target": resolve_target_defaults(preset, plan),
         "instruction": preset.description,

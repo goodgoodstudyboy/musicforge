@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import ImplementationDocument
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
 class APIResponse:
     status: int
-    body: dict[str, Any]
+    body: ImplementationDocument
     content_type: str = "application/json"

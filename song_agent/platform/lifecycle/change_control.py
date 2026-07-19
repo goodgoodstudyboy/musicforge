@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from song_agent.platform.contracts.documents import DomainDocument
 
 from song_agent.platform.contracts.lifecycle import ResetAuthorization
 from song_agent.platform.verification.hashing import integrity_hash, integrity_ok
@@ -9,8 +9,8 @@ from song_agent.platform.verification.hashing import integrity_hash, integrity_o
 class ChangeRequestService:
     @staticmethod
     def validate_reset_authorization(
-        request: dict[str, Any],
-        approval: dict[str, Any],
+        request: DomainDocument,
+        approval: DomainDocument,
         expected: ResetAuthorization,
         *,
         approved_actions_field: str = "approved_actions",
@@ -49,20 +49,20 @@ class ChangeRequestService:
 
 class ResetService:
     @staticmethod
-    def build_proof(payload: dict[str, Any]) -> dict[str, Any]:
+    def build_proof(payload: DomainDocument) -> DomainDocument:
         proof = dict(payload)
         proof["integrity_hash"] = integrity_hash(proof)
         return proof
 
     @staticmethod
     def mark_applied(
-        request: dict[str, Any],
+        request: DomainDocument,
         *,
         applied_at: str,
         proof_hash: str,
         event_hash: str,
-        updates: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        updates: DomainDocument | None = None,
+    ) -> DomainDocument:
         result = dict(request)
         result.update({"status": "applied", "applied_at": applied_at, "reset_proof_hash": proof_hash, "reset_event_hash": event_hash})
         result.update(updates or {})

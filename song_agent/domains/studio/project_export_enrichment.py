@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_list as _as_list
 
 import json as json
 from pathlib import Path as Path
@@ -12,7 +12,7 @@ from song_agent.domains.studio.project_repository import BLOCKED_ASSET_METADATA_
 from song_agent.domains.studio.projectio import read_json as read_json
 
 
-def build_project_summary(project_dir: Path, document: ProjectDocument) -> dict[str, Any]:
+def build_project_summary(project_dir: Path, document: ProjectDocument) -> DomainDocument:
     project_id = document.state.project_id
     return {
         "review_tasks": _collect_project_review_tasks(project_dir),
@@ -38,7 +38,7 @@ def _collect_project_review_tasks(project_dir: Path) -> list[ImplementationDocum
     store = ReviewTaskStore(project_dir)
     template_store = PromptTemplateStore(project_dir.parent.parent / "prompt-templates.json")
     tasks = store.list_tasks(include_archived=True)
-    summaries: list[dict[str, Any]] = []
+    summaries: list[ImplementationDocument] = []
     for task in tasks:
         selected = None
         if task.selected_candidate_id:

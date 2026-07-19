@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -52,10 +52,10 @@ def verify_release_audio_timeline_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {
         "zip_path": zip_path.name,
         "zip_sha256": None,
         "zip_size_bytes": 0,
@@ -146,11 +146,11 @@ def verify_release_audio_timeline_package(
     return _finish(checks, summary)
 
 
-def write_release_audio_timeline_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_release_audio_timeline_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def release_audio_timeline_verification_exit_code(report: dict[str, Any]) -> int:
+def release_audio_timeline_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -180,7 +180,7 @@ def _document_binding_checks(
 
 
 def _event_chain_checks(events: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     ids = [str(event.get("event_id") or "") for event in events]
     checks.append(_check("release_audio_timeline_events_present", bool(events), "Timeline event ledger is present."))
     checks.append(_check("release_audio_timeline_event_ids_unique", len(ids) == len(set(ids)) and all(ids), "Timeline event ids are unique and present."))
@@ -228,7 +228,7 @@ def _certification_binding_checks(
 ) -> list[ImplementationDocument]:
     if not require_current_certification:
         return []
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     if not certification_zip_path:
         return [_check("release_audio_timeline_certification_zip_required", False, "Current Certification requirement needs external Certification ZIP.")]
     if not certification_report_path:
@@ -343,9 +343,9 @@ def _manifest_checks(zf: zipfile.ZipFile, manifest: ImplementationDocument, name
 
 def _derive_from_events(release_id: Any, timeline_id: Any, events: list[ImplementationDocument], *, source_hash: Any) -> ImplementationDocument:
     track_events = [event for event in events if event.get("event_type") == "track_certification_summary"]
-    tracks: list[dict[str, Any]] = []
-    issues: dict[str, dict[str, Any]] = {}
-    risks: list[dict[str, Any]] = []
+    tracks: list[ImplementationDocument] = []
+    issues: dict[str, ImplementationDocument] = {}
+    risks: list[ImplementationDocument] = []
     accepted = needs_fix = rejected = open_markers = 0
     for event in track_events:
         payload = _as_document(event.get("payload"))
@@ -539,7 +539,7 @@ def _read_json_entry(zf: zipfile.ZipFile, name: str) -> ImplementationDocument:
 
 
 def _read_jsonl_entry(zf: zipfile.ZipFile, name: str) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     with zf.open(name) as fp:
         for raw in fp.read().decode("utf-8").splitlines():
             if not raw.strip():

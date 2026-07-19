@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -63,10 +63,10 @@ def verify_unified_command_center_reviewer_decision_board_package(
     max_zip_size_mb: int = 32,
     max_uncompressed_size_mb: int = 128,
     max_entry_count: int = 100,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(checks, summary, _check("ucc_decision_board_zip_exists", False, "Reviewer Decision Board ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -152,11 +152,11 @@ def verify_unified_command_center_reviewer_decision_board_package(
     return _finish(checks, summary)
 
 
-def write_unified_command_center_reviewer_decision_board_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_command_center_reviewer_decision_board_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_command_center_reviewer_decision_board_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_command_center_reviewer_decision_board_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -210,7 +210,7 @@ def _external_binding_checks(
     accepted_evidence_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
     accepted_evidence_response_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
 ) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     if not evidence_review_path or not evidence_review_verification_report_path:
         checks.append(_check("ucc_decision_board_evidence_review_external_binding", False, "Evidence Review ZIP and verification report are required."))
     else:
@@ -266,7 +266,7 @@ def _external_acceptance_items(
     accepted_evidence_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
     accepted_evidence_response_verification_report_paths: list[Path | str | None] | tuple[Path | str | None, ...],
 ) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     count = max(len(accepted_evidence_paths), len(accepted_evidence_verification_report_paths), len(accepted_evidence_response_verification_report_paths))
     for index in range(count):
         zip_path = _path_at(accepted_evidence_paths, index)

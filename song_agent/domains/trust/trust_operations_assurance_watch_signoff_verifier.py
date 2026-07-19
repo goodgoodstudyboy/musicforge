@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -48,7 +48,7 @@ def verify_trust_operations_assurance_watch_signoff_archive_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _WatchSignoffVerifier(
         Path(zip_path),
         strict=strict,
@@ -67,11 +67,11 @@ def verify_trust_operations_assurance_watch_signoff_archive_package(
     return verifier.run()
 
 
-def write_trust_operations_assurance_watch_signoff_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_trust_operations_assurance_watch_signoff_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_trust_operations_assurance_watch_signoff_verification_report(report: dict[str, Any]) -> None:
+def print_trust_operations_assurance_watch_signoff_verification_report(report: DomainDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Assurance Watch Signoff Archive verification")
     print(f"status: {report.get('status')}")
@@ -81,7 +81,7 @@ def print_trust_operations_assurance_watch_signoff_verification_report(report: d
     print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
-def trust_operations_assurance_watch_signoff_verification_exit_code(report: dict[str, Any]) -> int:
+def trust_operations_assurance_watch_signoff_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -116,8 +116,8 @@ class _WatchSignoffVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -125,21 +125,21 @@ class _WatchSignoffVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.manifest: dict[str, Any] = {}
-        self.closeout: dict[str, Any] = {}
-        self.signoff: dict[str, Any] = {}
-        self.queue_summary: dict[str, Any] = {}
-        self.action_summary: dict[str, Any] = {}
-        self.external_summary: dict[str, Any] = {}
-        self.change_requests_doc: dict[str, Any] = {}
-        self.history_events: list[dict[str, Any]] = []
-        self.watch_report: dict[str, Any] = {}
-        self.watch_manifest: dict[str, Any] = {}
-        self.hub_report: dict[str, Any] = {}
-        self.hub_manifest: dict[str, Any] = {}
-        self.assurance_report: dict[str, Any] = {}
+        self.manifest: ImplementationDocument = {}
+        self.closeout: ImplementationDocument = {}
+        self.signoff: ImplementationDocument = {}
+        self.queue_summary: ImplementationDocument = {}
+        self.action_summary: ImplementationDocument = {}
+        self.external_summary: ImplementationDocument = {}
+        self.change_requests_doc: ImplementationDocument = {}
+        self.history_events: list[ImplementationDocument] = []
+        self.watch_report: ImplementationDocument = {}
+        self.watch_manifest: ImplementationDocument = {}
+        self.hub_report: ImplementationDocument = {}
+        self.hub_manifest: ImplementationDocument = {}
+        self.assurance_report: ImplementationDocument = {}
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -404,7 +404,7 @@ class _WatchSignoffVerifier:
         self._add_check("requirements", "toaws_require_signed", "passed" if signed or not self.require_signed else "failed", "blocking", "Assurance Watch signoff is signed." if signed else "Assurance Watch signoff is not signed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[dict[str, Any]] = []
+        findings: list[ImplementationDocument] = []
         for info in self.entry_infos:
             if not _is_text_scan_entry(info.filename) or int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
                 continue

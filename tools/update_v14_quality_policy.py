@@ -42,7 +42,7 @@ def main() -> int:
         _ratchet_typing_policy(document, collect_typing_metrics(root))
     if args.ratchet_complexity:
         _ratchet_complexity_policy(document, root)
-    document["release_version"] = "14.1.2"
+    document["release_version"] = "14.2.0"
     if report is not None:
         output = (root / args.tracked_coverage_output).resolve()
         _write_compact_coverage(report, output, root)
@@ -175,13 +175,13 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
     if current_total >= previous_total:
         raise RuntimeError(f"Oversized module lines must decrease: {current_total}>={previous_total}.")
     document["module_size_debt"] = [
-        {"path": path, "max_lines": lines, "expires_version": "14.2.0"}
+        {"path": path, "max_lines": lines, "expires_version": "14.3.0"}
         for path, lines in sorted(current.items())
     ]
     aggregate = dict(metrics["aggregate"])
     complexity["aggregate_debt"] = {
         "architecture_decision": "docs/architecture/ADR-015-v141-complexity-ratchet.md",
-        "expires_version": "14.2.0",
+        "expires_version": "14.3.0",
         "previous_oversized_module_count": len(previous),
         "previous_total_oversized_module_lines": previous_total,
         "required_total_line_reduction": previous_total - current_total,

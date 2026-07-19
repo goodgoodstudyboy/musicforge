@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -55,7 +55,7 @@ def verify_release_portfolio_governance_evidence_vault_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _EvidenceVaultVerifier(
         Path(zip_path),
         strict=strict,
@@ -73,11 +73,11 @@ def verify_release_portfolio_governance_evidence_vault_package(
     return verifier.run()
 
 
-def write_release_portfolio_governance_evidence_vault_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_release_portfolio_governance_evidence_vault_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_release_portfolio_governance_evidence_vault_verification_report(report: dict[str, Any]) -> None:
+def print_release_portfolio_governance_evidence_vault_verification_report(report: DomainDocument) -> None:
     summary = evidence_vault_verification_summary(report)
     print("MusicForge release portfolio governance evidence vault verification")
     print(f"status: {summary.get('status')}")
@@ -95,7 +95,7 @@ def print_release_portfolio_governance_evidence_vault_verification_report(report
             print(f"  [{item.get('check_id', 'unknown')}] {item.get('message', '')}")
 
 
-def release_portfolio_governance_evidence_vault_verification_exit_code(report: dict[str, Any]) -> int:
+def release_portfolio_governance_evidence_vault_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -128,15 +128,15 @@ class _EvidenceVaultVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.nested_results: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
-        self.manifest: dict[str, Any] = {}
-        self.report_doc: dict[str, Any] = {}
-        self.package_index: dict[str, Any] = {}
-        self.verification_index: dict[str, Any] = {}
-        self.chain: dict[str, Any] = {}
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.nested_results: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: ImplementationDocument = {}
+        self.report_doc: ImplementationDocument = {}
+        self.package_index: ImplementationDocument = {}
+        self.verification_index: ImplementationDocument = {}
+        self.chain: ImplementationDocument = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -145,7 +145,7 @@ class _EvidenceVaultVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -209,7 +209,7 @@ class _EvidenceVaultVerifier:
         package_type_ok = self.manifest.get("package_type") == EVIDENCE_VAULT_PACKAGE_TYPE
         self._add_check("manifest", "evidence_vault_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", f"Manifest package_type is {EVIDENCE_VAULT_PACKAGE_TYPE}." if package_type_ok else "Manifest package_type is not release_portfolio_governance_evidence_vault.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[dict[str, Any]] = []
+        valid: list[ImplementationDocument] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -375,7 +375,7 @@ class _EvidenceVaultVerifier:
         self._add_nested_check(result, "evidence_vault_deep_verifier", "passed" if nested_report.get("status") != "failed" else "failed", "blocking", f"{package_id} deep verifier passed." if nested_report.get("status") != "failed" else f"{package_id} deep verifier failed.")
 
     def _verify_requirements(self) -> None:
-        by_role: dict[str, list[dict[str, Any]]] = {}
+        by_role: dict[str, list[ImplementationDocument]] = {}
         for item in self.nested_results:
             by_role.setdefault(str(item.get("role") or ""), []).append(item)
 
@@ -518,7 +518,7 @@ def _stable_hash(value: Any) -> str:
 
 
 def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
         for match in pattern.finditer(text):
             findings.append({"entry": name, "pattern": replacement, "excerpt": match.group(0)[:120]})
@@ -529,7 +529,7 @@ def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(name: str, value: Any) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     if isinstance(value, dict):
         for key, item in value.items():
             if str(key).lower() in VERIFIER_BLOCKED_KEYS:

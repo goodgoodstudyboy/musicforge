@@ -1,10 +1,11 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_list as _as_list
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import json as json
 import shutil as shutil
@@ -88,7 +89,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
     def verification_report_path(self, train_id: str) -> Path:
         return self.export_dir(train_id) / "unified-command-center-release-train-lifecycle-verification-report.json"
 
-    def refresh_report(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def refresh_report(self, train_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             docs = self._build_documents(train_id, payload)
@@ -97,21 +98,21 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             self._write_docs(train_id, docs)
             return docs["report"]
 
-    def read_report(self, train_id: str) -> dict[str, Any]:
+    def read_report(self, train_id: str) -> DomainDocument:
         if not self.report_path(train_id).exists():
             raise UnifiedCommandCenterReleaseTrainLifecycleNotFoundError(f"Release Train Lifecycle report not found: {train_id}")
         return read_json(self.report_path(train_id))
 
-    def export_package(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def export_package(self, train_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         with self.lock:
             docs = self._current_docs_for_export(train_id, payload or {})
             export_dir = self.export_dir(train_id)
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
+            files: list[ImplementationDocument] = []
 
-            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
+            def write_entry(rel: str, payload: DomainDocument | str) -> None:
                 path = export_dir / rel
                 if isinstance(payload, str):
                     path.parent.mkdir(parents=True, exist_ok=True)
@@ -134,7 +135,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             write_json(self.manifest_path(train_id), manifest)
             return manifest
 
-    def build_zip(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def build_zip(self, train_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         with self.lock:
             if not self.manifest_path(train_id).exists():
                 self.export_package(train_id, payload or {})
@@ -161,7 +162,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
                         archive.write(path, path.relative_to(export_dir).as_posix())
             return {"status": "passed", "train_id": train_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_package(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_package(self, train_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         report = verify_unified_command_center_release_train_lifecycle_package(
             self.zip_path(train_id),
@@ -187,7 +188,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
         lifecycle_zip_path: Path | str | None = None,
         verification_report_path: Path | str | None = None,
         **payload: Any,
-    ) -> dict[str, Any]:
+    ) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         zip_path = Path(lifecycle_zip_path) if lifecycle_zip_path else self.zip_path(train_id)
@@ -517,115 +518,19 @@ def _readiness_doc(train_id: str, source_hash: str, state: ImplementationDocumen
     return {"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_current_readiness_assertion", "train_id": train_id, "source_hash": source_hash, "status": "passed" if all(row["status"] == "passed" for row in checks) else "failed", "checks": checks}
 
 
-def _gap_items(readiness: ImplementationDocument, coverage: ImplementationDocument, has_reset: bool, change_summary: ImplementationDocument) -> list[ImplementationDocument]:
-    gaps = []
-    for index, check in enumerate(readiness.get("checks", []), start=1):
-        if check.get("status") != "passed":
-            gaps.append({"gap_id": f"gap-{index:03d}", "severity": "blocking", "category": check.get("check_id"), "message": f"{check.get('check_id')} failed.", "recommended_action": "Refresh required train lifecycle evidence and rebuild lifecycle audit."})
-    if has_reset and not change_summary.get("configured"):
-        gaps.append({"gap_id": "gap-change-control", "severity": "blocking", "category": "change_control", "message": "Release Train has reset history but Change Control evidence is missing.", "recommended_action": "Export and verify Change Control package with reset proof."})
-    for row in coverage.get("items", []):
-        if row.get("status") != "passed":
-            gaps.append({"gap_id": f"gap-reset-{row.get('change_request_id')}", "severity": "blocking", "category": "reset_coverage", "message": "Reset coverage is incomplete.", "recommended_action": "Provide reset proof and archive-history evidence."})
-    return gaps
+from song_agent.domains.program import v142_uccrtl_readiness as _v142_uccrtl_readiness
+from song_agent.domains.program.v142_uccrtl_readiness import (
+    _gap_items,
+    _evidence_index_doc,
+    _lifecycle_event_type,
+    _manifest_document,
+    _reviewer_guide,
+    _with_integrity,
+    _gate_failed,
+    _file_record,
+    _integrity_ok,
+    _integrity_hash,
+    _sha256_path,
+)
 
-
-def _evidence_index_doc(train_id: str, source_hash: str, train_summary: ImplementationDocument, change_summary: ImplementationDocument, reset_proofs: list[ImplementationDocument]) -> ImplementationDocument:
-    items = [
-        {"evidence_type": "current_train", **{key: train_summary.get(key) for key in ("zip_sha256", "manifest_hash", "verification_report_hash", "signoff_binding_hash", "external_evidence_manifest_hash", "runtime_status")}},
-    ]
-    if change_summary.get("configured"):
-        items.append({"evidence_type": "change_control", **{key: change_summary.get(key) for key in ("zip_sha256", "manifest_hash", "verification_report_hash", "runtime_status", "applied_reset_count")}})
-    for proof in reset_proofs:
-        items.append({"evidence_type": "reset_proof", "change_request_id": proof.get("change_request_id"), "reset_proof_hash": proof.get("reset_proof_hash"), "reset_event_hash": proof.get("reset_event_hash")})
-    return {"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_lifecycle_evidence_fingerprint_index", "train_id": train_id, "source_hash": source_hash, "items": sanitize_metadata(items), "summary": {"item_count": len(items)}}
-
-
-def _lifecycle_event_type(event_type: str) -> str:
-    mapping = {
-        "ucc_release_train_signoff_created": "train_signoff_created",
-        "ucc_release_train_archive_exported": "train_archive_exported",
-        "ucc_release_train_archive_built": "train_archive_built",
-        "ucc_release_train_signoff_reset": "train_signoff_reset",
-        "train_change_request_submitted": "train_change_request_submitted",
-        "train_change_request_approved": "train_change_request_approved",
-        "train_change_request_reset_applied": "train_change_request_reset_applied",
-    }
-    return mapping.get(event_type, event_type or "unknown")
-
-
-def _manifest_document(train_id: str, docs: ImplementationDocument, files: list[ImplementationDocument]) -> ImplementationDocument:
-    manifest = sanitize_metadata(
-        {
-            "schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION,
-            "package_type": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_PACKAGE_TYPE,
-            "train_id": train_id,
-            "created_at": now_iso(),
-            "source_hash": docs["report"].get("source_hash"),
-            "source": {
-                "report_hash": docs["report"].get("integrity_hash"),
-                "succession_hash": docs["succession"].get("integrity_hash"),
-                "coverage_hash": docs["coverage"].get("integrity_hash"),
-                "archive_history_hash": docs["archive_history"].get("integrity_hash"),
-                "readiness_hash": docs["readiness"].get("integrity_hash"),
-                "gap_plan_hash": docs["gap_plan"].get("integrity_hash"),
-                "evidence_index_hash": docs["evidence_index"].get("integrity_hash"),
-                "ledger_hash": stable_hash(docs["ledger"]),
-            },
-            "summary": docs["report"].get("summary", {}),
-            "files": sorted(files, key=lambda row: row.get("path") or ""),
-            "zip": {},
-        }
-    )
-    manifest["integrity_hash"] = _integrity_hash(manifest)
-    return manifest
-
-
-def _reviewer_guide(docs: ImplementationDocument) -> str:
-    summary = docs["report"].get("summary", {})
-    return "\n".join(
-        [
-            "# Release Train Lifecycle Audit",
-            "",
-            f"Status: {docs['report'].get('status')}",
-            f"Signoffs: {summary.get('signoff_count')}",
-            f"Resets: {summary.get('reset_count')}",
-            "",
-            "Use the offline verifier with the current Release Train archive, Change Control package, signoff binding, external evidence manifest, and reset proof files.",
-            "",
-        ]
-    )
-
-
-def _with_integrity(doc: ImplementationDocument) -> ImplementationDocument:
-    doc = sanitize_metadata(doc)
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
-    return {"status": "failed", "hard_block": True, "message": message, **extra}
-
-
-def _file_record(path: Path, rel: str) -> ImplementationDocument:
-    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
-
-
-def _integrity_ok(payload: ImplementationDocument) -> bool:
-    return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
-
-
-def _integrity_hash(payload: ImplementationDocument) -> str:
-    return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
-
-
-def _sha256_path(path: Path | str | None) -> str | None:
-    if not path or not Path(path).exists() or not Path(path).is_file():
-        return None
-    import hashlib
-
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+_v142_uccrtl_readiness.bind_globals(globals())

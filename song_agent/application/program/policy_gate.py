@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from pathlib import Path
 from typing import Any
@@ -18,7 +18,7 @@ class ProgramPolicyGate:
     def __init__(self, program_store: Any) -> None:
         self.program_store = program_store
 
-    def evaluate(self, program_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def evaluate(self, program_id: str, payload: DomainDocument) -> DomainDocument:
         policy_id = str(payload.get("policy") or payload.get("gate_policy") or "").strip()
         manifest = payload.get("evidence_manifest") or payload.get("evidence_graph_manifest")
         manifest_id = payload.get("evidence_manifest_id")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any as _InferenceType
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import json as json
 import shutil as shutil
@@ -87,7 +87,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
     def verification_report_path(self, train_id: str) -> Path:
         return self.export_dir(train_id) / "unified-command-center-release-train-change-control-verification-report.json"
 
-    def create_request(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create_request(self, train_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             self._require_signed_train(train_id)
@@ -123,7 +123,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             self.refresh_report(train_id)
             return request
 
-    def approve_request(self, train_id: str, request_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def approve_request(self, train_id: str, request_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             request = self.read_request(train_id, request_id)
@@ -159,7 +159,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             self.refresh_report(train_id)
             return approval
 
-    def reset_train_signoff(self, train_id: str, request_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def reset_train_signoff(self, train_id: str, request_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             request = self.read_request(train_id, request_id)
@@ -251,7 +251,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             self.refresh_report(train_id)
             return reset_proof
 
-    def list_requests(self, train_id: str) -> list[dict[str, Any]]:
+    def list_requests(self, train_id: str) -> list[DomainDocument]:
         base = self.change_dir(train_id) / "change-requests"
         if not base.exists():
             return []
@@ -260,13 +260,13 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             rows.append(read_json(path))
         return rows
 
-    def read_request(self, train_id: str, request_id: str) -> dict[str, Any]:
+    def read_request(self, train_id: str, request_id: str) -> DomainDocument:
         path = self.request_path(train_id, request_id)
         if not path.exists():
             raise UnifiedCommandCenterReleaseTrainChangeControlNotFoundError(f"Train Change Request not found: {request_id}")
         return read_json(path)
 
-    def refresh_report(self, train_id: str) -> dict[str, Any]:
+    def refresh_report(self, train_id: str) -> DomainDocument:
         with self.lock:
             docs = self._build_documents(train_id)
             self.change_dir(train_id).mkdir(parents=True, exist_ok=True)
@@ -277,16 +277,16 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             self.history_export_path(train_id).write_text(docs["history_text"], encoding="utf-8")
             return docs["report"]
 
-    def export_package(self, train_id: str) -> dict[str, Any]:
+    def export_package(self, train_id: str) -> DomainDocument:
         with self.lock:
             docs = self._build_documents(train_id)
             export_dir = self.export_dir(train_id)
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
+            files: list[ImplementationDocument] = []
 
-            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
+            def write_entry(rel: str, payload: DomainDocument | str) -> None:
                 path = export_dir / rel
                 if isinstance(payload, str):
                     path.parent.mkdir(parents=True, exist_ok=True)
@@ -305,7 +305,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
             write_json(self.manifest_path(train_id), manifest)
             return manifest
 
-    def build_zip(self, train_id: str) -> dict[str, Any]:
+    def build_zip(self, train_id: str) -> DomainDocument:
         with self.lock:
             if not self.manifest_path(train_id).exists():
                 self.export_package(train_id)
@@ -330,7 +330,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
                         archive.write(path, path.relative_to(export_dir).as_posix())
             return {"status": "passed", "train_id": train_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_package(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_package(self, train_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         report = verify_unified_command_center_release_train_change_control_package(
             self.zip_path(train_id),
@@ -346,7 +346,7 @@ class UnifiedCommandCenterReleaseTrainChangeControlStore:
         write_unified_command_center_release_train_change_control_verification_report(report, self.verification_report_path(train_id))
         return report
 
-    def gate(self, train_id: str, *, required: bool = False, package_zip_path: Path | str | None = None, verification_report_path: Path | str | None = None, **payload: Any) -> dict[str, Any]:
+    def gate(self, train_id: str, *, required: bool = False, package_zip_path: Path | str | None = None, verification_report_path: Path | str | None = None, **payload: Any) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         zip_path = Path(package_zip_path) if package_zip_path else self.zip_path(train_id)

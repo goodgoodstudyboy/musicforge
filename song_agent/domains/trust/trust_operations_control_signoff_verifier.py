@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -52,7 +52,7 @@ def verify_trust_operations_control_signoff_archive_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _ControlSignoffVerifier(
         Path(zip_path),
         strict=strict,
@@ -74,11 +74,11 @@ def verify_trust_operations_control_signoff_archive_package(
     return verifier.run()
 
 
-def write_trust_operations_control_signoff_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_trust_operations_control_signoff_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_trust_operations_control_signoff_verification_report(report: dict[str, Any]) -> None:
+def print_trust_operations_control_signoff_verification_report(report: DomainDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Control Signoff Archive verification")
     print(f"status: {report.get('status')}")
@@ -87,7 +87,7 @@ def print_trust_operations_control_signoff_verification_report(report: dict[str,
     print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
-def trust_operations_control_signoff_verification_exit_code(report: dict[str, Any]) -> int:
+def trust_operations_control_signoff_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -128,9 +128,9 @@ class _ControlSignoffVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -138,17 +138,17 @@ class _ControlSignoffVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.manifest: dict[str, Any] = {}
-        self.signoff: dict[str, Any] = {}
-        self.history_events: list[dict[str, Any]] = []
-        self.exceptions_doc: dict[str, Any] = {}
-        self.change_requests_doc: dict[str, Any] = {}
-        self.report: dict[str, Any] = {}
-        self.source_summary: dict[str, Any] = {}
-        self.external_reports: dict[str, dict[str, Any]] = {}
-        self.external_manifests: dict[str, dict[str, Any]] = {}
+        self.manifest: ImplementationDocument = {}
+        self.signoff: ImplementationDocument = {}
+        self.history_events: list[ImplementationDocument] = []
+        self.exceptions_doc: ImplementationDocument = {}
+        self.change_requests_doc: ImplementationDocument = {}
+        self.report: ImplementationDocument = {}
+        self.source_summary: ImplementationDocument = {}
+        self.external_reports: dict[str, ImplementationDocument] = {}
+        self.external_manifests: dict[str, ImplementationDocument] = {}
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -356,7 +356,7 @@ class _ControlSignoffVerifier:
         self._add_check("requirements", "tocs_require_signed", "passed" if signed or not self.require_signed else "failed", "blocking", "Control signoff is signed." if signed else "Control signoff is not signed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[dict[str, Any]] = []
+        findings: list[ImplementationDocument] = []
         for info in self.entry_infos:
             name = info.filename
             if not _is_text_scan_entry(name) or int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:

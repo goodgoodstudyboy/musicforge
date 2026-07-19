@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -95,8 +95,8 @@ class ReleaseAudioQualityObservatoryStore:
     def verification_report_path(self, observatory_id: str) -> Path:
         return self.observatory_dir(observatory_id) / "verification-report.json"
 
-    def list_observatories(self) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
+    def list_observatories(self) -> list[DomainDocument]:
+        rows: list[ImplementationDocument] = []
         for config in sorted(self.observatories_dir().glob("*/observatory-config.json")):
             try:
                 doc = read_json(config)
@@ -106,7 +106,7 @@ class ReleaseAudioQualityObservatoryStore:
             rows.append({"observatory": doc, "summary": summary})
         return rows
 
-    def create(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create(self, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             observatory_id = str(payload.get("observatory_id") or self._next_observatory_id())
@@ -133,13 +133,13 @@ class ReleaseAudioQualityObservatoryStore:
             self._record_history_event(observatory_id, "observatory_created", {"config_hash": config["integrity_hash"]})
             return config
 
-    def read_config(self, observatory_id: str) -> dict[str, Any]:
+    def read_config(self, observatory_id: str) -> DomainDocument:
         path = self.config_path(observatory_id)
         if not path.exists():
             raise ReleaseAudioQualityObservatoryNotFoundError(f"Audio Quality Observatory not found: {observatory_id}.")
         return read_json(path)
 
-    def refresh(self, observatory_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def refresh(self, observatory_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             config = self.read_config(observatory_id)
@@ -149,12 +149,12 @@ class ReleaseAudioQualityObservatoryStore:
             self._record_history_event(observatory_id, "observatory_refreshed", {"source_hash": docs["summary"].get("source_hash"), "summary_hash": docs["summary"].get("integrity_hash")})
             return docs["summary"]
 
-    def read_summary(self, observatory_id: str) -> dict[str, Any]:
+    def read_summary(self, observatory_id: str) -> DomainDocument:
         if not self.summary_path(observatory_id).exists():
             raise ReleaseAudioQualityObservatoryNotFoundError(f"Audio Quality Observatory summary not found: {observatory_id}.")
         return read_json(self.summary_path(observatory_id))
 
-    def export_package(self, observatory_id: str) -> dict[str, Any]:
+    def export_package(self, observatory_id: str) -> DomainDocument:
         with self.lock:
             config = self.read_config(observatory_id)
             docs = self._current_documents(observatory_id, config)
@@ -162,9 +162,9 @@ class ReleaseAudioQualityObservatoryStore:
             if export_dir.exists():
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
+            files: list[ImplementationDocument] = []
 
-            def write_entry(rel: str, payload: dict[str, Any] | list[dict[str, Any]] | str) -> None:
+            def write_entry(rel: str, payload: DomainDocument | list[DomainDocument] | str) -> None:
                 path = export_dir / rel
                 if isinstance(payload, str):
                     path.write_text(payload, encoding="utf-8")
@@ -213,7 +213,7 @@ class ReleaseAudioQualityObservatoryStore:
             write_json(export_dir / "manifest.json", manifest)
             return {"status": docs["summary"].get("status"), "export_dir": str(export_dir), "manifest": manifest}
 
-    def build_zip(self, observatory_id: str) -> dict[str, Any]:
+    def build_zip(self, observatory_id: str) -> DomainDocument:
         with self.lock:
             exported = self.export_package(observatory_id)
             export_dir = self.export_dir(observatory_id)
@@ -237,7 +237,7 @@ class ReleaseAudioQualityObservatoryStore:
                         archive.write(path, path.relative_to(export_dir).as_posix())
             return {"status": exported.get("status"), "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_zip(self, observatory_id: str, **kwargs: Any) -> dict[str, Any]:
+    def verify_zip(self, observatory_id: str, **kwargs: Any) -> DomainDocument:
         from song_agent.domains.quality.release_audio_quality_observatory_verifier import verify_release_audio_quality_observatory_package, write_release_audio_quality_observatory_verification_report
 
         with self.lock:
@@ -248,7 +248,7 @@ class ReleaseAudioQualityObservatoryStore:
             write_release_audio_quality_observatory_verification_report(report, self.verification_report_path(observatory_id))
             return report
 
-    def gate(self, release_id: str, *, observatory_id: str | None = None, required: bool, require_no_critical_risk: bool = True) -> dict[str, Any]:
+    def gate(self, release_id: str, *, observatory_id: str | None = None, required: bool, require_no_critical_risk: bool = True) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         try:
@@ -306,7 +306,7 @@ class ReleaseAudioQualityObservatoryStore:
             return [_build_release_entry_from_payload(row, release_store=self.release_store) for row in explicit if isinstance(row, dict)]
         release_ids = [str(item) for item in config.get("release_ids", []) if str(item).strip()]
         releases = [self.release_store.get_release(item) for item in release_ids] if release_ids else self.release_store.list_releases(include_hidden=False)
-        entries: list[dict[str, Any]] = []
+        entries: list[ImplementationDocument] = []
         for release in releases:
             try:
                 entries.append(_build_release_entry_from_paths(self.release_store.release_dir(release.release_id), release.to_dict()))
@@ -469,7 +469,7 @@ def _validate_observatory_id(value: str) -> str:
 
 
 def _read_jsonl(path: Path) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     if not path.exists():
         return rows
     for line in path.read_text(encoding="utf-8").splitlines():

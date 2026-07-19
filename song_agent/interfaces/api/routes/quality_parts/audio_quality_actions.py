@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts import ImplementationDocument
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -113,7 +113,7 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
         return (False, None)
 
     def _handle_audio_quality_actions_route(self, method: str, path: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: ImplementationDocument = {}
         try:
             _split_result = self._handle_audio_quality_actions_route_part_01(method, path, _split_state)
             if _split_result[0]:

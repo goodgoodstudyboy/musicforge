@@ -4,6 +4,19 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.0 - 2026-07-19
+
+- Split oversized domain modules into bounded-context v14.2 support modules so
+  the residual ARCH-014 set falls below the interim target, with no modules over
+  1000 lines and no active domain module over the v14.2 maximum.
+- Reduced explicit `Any` usage below the TYPE-003 interim target and kept
+  schema-v3 alias-aware total, layer, and per-file no-growth budgets.
+- Rebuilt the architecture baseline, quality policy, coverage evidence, and
+  material index for the v14.2 cleanup scope.
+- Preserved runtime verifier, lifecycle, persistence, policy, release-check,
+  CLI, API, and Studio contracts while keeping residual complexity and typing
+  debt visible for the next cleanup pass.
+
 ## v14.1.2 - 2026-07-18
 
 - Fixed the explicit-`Any` quality collector so aliases from `typing.Any` and

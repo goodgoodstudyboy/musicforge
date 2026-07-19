@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import hashlib as hashlib
 import json as json
@@ -38,16 +39,38 @@ TRUST_OPERATIONS_KNOWLEDGE_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path
 
 
 
-class TrustOperationsKnowledgeError(ValueError):
-    pass
+from song_agent.domains.trust import v142_toik_readiness as _v142_toik_readiness
+from song_agent.domains.trust.v142_toik_readiness import (
+    TrustOperationsKnowledgeError,
+    TrustOperationsKnowledgeNotFoundError,
+    TrustOperationsKnowledgeStateError,
+    _knowledge_report_status,
+    _knowledge_summary,
+    _entries_summary,
+    _guards_summary,
+    _guard_run_summary,
+    _incident_matches_entry,
+    _write_readme,
+    _file_record,
+    _walk_files,
+    _zip_entries,
+    _write_zip,
+    _sha256,
+    _read_json,
+    _read_json_default,
+    _write_json,
+    _mkdir,
+    _next_id,
+    _safe_id,
+    _now,
+    _sanitize,
+    _fs_path,
+)
 
 
-class TrustOperationsKnowledgeNotFoundError(TrustOperationsKnowledgeError):
-    pass
 
 
-class TrustOperationsKnowledgeStateError(TrustOperationsKnowledgeError):
-    pass
+
 
 
 class TrustOperationsIncidentKnowledgeStore:
@@ -99,7 +122,7 @@ class TrustOperationsIncidentKnowledgeStore:
     def verification_report_path(self, hub_id: str) -> Path:
         return self.hub_dir(hub_id) / "trust-operations-incident-knowledge-verification-report.json"
 
-    def refresh(self, hub_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def refresh(self, hub_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             payload = payload or {}
@@ -146,12 +169,12 @@ class TrustOperationsIncidentKnowledgeStore:
                 self.refresh_recurrence(hub_id, now=now)
             return _sanitize({"knowledge_base": base, "created_count": created_count, "updated_count": updated_count, "skipped_count": skipped_count, "entries": self.list_entries(hub_id)})
 
-    def read_base(self, hub_id: str) -> dict[str, Any]:
+    def read_base(self, hub_id: str) -> DomainDocument:
         if not self.base_path(hub_id).exists():
             raise TrustOperationsKnowledgeNotFoundError("Trust Operations Incident Knowledge Base not found.")
         return _read_json(self.base_path(hub_id))
 
-    def list_entries(self, hub_id: str, *, include_hidden: bool = False) -> list[dict[str, Any]]:
+    def list_entries(self, hub_id: str, *, include_hidden: bool = False) -> list[DomainDocument]:
         root = self.entries_dir(hub_id)
         if not root.exists():
             return []
@@ -163,19 +186,19 @@ class TrustOperationsIncidentKnowledgeStore:
             rows.append(_sanitize(entry))
         return rows
 
-    def read_entry(self, hub_id: str, entry_id: str) -> dict[str, Any]:
+    def read_entry(self, hub_id: str, entry_id: str) -> DomainDocument:
         path = self.entry_path(hub_id, entry_id)
         if not path.exists():
             raise TrustOperationsKnowledgeNotFoundError("Trust Operations Knowledge Entry not found.")
         return _read_json(path)
 
-    def hide_entry(self, hub_id: str, entry_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def hide_entry(self, hub_id: str, entry_id: str, *, now: str | None = None) -> DomainDocument:
         return self._set_entry_status(hub_id, entry_id, "hidden", now=now)
 
-    def unhide_entry(self, hub_id: str, entry_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def unhide_entry(self, hub_id: str, entry_id: str, *, now: str | None = None) -> DomainDocument:
         return self._set_entry_status(hub_id, entry_id, "active", now=now)
 
-    def list_guards(self, hub_id: str, *, include_archived: bool = False) -> list[dict[str, Any]]:
+    def list_guards(self, hub_id: str, *, include_archived: bool = False) -> list[DomainDocument]:
         root = self.guards_dir(hub_id)
         if not root.exists():
             return []
@@ -187,13 +210,13 @@ class TrustOperationsIncidentKnowledgeStore:
             rows.append(_sanitize(guard))
         return rows
 
-    def read_guard(self, hub_id: str, guard_id: str) -> dict[str, Any]:
+    def read_guard(self, hub_id: str, guard_id: str) -> DomainDocument:
         path = self.guard_path(hub_id, guard_id)
         if not path.exists():
             raise TrustOperationsKnowledgeNotFoundError("Trust Operations Regression Guard not found.")
         return _read_json(path)
 
-    def create_guard(self, hub_id: str, entry_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def create_guard(self, hub_id: str, entry_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             payload = payload or {}
@@ -240,7 +263,7 @@ class TrustOperationsIncidentKnowledgeStore:
             self._refresh_base_summary(hub_id, now=now)
             return _sanitize(guard)
 
-    def run_guard(self, hub_id: str, guard_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def run_guard(self, hub_id: str, guard_id: str, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             guard = self.read_guard(hub_id, guard_id)
@@ -269,7 +292,7 @@ class TrustOperationsIncidentKnowledgeStore:
             self._refresh_base_summary(hub_id, now=now)
             return _sanitize(run)
 
-    def run_all_guards(self, hub_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def run_all_guards(self, hub_id: str, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             runs = []
@@ -280,11 +303,11 @@ class TrustOperationsIncidentKnowledgeStore:
             summary = _guard_run_summary(runs)
             return _sanitize({"hub_id": hub_id, "runs": runs, "summary": summary})
 
-    def refresh_recurrence(self, hub_id: str, *, now: str | None = None, write: bool = True) -> dict[str, Any]:
+    def refresh_recurrence(self, hub_id: str, *, now: str | None = None, write: bool = True) -> DomainDocument:
         now = now or _now()
         entries = self.list_entries(hub_id, include_hidden=False)
         open_incidents = [item for item in self.incident_store.list_incidents(hub_id, include_archived=False) if item.get("status") not in {"closed", "archived"}]
-        matches: list[dict[str, Any]] = []
+        matches: list[ImplementationDocument] = []
         for entry in entries:
             for incident in open_incidents:
                 if _incident_matches_entry(incident, entry):
@@ -305,7 +328,7 @@ class TrustOperationsIncidentKnowledgeStore:
             self._refresh_base_summary(hub_id, now=now)
         return _sanitize(report)
 
-    def export_knowledge(self, hub_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def export_knowledge(self, hub_id: str, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             base = self.read_base(hub_id)
@@ -375,7 +398,7 @@ class TrustOperationsIncidentKnowledgeStore:
             _write_json(export_dir / "trust-operations-knowledge-manifest.json", manifest)
             return _sanitize(manifest)
 
-    def build_zip(self, hub_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def build_zip(self, hub_id: str, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             export_dir = self.export_dir(hub_id)
@@ -395,7 +418,7 @@ class TrustOperationsIncidentKnowledgeStore:
             _write_zip(zip_path, export_dir)
             return {"zip_path": str(zip_path), "filename": zip_path.name, "sha256": _sha256(zip_path), "size_bytes": os.stat(_fs_path(zip_path)).st_size, "manifest_hash": manifest["integrity_hash"], "hub_id": hub_id}
 
-    def verify_zip(self, hub_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_zip(self, hub_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         from song_agent.domains.trust.trust_operations_incident_knowledge_verifier import verify_trust_operations_incident_knowledge_package
 
         payload = payload or {}
@@ -505,7 +528,7 @@ class TrustOperationsIncidentKnowledgeStore:
         scope = _as_document(guard.get("scope"))
         component_type = str(scope.get("component_type") or "")
         current_report_id = str(_read_json_default(self.hub_store.current_report_path(hub_id), default={}).get("report_id") or "")
-        docs: dict[str, dict[str, Any]] = {}
+        docs: dict[str, ImplementationDocument] = {}
         try:
             docs = self.hub_store._read_report_docs(hub_id, current_report_id) if current_report_id else {}
             if docs:
@@ -559,166 +582,4 @@ class TrustOperationsIncidentKnowledgeStore:
         base["integrity_hash"] = knowledge_hash(base)
         _write_json(self.base_path(hub_id), base)
 
-
-
-
-
-
-
-
-
-
-
-def _knowledge_report_status(base: ImplementationDocument, guards_doc: ImplementationDocument, runs_doc: ImplementationDocument, recurrence: ImplementationDocument) -> str:
-    del base
-    guards = _as_list(guards_doc.get("guards"))
-    runs = _as_list(runs_doc.get("runs"))
-    active_guard_count = sum(1 for guard in guards if isinstance(guard, dict) and guard.get("status") not in {"archived", "manual_required"})
-    failed_run_count = sum(1 for run in runs if isinstance(run, dict) and run.get("status") == "failed")
-    if recurrence.get("status") == "failed" or failed_run_count:
-        return "failed"
-    if active_guard_count == 0:
-        return "warning"
-    return "passed"
-
-
-def _knowledge_summary(entries: list[ImplementationDocument], guards: list[ImplementationDocument], recurrence: ImplementationDocument | None = None, runs: list[ImplementationDocument] | None = None) -> ImplementationDocument:
-    recurrence = recurrence or {}
-    runs = runs or []
-    active_entries = [item for item in entries if item.get("status") != "hidden"]
-    return {
-        "entry_count": len(entries),
-        "active_entry_count": len(active_entries),
-        "hidden_entry_count": len(entries) - len(active_entries),
-        "high_severity_entry_count": sum(1 for item in active_entries if item.get("severity") in {"critical", "high"}),
-        "guard_count": len([item for item in guards if item.get("status") != "archived"]),
-        "guards_passed_count": sum(1 for item in runs if item.get("status") == "passed"),
-        "guards_failed_count": sum(1 for item in runs if item.get("status") == "failed"),
-        "manual_required_guard_count": sum(1 for item in guards if item.get("status") == "manual_required"),
-        "recurrence_count": int((_as_document(recurrence.get("summary"))).get("recurrence_count") or 0),
-    }
-
-
-def _entries_summary(entries: list[ImplementationDocument]) -> ImplementationDocument:
-    return _knowledge_summary(entries, [], {})
-
-
-def _guards_summary(guards: list[ImplementationDocument]) -> ImplementationDocument:
-    return {
-        "guard_count": len(guards),
-        "active_guard_count": sum(1 for item in guards if item.get("status") == "active"),
-        "manual_required_guard_count": sum(1 for item in guards if item.get("status") == "manual_required"),
-        "archived_guard_count": sum(1 for item in guards if item.get("status") == "archived"),
-    }
-
-
-def _guard_run_summary(runs: list[ImplementationDocument]) -> ImplementationDocument:
-    return {
-        "run_count": len(runs),
-        "passed_count": sum(1 for item in runs if item.get("status") == "passed"),
-        "failed_count": sum(1 for item in runs if item.get("status") == "failed"),
-        "manual_required_count": sum(1 for item in runs if item.get("status") == "manual_required"),
-    }
-
-
-def _incident_matches_entry(incident: ImplementationDocument, entry: ImplementationDocument) -> bool:
-    detected = _as_document(incident.get("detected_from"))
-    return (
-        str(detected.get("component_type") or "") == str(entry.get("component_type") or "")
-        and str(incident.get("category") or "") == str(entry.get("category") or "")
-    )
-
-
-def _write_readme(root: Path) -> None:
-    (root / "README.txt").write_text(
-        "MusicForge Trust Operations Incident Knowledge package.\n"
-        "This package contains closed incident lessons, regression guards, guard run summaries, and recurrence checks.\n",
-        encoding="utf-8",
-    )
-
-
-def _file_record(root: Path, path: Path) -> ImplementationDocument:
-    rel = path.relative_to(root).as_posix()
-    return {"path": rel, "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
-
-
-def _walk_files(root: Path) -> list[Path]:
-    return [path for path in root.rglob("*") if path.is_file()]
-
-
-def _zip_entries(root: Path) -> list[tuple[Path, str]]:
-    return sorted(((path, path.relative_to(root).as_posix()) for path in _walk_files(root)), key=lambda item: item[1])
-
-
-def _write_zip(zip_path: Path, root: Path) -> None:
-    _mkdir(zip_path.parent)
-    if zip_path.exists():
-        zip_path.unlink()
-    with zipfile.ZipFile(_fs_path(zip_path), "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path, entry in _zip_entries(root):
-            archive.write(_fs_path(path), arcname=entry)
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(_fs_path(path), "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _read_json(path: Path) -> ImplementationDocument:
-    return read_json(path)
-
-
-def _read_json_default(path: Path, default: Any | None = None) -> Any:
-    try:
-        return read_json(path)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return {} if default is None else default
-
-
-def _write_json(path: Path, payload: ImplementationDocument) -> Path:
-    _mkdir(path.parent)
-    return write_json(path, _sanitize(payload))
-
-
-def _mkdir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-
-
-def _next_id(root: Path, prefix: str) -> str:
-    _mkdir(root)
-    max_value = 0
-    pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)")
-    for path in root.iterdir():
-        match = pattern.match(path.stem if path.is_file() else path.name)
-        if match:
-            max_value = max(max_value, int(match.group(1)))
-    return f"{prefix}-{max_value + 1:06d}"
-
-
-def _safe_id(value: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", value.strip())
-    cleaned = cleaned.strip(".-")
-    return cleaned or "item"
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _sanitize(payload: Any) -> Any:
-    return sanitize_metadata(payload, blocked_keys=TRUST_OPERATIONS_KNOWLEDGE_BLOCKED_KEYS)
-
-
-def _fs_path(path: Path) -> str:
-    value = os.fspath(path)
-    if os.name == "nt":
-        absolute = os.path.abspath(value)
-        if absolute.startswith("\\\\?\\"):
-            return absolute
-        if absolute.startswith("\\\\"):
-            return "\\\\?\\UNC\\" + absolute[2:]
-        return "\\\\?\\" + absolute
-    return value
+_v142_toik_readiness.bind_globals(globals())

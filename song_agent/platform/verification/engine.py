@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
+from song_agent.platform.contracts import as_document as _as_document
 
 import json
 import re
 import zipfile
 from pathlib import Path
-from typing import Any
 
 from song_agent.platform.contracts.packages import PackageSpec
 from song_agent.platform.verification.hashing import integrity_ok, sha256_file
@@ -26,11 +26,11 @@ def verify_package_envelope(
     spec: PackageSpec,
     *,
     strict: bool = True,
-) -> dict[str, Any]:
+) -> DomainDocument:
     target = Path(zip_path)
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     target_is_file = target.is_file()
-    summary: dict[str, Any] = {
+    summary: ImplementationDocument = {
         "zip_sha256": sha256_file(target) if target_is_file else "",
         "zip_size_bytes": target.stat().st_size if target_is_file else 0,
         "manifest_hash": None,
@@ -105,8 +105,8 @@ def _read_and_check_manifest(
     name_set: set[str],
     spec: PackageSpec,
 ) -> tuple[ImplementationDocument, list[ImplementationDocument]]:
-    manifest: dict[str, Any] = {}
-    checks: list[dict[str, Any]] = []
+    manifest: ImplementationDocument = {}
+    checks: list[ImplementationDocument] = []
     if spec.manifest_entry not in name_set:
         if spec.manifest_entry:
             checks.append(build_check(f"{spec.check_prefix}_manifest_required", False, "Manifest entry exists."))

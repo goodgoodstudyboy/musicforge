@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import csv as csv
 import json as json
@@ -156,7 +156,7 @@ class BatchState:
     skipped_count: int = 0
     error: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "batch_id": self.batch_id,
             "name": self.name,
@@ -179,7 +179,7 @@ class BatchState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BatchState":
+    def from_dict(cls, data: DomainDocument) -> "BatchState":
         created_at = data.get("created_at") or now_iso()
         return cls(
             batch_id=str(data["batch_id"]),
@@ -207,7 +207,7 @@ class BatchState:
 class BatchItem:
     item_id: str
     index: int
-    request: dict[str, Any]
+    request: ImplementationDocument
     status: str = "queued"
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
@@ -229,7 +229,7 @@ class BatchItem:
     project_id: str | None = None
     version_id: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "item_id": self.item_id,
             "index": self.index,
@@ -257,7 +257,7 @@ class BatchItem:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BatchItem":
+    def from_dict(cls, data: DomainDocument) -> "BatchItem":
         created_at = data.get("created_at") or now_iso()
         return cls(
             item_id=str(data["item_id"]),
@@ -291,7 +291,7 @@ class BatchDocument:
     state: BatchState
     items: list[BatchItem]
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "batch": self.state.to_dict(),
             "items": [item.to_dict() for item in self.items],
@@ -406,7 +406,7 @@ class BatchStore:
                 return document
         raise FileNotFoundError(item.item_id)
 
-    def export_batch(self, batch_id: str) -> dict[str, Any]:
+    def export_batch(self, batch_id: str) -> DomainDocument:
         document = self.get_batch(batch_id)
         export = {
             "batch": document.state.to_dict(),
@@ -432,7 +432,7 @@ class BatchStore:
             raise FileNotFoundError(batch_id)
         shutil.rmtree(batch_dir)
 
-    def append_event(self, batch_id: str, event_type: str, payload: dict[str, Any]) -> None:
+    def append_event(self, batch_id: str, event_type: str, payload: DomainDocument) -> None:
         batch_dir = self.batch_dir(batch_id)
         batch_dir.mkdir(parents=True, exist_ok=True)
         event = {

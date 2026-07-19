@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from song_agent.platform.contracts import DomainDocument
 
 from song_agent.capabilities.model import CapabilitySpec, RuntimeIdentitySpec, RuntimeVerificationSpec
 
@@ -34,7 +34,7 @@ class CapabilityRegistry:
     def all(self) -> tuple[CapabilitySpec, ...]:
         return tuple(self._by_id[key] for key in sorted(self._by_id))
 
-    def inventory(self) -> list[dict[str, Any]]:
+    def inventory(self) -> list[DomainDocument]:
         from song_agent.platform.verification.registry import active_verifier_registry
 
         verifier_by_component = {row.component_type: row for row in active_verifier_registry.all()}

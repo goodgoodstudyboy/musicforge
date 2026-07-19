@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import ast
 from collections import Counter
 from contextlib import contextmanager
@@ -11,7 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable
 
 from song_agent.architecture_guardrails import build_architecture_snapshot
 
@@ -29,7 +30,7 @@ def build_v14_baseline(
     *,
     coverage_report: Path | str | None = None,
     performance_report: Path | str | None = None,
-) -> dict[str, dict[str, Any]]:
+) -> dict[str, DomainDocument]:
     root = Path(repo_root).resolve()
     final_sha = _git(root, "rev-parse", f"{BASELINE_TAG}^{{}}")
     head_sha = _git(root, "rev-parse", "HEAD")
@@ -83,7 +84,7 @@ def write_v14_baseline(
     tracked_manifest: Path | str | None = "architecture-v14-migration.json",
     coverage_report: Path | str | None = None,
     performance_report: Path | str | None = None,
-) -> dict[str, dict[str, Any]]:
+) -> dict[str, DomainDocument]:
     root = Path(repo_root).resolve()
     output = _rooted(root, output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -118,7 +119,7 @@ def write_v14_baseline(
     return documents
 
 
-def verify_v14_baseline(repo_root: Path | str = ".") -> dict[str, Any]:
+def verify_v14_baseline(repo_root: Path | str = ".") -> DomainDocument:
     root = Path(repo_root).resolve()
     tracked_path = root / "architecture-v14-migration.json"
     blockers: list[str] = []
@@ -169,15 +170,15 @@ def verify_v14_baseline(repo_root: Path | str = ".") -> dict[str, Any]:
 
 def _compatibility_retirement(
     root: Path,
-    snapshot: dict[str, Any],
-    modules: dict[str, dict[str, Any]],
+    snapshot: ImplementationDocument,
+    modules: dict[str, ImplementationDocument],
     imports: dict[str, list[str]],
     final_sha: str,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     debt = json.loads((root / "architecture-debt.json").read_text(encoding="utf-8"))
     debt_rows = {str(row["module"]): row for row in debt.get("compatibility_entries", [])}
     test_imports = _test_imports(root)
-    entries: list[dict[str, Any]] = []
+    entries: list[ImplementationDocument] = []
     for module, ownership in sorted(modules.items()):
         if ownership.get("layer") != "compatibility":
             continue
@@ -233,7 +234,7 @@ def _compatibility_retirement(
         )
     counts = Counter(str(row["context"]) for row in entries)
     active_edges = sum(len(row["active_callers"]) for row in entries)
-    document: dict[str, Any] = {
+    document: ImplementationDocument = {
         "schema_version": 1,
         "package_type": "musicforge_v14_compatibility_retirement",
         "baseline_tag": BASELINE_TAG,
@@ -256,15 +257,15 @@ def _compatibility_retirement(
 
 def _interface_debt(
     root: Path,
-    snapshot: dict[str, Any],
-    modules: dict[str, dict[str, Any]],
+    snapshot: ImplementationDocument,
+    modules: dict[str, ImplementationDocument],
     final_sha: str,
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     part_files: list[str] = []
-    wildcard_imports: list[dict[str, Any]] = []
-    dynamic_forwarding: list[dict[str, Any]] = []
-    store_references: list[dict[str, Any]] = []
-    oversized_functions: list[dict[str, Any]] = []
+    wildcard_imports: list[ImplementationDocument] = []
+    dynamic_forwarding: list[ImplementationDocument] = []
+    store_references: list[ImplementationDocument] = []
+    oversized_functions: list[ImplementationDocument] = []
     for module, row in sorted(modules.items()):
         layer = str(row.get("layer"))
         if layer in {"compatibility", "release_check"}:
@@ -295,7 +296,7 @@ def _interface_debt(
                         )
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) and _is_globals_update(node.value):
                 dynamic_forwarding.append({"module": module, "line": node.lineno, "name": "globals.update"})
-    document: dict[str, Any] = {
+    document: ImplementationDocument = {
         "schema_version": 1,
         "package_type": "musicforge_v14_interface_debt",
         "baseline_sha": final_sha,
@@ -319,10 +320,10 @@ def _interface_debt(
     return document
 
 
-def _type_debt(root: Path, modules: dict[str, dict[str, Any]], final_sha: str) -> dict[str, Any]:
+def _type_debt(root: Path, modules: dict[str, ImplementationDocument], final_sha: str) -> ImplementationDocument:
     by_layer: Counter[str] = Counter()
     by_context: Counter[str] = Counter()
-    untyped_public: list[dict[str, Any]] = []
+    untyped_public: list[ImplementationDocument] = []
     for module, row in sorted(modules.items()):
         if row.get("layer") in {"compatibility", "release_check"}:
             continue
@@ -336,7 +337,7 @@ def _type_debt(root: Path, modules: dict[str, dict[str, Any]], final_sha: str) -
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("_"):
                 if node.returns is None or any(arg.annotation is None for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs)):
                     untyped_public.append({"module": module, "name": node.name, "line": node.lineno})
-    document: dict[str, Any] = {
+    document: ImplementationDocument = {
         "schema_version": 1,
         "package_type": "musicforge_v14_type_debt",
         "baseline_sha": final_sha,
@@ -351,7 +352,7 @@ def _type_debt(root: Path, modules: dict[str, dict[str, Any]], final_sha: str) -
     return document
 
 
-def _coverage_baseline(root: Path, report_path: Path | str | None, final_sha: str) -> dict[str, Any]:
+def _coverage_baseline(root: Path, report_path: Path | str | None, final_sha: str) -> ImplementationDocument:
     policy = json.loads((root / "coverage-governance.json").read_text(encoding="utf-8"))
     report = _optional_json(root, report_path)
     totals = dict(report.get("totals") or {}) if report else {}
@@ -376,7 +377,7 @@ def _coverage_baseline(root: Path, report_path: Path | str | None, final_sha: st
     }
 
 
-def _performance_baseline(root: Path, report_path: Path | str | None, final_sha: str) -> dict[str, Any]:
+def _performance_baseline(root: Path, report_path: Path | str | None, final_sha: str) -> ImplementationDocument:
     report = _optional_json(root, report_path)
     return {
         "schema_version": 1,
@@ -388,7 +389,7 @@ def _performance_baseline(root: Path, report_path: Path | str | None, final_sha:
     }
 
 
-def _imports_by_target(snapshot: dict[str, Any]) -> dict[str, list[str]]:
+def _imports_by_target(snapshot: ImplementationDocument) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for row in snapshot["import_pairs"]:
         result.setdefault(str(row["imported"]), []).append(str(row["importer"]))
@@ -507,7 +508,7 @@ def _uses_resolve_symbol(node: ast.AST) -> bool:
     )
 
 
-def _optional_json(root: Path, path: Path | str | None) -> dict[str, Any]:
+def _optional_json(root: Path, path: Path | str | None) -> ImplementationDocument:
     if path is None:
         return {}
     target = _rooted(root, path)
@@ -518,11 +519,11 @@ def _optional_json(root: Path, path: Path | str | None) -> dict[str, Any]:
 
 
 def _coverage_totals(
-    report: dict[str, Any],
+    report: ImplementationDocument,
     *,
     include_roots: tuple[str, ...] = (),
     exclude_roots: tuple[str, ...] = (),
-) -> dict[str, Any]:
+) -> ImplementationDocument:
     statements = 0
     covered = 0
     for raw_path, raw_row in dict(report.get("files") or {}).items():
@@ -550,12 +551,12 @@ def _rooted(root: Path, path: Path | str) -> Path:
     return target if target.is_absolute() else root / target
 
 
-def _write_json(path: Path, value: dict[str, Any]) -> None:
+def _write_json(path: Path, value: ImplementationDocument) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _stable_hash(value: dict[str, Any]) -> str:
+def _stable_hash(value: ImplementationDocument) -> str:
     payload = {key: item for key, item in value.items() if key != "integrity_hash"}
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 

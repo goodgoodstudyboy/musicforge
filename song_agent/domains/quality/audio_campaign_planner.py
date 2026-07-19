@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, document_or as _document_or
 
 import json as json
 import threading as threading
@@ -65,7 +65,7 @@ class AudioCampaignPlannerStore:
     def events_path(self, release_id: str) -> Path:
         return self.plan_dir(release_id) / "events.jsonl"
 
-    def read_plan(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    def read_plan(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
         path = self.plan_path(release_id)
         if not path.exists():
             if default is not None:
@@ -73,7 +73,7 @@ class AudioCampaignPlannerStore:
             raise AudioCampaignPlannerNotFoundError(f"Release Audio Campaign plan not found: {release_id}.")
         return sanitize_metadata(read_json(path))
 
-    def read_preflight(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    def read_preflight(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
         path = self.preflight_path(release_id)
         if not path.exists():
             if default is not None:
@@ -81,7 +81,7 @@ class AudioCampaignPlannerStore:
             raise AudioCampaignPlannerNotFoundError(f"Release Audio Campaign preflight not found: {release_id}.")
         return sanitize_metadata(read_json(path))
 
-    def read_link(self, release_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    def read_link(self, release_id: str, *, default: DomainDocument | None = None) -> DomainDocument:
         path = self.link_path(release_id)
         if not path.exists():
             if default is not None:
@@ -89,14 +89,14 @@ class AudioCampaignPlannerStore:
             raise AudioCampaignPlannerNotFoundError(f"Release Audio Campaign link not found: {release_id}.")
         return sanitize_metadata(read_json(path))
 
-    def refresh_plan(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def refresh_plan(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             release = self.release_store.get_release(release_id)
             duplicate_allowed = bool(payload.get("allow_duplicate_track_identity", False))
             tracks = [_track_plan_row(self.project_store, track, release.release_id) for track in release.tracks]
-            blockers: list[dict[str, Any]] = []
-            warnings: list[dict[str, Any]] = []
+            blockers: list[ImplementationDocument] = []
+            warnings: list[ImplementationDocument] = []
             for row in tracks:
                 blockers.extend(row.get("blockers", []))
                 warnings.extend(row.get("warnings", []))
@@ -131,10 +131,10 @@ class AudioCampaignPlannerStore:
             _append_event(self.events_path(release_id), "release_audio_campaign_plan_refreshed", {"plan_id": plan["plan_id"], "source_hash": plan["source_hash"], "status": plan["status"]})
             return plan
 
-    def preflight(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def preflight(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         plan = self.refresh_plan(release_id, payload)
-        checks: list[dict[str, Any]] = []
+        checks: list[ImplementationDocument] = []
         for row in plan.get("tracks", []):
             track_id = str(row.get("track_id") or "")
             checks.extend(
@@ -172,7 +172,7 @@ class AudioCampaignPlannerStore:
             _append_event(self.events_path(release_id), "release_audio_campaign_preflight_failed", {"plan_id": plan.get("plan_id"), "blockers": plan.get("blockers", [])})
         return preflight
 
-    def create_campaign_from_release(self, release_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create_campaign_from_release(self, release_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         with self.lock:
             plan = self.refresh_plan(release_id, payload)
@@ -212,7 +212,7 @@ class AudioCampaignPlannerStore:
             write_json(self.plan_path(release_id), plan)
             return {"plan": plan, "preflight": preflight, "session": session, "campaign": campaign, "link": link}
 
-    def link_campaign(self, release_id: str, campaign_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def link_campaign(self, release_id: str, campaign_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         del payload
         with self.lock:
             plan = self.refresh_plan(release_id)
@@ -241,7 +241,7 @@ class AudioCampaignPlannerStore:
             _append_event(self.events_path(release_id), "release_audio_campaign_linked", {"plan_id": plan.get("plan_id"), "campaign_id": campaign_id, "coverage": coverage})
             return link
 
-    def status(self, release_id: str) -> dict[str, Any]:
+    def status(self, release_id: str) -> DomainDocument:
         plan = self.read_plan(release_id, default={})
         preflight = self.read_preflight(release_id, default={})
         link = self.read_link(release_id, default={})
@@ -253,7 +253,7 @@ class AudioCampaignPlannerStore:
                 stale = True
                 stale_reasons.append("release_track_identity_changed")
             plan = current
-        campaign: dict[str, Any] = {}
+        campaign: ImplementationDocument = {}
         if link.get("campaign_id"):
             try:
                 campaign = self.audio_campaign_store.read_campaign(str(link.get("campaign_id")))
@@ -273,7 +273,7 @@ class AudioCampaignPlannerStore:
         return {"status": "stale" if stale else "passed" if summary["coverage_status"] == "passed" else "warning", "plan": plan, "preflight": preflight, "link": link, "campaign": campaign, "summary": summary}
 
 
-def release_audio_campaign_link_payload(store: AudioCampaignPlannerStore, release_id: str) -> dict[str, Any]:
+def release_audio_campaign_link_payload(store: AudioCampaignPlannerStore, release_id: str) -> DomainDocument:
     link = store.read_link(release_id)
     if link.get("coverage_status") != "passed":
         raise AudioCampaignPlannerStateError("Release Audio Campaign link coverage is not passed.")
@@ -302,8 +302,8 @@ def _case_identity_key(case: ImplementationDocument) -> str:
 
 
 def _track_plan_row(project_store: ProjectStore, track: Any, release_id: str) -> ImplementationDocument:
-    blockers: list[dict[str, Any]] = []
-    warnings: list[dict[str, Any]] = []
+    blockers: list[ImplementationDocument] = []
+    warnings: list[ImplementationDocument] = []
     identity_key = _track_identity_key(track)
     if not identity_key:
         blockers.append({"check_id": "release_track_identity_complete", "track_id": getattr(track, "track_id", None), "message": "Release track project/version/final export identity is incomplete."})

@@ -4,7 +4,6 @@ from song_agent.platform.contracts.coercion import as_document as _as_document, 
 
 from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
 
-from typing import Any
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
@@ -18,7 +17,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate(QualityRouteContext):
         mismatched: list[str] = []
         if not manifest_acceptance:
             missing.append("encoded_audio_acceptance")
-        summary: dict[str, Any] = {}
+        summary: ImplementationDocument = {}
         release_id = str(export_manifest.get("release_id") or "")
         export_dir = self.release_store.export_dir(release_id)
         summary_path = str(manifest_acceptance.get("summary_path") or "encoded-audio-acceptance-summary.json")
@@ -97,7 +96,7 @@ class QualityRoutesReleaseEncodedAudioAcceptanceExportGate(QualityRouteContext):
         release_id = str(export_manifest.get("release_id") or "")
         export_dir = self.release_store.export_dir(release_id)
         report_path = str(manifest_decision.get("report_path") or "format-decision/decision-report.json")
-        report: dict[str, Any] = {}
+        report: ImplementationDocument = {}
         try:
             candidate = _interfaces_api_runtime.read_json(export_dir / report_path)
             report = _as_document(candidate)

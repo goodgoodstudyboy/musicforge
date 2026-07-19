@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import shutil as shutil
 import threading as threading
@@ -47,16 +47,16 @@ class UnifiedCommandCenterHandoffStore:
     def verification_report_path(self, center_id: str) -> Path:
         return self.handoff_dir(center_id) / "handoff-verification-report.json"
 
-    def export_handoff(self, center_id: str) -> dict[str, Any]:
+    def export_handoff(self, center_id: str) -> DomainDocument:
         with self.lock:
             source = self._source_state(center_id)
             handoff_dir = self.handoff_dir(center_id)
             if handoff_dir.exists():
                 shutil.rmtree(handoff_dir)
             handoff_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
+            files: list[ImplementationDocument] = []
 
-            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
+            def write_entry(rel: str, payload: DomainDocument | str) -> None:
                 path = handoff_dir / rel
                 if isinstance(payload, str):
                     path.parent.mkdir(parents=True, exist_ok=True)
@@ -98,7 +98,7 @@ class UnifiedCommandCenterHandoffStore:
             write_json(self.manifest_path(center_id), manifest)
             return manifest
 
-    def build_handoff_zip(self, center_id: str) -> dict[str, Any]:
+    def build_handoff_zip(self, center_id: str) -> DomainDocument:
         with self.lock:
             manifest = self.export_handoff(center_id)
             handoff_dir = self.handoff_dir(center_id)
@@ -122,7 +122,7 @@ class UnifiedCommandCenterHandoffStore:
                         archive.write(path, path.relative_to(handoff_dir).as_posix())
             return {"status": "passed", "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_handoff(self, center_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_handoff(self, center_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         payload = payload or {}
         report = verify_unified_command_center_handoff_package(
             self.zip_path(center_id),
@@ -134,7 +134,7 @@ class UnifiedCommandCenterHandoffStore:
         write_unified_command_center_handoff_verification_report(report, self.verification_report_path(center_id))
         return report
 
-    def gate(self, center_id: str, *, required: bool = True, handoff_zip_path: Path | str | None = None, handoff_verification_report_path: Path | str | None = None) -> dict[str, Any]:
+    def gate(self, center_id: str, *, required: bool = True, handoff_zip_path: Path | str | None = None, handoff_verification_report_path: Path | str | None = None) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         handoff_zip = Path(handoff_zip_path) if handoff_zip_path else self.zip_path(center_id)
@@ -179,7 +179,7 @@ class UnifiedCommandCenterHandoffStore:
         return {"signoff": signoff, "archive_verification": archive_verification, "archive_zip_path": archive_zip}
 
 
-def verify_unified_command_center_handoff_archive(archive_zip: Path, archive_verification_path: Path) -> dict[str, Any]:
+def verify_unified_command_center_handoff_archive(archive_zip: Path, archive_verification_path: Path) -> DomainDocument:
     from song_agent.domains.program.unified_command_center_archive_verifier import verify_unified_command_center_archive_package
 
     external = read_json(archive_verification_path)

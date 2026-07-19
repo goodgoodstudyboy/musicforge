@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -51,7 +52,7 @@ def verify_trust_operations_hub_incident_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _IncidentVerifier(
         Path(zip_path),
         strict=strict,
@@ -67,11 +68,11 @@ def verify_trust_operations_hub_incident_package(
     return verifier.run()
 
 
-def write_trust_operations_hub_incident_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_trust_operations_hub_incident_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_trust_operations_hub_incident_verification_report(report: dict[str, Any]) -> None:
+def print_trust_operations_hub_incident_verification_report(report: DomainDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Incident Board verification")
     print(f"status: {report.get('status')}")
@@ -81,7 +82,7 @@ def print_trust_operations_hub_incident_verification_report(report: dict[str, An
     print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
-def trust_operations_hub_incident_verification_exit_code(report: dict[str, Any]) -> int:
+def trust_operations_hub_incident_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -161,8 +162,8 @@ class _IncidentVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -170,20 +171,20 @@ class _IncidentVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.redaction_findings: list[dict[str, Any]] = []
-        self.manifest: dict[str, Any] = {}
-        self.board: dict[str, Any] = {}
-        self.report: dict[str, Any] = {}
-        self.source_summary: dict[str, Any] = {}
-        self.incidents_doc: dict[str, Any] = {}
-        self.plans_doc: dict[str, Any] = {}
-        self.results_doc: dict[str, Any] = {}
-        self.evidence_index: dict[str, Any] = {}
-        self.closeout_summary: dict[str, Any] = {}
-        self.events: list[dict[str, Any]] = []
-        self.hub_verification_report: dict[str, Any] = {}
+        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: ImplementationDocument = {}
+        self.board: ImplementationDocument = {}
+        self.report: ImplementationDocument = {}
+        self.source_summary: ImplementationDocument = {}
+        self.incidents_doc: ImplementationDocument = {}
+        self.plans_doc: ImplementationDocument = {}
+        self.results_doc: ImplementationDocument = {}
+        self.evidence_index: ImplementationDocument = {}
+        self.closeout_summary: ImplementationDocument = {}
+        self.events: list[ImplementationDocument] = []
+        self.hub_verification_report: ImplementationDocument = {}
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -323,7 +324,7 @@ class _IncidentVerifier:
         evidence_components = {str(evidence.get("component_id") or "") for evidence in evidence_rows if isinstance(evidence, dict) and _evidence_binding_valid(evidence)}
         missing_uncovered = sorted(component_id for component_id in missing_components if component_id not in evidence_components)
         self._add_check("evidence", "tohi_evidence_covers_hub_verifier_blockers", "failed" if missing_uncovered else "passed", "blocking", "Incident evidence does not cover Hub verifier blockers: " + ", ".join(missing_uncovered[:5]) if missing_uncovered else "Incident evidence covers Hub verifier blockers.")
-        valid_evidence_by_incident: dict[str, list[dict[str, Any]]] = {}
+        valid_evidence_by_incident: dict[str, list[ImplementationDocument]] = {}
         for evidence in evidence_rows:
             if isinstance(evidence, dict) and _evidence_binding_valid(evidence):
                 valid_evidence_by_incident.setdefault(str(evidence.get("incident_id") or ""), []).append(evidence)
@@ -364,7 +365,7 @@ class _IncidentVerifier:
         self._add_check("requirements", "tohi_no_stale_incidents", "passed" if stale == 0 else "failed", "blocking", "No stale incidents." if stale == 0 else "Stale incidents remain.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[dict[str, Any]] = []
+        findings: list[ImplementationDocument] = []
         for info in self.entry_infos:
             name = info.filename
             if not _is_text_scan_entry(name) or int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
@@ -441,7 +442,7 @@ class _IncidentVerifier:
         except (KeyError, OSError) as exc:
             self._add_check(scope, check_id, "failed", "blocking", f"{name} cannot be read: {exc}")
             return []
-        rows: list[dict[str, Any]] = []
+        rows: list[ImplementationDocument] = []
         for line in raw.decode("utf-8", errors="ignore").splitlines():
             if not line.strip():
                 continue
@@ -504,7 +505,7 @@ def _rebuild_status_from_events(events: list[ImplementationDocument]) -> dict[st
 
 
 def _event_chain_ok(events: list[ImplementationDocument]) -> bool:
-    by_incident: dict[str, list[dict[str, Any]]] = {}
+    by_incident: dict[str, list[ImplementationDocument]] = {}
     for event in events:
         by_incident.setdefault(str(event.get("incident_id") or ""), []).append(event)
     for rows in by_incident.values():
@@ -519,88 +520,18 @@ def _event_chain_ok(events: list[ImplementationDocument]) -> bool:
     return True
 
 
-def _read_json_file(path: Path) -> ImplementationDocument:
-    try:
-        with open(_fs_path(path), "r", encoding="utf-8") as handle:
-            value = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return _as_document(value)
+from song_agent.domains.trust import v142_tohiv_readiness as _v142_tohiv_readiness
+from song_agent.domains.trust.v142_tohiv_readiness import (
+    _read_json_file,
+    _sha256_entry,
+    _sha256_file,
+    _counts,
+    _is_safe_entry,
+    _is_forbidden_entry,
+    _is_text_scan_entry,
+    _contains_sensitive_text,
+    _walk_json_values,
+    _fs_path,
+)
 
-
-def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
-    digest = hashlib.sha256()
-    with archive.open(info, "r") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(_fs_path(path), "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _counts(values: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def _is_safe_entry(name: str) -> bool:
-    if not name or "\\" in name:
-        return False
-    try:
-        path = PurePosixPath(name)
-    except ValueError:
-        return False
-    return not path.is_absolute() and all(part not in {"", ".", ".."} for part in path.parts)
-
-
-def _is_forbidden_entry(name: str) -> bool:
-    lowered = name.lower()
-    return lowered.startswith(".musicforge/") or "/.musicforge/" in lowered
-
-
-def _is_text_scan_entry(name: str) -> bool:
-    return name.lower().endswith((".json", ".txt", ".md", ".csv", ".html", ".jsonl"))
-
-
-def _contains_sensitive_text(text: str) -> bool:
-    for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
-        if pattern.search(text):
-            return True
-    for pattern, _kind in LOCAL_PATH_VALUE_PATTERNS:
-        if pattern.search(text):
-            return True
-    lowered = text.lower()
-    return any(marker in lowered for marker in ("github" + "key", "x-access" + "-token", "github" + "_pat_"))
-
-
-def _walk_json_values(value: Any, prefix: str = "$") -> list[tuple[str, Any]]:
-    rows: list[tuple[str, Any]] = []
-    if isinstance(value, dict):
-        for key, item in value.items():
-            rows.extend(_walk_json_values(item, f"{prefix}.{key}"))
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            rows.extend(_walk_json_values(item, f"{prefix}[{index}]"))
-    elif isinstance(value, str):
-        rows.append((prefix, value))
-    return rows
-
-
-def _fs_path(path: Path) -> str:
-    value = os.fspath(path)
-    if os.name == "nt":
-        absolute = os.path.abspath(value)
-        if absolute.startswith("\\\\?\\"):
-            return absolute
-        if absolute.startswith("\\\\"):
-            return "\\\\?\\UNC\\" + absolute[2:]
-        return "\\\\?\\" + absolute
-    return value
+_v142_tohiv_readiness.bind_globals(globals())

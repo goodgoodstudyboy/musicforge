@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import base64 as base64
 import hashlib as hashlib
@@ -26,7 +26,7 @@ class DistributionArtworkError(ValueError):
     pass
 
 
-def import_distribution_artwork(store: DistributionStore, release_id: str, payload: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+def import_distribution_artwork(store: DistributionStore, release_id: str, payload: DomainDocument, *, now: str | None = None) -> DomainDocument:
     if store.any_signed_target(release_id):
         raise DistributionStateError("Signed distribution packages cannot change artwork. Reset distribution signoff before importing artwork.")
     store.release_store.get_release(release_id)
@@ -66,9 +66,9 @@ def import_distribution_artwork(store: DistributionStore, release_id: str, paylo
     return record
 
 
-def list_distribution_artwork(store: DistributionStore, release_id: str) -> list[dict[str, Any]]:
+def list_distribution_artwork(store: DistributionStore, release_id: str) -> list[DomainDocument]:
     store.release_store.get_release(release_id)
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     for path in sorted(store.artwork_dir(release_id).glob("artwork-*/artwork.json")):
         try:
             value = read_json(path)
@@ -79,7 +79,7 @@ def list_distribution_artwork(store: DistributionStore, release_id: str) -> list
     return sorted(rows, key=lambda item: str(item.get("created_at") or ""), reverse=True)
 
 
-def read_distribution_artwork(store: DistributionStore, release_id: str, artwork_id: str) -> dict[str, Any]:
+def read_distribution_artwork(store: DistributionStore, release_id: str, artwork_id: str) -> DomainDocument:
     store.release_store.get_release(release_id)
     path = store.artwork_dir(release_id) / _validate_artwork_id(artwork_id) / "artwork.json"
     if not path.exists():
@@ -88,19 +88,19 @@ def read_distribution_artwork(store: DistributionStore, release_id: str, artwork
     return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def latest_distribution_artwork(store: DistributionStore, release_id: str) -> dict[str, Any]:
+def latest_distribution_artwork(store: DistributionStore, release_id: str) -> DomainDocument:
     rows = list_distribution_artwork(store, release_id)
     return rows[0] if rows else {}
 
 
-def distribution_artwork_file_path(store: DistributionStore, release_id: str, artwork: dict[str, Any] | str) -> Path:
+def distribution_artwork_file_path(store: DistributionStore, release_id: str, artwork: DomainDocument | str) -> Path:
     record = read_distribution_artwork(store, release_id, artwork) if isinstance(artwork, str) else artwork
     artwork_id = _validate_artwork_id(str(record.get("artwork_id") or ""))
     stored_filename = _safe_filename(str(record.get("stored_filename") or "cover.png"))
     return store.artwork_dir(release_id) / artwork_id / stored_filename
 
 
-def delete_distribution_artwork(store: DistributionStore, release_id: str, artwork_id: str) -> dict[str, Any]:
+def delete_distribution_artwork(store: DistributionStore, release_id: str, artwork_id: str) -> DomainDocument:
     if store.any_signed_target(release_id):
         raise DistributionStateError("Signed distribution packages cannot change artwork. Reset distribution signoff before deleting artwork.")
     store.release_store.get_release(release_id)
@@ -117,7 +117,7 @@ def delete_distribution_artwork(store: DistributionStore, release_id: str, artwo
     return {"artwork_id": artwork_id, "deleted": True}
 
 
-def distribution_artwork_summary(record: dict[str, Any] | None) -> dict[str, Any]:
+def distribution_artwork_summary(record: DomainDocument | None) -> DomainDocument:
     data = _as_document(record)
     return sanitize_metadata(
         {

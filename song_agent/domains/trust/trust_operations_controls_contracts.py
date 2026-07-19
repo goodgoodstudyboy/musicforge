@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
-from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -65,11 +64,11 @@ BASELINE_CONTROLS: tuple[dict[str, str], ...] = (
 )
 
 
-def control_hash(doc: dict[str, Any]) -> str:
+def control_hash(doc: DomainDocument) -> str:
     return stable_hash({key: value for key, value in doc.items() if key not in TRUST_OPERATIONS_CONTROL_HASH_EXCLUDE_KEYS})
 
 
-def control_manifest_hash(manifest: dict[str, Any]) -> str:
+def control_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in manifest.items() if key not in {"integrity_hash", "generated_at", "zip"}})
 
 

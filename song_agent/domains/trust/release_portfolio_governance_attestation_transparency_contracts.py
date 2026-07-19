@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
-from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS, sanitize_metadata
 from song_agent.domains.delivery.releases import stable_hash
@@ -33,23 +32,23 @@ TRANSPARENCY_NOTICE_HASH_EXCLUDE_KEYS = {"integrity_hash"}
 TRANSPARENCY_EVENT_HASH_EXCLUDE_KEYS = {"event_hash"}
 
 
-def transparency_feed_hash(feed: dict[str, Any]) -> str:
+def transparency_feed_hash(feed: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (feed or {}).items() if key not in TRANSPARENCY_FEED_HASH_EXCLUDE_KEYS})
 
 
-def transparency_manifest_hash(manifest: dict[str, Any]) -> str:
+def transparency_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in TRANSPARENCY_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def transparency_event_hash(event: dict[str, Any]) -> str:
+def transparency_event_hash(event: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (event or {}).items() if key not in TRANSPARENCY_EVENT_HASH_EXCLUDE_KEYS})
 
 
-def transparency_notice_hash(notice: dict[str, Any]) -> str:
+def transparency_notice_hash(notice: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (notice or {}).items() if key not in TRANSPARENCY_NOTICE_HASH_EXCLUDE_KEYS})
 
 
-def transparency_summary(feed: dict[str, Any] | None) -> dict[str, Any]:
+def transparency_summary(feed: DomainDocument | None) -> DomainDocument:
     data = _as_document(feed)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(
@@ -74,7 +73,7 @@ def _build_events(portfolio_id: str, profile: str, public_state: ImplementationD
     attestation = _as_document(public_state.get("public_attestation"))
     portal = _as_document(public_state.get("portal"))
     accepted = _as_document(public_state.get("accepted_evidence"))
-    definitions: list[tuple[str, str, str, str, dict[str, Any]]] = []
+    definitions: list[tuple[str, str, str, str, ImplementationDocument]] = []
     current_id = registry.get("current_entry_id")
     current_status = registry.get("current_entry_status")
     if current_id and current_status == "published":
@@ -94,7 +93,7 @@ def _build_events(portfolio_id: str, profile: str, public_state: ImplementationD
         definitions.append(("accepted_evidence_stale", "warning", "Accepted Evidence is stale", "Accepted Evidence is stale and must not be treated as current.", {"accepted_evidence_id": accepted.get("accepted_evidence_id")}))
     else:
         definitions.append(("accepted_evidence_missing", "warning", "Accepted Evidence is missing", "No current accepted external review evidence is available.", {"accepted_evidence_id": accepted.get("accepted_evidence_id")}))
-    events: list[dict[str, Any]] = []
+    events: list[ImplementationDocument] = []
     previous_hash = ""
     for index, (event_type, severity, title, message, refs) in enumerate(definitions, start=1):
         event: ImplementationDocument = {
@@ -136,7 +135,7 @@ def _build_notices(
     previous_source = _as_document(previous_feed.get("source"))
     previous_state_hash = (previous_source.get("public_state_hash") or previous_feed.get("source_hash")) if isinstance(previous_feed, dict) else None
     event_by_type = {str(event.get("event_type")): str(event.get("event_id")) for event in events if isinstance(event, dict)}
-    rows: list[tuple[str, str, str, str, list[str], dict[str, Any]]] = []
+    rows: list[tuple[str, str, str, str, list[str], ImplementationDocument]] = []
     if registry.get("current_entry_status") == "published":
         rows.append(("initial_publish", "info", "Current public attestation is published", f"Registry current entry {registry.get('current_entry_id')} is published.", [event_by_type.get("registry_current_published", "")], {"current_entry_id": registry.get("current_entry_id"), "current_certificate_id": registry.get("current_certificate_id")}))
     if previous_state_hash and previous_state_hash != source.get("public_state_hash"):
@@ -149,7 +148,7 @@ def _build_notices(
         rows.append(("accepted_evidence_missing", "warning", "Accepted external review evidence missing", "No current accepted external review evidence is available.", [event_by_type.get("accepted_evidence_missing", "")], {"accepted_evidence_status": accepted.get("status"), "accepted_evidence_verification_status": accepted.get("accepted_evidence_verification_status")}))
     if portal.get("portal_verification_status") == "passed":
         rows.append(("portal_snapshot_changed", "info", "Portal snapshot fingerprint", "Current Portal snapshot fingerprint is recorded.", [event_by_type.get("portal_snapshot_verified", "")], {"portal_manifest_hash": portal.get("portal_manifest_hash"), "portal_zip_sha256": portal.get("portal_zip_sha256")}))
-    notices: list[dict[str, Any]] = []
+    notices: list[ImplementationDocument] = []
     from_hash = str(previous_state_hash or "")
     to_hash = str(source.get("public_state_hash") or "")
     for index, (notice_type, severity, title, message, event_ids, refs) in enumerate(rows, start=1):

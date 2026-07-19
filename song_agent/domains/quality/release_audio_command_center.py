@@ -1,8 +1,9 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import json as json
 import shutil as shutil
@@ -97,32 +98,32 @@ class ReleaseAudioCommandCenterStore:
     def runbook_results_path(self, release_id: str) -> Path:
         return self.center_dir(release_id) / "runbook-results.json"
 
-    def refresh(self, release_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+    def refresh(self, release_id: str, evidence: DomainDocument | None = None) -> DomainDocument:
         with self.lock:
             docs = self._build_documents(release_id, evidence or {})
             self._write_docs(release_id, docs)
             return docs["report"]
 
-    def read_report(self, release_id: str) -> dict[str, Any]:
+    def read_report(self, release_id: str) -> DomainDocument:
         if not self.report_path(release_id).exists():
             raise ReleaseAudioCommandCenterNotFoundError(f"Release Audio Command Center report not found for {release_id}.")
         return read_json(self.report_path(release_id))
 
-    def read_inventory(self, release_id: str) -> dict[str, Any]:
+    def read_inventory(self, release_id: str) -> DomainDocument:
         if not self.inventory_path(release_id).exists():
             raise ReleaseAudioCommandCenterNotFoundError(f"Release Audio Command Center inventory not found for {release_id}.")
         return read_json(self.inventory_path(release_id))
 
-    def create_runbook(self, release_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+    def create_runbook(self, release_id: str, evidence: DomainDocument | None = None) -> DomainDocument:
         with self.lock:
             docs = self._build_documents(release_id, evidence or {})
             self._write_docs(release_id, docs)
             return docs["runbook"]
 
-    def run_safe(self, release_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+    def run_safe(self, release_id: str, evidence: DomainDocument | None = None) -> DomainDocument:
         with self.lock:
             docs = self._ensure_docs(release_id, evidence or {})
-            results: list[dict[str, Any]] = []
+            results: list[ImplementationDocument] = []
             for item in docs["runbook"].get("actions", []):
                 if not isinstance(item, dict):
                     continue
@@ -166,7 +167,7 @@ class ReleaseAudioCommandCenterStore:
             write_json(self.runbook_results_path(release_id), result_doc)
             return result_doc
 
-    def export_package(self, release_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+    def export_package(self, release_id: str, evidence: DomainDocument | None = None) -> DomainDocument:
         with self.lock:
             docs = self._ensure_docs(release_id, evidence or {})
             _sync_report_document_hashes(docs)
@@ -197,7 +198,7 @@ class ReleaseAudioCommandCenterStore:
             write_json(export_dir / "manifest.json", manifest)
             return {"status": docs["report"].get("status"), "release_id": release_id, "export_dir": str(export_dir), "manifest": manifest}
 
-    def build_zip(self, release_id: str, evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+    def build_zip(self, release_id: str, evidence: DomainDocument | None = None) -> DomainDocument:
         with self.lock:
             exported = self.export_package(release_id, evidence or {})
             export_dir = Path(exported["export_dir"])
@@ -227,7 +228,7 @@ class ReleaseAudioCommandCenterStore:
                         archive.write(path, path.relative_to(export_dir).as_posix())
             return {"status": exported["status"], "release_id": release_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_zip(self, release_id: str, *, evidence: dict[str, Any] | None = None, strict: bool = True, require_ready: bool = False) -> dict[str, Any]:
+    def verify_zip(self, release_id: str, *, evidence: DomainDocument | None = None, strict: bool = True, require_ready: bool = False) -> DomainDocument:
         report = verify_release_audio_command_center_package(
             self.zip_path(release_id),
             strict=strict,
@@ -244,8 +245,8 @@ class ReleaseAudioCommandCenterStore:
         required: bool,
         command_center_zip_path: Path | str | None = None,
         command_center_verification_report_path: Path | str | None = None,
-        evidence: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        evidence: DomainDocument | None = None,
+    ) -> DomainDocument:
         if not required:
             return {"status": "not_required", "hard_block": False}
         zip_path = Path(command_center_zip_path) if command_center_zip_path else self.zip_path(release_id)
@@ -449,7 +450,7 @@ class ReleaseAudioCommandCenterStore:
         return manifest
 
 
-def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
+def evidence_to_verifier_kwargs(evidence: DomainDocument) -> DomainDocument:
     mapping = {
         "certification": ("certification_zip_path", "certification_verification_report_path"),
         "timeline": ("timeline_zip_path", "timeline_verification_report_path"),
@@ -460,7 +461,7 @@ def evidence_to_verifier_kwargs(evidence: dict[str, Any]) -> dict[str, Any]:
         "action_queue": ("action_queue_zip_path", "action_queue_verification_report_path"),
         "action_queue_signoff": ("action_queue_signoff_archive_path", "action_queue_signoff_verification_report_path"),
     }
-    kwargs: dict[str, Any] = {}
+    kwargs: ImplementationDocument = {}
     for key, (zip_arg, report_arg) in mapping.items():
         paths = _as_document(evidence.get(key))
         zip_value = paths.get("zip") or paths.get("zip_path") or evidence.get(zip_arg) or evidence.get(zip_arg.replace("_path", ""))
@@ -479,259 +480,22 @@ def _requirements(evidence: ImplementationDocument) -> dict[str, bool]:
     return {key: bool(raw.get(key, True)) for key in COMPONENT_KEYS}
 
 
-def _component_row(component: dict[str, str], evidence: ImplementationDocument, *, verifier_kwargs: ImplementationDocument) -> ImplementationDocument:
-    key = component["key"]
-    paths = _as_document(evidence.get(key))
-    mapping = {
-        "certification": ("certification_zip_path", "certification_verification_report_path"),
-        "timeline": ("timeline_zip_path", "timeline_verification_report_path"),
-        "regression": ("regression_zip_path", "regression_verification_report_path"),
-        "baseline_governance": ("baseline_registry_zip_path", "baseline_registry_verification_report_path"),
-        "regression_response": ("regression_response_zip_path", "regression_response_verification_report_path"),
-        "observatory": ("observatory_zip_path", "observatory_verification_report_path"),
-        "action_queue": ("action_queue_zip_path", "action_queue_verification_report_path"),
-        "action_queue_signoff": ("action_queue_signoff_archive_path", "action_queue_signoff_verification_report_path"),
-    }
-    zip_arg, report_arg = mapping[key]
-    zip_path = paths.get("zip") or paths.get("zip_path") or verifier_kwargs.get(zip_arg)
-    report_path = paths.get("verification_report") or paths.get("verification_report_path") or verifier_kwargs.get(report_arg)
-    status = "missing"
-    readiness = "missing"
-    message = "Evidence ZIP or verification report is missing."
-    fingerprint: _InferenceType = {
-        "component_key": key,
-        "artifact_type": component["artifact"],
-        "zip_sha256": None,
-        "zip_size_bytes": None,
-        "manifest_hash": None,
-        "verification_report_hash": None,
-        "verification_status": None,
-        "runtime_verification_status": None,
-        "runtime_manifest_hash": None,
-        "runtime_failed_count": 0,
-        "runtime_blockers": [],
-    }
-    verification_summary: dict[str, Any] = {"component_key": key, "status": "missing"}
-    runtime_summary: dict[str, Any] = {"component_key": key, "status": "missing", "blockers": []}
-    if zip_path and report_path:
-        runtime = verify_release_audio_command_center_component(key, zip_path, report_path, **verifier_kwargs)
-        fingerprint.update(runtime.get("fingerprint") or {})
-        fingerprint["artifact_type"] = component["artifact"]
-        external_report = _as_document(runtime.get("external_report"))
-        verification_summary = _public_verification_summary(key, external_report) if external_report else verification_summary
-        runtime_summary = {
-            "component_key": key,
-            "status": runtime.get("status"),
-            "readiness": runtime.get("readiness"),
-            "blockers": runtime.get("blockers", []),
-            "runtime_report": runtime.get("runtime_report", {}),
-        }
-        runtime_summary["integrity_hash"] = _integrity_hash(runtime_summary)
-        if runtime.get("status") == "passed":
-            status = "ready"
-            readiness = "ready"
-            message = "Evidence is current and runtime verification passed."
-        else:
-            status = "blocked"
-            readiness = str(runtime.get("readiness") or "blocked")
-            message = _message_for_readiness(readiness, component["label"])
-    fingerprint["integrity_hash"] = _integrity_hash(fingerprint)
-    if "integrity_hash" not in verification_summary:
-        verification_summary["integrity_hash"] = _integrity_hash(verification_summary)
-    return sanitize_metadata(
-        {
-            "component_key": key,
-            "artifact_type": component["artifact"],
-            "label": component["label"],
-            "status": status,
-            "readiness": readiness,
-            "message": message,
-            "fingerprint": fingerprint,
-            "verification_summary": verification_summary,
-            "runtime_summary": runtime_summary,
-        }
-    )
+from song_agent.domains.quality import v142_racc_readiness as _v142_racc_readiness
+from song_agent.domains.quality.v142_racc_readiness import (
+    _component_row,
+    _public_verification_summary,
+    _sync_report_document_hashes,
+    _readiness_row,
+    _gap_row,
+    _message_for_readiness,
+    _recommended_action_for_readiness,
+    _build_runbook,
+    _empty_runbook_results,
+    _readme,
+    _gate_failed,
+    _integrity_hash,
+    _sha256_path,
+    _file_record,
+)
 
-
-def _public_verification_summary(component_key: str, report: ImplementationDocument) -> ImplementationDocument:
-    summary = _as_document(report.get("summary"))
-    public = {
-        "component_key": component_key,
-        "package_type": report.get("package_type"),
-        "status": report.get("status"),
-        "zip_sha256": report.get("zip_sha256"),
-        "zip_size_bytes": report.get("zip_size_bytes"),
-        "manifest_hash": report.get("manifest_hash"),
-        "original_integrity_hash": report.get("integrity_hash"),
-        "summary": {key: value for key, value in summary.items() if key not in {"zip_path"}},
-    }
-    public["integrity_hash"] = _integrity_hash(public)
-    return sanitize_metadata(public)
-
-
-def _sync_report_document_hashes(docs: ImplementationDocument) -> None:
-    report = _as_document(docs.get("report"))
-    report["document_hashes"] = {
-        "command_center": docs.get("command_center", {}).get("integrity_hash"),
-        "evidence_inventory": docs.get("inventory", {}).get("integrity_hash"),
-        "readiness_matrix": docs.get("readiness", {}).get("integrity_hash"),
-        "gap_plan": docs.get("gap_plan", {}).get("integrity_hash"),
-        "runbook": docs.get("runbook", {}).get("integrity_hash"),
-        "runbook_results": docs.get("runbook_results", {}).get("integrity_hash"),
-    }
-    report["integrity_hash"] = _integrity_hash(report)
-
-
-def _readiness_row(row: ImplementationDocument) -> ImplementationDocument:
-    status = "ready" if row.get("status") == "ready" else str(row.get("readiness") or "blocked") if row.get("required") else "not_required"
-    return {
-        "component_key": row.get("component_key"),
-        "artifact_type": row.get("artifact_type"),
-        "label": row.get("label"),
-        "required": bool(row.get("required")),
-        "readiness": status,
-        "message": row.get("message"),
-        "verification_status": (row.get("fingerprint") or {}).get("verification_status"),
-        "runtime_verification_status": (row.get("fingerprint") or {}).get("runtime_verification_status"),
-        "runtime_blockers": (row.get("fingerprint") or {}).get("runtime_blockers", []),
-        "next_action": "none" if status == "ready" else f"refresh_or_verify_{row.get('component_key')}",
-    }
-
-
-def _gap_row(row: ImplementationDocument) -> ImplementationDocument:
-    priority = {
-        "runtime_failed": 10,
-        "stale": 20,
-        "verification_failed": 30,
-        "missing": 40,
-        "manual_required": 50,
-        "blocked": 60,
-    }.get(str(row.get("readiness") or ""), 90)
-    gap = {
-        "gap_id": f"acc-gap-{row.get('component_key')}",
-        "component_key": row.get("component_key"),
-        "severity": "blocking",
-        "priority": priority,
-        "readiness": row.get("readiness"),
-        "reason": row.get("message") or "Required evidence is not ready.",
-        "recommended_action": _recommended_action_for_readiness(row),
-    }
-    gap["integrity_hash"] = _integrity_hash(gap)
-    return gap
-
-
-def _message_for_readiness(readiness: str, label: str) -> str:
-    if readiness == "missing":
-        return f"{label} ZIP or verification report is missing."
-    if readiness == "stale":
-        return f"{label} verification report does not match current evidence."
-    if readiness == "verification_failed":
-        return f"{label} verification report is failed or invalid."
-    if readiness == "runtime_failed":
-        return f"{label} runtime verification failed."
-    if readiness == "manual_required":
-        return f"{label} requires manual follow-up."
-    return f"{label} is blocked."
-
-
-def _recommended_action_for_readiness(row: ImplementationDocument) -> str:
-    readiness = str(row.get("readiness") or "")
-    key = str(row.get("component_key") or "component")
-    if readiness == "runtime_failed":
-        return f"rerun_runtime_verifier_for_{key}"
-    if readiness == "stale":
-        return f"rebuild_and_reverify_{key}"
-    if readiness == "verification_failed":
-        return f"inspect_verification_report_for_{key}"
-    if readiness == "missing":
-        return f"generate_and_verify_{key}"
-    if readiness == "manual_required":
-        return f"complete_manual_action_for_{key}"
-    return row.get("next_action") or f"refresh_or_verify_{key}"
-
-
-def _build_runbook(release_id: str, source_hash: str, gaps: list[ImplementationDocument], created_at: str) -> ImplementationDocument:
-    actions = [
-        {"item_id": "acc-safe-001", "action_type": "refresh_command_center", "execution_mode": "safe_auto", "requires_manual": False},
-        {"item_id": "acc-safe-002", "action_type": "export_command_center", "execution_mode": "safe_auto", "requires_manual": False},
-        {"item_id": "acc-safe-003", "action_type": "build_command_center_zip", "execution_mode": "safe_auto", "requires_manual": False},
-        {"item_id": "acc-safe-004", "action_type": "verify_command_center_zip", "execution_mode": "safe_auto", "requires_manual": False},
-    ]
-    for index, gap in enumerate(gaps, start=1):
-        actions.append(
-            {
-                "item_id": f"acc-manual-{index:03d}",
-                "action_type": str(gap.get("recommended_action") or "resolve_gap"),
-                "execution_mode": "manual_required",
-                "requires_manual": True,
-                "source_gap_id": gap.get("gap_id"),
-            }
-        )
-    runbook = {
-        "schema_version": RELEASE_AUDIO_COMMAND_CENTER_SCHEMA_VERSION,
-        "package_type": "release_audio_command_center_runbook",
-        "release_id": release_id,
-        "created_at": created_at,
-        "source_hash": source_hash,
-        "actions": actions,
-        "summary": {
-            "action_count": len(actions),
-            "safe_action_count": sum(1 for row in actions if row.get("execution_mode") == "safe_auto"),
-            "manual_required_count": sum(1 for row in actions if row.get("execution_mode") == "manual_required"),
-        },
-    }
-    runbook["integrity_hash"] = _integrity_hash(runbook)
-    return runbook
-
-
-def _empty_runbook_results(release_id: str, *, source_hash: str | None = None) -> ImplementationDocument:
-    doc = {
-        "schema_version": RELEASE_AUDIO_COMMAND_CENTER_SCHEMA_VERSION,
-        "package_type": "release_audio_command_center_runbook_results",
-        "release_id": release_id,
-        "created_at": now_iso(),
-        "source_hash": source_hash,
-        "results": [],
-        "summary": {"completed_count": 0, "failed_count": 0, "blocked_count": 0, "manual_required_count": 0},
-    }
-    doc["integrity_hash"] = _integrity_hash(doc)
-    return doc
-
-
-def _readme(report: ImplementationDocument) -> str:
-    return "\n".join(
-        [
-            "MusicForge Release Audio Command Center",
-            "",
-            f"Release: {report.get('release_id')}",
-            f"Status: {report.get('status')}",
-            f"Readiness: {report.get('readiness')}",
-            "",
-            "This package summarizes audio release evidence. Verify it with verify-release-audio-command-center-package and external evidence ZIP/report files.",
-            "",
-        ]
-    )
-
-
-def _gate_failed(message: str, **extra: Any) -> ImplementationDocument:
-    return {"status": "failed", "hard_block": True, "message": message, **extra}
-
-
-def _integrity_hash(payload: ImplementationDocument) -> str:
-    return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
-
-
-def _sha256_path(path: Path | str | None) -> str | None:
-    if not path or not Path(path).exists() or not Path(path).is_file():
-        return None
-    import hashlib
-
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _file_record(path: Path, rel: str) -> ImplementationDocument:
-    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_path(path)}
+_v142_racc_readiness.bind_globals(globals())

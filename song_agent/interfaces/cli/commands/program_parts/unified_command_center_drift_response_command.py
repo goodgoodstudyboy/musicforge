@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
@@ -167,7 +166,7 @@ def _unified_command_center_reviewer_decision_board_payload_from_args(args: argp
                 "response_verification_report_path": accepted_response_reports[index] if index < len(accepted_response_reports) else None,
             }
         )
-    policy: dict[str, _InterfaceType] = {}
+    policy: ImplementationDocument = {}
     if getattr(args, "required_role", None):
         policy["required_roles"] = list(args.required_role)
     if getattr(args, "min_accepted_count", None) is not None:

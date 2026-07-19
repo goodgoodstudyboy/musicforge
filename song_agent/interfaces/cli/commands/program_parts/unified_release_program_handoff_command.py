@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
@@ -60,7 +59,7 @@ def _run_unified_release_program_handoff_command(args: argparse.Namespace) -> Im
             write_unified_release_program_accepted_evidence_verification_report(report, args.report_out)
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
     if args.action == "decision-board":
-        policy: dict[str, _InterfaceType] = {}
+        policy: ImplementationDocument = {}
         if args.required_roles is not None:
             policy["required_roles"] = args.required_roles
         if args.minimum_acceptances is not None:

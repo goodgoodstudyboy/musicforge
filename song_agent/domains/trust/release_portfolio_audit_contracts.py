@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any
+
+from song_agent.platform.contracts import DomainDocument
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
@@ -14,17 +15,17 @@ PORTFOLIO_AUDIT_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "updated_
 PORTFOLIO_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "updated_at"}
 
 
-def portfolio_report_integrity_hash(report: dict[str, Any]) -> str:
+def portfolio_report_integrity_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in PORTFOLIO_AUDIT_HASH_EXCLUDE_KEYS})
 
 
-def portfolio_trend_integrity_hash(report: dict[str, Any]) -> str:
+def portfolio_trend_integrity_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in PORTFOLIO_AUDIT_HASH_EXCLUDE_KEYS})
 
 
-def portfolio_risk_register_integrity_hash(report: dict[str, Any]) -> str:
+def portfolio_risk_register_integrity_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in PORTFOLIO_AUDIT_HASH_EXCLUDE_KEYS})
 
 
-def portfolio_manifest_integrity_hash(manifest: dict[str, Any]) -> str:
+def portfolio_manifest_integrity_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in PORTFOLIO_MANIFEST_HASH_EXCLUDE_KEYS})

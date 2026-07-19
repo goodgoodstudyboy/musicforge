@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
-from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
@@ -36,23 +36,23 @@ PORTAL_REVIEW_RESPONSE_HASH_FIELDS = (
 )
 
 
-def review_pack_hash(pack: dict[str, Any]) -> str:
+def review_pack_hash(pack: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (pack or {}).items() if key not in PORTAL_REVIEW_PACK_HASH_EXCLUDE_KEYS})
 
 
-def review_manifest_hash(manifest: dict[str, Any]) -> str:
+def review_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in PORTAL_REVIEW_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def response_payload_hash(response: dict[str, Any]) -> str:
+def response_payload_hash(response: DomainDocument) -> str:
     return stable_hash({key: response.get(key) for key in PORTAL_REVIEW_RESPONSE_HASH_FIELDS})
 
 
-def response_integrity_hash(response: dict[str, Any]) -> str:
+def response_integrity_hash(response: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (response or {}).items() if key != "integrity_hash"})
 
 
-def review_pack_summary(pack: dict[str, Any]) -> dict[str, Any]:
+def review_pack_summary(pack: DomainDocument) -> DomainDocument:
     source = _as_document(pack.get("source"))
     return {
         "status": pack.get("status") or "missing",
@@ -67,7 +67,7 @@ def review_pack_summary(pack: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def response_summary(response: dict[str, Any]) -> dict[str, Any]:
+def response_summary(response: DomainDocument) -> DomainDocument:
     return {
         "response_id": response.get("response_id"),
         "review_pack_id": response.get("review_pack_id"),
@@ -81,5 +81,5 @@ def response_summary(response: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def verification_hash(report: dict[str, Any]) -> str:
+def verification_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key != "generated_at"})

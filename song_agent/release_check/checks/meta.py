@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import ImplementationDocument
 import json
 from pathlib import Path
-from typing import Any
 
 from song_agent.release_check_architecture import run_architecture_guardrails_smoke, run_architecture_ratchet_smoke
 from song_agent.release_check.checks.legacy import delegated_check
@@ -66,7 +66,7 @@ def run_release_check_governance_smoke(root: Path) -> tuple[bool, str]:
             for row in current
         )
         empty = run_release_check_matrix(repo_root=root, profile="latest", since="99.0", run_tests=False)
-        details: dict[str, Any] = {
+        details: ImplementationDocument = {
             "expired_facade_removed": facade_removed,
             "facade_under_300": facade_removed,
             "legacy_preserved": legacy.is_file(),

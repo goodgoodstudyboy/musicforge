@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -45,7 +45,7 @@ def verify_release_portfolio_governance_attestation_registry(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _RegistryVerifier(
         Path(zip_path),
         strict=strict,
@@ -61,11 +61,11 @@ def verify_release_portfolio_governance_attestation_registry(
     return verifier.run()
 
 
-def write_release_portfolio_governance_attestation_registry_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_release_portfolio_governance_attestation_registry_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_release_portfolio_governance_attestation_registry_verification_report(report: dict[str, Any]) -> None:
+def print_release_portfolio_governance_attestation_registry_verification_report(report: DomainDocument) -> None:
     summary = registry_verification_summary(report)
     print("MusicForge release portfolio governance attestation registry verification")
     print(f"status: {summary.get('status')}")
@@ -82,7 +82,7 @@ def print_release_portfolio_governance_attestation_registry_verification_report(
             print(f"  [{item.get('check_id', 'unknown')}] {item.get('message', '')}")
 
 
-def release_portfolio_governance_attestation_registry_verification_exit_code(report: dict[str, Any]) -> int:
+def release_portfolio_governance_attestation_registry_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -111,16 +111,16 @@ class _RegistryVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
-        self.manifest: dict[str, Any] = {}
-        self.registry: dict[str, Any] = {}
-        self.report_doc: dict[str, Any] = {}
-        self.package_index: dict[str, Any] = {}
-        self.chain: dict[str, Any] = {}
-        self.accepted_evidence: dict[str, Any] = {}
-        self.accepted_evidence_verification: dict[str, Any] = {}
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: ImplementationDocument = {}
+        self.registry: ImplementationDocument = {}
+        self.report_doc: ImplementationDocument = {}
+        self.package_index: ImplementationDocument = {}
+        self.chain: ImplementationDocument = {}
+        self.accepted_evidence: ImplementationDocument = {}
+        self.accepted_evidence_verification: ImplementationDocument = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -129,7 +129,7 @@ class _RegistryVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -197,7 +197,7 @@ class _RegistryVerifier:
         package_type_ok = self.manifest.get("package_type") == REGISTRY_PACKAGE_TYPE
         self._add_check("manifest", "registry_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is valid." if package_type_ok else "Manifest package_type is invalid.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[dict[str, Any]] = []
+        valid: list[ImplementationDocument] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -492,7 +492,7 @@ def _report_source_from_registry(registry: ImplementationDocument) -> Implementa
 
 def _package_index_items_from_registry(registry: ImplementationDocument) -> list[ImplementationDocument]:
     entries = _as_list(registry.get("entries"))
-    items: list[dict[str, Any]] = []
+    items: list[ImplementationDocument] = []
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -539,7 +539,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 
 
 def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         for match in pattern.finditer(text):
             rows.append({"path": path, "type": kind, "excerpt": match.group(0)[:120]})
@@ -550,7 +550,7 @@ def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(path: str, value: Any) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
 
     def walk(current: Any, trail: str) -> None:
         if isinstance(current, dict):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 from dataclasses import asdict, dataclass, field
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ class PolicyProfile:
     no_blockers: NoBlockerRequirement = field(default_factory=NoBlockerRequirement)
     schema_version: int = 1
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -55,7 +55,7 @@ class PolicyProfile:
 class GateResult:
     policy_id: str
     status: str
-    checks: tuple[dict[str, Any], ...]
+    checks: tuple[ImplementationDocument, ...]
     blockers: tuple[str, ...]
     warnings: tuple[str, ...]
     graph_hash: str
@@ -65,5 +65,5 @@ class GateResult:
     def passed(self) -> bool:
         return self.status == "passed"
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)

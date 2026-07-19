@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import base64 as base64
 import json as json
@@ -22,6 +23,11 @@ from song_agent.domains.program.unified_command_center_release_train_lifecycle i
 from song_agent.domains.program.unified_command_center_release_train_verifier import verify_unified_command_center_release_train_package as verify_unified_command_center_release_train_package
 from song_agent.domains.program.unified_command_center_release_train_change_control_verifier import verify_unified_command_center_release_train_change_control_package as verify_unified_command_center_release_train_change_control_package
 from song_agent.domains.program.unified_command_center_release_train_lifecycle_verifier import verify_unified_command_center_release_train_lifecycle_package as verify_unified_command_center_release_train_lifecycle_package
+from song_agent.domains.program.v142_uccrth_readiness import UnifiedCommandCenterReleaseTrainHandoffStoreReadinessMixin
+from song_agent.domains.program import v142_uccrth_readiness as _v142_uccrth_readiness
+from song_agent.domains.program.v142_uccrth_evidence import UnifiedCommandCenterReleaseTrainHandoffStoreEvidenceMixin
+from song_agent.domains.program import v142_uccrth_evidence as _v142_uccrth_evidence
+
 
 
 class UnifiedCommandCenterReleaseTrainHandoffError(ValueError):
@@ -47,7 +53,7 @@ DEFAULT_POLICY = {
 }
 
 
-class UnifiedCommandCenterReleaseTrainHandoffStore:
+class UnifiedCommandCenterReleaseTrainHandoffStore(UnifiedCommandCenterReleaseTrainHandoffStoreReadinessMixin, UnifiedCommandCenterReleaseTrainHandoffStoreEvidenceMixin):
     def __init__(
         self,
         train_store: UnifiedCommandCenterReleaseTrainStore | None = None,
@@ -59,603 +65,54 @@ class UnifiedCommandCenterReleaseTrainHandoffStore:
         self.lifecycle_store = lifecycle_store or UnifiedCommandCenterReleaseTrainLifecycleStore(self.train_store, self.change_control_store)
         self.lock = threading.RLock()
 
-    def handoffs_dir(self, train_id: str) -> Path:
-        return self.train_store.train_dir(train_id) / "handoff"
 
-    def handoff_dir(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoffs_dir(train_id) / _safe_id(handoff_id)
 
-    def handoff_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "handoff.json"
 
-    def source_inputs_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "handoff-source-inputs.json"
 
-    def report_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "handoff-report.json"
 
-    def inventory_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "evidence-inventory.json"
 
-    def readiness_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "readiness-matrix.json"
 
-    def gap_plan_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "gap-plan.json"
 
-    def external_manifest_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "external-evidence-manifest.json"
 
-    def response_summary_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "response-summary.json"
 
-    def accepted_summary_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "accepted-evidence-summary.json"
 
-    def history_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "handoff-history.jsonl"
 
-    def signoff_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "handoff-signoff.json"
 
-    def signoff_binding_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "handoff-signoff-binding-summary.json"
 
-    def responses_dir(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "responses"
 
-    def response_dir(self, train_id: str, handoff_id: str, response_id: str) -> Path:
-        return self.responses_dir(train_id, handoff_id) / _safe_id(response_id)
 
-    def export_dir(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "export"
 
-    def manifest_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.export_dir(train_id, handoff_id) / "manifest.json"
 
-    def zip_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "release-train-final-handoff.zip"
 
-    def verification_report_path(self, train_id: str, handoff_id: str) -> Path:
-        return self.handoff_dir(train_id, handoff_id) / "release-train-final-handoff-verification-report.json"
 
-    def create_handoff(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        with self.lock:
-            handoff_id = _safe_id(str(payload.get("handoff_id") or self._next_handoff_id(train_id)))
-            if self.handoff_path(train_id, handoff_id).exists():
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError(f"Release Train Handoff already exists: {handoff_id}")
-            policy = _policy(payload.get("policy"))
-            now = now_iso()
-            handoff = {
-                "schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_SCHEMA_VERSION,
-                "package_type": "musicforge_release_train_handoff_record",
-                "handoff_id": handoff_id,
-                "train_id": train_id,
-                "status": "draft",
-                "created_at": now,
-                "updated_at": now,
-                "policy": policy,
-            }
-            handoff["integrity_hash"] = _integrity_hash(handoff)
-            self.handoff_dir(train_id, handoff_id).mkdir(parents=True, exist_ok=True)
-            write_json(self.handoff_path(train_id, handoff_id), handoff)
-            self.refresh_report(train_id, handoff_id, payload)
-            return self.get_handoff(train_id, handoff_id)
 
-    def list_handoffs(self, train_id: str) -> list[dict[str, Any]]:
-        if not self.handoffs_dir(train_id).exists():
-            return []
-        rows = []
-        for path in sorted(self.handoffs_dir(train_id).glob("rth-*")):
-            handoff_path = path / "handoff.json"
-            if handoff_path.exists():
-                rows.append(read_json(handoff_path))
-        return rows
 
-    def get_handoff(self, train_id: str, handoff_id: str | None = None) -> dict[str, Any]:
-        handoff_id = handoff_id or self._latest_handoff_id(train_id)
-        if not handoff_id or not self.handoff_path(train_id, handoff_id).exists():
-            raise UnifiedCommandCenterReleaseTrainHandoffNotFoundError(f"Release Train Handoff not found: {train_id}/{handoff_id}")
-        return {
-            "handoff": read_json(self.handoff_path(train_id, handoff_id)),
-            "report": _read_optional_json(self.report_path(train_id, handoff_id)),
-            "inventory": _read_optional_json(self.inventory_path(train_id, handoff_id)),
-            "readiness": _read_optional_json(self.readiness_path(train_id, handoff_id)),
-            "gap_plan": _read_optional_json(self.gap_plan_path(train_id, handoff_id)),
-            "response_summary": _read_optional_json(self.response_summary_path(train_id, handoff_id)),
-            "accepted_evidence_summary": _read_optional_json(self.accepted_summary_path(train_id, handoff_id)),
-            "signoff": _read_optional_json(self.signoff_path(train_id, handoff_id)),
-            "signoff_binding": _read_optional_json(self.signoff_binding_path(train_id, handoff_id)),
-            "verification": _read_optional_json(self.verification_report_path(train_id, handoff_id)),
-        }
 
-    def refresh_report(self, train_id: str, handoff_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        with self.lock:
-            self._ensure_unsigned(train_id, handoff_id)
-            inputs = self._with_default_inputs(train_id, _merge_inputs(_read_optional_json(self.source_inputs_path(train_id, handoff_id)), _source_inputs(payload)))
-            docs = self._build_documents(train_id, handoff_id, inputs)
-            self._write_docs(train_id, handoff_id, docs)
-            write_json(self.source_inputs_path(train_id, handoff_id), inputs)
-            handoff = read_json(self.handoff_path(train_id, handoff_id))
-            handoff["status"] = "ready" if docs["report"].get("status") == "ready" else "blocked"
-            handoff["updated_at"] = now_iso()
-            handoff["source_hash"] = docs["report"].get("source_hash")
-            handoff["external_evidence_manifest_hash"] = docs["external_manifest"].get("integrity_hash")
-            handoff["summary"] = docs["report"].get("summary", {})
-            handoff["integrity_hash"] = _integrity_hash(handoff)
-            write_json(self.handoff_path(train_id, handoff_id), handoff)
-            return docs["report"]
 
-    def export_handoff(self, train_id: str, handoff_id: str) -> dict[str, Any]:
-        with self.lock:
-            docs = self._docs_for_export(train_id, handoff_id)
-            export_dir = self.export_dir(train_id, handoff_id)
-            if export_dir.exists():
-                shutil.rmtree(export_dir)
-            export_dir.mkdir(parents=True, exist_ok=True)
-            files: list[dict[str, Any]] = []
 
-            def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
-                path = export_dir / rel
-                path.parent.mkdir(parents=True, exist_ok=True)
-                if isinstance(payload, str):
-                    path.write_text(payload, encoding="utf-8")
-                else:
-                    write_json(path, payload)
-                files.append(_file_record(path, rel))
 
-            write_entry("handoff-report.json", docs["report"])
-            write_entry("evidence-inventory.json", docs["inventory"])
-            write_entry("readiness-matrix.json", docs["readiness"])
-            write_entry("recipient-guide.md", _recipient_guide(docs))
-            write_entry("gap-plan.json", docs["gap_plan"])
-            write_entry("external-evidence-manifest.json", docs["external_manifest"])
-            write_entry("response-summary.json", docs["response_summary"])
-            write_entry("accepted-evidence-summary.json", docs["accepted_summary"])
-            write_entry("handoff-history.jsonl", _history_text(self._read_history(train_id, handoff_id)))
-            if docs.get("signoff"):
-                write_entry("handoff-signoff.json", docs["signoff"])
-                write_entry("handoff-signoff-binding-summary.json", docs["signoff_binding"])
-            write_entry("README.txt", "MusicForge Release Train Final Handoff Board\n")
-            file_index = _file_index(train_id, handoff_id, files)
-            write_entry("file-index.json", file_index)
-            manifest = _manifest_document(train_id, handoff_id, docs, files, file_index)
-            write_json(self.manifest_path(train_id, handoff_id), manifest)
-            return manifest
 
-    def build_zip(self, train_id: str, handoff_id: str) -> dict[str, Any]:
-        with self.lock:
-            if not self.manifest_path(train_id, handoff_id).exists():
-                self.export_handoff(train_id, handoff_id)
-            else:
-                try:
-                    self._assert_export_current(train_id, handoff_id)
-                except UnifiedCommandCenterReleaseTrainHandoffStateError:
-                    if not self.signoff_path(train_id, handoff_id).exists():
-                        raise
-                    self.export_handoff(train_id, handoff_id)
-            export_dir = self.export_dir(train_id, handoff_id)
-            zip_path = self.zip_path(train_id, handoff_id)
-            if zip_path.exists():
-                zip_path.unlink()
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file() and path != zip_path:
-                        archive.write(path, path.relative_to(export_dir).as_posix())
-            with zipfile.ZipFile(zip_path) as archive:
-                entries = sorted(info.filename for info in archive.infolist())
-            manifest = read_json(self.manifest_path(train_id, handoff_id))
-            manifest["zip"] = {"filename": zip_path.name, "sha256": _sha256_path(zip_path), "size_bytes": zip_path.stat().st_size, "entry_count": len(entries), "entries": entries}
-            manifest["files"] = [_file_record(path, path.relative_to(export_dir).as_posix()) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
-            manifest["integrity_hash"] = _integrity_hash(manifest)
-            write_json(self.manifest_path(train_id, handoff_id), manifest)
-            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(export_dir.rglob("*")):
-                    if path.is_file() and path != zip_path:
-                        archive.write(path, path.relative_to(export_dir).as_posix())
-            return {"status": "passed", "train_id": train_id, "handoff_id": handoff_id, "zip_path": str(zip_path), "zip_sha256": _sha256_path(zip_path), "manifest": manifest}
 
-    def verify_package(self, train_id: str, handoff_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        inputs = self._with_default_inputs(train_id, _merge_inputs(_read_optional_json(self.source_inputs_path(train_id, handoff_id)), _source_inputs(payload)))
-        report = verify_unified_command_center_release_train_handoff_package(
-            self.zip_path(train_id, handoff_id),
-            strict=bool(payload.get("strict", True)),
-            require_current=bool(payload.get("require_current", True)),
-            require_lifecycle=bool(payload.get("require_lifecycle", True)),
-            require_signed=bool(payload.get("require_signed", False)),
-            require_accepted=bool(payload.get("require_accepted", False)),
-            external_evidence_manifest_path=inputs.get("external_evidence_manifest"),
-            train_archive_path=inputs.get("train_archive"),
-            train_verification_report_path=inputs.get("train_verification_report"),
-            train_signoff_binding_path=inputs.get("train_signoff_binding"),
-            change_control_zip_path=inputs.get("change_control_zip"),
-            change_control_verification_report_path=inputs.get("change_control_verification_report"),
-            reset_proof_paths=_as_list(_reset_proof_paths(inputs)),
-            lifecycle_zip_path=inputs.get("lifecycle_zip"),
-            lifecycle_verification_report_path=inputs.get("lifecycle_verification_report"),
-            handoff_signoff_binding_path=payload.get("handoff_signoff_binding") or self.signoff_binding_path(train_id, handoff_id),
-            accepted_evidence_dir=payload.get("accepted_evidence_dir") or (self.responses_dir(train_id, handoff_id) if payload.get("require_accepted") else None),
-        )
-        write_unified_command_center_release_train_handoff_verification_report(report, self.verification_report_path(train_id, handoff_id))
-        return report
 
-    def import_response(self, train_id: str, handoff_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        with self.lock:
-            self._ensure_unsigned(train_id, handoff_id)
-            if any(key in payload for key in ("source_path", "local_path", "file_path")):
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Response import does not accept source_path/local_path/file_path.")
-            response = _response_from_payload(payload)
-            required = {"handoff_id", "train_id", "handoff_zip_sha256", "handoff_manifest_hash", "handoff_source_hash", "handoff_verification_report_hash", "reviewer", "decision", "reviewed_at"}
-            missing = sorted(key for key in required if not response.get(key))
-            if missing:
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError(f"Response is missing required binding fields: {', '.join(missing)}")
-            if response.get("handoff_id") != handoff_id or response.get("train_id") != train_id:
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Response handoff_id/train_id does not match current handoff.")
-            if not self.zip_path(train_id, handoff_id).exists() or not self.verification_report_path(train_id, handoff_id).exists():
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Build and verify handoff ZIP before importing response.")
-            verification = read_json(self.verification_report_path(train_id, handoff_id))
-            manifest_hash = _zip_manifest_hash(self.zip_path(train_id, handoff_id))
-            if response.get("handoff_zip_sha256") != _sha256_path(self.zip_path(train_id, handoff_id)) or response.get("handoff_manifest_hash") != manifest_hash:
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Response does not bind the current handoff ZIP.")
-            if response.get("handoff_source_hash") != read_json(self.report_path(train_id, handoff_id)).get("source_hash"):
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Response does not bind the current handoff source.")
-            if response.get("handoff_verification_report_hash") != _integrity_hash(verification):
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Response does not bind the current handoff verification report.")
-            response_id = _safe_id(str(response.get("response_id") or self._next_response_id(train_id, handoff_id)))
-            response["schema_version"] = UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_HANDOFF_SCHEMA_VERSION
-            response["package_type"] = "musicforge_release_train_handoff_response"
-            response["response_id"] = response_id
-            response["payload_hash"] = _integrity_hash(response)
-            response["integrity_hash"] = _integrity_hash(response)
-            response_dir = self.response_dir(train_id, handoff_id, response_id)
-            response_dir.mkdir(parents=True, exist_ok=True)
-            write_json(response_dir / "response.json", sanitize_metadata(response))
-            report = self.verify_response(train_id, handoff_id, response_id)
-            return {"response": response, "verification": report}
 
-    def verify_response(self, train_id: str, handoff_id: str, response_id: str) -> dict[str, Any]:
-        response_path = self.response_dir(train_id, handoff_id, response_id) / "response.json"
-        if not response_path.exists():
-            raise UnifiedCommandCenterReleaseTrainHandoffNotFoundError(f"Handoff response not found: {response_id}")
-        response = read_json(response_path)
-        checks = [
-            _check("handoff_response_integrity", _integrity_ok(response), "Response integrity hash is valid."),
-            _check("handoff_response_decision_valid", response.get("decision") in {"accepted", "needs_changes", "rejected"}, "Response decision is supported."),
-            _check("handoff_response_current_zip", response.get("handoff_zip_sha256") == _sha256_path(self.zip_path(train_id, handoff_id)), "Response binds current handoff ZIP."),
-            _check("handoff_response_current_manifest", response.get("handoff_manifest_hash") == _zip_manifest_hash(self.zip_path(train_id, handoff_id)), "Response binds current handoff manifest."),
-            _check("handoff_response_current_verification", response.get("handoff_verification_report_hash") == _integrity_hash(read_json(self.verification_report_path(train_id, handoff_id))), "Response binds current handoff verification report."),
-        ]
-        status = "failed" if any(check["status"] == "failed" for check in checks) else "passed"
-        report = {"schema_version": 1, "package_type": "musicforge_release_train_handoff_response_verification", "response_id": response_id, "handoff_id": handoff_id, "train_id": train_id, "status": status, "checks": checks, "summary": _response_public_summary(response)}
-        report["integrity_hash"] = _integrity_hash(report)
-        write_json(self.response_dir(train_id, handoff_id, response_id) / "response-verification-report.json", report)
-        binding = _response_binding_summary(response, report)
-        write_json(self.response_dir(train_id, handoff_id, response_id) / "response-binding-summary.json", binding)
-        return report
 
-    def create_accepted_evidence(self, train_id: str, handoff_id: str, response_id: str) -> dict[str, Any]:
-        with self.lock:
-            self._ensure_unsigned(train_id, handoff_id)
-            verification = self.verify_response(train_id, handoff_id, response_id)
-            response = read_json(self.response_dir(train_id, handoff_id, response_id) / "response.json")
-            if verification.get("status") != "passed" or response.get("decision") != "accepted":
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Only current accepted responses can create accepted evidence.")
-            evidence = {
-                "schema_version": 1,
-                "package_type": "musicforge_release_train_handoff_accepted_evidence",
-                "evidence_id": f"rthae-{response_id}",
-                "response_id": response_id,
-                "handoff_id": handoff_id,
-                "train_id": train_id,
-                "public_summary": _response_public_summary(response),
-                "response_binding": _response_binding_summary(response, verification),
-            }
-            evidence["integrity_hash"] = _integrity_hash(evidence)
-            write_json(self.response_dir(train_id, handoff_id, response_id) / "accepted-evidence.json", evidence)
-            self.refresh_report(train_id, handoff_id, _read_optional_json(self.source_inputs_path(train_id, handoff_id)))
-            return evidence
 
-    def refresh_board(self, train_id: str, handoff_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        return self.refresh_report(train_id, handoff_id, payload or {})
 
-    def signoff(self, train_id: str, handoff_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        with self.lock:
-            self._ensure_unsigned(train_id, handoff_id)
-            inputs = self._with_default_inputs(train_id, _merge_inputs(_read_optional_json(self.source_inputs_path(train_id, handoff_id)), _source_inputs(payload)))
-            write_json(self.source_inputs_path(train_id, handoff_id), inputs)
-            docs = self._build_documents(train_id, handoff_id, inputs)
-            if docs["report"].get("status") != "ready":
-                self._write_docs(train_id, handoff_id, docs)
-                raise UnifiedCommandCenterReleaseTrainHandoffStateError("Release Train Handoff is not ready for signoff.")
-            self._write_docs(train_id, handoff_id, docs)
-            now = now_iso()
-            signoff = sanitize_metadata(
-                {
-                    "schema_version": 1,
-                    "package_type": "musicforge_release_train_handoff_signoff",
-                    "handoff_id": handoff_id,
-                    "train_id": train_id,
-                    "status": "signed",
-                    "signed_by": _bounded(payload.get("signed_by") or "release-train-handoff-chair", 120),
-                    "role": _bounded(payload.get("role") or "release_owner", 80),
-                    "reason": _bounded(payload.get("reason") or "Release Train Handoff accepted.", 1000),
-                    "signed_at": now,
-                    "handoff_report_hash": docs["report"].get("integrity_hash"),
-                    "readiness_matrix_hash": docs["readiness"].get("integrity_hash"),
-                    "evidence_inventory_hash": docs["inventory"].get("integrity_hash"),
-                    "external_evidence_manifest_hash": docs["external_manifest"].get("integrity_hash"),
-                    "accepted_evidence_summary_hash": docs["accepted_summary"].get("integrity_hash"),
-                    "tool": {"name": "MusicForge Release Train Handoff Board", "version": __version__},
-                }
-            )
-            signoff["payload_hash"] = _integrity_hash(signoff)
-            signoff["integrity_hash"] = _integrity_hash(signoff)
-            write_json(self.signoff_path(train_id, handoff_id), signoff)
-            event = self._append_history(
-                train_id,
-                handoff_id,
-                {
-                    "event_type": "release_train_handoff_signoff_created",
-                    "created_at": now,
-                    "train_id": train_id,
-                    "handoff_id": handoff_id,
-                    "signed_by": signoff.get("signed_by"),
-                    "role": signoff.get("role"),
-                    "reason": signoff.get("reason"),
-                    "signoff_hash": signoff.get("integrity_hash"),
-                    "signoff_payload_hash": signoff.get("payload_hash"),
-                    "handoff_report_hash": signoff.get("handoff_report_hash"),
-                    "readiness_matrix_hash": signoff.get("readiness_matrix_hash"),
-                    "evidence_inventory_hash": signoff.get("evidence_inventory_hash"),
-                },
-            )
-            binding = _signoff_binding_summary(train_id, handoff_id, signoff, event, docs)
-            write_json(self.signoff_binding_path(train_id, handoff_id), binding)
-            handoff = read_json(self.handoff_path(train_id, handoff_id))
-            handoff["status"] = "signed"
-            handoff["updated_at"] = now
-            handoff["signoff_hash"] = signoff.get("integrity_hash")
-            handoff["integrity_hash"] = _integrity_hash(handoff)
-            write_json(self.handoff_path(train_id, handoff_id), handoff)
-            return signoff
 
-    def gate(self, train_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        if not payload.get("required", True):
-            return {"status": "not_required", "hard_block": False}
-        handoff_id = str(payload.get("handoff_id") or self._latest_handoff_id(train_id) or "")
-        if not handoff_id:
-            return _gate_failed("Release Train Handoff is missing.")
-        if not self.zip_path(train_id, handoff_id).exists() or not self.verification_report_path(train_id, handoff_id).exists():
-            return _gate_failed("Release Train Handoff ZIP or verification report is missing.")
-        runtime = self.verify_package(train_id, handoff_id, {**payload, "require_current": True, "require_lifecycle": True, "require_signed": bool(payload.get("require_signed", True)), "require_accepted": bool(payload.get("require_accepted", False))})
-        external = read_json(self.verification_report_path(train_id, handoff_id))
-        if runtime.get("status") != "passed" or external.get("status") != "passed":
-            return _gate_failed("Release Train Handoff verification failed.", verification=runtime)
-        if runtime.get("zip_sha256") != external.get("zip_sha256") or runtime.get("manifest_hash") != external.get("manifest_hash"):
-            return _gate_failed("Release Train Handoff verification report is stale.", verification=runtime)
-        return {"status": "passed", "hard_block": False, "message": "Release Train Handoff gate passed.", "summary": runtime.get("summary", {})}
 
-    def _build_documents(self, train_id: str, handoff_id: str, inputs: ImplementationDocument) -> ImplementationDocument:
-        now = now_iso()
-        handoff = read_json(self.handoff_path(train_id, handoff_id))
-        policy = _policy(handoff.get("policy"))
-        train_summary = self._train_summary(inputs)
-        reset_count = int(train_summary.get("summary", {}).get("reset_count") or 0)
-        change_summary = self._change_summary(inputs, require=reset_count > 0 and policy.get("require_change_control_if_resets", True))
-        lifecycle_summary = self._lifecycle_summary(inputs, require=bool(policy.get("require_lifecycle_audit", True)), reset_count=reset_count)
-        responses = self._response_summary(train_id, handoff_id)
-        accepted = self._accepted_summary(train_id, handoff_id)
-        external_manifest = _public_external_manifest(train_id, handoff_id, inputs, train_summary, change_summary, lifecycle_summary)
-        source = {
-            "schema_version": 1,
-            "package_type": "musicforge_release_train_handoff_source",
-            "train_id": train_id,
-            "handoff_id": handoff_id,
-            "policy": policy,
-            "current_train_zip_sha256": train_summary.get("zip_sha256"),
-            "current_train_manifest_hash": train_summary.get("manifest_hash"),
-            "current_train_verification_report_hash": train_summary.get("verification_report_hash"),
-            "change_control_zip_sha256": change_summary.get("zip_sha256"),
-            "change_control_manifest_hash": change_summary.get("manifest_hash"),
-            "change_control_verification_report_hash": change_summary.get("verification_report_hash"),
-            "lifecycle_zip_sha256": lifecycle_summary.get("zip_sha256"),
-            "lifecycle_manifest_hash": lifecycle_summary.get("manifest_hash"),
-            "lifecycle_verification_report_hash": lifecycle_summary.get("verification_report_hash"),
-            "external_evidence_manifest_hash": external_manifest.get("integrity_hash"),
-            "response_summary_hash": responses.get("integrity_hash"),
-            "accepted_evidence_summary_hash": accepted.get("integrity_hash"),
-        }
-        source_hash = stable_hash(source)
-        inventory = _inventory_doc(train_id, handoff_id, source_hash, train_summary, change_summary, lifecycle_summary)
-        readiness = _readiness_doc(train_id, handoff_id, source_hash, policy, inventory, accepted)
-        gap_plan = _gap_plan_doc(train_id, handoff_id, source_hash, readiness)
-        status = "ready" if readiness.get("summary", {}).get("status") == "ready" else "blocked" if readiness.get("summary", {}).get("critical_failed") else "manual_required"
-        report = {
-            "schema_version": 1,
-            "package_type": "musicforge_release_train_handoff_report",
-            "handoff_id": handoff_id,
-            "train_id": train_id,
-            "status": status,
-            "source": source,
-            "source_hash": source_hash,
-            "created_at": now,
-            "summary": {
-                "readiness": readiness.get("summary", {}).get("status"),
-                "train_status": train_summary.get("status"),
-                "reset_count": reset_count,
-                "accepted_response_count": accepted.get("summary", {}).get("accepted_count", 0),
-                "blocker_count": readiness.get("summary", {}).get("critical_failed", 0),
-            },
-            "tool": {"name": "MusicForge Release Train Handoff Board", "version": __version__},
-        }
-        for doc in (external_manifest, inventory, readiness, gap_plan, responses, accepted, report):
-            doc["integrity_hash"] = _integrity_hash(doc)
-        return {"handoff": handoff, "report": report, "inventory": inventory, "readiness": readiness, "gap_plan": gap_plan, "external_manifest": external_manifest, "response_summary": responses, "accepted_summary": accepted}
 
-    def _train_summary(self, inputs: ImplementationDocument) -> ImplementationDocument:
-        zip_path = Path(inputs.get("train_archive") or "")
-        report_path = Path(inputs.get("train_verification_report") or "")
-        binding_path = Path(inputs.get("train_signoff_binding") or "")
-        manifest_path = Path(inputs.get("external_evidence_manifest") or "")
-        if not zip_path.exists() or not report_path.exists() or not binding_path.exists() or not manifest_path.exists():
-            return {"evidence_type": "release_train_archive", "status": "missing"}
-        external = read_json(report_path)
-        runtime = verify_unified_command_center_release_train_package(zip_path, strict=True, require_go=True, require_signed=True, external_evidence_manifest_path=manifest_path, signoff_binding_path=binding_path)
-        return {"evidence_type": "release_train_archive", "status": "passed" if runtime.get("status") == "passed" and external.get("status") == "passed" else "failed", "runtime_status": runtime.get("status"), "external_status": external.get("status"), "zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": runtime.get("manifest_hash"), "verification_report_hash": _integrity_hash(external), "summary": runtime.get("summary", {})}
 
-    def _with_default_inputs(self, train_id: str, inputs: ImplementationDocument) -> ImplementationDocument:
-        merged = dict(inputs or {})
-        defaults: dict[str, Path] = {
-            "train_archive": self.train_store.zip_path(train_id),
-            "train_verification_report": self.train_store.verification_report_path(train_id),
-            "train_signoff_binding": self.train_store.signoff_binding_path(train_id),
-        }
-        if self.change_control_store is not None:
-            defaults["change_control_zip"] = self.change_control_store.zip_path(train_id)
-            defaults["change_control_verification_report"] = self.change_control_store.verification_report_path(train_id)
-        if self.lifecycle_store is not None:
-            defaults["lifecycle_zip"] = self.lifecycle_store.zip_path(train_id)
-            defaults["lifecycle_verification_report"] = self.lifecycle_store.verification_report_path(train_id)
-        for key, value in defaults.items():
-            if not merged.get(key) and value.exists():
-                merged[key] = str(value)
-        return merged
 
-    def _change_summary(self, inputs: ImplementationDocument, *, require: bool) -> ImplementationDocument:
-        if not require:
-            return {"evidence_type": "release_train_change_control", "required": False, "status": "not_required"}
-        zip_path = Path(inputs.get("change_control_zip") or "")
-        report_path = Path(inputs.get("change_control_verification_report") or "")
-        if not zip_path.exists() or not report_path.exists():
-            return {"evidence_type": "release_train_change_control", "required": True, "status": "missing"}
-        external = read_json(report_path)
-        reset_proofs = _reset_proof_paths(inputs)
-        runtime = verify_unified_command_center_release_train_change_control_package(
-            zip_path,
-            strict=True,
-            require_reset_applied=True,
-            require_current_train=True,
-            train_archive_path=inputs.get("train_archive"),
-            train_archive_verification_report_path=inputs.get("train_verification_report"),
-            train_signoff_binding_path=inputs.get("train_signoff_binding"),
-            external_evidence_manifest_path=inputs.get("external_evidence_manifest"),
-            reset_proof_path=reset_proofs[-1] if reset_proofs else None,
-        )
-        return {"evidence_type": "release_train_change_control", "required": True, "status": "passed" if runtime.get("status") == "passed" and external.get("status") == "passed" else "failed", "runtime_status": runtime.get("status"), "external_status": external.get("status"), "zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": runtime.get("manifest_hash"), "verification_report_hash": _integrity_hash(external), "reset_proof_count": len(reset_proofs)}
 
-    def _lifecycle_summary(self, inputs: ImplementationDocument, *, require: bool, reset_count: int) -> ImplementationDocument:
-        if not require:
-            return {"evidence_type": "release_train_lifecycle_audit", "required": False, "status": "not_required"}
-        zip_path = Path(inputs.get("lifecycle_zip") or "")
-        report_path = Path(inputs.get("lifecycle_verification_report") or "")
-        if not zip_path.exists() or not report_path.exists():
-            return {"evidence_type": "release_train_lifecycle_audit", "required": True, "status": "missing"}
-        external = read_json(report_path)
-        runtime = verify_unified_command_center_release_train_lifecycle_package(
-            zip_path,
-            strict=True,
-            require_current_train=True,
-            require_change_control=reset_count > 0,
-            train_archive_path=inputs.get("train_archive"),
-            train_archive_verification_report_path=inputs.get("train_verification_report"),
-            train_signoff_binding_path=inputs.get("train_signoff_binding"),
-            external_evidence_manifest_path=inputs.get("external_evidence_manifest"),
-            change_control_zip_path=inputs.get("change_control_zip"),
-            change_control_verification_report_path=inputs.get("change_control_verification_report"),
-            reset_proof_paths=_as_list(_reset_proof_paths(inputs)),
-        )
-        return {"evidence_type": "release_train_lifecycle_audit", "required": True, "status": "passed" if runtime.get("status") == "passed" and external.get("status") == "passed" else "failed", "runtime_status": runtime.get("status"), "external_status": external.get("status"), "zip_sha256": _sha256_path(zip_path), "zip_size_bytes": zip_path.stat().st_size, "manifest_hash": runtime.get("manifest_hash"), "verification_report_hash": _integrity_hash(external), "summary": runtime.get("summary", {})}
 
-    def _response_summary(self, train_id: str, handoff_id: str) -> ImplementationDocument:
-        rows = []
-        for response_path in sorted(self.responses_dir(train_id, handoff_id).glob("*/response.json")) if self.responses_dir(train_id, handoff_id).exists() else []:
-            response = read_json(response_path)
-            rows.append({**_response_public_summary(response), "response_id": response.get("response_id"), "response_hash": response.get("integrity_hash")})
-        doc = {"schema_version": 1, "package_type": "musicforge_release_train_handoff_response_summary", "handoff_id": handoff_id, "train_id": train_id, "items": rows, "summary": {"total": len(rows), "accepted": len([row for row in rows if row.get("decision") == "accepted"])}}
-        doc["integrity_hash"] = _integrity_hash(doc)
-        return doc
 
-    def _accepted_summary(self, train_id: str, handoff_id: str) -> ImplementationDocument:
-        rows = []
-        for path in sorted(self.responses_dir(train_id, handoff_id).glob("*/accepted-evidence.json")) if self.responses_dir(train_id, handoff_id).exists() else []:
-            rows.append(_accepted_evidence_row_from_dir(path.parent))
-        passed_rows = [row for row in rows if row.get("status") == "passed"]
-        doc = {"schema_version": 1, "package_type": "musicforge_release_train_handoff_accepted_evidence_summary", "handoff_id": handoff_id, "train_id": train_id, "items": rows, "summary": {"accepted_count": len(passed_rows), "failed_count": len(rows) - len(passed_rows), "organization_count": len({row.get("organization") for row in passed_rows if row.get("organization")}), "roles": sorted({str(row.get("reviewer_role")) for row in passed_rows if row.get("reviewer_role")})}}
-        doc["integrity_hash"] = _integrity_hash(doc)
-        return doc
 
-    def _write_docs(self, train_id: str, handoff_id: str, docs: ImplementationDocument) -> None:
-        self.handoff_dir(train_id, handoff_id).mkdir(parents=True, exist_ok=True)
-        write_json(self.report_path(train_id, handoff_id), docs["report"])
-        write_json(self.inventory_path(train_id, handoff_id), docs["inventory"])
-        write_json(self.readiness_path(train_id, handoff_id), docs["readiness"])
-        write_json(self.gap_plan_path(train_id, handoff_id), docs["gap_plan"])
-        write_json(self.external_manifest_path(train_id, handoff_id), docs["external_manifest"])
-        write_json(self.response_summary_path(train_id, handoff_id), docs["response_summary"])
-        write_json(self.accepted_summary_path(train_id, handoff_id), docs["accepted_summary"])
 
-    def _docs_for_export(self, train_id: str, handoff_id: str) -> ImplementationDocument:
-        if not self.report_path(train_id, handoff_id).exists():
-            raise UnifiedCommandCenterReleaseTrainHandoffStateError("Release Train Handoff report is missing. Refresh before export.")
-        docs = {
-            "report": read_json(self.report_path(train_id, handoff_id)),
-            "inventory": read_json(self.inventory_path(train_id, handoff_id)),
-            "readiness": read_json(self.readiness_path(train_id, handoff_id)),
-            "gap_plan": read_json(self.gap_plan_path(train_id, handoff_id)),
-            "external_manifest": read_json(self.external_manifest_path(train_id, handoff_id)),
-            "response_summary": read_json(self.response_summary_path(train_id, handoff_id)),
-            "accepted_summary": read_json(self.accepted_summary_path(train_id, handoff_id)),
-            "signoff": _read_optional_json(self.signoff_path(train_id, handoff_id)),
-            "signoff_binding": _read_optional_json(self.signoff_binding_path(train_id, handoff_id)),
-        }
-        if docs["signoff"]:
-            _assert_signed_docs_current(docs)
-        return docs
 
-    def _assert_export_current(self, train_id: str, handoff_id: str) -> None:
-        docs = self._docs_for_export(train_id, handoff_id)
-        manifest = read_json(self.manifest_path(train_id, handoff_id))
-        if manifest.get("source_hash") != docs["report"].get("source_hash"):
-            raise UnifiedCommandCenterReleaseTrainHandoffStateError("Release Train Handoff export is stale. Re-export before ZIP.")
 
-    def _ensure_unsigned(self, train_id: str, handoff_id: str) -> None:
-        handoff = read_json(self.handoff_path(train_id, handoff_id))
-        if handoff.get("status") == "signed" or self.signoff_path(train_id, handoff_id).exists() or _latest_signoff_event(self._read_history(train_id, handoff_id)):
-            raise UnifiedCommandCenterReleaseTrainHandoffStateError("Signed Release Train Handoff is immutable. Create a new handoff for changes.")
 
-    def _append_history(self, train_id: str, handoff_id: str, event: ImplementationDocument) -> ImplementationDocument:
-        history = self._read_history(train_id, handoff_id)
-        previous = history[-1].get("event_hash") if history else ""
-        event = sanitize_metadata({**event, "previous_event_hash": previous})
-        event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
-        event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
-        history.append(event)
-        self.history_path(train_id, handoff_id).parent.mkdir(parents=True, exist_ok=True)
-        self.history_path(train_id, handoff_id).write_text(_history_text(history), encoding="utf-8")
-        return event
 
-    def _read_history(self, train_id: str, handoff_id: str) -> list[ImplementationDocument]:
-        path = self.history_path(train_id, handoff_id)
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    def _next_handoff_id(self, train_id: str) -> str:
-        existing = [path.name for path in self.handoffs_dir(train_id).glob("rth-*")] if self.handoffs_dir(train_id).exists() else []
-        return f"rth-{len(existing) + 1:06d}"
-
-    def _latest_handoff_id(self, train_id: str) -> str:
-        rows = self.list_handoffs(train_id)
-        return str(rows[-1]["handoff_id"]) if rows else ""
-
-    def _next_response_id(self, train_id: str, handoff_id: str) -> str:
-        existing = [path.name for path in self.responses_dir(train_id, handoff_id).glob("rthr-*")] if self.responses_dir(train_id, handoff_id).exists() else []
-        return f"rthr-{len(existing) + 1:06d}"
 
 
 def _source_inputs(payload: ImplementationDocument) -> ImplementationDocument:
@@ -939,3 +396,6 @@ def _safe_id(value: str) -> str:
 
 def _bounded(value: Any, limit: int) -> str:
     return sanitize_sensitive_text(str(value or ""))[:limit]
+
+_v142_uccrth_readiness.bind_globals(globals())
+_v142_uccrth_evidence.bind_globals(globals())

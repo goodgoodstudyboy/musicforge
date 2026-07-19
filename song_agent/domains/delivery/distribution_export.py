@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import csv as csv
 import hashlib as hashlib
@@ -48,9 +49,9 @@ def build_distribution_export_package(
     store: DistributionStore,
     release_id: str,
     target: DistributionTarget,
-    qa_report: dict[str, Any],
+    qa_report: DomainDocument,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     now = now or now_iso()
     store.ensure_target_mutable(release_id, target)
     release = store.release_store.get_release(release_id)
@@ -67,7 +68,7 @@ def build_distribution_export_package(
         shutil.rmtree(export_dir)
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    copied_files: list[dict[str, Any]] = []
+    copied_files: list[ImplementationDocument] = []
     template = store.resolve_target_template(target)
     checklist = reconcile_distribution_checklist(store, release_id, target, template, write=True) if template else {}
     release_metadata = read_release_metadata(store.release_store, release_id, default={})
@@ -183,7 +184,7 @@ def build_distribution_export_package(
     return manifest
 
 
-def build_distribution_package_zip(store: DistributionStore, release_id: str, target: DistributionTarget, *, now: str | None = None) -> dict[str, Any]:
+def build_distribution_package_zip(store: DistributionStore, release_id: str, target: DistributionTarget, *, now: str | None = None) -> DomainDocument:
     now = now or now_iso()
     package_id = store.latest_package_id(target)
     if not package_id:
@@ -235,10 +236,10 @@ def sign_distribution_package(
     store: DistributionStore,
     release_id: str,
     target: DistributionTarget,
-    qa_report: dict[str, Any],
-    payload: dict[str, Any] | None = None,
+    qa_report: DomainDocument,
+    payload: DomainDocument | None = None,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     now = now or now_iso()
     store.ensure_target_mutable(release_id, target)
     package_id = store.latest_package_id(target)
@@ -264,7 +265,7 @@ def sign_distribution_package(
     return signoff
 
 
-def refresh_distribution_export_signoff_summary(store: DistributionStore, release_id: str, package_id: str) -> dict[str, Any]:
+def refresh_distribution_export_signoff_summary(store: DistributionStore, release_id: str, package_id: str) -> DomainDocument:
     export_dir = store.export_dir(release_id, package_id)
     manifest_path = export_dir / "distribution-manifest.json"
     if not manifest_path.exists():
@@ -285,7 +286,7 @@ def refresh_distribution_export_signoff_summary(store: DistributionStore, releas
     return read_distribution_export_manifest(store, release_id, package_id)
 
 
-def read_distribution_export_manifest(store: DistributionStore, release_id: str, package_id: str) -> dict[str, Any]:
+def read_distribution_export_manifest(store: DistributionStore, release_id: str, package_id: str) -> DomainDocument:
     path = store.export_dir(release_id, package_id) / "distribution-manifest.json"
     if not path.exists():
         raise FileNotFoundError("Distribution export has not been generated.")
@@ -293,7 +294,7 @@ def read_distribution_export_manifest(store: DistributionStore, release_id: str,
     return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def distribution_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
+def distribution_export_summary(manifest: DomainDocument | None) -> DomainDocument:
     data = _as_document(manifest)
     summary = _as_document(data.get("summary"))
     zip_info = _as_document(data.get("zip"))
@@ -365,7 +366,7 @@ def _selected_artwork(store: DistributionStore, release_id: str, target: Distrib
 
 
 def _copy_layout_entries(store: DistributionStore, release_id: str, release_export_dir: Path, export_dir: Path, layout_plan: ImplementationDocument, *, artwork: ImplementationDocument) -> list[ImplementationDocument]:
-    records: list[dict[str, Any]] = []
+    records: list[ImplementationDocument] = []
     encoded_root = store.release_store.release_dir(release_id).resolve() / "encoded-audio"
     for entry in layout_plan.get("entries", []) if isinstance(layout_plan.get("entries"), list) else []:
         if not isinstance(entry, dict) or not entry.get("exists") or entry.get("status") == "failed":
@@ -415,7 +416,7 @@ def _write_encoded_audio_sidecars(store: DistributionStore, release_id: str, tar
     manifests_dir.mkdir(parents=True, exist_ok=True)
     _write_json(target_dir / "summary.json", summary)
     records.append(_file_record(export_dir, target_dir / "summary.json"))
-    copied_profiles: list[dict[str, Any]] = []
+    copied_profiles: list[ImplementationDocument] = []
     for profile_id in profile_ids:
         manifest = encoding_store.read_manifest(release_id, profile_id)
         manifest_path = manifests_dir / f"{profile_id}.json"
@@ -513,133 +514,21 @@ def _write_template_files(export_dir: Path, template: ImplementationDocument, ch
     (export_dir / "docs" / "checklist.md").write_text(checklist_markdown(checklist, template), encoding="utf-8")
 
 
-def _write_template_platform_csv(export_dir: Path, store: DistributionStore, release_id: str, template: ImplementationDocument) -> Path | None:
-    mapping = template_mapping(template)
-    rows = _as_list(mapping.get("platform_csv"))
-    if not rows:
-        return None
-    from song_agent.domains.delivery.release_metadata import read_release_metadata
+from song_agent.domains.delivery import v142_de_readiness as _v142_de_readiness
+from song_agent.domains.delivery.v142_de_readiness import (
+    _write_template_platform_csv,
+    _write_json,
+    _profile_public,
+    _escape_csv_formulas,
+    _escape_csv_cell,
+    _distribution_signoff_export_summary,
+    _distribution_signoff_sidecar_record,
+    _distribution_signoff_hash_payload,
+    _file_record,
+    _zip_entries,
+    _validate_relative_path,
+    _ensure_within,
+    _sha256_file,
+)
 
-    metadata = read_release_metadata(store.release_store, release_id, default={})
-    tracks = _as_list(metadata.get("tracks"))
-    headers = [str(row.get("column") or "") for row in rows if isinstance(row, dict) and row.get("column")]
-    if not headers:
-        return None
-    buffer = io.StringIO(newline="")
-    writer = csv.DictWriter(buffer, fieldnames=headers)
-    writer.writeheader()
-    for track in tracks:
-        if not isinstance(track, dict):
-            continue
-        out: dict[str, Any] = {}
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            column = str(row.get("column") or "")
-            value = resolve_mapping_source(str(row.get("source") or ""), release_metadata=metadata, track_metadata=track)
-            out[column] = _escape_csv_cell(str(value or ""))
-        writer.writerow(out)
-    target = export_dir / "template-platform-metadata.csv"
-    target.write_text(buffer.getvalue(), encoding="utf-8")
-    return target
-
-
-def _write_json(path: Path, data: ImplementationDocument) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.parent / f".tmp-{os.getpid()}-{threading.get_ident()}.json"
-    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
-    return path
-
-
-def _profile_public(profile_id: str) -> ImplementationDocument:
-    profile = get_distribution_profile(profile_id)
-    return {key: profile.get(key) for key in ("profile_id", "name", "description", "profile_hash")}
-
-
-def _escape_csv_formulas(text: str) -> str:
-    reader = csv.reader(io.StringIO(text))
-    buffer = io.StringIO(newline="")
-    writer = csv.writer(buffer)
-    for row in reader:
-        writer.writerow([_escape_csv_cell(cell) for cell in row])
-    return buffer.getvalue()
-
-
-def _escape_csv_cell(cell: str) -> str:
-    text = str(cell or "")
-    if text and text.startswith(FORMULA_PREFIXES) and not text.startswith("'"):
-        return "'" + text
-    return text
-
-
-def _distribution_signoff_export_summary(signoff: ImplementationDocument) -> ImplementationDocument:
-    return sanitize_metadata(
-        {
-            "status": signoff.get("status") or "not_signed",
-            "signed_at": signoff.get("signed_at"),
-            "signed_by": signoff.get("signed_by"),
-            "forced": bool(signoff.get("forced", False)),
-            "qa_source_hash": signoff.get("qa_source_hash"),
-            "export_manifest_hash": signoff.get("export_manifest_hash"),
-        },
-        blocked_keys=DISTRIBUTION_BLOCKED_KEYS,
-    )
-
-
-def _distribution_signoff_sidecar_record(signoff_public: ImplementationDocument) -> ImplementationDocument:
-    return {
-        "path": "distribution-signoff.json",
-        "payload_hash": stable_hash(_distribution_signoff_hash_payload(signoff_public)),
-        "payload_hash_excludes": sorted(DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS),
-    }
-
-
-def _distribution_signoff_hash_payload(signoff_public: ImplementationDocument) -> ImplementationDocument:
-    return {key: value for key, value in signoff_public.items() if key not in DISTRIBUTION_SIGNOFF_PAYLOAD_HASH_EXCLUDE_KEYS}
-
-
-def _file_record(export_dir: Path, path: Path) -> ImplementationDocument:
-    rel = _validate_relative_path(path.resolve().relative_to(export_dir.resolve()).as_posix())
-    return {"path": rel, "size_bytes": path.stat().st_size, "sha256": _sha256_file(path)}
-
-
-def _zip_entries(export_dir: Path) -> list[tuple[Path, str]]:
-    entries: list[tuple[Path, str]] = []
-    seen: set[str] = set()
-    for file in sorted(export_dir.rglob("*")):
-        if not file.is_file() or file.is_symlink():
-            continue
-        resolved = file.resolve()
-        _ensure_within(export_dir, resolved)
-        entry = _validate_relative_path(resolved.relative_to(export_dir).as_posix())
-        if entry in seen:
-            raise DistributionExportError(f"Duplicate ZIP entry: {entry}.")
-        seen.add(entry)
-        entries.append((resolved, entry))
-    return entries
-
-
-def _validate_relative_path(path: str) -> str:
-    raw = str(path or "")
-    if "\\" in raw:
-        raise DistributionExportError("Unsafe relative path.")
-    parts = [part for part in raw.split("/") if part]
-    if not parts or raw.startswith("/") or raw.startswith("//") or any(part in {"..", "."} for part in parts) or ":" in parts[0]:
-        raise DistributionExportError("Unsafe relative path.")
-    return PurePosixPath(*parts).as_posix()
-
-
-def _ensure_within(root: Path, target: Path) -> None:
-    try:
-        target.resolve().relative_to(root.resolve())
-    except ValueError as exc:
-        raise DistributionExportError("Refusing to operate outside distribution export boundaries.") from exc
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as file:
-        for chunk in iter(lambda: file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+_v142_de_readiness.bind_globals(globals())

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import json as json
 from dataclasses import dataclass as dataclass, field as field
@@ -29,7 +29,7 @@ class QualityGateConfig:
     require_stems: bool = False
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "QualityGateConfig":
+    def from_dict(cls, data: DomainDocument) -> "QualityGateConfig":
         return cls(
             min_overall=_score(data.get("min_overall", 75), "min_overall"),
             min_structure=_score(data.get("min_structure", 65), "min_structure"),
@@ -42,7 +42,7 @@ class QualityGateConfig:
             require_stems=bool(data.get("require_stems", False)),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "min_overall": self.min_overall,
             "min_structure": self.min_structure,
@@ -60,11 +60,11 @@ class QualityGateConfig:
 class QualityGateResult:
     status: str
     score: int | None
-    checks: list[dict[str, Any]] = field(default_factory=list)
+    checks: list[ImplementationDocument] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     evaluated_at: str = ""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "status": self.status,
             "score": self.score,
@@ -87,7 +87,7 @@ def save_quality_gate_config(project_dir: Path, config: QualityGateConfig) -> Qu
 
 
 def evaluate_quality_gate(run_dir: Path, config: QualityGateConfig, *, now: str) -> QualityGateResult:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     warnings: list[str] = []
     plan_path = run_dir / "data" / "song-plan.json"
     if not plan_path.exists():
@@ -198,7 +198,7 @@ def _stem_midi_checks(run_dir: Path, manifest: Any, plan: SongPlan) -> list[Impl
         if stem.note_count > 0
     ]
     coverage_passed = sorted(expected_note_tracks, key=_stem_track_key) == sorted(manifest_note_stems, key=_stem_track_key)
-    checks: list[dict[str, Any]] = [
+    checks: list[ImplementationDocument] = [
         {
             "stem_id": "__manifest_coverage__",
             "passed": coverage_passed,

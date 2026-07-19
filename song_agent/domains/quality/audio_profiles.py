@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_float as _as_float, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_float as _as_float, as_list as _as_list
 
 import hashlib as hashlib
 import json as json
@@ -47,7 +47,7 @@ class RendererProfile:
     updated_at: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RendererProfile":
+    def from_dict(cls, data: DomainDocument) -> "RendererProfile":
         now = now_iso()
         return cls(
             profile_id=_profile_id(str(data.get("profile_id") or "arp-000001")),
@@ -80,7 +80,7 @@ class RendererProfile:
         if self.gain < 0 or self.gain > 10:
             raise AudioProfileError("gain must be between 0 and 10.")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "schema_version": AUDIO_PROFILE_SCHEMA_VERSION,
             "profile_id": self.profile_id,
@@ -102,7 +102,7 @@ class RendererProfile:
     def to_renderer_config(self) -> RendererConfig:
         return RendererConfig(renderer_type="fluidsynth", fluidsynth_path=self.engine_path, soundfont_path=self.soundfont_path, sample_rate=self.sample_rate, output_format="wav", gain=self.gain)
 
-    def public_summary(self) -> dict[str, Any]:
+    def public_summary(self) -> DomainDocument:
         payload = self.to_dict()
         payload.pop("engine_path", None)
         payload.pop("soundfont_path", None)
@@ -147,7 +147,7 @@ class AudioProfileStore:
         default = next((profile for profile in profiles if profile.is_default), None)
         return default or profiles[0]
 
-    def upsert_profile(self, payload: dict[str, Any]) -> RendererProfile:
+    def upsert_profile(self, payload: DomainDocument) -> RendererProfile:
         with self.lock:
             profiles = self._read_profiles()
             now = now_iso()
@@ -216,7 +216,7 @@ class AudioProfileStore:
             self._append_event("profile_hidden" if hidden else "profile_unhidden", {"profile_id": target})
             return next(profile for profile in updated if profile.profile_id == target)
 
-    def test_profile(self, profile_id: str) -> dict[str, Any]:
+    def test_profile(self, profile_id: str) -> DomainDocument:
         profile = self.get_profile(profile_id)
         try:
             result = test_renderer_config(profile.to_renderer_config(), timeout_seconds=profile.timeout_seconds)
@@ -252,7 +252,7 @@ class AudioProfileStore:
             file.write(json.dumps(sanitize_metadata({"timestamp": now_iso(), "type": event_type, "payload": payload}), ensure_ascii=False) + "\n")
 
 
-def renderer_profile_hash(profile: RendererProfile | dict[str, Any]) -> str:
+def renderer_profile_hash(profile: RendererProfile | DomainDocument) -> str:
     data = profile.to_dict() if isinstance(profile, RendererProfile) else dict(profile)
     return stable_hash(
         {

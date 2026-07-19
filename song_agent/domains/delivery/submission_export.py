@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import csv as csv
 import hashlib as hashlib
@@ -39,9 +39,9 @@ def build_submission_export_bundle(
     store: SubmissionStore,
     release_id: str,
     submission: SubmissionBatch,
-    qa_report: dict[str, Any],
+    qa_report: DomainDocument,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     now = now or now_iso()
     store.ensure_mutable(submission)
     current_source_hash = stable_hash(submission_source_state(store=store, release_id=release_id, submission=submission))
@@ -54,8 +54,8 @@ def build_submission_export_bundle(
         shutil.rmtree(export_dir)
     export_dir.mkdir(parents=True, exist_ok=True)
 
-    files: list[dict[str, Any]] = []
-    target_rows: list[dict[str, Any]] = []
+    files: list[ImplementationDocument] = []
+    target_rows: list[ImplementationDocument] = []
     for item in submission.items:
         if item.status == "withdrawn":
             continue
@@ -140,7 +140,7 @@ def build_submission_export_bundle(
     return manifest
 
 
-def build_submission_package_zip(store: SubmissionStore, release_id: str, submission: SubmissionBatch, *, now: str | None = None, allow_signed: bool = False) -> dict[str, Any]:
+def build_submission_package_zip(store: SubmissionStore, release_id: str, submission: SubmissionBatch, *, now: str | None = None, allow_signed: bool = False) -> DomainDocument:
     now = now or now_iso()
     if not allow_signed:
         store.ensure_mutable(submission)
@@ -191,10 +191,10 @@ def sign_submission_package(
     store: SubmissionStore,
     release_id: str,
     submission: SubmissionBatch,
-    qa_report: dict[str, Any],
-    payload: dict[str, Any] | None = None,
+    qa_report: DomainDocument,
+    payload: DomainDocument | None = None,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     now = now or now_iso()
     store.ensure_mutable(submission)
     existing = store.read_signoff(release_id, submission.submission_id, default={})
@@ -217,7 +217,7 @@ def sign_submission_package(
     return signoff
 
 
-def refresh_submission_export_signoff_summary(store: SubmissionStore, release_id: str, submission_id: str) -> dict[str, Any]:
+def refresh_submission_export_signoff_summary(store: SubmissionStore, release_id: str, submission_id: str) -> DomainDocument:
     export_dir = store.export_dir(release_id, submission_id)
     manifest_path = export_dir / "submission-manifest.json"
     if not manifest_path.exists():
@@ -237,7 +237,7 @@ def refresh_submission_export_signoff_summary(store: SubmissionStore, release_id
     return read_submission_export_manifest(store, release_id, submission_id)
 
 
-def read_submission_export_manifest(store: SubmissionStore, release_id: str, submission_id: str) -> dict[str, Any]:
+def read_submission_export_manifest(store: SubmissionStore, release_id: str, submission_id: str) -> DomainDocument:
     path = store.export_dir(release_id, submission_id) / "submission-manifest.json"
     if not path.exists():
         raise FileNotFoundError("Submission export has not been generated.")
@@ -245,7 +245,7 @@ def read_submission_export_manifest(store: SubmissionStore, release_id: str, sub
     return sanitize_metadata(_as_document(value), blocked_keys=DISTRIBUTION_BLOCKED_KEYS)
 
 
-def submission_export_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
+def submission_export_summary(manifest: DomainDocument | None) -> DomainDocument:
     data = _as_document(manifest)
     summary = _as_document(data.get("summary"))
     zip_info = _as_document(data.get("zip"))

@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, document_or as _document_or
 
 import hashlib as hashlib
 import json as json
@@ -20,6 +21,11 @@ from song_agent.domains.trust.release_portfolio_governance_audit import ReleaseP
 from song_agent.domains.trust.release_portfolio_governance_reviewer_pack import ReleasePortfolioGovernanceReviewerPackStore as ReleasePortfolioGovernanceReviewerPackStore, reviewer_report_integrity_hash as reviewer_report_integrity_hash, reviewer_report_integrity_ok as reviewer_report_integrity_ok, reviewer_pack_summary as reviewer_pack_summary
 from song_agent.domains.delivery.releases import stable_hash as stable_hash
 from song_agent.domains.trust.release_portfolio_governance_final_board_contracts import FINAL_BOARD_ARCHIVE_MANIFEST_HASH_EXCLUDE_KEYS as FINAL_BOARD_ARCHIVE_MANIFEST_HASH_EXCLUDE_KEYS, FINAL_BOARD_BLOCKED_KEYS as FINAL_BOARD_BLOCKED_KEYS, FINAL_BOARD_CHANGE_REQUEST_HASH_EXCLUDE_KEYS as FINAL_BOARD_CHANGE_REQUEST_HASH_EXCLUDE_KEYS, FINAL_BOARD_REPORT_HASH_EXCLUDE_KEYS as FINAL_BOARD_REPORT_HASH_EXCLUDE_KEYS, FINAL_BOARD_RESPONSE_HASH_EXCLUDE_KEYS as FINAL_BOARD_RESPONSE_HASH_EXCLUDE_KEYS, FINAL_BOARD_SIGNOFF_HASH_EXCLUDE_KEYS as FINAL_BOARD_SIGNOFF_HASH_EXCLUDE_KEYS, final_board_archive_manifest_hash as final_board_archive_manifest_hash, final_board_change_request_hash as final_board_change_request_hash, final_board_change_request_integrity_ok as final_board_change_request_integrity_ok, final_board_report_integrity_hash as final_board_report_integrity_hash, final_board_response_integrity_hash as final_board_response_integrity_hash, final_board_signoff_hash as final_board_signoff_hash
+from song_agent.domains.trust.v142_rpgfb_readiness import ReleasePortfolioGovernanceFinalBoardStoreReadinessMixin
+from song_agent.domains.trust import v142_rpgfb_readiness as _v142_rpgfb_readiness
+from song_agent.domains.trust.v142_rpgfb_evidence import ReleasePortfolioGovernanceFinalBoardStoreEvidenceMixin
+from song_agent.domains.trust import v142_rpgfb_evidence as _v142_rpgfb_evidence
+
 
 
 FINAL_BOARD_SCHEMA_VERSION = 1
@@ -48,7 +54,7 @@ class ReleasePortfolioGovernanceFinalBoardStateError(ReleasePortfolioGovernanceF
     pass
 
 
-class ReleasePortfolioGovernanceFinalBoardStore:
+class ReleasePortfolioGovernanceFinalBoardStore(ReleasePortfolioGovernanceFinalBoardStoreReadinessMixin, ReleasePortfolioGovernanceFinalBoardStoreEvidenceMixin):
     def __init__(
         self,
         *,
@@ -61,687 +67,51 @@ class ReleasePortfolioGovernanceFinalBoardStore:
         self.reviewer_pack_store = reviewer_pack_store
         self.lock = threading.RLock()
 
-    def root_dir(self, portfolio_id: str) -> Path:
-        return self.portfolio_store.portfolio_dir(portfolio_id) / "governance-final-board"
-
-    def report_path(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "final-board-report.json"
-
-    def signoff_path(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "final-board-signoff.json"
-
-    def history_path(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "final-board-history.jsonl"
-
-    def responses_root(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "reviewer-responses"
-
-    def response_path(self, portfolio_id: str, response_id: str) -> Path:
-        return self.responses_root(portfolio_id) / f"{_validate_id(response_id, 'fbr')}.json"
-
-    def change_requests_root(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "change-requests"
-
-    def change_request_path(self, portfolio_id: str, change_request_id: str) -> Path:
-        return self.change_requests_root(portfolio_id) / f"{_validate_id(change_request_id, 'fcr')}.json"
-
-    def change_request_events_path(self, portfolio_id: str) -> Path:
-        return self.change_requests_root(portfolio_id) / "events.jsonl"
-
-    def export_dir(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "export"
-
-    def archive_zip_path(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "portfolio-governance-final-board-archive.zip"
-
-    def verification_report_path(self, portfolio_id: str) -> Path:
-        return self.root_dir(portfolio_id) / "verification-report.json"
-
-    def read_report(self, portfolio_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
-        return _read_json_default(self.report_path(portfolio_id), default=default)
-
-    def read_signoff(self, portfolio_id: str, *, default: dict[str, Any] | None = None) -> dict[str, Any]:
-        return _read_json_default(self.signoff_path(portfolio_id), default=default)
-
-    def get_signoff(self, portfolio_id: str) -> dict[str, Any]:
-        signoff = self.read_signoff(portfolio_id, default={})
-        if not signoff:
-            raise ReleasePortfolioGovernanceFinalBoardNotFoundError("Portfolio Governance Final Board Signoff does not exist.")
-        return signoff
-
-    def read_export_manifest(self, portfolio_id: str) -> dict[str, Any]:
-        path = self.export_dir(portfolio_id) / "manifest.json"
-        if not path.exists():
-            raise ReleasePortfolioGovernanceFinalBoardNotFoundError("Portfolio Governance Final Board Archive export has not been generated.")
-        return _read_json_default(path, default={})
-
-    def refresh_report(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
-        with self.lock:
-            now = now or now_iso()
-            payload = payload or {}
-            self.portfolio_store.get_portfolio(portfolio_id)
-            responses = self.list_reviewer_responses(portfolio_id)
-            source = self._source_with_responses(portfolio_id, responses)
-            blockers, warnings, gates = self._final_board_findings(portfolio_id, source, responses, payload)
-            summary = _summary_from_source(source, responses, blockers, warnings)
-            status = "failed" if blockers else "warning" if warnings else "passed"
-            report = {
-                "schema_version": FINAL_BOARD_SCHEMA_VERSION,
-                "report_id": self._reserve_report_id(portfolio_id),
-                "portfolio_id": portfolio_id,
-                "generated_at": now,
-                "status": status,
-                "readiness": "blocked" if blockers else "requires_review" if warnings else "ready_for_final_signoff",
-                "source_hash": stable_hash(source),
-                "source": source,
-                "summary": summary,
-                "gates": gates,
-                "reviewer_responses": [_response_summary(item) for item in responses],
-                "blockers": blockers,
-                "warnings": warnings,
-            }
-            report["integrity_hash"] = final_board_report_integrity_hash(report)
-            report = sanitize_metadata(report, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
-            self.root_dir(portfolio_id).mkdir(parents=True, exist_ok=True)
-            _write_json(self.report_path(portfolio_id), report)
-            self._append_history(portfolio_id, "report_refreshed", {"status": status, "report_id": report["report_id"]}, now=now)
-            return report
-
-    def build_source(self, portfolio_id: str) -> dict[str, Any]:
-        portfolio = self.portfolio_store.get_portfolio(portfolio_id)
-        portfolio_report = self.portfolio_store.read_report(portfolio_id, default={})
-        governance_audit_report = self.audit_store.read_report(portfolio_id, default={})
-        governance_ledger = self.audit_store.read_ledger(portfolio_id)
-        audit_verification = _read_json_default(self.audit_store.verification_report_path(portfolio_id), default={})
-        audit_manifest = _read_json_default(self.audit_store.export_dir(portfolio_id) / "manifest.json", default={})
-        reviewer_report = self.reviewer_pack_store.read_report(portfolio_id, default={})
-        reviewer_verification = _read_json_default(self.reviewer_pack_store.verification_report_path(portfolio_id), default={})
-        reviewer_manifest = _read_json_default(self.reviewer_pack_store.export_dir(portfolio_id) / "manifest.json", default={})
-        reviewer_zip_path = self.reviewer_pack_store.zip_path(portfolio_id)
-        audit_zip_path = self.audit_store.zip_path(portfolio_id)
-        return sanitize_metadata(
-            {
-                "portfolio_id": portfolio_id,
-                "portfolio_hash": stable_hash(portfolio),
-                "portfolio_report_hash": portfolio_report_integrity_hash(portfolio_report) if portfolio_report else None,
-                "portfolio_report_integrity_hash": portfolio_report.get("integrity_hash") if portfolio_report else None,
-                "portfolio_report_integrity_ok": portfolio_report_integrity_ok(portfolio_report) if portfolio_report else False,
-                "portfolio_report_stale": self.portfolio_store.report_is_stale(portfolio_id, portfolio_report) if portfolio_report else False,
-                "governance_audit_report_hash": audit_report_integrity_hash(governance_audit_report) if governance_audit_report else None,
-                "governance_audit_report_integrity_hash": governance_audit_report.get("integrity_hash") if governance_audit_report else None,
-                "governance_audit_report_integrity_ok": audit_report_integrity_ok(governance_audit_report) if governance_audit_report else False,
-                "governance_audit_report_stale": self.audit_store.report_is_stale(portfolio_id, governance_audit_report) if governance_audit_report else False,
-                "governance_audit_report_status": governance_audit_report.get("status") if governance_audit_report else "missing",
-                "governance_audit_ledger_hash": audit_ledger_hash(governance_ledger) if governance_ledger else None,
-                "governance_audit_ledger_integrity_ok": audit_ledger_integrity_ok(governance_ledger) if governance_ledger else False,
-                "governance_audit_verification_hash": stable_hash(audit_verification) if audit_verification else None,
-                "governance_audit_verification_status": audit_verification.get("status") if audit_verification else "missing",
-                "governance_audit_verification_zip_sha256": audit_verification.get("zip_sha256") if audit_verification else None,
-                "governance_audit_verification_zip_size_bytes": audit_verification.get("zip_size_bytes") if audit_verification else None,
-                "governance_audit_verification_manifest_hash": audit_verification.get("manifest_hash") if audit_verification else None,
-                "governance_audit_zip_exists": audit_zip_path.exists(),
-                "governance_audit_zip_sha256": _sha256(audit_zip_path) if audit_zip_path.exists() else None,
-                "governance_audit_zip_size_bytes": audit_zip_path.stat().st_size if audit_zip_path.exists() else None,
-                "governance_audit_export_manifest_hash": audit_manifest.get("integrity_hash") if audit_manifest else None,
-                "governance_reviewer_report_hash": reviewer_report_integrity_hash(reviewer_report) if reviewer_report else None,
-                "governance_reviewer_report_integrity_hash": reviewer_report.get("integrity_hash") if reviewer_report else None,
-                "governance_reviewer_report_integrity_ok": reviewer_report_integrity_ok(reviewer_report) if reviewer_report else False,
-                "governance_reviewer_report_stale": self.reviewer_pack_store.report_is_stale(portfolio_id, reviewer_report) if reviewer_report else False,
-                "governance_reviewer_report_status": reviewer_report.get("status") if reviewer_report else "missing",
-                "governance_reviewer_pack_verification_hash": stable_hash(reviewer_verification) if reviewer_verification else None,
-                "governance_reviewer_pack_verification_status": reviewer_verification.get("status") if reviewer_verification else "missing",
-                "governance_reviewer_pack_verification_zip_sha256": reviewer_verification.get("zip_sha256") if reviewer_verification else None,
-                "governance_reviewer_pack_verification_zip_size_bytes": reviewer_verification.get("zip_size_bytes") if reviewer_verification else None,
-                "governance_reviewer_pack_zip_exists": reviewer_zip_path.exists(),
-                "governance_reviewer_pack_zip_sha256": _sha256(reviewer_zip_path) if reviewer_zip_path.exists() else None,
-                "governance_reviewer_pack_zip_size_bytes": reviewer_zip_path.stat().st_size if reviewer_zip_path.exists() else None,
-                "governance_reviewer_pack_manifest_hash": reviewer_manifest.get("integrity_hash") if reviewer_manifest else None,
-                "queue_count": int((_as_document(governance_audit_report.get("coverage"))).get("queue_count") or 0),
-                "signed_queue_count": int((_as_document(governance_audit_report.get("coverage"))).get("signed_queue_count") or 0),
-                "archive_verified_count": int((_as_document(governance_audit_report.get("coverage"))).get("archive_verified_count") or 0),
-                "force_signed_queue_count": int((_as_document(governance_audit_report.get("coverage"))).get("force_signed_count") or 0),
-                "reset_count": int((_as_document(governance_audit_report.get("coverage"))).get("reset_count") or 0),
-                "applied_change_request_count": int((_as_document(governance_audit_report.get("coverage"))).get("applied_change_request_count") or 0),
-            },
-            blocked_keys=FINAL_BOARD_BLOCKED_KEYS,
-        )
-
-    def _source_with_responses(self, portfolio_id: str, responses: list[ImplementationDocument] | None = None) -> ImplementationDocument:
-        rows = responses if responses is not None else self.list_reviewer_responses(portfolio_id)
-        source = self.build_source(portfolio_id)
-        source["reviewer_responses_hash"] = stable_hash([item.get("integrity_hash") for item in rows])
-        source["reviewer_response_count"] = len(rows)
-        source["reviewer_response_status"] = _reviewer_response_status(rows, source)
-        return sanitize_metadata(source, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
-
-    def report_is_stale(self, portfolio_id: str, report: dict[str, Any] | None = None) -> bool:
-        data = _document_or(report, self.read_report(portfolio_id, default={}))
-        if not data:
-            return False
-        try:
-            return stable_hash(self._source_with_responses(portfolio_id)) != str(data.get("source_hash") or "")
-        except Exception:
-            return True
-
-    def import_reviewer_response(self, portfolio_id: str, payload: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
-        if not isinstance(payload, dict):
-            raise ReleasePortfolioGovernanceFinalBoardStateError("Reviewer response payload must be a JSON object.")
-        _reject_forbidden_keys(payload)
-        with self.lock:
-            now = now or now_iso()
-            self.portfolio_store.get_portfolio(portfolio_id)
-            if self.signoff_summary(portfolio_id).get("status") in SIGNED_STATUSES:
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board is signed. Reset signoff before importing reviewer responses.")
-            source = self.build_source(portfolio_id)
-            decision = str(payload.get("decision") or "").strip()
-            if decision not in RESPONSE_DECISIONS:
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Reviewer response decision must be accepted, accepted_with_notes, needs_changes, or rejected.")
-            response_id = self._reserve_response_id(portfolio_id)
-            response = {
-                "schema_version": FINAL_BOARD_SCHEMA_VERSION,
-                "response_id": response_id,
-                "portfolio_id": portfolio_id,
-                "imported_at": now,
-                "reviewer": sanitize_metadata(_as_document(payload.get("reviewer")), blocked_keys=FINAL_BOARD_BLOCKED_KEYS),
-                "source": {
-                    "reviewer_pack_source_hash": source.get("governance_reviewer_report_hash"),
-                    "reviewer_pack_zip_sha256": source.get("governance_reviewer_pack_zip_sha256"),
-                    "reviewer_pack_verification_hash": source.get("governance_reviewer_pack_verification_hash"),
-                },
-                "decision": decision,
-                "findings": _sanitize_findings(payload.get("findings")),
-                "notes": sanitize_sensitive_text(str(payload.get("notes") or "").strip())[:2000],
-            }
-            response["integrity_hash"] = final_board_response_integrity_hash(response)
-            self.responses_root(portfolio_id).mkdir(parents=True, exist_ok=True)
-            _write_json(self.response_path(portfolio_id, response_id), response)
-            self._append_history(portfolio_id, "reviewer_response_imported", {"response_id": response_id, "decision": decision}, now=now)
-            return response
-
-    def list_reviewer_responses(self, portfolio_id: str) -> list[dict[str, Any]]:
-        root = self.responses_root(portfolio_id)
-        if not root.exists():
-            return []
-        rows = [_read_json_default(path, default={}) for path in sorted(root.glob("fbr-*.json"))]
-        return sorted([item for item in rows if item], key=lambda item: str(item.get("imported_at") or ""), reverse=True)
-
-    def signoff(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        with self.lock:
-            now = now or now_iso()
-            existing = self.read_signoff(portfolio_id, default={})
-            if final_board_signoff_summary(existing).get("status") in SIGNED_STATUSES:
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board is already signed. Reset before signing again.")
-            report = self.read_report(portfolio_id, default={}) or self.refresh_report(portfolio_id, now=now)
-            if self.report_is_stale(portfolio_id, report):
-                report = self.refresh_report(portfolio_id, now=now)
-            if not final_board_report_integrity_ok(report):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Report integrity failed. Refresh before signoff.")
-            force = bool(payload.get("force", False))
-            override_reason = sanitize_sensitive_text(str(payload.get("override_reason") or "").strip())
-            blockers = _as_list(report.get("blockers"))
-            warnings = _as_list(report.get("warnings"))
-            if blockers:
-                detail = str((_as_document(blockers[0])).get("message") or "Final Board gate failed.")
-                raise ReleasePortfolioGovernanceFinalBoardStateError(f"Final Board Signoff gate failed: {detail}")
-            if warnings and not force and not bool(payload.get("allow_warning_signoff", False)):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Report has warnings. Use force with override_reason or allow_warning_signoff.")
-            if force and len(override_reason) < 20:
-                raise ReleasePortfolioGovernanceFinalBoardStateError("override_reason must be at least 20 characters for force Final Board Signoff.")
-            status = "force_signed" if force and warnings else "signed"
-            source = _as_document(report.get("source"))
-            signoff = {
-                "schema_version": FINAL_BOARD_SCHEMA_VERSION,
-                "signoff_id": self._reserve_signoff_id(portfolio_id),
-                "portfolio_id": portfolio_id,
-                "status": status,
-                "signed_at": now,
-                "signed_by": _safe_text(payload.get("signed_by"), 120) or "local-user",
-                "role": _safe_text(payload.get("role"), 120) or "portfolio_governance_owner",
-                "reason": sanitize_sensitive_text(str(payload.get("reason") or "Portfolio governance evidence reviewed.").strip())[:1000],
-                "force": status == "force_signed",
-                "override_reason": override_reason or None,
-                "source": {
-                    "final_board_report_hash": report.get("integrity_hash"),
-                    "final_board_report_source_hash": report.get("source_hash"),
-                    "reviewer_pack_verification_hash": source.get("governance_reviewer_pack_verification_hash"),
-                    "reviewer_pack_zip_sha256": source.get("governance_reviewer_pack_zip_sha256"),
-                    "governance_audit_verification_hash": source.get("governance_audit_verification_hash"),
-                    "governance_audit_zip_sha256": source.get("governance_audit_zip_sha256"),
-                },
-                "evidence": {
-                    "report_status": report.get("status"),
-                    "gate_status": "passed" if not blockers else "failed",
-                    "reviewer_response_status": _reviewer_response_status(self.list_reviewer_responses(portfolio_id), source),
-                    "archive_coverage_status": "passed" if int(source.get("archive_verified_count") or 0) >= int(source.get("signed_queue_count") or 0) and int(source.get("signed_queue_count") or 0) > 0 else "failed",
-                    "warning_count": len(warnings),
-                },
-            }
-            signoff["integrity_hash"] = final_board_signoff_hash(signoff)
-            _write_json(self.signoff_path(portfolio_id), signoff)
-            self._append_history(portfolio_id, "signed", {"status": status, "signoff_id": signoff["signoff_id"], "signoff_integrity_hash": signoff["integrity_hash"]}, now=now)
-            return signoff
-
-    def reset_signoff(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        reason = sanitize_sensitive_text(str(payload.get("reason") or "").strip())
-        if len(reason) < 8:
-            raise ReleasePortfolioGovernanceFinalBoardStateError("reason must be at least 8 characters.")
-        change_request_id = str(payload.get("change_request_id") or "").strip()
-        if not change_request_id:
-            raise ReleasePortfolioGovernanceFinalBoardStateError("approved Final Board Change Request is required before reset.")
-        with self.lock:
-            now = now or now_iso()
-            request = self.get_change_request(portfolio_id, change_request_id)
-            if not final_board_change_request_integrity_ok(request):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Change Request integrity failed.")
-            if request.get("status") != "approved":
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Change Request must be approved before reset.")
-            existing = self.read_signoff(portfolio_id, default={})
-            reset = {
-                "schema_version": FINAL_BOARD_SCHEMA_VERSION,
-                "portfolio_id": portfolio_id,
-                "status": "reset",
-                "reset_at": now,
-                "reset_by": _safe_text(payload.get("reset_by"), 120) or "local-user",
-                "reason": reason,
-                "change_request_id": change_request_id,
-                "previous_status": existing.get("status") if existing else "not_signed",
-                "previous_integrity_hash": existing.get("integrity_hash") if existing else None,
-            }
-            reset["integrity_hash"] = final_board_signoff_hash(reset)
-            _write_json(self.signoff_path(portfolio_id), reset)
-            request["status"] = "applied"
-            request["updated_at"] = now
-            request["application"] = {"applied_at": now, "applied_by": reset["reset_by"], "applied_signoff_reset_hash": reset["integrity_hash"]}
-            request["integrity_hash"] = final_board_change_request_hash(request)
-            _write_json(self.change_request_path(portfolio_id, change_request_id), request)
-            self._append_change_event(portfolio_id, "applied", request, now=now)
-            self._append_history(portfolio_id, "reset", {"change_request_id": change_request_id, "reset_hash": reset["integrity_hash"]}, now=now)
-            return reset
-
-    def create_change_request(self, portfolio_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        reason = sanitize_sensitive_text(str(payload.get("reason") or "").strip())
-        if len(reason) < 8:
-            raise ReleasePortfolioGovernanceFinalBoardStateError("reason must be at least 8 characters.")
-        with self.lock:
-            now = now or now_iso()
-            self.portfolio_store.get_portfolio(portfolio_id)
-            signoff = self.read_signoff(portfolio_id, default={})
-            change_request_id = self._reserve_change_request_id(portfolio_id)
-            item = {
-                "schema_version": FINAL_BOARD_CHANGE_REQUEST_SCHEMA_VERSION,
-                "change_request_id": change_request_id,
-                "portfolio_id": portfolio_id,
-                "status": "requested",
-                "requested_at": now,
-                "updated_at": now,
-                "requested_by": _safe_text(payload.get("requested_by") or payload.get("created_by"), 120) or "local-user",
-                "reason": reason,
-                "scope": _scope(payload.get("scope")),
-                "approval": {"approved_by": None, "approved_at": None, "note": None},
-                "application": {"applied_at": None, "applied_by": None, "applied_signoff_reset_hash": None},
-                "source": {"signoff_hash": signoff.get("integrity_hash"), "report_hash": self.read_report(portfolio_id, default={}).get("integrity_hash")},
-            }
-            item["payload_hash"] = stable_hash({key: value for key, value in item.items() if key not in {"payload_hash", "integrity_hash", "updated_at"}})
-            item["integrity_hash"] = final_board_change_request_hash(item)
-            self.change_requests_root(portfolio_id).mkdir(parents=True, exist_ok=True)
-            _write_json(self.change_request_path(portfolio_id, change_request_id), item)
-            self._append_change_event(portfolio_id, "created", item, now=now)
-            return item
-
-    def update_change_request_status(self, portfolio_id: str, change_request_id: str, action: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
-        payload = payload or {}
-        with self.lock:
-            now = now or now_iso()
-            item = self.get_change_request(portfolio_id, change_request_id)
-            if not final_board_change_request_integrity_ok(item):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Change Request integrity failed.")
-            current = str(item.get("status") or "")
-            if action == "approve":
-                if current != "requested":
-                    raise ReleasePortfolioGovernanceFinalBoardStateError("Only requested Change Requests can be approved.")
-                approved_by = _safe_text(payload.get("approved_by") or payload.get("reviewed_by"), 120)
-                if not approved_by:
-                    raise ReleasePortfolioGovernanceFinalBoardStateError("approved_by is required.")
-                item["status"] = "approved"
-                item["approval"] = {"approved_by": approved_by, "approved_at": now, "note": sanitize_sensitive_text(str(payload.get("note") or payload.get("approval_note") or "").strip()) or None}
-            elif action == "reject":
-                if current != "requested":
-                    raise ReleasePortfolioGovernanceFinalBoardStateError("Only requested Change Requests can be rejected.")
-                reason = sanitize_sensitive_text(str(payload.get("reason") or payload.get("notes") or "").strip())
-                if len(reason) < 8:
-                    raise ReleasePortfolioGovernanceFinalBoardStateError("Rejection reason must be at least 8 characters.")
-                item["status"] = "rejected"
-                item["approval"] = {"approved_by": None, "approved_at": None, "note": reason}
-            else:
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Unknown Change Request action.")
-            item["updated_at"] = now
-            item["integrity_hash"] = final_board_change_request_hash(item)
-            _write_json(self.change_request_path(portfolio_id, change_request_id), item)
-            self._append_change_event(portfolio_id, action, item, now=now)
-            return item
-
-    def list_change_requests(self, portfolio_id: str) -> list[dict[str, Any]]:
-        root = self.change_requests_root(portfolio_id)
-        if not root.exists():
-            return []
-        rows = [_read_json_default(path, default={}) for path in sorted(root.glob("fcr-*.json"))]
-        return sorted([item for item in rows if item], key=lambda item: str(item.get("requested_at") or ""), reverse=True)
-
-    def get_change_request(self, portfolio_id: str, change_request_id: str) -> dict[str, Any]:
-        data = _read_json_default(self.change_request_path(portfolio_id, change_request_id), default={})
-        if not data:
-            raise ReleasePortfolioGovernanceFinalBoardNotFoundError("Final Board Change Request does not exist.")
-        return data
-
-    def export_archive(self, portfolio_id: str, *, now: str | None = None) -> dict[str, Any]:
-        with self.lock:
-            now = now or now_iso()
-            signoff = self.get_signoff(portfolio_id)
-            summary = self.signoff_summary(portfolio_id, signoff=signoff)
-            if summary.get("status") not in SIGNED_STATUSES:
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive requires signed Final Board Signoff.")
-            if not summary.get("integrity_ok") or summary.get("stale"):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Signoff is stale or integrity failed. Reset and sign again.")
-            export_dir = self.export_dir(portfolio_id).resolve()
-            root = self.root_dir(portfolio_id).resolve()
-            _ensure_within(root, export_dir)
-            if self._history_has_current_signoff_archive_event(portfolio_id, signoff, "archive_exported"):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive already exists for this signoff. Reset signoff before rebuilding archive evidence.")
-            existing_manifest = _read_json_default(export_dir / "manifest.json", default={})
-            if existing_manifest.get("final_board_signoff", {}).get("integrity_hash") == signoff.get("integrity_hash"):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive already exists for this signoff. Reset signoff before rebuilding archive evidence.")
-            if export_dir.exists():
-                shutil.rmtree(export_dir)
-            export_dir.mkdir(parents=True, exist_ok=True)
-            report = self.read_report(portfolio_id, default={})
-            responses = self.list_reviewer_responses(portfolio_id)
-            change_requests = {"portfolio_id": portfolio_id, "items": self.list_change_requests(portfolio_id)}
-            change_requests["payload_hash"] = stable_hash({key: value for key, value in change_requests.items() if key != "payload_hash"})
-            history_text = self.history_path(portfolio_id).read_text(encoding="utf-8") if self.history_path(portfolio_id).exists() else ""
-            reviewer_verification = _read_json_default(self.reviewer_pack_store.verification_report_path(portfolio_id), default={})
-            audit_verification = _read_json_default(self.audit_store.verification_report_path(portfolio_id), default={})
-            _write_json(export_dir / "final-board-report.json", report)
-            _write_json(export_dir / "final-board-signoff.json", signoff)
-            (export_dir / "final-board-history.jsonl").write_text(history_text, encoding="utf-8")
-            _write_json(export_dir / "reviewer-response-summary.json", _reviewer_response_bundle(portfolio_id, responses, report.get("source", {})))
-            _write_json(export_dir / "change-requests.json", change_requests)
-            _write_json(export_dir / "governance-reviewer-pack-summary.json", {"summary": reviewer_pack_summary(self.reviewer_pack_store.read_report(portfolio_id, default={})), "verification": _verification_summary(reviewer_verification)})
-            _write_json(export_dir / "governance-audit-summary.json", {"summary": audit_summary(self.audit_store.read_report(portfolio_id, default={})), "verification": _verification_summary(audit_verification)})
-            _write_json(export_dir / "governance-archive-summary.json", self.audit_store.read_report(portfolio_id, default={}).get("archive_summary", {}))
-            (export_dir / "final-board.md").write_text(_final_board_markdown(report, signoff), encoding="utf-8")
-            (export_dir / "reviewer-response-summary.md").write_text(_reviewer_response_markdown(responses), encoding="utf-8")
-            _write_readme(export_dir, report, signoff)
-            files = [_file_record(export_dir, path) for path in sorted(export_dir.rglob("*")) if path.is_file() and path.name != "manifest.json"]
-            source = _as_document(report.get("source"))
-            manifest = {
-                "schema_version": FINAL_BOARD_ARCHIVE_SCHEMA_VERSION,
-                "package_type": "release_portfolio_governance_final_board_archive",
-                "tool": {"name": "MusicForge Release Portfolio Governance Final Board Archive", "version": __version__},
-                "portfolio_id": portfolio_id,
-                "created_at": now,
-                "source_hash": report.get("source_hash"),
-                "final_board_report": {"integrity_hash": report.get("integrity_hash"), "source_hash": report.get("source_hash")},
-                "final_board_signoff": {"integrity_hash": signoff.get("integrity_hash"), "status": signoff.get("status")},
-                "reviewer_pack_evidence": {
-                    "verification_hash": source.get("governance_reviewer_pack_verification_hash"),
-                    "zip_sha256": source.get("governance_reviewer_pack_zip_sha256"),
-                    "manifest_hash": source.get("governance_reviewer_pack_manifest_hash"),
-                },
-                "audit_evidence": {
-                    "verification_hash": source.get("governance_audit_verification_hash"),
-                    "zip_sha256": source.get("governance_audit_zip_sha256"),
-                    "manifest_hash": source.get("governance_audit_export_manifest_hash"),
-                },
-                "reviewer_response_summary": {"status": _reviewer_response_status(responses, source), "count": len(responses)},
-                "files": sorted(files, key=lambda item: item["path"]),
-                "zip": {},
-                "redaction_summary": _redaction_summary({"report": report, "signoff": signoff, "responses": responses, "change_requests": change_requests}),
-            }
-            manifest["integrity_hash"] = final_board_archive_manifest_hash(manifest)
-            _write_json(export_dir / "manifest.json", manifest)
-            self._append_history(portfolio_id, "archive_exported", {"status": report.get("status"), "file_count": len(files), "signoff_id": signoff.get("signoff_id"), "signoff_integrity_hash": signoff.get("integrity_hash")}, now=now)
-            return sanitize_metadata(manifest, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
-
-    def build_archive_zip(self, portfolio_id: str, *, now: str | None = None) -> dict[str, Any]:
-        with self.lock:
-            now = now or now_iso()
-            signoff = self.signoff_summary(portfolio_id)
-            if signoff.get("status") not in SIGNED_STATUSES:
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive ZIP requires signed Final Board Signoff.")
-            current_signoff = self.read_signoff(portfolio_id, default={})
-            if self._history_has_current_signoff_archive_event(portfolio_id, current_signoff, "archive_zip_built"):
-                raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive ZIP already exists for this signoff. Reset signoff before rebuilding archive evidence.")
-            export_dir = self.export_dir(portfolio_id).resolve()
-            root = self.root_dir(portfolio_id).resolve()
-            zip_path = self.archive_zip_path(portfolio_id).resolve()
-            _ensure_within(root, export_dir)
-            _ensure_within(root, zip_path)
-            if not (export_dir / "manifest.json").exists():
-                self.export_archive(portfolio_id, now=now)
-            if zip_path.exists():
-                manifest = _read_zip_json(zip_path, "manifest.json")
-                if manifest.get("final_board_signoff", {}).get("integrity_hash") == current_signoff.get("integrity_hash"):
-                    raise ReleasePortfolioGovernanceFinalBoardStateError("Final Board Archive ZIP already exists for this signoff. Reset signoff before rebuilding archive evidence.")
-            manifest = read_json(export_dir / "manifest.json")
-            entries = _zip_entries(export_dir)
-            manifest["zip"] = {"created_at": now, "filename": zip_path.name, "entry_count": len(entries), "entries": [entry for _path, entry in entries]}
-            manifest["integrity_hash"] = final_board_archive_manifest_hash(manifest)
-            _write_json(export_dir / "manifest.json", manifest)
-            entries = _zip_entries(export_dir)
-            tmp_path = zip_path.with_name(f".{zip_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-            try:
-                with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                    for resolved, entry in entries:
-                        archive.write(resolved, entry)
-                tmp_path.replace(zip_path)
-            except Exception:
-                if tmp_path.exists():
-                    tmp_path.unlink()
-                raise
-            info = {"created_at": now, "filename": zip_path.name, "size_bytes": zip_path.stat().st_size, "sha256": _sha256(zip_path), "entry_count": len(entries), "entries": [entry for _path, entry in entries]}
-            self._append_history(portfolio_id, "archive_zip_built", {"sha256": info["sha256"], "entry_count": len(entries), "signoff_id": current_signoff.get("signoff_id"), "signoff_integrity_hash": current_signoff.get("integrity_hash")}, now=now)
-            return sanitize_metadata(info, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
-
-    def signoff_summary(self, portfolio_id: str, *, signoff: dict[str, Any] | None = None) -> dict[str, Any]:
-        data = _document_or(signoff, self.read_signoff(portfolio_id, default={}))
-        stale = False
-        if data and data.get("status") in SIGNED_STATUSES:
-            try:
-                report = self.read_report(portfolio_id, default={})
-                source = _as_document(data.get("source"))
-                stale = (
-                    self.report_is_stale(portfolio_id, report)
-                    or source.get("final_board_report_hash") != report.get("integrity_hash")
-                    or source.get("reviewer_pack_verification_hash") != stable_hash(_read_json_default(self.reviewer_pack_store.verification_report_path(portfolio_id), default={}))
-                    or source.get("governance_audit_verification_hash") != stable_hash(_read_json_default(self.audit_store.verification_report_path(portfolio_id), default={}))
-                )
-            except Exception:
-                stale = True
-        return final_board_signoff_summary(data, stale=stale)
-
-    def summary(self, portfolio_id: str) -> dict[str, Any]:
-        report = self.read_report(portfolio_id, default={})
-        signoff = self.read_signoff(portfolio_id, default={})
-        verification = _read_json_default(self.verification_report_path(portfolio_id), default={})
-        return sanitize_metadata(
-            {
-                "status": final_board_signoff_summary(signoff).get("status") if signoff else report.get("status", "missing"),
-                "report_status": report.get("status") if report else "missing",
-                "signoff_status": final_board_signoff_summary(signoff).get("status"),
-                "source_hash": report.get("source_hash"),
-                "archive_zip_sha256": _sha256(self.archive_zip_path(portfolio_id)) if self.archive_zip_path(portfolio_id).exists() else None,
-                "verification_status": verification.get("status") or "missing",
-                "stale": self.report_is_stale(portfolio_id, report) if report else False,
-            },
-            blocked_keys=FINAL_BOARD_BLOCKED_KEYS,
-        )
-
-    def _final_board_findings(self, portfolio_id: str, source: ImplementationDocument, responses: list[ImplementationDocument], payload: ImplementationDocument) -> tuple[list[ImplementationDocument], list[ImplementationDocument], list[ImplementationDocument]]:
-        blockers: list[dict[str, Any]] = []
-        warnings: list[dict[str, Any]] = []
-        gates: list[dict[str, Any]] = []
-
-        def gate(gate_id: str, passed: bool, message: str, *, warning: bool = False) -> None:
-            status = "passed" if passed else "warning" if warning else "failed"
-            item = {"gate_id": gate_id, "status": status, "severity": "warning" if warning else "blocking", "message": message}
-            gates.append(item)
-            if not passed and warning:
-                warnings.append(_warning(gate_id, message))
-            elif not passed:
-                blockers.append(_blocker(gate_id, message))
-
-        gate("portfolio_exists", bool(source.get("portfolio_hash")), "Portfolio exists.")
-        gate("portfolio_report_current", bool(source.get("portfolio_report_integrity_ok")) and not source.get("portfolio_report_stale"), "Portfolio Audit report is current.")
-        gate("governance_audit_report_current", bool(source.get("governance_audit_report_integrity_ok")) and not source.get("governance_audit_report_stale") and source.get("governance_audit_report_status") != "failed", "Governance Audit report is current.")
-        gate("governance_audit_ledger_chain", bool(source.get("governance_audit_ledger_integrity_ok")), "Governance Audit ledger chain is valid.")
-        gate(
-            "governance_audit_verification_current",
-            source.get("governance_audit_verification_status") == "passed"
-            and source.get("governance_audit_verification_zip_sha256") == source.get("governance_audit_zip_sha256")
-            and source.get("governance_audit_verification_zip_size_bytes") == source.get("governance_audit_zip_size_bytes")
-            and source.get("governance_audit_verification_manifest_hash") == source.get("governance_audit_export_manifest_hash"),
-            "Governance Audit verification matches the current Audit ZIP and manifest.",
-        )
-        gate("governance_reviewer_pack_report_current", bool(source.get("governance_reviewer_report_integrity_ok")) and not source.get("governance_reviewer_report_stale") and source.get("governance_reviewer_report_status") != "failed", "Governance Reviewer Pack report is current.")
-        gate(
-            "governance_reviewer_pack_verification_current",
-            source.get("governance_reviewer_pack_verification_status") == "passed"
-            and source.get("governance_reviewer_pack_verification_zip_sha256") == source.get("governance_reviewer_pack_zip_sha256")
-            and source.get("governance_reviewer_pack_verification_zip_size_bytes") == source.get("governance_reviewer_pack_zip_size_bytes"),
-            "Governance Reviewer Pack verification matches the current Reviewer Pack ZIP.",
-        )
-        queue_count = int(source.get("queue_count") or 0)
-        signed_count = int(source.get("signed_queue_count") or 0)
-        archive_count = int(source.get("archive_verified_count") or 0)
-        gate("signed_queue_coverage", queue_count > 0 and signed_count >= queue_count, "All Governance Queues are signed.")
-        gate("archive_verification_coverage", signed_count > 0 and archive_count >= signed_count, "All signed Governance Queues have verified Archive evidence.")
-        gate("reset_change_request_causality", int(source.get("reset_count") or 0) == 0 or int(source.get("applied_change_request_count") or 0) >= int(source.get("reset_count") or 0), "Reset entries are bound to applied Change Requests.")
-        response_status = _reviewer_response_status(responses, source)
-        gate("reviewer_response_closed", response_status not in {"needs_changes", "rejected", "stale", "invalid"}, "Reviewer responses are closed.")
-        if bool(payload.get("require_reviewer_response", False)):
-            gate("external_reviewer_response_required", response_status in {"accepted", "accepted_with_notes"}, "Accepted reviewer response is required.")
-        force_count = int(source.get("force_signed_queue_count") or 0)
-        if force_count:
-            gate("no_force_signoff", False, "Force-signed Governance Queue is present.", warning=not bool(payload.get("require_no_force", False)))
-        if _redaction_summary({"source": source, "responses": responses}).get("status") == "failed":
-            gate("redaction_scan", False, "Final Board source contains sensitive values.")
-        else:
-            gate("redaction_scan", True, "No sensitive values found in Final Board source.")
-        return blockers, warnings, gates
-
-    def _reserve_report_id(self, portfolio_id: str) -> str:
-        existing = self.read_report(portfolio_id, default={})
-        if str(existing.get("report_id") or "").startswith("fgb-"):
-            return str(existing.get("report_id"))
-        return "fgb-000001"
-
-    def _reserve_response_id(self, portfolio_id: str) -> str:
-        root = self.responses_root(portfolio_id)
-        root.mkdir(parents=True, exist_ok=True)
-        nums: list[int] = []
-        for path in root.glob("fbr-*.json"):
-            try:
-                nums.append(int(path.stem.split("-")[-1]))
-            except ValueError:
-                pass
-        return f"fbr-{(max(nums) if nums else 0) + 1:06d}"
-
-    def _reserve_signoff_id(self, portfolio_id: str) -> str:
-        path = self.history_path(portfolio_id)
-        used: list[int] = []
-        if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                signoff_id = str((_as_document(event.get("summary"))).get("signoff_id") or "")
-                if signoff_id.startswith("fgs-"):
-                    try:
-                        used.append(int(signoff_id.split("-")[-1]))
-                    except ValueError:
-                        pass
-        return f"fgs-{(max(used) if used else 0) + 1:06d}"
-
-    def _reserve_change_request_id(self, portfolio_id: str) -> str:
-        root = self.change_requests_root(portfolio_id)
-        root.mkdir(parents=True, exist_ok=True)
-        nums: list[int] = []
-        for path in root.glob("fcr-*.json"):
-            try:
-                nums.append(int(path.stem.split("-")[-1]))
-            except ValueError:
-                pass
-        return f"fcr-{(max(nums) if nums else 0) + 1:06d}"
-
-    def _append_history(self, portfolio_id: str, event_type: str, summary: ImplementationDocument, *, now: str | None = None) -> None:
-        path = self.history_path(portfolio_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
-        event = sanitize_metadata({"event_id": f"fgbe-{count + 1:06d}", "at": now or now_iso(), "type": event_type, "summary": summary}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-
-    def _history_has_current_signoff_archive_event(self, portfolio_id: str, signoff: ImplementationDocument, event_type: str) -> bool:
-        signoff_id = str(signoff.get("signoff_id") or "")
-        signoff_hash = str(signoff.get("integrity_hash") or "")
-        if not signoff_id and not signoff_hash:
-            return False
-        active_signoff_id: str | None = None
-        active_signoff_hash: str | None = None
-        path = self.history_path(portfolio_id)
-        if not path.exists():
-            return False
-        for line in path.read_text(encoding="utf-8").splitlines():
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(event, dict):
-                continue
-            summary = _as_document(event.get("summary"))
-            event_name = str(event.get("type") or "")
-            if event_name == "signed":
-                active_signoff_id = str(summary.get("signoff_id") or "") or None
-                active_signoff_hash = str(summary.get("signoff_integrity_hash") or "") or None
-                continue
-            if event_name == "reset":
-                active_signoff_id = None
-                active_signoff_hash = None
-                continue
-            if event_name != event_type:
-                continue
-            event_signoff_hash = str(summary.get("signoff_integrity_hash") or "")
-            event_signoff_id = str(summary.get("signoff_id") or "")
-            if signoff_hash and event_signoff_hash and event_signoff_hash == signoff_hash:
-                return True
-            if signoff_id and event_signoff_id and event_signoff_id == signoff_id:
-                return True
-            # v7.0.0 archive history entries did not record signoff hashes.
-            # Bind those legacy entries to the latest signed event until reset.
-            if not event_signoff_hash and not event_signoff_id:
-                if signoff_id and active_signoff_id == signoff_id:
-                    return True
-                if signoff_hash and active_signoff_hash == signoff_hash:
-                    return True
-        return False
-
-    def _append_change_event(self, portfolio_id: str, event_type: str, item: ImplementationDocument, *, now: str | None = None) -> None:
-        path = self.change_request_events_path(portfolio_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        count = len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
-        event = sanitize_metadata({"event_id": f"fcre-{count + 1:06d}", "at": now or now_iso(), "type": event_type, "change_request_id": item.get("change_request_id"), "status": item.get("status")}, blocked_keys=FINAL_BOARD_BLOCKED_KEYS)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 
 
 
-def final_board_report_integrity_ok(report: dict[str, Any] | None) -> bool:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def final_board_report_integrity_ok(report: DomainDocument | None) -> bool:
     data = _as_document(report)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_report_integrity_hash(data)
 
@@ -749,7 +119,7 @@ def final_board_report_integrity_ok(report: dict[str, Any] | None) -> bool:
 
 
 
-def final_board_response_integrity_ok(response: dict[str, Any] | None) -> bool:
+def final_board_response_integrity_ok(response: DomainDocument | None) -> bool:
     data = _as_document(response)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_response_integrity_hash(data)
 
@@ -757,12 +127,12 @@ def final_board_response_integrity_ok(response: dict[str, Any] | None) -> bool:
 
 
 
-def final_board_signoff_integrity_ok(signoff: dict[str, Any] | None) -> bool:
+def final_board_signoff_integrity_ok(signoff: DomainDocument | None) -> bool:
     data = _as_document(signoff)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_signoff_hash(data)
 
 
-def final_board_signoff_summary(signoff: dict[str, Any] | None, *, stale: bool = False) -> dict[str, Any]:
+def final_board_signoff_summary(signoff: DomainDocument | None, *, stale: bool = False) -> DomainDocument:
     data = _as_document(signoff)
     if not data:
         return {"status": "not_signed", "integrity_ok": False, "stale": False}
@@ -779,12 +149,12 @@ def final_board_signoff_summary(signoff: dict[str, Any] | None, *, stale: bool =
 
 
 
-def final_board_archive_manifest_integrity_ok(manifest: dict[str, Any] | None) -> bool:
+def final_board_archive_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
     data = _as_document(manifest)
     return bool(data.get("integrity_hash")) and str(data.get("integrity_hash")) == final_board_archive_manifest_hash(data)
 
 
-def final_board_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+def final_board_summary(report: DomainDocument | None) -> DomainDocument:
     data = _as_document(report)
     if not data:
         return {"status": "missing", "integrity_ok": False}
@@ -814,7 +184,7 @@ def _summary_from_source(source: ImplementationDocument, responses: list[Impleme
 def _reviewer_response_status(responses: list[ImplementationDocument], source: ImplementationDocument) -> str:
     if not responses:
         return "missing"
-    valid_current: list[dict[str, Any]] = []
+    valid_current: list[ImplementationDocument] = []
     for item in responses:
         if not final_board_response_integrity_ok(item):
             return "invalid"
@@ -849,7 +219,7 @@ def _verification_summary(report: ImplementationDocument) -> ImplementationDocum
 
 
 def _sanitize_findings(value: Any) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
+    rows: list[ImplementationDocument] = []
     if not isinstance(value, list):
         return rows
     for index, item in enumerate(value, start=1):
@@ -994,3 +364,6 @@ def _validate_id(value: str, prefix: str) -> str:
     if not text.startswith(f"{prefix}-") or any(ch in text for ch in "\\/:"):
         raise ReleasePortfolioGovernanceFinalBoardStateError(f"Invalid {prefix} id.")
     return text
+
+_v142_rpgfb_readiness.bind_globals(globals())
+_v142_rpgfb_evidence.bind_globals(globals())

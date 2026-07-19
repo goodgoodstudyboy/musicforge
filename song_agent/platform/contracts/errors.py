@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
-from typing import Any
 
 
 class DomainError(Exception):
@@ -24,7 +23,7 @@ class DomainError(Exception):
         self.retryable = bool(retryable)
         self.details = dict(details or {})
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "error_code": self.error_code,
             "message": self.message,

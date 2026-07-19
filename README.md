@@ -50,12 +50,12 @@ listening acceptance.
 
 ## Quality Gates
 
-v14.1 checks the complete active modular-monolith tree with mypy and checks the
-entire repository with Ruff. v14.1.2 also freezes explicit `Any` usage by file
-and layer with alias-aware counting for imported, nested, and quoted
-annotations. ARCH-014 module-size debt remains explicitly tracked under ADR-015
-and cannot grow in count, maximum size, aggregate lines, or any registered
-per-file ceiling.
+v14.2 checks the complete active modular-monolith tree with mypy and checks the
+entire repository with Ruff. The v14.2 quality ratchets use schema-v3
+explicit-`Any` counting for direct imports, import aliases, module aliases,
+nested annotations, and quoted annotations. The same gate tracks residual
+module-size debt by per-file ceiling, oversized-module count, thousand-line
+count, maximum size, and aggregate oversized lines.
 
 ```powershell
 python -m mypy --no-incremental

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import json as json
 import zipfile as zipfile
@@ -64,10 +64,10 @@ def verify_unified_release_program_operations_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -176,11 +176,11 @@ def verify_unified_release_program_operations_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_operations_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_release_program_operations_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_release_program_operations_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_release_program_operations_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -192,8 +192,8 @@ def _external_program_state(
     program_signoff_binding_path: Path | str | None,
     external_evidence_manifest_path: Path | str | None,
 ) -> ImplementationDocument:
-    checks: list[dict[str, Any]] = []
-    state: dict[str, Any] = {"checks": checks, "runtime": {}, "external_report": {}, "binding": {}, "external_manifest": {}, "history": []}
+    checks: list[ImplementationDocument] = []
+    state: ImplementationDocument = {"checks": checks, "runtime": {}, "external_report": {}, "binding": {}, "external_manifest": {}, "history": []}
     if not require:
         return state
     if not program_zip_path or not program_verification_report_path or not program_signoff_binding_path or not external_evidence_manifest_path:
@@ -262,7 +262,7 @@ def _semantic_checks(
     require_continuous_review_clear: bool,
     require_lifecycle_audit: bool,
 ) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     runtime = external.get("runtime") or {}
     external_report = external.get("external_report") or {}
     if external:
@@ -330,7 +330,7 @@ def _document_binding_checks(
 
 
 def _history_checks(program_history: list[ImplementationDocument], change_history: list[ImplementationDocument], lifecycle: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     checks.extend(_hash_chain_checks("urp_ops_program_history", program_history))
     checks.extend(_hash_chain_checks("urp_ops_change_history", change_history))
     signoff_count = sum(1 for row in program_history if row.get("event_type") == "unified_release_program_signoff_created")
@@ -345,7 +345,7 @@ def _history_checks(program_history: list[ImplementationDocument], change_histor
 
 
 def _hash_chain_checks(prefix: str, rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     previous = ""
     for index, event in enumerate(rows):
         payload_hash = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts import ImplementationDocument
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
-from typing import Any
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -103,7 +102,7 @@ class CreationRoutesReference(CreationRouteContext):
         return (False, None)
 
     def _handle_reference_route(self, method: str, reference_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: ImplementationDocument = {}
         try:
             _split_result = self._handle_reference_route_part_01(method, reference_id, tail, _split_state)
             if _split_result[0]:
@@ -193,7 +192,7 @@ class CreationRoutesReference(CreationRouteContext):
         if method != "GET":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        records: list[dict[str, Any]] = []
+        records: list[ImplementationDocument] = []
         for job in self.store.list_jobs(include_hidden=True):
             record = _interfaces_api_runtime.usage_record_from_file(
                 _interfaces_api_runtime.Path(job.output_dir) / "data" / "provider-usage.json",

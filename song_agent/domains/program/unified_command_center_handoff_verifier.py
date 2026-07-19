@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -49,10 +49,10 @@ def verify_unified_command_center_handoff_package(
     max_zip_size_mb: int = 32,
     max_uncompressed_size_mb: int = 128,
     max_entry_count: int = 200,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(checks, summary, _check("ucc_handoff_zip_exists", False, "Unified Command Center Handoff ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -109,11 +109,11 @@ def verify_unified_command_center_handoff_package(
     return _finish(checks, summary)
 
 
-def write_unified_command_center_handoff_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_command_center_handoff_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_command_center_handoff_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_command_center_handoff_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 

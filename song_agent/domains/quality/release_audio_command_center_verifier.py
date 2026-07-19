@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -87,10 +88,10 @@ def verify_release_audio_command_center_package(
     max_zip_size_mb: int = 128,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 1000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_path": str(zip_path), "zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None, "release_ids": []}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_path": str(zip_path), "zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None, "release_ids": []}
     external_paths = {
         "certification": (certification_zip_path, certification_verification_report_path),
         "timeline": (timeline_zip_path, timeline_verification_report_path),
@@ -181,11 +182,11 @@ def verify_release_audio_command_center_package(
     return _finish(checks, summary)
 
 
-def write_release_audio_command_center_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_release_audio_command_center_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def release_audio_command_center_verification_exit_code(report: dict[str, Any]) -> int:
+def release_audio_command_center_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -211,11 +212,11 @@ def verify_release_audio_command_center_component(
     action_queue_signoff_archive_path: Path | str | None = None,
     action_queue_signoff_verification_report_path: Path | str | None = None,
     evidence_root: Path | str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     if key not in COMPONENT_KEYS:
         raise ValueError(f"Unknown Command Center component: {key}")
-    checks: list[dict[str, Any]] = []
-    fingerprint: dict[str, Any] = {
+    checks: list[ImplementationDocument] = []
+    fingerprint: ImplementationDocument = {
         "component_key": key,
         "zip_sha256": None,
         "zip_size_bytes": None,
@@ -505,149 +506,22 @@ def _document_binding_checks(
     return checks
 
 
-def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, names: set[str]) -> list[ImplementationDocument]:
-    files = _as_list(manifest.get("files"))
-    declared = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
-    effective_names = names - {"manifest.json"}
-    expected_files = REQUIRED_ENTRIES - {"manifest.json"}
-    mismatches = []
-    for row in files:
-        if not isinstance(row, dict):
-            continue
-        path = str(row.get("path") or "")
-        if not path or path not in names:
-            continue
-        info = archive.getinfo(path)
-        data = archive.read(path)
-        if row.get("sha256") != _sha256_bytes(data) or int(row.get("size_bytes") or -1) != info.file_size:
-            mismatches.append(path)
-    return [
-        _check("release_audio_command_center_manifest_integrity_hash", _integrity_ok(manifest), "Manifest integrity hash is valid."),
-        _check("release_audio_command_center_manifest_declares_files", declared == effective_names, "Manifest files exactly match ZIP entries.", {"declared_extra": sorted(declared - effective_names), "undeclared": sorted(effective_names - declared)}),
-        _check("release_audio_command_center_manifest_fixed_files", declared == expected_files, "Manifest files match fixed Command Center structure.", {"extra": sorted(declared - expected_files), "missing": sorted(expected_files - declared)}),
-        _check("release_audio_command_center_manifest_file_hashes", not mismatches, "Manifest file hashes match ZIP contents.", {"mismatches": mismatches}),
-        _check("release_audio_command_center_manifest_zip_entries_untrusted", True, "manifest.zip.entries is not used as an allow-list."),
-    ]
+from song_agent.domains.quality import v142_raccv_readiness as _v142_raccv_readiness
+from song_agent.domains.quality.v142_raccv_readiness import (
+    _manifest_checks,
+    _finish,
+    _check,
+    _component_required,
+    _component_status,
+    _public_verification_summary,
+    _read_json_entry,
+    _integrity_ok,
+    _integrity_hash,
+    _semantic_hash,
+    _is_safe_entry,
+    _redaction_check,
+    _sha256_bytes,
+    _sha256_path,
+)
 
-
-def _finish(checks: list[ImplementationDocument], summary: ImplementationDocument, *extra: ImplementationDocument) -> ImplementationDocument:
-    checks.extend(extra)
-    blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("blocking", True)]
-    warnings = [check["check_id"] for check in checks if check.get("status") == "warning"]
-    public_summary = {key: value for key, value in summary.items() if key != "zip_path"}
-    report = {
-        "package_type": RELEASE_AUDIO_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE,
-        "schema_version": RELEASE_AUDIO_COMMAND_CENTER_SCHEMA_VERSION,
-        "status": "failed" if blockers else "warning" if warnings else "passed",
-        "summary": {**public_summary, "check_count": len(checks), "failed_count": len(blockers), "warning_count": len(warnings)},
-        "checks": checks,
-        "blockers": blockers,
-        "warnings": warnings,
-        "zip_sha256": summary.get("zip_sha256"),
-        "zip_size_bytes": summary.get("zip_size_bytes"),
-        "manifest_hash": summary.get("manifest_hash"),
-    }
-    report["integrity_hash"] = _integrity_hash(report)
-    return report
-
-
-def _check(check_id: str, passed: bool, message: str, details: ImplementationDocument | None = None, *, blocking: bool = True) -> ImplementationDocument:
-    return {"check_id": check_id, "status": "passed" if passed else "failed", "message": message, "details": details or {}, "blocking": blocking}
-
-
-def _component_required(inventory: ImplementationDocument, key: str) -> bool:
-    for row in inventory.get("components", []):
-        if isinstance(row, dict) and row.get("component_key") == key:
-            return bool(row.get("required"))
-    return False
-
-
-def _component_status(inventory: ImplementationDocument, key: str) -> str:
-    for row in inventory.get("components", []):
-        if isinstance(row, dict) and row.get("component_key") == key:
-            return str(row.get("status") or "")
-    return ""
-
-
-def _public_verification_summary(component_key: str, report: ImplementationDocument) -> ImplementationDocument:
-    summary = _as_document(report.get("summary"))
-    public = {
-        "component_key": component_key,
-        "package_type": report.get("package_type"),
-        "status": report.get("status"),
-        "zip_sha256": report.get("zip_sha256"),
-        "zip_size_bytes": report.get("zip_size_bytes"),
-        "manifest_hash": report.get("manifest_hash"),
-        "original_integrity_hash": report.get("integrity_hash"),
-        "summary": {key: value for key, value in summary.items() if key != "zip_path"},
-    }
-    public["integrity_hash"] = _integrity_hash(public)
-    return public
-
-
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
-    data = json.loads(archive.read(name).decode("utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"{name} must contain a JSON object.")
-    return data
-
-
-def _integrity_ok(payload: ImplementationDocument) -> bool:
-    return bool(payload) and payload.get("integrity_hash") == _integrity_hash(payload)
-
-
-def _integrity_hash(payload: ImplementationDocument) -> str:
-    return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
-
-
-def _semantic_hash(value: Any) -> str:
-    def scrub(item: Any) -> Any:
-        if isinstance(item, dict):
-            return {key: scrub(val) for key, val in sorted(item.items()) if key not in {"created_at", "updated_at", "generated_at", "integrity_hash"}}
-        if isinstance(item, list):
-            return [scrub(val) for val in item]
-        return item
-
-    return stable_hash(scrub(value))
-
-
-def _is_safe_entry(name: str) -> bool:
-    if "\\" in name:
-        return False
-    lowered = name.lower()
-    if lowered.startswith(".musicforge/") or "/.musicforge/" in lowered:
-        return False
-    path = Path(name)
-    if path.is_absolute():
-        return False
-    parts = name.split("/")
-    return all(part and part not in {".", ".."} and ":" not in part for part in parts)
-
-
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
-    offenders: list[str] = []
-    for name in names:
-        if name.endswith("/"):
-            continue
-        data = archive.read(name)
-        if any(pattern.search(data) for pattern in SENSITIVE_PATTERNS):
-            offenders.append(name)
-    return _check("release_audio_command_center_redaction", not offenders, "Package contains no obvious secrets or local workspace paths.", {"offenders": offenders})
-
-
-def _sha256_bytes(data: bytes) -> str:
-    import hashlib
-
-    return hashlib.sha256(data).hexdigest()
-
-
-def _sha256_path(path: Path | str | None) -> str | None:
-    if not path or not Path(path).exists() or not Path(path).is_file():
-        return None
-    import hashlib
-
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+_v142_raccv_readiness.bind_globals(globals())

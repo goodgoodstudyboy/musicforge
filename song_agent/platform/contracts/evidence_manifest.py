@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import DomainDocument
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Iterable
 
 from song_agent.platform.contracts.evidence import EvidenceRef
 
@@ -12,7 +13,7 @@ class ExternalEvidenceManifest:
     schema_version: int = 1
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "ExternalEvidenceManifest":
+    def from_dict(cls, value: DomainDocument) -> "ExternalEvidenceManifest":
         return cls(
             schema_version=int(value.get("schema_version") or 1),
             items=tuple(EvidenceRef.from_dict(row) for row in value.get("items") or [] if isinstance(row, dict)),
@@ -34,5 +35,5 @@ class ExternalEvidenceManifest:
             and set(self.by_identity()) == set(actual_by_identity)
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {"schema_version": self.schema_version, "items": [item.to_dict() for item in self.items]}

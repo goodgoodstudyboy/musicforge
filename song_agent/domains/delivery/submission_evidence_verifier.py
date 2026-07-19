@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -48,7 +48,7 @@ def verify_submission_evidence_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _SubmissionEvidencePackageVerifier(
         Path(zip_path),
         strict=strict,
@@ -64,7 +64,7 @@ def verify_submission_evidence_package(
     return verifier.run()
 
 
-def submission_evidence_verification_summary(report: dict[str, Any]) -> dict[str, Any]:
+def submission_evidence_verification_summary(report: DomainDocument) -> DomainDocument:
     summary = _as_document(report.get("summary"))
     return sanitize_metadata(
         {
@@ -83,11 +83,11 @@ def submission_evidence_verification_summary(report: dict[str, Any]) -> dict[str
     )
 
 
-def write_submission_evidence_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_submission_evidence_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
 
 
-def print_submission_evidence_verification_report(report: dict[str, Any]) -> None:
+def print_submission_evidence_verification_report(report: DomainDocument) -> None:
     summary = submission_evidence_verification_summary(report)
     print("MusicForge submission evidence package verification")
     print(f"status: {summary.get('status')}")
@@ -111,7 +111,7 @@ def print_submission_evidence_verification_report(report: dict[str, Any]) -> Non
             print(f"  ... {len(items) - 10} more")
 
 
-def submission_evidence_verification_exit_code(report: dict[str, Any]) -> int:
+def submission_evidence_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -140,13 +140,13 @@ class _SubmissionEvidencePackageVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.item_checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
-        self.manifest: dict[str, Any] = {}
-        self.report_doc: dict[str, Any] = {}
-        self.signoff: dict[str, Any] = {}
+        self.checks: list[ImplementationDocument] = []
+        self.item_checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
+        self.manifest: ImplementationDocument = {}
+        self.report_doc: ImplementationDocument = {}
+        self.signoff: ImplementationDocument = {}
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -155,7 +155,7 @@ class _SubmissionEvidencePackageVerifier:
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -223,7 +223,7 @@ class _SubmissionEvidencePackageVerifier:
             missing_fields.append("summary")
         self._add_check("manifest", "submission_evidence_manifest_schema", "failed" if missing_fields else "passed", "blocking", "Missing manifest fields: " + ", ".join(missing_fields) if missing_fields else "Evidence manifest schema has required fields.", count=len(missing_fields))
         rows = _as_list(self.manifest.get("files"))
-        valid_rows: list[dict[str, Any]] = []
+        valid_rows: list[ImplementationDocument] = []
         shape_errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -405,14 +405,14 @@ class _SubmissionEvidencePackageVerifier:
         return value
 
     def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str, *, count: int | None = None, **extra: Any) -> None:
-        item: dict[str, Any] = {"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message}
+        item: ImplementationDocument = {"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message}
         if count is not None:
             item["count"] = count
         item.update(extra)
         self.checks.append(sanitize_metadata(item, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
 
     def _add_item_check(self, item_id: str, check_id: str, status: str, severity: str, message: str, **extra: Any) -> None:
-        item: dict[str, Any] = {"scope": "item", "item_id": item_id, "check_id": check_id, "status": status, "severity": severity, "message": message}
+        item: ImplementationDocument = {"scope": "item", "item_id": item_id, "check_id": check_id, "status": status, "severity": severity, "message": message}
         item.update(extra)
         self.item_checks.append(sanitize_metadata(item, blocked_keys=DISTRIBUTION_BLOCKED_KEYS))
 
@@ -478,7 +478,7 @@ def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
 
 
 def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     for pattern, kind in LOCAL_PATH_VALUE_PATTERNS:
         if pattern.search(text):
             findings.append({"path": path, "kind": kind, "message": f"{path} contains a local path-like value."})
@@ -489,7 +489,7 @@ def _redaction_findings(path: str, text: str) -> list[ImplementationDocument]:
 
 
 def _blocked_key_findings(path: str, value: Any, *, prefix: str = "") -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
+    findings: list[ImplementationDocument] = []
     if isinstance(value, dict):
         for key, item in value.items():
             child_path = f"{prefix}.{key}" if prefix else str(key)

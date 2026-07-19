@@ -1,7 +1,6 @@
 from __future__ import annotations
-from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
 from song_agent.domains.delivery.releases import stable_hash
@@ -19,23 +18,23 @@ AUDIT_REPORT_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "updated_at"
 AUDIT_MANIFEST_HASH_EXCLUDE_KEYS = {"integrity_hash", "generated_at", "updated_at"}
 
 
-def audit_entry_hash(entry: dict[str, Any]) -> str:
+def audit_entry_hash(entry: DomainDocument) -> str:
     return stable_hash(_entry_hash_payload(entry))
 
 
-def audit_report_integrity_hash(report: dict[str, Any]) -> str:
+def audit_report_integrity_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in AUDIT_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def audit_manifest_integrity_hash(manifest: dict[str, Any]) -> str:
+def audit_manifest_integrity_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in AUDIT_MANIFEST_HASH_EXCLUDE_KEYS})
 
 
-def audit_ledger_hash(entries: list[dict[str, Any]]) -> str:
+def audit_ledger_hash(entries: list[DomainDocument]) -> str:
     return stable_hash([entry.get("entry_hash") for entry in entries])
 
 
-def audit_ledger_integrity_ok(entries: list[dict[str, Any]]) -> bool:
+def audit_ledger_integrity_ok(entries: list[DomainDocument]) -> bool:
     previous: str | None = None
     seen: set[str] = set()
     for index, entry in enumerate(entries, start=1):

@@ -9,331 +9,222 @@ Any, CommandSpec, Path, ProgramApplicationService, ProviderConfig, ProviderError
 def _program_component(name: str) -> _InterfaceType:
     return ProgramApplicationService.build().component(name)
 
-def _acceptance_analytics_fail_on(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality._acceptance_analytics_fail_on(*args, **kwargs)
+_acceptance_analytics_fail_on = CLI_BINDINGS.quality._acceptance_analytics_fail_on
 
-def _add_command_center_acceptance_source_args(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality._add_command_center_acceptance_source_args(*args, **kwargs)
+_add_command_center_acceptance_source_args = CLI_BINDINGS.quality._add_command_center_acceptance_source_args
 
-def _build_public_trust_center_publication_store(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust._build_public_trust_center_publication_store(*args, **kwargs)
+_build_public_trust_center_publication_store = CLI_BINDINGS.trust._build_public_trust_center_publication_store
 
-def _build_public_trust_center_store(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust._build_public_trust_center_store(*args, **kwargs)
+_build_public_trust_center_store = CLI_BINDINGS.trust._build_public_trust_center_store
 
-def _build_release_portfolio_governance_attestation_portal_store(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust._build_release_portfolio_governance_attestation_portal_store(*args, **kwargs)
+_build_release_portfolio_governance_attestation_portal_store = CLI_BINDINGS.trust._build_release_portfolio_governance_attestation_portal_store
 
-def _command_center_acceptance_payload(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality._command_center_acceptance_payload(*args, **kwargs)
+_command_center_acceptance_payload = CLI_BINDINGS.quality._command_center_acceptance_payload
 
-def _print_release_audio_certification_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality._print_release_audio_certification_result(*args, **kwargs)
+_print_release_audio_certification_result = CLI_BINDINGS.quality._print_release_audio_certification_result
 
-def _release_audio_command_center_evidence_from_args(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality._release_audio_command_center_evidence_from_args(*args, **kwargs)
+_release_audio_command_center_evidence_from_args = CLI_BINDINGS.quality._release_audio_command_center_evidence_from_args
 
-def _release_train_handoff_payload_from_args(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery._release_train_handoff_payload_from_args(*args, **kwargs)
+_release_train_handoff_payload_from_args = CLI_BINDINGS.delivery._release_train_handoff_payload_from_args
 
-def _release_train_lifecycle_payload_from_args(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery._release_train_lifecycle_payload_from_args(*args, **kwargs)
+_release_train_lifecycle_payload_from_args = CLI_BINDINGS.delivery._release_train_lifecycle_payload_from_args
 
-def _trust_operations_assurance_source_payload(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust._trust_operations_assurance_source_payload(*args, **kwargs)
+_trust_operations_assurance_source_payload = CLI_BINDINGS.trust._trust_operations_assurance_source_payload
 
-def _trust_operations_assurance_watch_source_payload(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust._trust_operations_assurance_watch_source_payload(*args, **kwargs)
+_trust_operations_assurance_watch_source_payload = CLI_BINDINGS.trust._trust_operations_assurance_watch_source_payload
 
-def _trust_operations_final_readiness_source_payload(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust._trust_operations_final_readiness_source_payload(*args, **kwargs)
+_trust_operations_final_readiness_source_payload = CLI_BINDINGS.trust._trust_operations_final_readiness_source_payload
 
-def build_acceptance_analytics_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_acceptance_analytics_parser(*args, **kwargs)
+build_acceptance_analytics_parser = CLI_BINDINGS.quality.build_acceptance_analytics_parser
 
-def build_acceptance_check_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_acceptance_check_parser(*args, **kwargs)
+build_acceptance_check_parser = CLI_BINDINGS.quality.build_acceptance_check_parser
 
-def build_acceptance_diff_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_acceptance_diff_parser(*args, **kwargs)
+build_acceptance_diff_parser = CLI_BINDINGS.quality.build_acceptance_diff_parser
 
-def build_acceptance_fix_plan_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_acceptance_fix_plan_parser(*args, **kwargs)
+build_acceptance_fix_plan_parser = CLI_BINDINGS.quality.build_acceptance_fix_plan_parser
 
-def build_acceptance_fix_sprint_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_acceptance_fix_sprint_parser(*args, **kwargs)
+build_acceptance_fix_sprint_parser = CLI_BINDINGS.quality.build_acceptance_fix_sprint_parser
 
-def build_acceptance_kb_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_acceptance_kb_parser(*args, **kwargs)
+build_acceptance_kb_parser = CLI_BINDINGS.quality.build_acceptance_kb_parser
 
-def build_audio_health_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_audio_health_parser(*args, **kwargs)
+build_audio_health_parser = CLI_BINDINGS.quality.build_audio_health_parser
 
-def build_audio_profile_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_audio_profile_parser(*args, **kwargs)
+build_audio_profile_parser = CLI_BINDINGS.quality.build_audio_profile_parser
 
-def build_encoded_audio_acceptance_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_encoded_audio_acceptance_parser(*args, **kwargs)
+build_encoded_audio_acceptance_parser = CLI_BINDINGS.quality.build_encoded_audio_acceptance_parser
 
-def build_format_decision_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_format_decision_parser(*args, **kwargs)
+build_format_decision_parser = CLI_BINDINGS.quality.build_format_decision_parser
 
-def build_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.creation.build_parser(*args, **kwargs)
+build_parser = CLI_BINDINGS.creation.build_parser
 
-def build_planning_rule_governance_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_planning_rule_governance_parser(*args, **kwargs)
+build_planning_rule_governance_parser = CLI_BINDINGS.quality.build_planning_rule_governance_parser
 
-def build_planning_rule_impact_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_planning_rule_impact_parser(*args, **kwargs)
+build_planning_rule_impact_parser = CLI_BINDINGS.quality.build_planning_rule_impact_parser
 
-def build_planning_ruleset_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_planning_ruleset_parser(*args, **kwargs)
+build_planning_ruleset_parser = CLI_BINDINGS.quality.build_planning_ruleset_parser
 
-def build_planning_simulation_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_planning_simulation_parser(*args, **kwargs)
+build_planning_simulation_parser = CLI_BINDINGS.quality.build_planning_simulation_parser
 
-def build_public_trust_center_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_public_trust_center_parser(*args, **kwargs)
+build_public_trust_center_parser = CLI_BINDINGS.trust.build_public_trust_center_parser
 
-def build_public_trust_center_publication_monitor_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_public_trust_center_publication_monitor_parser(*args, **kwargs)
+build_public_trust_center_publication_monitor_parser = CLI_BINDINGS.trust.build_public_trust_center_publication_monitor_parser
 
-def build_public_trust_center_publication_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_public_trust_center_publication_parser(*args, **kwargs)
+build_public_trust_center_publication_parser = CLI_BINDINGS.trust.build_public_trust_center_publication_parser
 
-def build_release_audio_review_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_release_audio_review_parser(*args, **kwargs)
+build_release_audio_review_parser = CLI_BINDINGS.quality.build_release_audio_review_parser
 
-def build_release_check_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.release_check.build_release_check_parser(*args, **kwargs)
+build_release_check_parser = CLI_BINDINGS.release_check.build_release_check_parser
 
-def build_release_encode_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_release_encode_parser(*args, **kwargs)
+build_release_encode_parser = CLI_BINDINGS.delivery.build_release_encode_parser
 
-def build_release_operations_archive_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_release_operations_archive_parser(*args, **kwargs)
+build_release_operations_archive_parser = CLI_BINDINGS.delivery.build_release_operations_archive_parser
 
-def build_release_operations_audit_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_release_operations_audit_parser(*args, **kwargs)
+build_release_operations_audit_parser = CLI_BINDINGS.delivery.build_release_operations_audit_parser
 
-def build_release_operations_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_release_operations_parser(*args, **kwargs)
+build_release_operations_parser = CLI_BINDINGS.delivery.build_release_operations_parser
 
-def build_release_operations_reviewer_pack_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_release_operations_reviewer_pack_parser(*args, **kwargs)
+build_release_operations_reviewer_pack_parser = CLI_BINDINGS.delivery.build_release_operations_reviewer_pack_parser
 
-def build_release_operations_runbook_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_release_operations_runbook_parser(*args, **kwargs)
+build_release_operations_runbook_parser = CLI_BINDINGS.delivery.build_release_operations_runbook_parser
 
-def build_release_operations_signoff_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_release_operations_signoff_parser(*args, **kwargs)
+build_release_operations_signoff_parser = CLI_BINDINGS.delivery.build_release_operations_signoff_parser
 
-def build_release_portfolio_audit_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_audit_parser(*args, **kwargs)
+build_release_portfolio_audit_parser = CLI_BINDINGS.trust.build_release_portfolio_audit_parser
 
-def build_release_portfolio_governance_attestation_accepted_evidence_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_accepted_evidence_parser(*args, **kwargs)
+build_release_portfolio_governance_attestation_accepted_evidence_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_accepted_evidence_parser
 
-def build_release_portfolio_governance_attestation_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_parser(*args, **kwargs)
+build_release_portfolio_governance_attestation_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_parser
 
-def build_release_portfolio_governance_attestation_portal_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_portal_parser(*args, **kwargs)
+build_release_portfolio_governance_attestation_portal_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_portal_parser
 
-def build_release_portfolio_governance_attestation_portal_review_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_portal_review_parser(*args, **kwargs)
+build_release_portfolio_governance_attestation_portal_review_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_portal_review_parser
 
-def build_release_portfolio_governance_attestation_registry_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_registry_parser(*args, **kwargs)
+build_release_portfolio_governance_attestation_registry_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_registry_parser
 
-def build_release_portfolio_governance_attestation_transparency_acknowledgement_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_transparency_acknowledgement_parser(*args, **kwargs)
+build_release_portfolio_governance_attestation_transparency_acknowledgement_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_transparency_acknowledgement_parser
 
-def build_release_portfolio_governance_attestation_transparency_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_transparency_parser(*args, **kwargs)
+build_release_portfolio_governance_attestation_transparency_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_attestation_transparency_parser
 
-def build_release_portfolio_governance_audit_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_audit_parser(*args, **kwargs)
+build_release_portfolio_governance_audit_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_audit_parser
 
-def build_release_portfolio_governance_evidence_vault_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_evidence_vault_parser(*args, **kwargs)
+build_release_portfolio_governance_evidence_vault_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_evidence_vault_parser
 
-def build_release_portfolio_governance_final_board_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_final_board_parser(*args, **kwargs)
+build_release_portfolio_governance_final_board_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_final_board_parser
 
-def build_release_portfolio_governance_queue_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_queue_parser(*args, **kwargs)
+build_release_portfolio_governance_queue_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_queue_parser
 
-def build_release_portfolio_governance_reviewer_pack_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_reviewer_pack_parser(*args, **kwargs)
+build_release_portfolio_governance_reviewer_pack_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_reviewer_pack_parser
 
-def build_release_portfolio_governance_signoff_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_release_portfolio_governance_signoff_parser(*args, **kwargs)
+build_release_portfolio_governance_signoff_parser = CLI_BINDINGS.trust.build_release_portfolio_governance_signoff_parser
 
-def build_trust_operations_assurance_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_assurance_parser(*args, **kwargs)
+build_trust_operations_assurance_parser = CLI_BINDINGS.trust.build_trust_operations_assurance_parser
 
-def build_trust_operations_assurance_watch_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_assurance_watch_parser(*args, **kwargs)
+build_trust_operations_assurance_watch_parser = CLI_BINDINGS.trust.build_trust_operations_assurance_watch_parser
 
-def build_trust_operations_assurance_watch_signoff_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_assurance_watch_signoff_parser(*args, **kwargs)
+build_trust_operations_assurance_watch_signoff_parser = CLI_BINDINGS.trust.build_trust_operations_assurance_watch_signoff_parser
 
-def build_trust_operations_control_signoff_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_control_signoff_parser(*args, **kwargs)
+build_trust_operations_control_signoff_parser = CLI_BINDINGS.trust.build_trust_operations_control_signoff_parser
 
-def build_trust_operations_controls_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_controls_parser(*args, **kwargs)
+build_trust_operations_controls_parser = CLI_BINDINGS.trust.build_trust_operations_controls_parser
 
-def build_trust_operations_final_readiness_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_final_readiness_parser(*args, **kwargs)
+build_trust_operations_final_readiness_parser = CLI_BINDINGS.trust.build_trust_operations_final_readiness_parser
 
-def build_trust_operations_hub_incidents_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_hub_incidents_parser(*args, **kwargs)
+build_trust_operations_hub_incidents_parser = CLI_BINDINGS.trust.build_trust_operations_hub_incidents_parser
 
-def build_trust_operations_hub_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_hub_parser(*args, **kwargs)
+build_trust_operations_hub_parser = CLI_BINDINGS.trust.build_trust_operations_hub_parser
 
-def build_trust_operations_hub_runbook_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_hub_runbook_parser(*args, **kwargs)
+build_trust_operations_hub_runbook_parser = CLI_BINDINGS.trust.build_trust_operations_hub_runbook_parser
 
-def build_trust_operations_incident_knowledge_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_trust_operations_incident_knowledge_parser(*args, **kwargs)
+build_trust_operations_incident_knowledge_parser = CLI_BINDINGS.trust.build_trust_operations_incident_knowledge_parser
 
-def build_verify_audio_campaign_archive_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_audio_campaign_archive_parser(*args, **kwargs)
+build_verify_audio_campaign_archive_parser = CLI_BINDINGS.quality.build_verify_audio_campaign_archive_parser
 
-def build_verify_audio_campaign_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_audio_campaign_parser(*args, **kwargs)
+build_verify_audio_campaign_parser = CLI_BINDINGS.quality.build_verify_audio_campaign_parser
 
-def build_verify_audio_campaign_remediation_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_audio_campaign_remediation_parser(*args, **kwargs)
+build_verify_audio_campaign_remediation_parser = CLI_BINDINGS.quality.build_verify_audio_campaign_remediation_parser
 
-def build_verify_distribution_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_verify_distribution_parser(*args, **kwargs)
+build_verify_distribution_parser = CLI_BINDINGS.delivery.build_verify_distribution_parser
 
-def build_verify_human_review_pack_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.studio.build_verify_human_review_pack_parser(*args, **kwargs)
+build_verify_human_review_pack_parser = CLI_BINDINGS.studio.build_verify_human_review_pack_parser
 
-def build_verify_maintenance_backup_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.maintenance.build_verify_maintenance_backup_parser(*args, **kwargs)
+build_verify_maintenance_backup_parser = CLI_BINDINGS.maintenance.build_verify_maintenance_backup_parser
 
-def build_verify_public_trust_center_acceptance_board_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_acceptance_board_parser(*args, **kwargs)
+build_verify_public_trust_center_acceptance_board_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_acceptance_board_parser
 
-def build_verify_public_trust_center_acceptance_board_signoff_archive_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_acceptance_board_signoff_archive_parser(*args, **kwargs)
+build_verify_public_trust_center_acceptance_board_signoff_archive_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_acceptance_board_signoff_archive_parser
 
-def build_verify_public_trust_center_anchor_registry_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_anchor_registry_parser(*args, **kwargs)
+build_verify_public_trust_center_anchor_registry_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_anchor_registry_parser
 
-def build_verify_public_trust_center_anchor_transparency_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_anchor_transparency_parser(*args, **kwargs)
+build_verify_public_trust_center_anchor_transparency_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_anchor_transparency_parser
 
-def build_verify_public_trust_center_distribution_kit_accepted_evidence_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_distribution_kit_accepted_evidence_parser(*args, **kwargs)
+build_verify_public_trust_center_distribution_kit_accepted_evidence_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_distribution_kit_accepted_evidence_parser
 
-def build_verify_public_trust_center_distribution_kit_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_distribution_kit_parser(*args, **kwargs)
+build_verify_public_trust_center_distribution_kit_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_distribution_kit_parser
 
-def build_verify_public_trust_center_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_parser(*args, **kwargs)
+build_verify_public_trust_center_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_parser
 
-def build_verify_public_trust_center_publication_mirror_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_publication_mirror_parser(*args, **kwargs)
+build_verify_public_trust_center_publication_mirror_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_publication_mirror_parser
 
-def build_verify_public_trust_center_publication_monitoring_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_publication_monitoring_parser(*args, **kwargs)
+build_verify_public_trust_center_publication_monitoring_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_publication_monitoring_parser
 
-def build_verify_public_trust_center_publication_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_public_trust_center_publication_parser(*args, **kwargs)
+build_verify_public_trust_center_publication_parser = CLI_BINDINGS.trust.build_verify_public_trust_center_publication_parser
 
-def build_verify_release_audio_baseline_registry_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_baseline_registry_parser(*args, **kwargs)
+build_verify_release_audio_baseline_registry_parser = CLI_BINDINGS.quality.build_verify_release_audio_baseline_registry_parser
 
-def build_verify_release_audio_certification_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_certification_parser(*args, **kwargs)
+build_verify_release_audio_certification_parser = CLI_BINDINGS.quality.build_verify_release_audio_certification_parser
 
-def build_verify_release_audio_command_center_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_command_center_parser(*args, **kwargs)
+build_verify_release_audio_command_center_parser = CLI_BINDINGS.quality.build_verify_release_audio_command_center_parser
 
-def build_verify_release_audio_quality_action_queue_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_quality_action_queue_parser(*args, **kwargs)
+build_verify_release_audio_quality_action_queue_parser = CLI_BINDINGS.quality.build_verify_release_audio_quality_action_queue_parser
 
-def build_verify_release_audio_quality_action_queue_signoff_archive_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_quality_action_queue_signoff_archive_parser(*args, **kwargs)
+build_verify_release_audio_quality_action_queue_signoff_archive_parser = CLI_BINDINGS.quality.build_verify_release_audio_quality_action_queue_signoff_archive_parser
 
-def build_verify_release_audio_quality_observatory_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_quality_observatory_parser(*args, **kwargs)
+build_verify_release_audio_quality_observatory_parser = CLI_BINDINGS.quality.build_verify_release_audio_quality_observatory_parser
 
-def build_verify_release_audio_regression_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_regression_parser(*args, **kwargs)
+build_verify_release_audio_regression_parser = CLI_BINDINGS.quality.build_verify_release_audio_regression_parser
 
-def build_verify_release_audio_regression_response_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_regression_response_parser(*args, **kwargs)
+build_verify_release_audio_regression_response_parser = CLI_BINDINGS.quality.build_verify_release_audio_regression_response_parser
 
-def build_verify_release_audio_timeline_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.build_verify_release_audio_timeline_parser(*args, **kwargs)
+build_verify_release_audio_timeline_parser = CLI_BINDINGS.quality.build_verify_release_audio_timeline_parser
 
-def build_verify_release_operations_archive_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_verify_release_operations_archive_parser(*args, **kwargs)
+build_verify_release_operations_archive_parser = CLI_BINDINGS.delivery.build_verify_release_operations_archive_parser
 
-def build_verify_release_operations_audit_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_verify_release_operations_audit_parser(*args, **kwargs)
+build_verify_release_operations_audit_parser = CLI_BINDINGS.delivery.build_verify_release_operations_audit_parser
 
-def build_verify_release_operations_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_verify_release_operations_parser(*args, **kwargs)
+build_verify_release_operations_parser = CLI_BINDINGS.delivery.build_verify_release_operations_parser
 
-def build_verify_release_operations_reviewer_pack_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_verify_release_operations_reviewer_pack_parser(*args, **kwargs)
+build_verify_release_operations_reviewer_pack_parser = CLI_BINDINGS.delivery.build_verify_release_operations_reviewer_pack_parser
 
-def build_verify_release_operations_runbook_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_verify_release_operations_runbook_parser(*args, **kwargs)
+build_verify_release_operations_runbook_parser = CLI_BINDINGS.delivery.build_verify_release_operations_runbook_parser
 
-def build_verify_release_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.build_verify_release_parser(*args, **kwargs)
+build_verify_release_parser = CLI_BINDINGS.delivery.build_verify_release_parser
 
-def build_verify_release_portfolio_audit_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_audit_parser(*args, **kwargs)
+build_verify_release_portfolio_audit_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_audit_parser
 
-def build_verify_release_portfolio_governance_archive_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_archive_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_archive_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_archive_parser
 
-def build_verify_release_portfolio_governance_attestation_accepted_evidence_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_accepted_evidence_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_accepted_evidence_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_accepted_evidence_parser
 
-def build_verify_release_portfolio_governance_attestation_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_parser
 
-def build_verify_release_portfolio_governance_attestation_portal_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_portal_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_portal_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_portal_parser
 
-def build_verify_release_portfolio_governance_attestation_portal_response_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_portal_response_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_portal_response_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_portal_response_parser
 
-def build_verify_release_portfolio_governance_attestation_portal_review_pack_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_portal_review_pack_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_portal_review_pack_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_portal_review_pack_parser
 
-def build_verify_release_portfolio_governance_attestation_registry_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_registry_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_registry_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_registry_parser
 
-def build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser
 
-def build_verify_release_portfolio_governance_attestation_transparency_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_transparency_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_attestation_transparency_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_attestation_transparency_parser
 
-def build_verify_release_portfolio_governance_audit_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_audit_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_audit_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_audit_parser
 
-def build_verify_release_portfolio_governance_evidence_vault_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_evidence_vault_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_evidence_vault_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_evidence_vault_parser
 
-def build_verify_release_portfolio_governance_final_board_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_final_board_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_final_board_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_final_board_parser
 
-def build_verify_release_portfolio_governance_parser(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.build_verify_release_portfolio_governance_parser(*args, **kwargs)
+build_verify_release_portfolio_governance_parser = CLI_BINDINGS.trust.build_verify_release_portfolio_governance_parser
 
 __all__ = ('_program_component', '_acceptance_analytics_fail_on', '_add_command_center_acceptance_source_args', '_build_public_trust_center_publication_store', '_build_public_trust_center_store', '_build_release_portfolio_governance_attestation_portal_store', '_command_center_acceptance_payload', '_print_release_audio_certification_result', '_release_audio_command_center_evidence_from_args', '_release_train_handoff_payload_from_args', '_release_train_lifecycle_payload_from_args', '_trust_operations_assurance_source_payload', '_trust_operations_assurance_watch_source_payload', '_trust_operations_final_readiness_source_payload', 'build_acceptance_analytics_parser', 'build_acceptance_check_parser', 'build_acceptance_diff_parser', 'build_acceptance_fix_plan_parser', 'build_acceptance_fix_sprint_parser', 'build_acceptance_kb_parser', 'build_audio_health_parser', 'build_audio_profile_parser', 'build_encoded_audio_acceptance_parser', 'build_format_decision_parser', 'build_parser', 'build_planning_rule_governance_parser', 'build_planning_rule_impact_parser', 'build_planning_ruleset_parser', 'build_planning_simulation_parser', 'build_public_trust_center_parser', 'build_public_trust_center_publication_monitor_parser', 'build_public_trust_center_publication_parser', 'build_release_audio_review_parser', 'build_release_check_parser', 'build_release_encode_parser', 'build_release_operations_archive_parser', 'build_release_operations_audit_parser', 'build_release_operations_parser', 'build_release_operations_reviewer_pack_parser', 'build_release_operations_runbook_parser', 'build_release_operations_signoff_parser', 'build_release_portfolio_audit_parser', 'build_release_portfolio_governance_attestation_accepted_evidence_parser', 'build_release_portfolio_governance_attestation_parser', 'build_release_portfolio_governance_attestation_portal_parser', 'build_release_portfolio_governance_attestation_portal_review_parser', 'build_release_portfolio_governance_attestation_registry_parser', 'build_release_portfolio_governance_attestation_transparency_acknowledgement_parser', 'build_release_portfolio_governance_attestation_transparency_parser', 'build_release_portfolio_governance_audit_parser', 'build_release_portfolio_governance_evidence_vault_parser', 'build_release_portfolio_governance_final_board_parser', 'build_release_portfolio_governance_queue_parser', 'build_release_portfolio_governance_reviewer_pack_parser', 'build_release_portfolio_governance_signoff_parser', 'build_trust_operations_assurance_parser', 'build_trust_operations_assurance_watch_parser', 'build_trust_operations_assurance_watch_signoff_parser', 'build_trust_operations_control_signoff_parser', 'build_trust_operations_controls_parser', 'build_trust_operations_final_readiness_parser', 'build_trust_operations_hub_incidents_parser', 'build_trust_operations_hub_parser', 'build_trust_operations_hub_runbook_parser', 'build_trust_operations_incident_knowledge_parser', 'build_verify_audio_campaign_archive_parser', 'build_verify_audio_campaign_parser', 'build_verify_audio_campaign_remediation_parser', 'build_verify_distribution_parser', 'build_verify_human_review_pack_parser', 'build_verify_maintenance_backup_parser', 'build_verify_public_trust_center_acceptance_board_parser', 'build_verify_public_trust_center_acceptance_board_signoff_archive_parser', 'build_verify_public_trust_center_anchor_registry_parser', 'build_verify_public_trust_center_anchor_transparency_parser', 'build_verify_public_trust_center_distribution_kit_accepted_evidence_parser', 'build_verify_public_trust_center_distribution_kit_parser', 'build_verify_public_trust_center_parser', 'build_verify_public_trust_center_publication_mirror_parser', 'build_verify_public_trust_center_publication_monitoring_parser', 'build_verify_public_trust_center_publication_parser', 'build_verify_release_audio_baseline_registry_parser', 'build_verify_release_audio_certification_parser', 'build_verify_release_audio_command_center_parser', 'build_verify_release_audio_quality_action_queue_parser', 'build_verify_release_audio_quality_action_queue_signoff_archive_parser', 'build_verify_release_audio_quality_observatory_parser', 'build_verify_release_audio_regression_parser', 'build_verify_release_audio_regression_response_parser', 'build_verify_release_audio_timeline_parser', 'build_verify_release_operations_archive_parser', 'build_verify_release_operations_audit_parser', 'build_verify_release_operations_parser', 'build_verify_release_operations_reviewer_pack_parser', 'build_verify_release_operations_runbook_parser', 'build_verify_release_parser', 'build_verify_release_portfolio_audit_parser', 'build_verify_release_portfolio_governance_archive_parser', 'build_verify_release_portfolio_governance_attestation_accepted_evidence_parser', 'build_verify_release_portfolio_governance_attestation_parser', 'build_verify_release_portfolio_governance_attestation_portal_parser', 'build_verify_release_portfolio_governance_attestation_portal_response_parser', 'build_verify_release_portfolio_governance_attestation_portal_review_pack_parser', 'build_verify_release_portfolio_governance_attestation_registry_parser', 'build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser', 'build_verify_release_portfolio_governance_attestation_transparency_parser', 'build_verify_release_portfolio_governance_audit_parser', 'build_verify_release_portfolio_governance_evidence_vault_parser', 'build_verify_release_portfolio_governance_final_board_parser', 'build_verify_release_portfolio_governance_parser')

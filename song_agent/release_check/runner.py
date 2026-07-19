@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import json
 import os
 import platform
@@ -50,8 +51,8 @@ class ReleaseCheckReport:
     started_at: str = ""
     finished_at: str = ""
     duration_ms: int = 0
-    environment: dict[str, Any] = field(default_factory=dict)
-    selected_checks: list[dict[str, Any]] = field(default_factory=list)
+    environment: ImplementationDocument = field(default_factory=dict)
+    selected_checks: list[ImplementationDocument] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -61,7 +62,7 @@ class ReleaseCheckReport:
         status = "passed" if ok else "failed"
         self.results.append(CheckResult(name=name, ok=ok, detail=detail, status=status))
 
-    def to_json_report(self) -> dict[str, Any]:
+    def to_json_report(self) -> DomainDocument:
         failures = [result for result in self.results if not result.ok]
         warning_results = [result for result in self.results if result.status == "warning"]
         checks_with_warnings = [
@@ -115,7 +116,7 @@ class ReleaseCheckReport:
             }
         )
 
-    def to_timing_report(self) -> dict[str, Any]:
+    def to_timing_report(self) -> DomainDocument:
         slowest = sorted(self.results, key=lambda result: result.duration_ms, reverse=True)[:20]
         performance = performance_summary(self.results, profile=self.profile, duration_ms=self.duration_ms)
         return sanitize_report(
@@ -144,7 +145,7 @@ class ReleaseCheckReport:
         )
 
 
-def result_to_dict(result: CheckResult) -> dict[str, Any]:
+def result_to_dict(result: CheckResult) -> DomainDocument:
     return {
         "check_id": result.check_id,
         "name": result.name,
@@ -409,7 +410,7 @@ def _effective_timeout(default: int, override: int | None) -> int:
     return max(10, int(override))
 
 
-def _environment(root: Path) -> dict[str, Any]:
+def _environment(root: Path) -> ImplementationDocument:
     return {
         "python": platform.python_version(),
         "platform": platform.platform(),

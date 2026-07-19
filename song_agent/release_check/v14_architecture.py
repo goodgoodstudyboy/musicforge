@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import ast
 from collections import Counter
 import json
 import re
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from song_agent import __version__
 from song_agent.architecture_guardrails import build_architecture_snapshot
@@ -21,8 +21,8 @@ def evaluate_v14_architecture(
     *,
     policy_path: Path | str = V14_POLICY_PATH,
     require_final: bool | None = None,
-    snapshot: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+    snapshot: DomainDocument | None = None,
+) -> DomainDocument:
     root = Path(repo_root).resolve()
     policy_file = _rooted(root, policy_path)
     policy = json.loads(policy_file.read_text(encoding="utf-8"))
@@ -38,7 +38,7 @@ def evaluate_v14_architecture(
         blockers.append("v14_architecture_release_version")
     if not _current_docs_match_package(root):
         blockers.append("v14_architecture_current_docs_version")
-    report: dict[str, Any] = {
+    report: ImplementationDocument = {
         "schema_version": 1,
         "package_type": "musicforge_v14_architecture_report",
         "app_version": __version__,
@@ -68,7 +68,7 @@ def run_v14_architecture_cutover_smoke(root: Path) -> tuple[bool, str]:
         return False, f"v14 architecture cutover smoke failed: {exc}"
 
 
-def _v14_metrics(root: Path, snapshot: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+def _v14_metrics(root: Path, snapshot: ImplementationDocument, policy: ImplementationDocument) -> ImplementationDocument:
     ownership = {str(row["module"]): row for row in snapshot["modules"]}
     composition_roots = tuple(
         str(path).replace("\\", "/").rstrip("/")
@@ -79,10 +79,10 @@ def _v14_metrics(root: Path, snapshot: dict[str, Any], policy: dict[str, Any]) -
         for row in snapshot["active_to_compatibility_imports"]
     )
     anonymous_parts: list[str] = []
-    wildcard_imports: list[dict[str, Any]] = []
-    dynamic_forwarding: list[dict[str, Any]] = []
-    store_references: list[dict[str, Any]] = []
-    oversized_functions: list[dict[str, Any]] = []
+    wildcard_imports: list[ImplementationDocument] = []
+    dynamic_forwarding: list[ImplementationDocument] = []
+    store_references: list[ImplementationDocument] = []
+    oversized_functions: list[ImplementationDocument] = []
     for module, row in sorted(ownership.items()):
         layer = str(row.get("layer"))
         if layer in {"compatibility", "release_check"}:
@@ -145,7 +145,7 @@ def _v14_metrics(root: Path, snapshot: dict[str, Any], policy: dict[str, Any]) -
     }
 
 
-def _policy_declaration_blockers(policy: dict[str, Any], frozen: dict[str, Any]) -> list[str]:
+def _policy_declaration_blockers(policy: ImplementationDocument, frozen: ImplementationDocument) -> list[str]:
     blockers: list[str] = []
     if policy.get("schema_version") != 1:
         blockers.append("v14_architecture_policy_schema")
@@ -168,7 +168,7 @@ def _policy_declaration_blockers(policy: dict[str, Any], frozen: dict[str, Any])
     return blockers
 
 
-def _limit_blockers(metrics: dict[str, Any], limits: dict[str, Any], *, final: bool) -> list[str]:
+def _limit_blockers(metrics: ImplementationDocument, limits: ImplementationDocument, *, final: bool) -> list[str]:
     prefix = "v14_final" if final else "v14_ratchet"
     blockers: list[str] = []
     for key, maximum in limits.items():
@@ -179,7 +179,7 @@ def _limit_blockers(metrics: dict[str, Any], limits: dict[str, Any], *, final: b
     return blockers
 
 
-def _context_limit_blockers(metrics: dict[str, Any], policy: dict[str, Any], *, final: bool) -> list[str]:
+def _context_limit_blockers(metrics: ImplementationDocument, policy: ImplementationDocument, *, final: bool) -> list[str]:
     counts = metrics["active_to_compatibility_by_context"]
     if final:
         return [f"v14_final:active_to_compatibility_context:{context}:{count}>0" for context, count in counts.items() if count]

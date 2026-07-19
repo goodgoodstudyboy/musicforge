@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document
 
 import json as json
 import re as re
@@ -65,10 +65,10 @@ def verify_unified_release_program_continuity_acceptance_package(
     max_zip_size_mb: int = 256,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 2000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -212,11 +212,11 @@ def verify_unified_release_program_continuity_acceptance_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_continuity_acceptance_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_release_program_continuity_acceptance_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_release_program_continuity_acceptance_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_release_program_continuity_acceptance_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -240,7 +240,7 @@ def _evidence_bundle(archive: zipfile.ZipFile, evidence_id: str) -> Implementati
 
 
 def _response_checks(responses: dict[str, ImplementationDocument], source: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     for response_id, bundle in sorted(responses.items()):
         response = bundle["response"]
         verification = bundle["verification"]
@@ -266,8 +266,8 @@ def _response_checks(responses: dict[str, ImplementationDocument], source: Imple
 
 
 def _participants_from_evidence(evidences: dict[str, ImplementationDocument], responses: dict[str, ImplementationDocument]) -> tuple[list[ImplementationDocument], list[ImplementationDocument]]:
-    participants: list[dict[str, Any]] = []
-    conflicts: list[dict[str, Any]] = []
+    participants: list[ImplementationDocument] = []
+    conflicts: list[ImplementationDocument] = []
     for evidence_id, bundle in sorted(evidences.items()):
         accepted = bundle["accepted"]
         public = bundle["public"]
@@ -328,7 +328,7 @@ def _matrix_rows(participants: list[ImplementationDocument]) -> list[Implementat
 
 
 def _negative_response_conflicts(responses: dict[str, ImplementationDocument], policy: ImplementationDocument) -> list[ImplementationDocument]:
-    conflicts: list[dict[str, Any]] = []
+    conflicts: list[ImplementationDocument] = []
     for response_id, bundle in responses.items():
         binding = bundle["binding"]
         decision = binding.get("decision")
@@ -452,7 +452,7 @@ def _current_kit_checks(source: ImplementationDocument, kit_path: Path | str | N
 
 
 def _history_checks(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     previous = ""
     for index, row in enumerate(rows, start=1):
         expected_payload = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})

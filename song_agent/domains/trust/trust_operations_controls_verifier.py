@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
@@ -34,56 +35,34 @@ MAX_TEXT_SCAN_BYTES = 2 * 1024 * 1024
 VERIFIER_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"}
 
 
-def verify_trust_operations_control_package(
-    zip_path: Path | str,
-    *,
-    strict: bool = False,
-    require_policy_passed: bool = False,
-    hub_package_path: Path | str | None = None,
-    hub_verification_report_path: Path | str | None = None,
-    incident_board_package_path: Path | str | None = None,
-    incident_board_verification_report_path: Path | str | None = None,
-    incident_knowledge_package_path: Path | str | None = None,
-    incident_knowledge_verification_report_path: Path | str | None = None,
-    max_zip_size_mb: int = DEFAULT_MAX_ZIP_SIZE_MB,
-    max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
-    max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
-    now: str | None = None,
-) -> dict[str, Any]:
-    verifier = _ControlVerifier(
-        Path(zip_path),
-        strict=strict,
-        require_policy_passed=require_policy_passed,
-        hub_package_path=Path(hub_package_path) if hub_package_path else None,
-        hub_verification_report_path=Path(hub_verification_report_path) if hub_verification_report_path else None,
-        incident_board_package_path=Path(incident_board_package_path) if incident_board_package_path else None,
-        incident_board_verification_report_path=Path(incident_board_verification_report_path) if incident_board_verification_report_path else None,
-        incident_knowledge_package_path=Path(incident_knowledge_package_path) if incident_knowledge_package_path else None,
-        incident_knowledge_verification_report_path=Path(incident_knowledge_verification_report_path) if incident_knowledge_verification_report_path else None,
-        max_zip_size_mb=max_zip_size_mb,
-        max_uncompressed_size_mb=max_uncompressed_size_mb,
-        max_entry_count=max_entry_count,
-        now=now,
-    )
-    return verifier.run()
+from song_agent.domains.trust import v142_tocv_readiness as _v142_tocv_readiness
+from song_agent.domains.trust.v142_tocv_readiness import (
+    verify_trust_operations_control_package,
+    write_trust_operations_control_verification_report,
+    print_trust_operations_control_verification_report,
+    trust_operations_control_verification_exit_code,
+    _control_matches_external_entry,
+    _result_projection,
+    _blocker_projection,
+    _action_projection,
+    _read_json_file,
+    _sha256_entry,
+    _sha256_file,
+    _counts,
+    _is_safe_entry,
+    _is_forbidden_entry,
+    _is_text_scan_entry,
+    _contains_sensitive_text,
+    _walk_json_values,
+    _fs_path,
+)
 
 
-def write_trust_operations_control_verification_report(report: dict[str, Any], path: Path | str) -> Path:
-    return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_trust_operations_control_verification_report(report: dict[str, Any]) -> None:
-    summary = _as_document(report.get("summary"))
-    print("MusicForge Trust Operations Control verification")
-    print(f"status: {report.get('status')}")
-    print(f"hub: {summary.get('hub_id') or '-'}")
-    print(f"controls: {summary.get('control_count') or 0}")
-    print(f"required failed: {summary.get('required_failed_count') or 0}")
-    print(f"blockers: {len(_as_list(report.get('blockers')))}")
 
 
-def trust_operations_control_verification_exit_code(report: dict[str, Any]) -> int:
-    return 1 if report.get("status") == "failed" else 0
+
 
 
 class _ControlVerifier:
@@ -117,8 +96,8 @@ class _ControlVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -126,26 +105,26 @@ class _ControlVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.manifest: dict[str, Any] = {}
-        self.catalog: dict[str, Any] = {}
-        self.policy: dict[str, Any] = {}
-        self.assessment: dict[str, Any] = {}
-        self.results_doc: dict[str, Any] = {}
-        self.bindings_doc: dict[str, Any] = {}
-        self.blockers_doc: dict[str, Any] = {}
-        self.actions_doc: dict[str, Any] = {}
-        self.external_reports: dict[str, dict[str, Any]] = {}
-        self.external_hub_manifest: dict[str, Any] = {}
-        self.external_incident_manifest: dict[str, Any] = {}
-        self.external_knowledge_manifest: dict[str, Any] = {}
-        self.external_incidents_doc: dict[str, Any] = {}
-        self.external_closeouts_doc: dict[str, Any] = {}
-        self.external_knowledge_entries_doc: dict[str, Any] = {}
-        self.external_knowledge_guards_doc: dict[str, Any] = {}
-        self.external_knowledge_runs_doc: dict[str, Any] = {}
-        self.redaction_findings: list[dict[str, Any]] = []
+        self.manifest: ImplementationDocument = {}
+        self.catalog: ImplementationDocument = {}
+        self.policy: ImplementationDocument = {}
+        self.assessment: ImplementationDocument = {}
+        self.results_doc: ImplementationDocument = {}
+        self.bindings_doc: ImplementationDocument = {}
+        self.blockers_doc: ImplementationDocument = {}
+        self.actions_doc: ImplementationDocument = {}
+        self.external_reports: dict[str, ImplementationDocument] = {}
+        self.external_hub_manifest: ImplementationDocument = {}
+        self.external_incident_manifest: ImplementationDocument = {}
+        self.external_knowledge_manifest: ImplementationDocument = {}
+        self.external_incidents_doc: ImplementationDocument = {}
+        self.external_closeouts_doc: ImplementationDocument = {}
+        self.external_knowledge_entries_doc: ImplementationDocument = {}
+        self.external_knowledge_guards_doc: ImplementationDocument = {}
+        self.external_knowledge_runs_doc: ImplementationDocument = {}
+        self.redaction_findings: list[ImplementationDocument] = []
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -440,7 +419,7 @@ class _ControlVerifier:
         incidents = _as_list(self.external_incidents_doc.get("incidents"))
         closeouts = _as_list(self.external_closeouts_doc.get("closeouts"))
         closeout_by_id = {str(closeout.get("incident_id") or ""): closeout for closeout in closeouts if isinstance(closeout, dict)}
-        facts: dict[str, dict[str, Any]] = {}
+        facts: dict[str, ImplementationDocument] = {}
         for incident in incidents:
             if not isinstance(incident, dict) or incident.get("status") != "closed" or incident.get("stale"):
                 continue
@@ -474,7 +453,7 @@ class _ControlVerifier:
         self._add_check("requirements", "tohc_require_policy_passed", "passed" if (not self.require_policy_passed or (required_failed == 0 and assessment_passed)) else "failed", "blocking", "Control policy assessment passed." if required_failed == 0 and assessment_passed else "Required controls failed.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[dict[str, Any]] = []
+        findings: list[ImplementationDocument] = []
         for info in self.entry_infos:
             name = info.filename
             if not _is_text_scan_entry(name) or int(info.file_size or 0) > MAX_TEXT_SCAN_BYTES:
@@ -575,148 +554,4 @@ class _ControlVerifier:
     def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str) -> None:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
-
-def _control_matches_external_entry(control: ImplementationDocument, entry: ImplementationDocument, fact: ImplementationDocument, guard: ImplementationDocument | None, knowledge_report: ImplementationDocument, incident_report: ImplementationDocument) -> bool:
-    source = _as_document(control.get("source"))
-    scope = _as_document(control.get("scope"))
-    recommended = _as_document(entry.get("recommended_guard"))
-    guard = guard or {}
-    expected_source = {
-        "source_type": "knowledge_entry",
-        "knowledge_entry_id": entry.get("entry_id"),
-        "knowledge_entry_hash": entry.get("integrity_hash"),
-        "incident_id": entry.get("incident_id"),
-        "incident_hash": entry.get("source", {}).get("incident_hash"),
-        "closeout_hash": entry.get("source", {}).get("closeout_hash"),
-        "source_fingerprint": entry.get("source", {}).get("source_fingerprint"),
-        "knowledge_verification_report_hash": verification_hash(knowledge_report) if knowledge_report else source.get("knowledge_verification_report_hash"),
-        "incident_verification_report_hash": verification_hash(incident_report) if incident_report else source.get("incident_verification_report_hash"),
-        "guard_id": guard.get("guard_id"),
-        "guard_hash": guard.get("integrity_hash"),
-        "recommended_guard_type": recommended.get("guard_type"),
-    }
-    return (
-        control.get("severity") == fact.get("severity")
-        and control.get("category") == fact.get("category")
-        and scope.get("component_type") == fact.get("component_type")
-        and scope.get("component_id") == fact.get("component_id")
-        and scope.get("failure_mode") == fact.get("failure_mode")
-        and source == expected_source
-        and control.get("source_hash") == stable_hash(expected_source)
-        and control.get("evaluation", {}).get("method") == "knowledge_guard_coverage"
-        and control.get("integrity_hash") == control_hash(control)
-    )
-
-
-def _result_projection(rows: list[Any]) -> list[ImplementationDocument]:
-    out = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        out.append({"control_id": row.get("control_id"), "control_hash": row.get("control_hash"), "required": row.get("required"), "severity": row.get("severity"), "status": row.get("status"), "evaluation_method": row.get("evaluation_method")})
-    return sorted(out, key=lambda item: str(item.get("control_id") or ""))
-
-
-def _blocker_projection(rows: list[Any]) -> list[ImplementationDocument]:
-    out = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        out.append({"control_id": row.get("control_id"), "severity": row.get("severity"), "source_result_hash": row.get("source_result_hash")})
-    return sorted(out, key=lambda item: str(item.get("control_id") or ""))
-
-
-def _action_projection(rows: list[Any]) -> list[ImplementationDocument]:
-    out = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        out.append({"control_id": row.get("control_id"), "status": row.get("status"), "allowed_automation": row.get("allowed_automation")})
-    return sorted(out, key=lambda item: str(item.get("control_id") or ""))
-
-
-def _read_json_file(path: Path) -> ImplementationDocument:
-    try:
-        with open(_fs_path(path), "r", encoding="utf-8") as handle:
-            value = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return _as_document(value)
-
-
-def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
-    digest = hashlib.sha256()
-    with archive.open(info, "r") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(_fs_path(path), "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _counts(values: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def _is_safe_entry(name: str) -> bool:
-    if not name or "\\" in name:
-        return False
-    try:
-        path = PurePosixPath(name)
-    except ValueError:
-        return False
-    return not path.is_absolute() and all(part not in {"", ".", ".."} for part in path.parts)
-
-
-def _is_forbidden_entry(name: str) -> bool:
-    lowered = name.lower()
-    return lowered.startswith(".musicforge/") or "/.musicforge/" in lowered
-
-
-def _is_text_scan_entry(name: str) -> bool:
-    return name.lower().endswith((".json", ".txt", ".md", ".csv", ".html", ".jsonl"))
-
-
-def _contains_sensitive_text(text: str) -> bool:
-    for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
-        if pattern.search(text):
-            return True
-    for pattern, _kind in LOCAL_PATH_VALUE_PATTERNS:
-        if pattern.search(text):
-            return True
-    lowered = text.lower()
-    return any(marker in lowered for marker in ("github" + "key", "x-access" + "-token", "github" + "_pat_"))
-
-
-def _walk_json_values(value: Any, prefix: str = "$") -> list[tuple[str, Any]]:
-    rows: list[tuple[str, Any]] = []
-    if isinstance(value, dict):
-        for key, item in value.items():
-            rows.extend(_walk_json_values(item, f"{prefix}.{key}"))
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            rows.extend(_walk_json_values(item, f"{prefix}[{index}]"))
-    elif isinstance(value, str):
-        rows.append((prefix, value))
-    return rows
-
-
-def _fs_path(path: Path) -> str:
-    value = os.fspath(path)
-    if os.name == "nt":
-        absolute = os.path.abspath(value)
-        if absolute.startswith("\\\\?\\"):
-            return absolute
-        if absolute.startswith("\\\\"):
-            return "\\\\?\\UNC\\" + absolute[2:]
-        return "\\\\?\\" + absolute
-    return value
+_v142_tocv_readiness.bind_globals(globals())

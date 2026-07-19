@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import ast
+import inspect
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
@@ -63,7 +64,10 @@ class VerifierCapability:
 
     def external_proofs_adopted(self) -> bool:
         module = import_module(self.module)
-        tree = ast.parse(Path(str(module.__file__)).read_text(encoding="utf-8"), filename=str(module.__file__))
+        function_object = getattr(module, self.function, None)
+        source_file = inspect.getsourcefile(function_object) if callable(function_object) else None
+        source_path = Path(source_file or str(module.__file__))
+        tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
         function = next(
             (node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == self.function),
             None,
@@ -74,7 +78,7 @@ class VerifierCapability:
         used_names = {node.id for node in ast.walk(function) if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
         return set(self.required_proofs).issubset(parameters & used_names)
 
-    def inventory(self) -> dict[str, Any]:
+    def inventory(self) -> DomainDocument:
         spec = self.package_spec()
         return {
             "capability_id": self.capability_id,
@@ -110,10 +114,10 @@ class VerifierCapabilityRegistry:
     def get(self, component_type: str) -> VerifierCapability:
         return next(row for row in self._capabilities if row.component_type == component_type)
 
-    def inventory(self) -> list[dict[str, Any]]:
+    def inventory(self) -> list[DomainDocument]:
         return [row.inventory() for row in self._capabilities]
 
-    def adoption_report(self) -> dict[str, Any]:
+    def adoption_report(self) -> DomainDocument:
         rows = [_verifier_adoption_row(row) for row in self._capabilities]
         package_types = [row["package_type"] for row in rows]
         unique = len(package_types) == len(set(package_types))

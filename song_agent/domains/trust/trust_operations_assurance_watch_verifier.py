@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -47,7 +48,7 @@ def verify_trust_operations_assurance_watch_package(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _WatchVerifier(
         Path(zip_path),
         strict=strict,
@@ -65,11 +66,11 @@ def verify_trust_operations_assurance_watch_package(
     return verifier.run()
 
 
-def write_trust_operations_assurance_watch_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_trust_operations_assurance_watch_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_trust_operations_assurance_watch_verification_report(report: dict[str, Any]) -> None:
+def print_trust_operations_assurance_watch_verification_report(report: DomainDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge Trust Operations Assurance Watch verification")
     print(f"status: {report.get('status')}")
@@ -80,7 +81,7 @@ def print_trust_operations_assurance_watch_verification_report(report: dict[str,
     print(f"warnings: {len(_as_list(report.get('warnings')))}")
 
 
-def trust_operations_assurance_watch_verification_exit_code(report: dict[str, Any]) -> int:
+def trust_operations_assurance_watch_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -113,8 +114,8 @@ class _WatchVerifier:
         self.max_uncompressed_size_mb = max(1, int(max_uncompressed_size_mb))
         self.max_entry_count = max(1, int(max_entry_count))
         self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
@@ -122,20 +123,20 @@ class _WatchVerifier:
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
-        self.manifest: dict[str, Any] = {}
-        self.queue: dict[str, Any] = {}
-        self.schedule: dict[str, Any] = {}
-        self.run_index: dict[str, Any] = {}
-        self.action_pack: dict[str, Any] = {}
-        self.external_summary: dict[str, Any] = {}
-        self.history_events: list[dict[str, Any]] = []
-        self.assurance_report: dict[str, Any] = {}
-        self.assurance_manifest: dict[str, Any] = {}
-        self.hub_report: dict[str, Any] = {}
-        self.hub_manifest: dict[str, Any] = {}
-        self.redaction_findings: list[dict[str, Any]] = []
+        self.manifest: ImplementationDocument = {}
+        self.queue: ImplementationDocument = {}
+        self.schedule: ImplementationDocument = {}
+        self.run_index: ImplementationDocument = {}
+        self.action_pack: ImplementationDocument = {}
+        self.external_summary: ImplementationDocument = {}
+        self.history_events: list[ImplementationDocument] = []
+        self.assurance_report: ImplementationDocument = {}
+        self.assurance_manifest: ImplementationDocument = {}
+        self.hub_report: ImplementationDocument = {}
+        self.hub_manifest: ImplementationDocument = {}
+        self.redaction_findings: list[ImplementationDocument] = []
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -356,7 +357,7 @@ class _WatchVerifier:
         self._add_check("requirements", "toaw_require_clear", "passed" if clear or not self.require_clear else "failed", "blocking", "Assurance Watch queue is clear." if clear else "Assurance Watch queue is not clear.")
 
     def _verify_redaction(self, archive: zipfile.ZipFile) -> None:
-        findings: list[dict[str, Any]] = []
+        findings: list[ImplementationDocument] = []
         for info in archive.infolist():
             if info.file_size > MAX_TEXT_SCAN_BYTES:
                 continue
@@ -433,229 +434,25 @@ def _queue_status(summary: ImplementationDocument) -> str:
     return "clear"
 
 
-def _expected_rows_and_action_pack(queue: ImplementationDocument, schedule: ImplementationDocument, run_index: ImplementationDocument, now: str) -> tuple[list[ImplementationDocument], ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
-    actions: list[dict[str, Any]] = []
-    queue_id = str(queue.get("queue_id") or "")
-    hub_ids = _hub_ids_from_queue_or_run_index(queue, run_index)
-    runs_by_hub = {str(row.get("hub_id") or ""): row for row in run_index.get("runs", []) if isinstance(row, dict)}
-    cadence = _as_document(schedule.get("cadence"))
-    interval_days = int(cadence.get("interval_days") or 7)
-    grace_days = int(cadence.get("grace_days") or 1)
-    requirements = _as_document(schedule.get("requirements"))
-    require_verified = bool(requirements.get("require_latest_assurance_verified", True))
-    for hub_id in hub_ids:
-        run = runs_by_hub.get(hub_id, {"hub_id": hub_id, "status": "missing", "verification_status": "missing"})
-        due_status, next_due_at = _due_status(str(run.get("verified_at") or run.get("created_at") or ""), now, interval_days, grace_days)
-        reasons: list[str] = []
-        readiness = "clear"
-        drift_status = "clear"
-        if not run.get("run_id"):
-            due_status = "missing"
-            readiness = "blocked"
-            drift_status = "missing"
-            reasons.append("assurance_run_missing")
-        if run.get("status") not in {"passed", None}:
-            readiness = "blocked"
-            drift_status = "failed"
-            reasons.append("assurance_run_failed")
-        if require_verified and run.get("verification_status") != "passed":
-            readiness = "blocked"
-            drift_status = "failed" if run.get("verification_status") == "failed" else "missing"
-            reasons.append("assurance_verification_not_passed")
-        if due_status == "overdue":
-            readiness = "blocked"
-            reasons.append("assurance_overdue")
-        elif due_status == "due" and readiness == "clear":
-            readiness = "warning"
-            reasons.append("assurance_due")
-        row: ImplementationDocument = {
-            "hub_id": hub_id,
-            "latest_assurance_run_id": run.get("run_id"),
-            "latest_assurance_status": run.get("status") or "missing",
-            "latest_assurance_verified": run.get("verification_status") == "passed",
-            "last_verified_at": run.get("verified_at"),
-            "next_due_at": next_due_at,
-            "due_status": due_status,
-            "drift_status": drift_status,
-            "readiness": readiness,
-            "reasons": reasons,
-            "action_ids": [],
-        }
-        for action_type, severity, reason in _expected_actions_for_row(row):
-            action_id = f"toaa-{len(actions) + 1:06d}"
-            action = {
-                "action_id": action_id,
-                "queue_id": queue_id,
-                "hub_id": hub_id,
-                "action_type": action_type,
-                "status": "pending",
-                "severity": severity,
-                "reason": reason,
-                "manual_required": True,
-                "safe_to_auto_run": False,
-            }
-            action["integrity_hash"] = watch_hash(action)
-            actions.append(action)
-            row["action_ids"].append(action_id)
-        row["integrity_hash"] = watch_hash(row)
-        rows.append(row)
-    action_pack: ImplementationDocument = {
-        "schema_version": TRUST_OPERATIONS_ASSURANCE_WATCH_SCHEMA_VERSION,
-        "package_type": TRUST_OPERATIONS_ASSURANCE_WATCH_ACTION_PACK_PACKAGE_TYPE,
-        "queue_id": queue_id,
-        "actions": actions,
-        "summary": _action_summary(actions),
-        "source": {"external_verification_summary_hash": _external_summary_hash_for_queue(queue)},
-    }
-    action_pack["status"] = "blocked" if action_pack["summary"]["blocking_count"] else "warning" if action_pack["summary"]["action_count"] else "clear"
-    action_pack["integrity_hash"] = watch_hash(action_pack)
-    return sorted(rows, key=lambda row: str(row.get("hub_id") or "")), action_pack
+from song_agent.domains.trust import v142_toawv_readiness as _v142_toawv_readiness
+from song_agent.domains.trust.v142_toawv_readiness import (
+    _expected_rows_and_action_pack,
+    _external_summary_hash_for_queue,
+    _hub_ids_from_queue_or_run_index,
+    _row_projection,
+    _action_summary,
+    _due_status,
+    _parse_dt,
+    _expected_actions_for_row,
+    _external_item,
+    _read_json_file,
+    _read_zip_json,
+    _sha256_file,
+    _counts,
+    _is_forbidden_entry,
+    _safe_check_id,
+    _contains_sensitive_text,
+    _fs_path,
+)
 
-
-def _external_summary_hash_for_queue(queue: ImplementationDocument) -> str | None:
-    source = _as_document(queue.get("source"))
-    return source.get("external_verification_summary_hash")
-
-
-def _hub_ids_from_queue_or_run_index(queue: ImplementationDocument, run_index: ImplementationDocument) -> list[str]:
-    ids = [str(row.get("hub_id") or "") for row in queue.get("rows", []) if isinstance(row, dict) and row.get("hub_id")]
-    if not ids:
-        ids = [str(row.get("hub_id") or "") for row in run_index.get("runs", []) if isinstance(row, dict) and row.get("hub_id")]
-    return sorted(dict.fromkeys(item for item in ids if item)) or ["hub"]
-
-
-def _row_projection(row: ImplementationDocument) -> ImplementationDocument:
-    keys = [
-        "hub_id",
-        "latest_assurance_run_id",
-        "latest_assurance_status",
-        "latest_assurance_verified",
-        "last_verified_at",
-        "next_due_at",
-        "due_status",
-        "drift_status",
-        "readiness",
-        "reasons",
-        "action_ids",
-    ]
-    return {key: row.get(key) for key in keys}
-
-
-def _action_summary(actions: list[ImplementationDocument]) -> ImplementationDocument:
-    return {
-        "action_count": len(actions),
-        "blocking_count": sum(1 for action in actions if action.get("severity") in {"critical", "high"}),
-        "manual_required_count": sum(1 for action in actions if action.get("manual_required")),
-        "safe_auto_count": sum(1 for action in actions if action.get("safe_to_auto_run")),
-    }
-
-
-def _due_status(last_at: str, now: str, interval_days: int, grace_days: int) -> tuple[str, str | None]:
-    base = _parse_dt(last_at)
-    current = _parse_dt(now)
-    if not base or not current:
-        return "unknown", None
-    next_due = base + timedelta(days=max(0, interval_days))
-    if current <= next_due:
-        return "not_due", next_due.isoformat()
-    if current <= next_due + timedelta(days=max(0, grace_days)):
-        return "due", next_due.isoformat()
-    return "overdue", next_due.isoformat()
-
-
-def _parse_dt(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    text = str(value).replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
-def _expected_actions_for_row(row: ImplementationDocument) -> list[tuple[str, str, str]]:
-    actions: list[tuple[str, str, str]] = []
-    due_status = row.get("due_status")
-    if due_status == "missing":
-        actions.append(("refresh_assurance", "high", "Assurance run is missing."))
-    elif due_status == "overdue":
-        actions.append(("refresh_assurance", "high", "Assurance run is overdue."))
-    elif due_status == "due":
-        actions.append(("refresh_assurance", "medium", "Assurance run is due."))
-    if "assurance_verification_not_passed" in row.get("reasons", []):
-        actions.append(("verify_assurance_archive", "high", "Assurance archive verification is missing or failed."))
-    if "assurance_run_failed" in row.get("reasons", []):
-        actions.append(("manual_delivery_review_required", "high", "Assurance run failed and requires manual review."))
-    return actions
-
-
-def _external_item(summary: ImplementationDocument, component_type: str) -> ImplementationDocument:
-    for item in summary.get("items", []) if isinstance(summary.get("items"), list) else []:
-        if isinstance(item, dict) and item.get("component_type") == component_type:
-            return item
-    return {}
-
-
-def _read_json_file(path: Path | None) -> ImplementationDocument:
-    if not path:
-        return {}
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-        return _as_document(value)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return {}
-
-
-def _read_zip_json(zip_path: Path | None, entry: str) -> ImplementationDocument:
-    if not zip_path:
-        return {}
-    try:
-        with zipfile.ZipFile(_fs_path(zip_path), "r") as archive:
-            value = json.loads(archive.read(entry).decode("utf-8"))
-            return _as_document(value)
-    except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError):
-        return {}
-
-
-def _sha256_file(path: Path | None) -> str | None:
-    if path is None or not path.exists():
-        return None
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _counts(values: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def _is_forbidden_entry(name: str) -> bool:
-    lower = name.lower()
-    return lower.startswith(".musicforge/") or lower.endswith(".zip")
-
-
-def _safe_check_id(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_]+", "_", value).strip("_").lower() or "item"
-
-
-def _contains_sensitive_text(text: str) -> bool:
-    for pattern, _replacement in SENSITIVE_VALUE_PATTERNS:
-        if pattern.search(text):
-            return True
-    for pattern, _kind in LOCAL_PATH_VALUE_PATTERNS:
-        if pattern.search(text):
-            return True
-    return False
-
-
-def _fs_path(path: Path) -> str:
-    return str(path)
+_v142_toawv_readiness.bind_globals(globals())

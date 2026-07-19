@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 import json as json
 import re as re
@@ -32,14 +32,14 @@ class PromptTemplate:
     task: str
     system_prompt: str
     user_prompt: str
-    output_schema: dict[str, Any]
+    output_schema: ImplementationDocument
     built_in: bool = False
     enabled: bool = True
     created_at: str | None = None
     updated_at: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], *, built_in: bool | None = None) -> "PromptTemplate":
+    def from_dict(cls, data: DomainDocument, *, built_in: bool | None = None) -> "PromptTemplate":
         if not isinstance(data, dict):
             raise ValueError("prompt template must be an object.")
         template = cls(
@@ -74,7 +74,7 @@ class PromptTemplate:
         if size > MAX_TEMPLATE_JSON_BYTES:
             raise ValueError(f"prompt template JSON must be {MAX_TEMPLATE_JSON_BYTES} bytes or fewer.")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -91,7 +91,7 @@ class PromptTemplateStore:
                 result.append(overrides.get(built_in.template_id, built_in))
             return result
 
-    def to_response(self) -> dict[str, Any]:
+    def to_response(self) -> DomainDocument:
         templates = self.list_templates()
         override_ids = {template.template_id for template in self._read_user_templates()}
         return {
@@ -111,7 +111,7 @@ class PromptTemplateStore:
                 return template
         raise FileNotFoundError(template_id)
 
-    def save_template(self, template_id: str, data: dict[str, Any]) -> PromptTemplate:
+    def save_template(self, template_id: str, data: DomainDocument) -> PromptTemplate:
         with self.lock:
             template_id = _clean_template_id(template_id)
             built_in = _built_in_template(template_id)
@@ -172,7 +172,7 @@ class PromptTemplateStore:
         )
 
 
-def render_prompt_template(template: PromptTemplate, context: dict[str, Any]) -> str:
+def render_prompt_template(template: PromptTemplate, context: DomainDocument) -> str:
     payload = json.dumps(context, ensure_ascii=False, indent=2)
     rendered = template.user_prompt.replace("{{context_json}}", payload)
     return f"{template.system_prompt.strip()}\n\n{rendered.strip()}"

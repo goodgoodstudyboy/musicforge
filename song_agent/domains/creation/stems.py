@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 from song_agent.platform.contracts.coercion import as_int as _as_int
 
 import hashlib as hashlib
@@ -38,7 +39,7 @@ class StemRecord:
     updated_at: str
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "StemRecord":
+    def from_dict(cls, data: DomainDocument) -> "StemRecord":
         status = str(data.get("audio_status") or "not_started")
         if status not in STEM_STATUSES:
             status = "not_started"
@@ -60,7 +61,7 @@ class StemRecord:
             updated_at=str(data.get("updated_at") or ""),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -75,7 +76,7 @@ class StemManifest:
     stems: list[StemRecord]
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "StemManifest":
+    def from_dict(cls, data: DomainDocument) -> "StemManifest":
         return cls(
             version=int(data.get("version", MANIFEST_VERSION) or MANIFEST_VERSION),
             job_id=str(data.get("job_id") or ""),
@@ -86,7 +87,7 @@ class StemManifest:
             stems=[StemRecord.from_dict(item) for item in data.get("stems", [])],
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "version": self.version,
             "job_id": self.job_id,

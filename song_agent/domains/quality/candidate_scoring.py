@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 from dataclasses import dataclass as dataclass
 from typing import Any as Any
 
@@ -17,7 +18,7 @@ class CandidateScore:
     combined: int
     warnings: list[str]
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return {
             "quality_overall": self.quality_overall,
             "validator": self.validator,
@@ -66,7 +67,7 @@ def score_provider_edit_candidate(
     )
 
 
-def rank_candidate_summaries(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def rank_candidate_summaries(candidates: list[DomainDocument]) -> list[DomainDocument]:
     ready = [candidate for candidate in candidates if str(candidate.get("status") or "") == "ready"]
     ranked = sorted(
         ready,
@@ -87,7 +88,7 @@ def rank_candidate_summaries(candidates: list[dict[str, Any]]) -> list[dict[str,
     ]
 
 
-def group_status_for_candidates(candidates: list[dict[str, Any]]) -> str:
+def group_status_for_candidates(candidates: list[DomainDocument]) -> str:
     if not candidates:
         return "failed"
     statuses = {str(candidate.get("status") or "failed") for candidate in candidates}

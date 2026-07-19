@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument
 import json
 from pathlib import Path
 import shutil
@@ -25,9 +26,9 @@ PROGRAM_IMPORTER_PREFIXES = (
 def build_lts_recertification(
     repo_root: Path | str = ".",
     *,
-    audit: dict[str, Any] | None = None,
-    runtime: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+    audit: DomainDocument | None = None,
+    runtime: DomainDocument | None = None,
+) -> DomainDocument:
     root = Path(repo_root).resolve()
     from song_agent.release_check.checks.registry import callable_provenance
 
@@ -110,7 +111,7 @@ def run_lts_recertification_smoke(root: Path) -> tuple[bool, str]:
         return False, f"v13.8 LTS recertification smoke failed: {exc}"
 
 
-def _migration_rehearsal(root: Path) -> dict[str, Any]:
+def _migration_rehearsal(root: Path) -> ImplementationDocument:
     fixture = root / "tests" / "fixtures" / "v12_13_program_workspace" / "workspace"
     with tempfile.TemporaryDirectory(prefix="musicforge-v138-migration-") as temp:
         workspace = Path(temp) / ".musicforge"
@@ -130,7 +131,7 @@ def _migration_rehearsal(root: Path) -> dict[str, Any]:
     }
 
 
-def _runtime_checks(runtime: dict[str, Any]) -> dict[str, bool]:
+def _runtime_checks(runtime: ImplementationDocument) -> dict[str, bool]:
     final_sha = str(runtime.get("final_sha") or "")
     ci = runtime.get("ci") if isinstance(runtime.get("ci"), dict) else {}
     profiles = runtime.get("release_checks") if isinstance(runtime.get("release_checks"), dict) else {}

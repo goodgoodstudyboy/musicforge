@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -65,10 +65,10 @@ def verify_unified_command_center_continuous_review_package(
     max_zip_size_mb: int = 64,
     max_uncompressed_size_mb: int = 256,
     max_entry_count: int = 200,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(checks, summary, _check("ucc_review_zip_exists", False, "Continuous Review ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -165,11 +165,11 @@ def verify_unified_command_center_continuous_review_package(
     return _finish(checks, summary)
 
 
-def write_unified_command_center_continuous_review_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_command_center_continuous_review_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_command_center_continuous_review_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_command_center_continuous_review_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -188,7 +188,7 @@ def _current_review_checks(
     release_check_report_path: Path | str | None,
     require_handoff: bool,
 ) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     inputs = _as_document(source.get("inputs"))
     archive_input = _as_document(inputs.get("archive"))
     handoff_input = _as_document(inputs.get("handoff"))
@@ -312,7 +312,7 @@ def _status_is_passing_or_absent(status: Any) -> bool:
 
 
 def _external_status_checks(inputs: ImplementationDocument) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     ga = _as_document(inputs.get("ga"))
     release_check = _as_document(inputs.get("release_check"))
     checks.append(_check("ucc_review_ga_status", _status_is_passing_or_absent(ga.get("status")), "Packaged GA readiness evidence is passing or absent.", {"status": ga.get("status")}))

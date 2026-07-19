@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_int as _as_int, document_or as _document_or, list_or as _list_or
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_int as _as_int, document_or as _document_or, list_or as _list_or
 
 import hashlib as hashlib
 import json as json
@@ -60,7 +61,7 @@ class ClipNote:
     role: str = ""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ClipNote":
+    def from_dict(cls, data: DomainDocument) -> "ClipNote":
         if not isinstance(data, dict):
             raise EditorClipError("clip note must be an object.")
         try:
@@ -92,7 +93,7 @@ class ClipNote:
             role=sanitize_sensitive_text(str(data.get("role") or ""))[:40],
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -110,7 +111,7 @@ class EditorClip:
     suggested_key: str = ""
     suggested_tempo: int | None = None
     lyrics: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: ImplementationDocument = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.source_type not in CLIP_SOURCE_TYPES:
@@ -122,12 +123,12 @@ class EditorClip:
         if self.duration_beats <= 0 or self.duration_beats > MAX_EDITOR_CLIP_DURATION_BEATS:
             raise EditorClipError(f"editor clip duration must be > 0 and at most {MAX_EDITOR_CLIP_DURATION_BEATS} beats.")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         data = asdict(self)
         data["notes"] = [note.to_dict() for note in self.notes]
         return sanitize_metadata(data)
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self) -> DomainDocument:
         return sanitize_metadata(
             {
                 "schema_version": self.schema_version,
@@ -153,7 +154,7 @@ def list_editor_clips(
     asset_store: AssetStore,
     reference_store: ReferenceStore,
     project_store: ProjectStore,
-) -> dict[str, Any]:
+) -> DomainDocument:
     assets = [_asset_clip_summary(asset) for asset in asset_store.list_assets() if _asset_has_notes(asset)]
     reference_slices = _reference_slice_summaries(reference_store)
     project_versions = _project_version_clip_summaries(project_store, project_id)
@@ -182,7 +183,7 @@ def list_editor_clips(
 
 
 def build_editor_clip_from_ref(
-    clip_ref: dict[str, Any],
+    clip_ref: DomainDocument,
     *,
     default_project_id: str,
     asset_store: AssetStore,
@@ -206,11 +207,11 @@ def build_editor_clip_from_ref(
 def build_clip_insert_patch(
     parent_plan: SongPlan,
     clip: EditorClip,
-    payload: dict[str, Any],
+    payload: DomainDocument,
     *,
     draft_plan: SongPlan | None = None,
-    draft_state: dict[str, Any] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    draft_state: DomainDocument | None = None,
+) -> tuple[DomainDocument, DomainDocument, list[str]]:
     raw = json.dumps(payload, ensure_ascii=False)
     if len(raw.encode("utf-8")) > MAX_EDITOR_CLIP_BODY_BYTES:
         raise EditorClipError(f"clip insert request must be {MAX_EDITOR_CLIP_BODY_BYTES} bytes or fewer.")
@@ -234,7 +235,7 @@ def build_clip_insert_patch(
     trim_to_section = bool(options.get("trim_to_section", section is not None or options.get("fit") == "trim"))
     total_beats = float(state["song"]["total_bars"]) * float(state["song"]["beats_per_bar"])
     section_end = float(section["end_beat"]) if section and trim_to_section else None
-    operations: list[dict[str, Any]] = []
+    operations: list[ImplementationDocument] = []
     warnings: list[str] = []
     if mode == "replace_range":
         note_ids = _note_ids_in_replace_range(state, track_id, start_beat, start_beat + clip.duration_beats)
@@ -331,7 +332,7 @@ def _asset_clip_summary(asset: CreativeAsset) -> ImplementationDocument:
 
 
 def _reference_slice_summaries(reference_store: ReferenceStore) -> list[ImplementationDocument]:
-    summaries: list[dict[str, Any]] = []
+    summaries: list[ImplementationDocument] = []
     for reference in reference_store.list_references():
         if reference.reference_type != "midi":
             continue
@@ -458,441 +459,38 @@ def _clip_from_asset(clip_ref: ImplementationDocument, store: AssetStore) -> Edi
     )
 
 
-def _clip_from_reference_slice(clip_ref: ImplementationDocument, store: ReferenceStore) -> EditorClip:
-    reference_id = _clean_id(clip_ref.get("reference_id") or clip_ref.get("source_id"), "reference_id")
-    slice_id = _clean_id(clip_ref.get("slice_id"), "slice_id")
-    context = reference_context(store, reference_id)
-    if context.reference.hidden:
-        raise EditorClipUnavailableError("Hidden references cannot be inserted.")
-    if context.reference.reference_type != "midi":
-        raise EditorClipError("Only MIDI references can provide editor clips.")
-    manifest = require_fresh_slices(store, reference_id)
-    expected_hash = str(clip_ref.get("source_hash") or "").strip()
-    actual_hash = str(manifest.get("source_sha256") or context.reference.sha256)
-    if expected_hash and expected_hash != actual_hash:
-        raise EditorClipUnavailableError("Reference clip is stale.")
-    slice_item = _find_slice(manifest, slice_id)
-    midi = parse_midi(context.source_path.read_bytes())
-    notes = _normalize_notes(notes_for_slice(midi, slice_item))
-    return EditorClip(
-        schema_version=EDITOR_CLIP_SCHEMA_VERSION,
-        source_type="reference_slice",
-        source_id=context.reference.reference_id,
-        source_version_id=None,
-        title=f"{context.reference.title} {slice_id}",
-        kind=str(slice_item.get("slice_type") or "motif"),
-        duration_beats=_clip_duration(notes, float(slice_item.get("duration_beats") or 0)),
-        suggested_track_role=str(slice_item.get("slice_type") or ""),
-        suggested_key=context.reference.key,
-        suggested_tempo=context.reference.tempo_bpm,
-        notes=notes,
-        metadata={
-            "reference_id": context.reference.reference_id,
-            "slice_id": slice_id,
-            "source_hash": actual_hash,
-            "track_index": slice_item.get("track_index"),
-            "channel": slice_item.get("channel"),
-        },
-    )
+from song_agent.domains.studio import v142_ec_readiness as _v142_ec_readiness
+from song_agent.domains.studio.v142_ec_readiness import (
+    _clip_from_reference_slice,
+    _clip_from_project_section,
+    _clip_from_project_track_range,
+    _raw_asset_notes,
+    _fallback_asset_notes,
+    _asset_has_notes,
+    _normalize_notes,
+    _clip_duration,
+    _target_track_id,
+    _target_section,
+    _target_start_beat,
+    _note_ids_in_replace_range,
+    _clip_insert_metadata,
+    _clip_group_id,
+    _base_summary,
+    _find_slice,
+    _project_version_plan,
+    _version_plan,
+    _check_project_source_hash,
+    _section_by_id,
+    _track_by_id,
+    _kind_for_asset,
+    _role_for_asset,
+    _asset_hash,
+    _clean_id,
+    _int_range,
+    _float_min,
+    _float_range,
+    _quantize_grid,
+    _round_beat,
+)
 
-
-def _clip_from_project_section(clip_ref: ImplementationDocument, *, default_project_id: str, project_store: ProjectStore) -> EditorClip:
-    project_id = _clean_id(clip_ref.get("project_id") or default_project_id, "project_id")
-    version_id = _clean_id(clip_ref.get("source_version_id") or clip_ref.get("version_id"), "source_version_id")
-    section_id = _clean_id(clip_ref.get("section_id"), "section_id")
-    track_id = _clean_id(clip_ref.get("track_id"), "track_id")
-    plan = _project_version_plan(project_store, project_id, version_id)
-    state = build_editor_state(plan)
-    _check_project_source_hash(clip_ref, state["base_plan_hash"])
-    section = _section_by_id(state, section_id)
-    track = _track_by_id(state, track_id)
-    section_start = float(section["start_beat"])
-    section_end = float(section["end_beat"])
-    raw_notes = [
-        {**note, "start_beat": float(note["start_beat"]) - section_start, "role": track.get("role")}
-        for note in track.get("notes", [])
-        if section_start <= float(note["start_beat"]) < section_end
-    ]
-    notes = _normalize_notes(raw_notes)
-    return EditorClip(
-        schema_version=EDITOR_CLIP_SCHEMA_VERSION,
-        source_type="project_version_section",
-        source_id=project_id,
-        source_version_id=version_id,
-        title=f"{version_id} {section['name']} {track['name']}",
-        kind=str(track.get("role") or "track"),
-        duration_beats=_clip_duration(notes, float(section["end_beat"]) - float(section["start_beat"])),
-        suggested_track_role=str(track.get("role") or ""),
-        suggested_key=plan.key,
-        suggested_tempo=plan.tempo_bpm,
-        notes=notes,
-        metadata={
-            "project_id": project_id,
-            "source_version_id": version_id,
-            "section_id": section_id,
-            "track_id": track_id,
-            "source_hash": state["base_plan_hash"],
-        },
-    )
-
-
-def _clip_from_project_track_range(clip_ref: ImplementationDocument, *, default_project_id: str, project_store: ProjectStore) -> EditorClip:
-    project_id = _clean_id(clip_ref.get("project_id") or default_project_id, "project_id")
-    version_id = _clean_id(clip_ref.get("source_version_id") or clip_ref.get("version_id"), "source_version_id")
-    track_id = _clean_id(clip_ref.get("track_id"), "track_id")
-    start = _float_min(clip_ref.get("start_beat"), "start_beat", 0.0)
-    end = _float_min(clip_ref.get("end_beat"), "end_beat", start + 0.0001)
-    if end <= start:
-        raise EditorClipError("end_beat must be greater than start_beat.")
-    if end - start > MAX_EDITOR_CLIP_DURATION_BEATS:
-        raise EditorClipError("track range clip is too long.")
-    plan = _project_version_plan(project_store, project_id, version_id)
-    state = build_editor_state(plan)
-    _check_project_source_hash(clip_ref, state["base_plan_hash"])
-    track = _track_by_id(state, track_id)
-    raw_notes = [
-        {**note, "start_beat": float(note["start_beat"]) - start, "role": track.get("role")}
-        for note in track.get("notes", [])
-        if start <= float(note["start_beat"]) < end
-    ]
-    notes = _normalize_notes(raw_notes)
-    return EditorClip(
-        schema_version=EDITOR_CLIP_SCHEMA_VERSION,
-        source_type="project_version_track_range",
-        source_id=project_id,
-        source_version_id=version_id,
-        title=f"{version_id} {track['name']} {start:g}-{end:g}",
-        kind=str(track.get("role") or "track"),
-        duration_beats=_clip_duration(notes, end - start),
-        suggested_track_role=str(track.get("role") or ""),
-        suggested_key=plan.key,
-        suggested_tempo=plan.tempo_bpm,
-        notes=notes,
-        metadata={
-            "project_id": project_id,
-            "source_version_id": version_id,
-            "track_id": track_id,
-            "start_beat": start,
-            "end_beat": end,
-            "source_hash": state["base_plan_hash"],
-        },
-    )
-
-
-def _raw_asset_notes(asset: CreativeAsset) -> list[ImplementationDocument]:
-    notes = asset.content.get("notes")
-    if isinstance(notes, list) and notes:
-        return [dict(note) for note in notes if isinstance(note, dict)]
-    return [note.to_dict() for note in _fallback_asset_notes(asset)]
-
-
-def _fallback_asset_notes(asset: CreativeAsset) -> list[NoteEvent]:
-    if asset.asset_type == "motif":
-        anchor = int(asset.content.get("anchor_pitch") or 64)
-        intervals = [int(item) for item in asset.content.get("pitch_intervals", [0, 3, 5, 7])][:16]
-        rhythm = [float(item) for item in asset.content.get("rhythm_pattern", [1.0] * len(intervals))]
-        cursor = 0.0
-        notes = []
-        for index, interval in enumerate(intervals):
-            duration = max(0.25, rhythm[index % len(rhythm)] if rhythm else 1.0)
-            notes.append(NoteEvent(anchor + interval, cursor, duration, 92))
-            cursor += duration
-        return notes
-    if asset.asset_type in {"chord_progression", "section_template"}:
-        chords = _list_or(asset.content.get("chords"), ["Cmaj7"])
-        notes = []
-        for index, _chord in enumerate(chords[:16]):
-            for pitch in (60, 64, 67):
-                notes.append(NoteEvent(pitch, float(index * 4), 3.75, 72))
-        return notes
-    return []
-
-
-def _asset_has_notes(asset: CreativeAsset) -> bool:
-    if asset.hidden:
-        return False
-    try:
-        return bool(_raw_asset_notes(asset))
-    except Exception:
-        return False
-
-
-def _normalize_notes(raw_notes: list[ImplementationDocument]) -> list[ClipNote]:
-    notes = [ClipNote.from_dict(dict(note)) for note in raw_notes if isinstance(note, dict)]
-    if not notes:
-        raise EditorClipUnavailableError("Clip has no notes.")
-    if len(notes) > MAX_EDITOR_CLIP_NOTES:
-        raise EditorClipError(f"editor clips support at most {MAX_EDITOR_CLIP_NOTES} notes.")
-    min_start = min(note.start_beat for note in notes)
-    normalized = [
-        ClipNote(
-            pitch=note.pitch,
-            start_beat=round(note.start_beat - min_start, 6),
-            duration_beats=note.duration_beats,
-            velocity=note.velocity,
-            channel=note.channel,
-            role=note.role,
-        )
-        for note in sorted(notes, key=lambda item: (item.start_beat, item.pitch, item.duration_beats, item.velocity))
-    ]
-    duration = max(note.start_beat + note.duration_beats for note in normalized)
-    if duration > MAX_EDITOR_CLIP_DURATION_BEATS:
-        raise EditorClipError(f"editor clip duration must be at most {MAX_EDITOR_CLIP_DURATION_BEATS} beats.")
-    return normalized
-
-
-def _clip_duration(notes: list[ClipNote], fallback: float) -> float:
-    duration = max((note.start_beat + note.duration_beats for note in notes), default=float(fallback or 0))
-    return round(max(0.25, min(MAX_EDITOR_CLIP_DURATION_BEATS, duration or float(fallback or 0.25))), 6)
-
-
-def _target_track_id(target: ImplementationDocument, state: ImplementationDocument) -> str:
-    track_id = _clean_id(target.get("track_id"), "track_id")
-    _track_by_id(state, track_id)
-    return track_id
-
-
-def _target_section(target: ImplementationDocument, state: ImplementationDocument) -> ImplementationDocument | None:
-    section_id = str(target.get("section_id") or "").strip()
-    if not section_id:
-        return None
-    return _section_by_id(state, section_id)
-
-
-def _target_start_beat(target: ImplementationDocument, section: ImplementationDocument | None) -> float:
-    if "start_beat" in target:
-        return _float_min(target.get("start_beat"), "target.start_beat", 0.0)
-    if section is not None:
-        return round(float(section["start_beat"]), 6)
-    raise EditorClipError("target.start_beat is required when section_id is not provided.")
-
-
-def _note_ids_in_replace_range(state: ImplementationDocument, track_id: str, start: float, end: float) -> list[str]:
-    track = _track_by_id(state, track_id)
-    lane = next((item for item in state.get("lanes", []) if item.get("track_id") == track_id), None)
-    raw_notes = lane.get("notes", []) if isinstance(lane, dict) else track.get("notes", [])
-    ids = []
-    for note in raw_notes:
-        if bool(note.get("derived", False)) or str(note.get("note_id") or "").startswith("derived-note-"):
-            continue
-        note_start = float(note["start_beat"])
-        note_end = note_start + float(note["duration_beats"])
-        if note_end > start and note_start < end:
-            ids.append(str(note["note_id"]))
-    return ids
-
-
-def _clip_insert_metadata(
-    clip: EditorClip,
-    *,
-    group_id: str,
-    target: ImplementationDocument,
-    options: ImplementationDocument,
-    inserted_note_count: int,
-    replaced_note_count: int,
-) -> ImplementationDocument:
-    metadata = {
-        "schema_version": EDITOR_CLIP_SCHEMA_VERSION,
-        "clip_group_id": group_id,
-        "source_type": clip.source_type,
-        "source_id": clip.source_id,
-        "source_version_id": clip.source_version_id,
-        "title": clip.title,
-        "kind": clip.kind,
-        "duration_beats": clip.duration_beats,
-        "note_count": len(clip.notes),
-        "inserted_note_count": inserted_note_count,
-        "replaced_note_count": replaced_note_count,
-        "target": target,
-        "options": options,
-        "source": clip.metadata,
-    }
-    for key in ("asset_type", "reference_id", "slice_id", "project_id", "section_id", "track_id", "source_hash"):
-        if key in clip.metadata:
-            metadata[key] = clip.metadata[key]
-    return sanitize_metadata(metadata)
-
-
-def _clip_group_id(clip: EditorClip, *, track_id: str, start_beat: float, operations: list[ImplementationDocument]) -> str:
-    operation_fingerprint = [
-        {
-            key: value
-            for key, value in operation.items()
-            if key not in {"clip_group_id", "clipInsert"}
-        }
-        for operation in operations
-    ]
-    payload = json.dumps(
-        {
-            "source_type": clip.source_type,
-            "source_id": clip.source_id,
-            "source_version_id": clip.source_version_id,
-            "title": clip.title,
-            "track_id": track_id,
-            "start_beat": start_beat,
-            "operation_count": len(operations),
-            "notes": [note.to_dict() for note in clip.notes[:MAX_EDITOR_CLIP_NOTES]],
-            "operations": operation_fingerprint,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return f"clip-{hashlib.sha1(payload.encode('utf-8')).hexdigest()[:12]}"
-
-
-def _base_summary(
-    *,
-    source_type: str,
-    source_id: str,
-    title: str,
-    kind: str,
-    duration_beats: float,
-    note_count: int,
-    suggested_track_role: str,
-    suggested_key: str,
-    suggested_tempo: int | None,
-    source_hash: str,
-) -> ImplementationDocument:
-    return {
-        "schema_version": EDITOR_CLIP_SCHEMA_VERSION,
-        "source_type": source_type,
-        "source_id": source_id,
-        "title": sanitize_sensitive_text(str(title or source_id))[:160],
-        "kind": sanitize_sensitive_text(str(kind or "clip"))[:80],
-        "duration_beats": round(float(duration_beats or 0), 6),
-        "note_count": max(0, int(note_count or 0)),
-        "suggested_track_role": sanitize_sensitive_text(str(suggested_track_role or ""))[:80],
-        "suggested_key": sanitize_sensitive_text(str(suggested_key or ""))[:40],
-        "suggested_tempo": suggested_tempo,
-        "source_hash": source_hash,
-    }
-
-
-def _find_slice(manifest: ImplementationDocument, slice_id: str) -> ImplementationDocument:
-    for item in manifest.get("slices", []) if isinstance(manifest.get("slices"), list) else []:
-        if str(item.get("slice_id") or "") == slice_id:
-            return dict(item)
-    raise FileNotFoundError(slice_id)
-
-
-def _project_version_plan(project_store: ProjectStore, project_id: str, version_id: str) -> SongPlan:
-    document = project_store.get_project(project_id)
-    version = next((item for item in document.versions if item.version_id == version_id), None)
-    if version is None:
-        raise FileNotFoundError(version_id)
-    plan = _version_plan(version.output_dir)
-    if plan is None:
-        raise EditorClipUnavailableError("Project version song-plan.json is not available.")
-    return plan
-
-
-def _version_plan(output_dir: str | Path) -> SongPlan | None:
-    path = Path(output_dir) / "data" / "song-plan.json"
-    if not path.exists():
-        return None
-    try:
-        return SongPlan.from_dict(read_json(path))
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        return None
-
-
-def _check_project_source_hash(clip_ref: ImplementationDocument, actual_hash: str) -> None:
-    expected_hash = str(clip_ref.get("source_hash") or "").strip()
-    if expected_hash and expected_hash != actual_hash:
-        raise EditorClipUnavailableError("Project version clip is stale.")
-
-
-def _section_by_id(state: ImplementationDocument, section_id: str) -> ImplementationDocument:
-    section = next((item for item in state.get("sections", []) if item.get("section_id") == section_id), None)
-    if section is None:
-        raise EditorClipError("Unknown section_id.")
-    return dict(section)
-
-
-def _track_by_id(state: ImplementationDocument, track_id: str) -> ImplementationDocument:
-    track = next((item for item in state.get("tracks", []) if item.get("track_id") == track_id), None)
-    if track is None:
-        raise EditorClipError("Unknown track_id.")
-    return dict(track)
-
-
-def _kind_for_asset(asset: CreativeAsset) -> str:
-    return str(asset.content.get("kind") or asset.asset_type)
-
-
-def _role_for_asset(asset: CreativeAsset) -> str:
-    return {
-        "motif": "melody",
-        "chord_progression": "chords",
-        "drum_pattern": "drums",
-        "bass_pattern": "bass",
-        "section_template": "chords",
-    }.get(asset.asset_type, "melody")
-
-
-def _asset_hash(asset: CreativeAsset) -> str:
-    payload = json.dumps(
-        {
-            "asset_id": asset.asset_id,
-            "updated_at": asset.updated_at,
-            "content": sanitize_asset_metadata(asset.content),
-            "source": sanitize_asset_metadata(asset.source),
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _clean_id(value: Any, name: str) -> str:
-    text = str(value or "").strip()
-    if not text or not _SAFE_ID.match(text):
-        raise EditorClipError(f"{name} is required.")
-    return text
-
-
-def _int_range(value: Any, name: str, low: int, high: int) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError) as exc:
-        raise EditorClipError(f"{name} must be an integer.") from exc
-    if number < low or number > high:
-        raise EditorClipError(f"{name} must be between {low} and {high}.")
-    return number
-
-
-def _float_min(value: Any, name: str, minimum: float) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError) as exc:
-        raise EditorClipError(f"{name} must be a number.") from exc
-    if number < minimum:
-        raise EditorClipError(f"{name} must be >= {minimum}.")
-    return round(number, 6)
-
-
-def _float_range(value: Any, name: str, low: float, high: float) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError) as exc:
-        raise EditorClipError(f"{name} must be a number.") from exc
-    if number < low or number > high:
-        raise EditorClipError(f"{name} must be between {low} and {high}.")
-    return float(number)
-
-
-def _quantize_grid(value: Any) -> float | None:
-    if value is None or str(value).strip() == "":
-        return None
-    if isinstance(value, str) and value.strip() in QUANTIZE_GRIDS:
-        return QUANTIZE_GRIDS[value.strip()]
-    grid = _float_range(value, "quantize_grid", 0.125, 4.0)
-    if grid not in {0.125, 0.25, 0.5, 1.0, 2.0, 4.0}:
-        raise EditorClipError("quantize_grid must be one of 0.125, 0.25, 0.5, 1.0, 2.0, 4.0.")
-    return grid
-
-
-def _round_beat(value: float) -> float:
-    return round(float(value), 6)
+_v142_ec_readiness.bind_globals(globals())

@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
@@ -63,7 +64,7 @@ def verify_release_portfolio_governance_attestation_portal_review_pack(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _ReviewZipVerifier(
         Path(zip_path),
         package_kind="pack",
@@ -88,7 +89,7 @@ def verify_release_portfolio_governance_attestation_portal_response(
     max_uncompressed_size_mb: int = DEFAULT_MAX_UNCOMPRESSED_SIZE_MB,
     max_entry_count: int = DEFAULT_MAX_ENTRY_COUNT,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> DomainDocument:
     verifier = _ReviewZipVerifier(
         Path(zip_path),
         package_kind="response",
@@ -103,28 +104,28 @@ def verify_release_portfolio_governance_attestation_portal_response(
     return verifier.run()
 
 
-def verify_response_document(response: dict[str, Any], pack: dict[str, Any], *, now: str | None = None) -> dict[str, Any]:
+def verify_response_document(response: DomainDocument, pack: DomainDocument, *, now: str | None = None) -> DomainDocument:
     verifier = _ResponseDocumentVerifier(response, pack, now=now)
     return verifier.run()
 
 
-def write_release_portfolio_governance_attestation_portal_review_pack_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_release_portfolio_governance_attestation_portal_review_pack_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def write_release_portfolio_governance_attestation_portal_response_verification_report(report: dict[str, Any], path: Path | str) -> Path:
+def write_release_portfolio_governance_attestation_portal_response_verification_report(report: DomainDocument, path: Path | str) -> Path:
     return write_json(Path(path), sanitize_metadata(report, blocked_keys=VERIFIER_BLOCKED_KEYS))
 
 
-def print_release_portfolio_governance_attestation_portal_review_pack_verification_report(report: dict[str, Any]) -> None:
+def print_release_portfolio_governance_attestation_portal_review_pack_verification_report(report: DomainDocument) -> None:
     _print_report("MusicForge release portfolio governance attestation portal review pack verification", report)
 
 
-def print_release_portfolio_governance_attestation_portal_response_verification_report(report: dict[str, Any]) -> None:
+def print_release_portfolio_governance_attestation_portal_response_verification_report(report: DomainDocument) -> None:
     _print_report("MusicForge release portfolio governance attestation portal response verification", report)
 
 
-def release_portfolio_governance_attestation_portal_review_verification_exit_code(report: dict[str, Any]) -> int:
+def release_portfolio_governance_attestation_portal_review_verification_exit_code(report: DomainDocument) -> int:
     return 1 if report.get("status") == "failed" else 0
 
 
@@ -157,21 +158,21 @@ class _ReviewZipVerifier:
         self.required_entries = PACK_REQUIRED_ENTRIES if package_kind == "pack" else RESPONSE_REQUIRED_ENTRIES
         self.legal_sidecars = LEGAL_PACK_SIDECARS if package_kind == "pack" else LEGAL_RESPONSE_SIDECARS
         self.check_prefix = "portal_review_pack" if package_kind == "pack" else "portal_review_response"
-        self.checks: list[dict[str, Any]] = []
-        self.files: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
+        self.checks: list[ImplementationDocument] = []
+        self.files: list[ImplementationDocument] = []
+        self.redaction_findings: list[ImplementationDocument] = []
         self.entry_infos: list[zipfile.ZipInfo] = []
         self.entry_names: list[str] = []
         self.raw_entry_names: list[str] = []
         self.entry_map: dict[str, zipfile.ZipInfo] = {}
-        self.manifest: dict[str, Any] = {}
-        self.main_doc: dict[str, Any] = {}
-        self.data_docs: dict[str, dict[str, Any]] = {}
+        self.manifest: ImplementationDocument = {}
+        self.main_doc: ImplementationDocument = {}
+        self.data_docs: dict[str, ImplementationDocument] = {}
         self.zip_sha256: str | None = None
         self.zip_size_bytes = 0
         self.total_uncompressed_size = 0
 
-    def run(self) -> dict[str, Any]:
+    def run(self) -> DomainDocument:
         archive: zipfile.ZipFile | None = None
         try:
             archive = self._open_zip()
@@ -234,7 +235,7 @@ class _ReviewZipVerifier:
         package_type_ok = self.manifest.get("package_type") == self.expected_package_type
         self._add_check("manifest", f"{self.check_prefix}_manifest_package_type", "passed" if package_type_ok else "failed", "blocking", "Manifest package_type is valid." if package_type_ok else "Manifest package_type is invalid.")
         rows = _as_list(self.manifest.get("files"))
-        valid: list[dict[str, Any]] = []
+        valid: list[ImplementationDocument] = []
         errors: list[str] = []
         for index, item in enumerate(rows):
             if not isinstance(item, dict):
@@ -494,131 +495,17 @@ class _ReviewZipVerifier:
         self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
 
 
-class _ResponseDocumentVerifier:
-    def __init__(self, response: ImplementationDocument, pack: ImplementationDocument, *, now: str | None) -> None:
-        self.response = sanitize_metadata(response, blocked_keys=VERIFIER_BLOCKED_KEYS)
-        self.pack = sanitize_metadata(pack, blocked_keys=VERIFIER_BLOCKED_KEYS)
-        self.generated_at = now or datetime.now(timezone.utc).isoformat()
-        self.checks: list[dict[str, Any]] = []
-        self.redaction_findings: list[dict[str, Any]] = []
+from song_agent.domains.trust import v142_rpgaprv_readiness as _v142_rpgaprv_readiness
+from song_agent.domains.trust.v142_rpgaprv_readiness import (
+    _ResponseDocumentVerifier,
+    _print_report,
+    _is_forbidden_entry,
+    _counts,
+    _sha256_file,
+    _sha256_entry,
+    _redaction_findings,
+    _blocked_key_findings,
+    _unresolved_high_findings,
+)
 
-    def run(self) -> dict[str, Any]:
-        self._add_hash_check("response", "portal_review_response_payload_hash", self.response.get("payload_hash"), response_payload_hash(self.response), "Response payload hash")
-        self._add_hash_check("response", "portal_review_response_integrity", self.response.get("integrity_hash"), response_integrity_hash(self.response), "Response integrity")
-        self._add_exact_check("response", "portal_review_response_pack_source_current", self.response.get("review_pack_source_hash"), self.pack.get("source_hash"), "Response source hash")
-        self._add_check("response", "portal_review_response_decision", "passed" if self.response.get("decision") in {"accepted", "needs_changes", "rejected"} else "failed", "blocking", "Decision is valid.")
-        reviewer_ok = isinstance(self.response.get("reviewer"), dict) and bool(self.response.get("reviewer", {}).get("name"))
-        self._add_check("response", "portal_review_response_reviewer", "passed" if reviewer_ok else "failed", "blocking", "Reviewer is present." if reviewer_ok else "reviewer.name is required.")
-        if self.response.get("decision") == "accepted":
-            high = _unresolved_high_findings(self.response)
-            self._add_check("response", "portal_review_response_accepted_no_unresolved_high_findings", "failed" if high else "passed", "blocking", f"Accepted response has unresolved high findings: {len(high)}" if high else "Accepted response has no unresolved high or critical findings.")
-        text = json.dumps({"response": self.response}, ensure_ascii=False, sort_keys=True, default=str)
-        self.redaction_findings.extend(_redaction_findings("review-response.json", text))
-        self.redaction_findings.extend(_blocked_key_findings("review-response.json", self.response))
-        self._add_check("redaction", "portal_review_response_redaction_scan", "failed" if self.redaction_findings else "passed", "blocking", "Sensitive values found." if self.redaction_findings else "No sensitive values found.")
-        blockers = [item for item in self.checks if item.get("status") == "failed" and item.get("severity") == "blocking"]
-        warnings = [item for item in self.checks if item.get("status") in {"warning", "failed"} and item.get("severity") == "warning"]
-        return sanitize_metadata(
-            {
-                "schema_version": PORTAL_REVIEW_VERIFICATION_SCHEMA_VERSION,
-                "generated_at": self.generated_at,
-                "status": "failed" if blockers else "warning" if warnings else "passed",
-                "package_kind": "response_document",
-                "summary": response_summary(self.response),
-                "checks": self.checks,
-                "blockers": blockers,
-                "warnings": warnings,
-                "redaction_findings": self.redaction_findings[:50],
-            },
-            blocked_keys=VERIFIER_BLOCKED_KEYS,
-        )
-
-    def _add_hash_check(self, scope: str, check_id: str, expected: Any, actual: Any, label: str) -> None:
-        ok = bool(expected) and str(expected) == str(actual)
-        self._add_check(scope, check_id, "passed" if ok else "failed", "blocking", f"{label} matches." if ok else f"{label} does not match.")
-
-    def _add_exact_check(self, scope: str, check_id: str, expected: Any, actual: Any, label: str) -> None:
-        ok = expected == actual
-        self._add_check(scope, check_id, "passed" if ok else "failed", "blocking", f"{label} matches." if ok else f"{label} does not match.")
-
-    def _add_check(self, scope: str, check_id: str, status: str, severity: str, message: str) -> None:
-        self.checks.append({"scope": scope, "check_id": check_id, "status": status, "severity": severity, "message": message})
-
-
-def _print_report(title: str, report: ImplementationDocument) -> None:
-    print(title)
-    print(f"status: {report.get('status')}")
-    summary = _as_document(report.get("summary"))
-    if summary.get("portfolio_id"):
-        print(f"portfolio: {summary.get('portfolio_id')}")
-    if summary.get("review_pack_id"):
-        print(f"review pack: {summary.get('review_pack_id')}")
-    if summary.get("response_id"):
-        print(f"response: {summary.get('response_id')}")
-    print(f"blockers: {len(_as_list(report.get('blockers')))}")
-    print(f"warnings: {len(_as_list(report.get('warnings')))}")
-
-
-def _is_forbidden_entry(name: str) -> bool:
-    lowered = str(name or "").lower()
-    return lowered.endswith(".zip") or lowered.startswith("nested/") or ".musicforge/" in lowered or lowered.startswith(".musicforge/")
-
-
-def _counts(values: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _sha256_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
-    digest = hashlib.sha256()
-    with archive.open(info, "r") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _redaction_findings(name: str, text: str) -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
-    for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
-        for match in pattern.finditer(text):
-            findings.append({"entry": name, "pattern": replacement, "excerpt": match.group(0)[:120]})
-    for pattern, _kind in LOCAL_PATH_VALUE_PATTERNS:
-        for match in pattern.finditer(text):
-            findings.append({"entry": name, "pattern": "local_path", "excerpt": match.group(0)[:120]})
-    return findings
-
-
-def _blocked_key_findings(name: str, value: Any, path: str = "") -> list[ImplementationDocument]:
-    findings: list[dict[str, Any]] = []
-    if isinstance(value, dict):
-        for key, item in value.items():
-            key_path = f"{path}.{key}" if path else str(key)
-            if str(key).lower() in VERIFIER_BLOCKED_KEYS:
-                findings.append({"entry": name, "pattern": "blocked_key", "excerpt": key_path[:120]})
-            findings.extend(_blocked_key_findings(name, item, key_path))
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            findings.extend(_blocked_key_findings(name, item, f"{path}[{index}]"))
-    return findings
-
-
-def _unresolved_high_findings(response: ImplementationDocument) -> list[ImplementationDocument]:
-    rows: list[dict[str, Any]] = []
-    for finding in response.get("findings", []) if isinstance(response.get("findings"), list) else []:
-        if not isinstance(finding, dict):
-            continue
-        severity = str(finding.get("severity") or "").lower()
-        status = str(finding.get("status") or "open").lower()
-        if severity in {"high", "critical"} and status not in {"resolved", "accepted_risk"}:
-            rows.append(finding)
-    return rows
+_v142_rpgaprv_readiness.bind_globals(globals())

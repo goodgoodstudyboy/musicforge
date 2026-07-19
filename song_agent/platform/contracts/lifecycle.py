@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 from dataclasses import asdict, dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class SignoffRef:
     history_event_hash: str
     source_hash: str = ""
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)
 
 
@@ -23,8 +23,8 @@ class ResetAuthorization:
     request_id: str
     action: str
     change_type: str
-    target: dict[str, Any]
-    source: dict[str, Any] | None = None
+    target: ImplementationDocument
+    source: ImplementationDocument | None = None
 
 
 @dataclass(frozen=True)
@@ -35,5 +35,5 @@ class GenerationRef:
     previous_generation: int | None = None
     reset_proof_hash: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DomainDocument:
         return asdict(self)

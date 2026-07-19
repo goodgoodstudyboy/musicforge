@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts import DomainDocument
 from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
 
 from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import AUDIO_ARTIFACT_FILENAME, Any, HTTPStatus, JobState, Path, audio_artifact_summary, build_audio_artifact_manifest, datetime, shutil, threading, timezone, write_audio_artifact_manifest
@@ -52,7 +53,7 @@ class JobStoreRetryJob(JobStoreContext):
         self,
         job_id: str,
         node_name: str,
-    ) -> tuple[JobState | None, HTTPStatus, str | None, dict[str, Any]]:
+    ) -> tuple[JobState | None, HTTPStatus, str | None, DomainDocument]:
         job = self.get_job(job_id)
         if job is None:
             return None, HTTPStatus.NOT_FOUND, "Job not found.", {}
@@ -149,7 +150,7 @@ class JobStoreRetryJob(JobStoreContext):
             self.jobs.pop(job_id, None)
             return True, HTTPStatus.OK, None
 
-    def render_job_audio(self, job_id: str, *, config: Any | None = None, audio_profile: Any | None = None) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    def render_job_audio(self, job_id: str, *, config: Any | None = None, audio_profile: Any | None = None) -> tuple[DomainDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."
@@ -201,7 +202,7 @@ class JobStoreRetryJob(JobStoreContext):
             "audio_artifact_summary": audio_artifact_summary(manifest),
         }, HTTPStatus.OK, None
 
-    def get_job_stems(self, job_id: str) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    def get_job_stems(self, job_id: str) -> tuple[DomainDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."
@@ -221,7 +222,7 @@ class JobStoreRetryJob(JobStoreContext):
         job_id: str,
         *,
         force: bool = False,
-    ) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    ) -> tuple[DomainDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."
@@ -248,7 +249,7 @@ class JobStoreRetryJob(JobStoreContext):
         *,
         stem_ids: list[str] | None = None,
         force: bool = False,
-    ) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    ) -> tuple[DomainDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."

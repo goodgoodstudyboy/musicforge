@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -64,10 +64,10 @@ def verify_unified_release_program_vault_operations_package(
     max_zip_size_mb: int = 1024,
     max_uncompressed_size_mb: int = 4096,
     max_entry_count: int = 5000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -190,16 +190,16 @@ def verify_unified_release_program_vault_operations_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_vault_operations_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_release_program_vault_operations_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_release_program_vault_operations_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_release_program_vault_operations_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument, name_set: set[str]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     files = _as_list(manifest.get("files"))
     file_paths = {str(row.get("path") or "") for row in files if isinstance(row, dict)}
     expected_files = REQUIRED_ENTRIES - {"manifest.json"}
@@ -232,7 +232,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument,
 
 
 def _history_checks(events: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     previous = ""
     signoff_events = 0
     for index, event in enumerate(events, start=1):
@@ -349,7 +349,7 @@ def _current_vault_checks(archive: zipfile.ZipFile, registry: ImplementationDocu
 
 
 def _deep_vault_checks(archive: zipfile.ZipFile) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     with tempfile.TemporaryDirectory(prefix="mf-urpvo-deep-") as temp:
         root = Path(temp)
         root_resolved = root.resolve()

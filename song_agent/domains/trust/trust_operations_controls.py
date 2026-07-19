@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_path as _as_path
 
 import hashlib as hashlib
 import json as json
@@ -40,16 +41,35 @@ TRUST_OPERATIONS_CONTROL_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path",
 
 
 
-class TrustOperationsControlError(ValueError):
-    pass
+from song_agent.domains.trust import v142_toc_readiness as _v142_toc_readiness
+from song_agent.domains.trust.v142_toc_readiness import (
+    TrustOperationsControlError,
+    TrustOperationsControlNotFoundError,
+    TrustOperationsControlStateError,
+    _existing_control,
+    _current_hub_verification_path,
+    _optional_path,
+    _now,
+    _next_id,
+    _read_required,
+    _read_json,
+    _read_json_default,
+    _write_json,
+    _write_readme,
+    _file_record,
+    _walk_files,
+    _zip_entries,
+    _write_zip,
+    _sha256,
+    _mkdir,
+    _sanitize,
+    _fs_path,
+)
 
 
-class TrustOperationsControlNotFoundError(TrustOperationsControlError):
-    pass
 
 
-class TrustOperationsControlStateError(TrustOperationsControlError):
-    pass
+
 
 
 class TrustOperationsControlStore:
@@ -112,13 +132,13 @@ class TrustOperationsControlStore:
     def verification_report_path(self, hub_id: str, assessment_id: str) -> Path:
         return self.assessment_dir(hub_id, assessment_id) / "trust-operations-controls-verification-report.json"
 
-    def refresh_catalog(self, hub_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def refresh_catalog(self, hub_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             payload = payload or {}
             source = self._catalog_source(hub_id, payload)
             existing = _read_json_default(self.catalog_path(hub_id), default={})
-            controls: list[dict[str, Any]] = []
+            controls: list[ImplementationDocument] = []
             for spec in BASELINE_CONTROLS:
                 controls.append(self._baseline_control(hub_id, spec, source, now, existing))
             entries = self.knowledge_store.list_entries(hub_id, include_hidden=False)
@@ -143,25 +163,25 @@ class TrustOperationsControlStore:
             _write_json(self.catalog_path(hub_id), catalog)
             return _sanitize(catalog)
 
-    def read_catalog(self, hub_id: str) -> dict[str, Any]:
+    def read_catalog(self, hub_id: str) -> DomainDocument:
         path = self.catalog_path(hub_id)
         if not path.exists():
             raise TrustOperationsControlNotFoundError("Trust Operations Control Catalog not found.")
         return _read_json(path)
 
-    def list_policies(self, hub_id: str) -> list[dict[str, Any]]:
+    def list_policies(self, hub_id: str) -> list[DomainDocument]:
         root = self.policies_dir(hub_id)
         if not root.exists():
             return []
         return [_sanitize(_read_json(path)) for path in sorted(root.glob("*/policy-bundle.json"))]
 
-    def read_policy(self, hub_id: str, policy_id: str) -> dict[str, Any]:
+    def read_policy(self, hub_id: str, policy_id: str) -> DomainDocument:
         path = self.policy_path(hub_id, policy_id)
         if not path.exists():
             raise TrustOperationsControlNotFoundError("Trust Operations Control Policy Bundle not found.")
         return _read_json(path)
 
-    def create_policy_bundle(self, hub_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def create_policy_bundle(self, hub_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             payload = payload or {}
@@ -195,7 +215,7 @@ class TrustOperationsControlStore:
             _write_json(self.policy_path(hub_id, policy_id), policy)
             return _sanitize(policy)
 
-    def assess_policy(self, hub_id: str, policy_id: str, payload: dict[str, Any] | None = None, *, now: str | None = None) -> dict[str, Any]:
+    def assess_policy(self, hub_id: str, policy_id: str, payload: DomainDocument | None = None, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             payload = payload or {}
@@ -279,13 +299,13 @@ class TrustOperationsControlStore:
             _write_json(self.manual_actions_path(hub_id, assessment_id), actions_doc)
             return _sanitize({"assessment": report, "control_results": results_doc, "evidence_bindings": bindings_doc, "blocker_summary": blocker_doc, "manual_actions": actions_doc})
 
-    def read_assessment(self, hub_id: str, assessment_id: str) -> dict[str, Any]:
+    def read_assessment(self, hub_id: str, assessment_id: str) -> DomainDocument:
         path = self.assessment_path(hub_id, assessment_id)
         if not path.exists():
             raise TrustOperationsControlNotFoundError("Trust Operations Control Assessment not found.")
         return _read_json(path)
 
-    def export_controls(self, hub_id: str, assessment_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def export_controls(self, hub_id: str, assessment_id: str, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             catalog = self.read_catalog(hub_id)
@@ -333,7 +353,7 @@ class TrustOperationsControlStore:
             _write_json(export_dir / "trust-operations-controls-manifest.json", manifest)
             return _sanitize(manifest)
 
-    def build_zip(self, hub_id: str, assessment_id: str, *, now: str | None = None) -> dict[str, Any]:
+    def build_zip(self, hub_id: str, assessment_id: str, *, now: str | None = None) -> DomainDocument:
         with self.lock:
             now = now or _now()
             export_dir = self.export_dir(hub_id, assessment_id)
@@ -352,7 +372,7 @@ class TrustOperationsControlStore:
             _write_zip(zip_path, export_dir)
             return {"zip_path": str(zip_path), "filename": zip_path.name, "sha256": _sha256(zip_path), "size_bytes": os.stat(_fs_path(zip_path)).st_size, "manifest_hash": manifest.get("integrity_hash"), "assessment_id": assessment_id}
 
-    def verify_zip(self, hub_id: str, assessment_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def verify_zip(self, hub_id: str, assessment_id: str, payload: DomainDocument | None = None) -> DomainDocument:
         from song_agent.domains.trust.trust_operations_controls_verifier import verify_trust_operations_control_package
 
         payload = payload or {}
@@ -393,7 +413,7 @@ class TrustOperationsControlStore:
         return source
 
     def _assessment_source(self, hub_id: str, payload: ImplementationDocument) -> ImplementationDocument:
-        paths: dict[str, Any] = {
+        paths: ImplementationDocument = {
             "hub_package_path": _optional_path(payload.get("hub_package_path")),
             "hub_verification_report_path": _optional_path(payload.get("hub_verification_report_path") or _current_hub_verification_path(self.hub_store, hub_id)),
             "incident_board_package_path": _optional_path(payload.get("incident_board_package_path") or self.incident_store.zip_path(hub_id)),
@@ -411,7 +431,7 @@ class TrustOperationsControlStore:
             "incident": _read_json_default(Path(paths["incident_board_verification_report_path"]) if paths["incident_board_verification_report_path"] else Path(), default={}),
             "knowledge": _read_json_default(Path(paths["incident_knowledge_verification_report_path"]) if paths["incident_knowledge_verification_report_path"] else Path(), default={}),
         }
-        source: dict[str, Any] = {"hub_id": hub_id}
+        source: ImplementationDocument = {"hub_id": hub_id}
         for key, path_value in paths.items():
             source[key] = str(Path(path_value).name) if path_value else None
         for key, report in reports.items():
@@ -514,145 +534,4 @@ class TrustOperationsControlStore:
         doc["integrity_hash"] = control_hash(doc)
         return doc
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _existing_control(catalog: ImplementationDocument, control_id: str) -> ImplementationDocument:
-    for control in catalog.get("controls", []) if isinstance(catalog.get("controls"), list) else []:
-        if isinstance(control, dict) and control.get("control_id") == control_id:
-            return control
-    return {}
-
-
-def _current_hub_verification_path(store: TrustOperationsHubStore, hub_id: str) -> Path:
-    current = _read_json_default(store.current_report_path(hub_id), default={})
-    report_id = str(current.get("report_id") or "")
-    return store.verification_report_path(hub_id, report_id) if report_id else Path()
-
-
-def _optional_path(value: Any) -> str | None:
-    if not value:
-        return None
-    return str(Path(value))
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-
-
-
-def _next_id(root: Path, prefix: str) -> str:
-    _mkdir(root)
-    indexes = []
-    for path in root.iterdir():
-        name = path.stem if path.is_file() else path.name
-        if not name.startswith(prefix + "-"):
-            continue
-        try:
-            indexes.append(int(name.rsplit("-", 1)[-1]))
-        except ValueError:
-            continue
-    return f"{prefix}-{(max(indexes) if indexes else 0) + 1:06d}"
-
-
-def _read_required(path: Path) -> ImplementationDocument:
-    if not path.exists():
-        raise TrustOperationsControlNotFoundError(f"Trust Operations Control artifact missing: {path.name}")
-    return _read_json(path)
-
-
-def _read_json(path: Path) -> ImplementationDocument:
-    return read_json(path)
-
-
-def _read_json_default(path: Path, *, default: ImplementationDocument) -> ImplementationDocument:
-    try:
-        if not path or not path.exists():
-            return dict(default)
-        return read_json(path)
-    except (OSError, ValueError, json.JSONDecodeError):
-        return dict(default)
-
-
-def _write_json(path: Path, payload: ImplementationDocument) -> Path:
-    return write_json(path, _sanitize(payload))
-
-
-def _write_readme(root: Path) -> None:
-    (root / "README.txt").write_text("MusicForge Trust Operations Controls\n\nThis package contains local preventive control catalog and assessment evidence.\n", encoding="utf-8")
-
-
-def _file_record(root: Path, path: Path) -> ImplementationDocument:
-    return {"path": path.relative_to(root).as_posix(), "size_bytes": os.stat(_fs_path(path)).st_size, "sha256": _sha256(path)}
-
-
-def _walk_files(root: Path) -> list[Path]:
-    if not root.exists():
-        return []
-    return sorted(path for path in root.rglob("*") if path.is_file())
-
-
-def _zip_entries(root: Path) -> list[tuple[Path, str]]:
-    return [(path.resolve(), path.relative_to(root).as_posix()) for path in _walk_files(root)]
-
-
-def _write_zip(zip_path: Path, root: Path) -> None:
-    _mkdir(zip_path.parent)
-    with zipfile.ZipFile(_fs_path(zip_path), "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path, entry in _zip_entries(root):
-            archive.write(_fs_path(path), entry)
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(_fs_path(path), "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _mkdir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-
-
-def _sanitize(value: Any) -> Any:
-    return sanitize_metadata(value, blocked_keys=TRUST_OPERATIONS_CONTROL_BLOCKED_KEYS)
-
-
-def _fs_path(path: Path) -> str:
-    value = os.fspath(path)
-    if os.name == "nt":
-        absolute = os.path.abspath(value)
-        if absolute.startswith("\\\\?\\"):
-            return absolute
-        if absolute.startswith("\\\\"):
-            return "\\\\?\\UNC\\" + absolute[2:]
-        return "\\\\?\\" + absolute
-    return value
+_v142_toc_readiness.bind_globals(globals())

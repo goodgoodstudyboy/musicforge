@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -164,7 +163,7 @@ class CreationRoutesProjectReviewTask(CreationRouteContext):
         return (False, None)
 
     def _handle_project_review_task_route(self, method: str, project_id: str, task_id: str, action: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: ImplementationDocument = {}
         try:
             _split_result = self._handle_project_review_task_route_part_01(method, project_id, task_id, action, _split_state)
             if _split_result[0]:

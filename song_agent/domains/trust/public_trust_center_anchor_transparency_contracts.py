@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
-from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import DomainDocument, ImplementationDocument
 
 from song_agent.domains.trust.public_trust_center_anchor_registry_contracts import ANCHOR_REGISTRY_BLOCKED_KEYS
 from song_agent.domains.creation.redaction import sanitize_metadata
@@ -31,24 +30,24 @@ ANCHOR_CHECKPOINT_HASH_EXCLUDE_KEYS = {"integrity_hash"}
 ANCHOR_TRANSPARENCY_BLOCKED_KEYS = ANCHOR_REGISTRY_BLOCKED_KEYS
 
 
-def anchor_transparency_event_hash(event: dict[str, Any]) -> str:
+def anchor_transparency_event_hash(event: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (event or {}).items() if key not in ANCHOR_TRANSPARENCY_EVENT_HASH_EXCLUDE_KEYS})
 
 
-def anchor_transparency_ledger_hash(events: list[dict[str, Any]]) -> str:
+def anchor_transparency_ledger_hash(events: list[DomainDocument]) -> str:
     return stable_hash([event for event in events if isinstance(event, dict)])
 
 
-def anchor_checkpoint_hash(checkpoint: dict[str, Any]) -> str:
+def anchor_checkpoint_hash(checkpoint: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (checkpoint or {}).items() if key not in ANCHOR_CHECKPOINT_HASH_EXCLUDE_KEYS})
 
 
-def anchor_checkpoint_integrity_ok(checkpoint: dict[str, Any] | None) -> bool:
+def anchor_checkpoint_integrity_ok(checkpoint: DomainDocument | None) -> bool:
     data = _as_document(checkpoint)
     return bool(data.get("integrity_hash")) and data.get("integrity_hash") == anchor_checkpoint_hash(data)
 
 
-def anchor_checkpoint_signature_ok(checkpoint: dict[str, Any] | None) -> bool:
+def anchor_checkpoint_signature_ok(checkpoint: DomainDocument | None) -> bool:
     data = _as_document(checkpoint)
     signature = _as_document(data.get("signature"))
     payload_hash = _checkpoint_payload_hash(data)
@@ -62,15 +61,15 @@ def anchor_checkpoint_signature_ok(checkpoint: dict[str, Any] | None) -> bool:
     )
 
 
-def anchor_transparency_report_hash(report: dict[str, Any]) -> str:
+def anchor_transparency_report_hash(report: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (report or {}).items() if key not in ANCHOR_TRANSPARENCY_REPORT_HASH_EXCLUDE_KEYS})
 
 
-def anchor_transparency_manifest_hash(manifest: dict[str, Any]) -> str:
+def anchor_transparency_manifest_hash(manifest: DomainDocument) -> str:
     return stable_hash({key: value for key, value in (manifest or {}).items() if key not in ANCHOR_TRANSPARENCY_HASH_EXCLUDE_KEYS})
 
 
-def anchor_transparency_summary(report: dict[str, Any] | None) -> dict[str, Any]:
+def anchor_transparency_summary(report: DomainDocument | None) -> DomainDocument:
     data = _as_document(report)
     summary = _as_document(data.get("summary"))
     return sanitize_metadata(

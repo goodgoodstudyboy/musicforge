@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list
 
 import json as json
 import re as re
@@ -63,10 +63,10 @@ def verify_unified_release_program_continuity_acceptance_change_package(
     max_zip_size_mb: int = 256,
     max_uncompressed_size_mb: int = 512,
     max_entry_count: int = 2000,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     checks.extend(
         verify_package_envelope(
             zip_path,
@@ -193,11 +193,11 @@ def verify_unified_release_program_continuity_acceptance_change_package(
     return _finish(checks, summary)
 
 
-def write_unified_release_program_continuity_acceptance_change_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_release_program_continuity_acceptance_change_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_release_program_continuity_acceptance_change_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_release_program_continuity_acceptance_change_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
@@ -230,7 +230,7 @@ def _generation_bundle(archive: zipfile.ZipFile, generation: int) -> Implementat
 
 
 def _request_checks(requests: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     for request_id, bundle in sorted(requests.items()):
         request = bundle["request"]
         approval = bundle.get("approval") or {}
@@ -263,8 +263,8 @@ def _reset_checks(resets: dict[str, ImplementationDocument], requests: dict[str,
     return continuity_acceptance_change_reset_semantic_checks(resets, requests, events, reset_index)
 
 
-def continuity_acceptance_change_reset_semantic_checks(resets: dict[str, dict[str, Any]], requests: dict[str, dict[str, Any]], events: list[dict[str, Any]], reset_index: dict[str, Any]) -> list[dict[str, Any]]:
-    checks: list[dict[str, Any]] = []
+def continuity_acceptance_change_reset_semantic_checks(resets: dict[str, DomainDocument], requests: dict[str, DomainDocument], events: list[DomainDocument], reset_index: DomainDocument) -> list[DomainDocument]:
+    checks: list[ImplementationDocument] = []
     reset_event_by_hash = {row.get("reset_event_hash"): row for row in events if row.get("event_type") == "continuity_acceptance_signoff_reset_applied"}
     reset_index_rows = {
         str(row.get("reset_id") or ""): row
@@ -347,7 +347,7 @@ def _index_checks(request_index: ImplementationDocument, reset_index: Implementa
 
 
 def _generation_checks(generations: dict[int, ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     for generation, bundle in sorted(generations.items()):
         for key, doc in bundle.items():
             checks.append(_check(f"urpca_cc_generation_{generation:06d}_{key}_integrity", _integrity_ok(doc), "Generation sidecar integrity is valid."))
@@ -424,7 +424,7 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument,
 
 
 def _history_checks(rows: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     previous = ""
     for index, row in enumerate(rows, start=1):
         expected_payload = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})

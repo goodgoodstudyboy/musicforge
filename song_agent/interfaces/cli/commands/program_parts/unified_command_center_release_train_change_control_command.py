@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_text as _as_text
 
-from typing import Any as _InterfaceType
 
 from song_agent.platform.contracts.documents import ImplementationDocument
 
@@ -240,7 +239,7 @@ def _run_unified_release_program_command(args: argparse.Namespace) -> Implementa
     raise ValueError("Unsupported unified-release-program command.")
 
 def _unified_release_program_operations_payload_from_args(args: argparse.Namespace) -> ImplementationDocument:
-    payload: dict[str, _InterfaceType] = {
+    payload: ImplementationDocument = {
         "program_zip": getattr(args, "program_zip", None),
         "program_verification_report": getattr(args, "program_verification_report", None),
         "program_signoff_binding": getattr(args, "program_signoff_binding", None),

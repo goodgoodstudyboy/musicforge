@@ -1,6 +1,7 @@
+# ruff: noqa: E402,F401
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts import DomainDocument, ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
 
 import json as json
 import re as re
@@ -93,10 +94,10 @@ def verify_unified_command_center_evidence_review_package(
     max_zip_size_mb: int = 64,
     max_uncompressed_size_mb: int = 256,
     max_entry_count: int = 200,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(checks, summary, _check("ucc_review_zip_exists", False, "Evidence Review ZIP exists."))
     summary["zip_sha256"] = _sha256_path(zip_path)
@@ -216,10 +217,10 @@ def verify_unified_command_center_evidence_review_acceptance_package(
     max_zip_size_mb: int = 16,
     max_uncompressed_size_mb: int = 64,
     max_entry_count: int = 50,
-) -> dict[str, Any]:
+) -> DomainDocument:
     zip_path = Path(zip_path)
-    checks: list[dict[str, Any]] = []
-    summary: dict[str, Any] = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
+    checks: list[ImplementationDocument] = []
+    summary: ImplementationDocument = {"zip_sha256": None, "zip_size_bytes": 0, "manifest_hash": None}
     if not zip_path.exists():
         return _finish(
             checks,
@@ -280,26 +281,26 @@ def verify_unified_command_center_evidence_review_acceptance_package(
     return _finish(checks, summary, package_type=UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_ACCEPTANCE_VERIFICATION_PACKAGE_TYPE)
 
 
-def write_unified_command_center_evidence_review_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_command_center_evidence_review_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def write_unified_command_center_evidence_review_acceptance_verification_report(report: dict[str, Any], path: Path | str) -> None:
+def write_unified_command_center_evidence_review_acceptance_verification_report(report: DomainDocument, path: Path | str) -> None:
     write_json(Path(path), report)
 
 
-def unified_command_center_evidence_review_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_command_center_evidence_review_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
-def unified_command_center_evidence_review_acceptance_verification_exit_code(report: dict[str, Any]) -> int:
+def unified_command_center_evidence_review_acceptance_verification_exit_code(report: DomainDocument) -> int:
     return 0 if report.get("status") == "passed" else 1
 
 
 def _runtime_replay_checks(source: ImplementationDocument, replay_result: ImplementationDocument, **paths: Any) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     source_map = _as_document(source.get("source"))
-    step_reports: dict[str, dict[str, Any]] = {}
+    step_reports: dict[str, ImplementationDocument] = {}
 
     def require_pair(step: str, zip_key: str, report_key: str, label: str) -> tuple[Path, Path] | None:
         zip_path = paths.get(zip_key)
@@ -407,7 +408,7 @@ def _cr_proof_checks(path: Path | str | None, source_map: ImplementationDocument
 
 
 def _ga_release_check_external_checks(source_map: ImplementationDocument, ga_path: Path | str | None, release_check_path: Path | str | None) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     if source_map.get("ga_report_hash"):
         if not ga_path:
             checks.append(_check("ucc_review_ga_report_binding", False, "GA readiness report is required."))
@@ -424,7 +425,7 @@ def _ga_release_check_external_checks(source_map: ImplementationDocument, ga_pat
 
 
 def _acceptance_external_checks(report: ImplementationDocument, response_summary: ImplementationDocument, binding_summary: ImplementationDocument, review_pack_path: Path | str | None, review_pack_verification_report_path: Path | str | None, response_verification_report_path: Path | str | None) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     if not review_pack_path:
         checks.append(_check("ucc_review_acceptance_review_pack_required", False, "Review Pack ZIP is required."))
     if not review_pack_verification_report_path:
@@ -450,7 +451,7 @@ def _acceptance_external_checks(report: ImplementationDocument, response_summary
 
 
 def _summary_binding_checks(source: ImplementationDocument, evidence_index: ImplementationDocument, proof_index: ImplementationDocument, summaries: dict[str, ImplementationDocument], proofs: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     source_map = _as_document(source.get("source"))
     evidence_items = [row for row in evidence_index.get("items", []) if isinstance(row, dict)]
     proof_items = [row for row in proof_index.get("proofs", []) if isinstance(row, dict)]
@@ -467,7 +468,7 @@ def _summary_binding_checks(source: ImplementationDocument, evidence_index: Impl
 
 
 def _replay_runtime_match_checks(replay_result: ImplementationDocument, step_reports: dict[str, ImplementationDocument]) -> list[ImplementationDocument]:
-    checks: list[dict[str, Any]] = []
+    checks: list[ImplementationDocument] = []
     by_step = {str(row.get("step_id")): row for row in replay_result.get("steps", []) if isinstance(row, dict)}
     for step_id, runtime in step_reports.items():
         row = by_step.get(step_id)
@@ -513,118 +514,20 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument,
     ]
 
 
-def _redaction_check(archive: zipfile.ZipFile, names: list[str]) -> ImplementationDocument:
-    hits: list[str] = []
-    for name in names:
-        try:
-            data = archive.read(name)
-        except (KeyError, OSError):
-            continue
-        for pattern in SENSITIVE_PATTERNS:
-            if pattern.search(data):
-                hits.append(name)
-                break
-    return _check("ucc_review_redaction_scan", not hits, "No sensitive strings appear in the package.", {"entries": sorted(set(hits))})
+from song_agent.domains.program import v142_uccerv_readiness as _v142_uccerv_readiness
+from song_agent.domains.program.v142_uccerv_readiness import (
+    _redaction_check,
+    _finish,
+    _check,
+    _read_json_entry,
+    _read_json_file,
+    _integrity_hash,
+    _integrity_ok,
+    _integrity_or_stable,
+    _sha256_path,
+    _sha256_bytes,
+    _zip_manifest_hash,
+    _is_safe_entry,
+)
 
-
-def _finish(
-    checks: list[ImplementationDocument],
-    summary: ImplementationDocument,
-    extra: ImplementationDocument | None = None,
-    *,
-    package_type: str = UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_VERIFICATION_PACKAGE_TYPE,
-) -> ImplementationDocument:
-    if extra is not None:
-        checks.append(extra)
-    blockers = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("severity") == "blocking"]
-    warnings = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("severity") != "blocking"]
-    status = "failed" if blockers else "warning" if warnings else "passed"
-    report = {
-        "package_type": package_type,
-        "schema_version": UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_SCHEMA_VERSION,
-        "status": status,
-        "summary": summary,
-        "checks": checks,
-        "blockers": blockers,
-        "warnings": warnings,
-        "zip_sha256": summary.get("zip_sha256"),
-        "zip_size_bytes": summary.get("zip_size_bytes"),
-        "manifest_hash": summary.get("manifest_hash"),
-    }
-    report["integrity_hash"] = _integrity_hash(report)
-    return report
-
-
-def _check(check_id: str, passed: bool, message: str, detail: ImplementationDocument | None = None, *, severity: str = "blocking") -> ImplementationDocument:
-    return {
-        "check_id": check_id,
-        "status": "passed" if passed else "failed",
-        "severity": severity,
-        "message": message,
-        "detail": detail or {},
-    }
-
-
-def _read_json_entry(archive: zipfile.ZipFile, name: str) -> ImplementationDocument:
-    return json.loads(archive.read(name).decode("utf-8"))
-
-
-def _read_json_file(path: Path | str) -> ImplementationDocument:
-    return read_json(Path(path))
-
-
-def _integrity_hash(payload: ImplementationDocument) -> str:
-    return stable_hash({key: value for key, value in payload.items() if key != "integrity_hash"})
-
-
-def _integrity_ok(payload: ImplementationDocument) -> bool:
-    return bool(payload.get("integrity_hash")) and payload.get("integrity_hash") == _integrity_hash(payload)
-
-
-def _integrity_or_stable(payload: ImplementationDocument) -> str:
-    return str(payload.get("integrity_hash") or stable_hash(payload))
-
-
-def _sha256_path(path: Path | str | None) -> str | None:
-    if not path:
-        return None
-    path = Path(path)
-    if not path.exists() or not path.is_file():
-        return None
-    import hashlib
-
-    h = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _sha256_bytes(data: bytes) -> str:
-    import hashlib
-
-    return hashlib.sha256(data).hexdigest()
-
-
-def _zip_manifest_hash(zip_path: Path | str | None) -> str | None:
-    if not zip_path:
-        return None
-    try:
-        with zipfile.ZipFile(zip_path) as archive:
-            return _read_json_entry(archive, "manifest.json").get("integrity_hash")
-    except (OSError, zipfile.BadZipFile, KeyError, json.JSONDecodeError, ValueError):
-        return None
-
-
-def _is_safe_entry(name: str) -> bool:
-    normalized = name.replace("\\", "/")
-    if normalized != name:
-        return False
-    if not normalized or normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized:
-        return False
-    if re.match(r"^[A-Za-z]:", normalized):
-        return False
-    lower = normalized.lower()
-    if lower.startswith(".musicforge/") or "/.musicforge/" in lower:
-        return False
-    return True
+_v142_uccerv_readiness.bind_globals(globals())
