@@ -496,22 +496,6 @@ def preview_stale(preview: ProviderEditPreview, parent_plan: SongPlan) -> bool:
 
 
 from song_agent.domains.creation import v142_pe_readiness as _v142_pe_readiness
-from song_agent.domains.creation.v142_pe_readiness import (
-    _operation_to_intent,
-    _client_for_config,
-    _provider_edit_response_parts,
-    _scan_blocked_fields,
-    _optional_text,
-    _bounded_text,
-    _optional_float,
-    _optional_strength,
-    _chord_list,
-    _string_list,
-    _confidence,
-    _candidate_count,
-    _merge_usage,
-    _next_preview_id,
-    _safe_preview_dir,
-)
+from song_agent.domains.creation.v142_pe_readiness import _operation_to_intent as _operation_to_intent, _client_for_config as _client_for_config, _provider_edit_response_parts as _provider_edit_response_parts, _scan_blocked_fields as _scan_blocked_fields, _optional_text as _optional_text, _bounded_text as _bounded_text, _optional_float as _optional_float, _optional_strength as _optional_strength, _chord_list as _chord_list, _string_list as _string_list, _confidence as _confidence, _candidate_count as _candidate_count, _merge_usage as _merge_usage, _next_preview_id as _next_preview_id, _safe_preview_dir as _safe_preview_dir
 
 _v142_pe_readiness.bind_globals(globals())

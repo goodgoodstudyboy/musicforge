@@ -466,24 +466,6 @@ def _event_indexes(events: list[ImplementationDocument], event_type: str, field:
 
 
 from song_agent.domains.program import v142_urpcccacv_readiness as _v142_urpcccacv_readiness
-from song_agent.domains.program.v142_urpcccacv_readiness import (
-    _generation_checks,
-    _current_generation_checks,
-    _document_binding_checks,
-    _current_acceptance_checks,
-    command_center_acceptance_change_previous_evidence_checks,
-    _manifest_checks,
-    _history_checks,
-    _redaction_check,
-    _finish,
-    _same_nonempty,
-    _as_int,
-    _same_number,
-    _next_generation_ok,
-    _read_json_entry,
-    _parse_jsonl,
-    _safe_check_key,
-    _has_blocking_failures,
-)
+from song_agent.domains.program.v142_urpcccacv_readiness import _generation_checks as _generation_checks, _current_generation_checks as _current_generation_checks, _document_binding_checks as _document_binding_checks, _current_acceptance_checks as _current_acceptance_checks, command_center_acceptance_change_previous_evidence_checks as command_center_acceptance_change_previous_evidence_checks, _manifest_checks as _manifest_checks, _history_checks as _history_checks, _redaction_check as _redaction_check, _finish as _finish, _same_nonempty as _same_nonempty, _as_int as _as_int, _same_number as _same_number, _next_generation_ok as _next_generation_ok, _read_json_entry as _read_json_entry, _parse_jsonl as _parse_jsonl, _safe_check_key as _safe_check_key, _has_blocking_failures as _has_blocking_failures
 
 _v142_urpcccacv_readiness.bind_globals(globals())

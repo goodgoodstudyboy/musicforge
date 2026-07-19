@@ -475,24 +475,7 @@ def build_song_plan(
 
 
 from song_agent.domains.creation.agent import v142_mp_readiness as _v142_mp_readiness
-from song_agent.domains.creation.agent.v142_mp_readiness import (
-    critic_report_for_plan,
-    repair_song_plan,
-    load_node_prompt,
-    _run_schema_node,
-    _schema_node_value,
-    _node_value,
-    _run_node,
-    _next_node_counts,
-    _node_provider_snapshot,
-    _node_output_summary,
-    _song_plan_summary,
-    _style_tags,
-    _issue,
-    _track_role,
-    _clamp_int,
-    _utc_now,
-)
+from song_agent.domains.creation.agent.v142_mp_readiness import critic_report_for_plan as critic_report_for_plan, repair_song_plan as repair_song_plan, load_node_prompt as load_node_prompt, _run_schema_node as _run_schema_node, _schema_node_value as _schema_node_value, _node_value as _node_value, _run_node as _run_node, _next_node_counts as _next_node_counts, _node_provider_snapshot as _node_provider_snapshot, _node_output_summary as _node_output_summary, _song_plan_summary as _song_plan_summary, _style_tags as _style_tags, _issue as _issue, _track_role as _track_role, _clamp_int as _clamp_int, _utc_now as _utc_now
 
 
 

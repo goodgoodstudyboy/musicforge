@@ -136,27 +136,9 @@ def trust_operations_final_handoff_verification_exit_code(report: DomainDocument
 
 
 from song_agent.domains.trust import v142_tofrv_readiness as _v142_tofrv_readiness
-from song_agent.domains.trust.v142_tofrv_readiness import _FinalHandoffVerifier, stable_summary_hash, _row_by_type
+from song_agent.domains.trust.v142_tofrv_readiness import _FinalHandoffVerifier as _FinalHandoffVerifier, stable_summary_hash as stable_summary_hash, _row_by_type as _row_by_type
 from song_agent.domains.trust import v142_tofrv_evidence as _v142_tofrv_evidence
-from song_agent.domains.trust.v142_tofrv_evidence import (
-    _summary_projection,
-    _row_summary_projection,
-    _row_key,
-    _combine_paths,
-    _first_path,
-    _component_id_from_report,
-    _read_json_file,
-    _read_zip_json,
-    _is_forbidden_entry,
-    _is_text_scan_entry,
-    _contains_sensitive_text,
-    _walk_json_values,
-    _counts,
-    _sha256_file,
-    _safe_check_id,
-    _safe_id,
-    _fs_path,
-)
+from song_agent.domains.trust.v142_tofrv_evidence import _summary_projection as _summary_projection, _row_summary_projection as _row_summary_projection, _row_key as _row_key, _combine_paths as _combine_paths, _first_path as _first_path, _component_id_from_report as _component_id_from_report, _read_json_file as _read_json_file, _read_zip_json as _read_zip_json, _is_forbidden_entry as _is_forbidden_entry, _is_text_scan_entry as _is_text_scan_entry, _contains_sensitive_text as _contains_sensitive_text, _walk_json_values as _walk_json_values, _counts as _counts, _sha256_file as _sha256_file, _safe_check_id as _safe_check_id, _safe_id as _safe_id, _fs_path as _fs_path
 
 _v142_tofrv_readiness.bind_globals(globals())
 _v142_tofrv_evidence.bind_globals(globals())

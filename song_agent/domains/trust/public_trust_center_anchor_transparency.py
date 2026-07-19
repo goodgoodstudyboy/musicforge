@@ -499,27 +499,6 @@ def anchor_transparency_manifest_integrity_ok(manifest: DomainDocument | None) -
 
 
 from song_agent.domains.trust import v142_ptcat_readiness as _v142_ptcat_readiness
-from song_agent.domains.trust.v142_ptcat_readiness import (
-    _signature_envelope,
-    _event_type_for_state,
-    _summary_from_source,
-    _registry_verification_summary,
-    _current_entry_summary,
-    _current_entry,
-    _event_chain_ok,
-    source_or_none,
-    _state_row,
-    _manifest_state,
-    _ledger_text,
-    _file_record,
-    _zip_entries,
-    _read_json_default,
-    _read_zip_json,
-    _write_json,
-    _write_readme,
-    _safe_text,
-    _sha256,
-    _ensure_within,
-)
+from song_agent.domains.trust.v142_ptcat_readiness import _signature_envelope as _signature_envelope, _event_type_for_state as _event_type_for_state, _summary_from_source as _summary_from_source, _registry_verification_summary as _registry_verification_summary, _current_entry_summary as _current_entry_summary, _current_entry as _current_entry, _event_chain_ok as _event_chain_ok, source_or_none as source_or_none, _state_row as _state_row, _manifest_state as _manifest_state, _ledger_text as _ledger_text, _file_record as _file_record, _zip_entries as _zip_entries, _read_json_default as _read_json_default, _read_zip_json as _read_zip_json, _write_json as _write_json, _write_readme as _write_readme, _safe_text as _safe_text, _sha256 as _sha256, _ensure_within as _ensure_within
 
 _v142_ptcat_readiness.bind_globals(globals())

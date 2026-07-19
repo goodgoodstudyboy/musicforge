@@ -481,30 +481,7 @@ def _verification_sidecars(source: ImplementationDocument) -> list[Implementatio
 
 
 from song_agent.domains.trust import v142_ptccv_readiness_2 as _v142_ptccv_readiness_2
-from song_agent.domains.trust.v142_ptccv_readiness_2 import (
-    _packages_from_sidecars,
-    _verifications_from_sidecars,
-    _delivery_payloads_from_sidecars,
-    _delivery_payloads_from_fingerprint_sidecars,
-    _delivery_anchor_rows_from_fingerprint_sidecars,
-    _read_zip_json,
-    _find_registry_current_entry,
-    _delivery_payloads_from_data_docs,
-    _delivery_public_payload,
-    _delivery_summary_key,
-    _delivery_payload_key,
-    _fingerprint_key,
-    _is_forbidden_public_entry,
-    _counts,
-    _sha256_file,
-    _sha256_entry,
-    _sha256_text,
-    _contains_local_path,
-    _normalize_newlines,
-    _redaction_findings,
-    _allowed_public_false_positive,
-    _blocked_key_findings,
-)
+from song_agent.domains.trust.v142_ptccv_readiness_2 import _packages_from_sidecars as _packages_from_sidecars, _verifications_from_sidecars as _verifications_from_sidecars, _delivery_payloads_from_sidecars as _delivery_payloads_from_sidecars, _delivery_payloads_from_fingerprint_sidecars as _delivery_payloads_from_fingerprint_sidecars, _delivery_anchor_rows_from_fingerprint_sidecars as _delivery_anchor_rows_from_fingerprint_sidecars, _read_zip_json as _read_zip_json, _find_registry_current_entry as _find_registry_current_entry, _delivery_payloads_from_data_docs as _delivery_payloads_from_data_docs, _delivery_public_payload as _delivery_public_payload, _delivery_summary_key as _delivery_summary_key, _delivery_payload_key as _delivery_payload_key, _fingerprint_key as _fingerprint_key, _is_forbidden_public_entry as _is_forbidden_public_entry, _counts as _counts, _sha256_file as _sha256_file, _sha256_entry as _sha256_entry, _sha256_text as _sha256_text, _contains_local_path as _contains_local_path, _normalize_newlines as _normalize_newlines, _redaction_findings as _redaction_findings, _allowed_public_false_positive as _allowed_public_false_positive, _blocked_key_findings as _blocked_key_findings
 
 
 

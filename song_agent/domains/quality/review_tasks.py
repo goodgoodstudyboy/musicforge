@@ -190,81 +190,13 @@ class ReviewCandidate:
 
 
 from song_agent.domains.quality import v142_rt_readiness as _v142_rt_readiness
-from song_agent.domains.quality.v142_rt_readiness import ReviewTaskStore
+from song_agent.domains.quality.v142_rt_readiness import ReviewTaskStore as ReviewTaskStore
 from song_agent.domains.quality import v142_rt_evidence as _v142_rt_evidence
-from song_agent.domains.quality.v142_rt_evidence import (
-    build_local_review_candidates,
-    build_provider_review_candidates,
-    provider_review_candidate_instruction,
-    score_provider_review_candidate,
-    build_review_decision_report,
-    review_decision_summary,
-    review_candidate_source_breakdown,
-    _decision_rank_entry,
-    _recommendation_reason,
-    _decision_risk_flags,
-)
+from song_agent.domains.quality.v142_rt_evidence import build_local_review_candidates as build_local_review_candidates, build_provider_review_candidates as build_provider_review_candidates, provider_review_candidate_instruction as provider_review_candidate_instruction, score_provider_review_candidate as score_provider_review_candidate, build_review_decision_report as build_review_decision_report, review_decision_summary as review_decision_summary, review_candidate_source_breakdown as review_candidate_source_breakdown, _decision_rank_entry as _decision_rank_entry, _recommendation_reason as _recommendation_reason, _decision_risk_flags as _decision_risk_flags
 from song_agent.domains.quality import v142_rt_lifecycle as _v142_rt_lifecycle
-from song_agent.domains.quality.v142_rt_lifecycle import (
-    _judge_summary_for_decision,
-    _provider_patch_summary,
-    candidate_intents_for_strategy,
-    apply_candidate_intents,
-    review_task_target,
-    review_snapshot,
-    review_task_summary,
-    review_candidate_summary,
-    task_list_summary,
-    mark_task_resolved,
-    mark_task_archived,
-    candidate_apply_metadata,
-    validate_review_task_id,
-    validate_review_candidate_id,
-    _ensure_task_open_for_generation,
-    _ensure_task_open_for_apply,
-    ensure_task_current,
-    ensure_candidate_current,
-    _ensure_candidate_current,
-    _candidate_type,
-    _strategy,
-    _candidate_source,
-    _provider_candidate_source,
-    _provider_snapshot_for_candidate,
-    _candidate_artifacts,
-    _validator,
-    _usage_int,
-    score_review_candidate,
-    candidate_summary,
-    _candidate_warnings,
-    _task_title,
-    _task_summary,
-    _priority,
-    _primary_marker,
-)
+from song_agent.domains.quality.v142_rt_lifecycle import _judge_summary_for_decision as _judge_summary_for_decision, _provider_patch_summary as _provider_patch_summary, candidate_intents_for_strategy as candidate_intents_for_strategy, apply_candidate_intents as apply_candidate_intents, review_task_target as review_task_target, review_snapshot as review_snapshot, review_task_summary as review_task_summary, review_candidate_summary as review_candidate_summary, task_list_summary as task_list_summary, mark_task_resolved as mark_task_resolved, mark_task_archived as mark_task_archived, candidate_apply_metadata as candidate_apply_metadata, validate_review_task_id as validate_review_task_id, validate_review_candidate_id as validate_review_candidate_id, _ensure_task_open_for_generation as _ensure_task_open_for_generation, _ensure_task_open_for_apply as _ensure_task_open_for_apply, ensure_task_current as ensure_task_current, ensure_candidate_current as ensure_candidate_current, _ensure_candidate_current as _ensure_candidate_current, _candidate_type as _candidate_type, _strategy as _strategy, _candidate_source as _candidate_source, _provider_candidate_source as _provider_candidate_source, _provider_snapshot_for_candidate as _provider_snapshot_for_candidate, _candidate_artifacts as _candidate_artifacts, _validator as _validator, _usage_int as _usage_int, score_review_candidate as score_review_candidate, candidate_summary as candidate_summary, _candidate_warnings as _candidate_warnings, _task_title as _task_title, _task_summary as _task_summary, _priority as _priority, _primary_marker as _primary_marker
 from song_agent.domains.quality import v142_rt_archive as _v142_rt_archive
-from song_agent.domains.quality.v142_rt_archive import (
-    _section_from_range_or_marker,
-    _target_track,
-    _review_text,
-    _role_from_text,
-    _track_by_role,
-    _role_for_track,
-    _track_id,
-    _track_state,
-    _find_section,
-    _section_for_beat,
-    _section_start,
-    _section_end,
-    _range_start,
-    _intent,
-    _has_any,
-    _clamp_int,
-    _clamp,
-    _float_or_none,
-    _optional_str,
-    _lock_for_project,
-    _append_event,
-)
+from song_agent.domains.quality.v142_rt_archive import _section_from_range_or_marker as _section_from_range_or_marker, _target_track as _target_track, _review_text as _review_text, _role_from_text as _role_from_text, _track_by_role as _track_by_role, _role_for_track as _role_for_track, _track_id as _track_id, _track_state as _track_state, _find_section as _find_section, _section_for_beat as _section_for_beat, _section_start as _section_start, _section_end as _section_end, _range_start as _range_start, _intent as _intent, _has_any as _has_any, _clamp_int as _clamp_int, _clamp as _clamp, _float_or_none as _float_or_none, _optional_str as _optional_str, _lock_for_project as _lock_for_project, _append_event as _append_event
 
 _v142_rt_readiness.bind_globals(globals())
 _v142_rt_evidence.bind_globals(globals())

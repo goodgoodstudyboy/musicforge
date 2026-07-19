@@ -519,17 +519,6 @@ def _recommendation_actions(report: ImplementationDocument) -> list[Implementati
 
 
 from song_agent.domains.quality import v142_rsa_readiness as _v142_rsa_readiness
-from song_agent.domains.quality.v142_rsa_readiness import (
-    _queue_settings,
-    _queue_summary,
-    _queue_status,
-    _with_item_id,
-    _item_sort_key,
-    _context_ref_count,
-    _optional_task_id,
-    _optional_str,
-    _clamp_int,
-    _lock_for_root,
-)
+from song_agent.domains.quality.v142_rsa_readiness import _queue_settings as _queue_settings, _queue_summary as _queue_summary, _queue_status as _queue_status, _with_item_id as _with_item_id, _item_sort_key as _item_sort_key, _context_ref_count as _context_ref_count, _optional_task_id as _optional_task_id, _optional_str as _optional_str, _clamp_int as _clamp_int, _lock_for_root as _lock_for_root
 
 _v142_rsa_readiness.bind_globals(globals())

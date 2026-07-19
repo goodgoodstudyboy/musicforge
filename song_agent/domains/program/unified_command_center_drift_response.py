@@ -22,31 +22,7 @@ from song_agent.domains.program.unified_command_center_signoff import UnifiedCom
 
 
 from song_agent.domains.program import v142_uccdr_readiness as _v142_uccdr_readiness
-from song_agent.domains.program.v142_uccdr_readiness import (
-    UnifiedCommandCenterDriftResponseError,
-    UnifiedCommandCenterDriftResponseNotFoundError,
-    UnifiedCommandCenterDriftResponseStateError,
-    _source_document,
-    _review_binding,
-    _plan_document,
-    _queue_document,
-    _results_document,
-    _cr_bindings_document,
-    _cr_binding_report_document,
-    _recheck_document,
-    _closeout_document,
-    _fingerprints_document,
-    _highest_severity,
-    _read_json_required,
-    _file_record,
-    _integrity_ok,
-    _integrity_hash,
-    _approval_hash,
-    _sha256_path,
-    _bounded,
-    _safe_id,
-    _gate_failed,
-)
+from song_agent.domains.program.v142_uccdr_readiness import UnifiedCommandCenterDriftResponseError as UnifiedCommandCenterDriftResponseError, UnifiedCommandCenterDriftResponseNotFoundError as UnifiedCommandCenterDriftResponseNotFoundError, UnifiedCommandCenterDriftResponseStateError as UnifiedCommandCenterDriftResponseStateError, _source_document as _source_document, _review_binding as _review_binding, _plan_document as _plan_document, _queue_document as _queue_document, _results_document as _results_document, _cr_bindings_document as _cr_bindings_document, _cr_binding_report_document as _cr_binding_report_document, _recheck_document as _recheck_document, _closeout_document as _closeout_document, _fingerprints_document as _fingerprints_document, _highest_severity as _highest_severity, _read_json_required as _read_json_required, _file_record as _file_record, _integrity_ok as _integrity_ok, _integrity_hash as _integrity_hash, _approval_hash as _approval_hash, _sha256_path as _sha256_path, _bounded as _bounded, _safe_id as _safe_id, _gate_failed as _gate_failed
 
 
 

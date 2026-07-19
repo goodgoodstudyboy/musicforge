@@ -262,47 +262,9 @@ class TrackTemplate:
 
 
 from song_agent.domains.studio import v142_et_readiness as _v142_et_readiness
-from song_agent.domains.studio.v142_et_readiness import (
-    EditorTemplateStore,
-    section_template_public_dict,
-    track_template_public_dict,
-    section_template_source_status,
-    build_multitrack_clip_from_project_section,
-    build_multitrack_clip_from_ref,
-    suggest_lane_mappings,
-)
+from song_agent.domains.studio.v142_et_readiness import EditorTemplateStore as EditorTemplateStore, section_template_public_dict as section_template_public_dict, track_template_public_dict as track_template_public_dict, section_template_source_status as section_template_source_status, build_multitrack_clip_from_project_section as build_multitrack_clip_from_project_section, build_multitrack_clip_from_ref as build_multitrack_clip_from_ref, suggest_lane_mappings as suggest_lane_mappings
 from song_agent.domains.studio import v142_et_evidence as _v142_et_evidence
-from song_agent.domains.studio.v142_et_evidence import (
-    build_multitrack_clip_insert_patch,
-    validate_section_template_id,
-    validate_track_template_id,
-    _project_version_plan,
-    _track_by_id,
-    _section_by_id,
-    _target_section,
-    _target_start_beat,
-    _clean_lane_mappings,
-    _note_ids_in_replace_range,
-    _lane_summary,
-    _template_insert_metadata,
-    _template_group_id,
-    _mapping_score,
-    _ranges_overlap,
-    _range_from_payload,
-    _safe_child,
-    _validate_template_size,
-    _safe_id,
-    _role,
-    _tags,
-    _bounded,
-    _choice,
-    _int_range,
-    _float_min,
-    _float_range,
-    _optional_tempo,
-    _quantize_grid,
-    _round_beat,
-)
+from song_agent.domains.studio.v142_et_evidence import build_multitrack_clip_insert_patch as build_multitrack_clip_insert_patch, validate_section_template_id as validate_section_template_id, validate_track_template_id as validate_track_template_id, _project_version_plan as _project_version_plan, _track_by_id as _track_by_id, _section_by_id as _section_by_id, _target_section as _target_section, _target_start_beat as _target_start_beat, _clean_lane_mappings as _clean_lane_mappings, _note_ids_in_replace_range as _note_ids_in_replace_range, _lane_summary as _lane_summary, _template_insert_metadata as _template_insert_metadata, _template_group_id as _template_group_id, _mapping_score as _mapping_score, _ranges_overlap as _ranges_overlap, _range_from_payload as _range_from_payload, _safe_child as _safe_child, _validate_template_size as _validate_template_size, _safe_id as _safe_id, _role as _role, _tags as _tags, _bounded as _bounded, _choice as _choice, _int_range as _int_range, _float_min as _float_min, _float_range as _float_range, _optional_tempo as _optional_tempo, _quantize_grid as _quantize_grid, _round_beat as _round_beat
 
 _v142_et_readiness.bind_globals(globals())
 _v142_et_evidence.bind_globals(globals())

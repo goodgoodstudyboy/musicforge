@@ -493,28 +493,6 @@ def _external_semantic_checks(report: ImplementationDocument, inventory: Impleme
 
 
 from song_agent.domains.program import v142_uccrthv_readiness as _v142_uccrthv_readiness
-from song_agent.domains.program.v142_uccrthv_readiness import (
-    _document_binding_checks,
-    _signoff_binding_checks,
-    _external_signoff_binding_checks,
-    _history_checks,
-    _manifest_checks,
-    _file_index_checks,
-    _finish,
-    write_unified_command_center_release_train_handoff_verification_report,
-    unified_command_center_release_train_handoff_verification_exit_code,
-    _check,
-    _read_json_entry,
-    _read_optional_json,
-    _parse_jsonl,
-    _integrity_hash,
-    _integrity_ok,
-    _sha256_path,
-    _sha256_bytes,
-    _is_safe_entry,
-    _redaction_check,
-    _safe_check_key,
-    _report_manifest_hash,
-)
+from song_agent.domains.program.v142_uccrthv_readiness import _document_binding_checks as _document_binding_checks, _signoff_binding_checks as _signoff_binding_checks, _external_signoff_binding_checks as _external_signoff_binding_checks, _history_checks as _history_checks, _manifest_checks as _manifest_checks, _file_index_checks as _file_index_checks, _finish as _finish, write_unified_command_center_release_train_handoff_verification_report as write_unified_command_center_release_train_handoff_verification_report, unified_command_center_release_train_handoff_verification_exit_code as unified_command_center_release_train_handoff_verification_exit_code, _check as _check, _read_json_entry as _read_json_entry, _read_optional_json as _read_optional_json, _parse_jsonl as _parse_jsonl, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _sha256_path as _sha256_path, _sha256_bytes as _sha256_bytes, _is_safe_entry as _is_safe_entry, _redaction_check as _redaction_check, _safe_check_key as _safe_check_key, _report_manifest_hash as _report_manifest_hash
 
 _v142_uccrthv_readiness.bind_globals(globals())

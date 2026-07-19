@@ -459,50 +459,9 @@ def rights_track_integrity_ok(record: DomainDocument) -> bool:
 
 
 from song_agent.domains.delivery import v142_rc_readiness as _v142_rc_readiness
-from song_agent.domains.delivery.v142_rc_readiness import (
-    rights_report_source_hash,
-    rights_report_integrity_hash,
-    rights_report_integrity_ok,
-    rights_summary_hash,
-    rights_summary_integrity_ok,
-    rights_export_summary,
-    rights_redaction_findings,
-    verify_release_rights_package_evidence,
-    verify_rights_summary_evidence,
-    required_source_usages_for_track,
-    _evaluate_track,
-    _declared_source_coverage,
-    _source_coverage_key,
-    _project_export_snapshot,
-    _final_export_manifest,
-    _project_version,
-    _asset_required_source,
-    _reference_required_source,
-)
+from song_agent.domains.delivery.v142_rc_readiness import rights_report_source_hash as rights_report_source_hash, rights_report_integrity_hash as rights_report_integrity_hash, rights_report_integrity_ok as rights_report_integrity_ok, rights_summary_hash as rights_summary_hash, rights_summary_integrity_ok as rights_summary_integrity_ok, rights_export_summary as rights_export_summary, rights_redaction_findings as rights_redaction_findings, verify_release_rights_package_evidence as verify_release_rights_package_evidence, verify_rights_summary_evidence as verify_rights_summary_evidence, required_source_usages_for_track as required_source_usages_for_track, _evaluate_track as _evaluate_track, _declared_source_coverage as _declared_source_coverage, _source_coverage_key as _source_coverage_key, _project_export_snapshot as _project_export_snapshot, _final_export_manifest as _final_export_manifest, _project_version as _project_version, _asset_required_source as _asset_required_source, _reference_required_source as _reference_required_source
 from song_agent.domains.delivery import v142_rc_evidence as _v142_rc_evidence
-from song_agent.domains.delivery.v142_rc_evidence import (
-    _context_pack_required_source,
-    _metadata_required_source,
-    _metadata_source_id,
-    _normalize_required_source,
-    _used_by_version,
-    _normalize_contributor,
-    _normalize_source_usage,
-    _release_track,
-    _track_snapshot,
-    _metadata_track,
-    _metadata_track_from_doc,
-    _metadata_snapshot,
-    _metadata_credit_names,
-    _read_json_default,
-    _safe_id,
-    _next_id,
-    _text,
-    _norm_name,
-    _list,
-    _safe_dict,
-    _looks_like_local_path,
-)
+from song_agent.domains.delivery.v142_rc_evidence import _context_pack_required_source as _context_pack_required_source, _metadata_required_source as _metadata_required_source, _metadata_source_id as _metadata_source_id, _normalize_required_source as _normalize_required_source, _used_by_version as _used_by_version, _normalize_contributor as _normalize_contributor, _normalize_source_usage as _normalize_source_usage, _release_track as _release_track, _track_snapshot as _track_snapshot, _metadata_track as _metadata_track, _metadata_track_from_doc as _metadata_track_from_doc, _metadata_snapshot as _metadata_snapshot, _metadata_credit_names as _metadata_credit_names, _read_json_default as _read_json_default, _safe_id as _safe_id, _next_id as _next_id, _text as _text, _norm_name as _norm_name, _list as _list, _safe_dict as _safe_dict, _looks_like_local_path as _looks_like_local_path
 
 _v142_rc_readiness.bind_globals(globals())
 _v142_rc_evidence.bind_globals(globals())

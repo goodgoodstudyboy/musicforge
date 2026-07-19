@@ -428,55 +428,9 @@ class AcceptanceAnalyticsStore:
 
 
 from song_agent.domains.quality import v142_aa_readiness as _v142_aa_readiness
-from song_agent.domains.quality.v142_aa_readiness import (
-    build_acceptance_analytics_report,
-    acceptance_analytics_summary,
-    release_acceptance_analytics_evidence,
-    write_acceptance_analytics_summary,
-    _case_facts,
-    _songbook_heatmap,
-    _style_breakdown,
-    _issue_taxonomy,
-    _reviewer_breakdown,
-    _trend,
-    _trend_summary,
-    _weakness_ranking,
-    _recommendations,
-    _summary,
-)
+from song_agent.domains.quality.v142_aa_readiness import build_acceptance_analytics_report as build_acceptance_analytics_report, acceptance_analytics_summary as acceptance_analytics_summary, release_acceptance_analytics_evidence as release_acceptance_analytics_evidence, write_acceptance_analytics_summary as write_acceptance_analytics_summary, _case_facts as _case_facts, _songbook_heatmap as _songbook_heatmap, _style_breakdown as _style_breakdown, _issue_taxonomy as _issue_taxonomy, _reviewer_breakdown as _reviewer_breakdown, _trend as _trend, _trend_summary as _trend_summary, _weakness_ranking as _weakness_ranking, _recommendations as _recommendations, _summary as _summary
 from song_agent.domains.quality import v142_aa_evidence as _v142_aa_evidence
-from song_agent.domains.quality.v142_aa_evidence import (
-    _source_summary,
-    _warnings,
-    _readiness,
-    _fact_issue_types,
-    _issue_sources,
-    _classify_text,
-    _issue_excerpt,
-    _weakness_score,
-    _latest_fact,
-    _open_task_count,
-    _top_strings,
-    _first_text,
-    _suite_source,
-    _case_source,
-    _review_source,
-    _health_source,
-    _report_source,
-    _case_in_scope,
-    _scope_project_ids,
-    _suite_matches_release,
-    _release_acceptance_suite_id,
-    _release_ids_for_project,
-    _scope_from_report,
-    _report_id,
-    _optional_id,
-    _safe_storage_key,
-    _optional_int,
-    _bounded,
-    _append_event,
-    _matching_open_review_task,
-)
+from song_agent.domains.quality.v142_aa_evidence import _source_summary as _source_summary, _warnings as _warnings, _readiness as _readiness, _fact_issue_types as _fact_issue_types, _issue_sources as _issue_sources, _classify_text as _classify_text, _issue_excerpt as _issue_excerpt, _weakness_score as _weakness_score, _latest_fact as _latest_fact, _open_task_count as _open_task_count, _top_strings as _top_strings, _first_text as _first_text, _suite_source as _suite_source, _case_source as _case_source, _review_source as _review_source, _health_source as _health_source, _report_source as _report_source, _case_in_scope as _case_in_scope, _scope_project_ids as _scope_project_ids, _suite_matches_release as _suite_matches_release, _release_acceptance_suite_id as _release_acceptance_suite_id, _release_ids_for_project as _release_ids_for_project, _scope_from_report as _scope_from_report, _report_id as _report_id, _optional_id as _optional_id, _safe_storage_key as _safe_storage_key, _optional_int as _optional_int, _bounded as _bounded, _append_event as _append_event, _matching_open_review_task as _matching_open_review_task
 
 _v142_aa_readiness.bind_globals(globals())
 _v142_aa_evidence.bind_globals(globals())

@@ -457,45 +457,6 @@ def release_snapshot_integrity_ok(snapshot: DomainDocument | None) -> bool:
 
 
 from song_agent.domains.trust import v142_rpa_readiness as _v142_rpa_readiness
-from song_agent.domains.trust.v142_rpa_readiness import (
-    portfolio_report_integrity_ok,
-    portfolio_trend_integrity_ok,
-    portfolio_risk_register_integrity_ok,
-    portfolio_manifest_integrity_ok,
-    portfolio_audit_summary,
-    _portfolio_findings,
-    _build_risk_register,
-    _portfolio_risk_score,
-    _build_recommendations,
-    _release_readiness_ranking,
-    _portfolio_summary,
-    _build_trend_report,
-    _trend_findings,
-    _portfolio_gates,
-    _release_summary_from_snapshot,
-    _snapshot_source,
-    _selection_from_payload,
-    _selection_patch,
-    _pick,
-    _rate,
-    _portfolio_review_markdown,
-    _portfolio_retrospective_markdown,
-    _risk_register_markdown,
-    _write_portfolio_readme,
-    _file_record,
-    _zip_entries,
-    _validate_relative_path,
-    _ensure_within,
-    _sha256,
-    _read_optional_json,
-    _read_json_default,
-    _write_json,
-    _redaction_summary,
-    _event_count,
-    _validate_portfolio_id,
-    _safe_text,
-    _blocker,
-    _warning,
-)
+from song_agent.domains.trust.v142_rpa_readiness import portfolio_report_integrity_ok as portfolio_report_integrity_ok, portfolio_trend_integrity_ok as portfolio_trend_integrity_ok, portfolio_risk_register_integrity_ok as portfolio_risk_register_integrity_ok, portfolio_manifest_integrity_ok as portfolio_manifest_integrity_ok, portfolio_audit_summary as portfolio_audit_summary, _portfolio_findings as _portfolio_findings, _build_risk_register as _build_risk_register, _portfolio_risk_score as _portfolio_risk_score, _build_recommendations as _build_recommendations, _release_readiness_ranking as _release_readiness_ranking, _portfolio_summary as _portfolio_summary, _build_trend_report as _build_trend_report, _trend_findings as _trend_findings, _portfolio_gates as _portfolio_gates, _release_summary_from_snapshot as _release_summary_from_snapshot, _snapshot_source as _snapshot_source, _selection_from_payload as _selection_from_payload, _selection_patch as _selection_patch, _pick as _pick, _rate as _rate, _portfolio_review_markdown as _portfolio_review_markdown, _portfolio_retrospective_markdown as _portfolio_retrospective_markdown, _risk_register_markdown as _risk_register_markdown, _write_portfolio_readme as _write_portfolio_readme, _file_record as _file_record, _zip_entries as _zip_entries, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _sha256 as _sha256, _read_optional_json as _read_optional_json, _read_json_default as _read_json_default, _write_json as _write_json, _redaction_summary as _redaction_summary, _event_count as _event_count, _validate_portfolio_id as _validate_portfolio_id, _safe_text as _safe_text, _blocker as _blocker, _warning as _warning
 
 _v142_rpa_readiness.bind_globals(globals())

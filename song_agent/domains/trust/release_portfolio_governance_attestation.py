@@ -512,21 +512,6 @@ def _manifest_triple(manifest: ImplementationDocument) -> dict[str, str]:
 
 
 from song_agent.domains.trust import v142_rpga_readiness as _v142_rpga_readiness
-from song_agent.domains.trust.v142_rpga_readiness import (
-    _certificate_markdown,
-    _certificate_html,
-    _write_readme,
-    _file_record,
-    _zip_entries,
-    _read_zip_json,
-    _read_json_default,
-    _write_json,
-    _sha256,
-    _ensure_within,
-    _redaction_summary,
-    _blocker,
-    _warning,
-    _validate_profile,
-)
+from song_agent.domains.trust.v142_rpga_readiness import _certificate_markdown as _certificate_markdown, _certificate_html as _certificate_html, _write_readme as _write_readme, _file_record as _file_record, _zip_entries as _zip_entries, _read_zip_json as _read_zip_json, _read_json_default as _read_json_default, _write_json as _write_json, _sha256 as _sha256, _ensure_within as _ensure_within, _redaction_summary as _redaction_summary, _blocker as _blocker, _warning as _warning, _validate_profile as _validate_profile
 
 _v142_rpga_readiness.bind_globals(globals())

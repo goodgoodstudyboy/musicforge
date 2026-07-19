@@ -519,18 +519,6 @@ def _readiness_doc(train_id: str, source_hash: str, state: ImplementationDocumen
 
 
 from song_agent.domains.program import v142_uccrtl_readiness as _v142_uccrtl_readiness
-from song_agent.domains.program.v142_uccrtl_readiness import (
-    _gap_items,
-    _evidence_index_doc,
-    _lifecycle_event_type,
-    _manifest_document,
-    _reviewer_guide,
-    _with_integrity,
-    _gate_failed,
-    _file_record,
-    _integrity_ok,
-    _integrity_hash,
-    _sha256_path,
-)
+from song_agent.domains.program.v142_uccrtl_readiness import _gap_items as _gap_items, _evidence_index_doc as _evidence_index_doc, _lifecycle_event_type as _lifecycle_event_type, _manifest_document as _manifest_document, _reviewer_guide as _reviewer_guide, _with_integrity as _with_integrity, _gate_failed as _gate_failed, _file_record as _file_record, _integrity_ok as _integrity_ok, _integrity_hash as _integrity_hash, _sha256_path as _sha256_path
 
 _v142_uccrtl_readiness.bind_globals(globals())

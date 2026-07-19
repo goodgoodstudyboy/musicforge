@@ -475,26 +475,6 @@ def render_file_pattern(pattern: str, *, track: DomainDocument, ext: str) -> str
 
 
 from song_agent.domains.delivery import v142_dt_readiness as _v142_dt_readiness
-from song_agent.domains.delivery.v142_dt_readiness import (
-    _builtin_template_packs,
-    _builtin_template_by_id,
-    _template_payload,
-    _ensure_import_payload_safe,
-    _payload_size,
-    _safe_rules,
-    _safe_mapping,
-    _safe_file_naming,
-    _safe_file_pattern,
-    _safe_checklist,
-    _safe_template_id,
-    _safe_slug,
-    _safe_source,
-    _safe_item_id,
-    _safe_text,
-    _slug,
-    _validate_relative_path,
-    _validation_report,
-    _first_validation_error,
-)
+from song_agent.domains.delivery.v142_dt_readiness import _builtin_template_packs as _builtin_template_packs, _builtin_template_by_id as _builtin_template_by_id, _template_payload as _template_payload, _ensure_import_payload_safe as _ensure_import_payload_safe, _payload_size as _payload_size, _safe_rules as _safe_rules, _safe_mapping as _safe_mapping, _safe_file_naming as _safe_file_naming, _safe_file_pattern as _safe_file_pattern, _safe_checklist as _safe_checklist, _safe_template_id as _safe_template_id, _safe_slug as _safe_slug, _safe_source as _safe_source, _safe_item_id as _safe_item_id, _safe_text as _safe_text, _slug as _slug, _validate_relative_path as _validate_relative_path, _validation_report as _validation_report, _first_validation_error as _first_validation_error
 
 _v142_dt_readiness.bind_globals(globals())

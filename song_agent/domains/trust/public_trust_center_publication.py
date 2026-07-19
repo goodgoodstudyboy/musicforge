@@ -528,7 +528,7 @@ def _from_fs_path(value: str) -> Path:
 
 
 from song_agent.domains.trust import v142_ptcp_readiness_2 as _v142_ptcp_readiness_2
-from song_agent.domains.trust.v142_ptcp_readiness_2 import _safe_id, _next_channel_id, _next_publication_id, _sanitize, _html
+from song_agent.domains.trust.v142_ptcp_readiness_2 import _safe_id as _safe_id, _next_channel_id as _next_channel_id, _next_publication_id as _next_publication_id, _sanitize as _sanitize, _html as _html
 
 
 

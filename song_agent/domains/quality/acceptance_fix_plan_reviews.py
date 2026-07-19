@@ -484,33 +484,7 @@ def _item_outcomes(plan: AcceptanceFixPlan, sprint: AcceptanceFixSprint, items: 
 
 
 from song_agent.domains.quality import v142_afpr_readiness as _v142_afpr_readiness
-from song_agent.domains.quality.v142_afpr_readiness import (
-    _review_summary,
-    _calibration_hints,
-    _plan_effectiveness_score,
-    _ranking_alignment_score,
-    _evidence_status,
-    _item_effectiveness_score,
-    _observed_status,
-    _kb_helpfulness,
-    _overall_kb_helpfulness,
-    _task_statuses,
-    _song_delta_status,
-    _plan_source,
-    _sprint_source,
-    _item_source,
-    _delta_source,
-    _closeout_source,
-    _review_matches_project,
-    _safe_dict,
-    _bounded,
-    _int,
-    _int_or_none,
-    _float,
-    _validate_id,
-    _lock_for_root,
-    _append_event,
-)
+from song_agent.domains.quality.v142_afpr_readiness import _review_summary as _review_summary, _calibration_hints as _calibration_hints, _plan_effectiveness_score as _plan_effectiveness_score, _ranking_alignment_score as _ranking_alignment_score, _evidence_status as _evidence_status, _item_effectiveness_score as _item_effectiveness_score, _observed_status as _observed_status, _kb_helpfulness as _kb_helpfulness, _overall_kb_helpfulness as _overall_kb_helpfulness, _task_statuses as _task_statuses, _song_delta_status as _song_delta_status, _plan_source as _plan_source, _sprint_source as _sprint_source, _item_source as _item_source, _delta_source as _delta_source, _closeout_source as _closeout_source, _review_matches_project as _review_matches_project, _safe_dict as _safe_dict, _bounded as _bounded, _int as _int, _int_or_none as _int_or_none, _float as _float, _validate_id as _validate_id, _lock_for_root as _lock_for_root, _append_event as _append_event
 
 
 

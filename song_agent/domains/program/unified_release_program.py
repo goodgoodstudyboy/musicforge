@@ -498,28 +498,7 @@ def _file_index(program_id: str, files: list[ImplementationDocument]) -> Impleme
 
 
 from song_agent.domains.program import v142_urp_readiness as _v142_urp_readiness
-from song_agent.domains.program.v142_urp_readiness import (
-    _file_record,
-    _recipient_guide,
-    _read_optional_json,
-    _source_inputs,
-    _merge_inputs,
-    _json_safe_input,
-    _policy,
-    _safe_id,
-    _bounded,
-    _integrity_hash,
-    _integrity_ok,
-    _sha256_path,
-    _sha256_or_integrity,
-    _verification_zip_sha256,
-    _verification_manifest_hash,
-    _item_key,
-    _history_text,
-    _gate_failed,
-    _has_cycle,
-    _topological_order,
-)
+from song_agent.domains.program.v142_urp_readiness import _file_record as _file_record, _recipient_guide as _recipient_guide, _read_optional_json as _read_optional_json, _source_inputs as _source_inputs, _merge_inputs as _merge_inputs, _json_safe_input as _json_safe_input, _policy as _policy, _safe_id as _safe_id, _bounded as _bounded, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _sha256_path as _sha256_path, _sha256_or_integrity as _sha256_or_integrity, _verification_zip_sha256 as _verification_zip_sha256, _verification_manifest_hash as _verification_manifest_hash, _item_key as _item_key, _history_text as _history_text, _gate_failed as _gate_failed, _has_cycle as _has_cycle, _topological_order as _topological_order
 
 
 

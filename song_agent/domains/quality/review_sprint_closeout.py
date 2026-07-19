@@ -504,21 +504,6 @@ def _sprint_source_summary(sprint: ReviewSprint) -> ImplementationDocument:
 
 
 from song_agent.domains.quality import v142_rsc_readiness as _v142_rsc_readiness
-from song_agent.domains.quality.v142_rsc_readiness import (
-    _task_source_summary,
-    _queue_source_summary,
-    _conflict_source_summary,
-    _recommendation_source_summary,
-    _metrics_source_summary,
-    _judge_source_summary,
-    _project_source_summary,
-    _source_hash,
-    _stable_hash,
-    _blocking_conflict_count,
-    _report_stale,
-    _quality_not_improved,
-    _has_applied_or_selected_version,
-    _optional_str,
-)
+from song_agent.domains.quality.v142_rsc_readiness import _task_source_summary as _task_source_summary, _queue_source_summary as _queue_source_summary, _conflict_source_summary as _conflict_source_summary, _recommendation_source_summary as _recommendation_source_summary, _metrics_source_summary as _metrics_source_summary, _judge_source_summary as _judge_source_summary, _project_source_summary as _project_source_summary, _source_hash as _source_hash, _stable_hash as _stable_hash, _blocking_conflict_count as _blocking_conflict_count, _report_stale as _report_stale, _quality_not_improved as _quality_not_improved, _has_applied_or_selected_version as _has_applied_or_selected_version, _optional_str as _optional_str
 
 _v142_rsc_readiness.bind_globals(globals())

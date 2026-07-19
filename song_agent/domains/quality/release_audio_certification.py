@@ -472,33 +472,6 @@ def _track_row(project_store: ProjectStore, track: Any, release_id: str) -> Impl
 
 
 from song_agent.domains.quality import v142_rac_readiness as _v142_rac_readiness
-from song_agent.domains.quality.v142_rac_readiness import (
-    _build_track_matrix,
-    _build_evidence_index,
-    _build_blocker_register,
-    _checks_from_matrix_and_evidence,
-    _coverage,
-    _remediation_needed,
-    _track_blockers,
-    _track_source,
-    _evidence,
-    _blocker,
-    _check,
-    _identity_key,
-    _case_identity_key,
-    _renderer_summary,
-    _renderer_release_ready,
-    _read_optional_json,
-    _readme,
-    _file_record,
-    _sha256_path,
-    _bounded,
-    _integrity_hash,
-    _integrity_ok,
-    _semantic_hash,
-    _strip_semantic_volatile,
-    _append_event,
-    _blocker_message,
-)
+from song_agent.domains.quality.v142_rac_readiness import _build_track_matrix as _build_track_matrix, _build_evidence_index as _build_evidence_index, _build_blocker_register as _build_blocker_register, _checks_from_matrix_and_evidence as _checks_from_matrix_and_evidence, _coverage as _coverage, _remediation_needed as _remediation_needed, _track_blockers as _track_blockers, _track_source as _track_source, _evidence as _evidence, _blocker as _blocker, _check as _check, _identity_key as _identity_key, _case_identity_key as _case_identity_key, _renderer_summary as _renderer_summary, _renderer_release_ready as _renderer_release_ready, _read_optional_json as _read_optional_json, _readme as _readme, _file_record as _file_record, _sha256_path as _sha256_path, _bounded as _bounded, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _semantic_hash as _semantic_hash, _strip_semantic_volatile as _strip_semantic_volatile, _append_event as _append_event, _blocker_message as _blocker_message
 
 _v142_rac_readiness.bind_globals(globals())

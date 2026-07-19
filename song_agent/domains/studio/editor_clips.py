@@ -460,37 +460,6 @@ def _clip_from_asset(clip_ref: ImplementationDocument, store: AssetStore) -> Edi
 
 
 from song_agent.domains.studio import v142_ec_readiness as _v142_ec_readiness
-from song_agent.domains.studio.v142_ec_readiness import (
-    _clip_from_reference_slice,
-    _clip_from_project_section,
-    _clip_from_project_track_range,
-    _raw_asset_notes,
-    _fallback_asset_notes,
-    _asset_has_notes,
-    _normalize_notes,
-    _clip_duration,
-    _target_track_id,
-    _target_section,
-    _target_start_beat,
-    _note_ids_in_replace_range,
-    _clip_insert_metadata,
-    _clip_group_id,
-    _base_summary,
-    _find_slice,
-    _project_version_plan,
-    _version_plan,
-    _check_project_source_hash,
-    _section_by_id,
-    _track_by_id,
-    _kind_for_asset,
-    _role_for_asset,
-    _asset_hash,
-    _clean_id,
-    _int_range,
-    _float_min,
-    _float_range,
-    _quantize_grid,
-    _round_beat,
-)
+from song_agent.domains.studio.v142_ec_readiness import _clip_from_reference_slice as _clip_from_reference_slice, _clip_from_project_section as _clip_from_project_section, _clip_from_project_track_range as _clip_from_project_track_range, _raw_asset_notes as _raw_asset_notes, _fallback_asset_notes as _fallback_asset_notes, _asset_has_notes as _asset_has_notes, _normalize_notes as _normalize_notes, _clip_duration as _clip_duration, _target_track_id as _target_track_id, _target_section as _target_section, _target_start_beat as _target_start_beat, _note_ids_in_replace_range as _note_ids_in_replace_range, _clip_insert_metadata as _clip_insert_metadata, _clip_group_id as _clip_group_id, _base_summary as _base_summary, _find_slice as _find_slice, _project_version_plan as _project_version_plan, _version_plan as _version_plan, _check_project_source_hash as _check_project_source_hash, _section_by_id as _section_by_id, _track_by_id as _track_by_id, _kind_for_asset as _kind_for_asset, _role_for_asset as _role_for_asset, _asset_hash as _asset_hash, _clean_id as _clean_id, _int_range as _int_range, _float_min as _float_min, _float_range as _float_range, _quantize_grid as _quantize_grid, _round_beat as _round_beat
 
 _v142_ec_readiness.bind_globals(globals())

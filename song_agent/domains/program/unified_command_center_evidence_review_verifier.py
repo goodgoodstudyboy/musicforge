@@ -515,19 +515,6 @@ def _manifest_checks(archive: zipfile.ZipFile, manifest: ImplementationDocument,
 
 
 from song_agent.domains.program import v142_uccerv_readiness as _v142_uccerv_readiness
-from song_agent.domains.program.v142_uccerv_readiness import (
-    _redaction_check,
-    _finish,
-    _check,
-    _read_json_entry,
-    _read_json_file,
-    _integrity_hash,
-    _integrity_ok,
-    _integrity_or_stable,
-    _sha256_path,
-    _sha256_bytes,
-    _zip_manifest_hash,
-    _is_safe_entry,
-)
+from song_agent.domains.program.v142_uccerv_readiness import _redaction_check as _redaction_check, _finish as _finish, _check as _check, _read_json_entry as _read_json_entry, _read_json_file as _read_json_file, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _integrity_or_stable as _integrity_or_stable, _sha256_path as _sha256_path, _sha256_bytes as _sha256_bytes, _zip_manifest_hash as _zip_manifest_hash, _is_safe_entry as _is_safe_entry
 
 _v142_uccerv_readiness.bind_globals(globals())

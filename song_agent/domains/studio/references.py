@@ -502,26 +502,6 @@ def sanitize_reference_metadata(value: Any) -> Any:
 
 
 from song_agent.domains.studio import v142_r_readiness as _v142_r_readiness
-from song_agent.domains.studio.v142_r_readiness import (
-    _decode_base64,
-    _validate_reference_content,
-    _validate_size,
-    _safe_filename,
-    _filename_is_safe,
-    _fallback_safe_filename,
-    _extension,
-    _stored_filename,
-    _clean_tags,
-    _clean_ids,
-    _validate_external_id,
-    _bounded_text,
-    _optional_tempo,
-    _reference_matches,
-    _strength,
-    _default_reference_role,
-    _read_text_excerpt,
-    _midi_seed_content,
-    _append_reference_event,
-)
+from song_agent.domains.studio.v142_r_readiness import _decode_base64 as _decode_base64, _validate_reference_content as _validate_reference_content, _validate_size as _validate_size, _safe_filename as _safe_filename, _filename_is_safe as _filename_is_safe, _fallback_safe_filename as _fallback_safe_filename, _extension as _extension, _stored_filename as _stored_filename, _clean_tags as _clean_tags, _clean_ids as _clean_ids, _validate_external_id as _validate_external_id, _bounded_text as _bounded_text, _optional_tempo as _optional_tempo, _reference_matches as _reference_matches, _strength as _strength, _default_reference_role as _default_reference_role, _read_text_excerpt as _read_text_excerpt, _midi_seed_content as _midi_seed_content, _append_reference_event as _append_reference_event
 
 _v142_r_readiness.bind_globals(globals())

@@ -486,34 +486,6 @@ def mix_state_integrity_ok(state: MixState | DomainDocument) -> bool:
 
 
 from song_agent.domains.quality import v142_mc_readiness as _v142_mc_readiness
-from song_agent.domains.quality.v142_mc_readiness import (
-    with_mix_state_integrity,
-    mix_patch_hash,
-    mix_patch_integrity_ok,
-    with_mix_patch_integrity,
-    mix_state_stale_reasons,
-    source_state_for_version,
-    song_plan_hash,
-    file_sha256,
-    stable_hash,
-    track_role,
-    pan_to_midi_cc,
-    _source_state,
-    _clean_operation,
-    _automation_for_note,
-    _scaled_velocity,
-    _replace_track,
-    _first_track,
-    _roles_from_payload,
-    _volume_db,
-    _volume_db_delta,
-    _pan,
-    _velocity_scale,
-    _validate_track_id,
-    _validate_section_id,
-    _validate_mix_state_id,
-    _validate_mix_patch_id,
-    _validate_version_id,
-)
+from song_agent.domains.quality.v142_mc_readiness import with_mix_state_integrity as with_mix_state_integrity, mix_patch_hash as mix_patch_hash, mix_patch_integrity_ok as mix_patch_integrity_ok, with_mix_patch_integrity as with_mix_patch_integrity, mix_state_stale_reasons as mix_state_stale_reasons, source_state_for_version as source_state_for_version, song_plan_hash as song_plan_hash, file_sha256 as file_sha256, stable_hash as stable_hash, track_role as track_role, pan_to_midi_cc as pan_to_midi_cc, _source_state as _source_state, _clean_operation as _clean_operation, _automation_for_note as _automation_for_note, _scaled_velocity as _scaled_velocity, _replace_track as _replace_track, _first_track as _first_track, _roles_from_payload as _roles_from_payload, _volume_db as _volume_db, _volume_db_delta as _volume_db_delta, _pan as _pan, _velocity_scale as _velocity_scale, _validate_track_id as _validate_track_id, _validate_section_id as _validate_section_id, _validate_mix_state_id as _validate_mix_state_id, _validate_mix_patch_id as _validate_mix_patch_id, _validate_version_id as _validate_version_id
 
 _v142_mc_readiness.bind_globals(globals())

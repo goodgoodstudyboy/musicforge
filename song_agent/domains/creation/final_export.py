@@ -443,48 +443,9 @@ def _final_version_asset_refs(run_dir: Path, version_id: str, project_export: Im
 
 
 from song_agent.domains.creation import v142_fe_readiness as _v142_fe_readiness
-from song_agent.domains.creation.v142_fe_readiness import (
-    _write_reference_ref_summaries,
-    _final_version_reference_refs,
-    _final_version_context_pack,
-    _final_version_edit_metadata,
-    _edit_metadata_export_summary,
-    _final_review_sprint_summary,
-    _final_review_sprint_recommendations,
-    _final_review_sprint_action_queues,
-    _final_review_metrics,
-    _final_review_judge,
-    _final_review_sprint_closeout,
-    _final_delivery_qa,
-    _final_acceptance_fix_sprint,
-    _final_acceptance_fix_plan,
-    _final_acceptance_fix_plan_review,
-    _final_acceptance_kb,
-    _final_planning_rule_simulation,
-    _final_planning_rule_governance,
-    _final_planning_rule_impact,
-)
+from song_agent.domains.creation.v142_fe_readiness import _write_reference_ref_summaries as _write_reference_ref_summaries, _final_version_reference_refs as _final_version_reference_refs, _final_version_context_pack as _final_version_context_pack, _final_version_edit_metadata as _final_version_edit_metadata, _edit_metadata_export_summary as _edit_metadata_export_summary, _final_review_sprint_summary as _final_review_sprint_summary, _final_review_sprint_recommendations as _final_review_sprint_recommendations, _final_review_sprint_action_queues as _final_review_sprint_action_queues, _final_review_metrics as _final_review_metrics, _final_review_judge as _final_review_judge, _final_review_sprint_closeout as _final_review_sprint_closeout, _final_delivery_qa as _final_delivery_qa, _final_acceptance_fix_sprint as _final_acceptance_fix_sprint, _final_acceptance_fix_plan as _final_acceptance_fix_plan, _final_acceptance_fix_plan_review as _final_acceptance_fix_plan_review, _final_acceptance_kb as _final_acceptance_kb, _final_planning_rule_simulation as _final_planning_rule_simulation, _final_planning_rule_governance as _final_planning_rule_governance, _final_planning_rule_impact as _final_planning_rule_impact
 from song_agent.domains.creation import v142_fe_evidence as _v142_fe_evidence
-from song_agent.domains.creation.v142_fe_evidence import (
-    _final_delivery_signoff,
-    _context_pack_export_summary,
-    _reference_ref_export_summary,
-    _asset_ref_export_summary,
-    _drop_empty,
-    _safe_asset_id,
-    _safe_reference_id,
-    _sanitize_asset_metadata,
-    _write_readme,
-    _prepare_export_dir,
-    _load_song_plan,
-    _relative_to_run_dir,
-    _unsafe_stem_path_records,
-    _skipped_stem_record,
-    _ensure_within,
-    _safe_zip_entry,
-    _sha256,
-    _optional_str,
-)
+from song_agent.domains.creation.v142_fe_evidence import _final_delivery_signoff as _final_delivery_signoff, _context_pack_export_summary as _context_pack_export_summary, _reference_ref_export_summary as _reference_ref_export_summary, _asset_ref_export_summary as _asset_ref_export_summary, _drop_empty as _drop_empty, _safe_asset_id as _safe_asset_id, _safe_reference_id as _safe_reference_id, _sanitize_asset_metadata as _sanitize_asset_metadata, _write_readme as _write_readme, _prepare_export_dir as _prepare_export_dir, _load_song_plan as _load_song_plan, _relative_to_run_dir as _relative_to_run_dir, _unsafe_stem_path_records as _unsafe_stem_path_records, _skipped_stem_record as _skipped_stem_record, _ensure_within as _ensure_within, _safe_zip_entry as _safe_zip_entry, _sha256 as _sha256, _optional_str as _optional_str
 
 _v142_fe_readiness.bind_globals(globals())
 _v142_fe_evidence.bind_globals(globals())

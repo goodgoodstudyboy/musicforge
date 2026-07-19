@@ -71,39 +71,9 @@ BLOCKED_ASSET_METADATA_KEYS = {
 
 
 from song_agent.domains.studio import v142_pr_readiness as _v142_pr_readiness
-from song_agent.domains.studio.v142_pr_readiness import (
-    JobLike,
-    ProjectSummaryProvider,
-    _empty_project_summary,
-    quality_score_for_run,
-    now_iso,
-    _artifact_exists,
-    _find_version,
-    _version_or_none,
-    _version_ref,
-    _lineage_info,
-    _artifact_flags,
-    _edit_info,
-    _mix_info,
-    _section_info,
-    _track_info,
-    _version_song_plan,
-    _average_velocity,
-    _diff_dict,
-    _diff_optional,
-    _validate_project_id,
-    _validate_version_id,
-    _optional_version_id,
-    _validate_variant_type,
-    _version_index,
-    _clean,
-    _optional_str,
-    _optional_int,
-    _collect_project_asset_refs,
-    _collect_project_reference_refs,
-)
+from song_agent.domains.studio.v142_pr_readiness import JobLike as JobLike, ProjectSummaryProvider as ProjectSummaryProvider, _empty_project_summary as _empty_project_summary, quality_score_for_run as quality_score_for_run, now_iso as now_iso, _artifact_exists as _artifact_exists, _find_version as _find_version, _version_or_none as _version_or_none, _version_ref as _version_ref, _lineage_info as _lineage_info, _artifact_flags as _artifact_flags, _edit_info as _edit_info, _mix_info as _mix_info, _section_info as _section_info, _track_info as _track_info, _version_song_plan as _version_song_plan, _average_velocity as _average_velocity, _diff_dict as _diff_dict, _diff_optional as _diff_optional, _validate_project_id as _validate_project_id, _validate_version_id as _validate_version_id, _optional_version_id as _optional_version_id, _validate_variant_type as _validate_variant_type, _version_index as _version_index, _clean as _clean, _optional_str as _optional_str, _optional_int as _optional_int, _collect_project_asset_refs as _collect_project_asset_refs, _collect_project_reference_refs as _collect_project_reference_refs
 from song_agent.domains.studio import v142_pr_evidence as _v142_pr_evidence
-from song_agent.domains.studio.v142_pr_evidence import _collect_project_context_packs, _sanitize_asset_metadata
+from song_agent.domains.studio.v142_pr_evidence import _collect_project_context_packs as _collect_project_context_packs, _sanitize_asset_metadata
 
 
 

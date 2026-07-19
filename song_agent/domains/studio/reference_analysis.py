@@ -493,30 +493,6 @@ def _analyze_text(context: ReferenceContext, now: str) -> ImplementationDocument
 
 
 from song_agent.domains.studio import v142_ra_readiness as _v142_ra_readiness
-from song_agent.domains.studio.v142_ra_readiness import (
-    _base_report,
-    _pcm_samples,
-    _wav_envelope,
-    _loudness_hint,
-    _text_words,
-    _keywords,
-    _language_hint,
-    _chord_like_tokens,
-    _find_slice,
-    _update_slice,
-    _export_slice_summary,
-    _compact_provider_reference_summary,
-    _compact_analysis_inner,
-    _asset_notes,
-    _tempo_from_analysis,
-    _safe_reference_file,
-    _safe_preview_file,
-    _ensure_within,
-    _validate_slice_id,
-    _bounded_text,
-    _clean_tags,
-    _sanitize_report,
-    _append_reference_event,
-)
+from song_agent.domains.studio.v142_ra_readiness import _base_report as _base_report, _pcm_samples as _pcm_samples, _wav_envelope as _wav_envelope, _loudness_hint as _loudness_hint, _text_words as _text_words, _keywords as _keywords, _language_hint as _language_hint, _chord_like_tokens as _chord_like_tokens, _find_slice as _find_slice, _update_slice as _update_slice, _export_slice_summary as _export_slice_summary, _compact_provider_reference_summary as _compact_provider_reference_summary, _compact_analysis_inner as _compact_analysis_inner, _asset_notes as _asset_notes, _tempo_from_analysis as _tempo_from_analysis, _safe_reference_file as _safe_reference_file, _safe_preview_file as _safe_preview_file, _ensure_within as _ensure_within, _validate_slice_id as _validate_slice_id, _bounded_text as _bounded_text, _clean_tags as _clean_tags, _sanitize_report as _sanitize_report, _append_reference_event as _append_reference_event
 
 _v142_ra_readiness.bind_globals(globals())

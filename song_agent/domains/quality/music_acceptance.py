@@ -464,42 +464,9 @@ def _report_verification(stored_source_hash: str, current_source_hash: str, stor
 
 
 from song_agent.domains.quality import v142_ma_readiness_2 as _v142_ma_readiness_2
-from song_agent.domains.quality.v142_ma_readiness_2 import (
-    acceptance_report_summary,
-    listening_review_summary,
-    acceptance_signoff_summary,
-    acceptance_suite_summary,
-    stable_hash,
-    acceptance_profile_payload,
-    default_acceptance_requests,
-    default_acceptance_song_cases,
-    _request_from_payload,
-    _request_summary,
-    _default_request,
-    _quality_payload,
-    _case_artifacts,
-    _review_payload,
-    _case_status_from_review,
-    _suite_requires_audio,
-    _request_duration_seconds,
-    _audio_evidence_status,
-    _profile_from_payload,
-    _expectation_blockers,
-    _songbook_coverage,
-    _songbook_coverage_blockers,
-    _acceptance_status,
-    _renderer_snapshot,
-    _read_optional_json,
-    _report_markdown,
-    _redaction_findings,
-    _human_review_evidence_summary,
-    _safe_text,
-    _optional_text,
-    _safe_dict,
-    _validate_suite_id,
-)
+from song_agent.domains.quality.v142_ma_readiness_2 import acceptance_report_summary as acceptance_report_summary, listening_review_summary as listening_review_summary, acceptance_signoff_summary as acceptance_signoff_summary, acceptance_suite_summary as acceptance_suite_summary, stable_hash as stable_hash, acceptance_profile_payload as acceptance_profile_payload, default_acceptance_requests as default_acceptance_requests, default_acceptance_song_cases as default_acceptance_song_cases, _request_from_payload as _request_from_payload, _request_summary as _request_summary, _default_request as _default_request, _quality_payload as _quality_payload, _case_artifacts as _case_artifacts, _review_payload as _review_payload, _case_status_from_review as _case_status_from_review, _suite_requires_audio as _suite_requires_audio, _request_duration_seconds as _request_duration_seconds, _audio_evidence_status as _audio_evidence_status, _profile_from_payload as _profile_from_payload, _expectation_blockers as _expectation_blockers, _songbook_coverage as _songbook_coverage, _songbook_coverage_blockers as _songbook_coverage_blockers, _acceptance_status as _acceptance_status, _renderer_snapshot as _renderer_snapshot, _read_optional_json as _read_optional_json, _report_markdown as _report_markdown, _redaction_findings as _redaction_findings, _human_review_evidence_summary as _human_review_evidence_summary, _safe_text as _safe_text, _optional_text as _optional_text, _safe_dict as _safe_dict, _validate_suite_id as _validate_suite_id
 from song_agent.domains.quality import v142_ma_evidence_2 as _v142_ma_evidence_2
-from song_agent.domains.quality.v142_ma_evidence_2 import _validate_case_id
+from song_agent.domains.quality.v142_ma_evidence_2 import _validate_case_id as _validate_case_id
 
 
 

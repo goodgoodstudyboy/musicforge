@@ -490,32 +490,7 @@ def fix_plan_summary(plan: AcceptanceFixPlan | DomainDocument | None) -> DomainD
 
 
 from song_agent.domains.quality import v142_afp_readiness as _v142_afp_readiness
-from song_agent.domains.quality.v142_afp_readiness import (
-    latest_fix_plan_summary,
-    write_acceptance_fix_plan_summary,
-    _planned_items_from_sources,
-    _planning_score,
-    _knowledge_for_matches,
-    _matching_kb_entries,
-    _fix_item_from_planned,
-    _fix_item_counts,
-    _kb_entry_hashes_for_plan,
-    _current_entry_hashes,
-    _entry_plan_summary,
-    _selected_recommendations,
-    _selected_planned_items,
-    _planning_reason,
-    _suggested_actions,
-    _recommendation_source,
-    _scope,
-    _safe_dict,
-    _bounded,
-    _normalize_text,
-    _int,
-    _validate_id,
-    _lock_for_root,
-    _append_event,
-)
+from song_agent.domains.quality.v142_afp_readiness import latest_fix_plan_summary as latest_fix_plan_summary, write_acceptance_fix_plan_summary as write_acceptance_fix_plan_summary, _planned_items_from_sources as _planned_items_from_sources, _planning_score as _planning_score, _knowledge_for_matches as _knowledge_for_matches, _matching_kb_entries as _matching_kb_entries, _fix_item_from_planned as _fix_item_from_planned, _fix_item_counts as _fix_item_counts, _kb_entry_hashes_for_plan as _kb_entry_hashes_for_plan, _current_entry_hashes as _current_entry_hashes, _entry_plan_summary as _entry_plan_summary, _selected_recommendations as _selected_recommendations, _selected_planned_items as _selected_planned_items, _planning_reason as _planning_reason, _suggested_actions as _suggested_actions, _recommendation_source as _recommendation_source, _scope as _scope, _safe_dict as _safe_dict, _bounded as _bounded, _normalize_text as _normalize_text, _int as _int, _validate_id as _validate_id, _lock_for_root as _lock_for_root, _append_event as _append_event
 
 
 

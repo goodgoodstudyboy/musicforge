@@ -488,33 +488,6 @@ def asset_preview_song_plan(asset: CreativeAsset) -> SongPlan:
 
 
 from song_agent.domains.studio import v142_a_readiness as _v142_a_readiness
-from song_agent.domains.studio.v142_a_readiness import (
-    _extract_asset_payload,
-    _motif_content,
-    _select_section,
-    _select_track,
-    _notes_in_section,
-    _relative_note,
-    _asset_notes,
-    _asset_chords,
-    _apply_chord_asset,
-    _apply_motif_asset,
-    _chord_pitches,
-    _with_preview,
-    _preview_dict,
-    _safe_asset_file,
-    _validate_content,
-    _scan_blocked_content,
-    _validate_asset_size,
-    _bounded_text,
-    _clean_tags,
-    _optional_score,
-    _asset_matches,
-    _strength,
-    _default_asset_role,
-    _asset_source_summary,
-    _append_asset_event,
-    _root_motion,
-)
+from song_agent.domains.studio.v142_a_readiness import _extract_asset_payload as _extract_asset_payload, _motif_content as _motif_content, _select_section as _select_section, _select_track as _select_track, _notes_in_section as _notes_in_section, _relative_note as _relative_note, _asset_notes as _asset_notes, _asset_chords as _asset_chords, _apply_chord_asset as _apply_chord_asset, _apply_motif_asset as _apply_motif_asset, _chord_pitches as _chord_pitches, _with_preview as _with_preview, _preview_dict as _preview_dict, _safe_asset_file as _safe_asset_file, _validate_content as _validate_content, _scan_blocked_content as _scan_blocked_content, _validate_asset_size as _validate_asset_size, _bounded_text as _bounded_text, _clean_tags as _clean_tags, _optional_score as _optional_score, _asset_matches as _asset_matches, _strength as _strength, _default_asset_role as _default_asset_role, _asset_source_summary as _asset_source_summary, _append_asset_event as _append_asset_event, _root_motion as _root_motion
 
 _v142_a_readiness.bind_globals(globals())

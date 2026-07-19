@@ -486,24 +486,6 @@ def _external_program_checks(row: ImplementationDocument | None, *, require: boo
 
 
 from song_agent.domains.program import v142_urphv_readiness as _v142_urphv_readiness
-from song_agent.domains.program.v142_urphv_readiness import (
-    _external_operations_checks,
-    _external_accepted_evidence_checks,
-    _path_checks,
-    _handoff_semantic_checks,
-    _accepted_evidence_semantic_checks,
-    _external_response_binding_checks,
-    _handoff_document_binding_checks,
-    _handoff_signoff_binding_checks,
-    _public_external_manifest,
-    _external_handoff_binding_checks,
-    _manifest_checks,
-    _history_checks,
-    _finish,
-    _read_json_entry,
-    _parse_jsonl,
-    _redaction_check,
-    _safe_check_key,
-)
+from song_agent.domains.program.v142_urphv_readiness import _external_operations_checks as _external_operations_checks, _external_accepted_evidence_checks as _external_accepted_evidence_checks, _path_checks as _path_checks, _handoff_semantic_checks as _handoff_semantic_checks, _accepted_evidence_semantic_checks as _accepted_evidence_semantic_checks, _external_response_binding_checks as _external_response_binding_checks, _handoff_document_binding_checks as _handoff_document_binding_checks, _handoff_signoff_binding_checks as _handoff_signoff_binding_checks, _public_external_manifest as _public_external_manifest, _external_handoff_binding_checks as _external_handoff_binding_checks, _manifest_checks as _manifest_checks, _history_checks as _history_checks, _finish as _finish, _read_json_entry as _read_json_entry, _parse_jsonl as _parse_jsonl, _redaction_check as _redaction_check, _safe_check_key as _safe_check_key
 
 _v142_urphv_readiness.bind_globals(globals())

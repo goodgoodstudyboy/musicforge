@@ -184,98 +184,13 @@ class EditorPreview:
 
 
 from song_agent.domains.studio import v142_se_readiness as _v142_se_readiness
-from song_agent.domains.studio.v142_se_readiness import EditorPreviewStore, build_editor_state, _apply_editor_patch_part_01
+from song_agent.domains.studio.v142_se_readiness import EditorPreviewStore as EditorPreviewStore, build_editor_state as build_editor_state, _apply_editor_patch_part_01
 from song_agent.domains.studio import v142_se_evidence as _v142_se_evidence
-from song_agent.domains.studio.v142_se_evidence import (
-    _apply_editor_patch_operations_01,
-    _apply_editor_patch_operations_02,
-    _apply_editor_patch_part_02,
-    _apply_editor_patch_part_03,
-    apply_editor_patch,
-    summarize_editor_patch,
-    describe_editor_operations,
-    _operation_counts,
-    _operation_name,
-    _patch_metadata,
-    _clip_inserts_from_metadata,
-    _template_inserts_from_metadata,
-    _structure_edit_summary,
-)
+from song_agent.domains.studio.v142_se_evidence import _apply_editor_patch_operations_01, _apply_editor_patch_operations_02, _apply_editor_patch_part_02, _apply_editor_patch_part_03, apply_editor_patch as apply_editor_patch, summarize_editor_patch as summarize_editor_patch, describe_editor_operations as describe_editor_operations, _operation_counts as _operation_counts, _operation_name as _operation_name, _patch_metadata as _patch_metadata, _clip_inserts_from_metadata as _clip_inserts_from_metadata, _template_inserts_from_metadata as _template_inserts_from_metadata, _structure_edit_summary as _structure_edit_summary
 from song_agent.domains.studio import v142_se_lifecycle as _v142_se_lifecycle
-from song_agent.domains.studio.v142_se_lifecycle import (
-    editor_edit_metadata,
-    song_plan_hash,
-    validate_editor_preview_id,
-    _preview_audio_status,
-    section_id_for_index,
-    track_id_for_index,
-    note_id_for,
-    _section_index,
-    _section_index_for_plan,
-    _track_index,
-    _track_index_for_plan,
-    _chords,
-    _clean_lyrics,
-    _bounded_text,
-    _note,
-    _update_note,
-    _note_ids,
-    _base_note_keys_by_track_id,
-    _note_key,
-    _note_key_from_mapping,
-    _note_index_by_key,
-    _identity_by_id,
-    _note_identity_by_track_id,
-    normalize_sections,
-    shift_notes_after_beat,
-    delete_notes_in_range,
-    copy_notes_in_range,
-    remap_notes_by_section,
-    trim_notes_to_total_beats,
-    _note_selector,
-    _map_selected_notes,
-    _delete_selected_notes,
-    _validate_selected_note_ids,
-    _note_ids_by_key,
-)
+from song_agent.domains.studio.v142_se_lifecycle import editor_edit_metadata as editor_edit_metadata, song_plan_hash as song_plan_hash, validate_editor_preview_id as validate_editor_preview_id, _preview_audio_status as _preview_audio_status, section_id_for_index as section_id_for_index, track_id_for_index as track_id_for_index, note_id_for as note_id_for, _section_index as _section_index, _section_index_for_plan as _section_index_for_plan, _track_index as _track_index, _track_index_for_plan as _track_index_for_plan, _chords as _chords, _clean_lyrics as _clean_lyrics, _bounded_text as _bounded_text, _note as _note, _update_note as _update_note, _note_ids as _note_ids, _base_note_keys_by_track_id as _base_note_keys_by_track_id, _note_key as _note_key, _note_key_from_mapping as _note_key_from_mapping, _note_index_by_key as _note_index_by_key, _identity_by_id as _identity_by_id, _note_identity_by_track_id as _note_identity_by_track_id, normalize_sections as normalize_sections, shift_notes_after_beat as shift_notes_after_beat, delete_notes_in_range as delete_notes_in_range, copy_notes_in_range as copy_notes_in_range, remap_notes_by_section as remap_notes_by_section, trim_notes_to_total_beats as trim_notes_to_total_beats, _note_selector as _note_selector, _map_selected_notes as _map_selected_notes, _delete_selected_notes as _delete_selected_notes, _validate_selected_note_ids as _validate_selected_note_ids, _note_ids_by_key as _note_ids_by_key
 from song_agent.domains.studio import v142_se_archive as _v142_se_archive
-from song_agent.domains.studio.v142_se_archive import (
-    _pop_matching_note_id,
-    _shift_note_keys_after_beat,
-    _delete_note_keys_in_range,
-    _trim_note_keys_to_total_beats,
-    _remap_note_keys_by_section,
-    _section_name_for_note_key,
-    _beat_range,
-    _section_from_operation,
-    _unique_section_name,
-    _unique_track_name,
-    _optional_after_section_index,
-    _section_start_beat,
-    _section_span,
-    _section_start_beat_at_index,
-    _section_name_for_note,
-    _assert_total_bars,
-    _total_bars_from_sections,
-    _choice,
-    _missing_required_track_roles,
-    _validate_note_limits,
-    _ensure_note_bounds,
-    _sorted_notes,
-    _int_range,
-    _float_min,
-    _float_range,
-    _parse_iso_datetime,
-    _round_beat,
-    _clamp,
-    _total_bars,
-    _beats_per_bar,
-    _track_role,
-    _quality_summary,
-    _preview_validator_report,
-    _append_preview_event,
-    _optional_str,
-)
+from song_agent.domains.studio.v142_se_archive import _pop_matching_note_id as _pop_matching_note_id, _shift_note_keys_after_beat as _shift_note_keys_after_beat, _delete_note_keys_in_range as _delete_note_keys_in_range, _trim_note_keys_to_total_beats as _trim_note_keys_to_total_beats, _remap_note_keys_by_section as _remap_note_keys_by_section, _section_name_for_note_key as _section_name_for_note_key, _beat_range as _beat_range, _section_from_operation as _section_from_operation, _unique_section_name as _unique_section_name, _unique_track_name as _unique_track_name, _optional_after_section_index as _optional_after_section_index, _section_start_beat as _section_start_beat, _section_span as _section_span, _section_start_beat_at_index as _section_start_beat_at_index, _section_name_for_note as _section_name_for_note, _assert_total_bars as _assert_total_bars, _total_bars_from_sections as _total_bars_from_sections, _choice as _choice, _missing_required_track_roles as _missing_required_track_roles, _validate_note_limits as _validate_note_limits, _ensure_note_bounds as _ensure_note_bounds, _sorted_notes as _sorted_notes, _int_range as _int_range, _float_min as _float_min, _float_range as _float_range, _parse_iso_datetime as _parse_iso_datetime, _round_beat as _round_beat, _clamp as _clamp, _total_bars as _total_bars, _beats_per_bar as _beats_per_bar, _track_role as _track_role, _quality_summary as _quality_summary, _preview_validator_report as _preview_validator_report, _append_preview_event as _append_preview_event, _optional_str as _optional_str
 
 _v142_se_readiness.bind_globals(globals())
 _v142_se_evidence.bind_globals(globals())

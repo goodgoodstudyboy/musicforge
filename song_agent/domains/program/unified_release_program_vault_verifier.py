@@ -472,21 +472,6 @@ def _anchor_checks(
 
 
 from song_agent.domains.program import v142_urpvv_readiness as _v142_urpvv_readiness
-from song_agent.domains.program.v142_urpvv_readiness import (
-    _deep_checks,
-    _deep_program_checks,
-    _deep_operations_checks,
-    _deep_handoff_checks,
-    _deep_accepted_evidence_checks,
-    _runtime_report_checks,
-    _proof_path,
-    _nested_manifest_package_type,
-    _has_blocking_failures,
-    _finish,
-    _read_json_entry,
-    _safe_identifier,
-    _redaction_check,
-    _safe_check_key,
-)
+from song_agent.domains.program.v142_urpvv_readiness import _deep_checks as _deep_checks, _deep_program_checks as _deep_program_checks, _deep_operations_checks as _deep_operations_checks, _deep_handoff_checks as _deep_handoff_checks, _deep_accepted_evidence_checks as _deep_accepted_evidence_checks, _runtime_report_checks as _runtime_report_checks, _proof_path as _proof_path, _nested_manifest_package_type as _nested_manifest_package_type, _has_blocking_failures as _has_blocking_failures, _finish as _finish, _read_json_entry as _read_json_entry, _safe_identifier as _safe_identifier, _redaction_check as _redaction_check, _safe_check_key as _safe_check_key
 
 _v142_urpvv_readiness.bind_globals(globals())

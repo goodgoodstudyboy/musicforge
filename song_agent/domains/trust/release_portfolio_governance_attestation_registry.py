@@ -503,25 +503,6 @@ def registry_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
 
 
 from song_agent.domains.trust import v142_rpgar_readiness as _v142_rpgar_readiness
-from song_agent.domains.trust.v142_rpgar_readiness import (
-    build_package_index,
-    build_chain_of_custody,
-    _entry_source,
-    _state_triple,
-    _manifest_state,
-    _find_entry_mut,
-    _file_record,
-    _zip_entries,
-    _read_json_default,
-    _read_zip_json,
-    _write_json,
-    _sha256,
-    _ensure_within,
-    _redaction_summary,
-    _write_readme,
-    _accepted_evidence_summary_for_portfolio_dir,
-    _accepted_evidence_verification_summary_for_portfolio_dir,
-    _safe_text,
-)
+from song_agent.domains.trust.v142_rpgar_readiness import build_package_index as build_package_index, build_chain_of_custody as build_chain_of_custody, _entry_source as _entry_source, _state_triple as _state_triple, _manifest_state as _manifest_state, _find_entry_mut as _find_entry_mut, _file_record as _file_record, _zip_entries as _zip_entries, _read_json_default as _read_json_default, _read_zip_json as _read_zip_json, _write_json as _write_json, _sha256 as _sha256, _ensure_within as _ensure_within, _redaction_summary as _redaction_summary, _write_readme as _write_readme, _accepted_evidence_summary_for_portfolio_dir as _accepted_evidence_summary_for_portfolio_dir, _accepted_evidence_verification_summary_for_portfolio_dir as _accepted_evidence_verification_summary_for_portfolio_dir, _safe_text as _safe_text
 
 _v142_rpgar_readiness.bind_globals(globals())

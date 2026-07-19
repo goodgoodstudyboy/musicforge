@@ -481,21 +481,6 @@ def _requirements(evidence: ImplementationDocument) -> dict[str, bool]:
 
 
 from song_agent.domains.quality import v142_racc_readiness as _v142_racc_readiness
-from song_agent.domains.quality.v142_racc_readiness import (
-    _component_row,
-    _public_verification_summary,
-    _sync_report_document_hashes,
-    _readiness_row,
-    _gap_row,
-    _message_for_readiness,
-    _recommended_action_for_readiness,
-    _build_runbook,
-    _empty_runbook_results,
-    _readme,
-    _gate_failed,
-    _integrity_hash,
-    _sha256_path,
-    _file_record,
-)
+from song_agent.domains.quality.v142_racc_readiness import _component_row as _component_row, _public_verification_summary as _public_verification_summary, _sync_report_document_hashes as _sync_report_document_hashes, _readiness_row as _readiness_row, _gap_row as _gap_row, _message_for_readiness as _message_for_readiness, _recommended_action_for_readiness as _recommended_action_for_readiness, _build_runbook as _build_runbook, _empty_runbook_results as _empty_runbook_results, _readme as _readme, _gate_failed as _gate_failed, _integrity_hash as _integrity_hash, _sha256_path as _sha256_path, _file_record as _file_record
 
 _v142_racc_readiness.bind_globals(globals())

@@ -51,20 +51,7 @@ VERIFIER_BLOCKED_KEYS = PORTAL_BLOCKED_KEYS | (DEFAULT_BLOCKED_METADATA_KEYS - {
 
 
 from song_agent.domains.trust import v142_rpgapv_readiness as _v142_rpgapv_readiness
-from song_agent.domains.trust.v142_rpgapv_readiness import (
-    verify_release_portfolio_governance_attestation_portal,
-    write_release_portfolio_governance_attestation_portal_verification_report,
-    print_release_portfolio_governance_attestation_portal_verification_report,
-    release_portfolio_governance_attestation_portal_verification_exit_code,
-    _is_forbidden_public_entry,
-    _counts,
-    _sha256_file,
-    _sha256_entry,
-    _sha256_text,
-    _contains_local_path,
-    _redaction_findings,
-    _blocked_key_findings,
-)
+from song_agent.domains.trust.v142_rpgapv_readiness import verify_release_portfolio_governance_attestation_portal as verify_release_portfolio_governance_attestation_portal, write_release_portfolio_governance_attestation_portal_verification_report as write_release_portfolio_governance_attestation_portal_verification_report, print_release_portfolio_governance_attestation_portal_verification_report as print_release_portfolio_governance_attestation_portal_verification_report, release_portfolio_governance_attestation_portal_verification_exit_code as release_portfolio_governance_attestation_portal_verification_exit_code, _is_forbidden_public_entry as _is_forbidden_public_entry, _counts as _counts, _sha256_file as _sha256_file, _sha256_entry as _sha256_entry, _sha256_text as _sha256_text, _contains_local_path as _contains_local_path, _redaction_findings as _redaction_findings, _blocked_key_findings as _blocked_key_findings
 
 
 

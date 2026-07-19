@@ -343,33 +343,6 @@ def _timeline_facts(timeline_zip: Path) -> ImplementationDocument:
 
 
 from song_agent.domains.quality import v142_rarv_readiness as _v142_rarv_readiness
-from song_agent.domains.quality.v142_rarv_readiness import (
-    _expected_documents,
-    _external_binding_checks,
-    _recomputed_document_checks,
-    _document_binding_checks,
-    _signoff_checks,
-    _history_chain_ok,
-    _manifest_checks,
-    _finish,
-    _check,
-    _read_json_entry,
-    _read_jsonl_entry,
-    _is_safe_entry,
-    _redaction_check,
-    _certification_signoff_hash,
-    _manual_rating,
-    _identity_key,
-    _normalize_title,
-    _num,
-    _blocker,
-    _strip_binding,
-    _semantic_hash,
-    _strip_volatile,
-    _integrity_hash,
-    _integrity_ok,
-    _sha256_path,
-    _sha256_bytes,
-)
+from song_agent.domains.quality.v142_rarv_readiness import _expected_documents as _expected_documents, _external_binding_checks as _external_binding_checks, _recomputed_document_checks as _recomputed_document_checks, _document_binding_checks as _document_binding_checks, _signoff_checks as _signoff_checks, _history_chain_ok as _history_chain_ok, _manifest_checks as _manifest_checks, _finish as _finish, _check as _check, _read_json_entry as _read_json_entry, _read_jsonl_entry as _read_jsonl_entry, _is_safe_entry as _is_safe_entry, _redaction_check as _redaction_check, _certification_signoff_hash as _certification_signoff_hash, _manual_rating as _manual_rating, _identity_key as _identity_key, _normalize_title as _normalize_title, _num as _num, _blocker as _blocker, _strip_binding as _strip_binding, _semantic_hash as _semantic_hash, _strip_volatile as _strip_volatile, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _sha256_path as _sha256_path, _sha256_bytes as _sha256_bytes
 
 _v142_rarv_readiness.bind_globals(globals())

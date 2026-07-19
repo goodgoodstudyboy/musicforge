@@ -449,46 +449,9 @@ def _ga_component(report_path: Path | str, verification_report_path: Path | str 
 
 
 from song_agent.domains.program import v142_uccv_readiness as _v142_uccv_readiness
-from song_agent.domains.program.v142_uccv_readiness import (
-    _verify_ga_readiness_report_core,
-    _release_check_component,
-    _generic_report_component,
-    _component_finish,
-    _external_component_checks,
-    _external_multi_component_checks,
-    _document_binding_checks,
-    _manifest_checks,
-    _finish,
-    _check,
-    _external_paths,
-    _public_report,
-    _read_json_entry,
-    _component_status,
-    _component_required,
-    _component_forced,
-    _domain_requirement_check,
-    _readiness_from_checks,
-    _path_list,
-    _report_integrity_hash,
-    _package_type_matches,
-    _report_integrity_ok,
-    _report_zip_sha256,
-    _report_zip_size,
-    _report_manifest_hash,
-    _manifest_binding_matches,
-    _component_id_from_report,
-    _safe_component_id,
-    _fingerprint_items,
-    _public_fingerprint,
-    _integrity_ok,
-    _integrity_hash,
-    _semantic_hash,
-    _is_safe_entry,
-    _redaction_check,
-    _sha256_bytes,
-)
+from song_agent.domains.program.v142_uccv_readiness import _verify_ga_readiness_report_core as _verify_ga_readiness_report_core, _release_check_component as _release_check_component, _generic_report_component as _generic_report_component, _component_finish as _component_finish, _external_component_checks as _external_component_checks, _external_multi_component_checks as _external_multi_component_checks, _document_binding_checks as _document_binding_checks, _manifest_checks as _manifest_checks, _finish as _finish, _check as _check, _external_paths as _external_paths, _public_report as _public_report, _read_json_entry as _read_json_entry, _component_status as _component_status, _component_required as _component_required, _component_forced as _component_forced, _domain_requirement_check as _domain_requirement_check, _readiness_from_checks as _readiness_from_checks, _path_list as _path_list, _report_integrity_hash as _report_integrity_hash, _package_type_matches as _package_type_matches, _report_integrity_ok as _report_integrity_ok, _report_zip_sha256 as _report_zip_sha256, _report_zip_size as _report_zip_size, _report_manifest_hash as _report_manifest_hash, _manifest_binding_matches as _manifest_binding_matches, _component_id_from_report as _component_id_from_report, _safe_component_id as _safe_component_id, _fingerprint_items as _fingerprint_items, _public_fingerprint as _public_fingerprint, _integrity_ok as _integrity_ok, _integrity_hash as _integrity_hash, _semantic_hash as _semantic_hash, _is_safe_entry as _is_safe_entry, _redaction_check as _redaction_check, _sha256_bytes as _sha256_bytes
 from song_agent.domains.program import v142_uccv_evidence as _v142_uccv_evidence
-from song_agent.domains.program.v142_uccv_evidence import _sha256_path
+from song_agent.domains.program.v142_uccv_evidence import _sha256_path as _sha256_path
 
 _v142_uccv_readiness.bind_globals(globals())
 _v142_uccv_evidence.bind_globals(globals())

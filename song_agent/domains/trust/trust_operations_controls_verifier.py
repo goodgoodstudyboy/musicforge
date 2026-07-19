@@ -36,26 +36,7 @@ VERIFIER_BLOCKED_KEYS = DEFAULT_BLOCKED_METADATA_KEYS - {"path", "file"}
 
 
 from song_agent.domains.trust import v142_tocv_readiness as _v142_tocv_readiness
-from song_agent.domains.trust.v142_tocv_readiness import (
-    verify_trust_operations_control_package,
-    write_trust_operations_control_verification_report,
-    print_trust_operations_control_verification_report,
-    trust_operations_control_verification_exit_code,
-    _control_matches_external_entry,
-    _result_projection,
-    _blocker_projection,
-    _action_projection,
-    _read_json_file,
-    _sha256_entry,
-    _sha256_file,
-    _counts,
-    _is_safe_entry,
-    _is_forbidden_entry,
-    _is_text_scan_entry,
-    _contains_sensitive_text,
-    _walk_json_values,
-    _fs_path,
-)
+from song_agent.domains.trust.v142_tocv_readiness import verify_trust_operations_control_package as verify_trust_operations_control_package, write_trust_operations_control_verification_report as write_trust_operations_control_verification_report, print_trust_operations_control_verification_report as print_trust_operations_control_verification_report, trust_operations_control_verification_exit_code as trust_operations_control_verification_exit_code, _control_matches_external_entry as _control_matches_external_entry, _result_projection as _result_projection, _blocker_projection as _blocker_projection, _action_projection as _action_projection, _read_json_file as _read_json_file, _sha256_entry as _sha256_entry, _sha256_file as _sha256_file, _counts as _counts, _is_safe_entry as _is_safe_entry, _is_forbidden_entry as _is_forbidden_entry, _is_text_scan_entry as _is_text_scan_entry, _contains_sensitive_text as _contains_sensitive_text, _walk_json_values as _walk_json_values, _fs_path as _fs_path
 
 
 

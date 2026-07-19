@@ -509,23 +509,6 @@ def _proof_export_doc(source_path: Path, proof_type: str) -> ImplementationDocum
 
 
 from song_agent.domains.program import v142_urpv_readiness as _v142_urpv_readiness
-from song_agent.domains.program.v142_urpv_readiness import (
-    _manifest_document,
-    _anchor_document,
-    _chain_events,
-    _replay_steps,
-    _auditor_guide,
-    _file_record,
-    _public_row,
-    _with_integrity,
-    _integrity_hash,
-    _integrity_ok,
-    _sha256_path,
-    _sha256_bytes,
-    _json_bytes,
-    _read_optional_json,
-    _sanitize_payload,
-    _gate_failed,
-)
+from song_agent.domains.program.v142_urpv_readiness import _manifest_document as _manifest_document, _anchor_document as _anchor_document, _chain_events as _chain_events, _replay_steps as _replay_steps, _auditor_guide as _auditor_guide, _file_record as _file_record, _public_row as _public_row, _with_integrity as _with_integrity, _integrity_hash as _integrity_hash, _integrity_ok as _integrity_ok, _sha256_path as _sha256_path, _sha256_bytes as _sha256_bytes, _json_bytes as _json_bytes, _read_optional_json as _read_optional_json, _sanitize_payload as _sanitize_payload, _gate_failed as _gate_failed
 
 _v142_urpv_readiness.bind_globals(globals())

@@ -501,27 +501,6 @@ def _release_signoff_sidecar_record(signoff_public: ImplementationDocument) -> I
 
 
 from song_agent.domains.delivery import v142_re_readiness as _v142_re_readiness
-from song_agent.domains.delivery.v142_re_readiness import (
-    _release_signoff_hash_payload,
-    _release_acceptance_analytics_summary,
-    _release_acceptance_fix_sprint_summary,
-    _release_acceptance_fix_plan_summary,
-    _release_acceptance_fix_plan_review_summary,
-    _release_acceptance_kb_summary,
-    _release_planning_rule_simulation_summary,
-    _release_planning_rule_governance_summary,
-    _release_planning_rule_impact_summary,
-    _release_audio_qa_summary,
-    _release_audio_reviews_summary,
-    _release_audio_revisions_summary,
-    _release_mastering_summary,
-    _release_encoded_audio_summary,
-    _release_encoded_audio_acceptance_summary,
-    _release_format_decision_summary,
-    _release_rights_clearance_summary,
-    _validate_relative_path,
-    _ensure_within,
-    _sha256,
-)
+from song_agent.domains.delivery.v142_re_readiness import _release_signoff_hash_payload as _release_signoff_hash_payload, _release_acceptance_analytics_summary as _release_acceptance_analytics_summary, _release_acceptance_fix_sprint_summary as _release_acceptance_fix_sprint_summary, _release_acceptance_fix_plan_summary as _release_acceptance_fix_plan_summary, _release_acceptance_fix_plan_review_summary as _release_acceptance_fix_plan_review_summary, _release_acceptance_kb_summary as _release_acceptance_kb_summary, _release_planning_rule_simulation_summary as _release_planning_rule_simulation_summary, _release_planning_rule_governance_summary as _release_planning_rule_governance_summary, _release_planning_rule_impact_summary as _release_planning_rule_impact_summary, _release_audio_qa_summary as _release_audio_qa_summary, _release_audio_reviews_summary as _release_audio_reviews_summary, _release_audio_revisions_summary as _release_audio_revisions_summary, _release_mastering_summary as _release_mastering_summary, _release_encoded_audio_summary as _release_encoded_audio_summary, _release_encoded_audio_acceptance_summary as _release_encoded_audio_acceptance_summary, _release_format_decision_summary as _release_format_decision_summary, _release_rights_clearance_summary as _release_rights_clearance_summary, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _sha256 as _sha256
 
 _v142_re_readiness.bind_globals(globals())

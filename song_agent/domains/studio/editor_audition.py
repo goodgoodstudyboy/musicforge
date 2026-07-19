@@ -490,20 +490,6 @@ def audition_summary(auditions: list[EditorAuditionManifest]) -> DomainDocument:
 
 
 from song_agent.domains.studio import v142_ea_readiness as _v142_ea_readiness
-from song_agent.domains.studio.v142_ea_readiness import (
-    _resolve_range,
-    _resolve_tracks,
-    _clip_sections,
-    _clip_notes,
-    _track_ids,
-    _artifact_status,
-    _audition_status,
-    _bounded_label,
-    _float,
-    _render_report,
-    _lock_for_project,
-    _append_audition_event,
-    _review_event_payload,
-)
+from song_agent.domains.studio.v142_ea_readiness import _resolve_range as _resolve_range, _resolve_tracks as _resolve_tracks, _clip_sections as _clip_sections, _clip_notes as _clip_notes, _track_ids as _track_ids, _artifact_status as _artifact_status, _audition_status as _audition_status, _bounded_label as _bounded_label, _float as _float, _render_report as _render_report, _lock_for_project as _lock_for_project, _append_audition_event as _append_audition_event, _review_event_payload as _review_event_payload
 
 _v142_ea_readiness.bind_globals(globals())

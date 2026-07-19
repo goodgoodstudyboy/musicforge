@@ -447,36 +447,6 @@ class UnifiedCommandCenterStore:
 
 
 from song_agent.domains.program import v142_ucc_readiness as _v142_ucc_readiness
-from song_agent.domains.program.v142_ucc_readiness import (
-    evidence_to_verifier_kwargs,
-    _requirements,
-    _component_row,
-    _component_id,
-    _empty_fingerprint,
-    _graph_node,
-    _graph_edges,
-    _inventory_summary,
-    _readiness_matrix,
-    _domain_status,
-    _gap_item,
-    _safe_action,
-    _message,
-    _runbook,
-    _runbook_result,
-    _verification_index,
-    _report_summary,
-    _sync_report_hashes,
-    _component_by_key,
-    _readme,
-    _gate_failed,
-    _integrity_hash,
-    _sha256_path,
-    _path_list,
-    _multi_component_result,
-    _component_finish_for_store,
-    _component_instance_id,
-    _safe_component_id,
-    _file_record,
-)
+from song_agent.domains.program.v142_ucc_readiness import evidence_to_verifier_kwargs as evidence_to_verifier_kwargs, _requirements as _requirements, _component_row as _component_row, _component_id as _component_id, _empty_fingerprint as _empty_fingerprint, _graph_node as _graph_node, _graph_edges as _graph_edges, _inventory_summary as _inventory_summary, _readiness_matrix as _readiness_matrix, _domain_status as _domain_status, _gap_item as _gap_item, _safe_action as _safe_action, _message as _message, _runbook as _runbook, _runbook_result as _runbook_result, _verification_index as _verification_index, _report_summary as _report_summary, _sync_report_hashes as _sync_report_hashes, _component_by_key as _component_by_key, _readme as _readme, _gate_failed as _gate_failed, _integrity_hash as _integrity_hash, _sha256_path as _sha256_path, _path_list as _path_list, _multi_component_result as _multi_component_result, _component_finish_for_store as _component_finish_for_store, _component_instance_id as _component_instance_id, _safe_component_id as _safe_component_id, _file_record as _file_record
 
 _v142_ucc_readiness.bind_globals(globals())

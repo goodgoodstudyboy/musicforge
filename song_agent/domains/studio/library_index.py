@@ -481,33 +481,6 @@ def stable_source_hash(data: Any) -> str:
 
 
 from song_agent.domains.studio import v142_li_readiness as _v142_li_readiness
-from song_agent.domains.studio.v142_li_readiness import (
-    tokenize_library_text,
-    asset_roles,
-    reference_roles,
-    _matches_filters,
-    _type_role_points,
-    _style_mood_points,
-    _musical_points,
-    _utility_points,
-    _reason,
-    _safe_query_summary,
-    _has_search_constraints,
-    _role_for_result,
-    _roles_for_goal,
-    _density_hint,
-    _source_summary,
-    _source_origin,
-    _roles_from_analysis,
-    _reference_analysis_features,
-    _compact_analysis_for_index,
-    _tempo_from_analysis,
-    _normalize_key,
-    _string_set,
-    _clean_string_list,
-    _optional_int,
-    _optional_float,
-    _limit,
-)
+from song_agent.domains.studio.v142_li_readiness import tokenize_library_text as tokenize_library_text, asset_roles as asset_roles, reference_roles as reference_roles, _matches_filters as _matches_filters, _type_role_points as _type_role_points, _style_mood_points as _style_mood_points, _musical_points as _musical_points, _utility_points as _utility_points, _reason as _reason, _safe_query_summary as _safe_query_summary, _has_search_constraints as _has_search_constraints, _role_for_result as _role_for_result, _roles_for_goal as _roles_for_goal, _density_hint as _density_hint, _source_summary as _source_summary, _source_origin as _source_origin, _roles_from_analysis as _roles_from_analysis, _reference_analysis_features as _reference_analysis_features, _compact_analysis_for_index as _compact_analysis_for_index, _tempo_from_analysis as _tempo_from_analysis, _normalize_key as _normalize_key, _string_set as _string_set, _clean_string_list as _clean_string_list, _optional_int as _optional_int, _optional_float as _optional_float, _limit as _limit
 
 _v142_li_readiness.bind_globals(globals())

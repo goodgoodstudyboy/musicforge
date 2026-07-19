@@ -344,32 +344,9 @@ def verify_accepted_evidence(
 
 
 from song_agent.domains.program import v142_urpcccav_readiness as _v142_urpcccav_readiness
-from song_agent.domains.program.v142_urpcccav_readiness import verify_unified_release_program_continuity_command_center_acceptance_package, validate_response_proof, write_verification_report, verification_exit_code, _current_v1210_checks, _archive_external_checks
+from song_agent.domains.program.v142_urpcccav_readiness import verify_unified_release_program_continuity_command_center_acceptance_package as verify_unified_release_program_continuity_command_center_acceptance_package, validate_response_proof as validate_response_proof, write_verification_report as write_verification_report, verification_exit_code as verification_exit_code, _current_v1210_checks as _current_v1210_checks, _archive_external_checks as _archive_external_checks
 from song_agent.domains.program import v142_urpcccav_evidence as _v142_urpcccav_evidence
-from song_agent.domains.program.v142_urpcccav_evidence import (
-    _source_package_summary_checks,
-    _archive_internal_checks,
-    _package_index_matches,
-    _participant_from_binding,
-    _matrix_rows,
-    _findings_rows,
-    _quorum_result,
-    _response_public_projection,
-    _reviewer_identity,
-    _source_projection,
-    _response_payload_hash,
-    _with_integrity,
-    _manifest_checks,
-    _history_checks,
-    _redaction_check,
-    _read_json_entry,
-    _parse_jsonl,
-    _json_bytes,
-    _safe_key,
-    _prefix_checks,
-    _has_blockers,
-    _finish,
-)
+from song_agent.domains.program.v142_urpcccav_evidence import _source_package_summary_checks as _source_package_summary_checks, _archive_internal_checks as _archive_internal_checks, _package_index_matches as _package_index_matches, _participant_from_binding as _participant_from_binding, _matrix_rows as _matrix_rows, _findings_rows as _findings_rows, _quorum_result as _quorum_result, _response_public_projection as _response_public_projection, _reviewer_identity as _reviewer_identity, _source_projection as _source_projection, _response_payload_hash as _response_payload_hash, _with_integrity as _with_integrity, _manifest_checks as _manifest_checks, _history_checks as _history_checks, _redaction_check as _redaction_check, _read_json_entry as _read_json_entry, _parse_jsonl as _parse_jsonl, _json_bytes as _json_bytes, _safe_key as _safe_key, _prefix_checks as _prefix_checks, _has_blockers as _has_blockers, _finish as _finish
 
 _v142_urpcccav_readiness.bind_globals(globals())
 _v142_urpcccav_evidence.bind_globals(globals())

@@ -452,32 +452,6 @@ def _data_documents(report: ImplementationDocument) -> dict[str, ImplementationD
 
 
 from song_agent.domains.trust import v142_rpgap_readiness as _v142_rpgap_readiness
-from song_agent.domains.trust.v142_rpgap_readiness import (
-    _html_pages,
-    _html_shell,
-    _links,
-    _kv,
-    _hash_table,
-    _external_review_label,
-    _registry_manifest_row,
-    _attestation_manifest_row,
-    _state_triple,
-    _manifest_state,
-    _page_record,
-    _file_record,
-    _zip_entries,
-    _read_json_default,
-    _read_zip_json,
-    _write_json,
-    _sha256,
-    _ensure_within,
-    _redaction_summary,
-    _write_readme,
-    _accepted_evidence_summary_for_portfolio_dir,
-    _accepted_evidence_verification_summary_for_portfolio_dir,
-    _find_entry,
-    _safe_profile,
-    _verification_hash,
-)
+from song_agent.domains.trust.v142_rpgap_readiness import _html_pages as _html_pages, _html_shell as _html_shell, _links as _links, _kv as _kv, _hash_table as _hash_table, _external_review_label as _external_review_label, _registry_manifest_row as _registry_manifest_row, _attestation_manifest_row as _attestation_manifest_row, _state_triple as _state_triple, _manifest_state as _manifest_state, _page_record as _page_record, _file_record as _file_record, _zip_entries as _zip_entries, _read_json_default as _read_json_default, _read_zip_json as _read_zip_json, _write_json as _write_json, _sha256 as _sha256, _ensure_within as _ensure_within, _redaction_summary as _redaction_summary, _write_readme as _write_readme, _accepted_evidence_summary_for_portfolio_dir as _accepted_evidence_summary_for_portfolio_dir, _accepted_evidence_verification_summary_for_portfolio_dir as _accepted_evidence_verification_summary_for_portfolio_dir, _find_entry as _find_entry, _safe_profile as _safe_profile, _verification_hash as _verification_hash
 
 _v142_rpgap_readiness.bind_globals(globals())

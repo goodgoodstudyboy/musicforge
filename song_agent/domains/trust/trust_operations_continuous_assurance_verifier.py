@@ -519,18 +519,6 @@ def _read_zip_json(zip_path: Path, entry: str) -> ImplementationDocument:
 
 
 from song_agent.domains.trust import v142_tocav_readiness as _v142_tocav_readiness
-from song_agent.domains.trust.v142_tocav_readiness import (
-    _sha256_file,
-    _sha256_entry,
-    _is_forbidden_entry,
-    _is_text_scan_entry,
-    _contains_sensitive_text,
-    _walk_json_values,
-    _counts,
-    _path_list,
-    _delivery_types,
-    _safe_id,
-    _fs_path,
-)
+from song_agent.domains.trust.v142_tocav_readiness import _sha256_file as _sha256_file, _sha256_entry as _sha256_entry, _is_forbidden_entry as _is_forbidden_entry, _is_text_scan_entry as _is_text_scan_entry, _contains_sensitive_text as _contains_sensitive_text, _walk_json_values as _walk_json_values, _counts as _counts, _path_list as _path_list, _delivery_types as _delivery_types, _safe_id as _safe_id, _fs_path as _fs_path
 
 _v142_tocav_readiness.bind_globals(globals())

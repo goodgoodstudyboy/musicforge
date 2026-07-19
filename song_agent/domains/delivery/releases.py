@@ -207,32 +207,9 @@ class ReleaseDocument:
 
 
 from song_agent.domains.delivery import v142_r_readiness as _v142_r_readiness
-from song_agent.domains.delivery.v142_r_readiness import ReleaseStore, build_release_track_snapshot, release_summary
+from song_agent.domains.delivery.v142_r_readiness import ReleaseStore as ReleaseStore, build_release_track_snapshot as build_release_track_snapshot, release_summary as release_summary
 from song_agent.domains.delivery import v142_r_evidence as _v142_r_evidence
-from song_agent.domains.delivery.v142_r_evidence import (
-    release_document_source,
-    stable_hash,
-    _project_snapshot,
-    _export_snapshot,
-    _qa_snapshot,
-    _signoff_snapshot,
-    _track_title,
-    _duration_beats,
-    _find_version,
-    _read_optional_json,
-    _file_sha256,
-    _stable_hash,
-    _renumber_tracks,
-    _next_track_id,
-    _stale_summary,
-    _safe_dict,
-    _release_type,
-    _validate_release_id,
-    _validate_track_id,
-    _required_id,
-    _bounded_text,
-    _optional_bounded_text,
-)
+from song_agent.domains.delivery.v142_r_evidence import release_document_source as release_document_source, stable_hash as stable_hash, _project_snapshot as _project_snapshot, _export_snapshot as _export_snapshot, _qa_snapshot as _qa_snapshot, _signoff_snapshot as _signoff_snapshot, _track_title as _track_title, _duration_beats as _duration_beats, _find_version as _find_version, _read_optional_json as _read_optional_json, _file_sha256 as _file_sha256, _stable_hash as _stable_hash, _renumber_tracks as _renumber_tracks, _next_track_id as _next_track_id, _stale_summary as _stale_summary, _safe_dict as _safe_dict, _release_type as _release_type, _validate_release_id as _validate_release_id, _validate_track_id as _validate_track_id, _required_id as _required_id, _bounded_text as _bounded_text, _optional_bounded_text as _optional_bounded_text
 
 _v142_r_readiness.bind_globals(globals())
 _v142_r_evidence.bind_globals(globals())

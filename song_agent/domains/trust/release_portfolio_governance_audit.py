@@ -482,33 +482,6 @@ def audit_manifest_integrity_ok(manifest: DomainDocument | None) -> bool:
 
 
 from song_agent.domains.trust import v142_rpga_readiness_2 as _v142_rpga_readiness_2
-from song_agent.domains.trust.v142_rpga_readiness_2 import (
-    audit_summary,
-    _entry_seed,
-    _finalize_entries,
-    _bind_change_request_causal_refs,
-    _write_ledger,
-    _coverage,
-    _queue_summaries,
-    _change_request_summary,
-    _archive_summary,
-    _portfolio_summary,
-    _write_markdown,
-    _write_readme,
-    _write_json,
-    _file_record,
-    _zip_entries,
-    _validate_relative_path,
-    _ensure_within,
-    _sha256,
-    _read_optional_json,
-    _read_jsonl,
-    _redaction_summary,
-    _safe_time,
-    _safe_event_type,
-    _slug,
-    _blocker,
-    _warning,
-)
+from song_agent.domains.trust.v142_rpga_readiness_2 import audit_summary as audit_summary, _entry_seed as _entry_seed, _finalize_entries as _finalize_entries, _bind_change_request_causal_refs as _bind_change_request_causal_refs, _write_ledger as _write_ledger, _coverage as _coverage, _queue_summaries as _queue_summaries, _change_request_summary as _change_request_summary, _archive_summary as _archive_summary, _portfolio_summary as _portfolio_summary, _write_markdown as _write_markdown, _write_readme as _write_readme, _write_json as _write_json, _file_record as _file_record, _zip_entries as _zip_entries, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _sha256 as _sha256, _read_optional_json as _read_optional_json, _read_jsonl as _read_jsonl, _redaction_summary as _redaction_summary, _safe_time as _safe_time, _safe_event_type as _safe_event_type, _slug as _slug, _blocker as _blocker, _warning as _warning
 
 _v142_rpga_readiness_2.bind_globals(globals())

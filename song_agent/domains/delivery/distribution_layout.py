@@ -512,21 +512,6 @@ def _metadata_tracks_by_id(metadata: ImplementationDocument) -> dict[str, Implem
 
 
 from song_agent.domains.delivery import v142_dl_readiness as _v142_dl_readiness
-from song_agent.domains.delivery.v142_dl_readiness import (
-    _track_context,
-    _audio_source_rel,
-    _encoded_profile_summary,
-    _target_audio_profile_ids,
-    _normalize_profile_ids,
-    _validate_profile_id,
-    _lyrics_source_rel,
-    _artwork_source_rel,
-    _source_exists,
-    _slug_value,
-    _attr,
-    _entry_hash_payload,
-    _layout_hash_payload,
-    _check,
-)
+from song_agent.domains.delivery.v142_dl_readiness import _track_context as _track_context, _audio_source_rel as _audio_source_rel, _encoded_profile_summary as _encoded_profile_summary, _target_audio_profile_ids as _target_audio_profile_ids, _normalize_profile_ids as _normalize_profile_ids, _validate_profile_id as _validate_profile_id, _lyrics_source_rel as _lyrics_source_rel, _artwork_source_rel as _artwork_source_rel, _source_exists as _source_exists, _slug_value as _slug_value, _attr as _attr, _entry_hash_payload as _entry_hash_payload, _layout_hash_payload as _layout_hash_payload, _check as _check
 
 _v142_dl_readiness.bind_globals(globals())

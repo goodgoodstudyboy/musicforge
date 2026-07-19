@@ -465,36 +465,6 @@ def outcome_status_for_score(score: int, delta_summary: DomainDocument) -> str:
 
 
 from song_agent.domains.quality import v142_ak_readiness as _v142_ak_readiness
-from song_agent.domains.quality.v142_ak_readiness import (
-    build_knowledge_report,
-    knowledge_report_summary,
-    write_acceptance_kb_summary,
-    knowledge_entry_summary,
-    _issue_patterns,
-    _style_patterns,
-    _song_patterns,
-    _fix_patterns,
-    _knowledge_recommendations,
-    _entries_source_hash,
-    _sprint_source,
-    _item_source,
-    _delta_source,
-    _closeout_source,
-    _issue_types_from_item,
-    _issue_types_from_text,
-    _issue_types_from_payload,
-    _normalize_issue,
-    _style_from_items,
-    _safe_scope,
-    _risk_for_items,
-    _top_values,
-    _bounded,
-    _normalize_text,
-    _safe_dict,
-    _float_or_none,
-    _int_or_none,
-    _validate_id,
-    _append_event,
-)
+from song_agent.domains.quality.v142_ak_readiness import build_knowledge_report as build_knowledge_report, knowledge_report_summary as knowledge_report_summary, write_acceptance_kb_summary as write_acceptance_kb_summary, knowledge_entry_summary as knowledge_entry_summary, _issue_patterns as _issue_patterns, _style_patterns as _style_patterns, _song_patterns as _song_patterns, _fix_patterns as _fix_patterns, _knowledge_recommendations as _knowledge_recommendations, _entries_source_hash as _entries_source_hash, _sprint_source as _sprint_source, _item_source as _item_source, _delta_source as _delta_source, _closeout_source as _closeout_source, _issue_types_from_item as _issue_types_from_item, _issue_types_from_text as _issue_types_from_text, _issue_types_from_payload as _issue_types_from_payload, _normalize_issue as _normalize_issue, _style_from_items as _style_from_items, _safe_scope as _safe_scope, _risk_for_items as _risk_for_items, _top_values as _top_values, _bounded as _bounded, _normalize_text as _normalize_text, _safe_dict as _safe_dict, _float_or_none as _float_or_none, _int_or_none as _int_or_none, _validate_id as _validate_id, _append_event as _append_event
 
 _v142_ak_readiness.bind_globals(globals())

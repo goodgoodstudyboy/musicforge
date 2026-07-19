@@ -458,30 +458,6 @@ def metadata_export_summary(manifest: DomainDocument | None = None) -> DomainDoc
 
 
 from song_agent.domains.delivery import v142_rm_readiness as _v142_rm_readiness
-from song_agent.domains.delivery.v142_rm_readiness import (
-    export_release_metadata_files,
-    attach_metadata_export_to_manifest,
-    mark_release_export_stale_for_metadata,
-    _metadata_from_release,
-    _merge_missing_metadata,
-    _source_summary,
-    _track_plan,
-    _extract_lyrics,
-    _duration_beats,
-    _write_platform_csv,
-    _write_credits_csv,
-    _write_csv,
-    _write_lyrics,
-    _write_text,
-    _file_record,
-    _sha256,
-    _validate_relative_path,
-    _ensure_within,
-    _qa_summary,
-    _ensure_release_metadata_mutable,
-    _safe_int,
-    _safe_text,
-    _optional_text,
-)
+from song_agent.domains.delivery.v142_rm_readiness import export_release_metadata_files as export_release_metadata_files, attach_metadata_export_to_manifest as attach_metadata_export_to_manifest, mark_release_export_stale_for_metadata as mark_release_export_stale_for_metadata, _metadata_from_release as _metadata_from_release, _merge_missing_metadata as _merge_missing_metadata, _source_summary as _source_summary, _track_plan as _track_plan, _extract_lyrics as _extract_lyrics, _duration_beats as _duration_beats, _write_platform_csv as _write_platform_csv, _write_credits_csv as _write_credits_csv, _write_csv as _write_csv, _write_lyrics as _write_lyrics, _write_text as _write_text, _file_record as _file_record, _sha256 as _sha256, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _qa_summary as _qa_summary, _ensure_release_metadata_mutable as _ensure_release_metadata_mutable, _safe_int as _safe_int, _safe_text as _safe_text, _optional_text as _optional_text
 
 _v142_rm_readiness.bind_globals(globals())

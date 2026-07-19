@@ -472,32 +472,9 @@ def _expected_files(project_dir: Path, manifest: ImplementationDocument, manifes
 
 
 from song_agent.domains.delivery import v142_dq_readiness as _v142_dq_readiness
-from song_agent.domains.delivery.v142_dq_readiness import (
-    _expected_file_row,
-    _quality_gate_requires_stems,
-    _required_stem_midi_paths,
-    _actual_export_files,
-    _actual_zip_info,
-    _zip_manifest_matches_current,
-    _final_version_summary,
-    _version_by_id,
-    _final_export_summary,
-    _zip_summary,
-    _quality_gate_summary,
-    _review_sprint_summary,
-    _artifact_integrity_summary,
-    _build_checks,
-    _project_export_delivery_probe,
-    _qa_status,
-    _qa_readiness,
-    _check,
-    _check_message,
-    _file_missing,
-    _stem_audio_partial,
-    _safe_export_path,
-)
+from song_agent.domains.delivery.v142_dq_readiness import _expected_file_row as _expected_file_row, _quality_gate_requires_stems as _quality_gate_requires_stems, _required_stem_midi_paths as _required_stem_midi_paths, _actual_export_files as _actual_export_files, _actual_zip_info as _actual_zip_info, _zip_manifest_matches_current as _zip_manifest_matches_current, _final_version_summary as _final_version_summary, _version_by_id as _version_by_id, _final_export_summary as _final_export_summary, _zip_summary as _zip_summary, _quality_gate_summary as _quality_gate_summary, _review_sprint_summary as _review_sprint_summary, _artifact_integrity_summary as _artifact_integrity_summary, _build_checks as _build_checks, _project_export_delivery_probe as _project_export_delivery_probe, _qa_status as _qa_status, _qa_readiness as _qa_readiness, _check as _check, _check_message as _check_message, _file_missing as _file_missing, _stem_audio_partial as _stem_audio_partial, _safe_export_path as _safe_export_path
 from song_agent.domains.delivery import v142_dq_evidence as _v142_dq_evidence
-from song_agent.domains.delivery.v142_dq_evidence import _validate_relative_path, _path_presence, _sha256, _source_hash, _stable_hash, _raw_stable_hash
+from song_agent.domains.delivery.v142_dq_evidence import _validate_relative_path as _validate_relative_path, _path_presence as _path_presence, _sha256 as _sha256, _source_hash as _source_hash, _stable_hash as _stable_hash, _raw_stable_hash as _raw_stable_hash
 
 _v142_dq_readiness.bind_globals(globals())
 _v142_dq_evidence.bind_globals(globals())

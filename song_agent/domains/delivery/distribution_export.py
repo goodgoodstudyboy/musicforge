@@ -515,20 +515,6 @@ def _write_template_files(export_dir: Path, template: ImplementationDocument, ch
 
 
 from song_agent.domains.delivery import v142_de_readiness as _v142_de_readiness
-from song_agent.domains.delivery.v142_de_readiness import (
-    _write_template_platform_csv,
-    _write_json,
-    _profile_public,
-    _escape_csv_formulas,
-    _escape_csv_cell,
-    _distribution_signoff_export_summary,
-    _distribution_signoff_sidecar_record,
-    _distribution_signoff_hash_payload,
-    _file_record,
-    _zip_entries,
-    _validate_relative_path,
-    _ensure_within,
-    _sha256_file,
-)
+from song_agent.domains.delivery.v142_de_readiness import _write_template_platform_csv as _write_template_platform_csv, _write_json as _write_json, _profile_public as _profile_public, _escape_csv_formulas as _escape_csv_formulas, _escape_csv_cell as _escape_csv_cell, _distribution_signoff_export_summary as _distribution_signoff_export_summary, _distribution_signoff_sidecar_record as _distribution_signoff_sidecar_record, _distribution_signoff_hash_payload as _distribution_signoff_hash_payload, _file_record as _file_record, _zip_entries as _zip_entries, _validate_relative_path as _validate_relative_path, _ensure_within as _ensure_within, _sha256_file as _sha256_file
 
 _v142_de_readiness.bind_globals(globals())
