@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 from collections import Counter
+from copy import deepcopy
+from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path
@@ -84,6 +86,21 @@ def evaluate_v14_quality(
 
 
 def collect_typing_metrics(root: Path) -> dict[str, Any]:
+    resolved = root.resolve()
+    source_hash = active_source_tree_hash(resolved)
+    return deepcopy(_collect_typing_metrics_cached(str(resolved), source_hash))
+
+
+@lru_cache(maxsize=8)
+def _collect_typing_metrics_cached(root: str, source_hash: str) -> dict[str, Any]:
+    path = Path(root)
+    metrics = _collect_typing_metrics_uncached(path)
+    if active_source_tree_hash(path) != source_hash:
+        raise RuntimeError("Active source changed while collecting typing metrics.")
+    return metrics
+
+
+def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
     raw_count = 0
     implementation_count = 0
     explicit_any_by_file: Counter[str] = Counter()
@@ -175,6 +192,22 @@ def collect_mypy_metrics(root: Path) -> dict[str, Any]:
 
 
 def collect_complexity_metrics(root: Path, policy: dict[str, Any]) -> dict[str, Any]:
+    resolved = root.resolve()
+    source_hash = active_source_tree_hash(resolved)
+    policy_json = json.dumps(policy, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return deepcopy(_collect_complexity_metrics_cached(str(resolved), source_hash, policy_json))
+
+
+@lru_cache(maxsize=8)
+def _collect_complexity_metrics_cached(root: str, source_hash: str, policy_json: str) -> dict[str, Any]:
+    path = Path(root)
+    metrics = _collect_complexity_metrics_uncached(path, json.loads(policy_json))
+    if active_source_tree_hash(path) != source_hash:
+        raise RuntimeError("Active source changed while collecting complexity metrics.")
+    return metrics
+
+
+def _collect_complexity_metrics_uncached(root: Path, policy: dict[str, Any]) -> dict[str, Any]:
     oversized_functions: list[dict[str, Any]] = []
     oversized_modules: list[dict[str, Any]] = []
     blockers: list[str] = []
@@ -469,23 +502,23 @@ def collect_v1421_static_violations(root: Path) -> dict[str, Any]:
     pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     mypy_config = dict((pyproject.get("tool") or {}).get("mypy") or {})
     active_files = _active_python_files(root)
-    generated_modules = sorted(path.relative_to(root).as_posix() for path in active_files if path.name.startswith("v142_"))
-    suppressions = sorted(
-        path.relative_to(root).as_posix()
-        for path in active_files
-        if "# mypy: ignore-errors" in path.read_text(encoding="utf-8")
-        or "# ruff: noqa" in path.read_text(encoding="utf-8")
-    )
-    runtime_global_binders = sorted(
-        path.relative_to(root).as_posix()
-        for path in active_files
-        if "bind_globals(globals())" in path.read_text(encoding="utf-8")
-    )
+    generated_modules: list[str] = []
+    suppressions: list[str] = []
+    runtime_global_binders: list[str] = []
+    for path in active_files:
+        relative = path.relative_to(root).as_posix()
+        source = path.read_text(encoding="utf-8")
+        if path.name.startswith("v142_"):
+            generated_modules.append(relative)
+        if "# mypy: ignore-errors" in source or "# ruff: noqa" in source:
+            suppressions.append(relative)
+        if "bind_globals(globals())" in source:
+            runtime_global_binders.append(relative)
     return {
-        "generated_modules": generated_modules,
+        "generated_modules": sorted(generated_modules),
         "splitter_present": (root / "tools" / "split_v142_oversized_modules.py").exists(),
-        "suppressions": suppressions,
-        "runtime_global_binders": runtime_global_binders,
+        "suppressions": sorted(suppressions),
+        "runtime_global_binders": sorted(runtime_global_binders),
         "mypy_roots_complete": list(mypy_config.get("files") or []) == list(MYPY_ROOTS),
         "mypy_exclude": mypy_config.get("exclude"),
     }

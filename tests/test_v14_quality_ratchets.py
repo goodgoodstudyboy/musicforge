@@ -277,6 +277,45 @@ def test_v1421_explicit_any_local_growth_is_not_hidden_from_ratchet(tmp_path: Pa
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/local_growth.py": 100}
 
 
+def test_v1421_quality_metric_caches_invalidate_on_source_change(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "application" / "cache_probe.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("from typing import Any\nvalue: Any\n", encoding="utf-8")
+    policy = {
+        "complexity": {"module_default_max_lines": 600, "aggregate_debt": {}},
+        "module_size_debt": [],
+    }
+
+    first_typing = collect_typing_metrics(tmp_path)
+    first_complexity = collect_complexity_metrics(tmp_path, policy)
+    first_typing["explicit_any_count"] = -1
+    target.write_text(
+        "from typing import Any\nvalue: Any\nother: Any\n\ndef oversized() -> None:\n"
+        + "    value = 1\n" * 151,
+        encoding="utf-8",
+    )
+
+    second_typing = collect_typing_metrics(tmp_path)
+    second_complexity = collect_complexity_metrics(tmp_path, policy)
+
+    assert second_typing["explicit_any_count"] == 2
+    assert second_complexity["oversized_function_count"] == 1
+    assert first_complexity["oversized_function_count"] == 0
+
+
+def test_v1421_typing_cache_uses_content_hash_for_same_length_changes(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "application" / "same_length.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("from typing import Any\nvalue: Any\n", encoding="utf-8")
+    first = collect_typing_metrics(tmp_path)
+
+    target.write_text("from typing import Any\nvalue: int\n", encoding="utf-8")
+    second = collect_typing_metrics(tmp_path)
+
+    assert first["explicit_any_count"] == 1
+    assert second["explicit_any_count"] == 0
+
+
 def test_v1421_static_gate_detects_generated_split_suppressions_and_mypy_exclusion(tmp_path: Path) -> None:
     target = tmp_path / "song_agent" / "domains" / "v142_generated.py"
     target.parent.mkdir(parents=True)

@@ -16,6 +16,9 @@ and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.m
   aliases, and quoted annotations are counted.
 - Added ADR-016 and a hard `v1421.stabilization_rollback_smoke` to every current
   v14 release profile. ARCH-014 and TYPE-003 remain open through v14.3.0.
+- Cached v14 typing and complexity measurements by normalized source content
+  and policy while failing closed on concurrent source changes, keeping the
+  Windows release profiles inside their existing hard duration budgets.
 
 ## v14.1.2 - 2026-07-18
 
