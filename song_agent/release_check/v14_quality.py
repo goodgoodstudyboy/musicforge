@@ -17,8 +17,8 @@ from song_agent.platform.verification.hashing import canonical_text_bytes, sha25
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.2.1"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 4
+QUALITY_POLICY_VERSION = "14.2.2"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 5
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -30,7 +30,8 @@ COVERAGE_ROOTS = (*MYPY_ROOTS, "song_agent/release_check")
 MYPY_ERROR = re.compile(r"^(.*?):\d+: error: .*\[([^\]]+)\]\s*$")
 FUNCTION_LIMITS = {"interface_api": 100, "interface_cli": 120, "application": 150, "domain": 200}
 V1421_STABILIZATION_ADR = "docs/architecture/ADR-016-v1421-stabilization-rollback.md"
-V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "943ec95971b6106c83d3923ca6e74898aa9f86f6c49b685b61fe3a5f7dce7d11"
+V1422_COLLECTOR_ADR = "docs/architecture/ADR-017-v1422-explicit-any-scope-collector.md"
+V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d"
 V1421_MODULE_DEBT_CEILINGS_HASH = "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b"
 V1421_RECOVERY_LIMITS: dict[str, Any] = {
     "active_python_file_max_count": 700,
@@ -471,6 +472,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "mypy_roots": list((policy.get("mypy") or {}).get("active_roots") or []),
         "ruff_status": "passed" if ruff.returncode == 0 else "failed",
         "explicit_any_alias_probe": _explicit_any_alias_probe(),
+        "explicit_any_scope_probe": _explicit_any_scope_probe(),
         "explicit_any_collector_schema_version": int(
             (policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0
         ),
@@ -491,6 +493,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and details["mypy_roots"] == list(MYPY_ROOTS)
         and ruff.returncode == 0
         and details["explicit_any_alias_probe"]
+        and details["explicit_any_scope_probe"]
         and details["explicit_any_collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
         and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
@@ -553,8 +556,9 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
     )
     policy_blockers = [*_policy_blockers(policy), *_typing_blockers(typing, policy), *complexity["blockers"]]
     checks = {
-        "collector_schema_v4": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "collector_schema_v5": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "collector_nested_scope_probe": _explicit_any_alias_probe(),
+        "collector_control_flow_scope_probe": _explicit_any_scope_probe(),
         "generated_v142_modules_absent": not violations["generated_modules"],
         "splitter_absent": not violations["splitter_present"],
         "active_suppressions_absent": not violations["suppressions"],
@@ -580,6 +584,30 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
         "policy_blockers": policy_blockers,
     }
     return all(checks.values()), json.dumps(details, sort_keys=True)
+
+
+def run_v1422_explicit_any_scope_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing = collect_typing_metrics(root)
+    stabilization = dict(policy.get("stabilization") or {})
+    checks = {
+        "collector_schema_v5": typing["collector_schema_version"] == 5,
+        "policy_schema_v5": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0) == 5,
+        "policy_version_v1422": policy.get("release_version") == "14.2.2",
+        "conditional_scope_probe": _explicit_any_scope_probe(),
+        "existing_alias_probe": _explicit_any_alias_probe(),
+        "collector_decision_present": stabilization.get("collector_decision") == V1422_COLLECTOR_ADR
+        and (root / V1422_COLLECTOR_ADR).is_file(),
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+        "quality_policy_passed": not _policy_blockers(policy) and not _typing_blockers(typing, policy),
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "explicit_any_count": typing["explicit_any_count"],
+        "affected_file_count": typing["explicit_any_affected_file_count"],
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
 
 
 def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
@@ -668,6 +696,8 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
     stabilization = policy.get("stabilization") or {}
     if stabilization.get("architecture_decision") != V1421_STABILIZATION_ADR:
         blockers.append("v14_quality_policy_stabilization_decision")
+    if stabilization.get("collector_decision") != V1422_COLLECTOR_ADR:
+        blockers.append("v14_quality_policy_collector_decision")
     if stabilization.get("hard_limits") != V1421_RECOVERY_LIMITS:
         blockers.append("v14_quality_policy_stabilization_limits")
     if _explicit_any_file_budgets_hash(policy) != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
@@ -722,12 +752,14 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     def __init__(self) -> None:
         self.count = 0
         self._scopes: list[dict[str, str]] = [{}]
+        self._potential_scopes: list[dict[str, str]] = []
 
     def visit_Module(self, node: ast.Module) -> None:
         self._visit_scope_body(node.body, push_scope=False)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._visit_scope_body(node.body, push_scope=True)
+        self._bind(node.name, "other")
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._visit_function(node)
@@ -739,11 +771,106 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         # Lambda arguments cannot carry annotations.
         self.visit(node.body)
 
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            name = alias.asname or alias.name.split(".", 1)[0]
+            kind = "typing-module" if alias.name in {"typing", "typing_extensions"} else "other"
+            self._bind(name, kind)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        for alias in node.names:
+            if alias.name == "*" and node.module in {"typing", "typing_extensions"}:
+                self._bind("Any", "any")
+                self._bind("TypeAlias", "type-alias-marker")
+                self._bind("TYPE_CHECKING", "type-checking-marker")
+                continue
+            name = alias.asname or alias.name
+            kind = "other"
+            if node.module in {"typing", "typing_extensions"}:
+                kind = {
+                    "Any": "any",
+                    "TypeAlias": "type-alias-marker",
+                    "TYPE_CHECKING": "type-checking-marker",
+                }.get(alias.name, "other")
+            self._bind(name, kind)
+
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         if not self._is_type_alias_annotation(node.annotation):
             self.count += self._annotation_any_count(node.annotation)
         if node.value is not None:
             self.visit(node.value)
+        kind = self._expression_binding_kind(node.value) if node.value is not None else "other"
+        self._bind_target(node.target, kind)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        self.visit(node.value)
+        kind = self._expression_binding_kind(node.value)
+        for target in node.targets:
+            self._bind_target(target, kind)
+
+    def visit_AugAssign(self, node: ast.AugAssign) -> None:
+        self.visit(node.value)
+        self._bind_target(node.target, "other")
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+        self.visit(node.value)
+        kind = self._expression_binding_kind(node.value)
+        self._bind_target(node.target, kind)
+
+    def visit_TypeAlias(self, node: ast.AST) -> None:
+        name = getattr(node, "name", None)
+        value = getattr(node, "value", None)
+        if isinstance(name, ast.Name) and isinstance(value, ast.expr):
+            self._bind(name.id, self._expression_binding_kind(value))
+
+    def visit_If(self, node: ast.If) -> None:
+        self.visit(node.test)
+        base = dict(self._scopes[-1])
+        states = [self._visit_branch(node.body, base)]
+        states.append(self._visit_branch(node.orelse, base) if node.orelse else base)
+        self._scopes[-1] = self._merge_branch_states(states)
+
+    def visit_Try(self, node: ast.Try) -> None:
+        self._visit_try(node)
+
+    def visit_TryStar(self, node: ast.TryStar) -> None:
+        self._visit_try(node)
+
+    def visit_With(self, node: ast.With) -> None:
+        self._visit_with(node)
+
+    def visit_AsyncWith(self, node: ast.AsyncWith) -> None:
+        self._visit_with(node)
+
+    def visit_For(self, node: ast.For) -> None:
+        self._visit_for(node)
+
+    def visit_AsyncFor(self, node: ast.AsyncFor) -> None:
+        self._visit_for(node)
+
+    def visit_While(self, node: ast.While) -> None:
+        self.visit(node.test)
+        base = dict(self._scopes[-1])
+        body_state = self._visit_branch(node.body, base)
+        merged = self._merge_branch_states([base, body_state])
+        if node.orelse:
+            orelse_state = self._visit_branch(node.orelse, merged)
+            merged = self._merge_branch_states([merged, orelse_state])
+        self._scopes[-1] = merged
+
+    def visit_Match(self, node: ast.Match) -> None:
+        self.visit(node.subject)
+        base = dict(self._scopes[-1])
+        states = [base]
+        for case in node.cases:
+            self._scopes[-1] = dict(base)
+            for name in _match_pattern_names(case.pattern):
+                self._bind(name, "other")
+            if case.guard is not None:
+                self.visit(case.guard)
+            self._visit_statements(case.body)
+            states.append(dict(self._scopes[-1]))
+        self._scopes[-1] = self._merge_branch_states(states)
 
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         for annotation in _function_annotations(node, skip_receiver=False):
@@ -764,6 +891,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         if node.args.kwarg is not None:
             parameter_scope[node.args.kwarg.arg] = "other"
         self._visit_scope_body(node.body, push_scope=True, initial=parameter_scope)
+        self._bind(node.name, "other")
 
     def _visit_scope_body(
         self,
@@ -774,89 +902,187 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     ) -> None:
         if push_scope:
             self._scopes.append(dict(initial or {}))
-        self._scan_aliases_until_stable(body)
-        for statement in body:
-            self.visit(statement)
+        self._potential_scopes.append(self._potential_scope_bindings(body))
+        self._visit_statements(body)
+        self._potential_scopes.pop()
         if push_scope:
             self._scopes.pop()
 
-    def _scan_aliases_until_stable(self, body: list[ast.stmt]) -> None:
-        changed = True
-        while changed:
-            changed = False
-            for statement in body:
-                before = dict(self._scopes[-1])
-                self._record_alias(statement)
-                changed = changed or before != self._scopes[-1]
+    def _visit_statements(self, body: list[ast.stmt]) -> None:
+        for statement in body:
+            self.visit(statement)
 
-    def _record_alias(self, statement: ast.stmt) -> None:
-        if isinstance(statement, ast.Import):
-            for alias in statement.names:
-                name = alias.asname or alias.name
-                if alias.name in {"typing", "typing_extensions"}:
-                    self._scopes[-1][name] = "typing-module"
-                elif name in self._scopes[-1]:
-                    self._scopes[-1][name] = "other"
-            return
-        if isinstance(statement, ast.ImportFrom):
-            for alias in statement.names:
-                name = alias.asname or alias.name
-                if statement.module in {"typing", "typing_extensions"}:
+    def _visit_branch(self, body: list[ast.stmt], state: dict[str, str]) -> dict[str, str]:
+        self._scopes[-1] = dict(state)
+        self._visit_statements(body)
+        return dict(self._scopes[-1])
+
+    def _visit_try(self, node: ast.Try | ast.TryStar) -> None:
+        base = dict(self._scopes[-1])
+        normal_state = self._visit_branch([*node.body, *node.orelse], base)
+        states = [normal_state]
+        for handler in node.handlers:
+            self._scopes[-1] = dict(base)
+            if handler.type is not None:
+                self.visit(handler.type)
+            if handler.name:
+                self._bind(handler.name, "other")
+            self._visit_statements(handler.body)
+            states.append(dict(self._scopes[-1]))
+        self._scopes[-1] = self._merge_branch_states(states)
+        self._visit_statements(node.finalbody)
+
+    def _visit_with(self, node: ast.With | ast.AsyncWith) -> None:
+        for item in node.items:
+            self.visit(item.context_expr)
+            if item.optional_vars is not None:
+                self._bind_target(item.optional_vars, "other")
+        self._visit_statements(node.body)
+
+    def _visit_for(self, node: ast.For | ast.AsyncFor) -> None:
+        self.visit(node.iter)
+        base = dict(self._scopes[-1])
+        self._scopes[-1] = dict(base)
+        self._bind_target(node.target, "other")
+        self._visit_statements(node.body)
+        merged = self._merge_branch_states([base, dict(self._scopes[-1])])
+        if node.orelse:
+            orelse_state = self._visit_branch(node.orelse, merged)
+            merged = self._merge_branch_states([merged, orelse_state])
+        self._scopes[-1] = merged
+
+    def _potential_scope_bindings(self, body: list[ast.stmt]) -> dict[str, str]:
+        statements = list(_lexical_scope_statements(body))
+        potential: dict[str, str] = {}
+        for statement in statements:
+            if isinstance(statement, ast.Import):
+                for alias in statement.names:
+                    if alias.name in {"typing", "typing_extensions"}:
+                        _merge_potential_binding(potential, alias.asname or alias.name, "typing-module")
+            elif isinstance(statement, ast.ImportFrom) and statement.module in {"typing", "typing_extensions"}:
+                for alias in statement.names:
+                    if alias.name == "*":
+                        _merge_potential_binding(potential, "Any", "any")
+                        _merge_potential_binding(potential, "TypeAlias", "type-alias-marker")
+                        _merge_potential_binding(potential, "TYPE_CHECKING", "type-checking-marker")
+                        continue
                     kind = {
                         "Any": "any",
                         "TypeAlias": "type-alias-marker",
                         "TYPE_CHECKING": "type-checking-marker",
-                    }.get(alias.name, "other")
-                    self._scopes[-1][name] = kind
-                elif name in self._scopes[-1]:
-                    self._scopes[-1][name] = "other"
+                    }.get(alias.name)
+                    if kind:
+                        _merge_potential_binding(potential, alias.asname or alias.name, kind)
+
+        changed = True
+        while changed:
+            changed = False
+            any_names = self._names_for("any") | {name for name, kind in potential.items() if kind == "any"}
+            module_names = self._names_for("typing-module") | {
+                name for name, kind in potential.items() if kind == "typing-module"
+            }
+            for statement in statements:
+                targets: list[ast.expr] = []
+                value: ast.expr | None = None
+                if isinstance(statement, ast.Assign):
+                    targets = list(statement.targets)
+                    value = statement.value
+                elif isinstance(statement, ast.AnnAssign):
+                    targets = [statement.target]
+                    value = statement.value
+                elif isinstance(statement, ast.NamedExpr):
+                    targets = [statement.target]
+                    value = statement.value
+                else:
+                    type_alias_node = getattr(ast, "TypeAlias", None)
+                    if type_alias_node is not None and isinstance(statement, type_alias_node):
+                        name = getattr(statement, "name", None)
+                        if isinstance(name, ast.expr):
+                            targets = [name]
+                        candidate = getattr(statement, "value", None)
+                        value = candidate if isinstance(candidate, ast.expr) else None
+                if value is None:
+                    continue
+                kind = _potential_expression_binding_kind(value, any_names, module_names)
+                if not kind:
+                    continue
+                for target in targets:
+                    for name in _assignment_target_names(target):
+                        changed = _merge_potential_binding(potential, name, kind) or changed
+        return potential
+
+    def _bind(self, name: str, kind: str) -> None:
+        self._scopes[-1][name] = kind
+
+    def _merge_branch_states(self, states: list[dict[str, str]]) -> dict[str, str]:
+        merged: dict[str, str] = {}
+        for name in set().union(*(state.keys() for state in states)):
+            kinds = [state[name] for state in states if name in state]
+            if len(kinds) != len(states):
+                inherited = self._resolve_outer_name(name)
+                if inherited:
+                    kinds.append(inherited)
+            if kinds:
+                # Any-capable branch bindings dominate ordinary or absent
+                # bindings. Sequential statements still overwrite normally.
+                merged[name] = _merge_binding_kinds(kinds)
+        return merged
+
+    def _resolve_outer_name(self, name: str) -> str:
+        for index in range(len(self._scopes) - 2, -1, -1):
+            if name in self._scopes[index]:
+                return self._scopes[index][name]
+            if index < len(self._potential_scopes) and name in self._potential_scopes[index]:
+                return self._potential_scopes[index][name]
+        return ""
+
+    def _bind_target(self, target: ast.expr, kind: str) -> None:
+        if isinstance(target, ast.Name):
+            self._bind(target.id, kind)
             return
-        if isinstance(statement, ast.If) and self._is_type_checking_guard(statement.test):
-            self._scan_aliases_until_stable(statement.body)
-            return
-        if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
-            target = statement.targets[0]
-            if isinstance(target, ast.Name) and self._annotation_any_count(statement.value) > 0:
-                self._scopes[-1][target.id] = "any"
-            return
-        if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
-            if (
-                self._is_type_alias_annotation(statement.annotation)
-                and statement.value is not None
-                and self._annotation_any_count(statement.value) > 0
-            ):
-                self._scopes[-1][statement.target.id] = "any"
-            return
-        type_alias_node = getattr(ast, "TypeAlias", None)
-        if type_alias_node is not None and isinstance(statement, type_alias_node):
-            name = getattr(statement, "name", None)
-            value = getattr(statement, "value", None)
-            if isinstance(name, ast.Name) and isinstance(value, ast.expr) and self._annotation_any_count(value) > 0:
-                self._scopes[-1][name.id] = "any"
+        if isinstance(target, (ast.Tuple, ast.List)):
+            for item in target.elts:
+                self._bind_target(item, kind)
+
+    def _expression_binding_kind(self, value: ast.expr) -> str:
+        if isinstance(value, ast.Name):
+            binding = self._resolve_name(value.id)
+            if binding in {"any", "typing-module", "any-or-typing-module"}:
+                return binding
+        return "any" if self._annotation_any_count(value) > 0 else "other"
 
     def _annotation_any_count(self, annotation: ast.expr) -> int:
         count = 0
+        qualified_names = {
+            id(node.value)
+            for node in ast.walk(annotation)
+            if isinstance(node, ast.Attribute)
+            and node.attr == "Any"
+            and isinstance(node.value, ast.Name)
+            and _binding_matches(self._resolve_name(node.value.id), "typing-module")
+        }
         for node in ast.walk(annotation):
-            if isinstance(node, ast.Name) and self._resolve_name(node.id) == "any":
+            if (
+                isinstance(node, ast.Name)
+                and id(node) not in qualified_names
+                and _binding_matches(self._resolve_name(node.id), "any")
+            ):
                 count += 1
             elif isinstance(node, ast.Attribute) and node.attr == "Any" and isinstance(node.value, ast.Name):
-                if self._resolve_name(node.value.id) == "typing-module":
+                if _binding_matches(self._resolve_name(node.value.id), "typing-module"):
                     count += 1
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
                 count += _quoted_annotation_any_count(
                     node.value,
-                    self._names_for("any") | {"Any"},
-                    self._names_for("typing-module") | {"typing", "typing_extensions"},
+                    self._names_for("any"),
+                    self._names_for("typing-module"),
                 )
         return count
 
     def _names_for(self, kind: str) -> set[str]:
-        return {
-            name
-            for scope in self._scopes
-            for name, value in scope.items()
-            if value == kind
-        }
+        candidates = {name for scope in self._scopes for name in scope}
+        candidates.update(name for scope in self._potential_scopes for name in scope)
+        return {name for name in candidates if _binding_matches(self._resolve_name(name), kind)}
 
     def _is_type_alias_annotation(self, annotation: ast.expr) -> bool:
         if isinstance(annotation, ast.Name):
@@ -865,27 +1091,101 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             return self._resolve_name(annotation.value.id) == "typing-module"
         return False
 
-    def _is_type_checking_guard(self, test: ast.expr) -> bool:
-        if isinstance(test, ast.Name):
-            return test.id == "TYPE_CHECKING" or self._resolve_name(test.id) == "type-checking-marker"
-        return (
-            isinstance(test, ast.Attribute)
-            and test.attr == "TYPE_CHECKING"
-            and isinstance(test.value, ast.Name)
-            and self._resolve_name(test.value.id) == "typing-module"
-        )
-
     def _resolve_name(self, name: str) -> str:
-        for scope in reversed(self._scopes):
+        for index in range(len(self._scopes) - 1, -1, -1):
+            scope = self._scopes[index]
             if name in scope:
                 return scope[name]
-        return {
-            "Any": "any",
-            "typing": "typing-module",
-            "typing_extensions": "typing-module",
-            "TypeAlias": "type-alias-marker",
-            "TYPE_CHECKING": "type-checking-marker",
-        }.get(name, "")
+            if index < len(self._potential_scopes) and name in self._potential_scopes[index]:
+                return self._potential_scopes[index][name]
+        return ""
+
+
+def _match_pattern_names(pattern: ast.pattern) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(pattern):
+        if isinstance(node, ast.MatchAs) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.MatchStar) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            names.add(node.rest)
+    return names
+
+
+def _lexical_scope_statements(body: list[ast.stmt]) -> Iterable[ast.stmt]:
+    for statement in body:
+        yield statement
+        nested: list[list[ast.stmt]] = []
+        if isinstance(statement, ast.If):
+            nested.extend((statement.body, statement.orelse))
+        elif isinstance(statement, (ast.Try, ast.TryStar)):
+            nested.extend((statement.body, statement.orelse, statement.finalbody))
+            nested.extend(handler.body for handler in statement.handlers)
+        elif isinstance(statement, (ast.With, ast.AsyncWith, ast.For, ast.AsyncFor, ast.While)):
+            nested.append(statement.body)
+            if hasattr(statement, "orelse"):
+                nested.append(statement.orelse)
+        elif isinstance(statement, ast.Match):
+            nested.extend(case.body for case in statement.cases)
+        for branch in nested:
+            yield from _lexical_scope_statements(branch)
+
+
+def _assignment_target_names(target: ast.expr) -> set[str]:
+    if isinstance(target, ast.Name):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return set().union(*(_assignment_target_names(item) for item in target.elts)) if target.elts else set()
+    return set()
+
+
+def _potential_expression_binding_kind(
+    value: ast.expr,
+    any_names: set[str],
+    module_names: set[str],
+) -> str:
+    if isinstance(value, ast.Name):
+        is_any = value.id in any_names
+        is_module = value.id in module_names
+        if is_any and is_module:
+            return "any-or-typing-module"
+        if is_any:
+            return "any"
+        if is_module:
+            return "typing-module"
+    if _annotation_any_count(value, any_names, module_names) > 0:
+        return "any"
+    return ""
+
+
+def _merge_potential_binding(bindings: dict[str, str], name: str, kind: str) -> bool:
+    current = bindings.get(name)
+    merged = kind if current is None else _merge_binding_kinds([current, kind])
+    if current == merged:
+        return False
+    bindings[name] = merged
+    return True
+
+
+def _merge_binding_kinds(kinds: Iterable[str]) -> str:
+    values = set(kinds)
+    if "any-or-typing-module" in values or {"any", "typing-module"}.issubset(values):
+        return "any-or-typing-module"
+    priority = {
+        "other": 0,
+        "type-checking-marker": 1,
+        "type-alias-marker": 2,
+        "typing-module": 3,
+        "any": 4,
+    }
+    return max(values, key=lambda value: priority[value])
+
+
+def _binding_matches(binding: str, expected: str) -> bool:
+    return binding == expected or (
+        binding == "any-or-typing-module" and expected in {"any", "typing-module"}
+    )
 
 
 def _explicit_any_annotation_count(tree: ast.Module) -> int:
@@ -896,8 +1196,16 @@ def _explicit_any_annotation_count(tree: ast.Module) -> int:
 
 def _annotation_any_count(annotation: ast.expr, any_names: set[str], module_names: set[str]) -> int:
     count = 0
+    qualified_names = {
+        id(node.value)
+        for node in ast.walk(annotation)
+        if isinstance(node, ast.Attribute)
+        and node.attr == "Any"
+        and isinstance(node.value, ast.Name)
+        and node.value.id in module_names
+    }
     for node in ast.walk(annotation):
-        if isinstance(node, ast.Name) and node.id in any_names:
+        if isinstance(node, ast.Name) and id(node) not in qualified_names and node.id in any_names:
             count += 1
         elif (
             isinstance(node, ast.Attribute)
@@ -958,6 +1266,88 @@ class Handler:
 """
     )
     return _explicit_any_annotation_count(tree) == 19
+
+
+def _explicit_any_scope_probe() -> bool:
+    positive = ast.parse(
+        """
+if True:
+    from typing import Any as ConditionalAlias
+conditional_values: tuple[ConditionalAlias, ConditionalAlias]
+
+future_value: FutureAlias
+if enabled:
+    from typing import Any as FutureAlias
+
+try:
+    from typing_extensions import Any as TryAlias
+except ImportError:
+    TryAlias = object
+try_value: TryAlias
+
+with context():
+    import typing as scoped_typing
+with_value: scoped_typing.Any
+
+for _item in items:
+    from typing import Any as LoopAlias
+loop_value: LoopAlias
+
+match subject:
+    case "typed":
+        from typing import Any as MatchAlias
+match_value: MatchAlias
+
+if enabled:
+    from typing import Any as MixedAlias
+else:
+    import typing as MixedAlias
+mixed_direct: MixedAlias
+mixed_qualified: MixedAlias.Any
+AssignedMixedAlias = MixedAlias
+assigned_mixed_direct: AssignedMixedAlias
+assigned_mixed_qualified: AssignedMixedAlias.Any
+
+AssignedModuleAlias = scoped_typing
+assigned_module_qualified: AssignedModuleAlias.Any
+
+def route() -> None:
+    if enabled:
+        from typing import Any as FunctionAlias
+    local: FunctionAlias
+"""
+    )
+    shadowed = ast.parse(
+        """
+from typing import Any as ClassAny
+class ClassAny:
+    pass
+class_value: ClassAny
+
+from typing import Any as FunctionAny
+def FunctionAny() -> None:
+    pass
+function_value: FunctionAny
+
+from typing import Any as AssignmentAny
+AssignmentAny = int
+assignment_value: AssignmentAny
+
+class Any:
+    pass
+plain_shadow: Any
+"""
+    )
+    growth = ast.parse(
+        "if enabled:\n    from typing import Any as Alias\n"
+        + "\n".join(f"value_{index}: Alias" for index in range(100))
+        + "\n"
+    )
+    return (
+        _explicit_any_annotation_count(positive) == 13
+        and _explicit_any_annotation_count(shadowed) == 0
+        and _explicit_any_annotation_count(growth) == 100
+    )
 
 
 def _typing_layer(relative: str) -> str:

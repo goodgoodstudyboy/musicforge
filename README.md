@@ -52,10 +52,11 @@ listening acceptance.
 
 v14.1 checks the complete active modular-monolith tree with mypy and checks the
 entire repository with Ruff. v14.2.1 restores the reviewed v14.1.2 production
-structure after the rejected generated split in v14.2.0, and upgrades Explicit
-`Any` counting to include function-local and nested-scope annotations. ADR-016
-keeps ARCH-014 and TYPE-003 open under immutable recovery ceilings; v14.2.1
-does not claim that the original v14.2 cleanup targets were completed.
+structure after the rejected generated split in v14.2.0. v14.2.2 upgrades the
+Explicit `Any` collector to schema 5, covering control-flow imports and
+non-typing shadow bindings without relaxing the recovery ceilings. ADR-016 and
+ADR-017 keep ARCH-014 and TYPE-003 open; this hotfix does not claim that the
+original v14.2 cleanup targets were completed.
 
 ```powershell
 python -m mypy --no-incremental

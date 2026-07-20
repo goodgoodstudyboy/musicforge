@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.1 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.2 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -200,3 +200,13 @@ boundary violations, dependency exceptions, or compatibility imports.
   addition to direct, aliased, module-qualified, and quoted annotations.
 - ADR-016 records immutable recovery ceilings and keeps ARCH-014 and TYPE-003
   open through v14.3.0. The original v14.2 numerical targets are not claimed.
+
+## v14.2.2 Collector Hotfix
+
+- Explicit Any collector schema 5 resolves imports throughout the same lexical
+  scope, including ordinary control-flow branches and function-local imports.
+- A branch that may bind a name to `typing.Any` is counted fail closed; a plain
+  class, function, or assignment with an Any-like name is not counted without
+  a typing import or alias source.
+- The v14.2.1 recovery ceilings remain unchanged. Corrected total, layer,
+  affected-file, and per-file measurements may only decrease.

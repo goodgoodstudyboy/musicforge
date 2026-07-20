@@ -4,6 +4,19 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.2 - 2026-07-20
+
+- Upgraded the Explicit Any collector to schema 5 so aliases imported inside
+  ordinary `if`, `try/except`, `with`, `for`, `while`, and `match` control flow
+  are included in their lexical scope, including function-local imports.
+- Made conflicting branch bindings fail closed while ordinary classes,
+  functions, and assignments named like `Any` remain non-typing bindings when
+  no `typing.Any` source exists.
+- Added direct, conditional, nested, quoted, shadowing, and 100-alias growth
+  regressions to unit tests and the published v14 release-check matrix.
+- Preserved the v14.2.1 recovery ceilings and tightened measured total, layer,
+  affected-file, and per-file budgets under collector schema 5.
+
 ## v14.2.1 - 2026-07-20
 
 - Reverted the v14.2.0 generated `v142_*.py` extraction and restored the

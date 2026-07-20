@@ -11,6 +11,7 @@ from song_agent.release_check.v14_quality import (
     V1421_MODULE_DEBT_CEILINGS_HASH,
     V1421_RECOVERY_LIMITS,
     V1421_STABILIZATION_ADR,
+    V1422_COLLECTOR_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
     collect_complexity_metrics,
@@ -105,17 +106,15 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
     previous_raw = int(policy.get("raw_dict_str_any_max_count") or 0)
     previous_implementation = int(policy.get("implementation_document_max_count") or 0)
     has_explicit_any_budget = "explicit_any_max_count" in policy
-    collector_schema = int(policy.get("explicit_any_collector_schema_version") or 0)
-    collector_upgrade = collector_schema != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     previous_explicit_any = int(policy.get("explicit_any_max_count") or explicit_any)
     previous_affected_files = int(policy.get("explicit_any_affected_file_max_count") or affected_files)
     if int(metrics.get("public_implementation_document_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot expose implementation documents publicly.")
     if int(metrics.get("untyped_public_function_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot introduce untyped public functions.")
-    if explicit_any > previous_explicit_any and not collector_upgrade:
+    if explicit_any > previous_explicit_any:
         raise RuntimeError(f"Typing explicit Any cannot grow: {explicit_any}>{previous_explicit_any}.")
-    if affected_files > previous_affected_files and not collector_upgrade:
+    if affected_files > previous_affected_files:
         raise RuntimeError(f"Typing explicit Any affected files cannot grow: {affected_files}>{previous_affected_files}.")
     previous_layers = {
         str(key): int(value)
@@ -125,7 +124,7 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         str(key): int(value)
         for key, value in (metrics.get("explicit_any_by_layer") or {}).items()
     }
-    if not has_explicit_any_budget or collector_upgrade:
+    if not has_explicit_any_budget:
         previous_layers = dict(current_layers)
     for layer, count in sorted(current_layers.items()):
         maximum = previous_layers.get(layer, 0)
@@ -139,7 +138,7 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
         str(key): int(value)
         for key, value in (metrics.get("explicit_any_by_file") or {}).items()
     }
-    if not has_explicit_any_budget or collector_upgrade:
+    if not has_explicit_any_budget:
         previous_files = dict(current_files)
     for path, count in sorted(current_files.items()):
         maximum = previous_files.get(path, 0)
@@ -202,7 +201,7 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
 
 
 def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
-    document["release_version"] = "14.2.1"
+    document["release_version"] = "14.2.2"
     rows = document.get("module_size_debt")
     complexity = document.get("complexity")
     if not isinstance(rows, list) or not isinstance(complexity, dict):
@@ -224,12 +223,19 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
     complexity["aggregate_debt"] = aggregate
     document["stabilization"] = {
         "architecture_decision": V1421_STABILIZATION_ADR,
+        "collector_decision": V1422_COLLECTOR_ADR,
         "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
         "collector_migration": {
             "from_schema_version": 2,
-            "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "to_schema_version": 4,
             "previous_explicit_any_count": 11744,
             "recovered_explicit_any_count": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
+        },
+        "collector_hotfix": {
+            "from_schema_version": 4,
+            "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "previous_explicit_any_ceiling": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
+            "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),
         },
         "hard_limits": V1421_RECOVERY_LIMITS,
         "explicit_any_file_budgets_hash": V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH,

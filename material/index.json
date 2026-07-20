@@ -405,9 +405,15 @@
     },
     {
       "path": "material/v14.2.1-MusicForge架构稳定化回滚与质量门禁修复施工图-2026-07-20.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.2.1 MusicForge 架构稳定化回滚与质量门禁修复施工图",
       "version": "14.2.1"
+    },
+    {
+      "path": "material/v14.2.2-MusicForgeExplicitAny作用域收集器安全修复施工图-2026-07-20.md",
+      "status": "active",
+      "title": "v14.2.2 MusicForge Explicit Any 作用域收集器安全修复施工图",
+      "version": "14.2.2"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",
