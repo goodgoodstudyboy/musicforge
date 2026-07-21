@@ -4,6 +4,17 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.4 - 2026-07-21
+
+- Upgraded the Explicit Any collector to schema 7 so lambda, function,
+  async-function, and class definition-time expressions update their enclosing
+  binding scope in Python evaluation order.
+- Added exact `TYPE_CHECKING` regressions for lambda positional defaults,
+  function positional defaults, async keyword defaults, decorators, class
+  bases, and class keywords.
+- Preserved every schema 6 total, layer, affected-file, per-file, and recovery
+  ceiling; no quality budget was raised.
+
 ## v14.2.3 - 2026-07-21
 
 - Upgraded the Explicit Any collector to schema 6 so lambda parameters,

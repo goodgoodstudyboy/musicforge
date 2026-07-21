@@ -170,6 +170,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v1421.stabilization_rollback_smoke",
         "v1422.explicit_any_scope_smoke",
         "v1423.explicit_any_lambda_scope_smoke",
+        "v1424.explicit_any_definition_time_scope_smoke",
     ]
 
 

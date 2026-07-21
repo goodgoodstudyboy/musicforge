@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.3 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.4 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -218,3 +218,14 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Lambda parameters, assignment expressions, and nested lambdas cannot change
   the enclosing collector binding state.
 - Existing schema 5 measurements and all recovery ceilings remain unchanged.
+
+## v14.2.4 Definition-Time Scope Hotfix
+
+- Explicit Any collector schema 7 evaluates lambda defaults, function and
+  async-function decorators/defaults, and class decorators/bases/keywords in
+  the enclosing collector scope.
+- Lambda and function bodies remain isolated lexical scopes; class bodies keep
+  their existing class scope.
+- Definition expressions are visited in Python evaluation order, so later
+  defaults or bases can legitimately replace earlier decorator bindings.
+- Existing schema 6 measurements and all recovery ceilings remain unchanged.

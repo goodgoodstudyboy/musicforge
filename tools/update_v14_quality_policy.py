@@ -13,6 +13,7 @@ from song_agent.release_check.v14_quality import (
     V1421_STABILIZATION_ADR,
     V1422_COLLECTOR_ADR,
     V1423_LAMBDA_COLLECTOR_ADR,
+    V1424_DEFINITION_TIME_COLLECTOR_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
     collect_complexity_metrics,
@@ -202,7 +203,7 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
 
 
 def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
-    document["release_version"] = "14.2.3"
+    document["release_version"] = "14.2.4"
     rows = document.get("module_size_debt")
     complexity = document.get("complexity")
     if not isinstance(rows, list) or not isinstance(complexity, dict):
@@ -226,6 +227,7 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         "architecture_decision": V1421_STABILIZATION_ADR,
         "collector_decision": V1422_COLLECTOR_ADR,
         "lambda_collector_decision": V1423_LAMBDA_COLLECTOR_ADR,
+        "definition_time_collector_decision": V1424_DEFINITION_TIME_COLLECTOR_ADR,
         "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
         "collector_migration": {
             "from_schema_version": 2,
@@ -241,6 +243,12 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         },
         "lambda_collector_hotfix": {
             "from_schema_version": 5,
+            "to_schema_version": 6,
+            "previous_explicit_any_ceiling": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
+            "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),
+        },
+        "definition_time_collector_hotfix": {
+            "from_schema_version": 6,
             "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "previous_explicit_any_ceiling": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
             "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),

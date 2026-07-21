@@ -490,6 +490,7 @@ _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v1421.stabilization_rollback_smoke", "v14.2.1 generated-split rollback and quality-gate recovery", "_v1421_stabilization_rollback_smoke", group="quality", version="14.2.1", risk="critical", timeout_seconds=180, tags=("v14", "ga", "typing", "architecture", "rollback", "ratchet"), profiles=V14_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=V14_PROFILES),
     _callable("v1422.explicit_any_scope_smoke", "v14.2.2 Explicit Any lexical-scope collector hotfix", "_v1422_explicit_any_scope_smoke", group="quality", version="14.2.2", risk="critical", timeout_seconds=60, tags=("v14", "ga", "typing", "security", "ratchet"), profiles=V14_PROFILES, duration_budget_seconds=30, budget_enforced_profiles=V14_PROFILES),
     _callable("v1423.explicit_any_lambda_scope_smoke", "v14.2.3 Explicit Any lambda-scope collector hotfix", "_v1423_explicit_any_lambda_scope_smoke", group="quality", version="14.2.3", risk="critical", timeout_seconds=60, tags=("v14", "ga", "typing", "security", "ratchet"), profiles=V14_PROFILES, duration_budget_seconds=30, budget_enforced_profiles=V14_PROFILES),
+    _callable("v1424.explicit_any_definition_time_scope_smoke", "v14.2.4 Explicit Any definition-time scope collector hotfix", "_v1424_explicit_any_definition_time_scope_smoke", group="quality", version="14.2.4", risk="critical", timeout_seconds=60, tags=("v14", "ga", "typing", "security", "ratchet"), profiles=V14_PROFILES, duration_budget_seconds=30, budget_enforced_profiles=V14_PROFILES),
 )
 
 

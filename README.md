@@ -53,11 +53,12 @@ listening acceptance.
 v14.1 checks the complete active modular-monolith tree with mypy and checks the
 entire repository with Ruff. v14.2.1 restores the reviewed v14.1.2 production
 structure after the rejected generated split in v14.2.0. v14.2.2 covers
-control-flow imports and non-typing shadow bindings. v14.2.3 upgrades the
-Explicit `Any` collector to schema 6 so lambda-local bindings cannot pollute an
-outer lexical scope. ADR-016 through ADR-018 keep ARCH-014 and TYPE-003 open;
-these hotfixes do not claim that the original v14.2 cleanup targets were
-completed.
+control-flow imports and non-typing shadow bindings. v14.2.3 isolates lambda
+bodies from outer collector state. v14.2.4 upgrades the Explicit `Any`
+collector to schema 7 and evaluates lambda/function/class definition-time
+expressions in their enclosing scope. ADR-016 through ADR-019 keep ARCH-014
+and TYPE-003 open; these hotfixes do not claim that the original v14.2 cleanup
+targets were completed.
 
 ```powershell
 python -m mypy --no-incremental
