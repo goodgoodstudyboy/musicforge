@@ -411,9 +411,15 @@
     },
     {
       "path": "material/v14.2.2-MusicForgeExplicitAny作用域收集器安全修复施工图-2026-07-20.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.2.2 MusicForge Explicit Any 作用域收集器安全修复施工图",
       "version": "14.2.2"
+    },
+    {
+      "path": "material/v14.2.3-MusicForgeExplicitAnyLambda作用域收集器安全修复施工图-2026-07-21.md",
+      "status": "active",
+      "title": "v14.2.3 MusicForge Explicit Any Lambda 作用域收集器安全修复施工图",
+      "version": "14.2.3"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",

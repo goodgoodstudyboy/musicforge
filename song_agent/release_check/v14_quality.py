@@ -17,8 +17,8 @@ from song_agent.platform.verification.hashing import canonical_text_bytes, sha25
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.2.2"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 5
+QUALITY_POLICY_VERSION = "14.2.3"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 6
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -31,6 +31,7 @@ MYPY_ERROR = re.compile(r"^(.*?):\d+: error: .*\[([^\]]+)\]\s*$")
 FUNCTION_LIMITS = {"interface_api": 100, "interface_cli": 120, "application": 150, "domain": 200}
 V1421_STABILIZATION_ADR = "docs/architecture/ADR-016-v1421-stabilization-rollback.md"
 V1422_COLLECTOR_ADR = "docs/architecture/ADR-017-v1422-explicit-any-scope-collector.md"
+V1423_LAMBDA_COLLECTOR_ADR = "docs/architecture/ADR-018-v1423-explicit-any-lambda-scope.md"
 V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d"
 V1421_MODULE_DEBT_CEILINGS_HASH = "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b"
 V1421_RECOVERY_LIMITS: dict[str, Any] = {
@@ -556,9 +557,10 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
     )
     policy_blockers = [*_policy_blockers(policy), *_typing_blockers(typing, policy), *complexity["blockers"]]
     checks = {
-        "collector_schema_v5": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "collector_schema_v6": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "collector_nested_scope_probe": _explicit_any_alias_probe(),
         "collector_control_flow_scope_probe": _explicit_any_scope_probe(),
+        "collector_lambda_scope_probe": _explicit_any_lambda_scope_probe(),
         "generated_v142_modules_absent": not violations["generated_modules"],
         "splitter_absent": not violations["splitter_present"],
         "active_suppressions_absent": not violations["suppressions"],
@@ -590,14 +592,43 @@ def run_v1422_explicit_any_scope_smoke(root: Path) -> tuple[bool, str]:
     policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
     typing = collect_typing_metrics(root)
     stabilization = dict(policy.get("stabilization") or {})
+    collector_hotfix = dict(stabilization.get("collector_hotfix") or {})
     checks = {
-        "collector_schema_v5": typing["collector_schema_version"] == 5,
-        "policy_schema_v5": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0) == 5,
-        "policy_version_v1422": policy.get("release_version") == "14.2.2",
+        "collector_schema_current": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_schema_current": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "scope_collector_migration_recorded": int(collector_hotfix.get("to_schema_version") or 0) == 5,
         "conditional_scope_probe": _explicit_any_scope_probe(),
         "existing_alias_probe": _explicit_any_alias_probe(),
         "collector_decision_present": stabilization.get("collector_decision") == V1422_COLLECTOR_ADR
         and (root / V1422_COLLECTOR_ADR).is_file(),
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+        "quality_policy_passed": not _policy_blockers(policy) and not _typing_blockers(typing, policy),
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "explicit_any_count": typing["explicit_any_count"],
+        "affected_file_count": typing["explicit_any_affected_file_count"],
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
+def run_v1423_explicit_any_lambda_scope_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing = collect_typing_metrics(root)
+    stabilization = dict(policy.get("stabilization") or {})
+    lambda_hotfix = dict(stabilization.get("lambda_collector_hotfix") or {})
+    checks = {
+        "collector_schema_v6": typing["collector_schema_version"] == 6,
+        "policy_schema_v6": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0) == 6,
+        "policy_version_v1423": policy.get("release_version") == "14.2.3",
+        "lambda_scope_probe": _explicit_any_lambda_scope_probe(),
+        "lambda_collector_decision_present": stabilization.get("lambda_collector_decision")
+        == V1423_LAMBDA_COLLECTOR_ADR
+        and (root / V1423_LAMBDA_COLLECTOR_ADR).is_file(),
+        "lambda_collector_migration_recorded": int(lambda_hotfix.get("from_schema_version") or 0) == 5
+        and int(lambda_hotfix.get("to_schema_version") or 0) == 6,
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
         "quality_policy_passed": not _policy_blockers(policy) and not _typing_blockers(typing, policy),
     }
@@ -698,6 +729,14 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         blockers.append("v14_quality_policy_stabilization_decision")
     if stabilization.get("collector_decision") != V1422_COLLECTOR_ADR:
         blockers.append("v14_quality_policy_collector_decision")
+    if stabilization.get("lambda_collector_decision") != V1423_LAMBDA_COLLECTOR_ADR:
+        blockers.append("v14_quality_policy_lambda_collector_decision")
+    lambda_hotfix = stabilization.get("lambda_collector_hotfix") or {}
+    if (
+        int(lambda_hotfix.get("from_schema_version") or 0) != 5
+        or int(lambda_hotfix.get("to_schema_version") or 0) != 6
+    ):
+        blockers.append("v14_quality_policy_lambda_collector_migration")
     if stabilization.get("hard_limits") != V1421_RECOVERY_LIMITS:
         blockers.append("v14_quality_policy_stabilization_limits")
     if _explicit_any_file_budgets_hash(policy) != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
@@ -768,8 +807,9 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._visit_function(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
-        # Lambda arguments cannot carry annotations.
-        self.visit(node.body)
+        # Lambda arguments cannot carry annotations, while assignment
+        # expressions in the body bind only inside the lambda scope.
+        return
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -1348,6 +1388,18 @@ plain_shadow: Any
         and _explicit_any_annotation_count(shadowed) == 0
         and _explicit_any_annotation_count(growth) == 100
     )
+
+
+def _explicit_any_lambda_scope_probe() -> bool:
+    tree = ast.parse(
+        "from typing import Any as Alias\n"
+        "parameter_shadow = lambda Alias: Alias\n"
+        "walrus_shadow = lambda: (Alias := int)\n"
+        "nested_shadow = lambda: (lambda: (Alias := int))\n"
+        + "\n".join(f"field_{index}: Alias" for index in range(100))
+        + "\n"
+    )
+    return _explicit_any_annotation_count(tree) == 100
 
 
 def _typing_layer(relative: str) -> str:

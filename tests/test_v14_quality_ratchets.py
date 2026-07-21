@@ -17,6 +17,7 @@ from song_agent.release_check.v14_quality import (
     run_v141_quality_debt_closure_smoke,
     run_v1421_stabilization_rollback_smoke,
     run_v1422_explicit_any_scope_smoke,
+    run_v1423_explicit_any_lambda_scope_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -148,7 +149,7 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     configured = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert policy["release_version"] == "14.2.2"
+    assert policy["release_version"] == "14.2.3"
     assert policy["mypy"]["max_total_errors"] == 0
     assert policy["mypy"]["error_budgets"] == {}
     typing = collect_typing_metrics(ROOT)
@@ -190,7 +191,7 @@ def test_v1412_explicit_any_collector_counts_alias_module_nested_and_quoted_anno
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 5
+    assert typing["collector_schema_version"] == 6
     assert typing["explicit_any_count"] == 11
     assert typing["explicit_any_by_layer"] == {"interfaces": 11}
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/sample.py": 11}
@@ -261,7 +262,7 @@ async def async_handler() -> Alias:
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 5
+    assert typing["collector_schema_version"] == 6
     assert typing["explicit_any_count"] == 9
     assert typing["explicit_any_affected_file_count"] == 1
 
@@ -319,7 +320,7 @@ def route() -> None:
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 5
+    assert typing["collector_schema_version"] == 6
     assert typing["explicit_any_count"] == 8
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/conditional.py": 8}
 
@@ -418,7 +419,7 @@ def test_v1422_conditional_alias_growth_is_not_hidden_from_ratchet(tmp_path: Pat
         "typing": {
             "raw_dict_str_any_max_count": 0,
             "implementation_document_max_count": 0,
-            "explicit_any_collector_schema_version": 5,
+            "explicit_any_collector_schema_version": 6,
             "explicit_any_max_count": 99,
             "explicit_any_affected_file_max_count": 1,
             "explicit_any_layer_budgets": {"interfaces": 99},
@@ -431,6 +432,43 @@ def test_v1422_conditional_alias_growth_is_not_hidden_from_ratchet(tmp_path: Pat
     blockers = _typing_blockers(typing, policy)
 
     assert typing["explicit_any_count"] == 100
+    assert any("typing_explicit_any" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+def test_v1423_lambda_scope_cannot_hide_outer_any_growth(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "lambda_growth.py"
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    target.write_text(
+        "from typing import Any as Alias\n"
+        "parameter_shadow = lambda Alias: Alias\n"
+        "walrus_shadow = lambda: (Alias := int)\n"
+        "nested_shadow = lambda: (lambda: (Alias := int))\n"
+        f"{annotations}\n",
+        encoding="utf-8",
+    )
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": 6,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {"song_agent/interfaces/api/lambda_growth.py": 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+
+    blockers = _typing_blockers(typing, policy)
+
+    assert typing["collector_schema_version"] == 6
+    assert typing["explicit_any_count"] == 100
+    assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/lambda_growth.py": 100}
     assert any("typing_explicit_any" in value for value in blockers)
     assert any("typing_explicit_any_layer" in value for value in blockers)
     assert any("typing_explicit_any_file" in value for value in blockers)
@@ -556,7 +594,7 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
     assert policy["typing"] == {
         "raw_dict_str_any_max_count": 5,
         "implementation_document_max_count": 6,
-        "explicit_any_collector_schema_version": 5,
+        "explicit_any_collector_schema_version": 6,
         "explicit_any_max_count": 3,
         "explicit_any_affected_file_max_count": 0,
         "explicit_any_layer_budgets": {"application": 3},
@@ -654,6 +692,12 @@ def test_v1421_stabilization_rollback_smoke_is_self_consistent() -> None:
 
 def test_v1422_explicit_any_scope_smoke_is_self_consistent() -> None:
     passed, detail = run_v1422_explicit_any_scope_smoke(ROOT)
+
+    assert passed, detail
+
+
+def test_v1423_explicit_any_lambda_scope_smoke_is_self_consistent() -> None:
+    passed, detail = run_v1423_explicit_any_lambda_scope_smoke(ROOT)
 
     assert passed, detail
 

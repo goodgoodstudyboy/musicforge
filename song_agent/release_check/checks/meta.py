@@ -34,6 +34,7 @@ from song_agent.release_check.v14_quality import (
     run_v141_quality_debt_closure_smoke,
     run_v1421_stabilization_rollback_smoke,
     run_v1422_explicit_any_scope_smoke,
+    run_v1423_explicit_any_lambda_scope_smoke,
 )
 
 
@@ -116,6 +117,7 @@ CALLABLES = {
     "_v141_quality_debt_closure_smoke": run_v141_quality_debt_closure_smoke,
     "_v1421_stabilization_rollback_smoke": run_v1421_stabilization_rollback_smoke,
     "_v1422_explicit_any_scope_smoke": run_v1422_explicit_any_scope_smoke,
+    "_v1423_explicit_any_lambda_scope_smoke": run_v1423_explicit_any_lambda_scope_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

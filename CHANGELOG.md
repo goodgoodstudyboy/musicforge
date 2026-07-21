@@ -4,6 +4,16 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.3 - 2026-07-21
+
+- Upgraded the Explicit Any collector to schema 6 so lambda parameters,
+  assignment expressions, and nested lambdas cannot mutate an enclosing
+  collector binding.
+- Added a 100-annotation lambda-walrus attack regression to unit tests and the
+  published v14 release-check matrix.
+- Preserved every v14.2.1 recovery ceiling and schema 5 measured budget; the
+  active-tree Explicit Any totals remain unchanged.
+
 ## v14.2.2 - 2026-07-20
 
 - Upgraded the Explicit Any collector to schema 5 so aliases imported inside

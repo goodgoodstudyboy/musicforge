@@ -3,7 +3,7 @@
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
 | ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.3.0 | ADR-016 restores the reviewed v14.1.2 structure and freezes per-file ceilings plus aggregate module count, thousand-line count, largest-module size, and total oversized lines. |
-| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.3.0 | Schema-5 metrics freeze alias-, control-flow-, shadow-, and lexical-scope-aware total, layer, affected-file, and per-file explicit-`Any` budgets; no file, layer, or total budget may grow. |
+| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.3.0 | Schema-6 metrics freeze alias-, control-flow-, shadow-, lambda-scope-, and lexical-scope-aware total, layer, affected-file, and per-file explicit-`Any` budgets; no file, layer, or total budget may grow. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -92,3 +92,10 @@ conditional-import and ordinary-shadowing blind spots while retaining every
 v14.2.1 recovery ceiling. The corrected active tree is lower than the prior
 ceiling, so the migration does not authorize any total, layer, affected-file,
 or per-file increase. ARCH-014 and TYPE-003 remain open through v14.3.0.
+
+## v14.2.3 Lambda Scope Hotfix
+
+ADR-018 upgrades the collector to schema 6 and prevents lambda-local named
+expressions from changing an outer binding. The current active tree has no such
+attack pattern, so total, layer, affected-file, per-file, and recovery ceilings
+remain unchanged. ARCH-014 and TYPE-003 remain open through v14.3.0.

@@ -6009,9 +6009,9 @@
     },
     "song_agent/release_check/v14_quality.py": {
       "summary": {
-        "covered_lines": 638,
-        "missing_lines": 105,
-        "num_statements": 743
+        "covered_lines": 654,
+        "missing_lines": 107,
+        "num_statements": 761
       }
     },
     "song_agent/release_check/v14_reviewer.py": {
@@ -7088,5 +7088,5 @@
   },
   "package_type": "musicforge_v14_coverage_evidence",
   "schema_version": 2,
-  "source_report_semantic_hash": "4fc8ec768b47cc7263574188f94777345718ef2ad5a5597c1eb9f92ec206514d"
+  "source_report_semantic_hash": "3136311f3a9bf634e39f95e965aca5bf4bfcb1db2fe0694a28967616f53ebd39"
 }

@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.2 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.3 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -210,3 +210,11 @@ boundary violations, dependency exceptions, or compatibility imports.
   a typing import or alias source.
 - The v14.2.1 recovery ceilings remain unchanged. Corrected total, layer,
   affected-file, and per-file measurements may only decrease.
+
+## v14.2.3 Lambda Scope Hotfix
+
+- Explicit Any collector schema 6 does not traverse lambda bodies because
+  lambda syntax cannot own annotations.
+- Lambda parameters, assignment expressions, and nested lambdas cannot change
+  the enclosing collector binding state.
+- Existing schema 5 measurements and all recovery ceilings remain unchanged.
