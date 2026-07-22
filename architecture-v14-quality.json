@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "de301fa02f9d4f972905708ad62336595cf635ea77c1b3c99fa894b915f913fa",
-    "source_tree_hash": "42225e54e80cafb7ba3b011bf7d3ed5e1a21283aef235e829e2571ca247da411"
+    "report_sha256": "b9b13e335d033f4b63f951f7dd0169b1f528402a2b6a1abdde0aed2e6175c83f",
+    "source_tree_hash": "a3b94ff8a79c524e2269c468ee02b6d9476312e7f9a224c9c7a5b20c5d0b1258"
   },
-  "integrity_hash": "2a7d08b36bf85c76dcf0dbf3ea1a87579af04d92f75ae14b5ef2a5ff94f9d4a4",
+  "integrity_hash": "d875e26572921a1eca455e184915c7ff2739a7f42097926dd15e34d2d683a2ff",
   "module_size_debt": [
     {
       "expires_version": "14.3.0",
@@ -732,10 +732,17 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.2.4",
+  "release_version": "14.2.5",
   "schema_version": 1,
   "stabilization": {
     "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
+    "class_global_collector_decision": "docs/architecture/ADR-020-v1425-explicit-any-class-global-scope.md",
+    "class_global_collector_hotfix": {
+      "corrected_explicit_any_count": 11993,
+      "from_schema_version": 7,
+      "previous_explicit_any_ceiling": 12040,
+      "to_schema_version": 8
+    },
     "collector_decision": "docs/architecture/ADR-017-v1422-explicit-any-scope-collector.md",
     "collector_hotfix": {
       "corrected_explicit_any_count": 11993,
@@ -788,7 +795,7 @@
   "typing": {
     "activation_baseline_dict_str_any_count": 12535,
     "explicit_any_affected_file_max_count": 461,
-    "explicit_any_collector_schema_version": 7,
+    "explicit_any_collector_schema_version": 8,
     "explicit_any_file_budgets": {
       "song_agent/application/audio_campaigns/release_coverage.py": 7,
       "song_agent/application/evidence_policy_gate.py": 1,

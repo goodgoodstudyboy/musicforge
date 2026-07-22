@@ -56,7 +56,9 @@ structure after the rejected generated split in v14.2.0. v14.2.2 covers
 control-flow imports and non-typing shadow bindings. v14.2.3 isolates lambda
 bodies from outer collector state. v14.2.4 upgrades the Explicit `Any`
 collector to schema 7 and evaluates lambda/function/class definition-time
-expressions in their enclosing scope. ADR-016 through ADR-019 keep ARCH-014
+expressions in their enclosing scope. v14.2.5 upgrades the collector to schema
+8, models module bindings declared `global` by class bodies, and fails closed
+on unresolved Any-relevant cross-scope flows. ADR-016 through ADR-020 keep ARCH-014
 and TYPE-003 open; these hotfixes do not claim that the original v14.2 cleanup
 targets were completed.
 

@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.4 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.5 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -229,3 +229,12 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Definition expressions are visited in Python evaluation order, so later
   defaults or bases can legitimately replace earlier decorator bindings.
 - Existing schema 6 measurements and all recovery ceilings remain unchanged.
+
+## v14.2.5 Class-Global Scope Hotfix
+
+- Explicit Any collector schema 8 honors `global` declarations in class
+  bodies, including assignment and import into the module scope.
+- Any-relevant runtime, cross-control-flow, or unresolved nonlocal binding
+  flows fail closed instead of silently producing a zero count.
+- Existing schema 7 measurements and every typing, complexity, per-file, and
+  recovery ceiling remain unchanged.

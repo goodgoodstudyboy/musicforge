@@ -14,6 +14,7 @@ from song_agent.release_check.v14_quality import (
     V1422_COLLECTOR_ADR,
     V1423_LAMBDA_COLLECTOR_ADR,
     V1424_DEFINITION_TIME_COLLECTOR_ADR,
+    V1425_CLASS_GLOBAL_COLLECTOR_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
     collect_complexity_metrics,
@@ -110,6 +111,8 @@ def _ratchet_typing_policy(document: dict[str, object], metrics: dict[str, objec
     has_explicit_any_budget = "explicit_any_max_count" in policy
     previous_explicit_any = int(policy.get("explicit_any_max_count") or explicit_any)
     previous_affected_files = int(policy.get("explicit_any_affected_file_max_count") or affected_files)
+    if int(metrics.get("explicit_any_scope_blocker_count") or 0) != 0:
+        raise RuntimeError("Typing ownership contains unsupported global/nonlocal alias flow.")
     if int(metrics.get("public_implementation_document_count") or 0) != 0:
         raise RuntimeError("Typing ownership cannot expose implementation documents publicly.")
     if int(metrics.get("untyped_public_function_count") or 0) != 0:
@@ -203,7 +206,7 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
 
 
 def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
-    document["release_version"] = "14.2.4"
+    document["release_version"] = "14.2.5"
     rows = document.get("module_size_debt")
     complexity = document.get("complexity")
     if not isinstance(rows, list) or not isinstance(complexity, dict):
@@ -228,6 +231,7 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         "collector_decision": V1422_COLLECTOR_ADR,
         "lambda_collector_decision": V1423_LAMBDA_COLLECTOR_ADR,
         "definition_time_collector_decision": V1424_DEFINITION_TIME_COLLECTOR_ADR,
+        "class_global_collector_decision": V1425_CLASS_GLOBAL_COLLECTOR_ADR,
         "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
         "collector_migration": {
             "from_schema_version": 2,
@@ -249,6 +253,12 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         },
         "definition_time_collector_hotfix": {
             "from_schema_version": 6,
+            "to_schema_version": 7,
+            "previous_explicit_any_ceiling": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
+            "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),
+        },
+        "class_global_collector_hotfix": {
+            "from_schema_version": 7,
             "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "previous_explicit_any_ceiling": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
             "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),

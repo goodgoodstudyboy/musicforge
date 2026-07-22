@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from song_agent.release_check.v14_quality import (
+    EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
     _mypy_blockers,
     _policy_blockers,
     _typing_blockers,
@@ -19,6 +20,7 @@ from song_agent.release_check.v14_quality import (
     run_v1422_explicit_any_scope_smoke,
     run_v1423_explicit_any_lambda_scope_smoke,
     run_v1424_explicit_any_definition_time_scope_smoke,
+    run_v1425_explicit_any_class_global_scope_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -150,7 +152,7 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     workflow = (ROOT / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
     configured = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert policy["release_version"] == "14.2.4"
+    assert policy["release_version"] == "14.2.5"
     assert policy["mypy"]["max_total_errors"] == 0
     assert policy["mypy"]["error_budgets"] == {}
     typing = collect_typing_metrics(ROOT)
@@ -192,7 +194,7 @@ def test_v1412_explicit_any_collector_counts_alias_module_nested_and_quoted_anno
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 7
+    assert typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     assert typing["explicit_any_count"] == 11
     assert typing["explicit_any_by_layer"] == {"interfaces": 11}
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/sample.py": 11}
@@ -263,7 +265,7 @@ async def async_handler() -> Alias:
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 7
+    assert typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     assert typing["explicit_any_count"] == 9
     assert typing["explicit_any_affected_file_count"] == 1
 
@@ -321,7 +323,7 @@ def route() -> None:
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 7
+    assert typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     assert typing["explicit_any_count"] == 8
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/conditional.py": 8}
 
@@ -420,7 +422,7 @@ def test_v1422_conditional_alias_growth_is_not_hidden_from_ratchet(tmp_path: Pat
         "typing": {
             "raw_dict_str_any_max_count": 0,
             "implementation_document_max_count": 0,
-            "explicit_any_collector_schema_version": 7,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "explicit_any_max_count": 99,
             "explicit_any_affected_file_max_count": 1,
             "explicit_any_layer_budgets": {"interfaces": 99},
@@ -455,7 +457,7 @@ def test_v1423_lambda_scope_cannot_hide_outer_any_growth(tmp_path: Path) -> None
         "typing": {
             "raw_dict_str_any_max_count": 0,
             "implementation_document_max_count": 0,
-            "explicit_any_collector_schema_version": 7,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "explicit_any_max_count": 99,
             "explicit_any_affected_file_max_count": 1,
             "explicit_any_layer_budgets": {"interfaces": 99},
@@ -467,7 +469,7 @@ def test_v1423_lambda_scope_cannot_hide_outer_any_growth(tmp_path: Path) -> None
 
     blockers = _typing_blockers(typing, policy)
 
-    assert typing["collector_schema_version"] == 7
+    assert typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     assert typing["explicit_any_count"] == 100
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/lambda_growth.py": 100}
     assert any("typing_explicit_any" in value for value in blockers)
@@ -508,7 +510,7 @@ def test_v1424_definition_time_defaults_cannot_hide_outer_any_growth(
         "typing": {
             "raw_dict_str_any_max_count": 0,
             "implementation_document_max_count": 0,
-            "explicit_any_collector_schema_version": 7,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "explicit_any_max_count": 99,
             "explicit_any_affected_file_max_count": 1,
             "explicit_any_layer_budgets": {"interfaces": 99},
@@ -522,7 +524,7 @@ def test_v1424_definition_time_defaults_cannot_hide_outer_any_growth(
 
     assert namespace["Alias"] is __import__("typing").Any
     assert len(namespace["__annotations__"]) == 100
-    assert typing["collector_schema_version"] == 7
+    assert typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     assert typing["explicit_any_count"] == 100
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/definition_growth.py": 100}
     assert any("typing_explicit_any" in value for value in blockers)
@@ -549,7 +551,7 @@ def test_v1424_function_and_class_definition_expressions_use_outer_runtime_order
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 7
+    assert typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     assert typing["explicit_any_count"] == 0
     assert typing["explicit_any_affected_file_count"] == 0
 
@@ -582,9 +584,111 @@ def test_v1424_function_and_class_definition_expressions_propagate_any(tmp_path:
 
     typing = collect_typing_metrics(tmp_path)
 
-    assert typing["collector_schema_version"] == 7
+    assert typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
     assert typing["explicit_any_count"] == 5
     assert typing["explicit_any_by_file"] == {"song_agent/interfaces/api/definition_sources.py": 5}
+
+
+@pytest.mark.parametrize(
+    "class_body",
+    [
+        "        Alias = t.Any\n",
+        "        from typing import Any as Alias\n",
+    ],
+)
+def test_v1425_class_global_binding_cannot_hide_outer_any_growth(
+    tmp_path: Path,
+    class_body: str,
+) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "class_global_growth.py"
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    source = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+        "    class Probe:\n"
+        "        global Alias\n"
+        f"{class_body}"
+        f"{annotations}\n"
+    )
+    target.write_text(source, encoding="utf-8")
+    namespace: dict[str, object] = {}
+    exec(compile(source, str(target), "exec"), namespace)
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {"song_agent/interfaces/api/class_global_growth.py": 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+
+    blockers = _typing_blockers(typing, policy)
+
+    assert namespace["Alias"] is __import__("typing").Any
+    assert len(namespace["__annotations__"]) == 100
+    assert typing["explicit_any_count"] == 100
+    assert typing["explicit_any_scope_blocker_count"] == 0
+    assert any("typing_explicit_any:" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import typing as t\nAlias = int\ndef mutate():\n    global Alias\n    Alias = t.Any\nfield: Alias\n",
+        "import typing as t\nAlias = int\nclass Probe:\n    global Alias\n    if enabled:\n        Alias = t.Any\nfield: Alias\n",
+        "import typing as t\ndef outer():\n    Alias = int\n    def mutate():\n        nonlocal Alias\n        Alias = t.Any\n        field: Alias\n",
+    ],
+)
+def test_v1425_unsupported_cross_scope_alias_flow_fails_closed(tmp_path: Path, source: str) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "unsupported_scope.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(source, encoding="utf-8")
+
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 100,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 100},
+            "explicit_any_file_budgets": {"song_agent/interfaces/api/unsupported_scope.py": 100},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+
+    blockers = _typing_blockers(typing, policy)
+
+    assert typing["explicit_any_scope_blocker_count"] >= 1
+    assert any("typing_explicit_any_scope_flow" in value for value in blockers)
+
+
+def test_v1425_non_type_global_state_does_not_trigger_scope_blocker(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "ordinary_global.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "counter = 0\ndef increment():\n    global counter\n    counter += 1\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_scope_blocker_count"] == 0
 
 
 def test_v1421_quality_metric_caches_invalidate_on_source_change(tmp_path: Path) -> None:
@@ -707,7 +811,7 @@ def test_v14_typing_ownership_ratchet_preserves_the_combined_ceiling() -> None:
     assert policy["typing"] == {
         "raw_dict_str_any_max_count": 5,
         "implementation_document_max_count": 6,
-        "explicit_any_collector_schema_version": 7,
+        "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "explicit_any_max_count": 3,
         "explicit_any_affected_file_max_count": 0,
         "explicit_any_layer_budgets": {"application": 3},
@@ -770,6 +874,34 @@ def test_v1422_collector_schema_upgrade_cannot_relax_any_budget() -> None:
         _ratchet_typing_policy(policy, metrics)
 
 
+def test_v1425_typing_updater_rejects_unsupported_scope_flow() -> None:
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 1,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 1},
+            "explicit_any_file_budgets": {"song_agent/interfaces/api/probe.py": 1},
+        }
+    }
+    metrics = {
+        "raw_dict_str_any_count": 0,
+        "implementation_document_count": 0,
+        "explicit_any_count": 1,
+        "explicit_any_affected_file_count": 1,
+        "explicit_any_by_layer": {"interfaces": 1},
+        "explicit_any_by_file": {"song_agent/interfaces/api/probe.py": 1},
+        "explicit_any_scope_blocker_count": 1,
+        "public_implementation_document_count": 0,
+        "untyped_public_function_count": 0,
+    }
+
+    with pytest.raises(RuntimeError, match="unsupported global/nonlocal alias flow"):
+        _ratchet_typing_policy(policy, metrics)
+
+
 def test_v14_complexity_ratchet_rejects_file_growth_even_when_total_decreases(tmp_path: Path) -> None:
     root = tmp_path
     first = root / "song_agent" / "domains" / "sample_a.py"
@@ -817,6 +949,12 @@ def test_v1423_explicit_any_lambda_scope_smoke_is_self_consistent() -> None:
 
 def test_v1424_explicit_any_definition_time_scope_smoke_is_self_consistent() -> None:
     passed, detail = run_v1424_explicit_any_definition_time_scope_smoke(ROOT)
+
+    assert passed, detail
+
+
+def test_v1425_explicit_any_class_global_scope_smoke_is_self_consistent() -> None:
+    passed, detail = run_v1425_explicit_any_class_global_scope_smoke(ROOT)
 
     assert passed, detail
 

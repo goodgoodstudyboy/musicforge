@@ -4,6 +4,16 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.5 - 2026-07-22
+
+- Upgraded the Explicit Any collector to schema 8 so `global` assignment and
+  import inside an immediately executed class body update the module binding.
+- Added hard scope-flow blockers for Any-relevant runtime and cross-control-flow
+  `global`/`nonlocal` mutations that cannot be modeled deterministically.
+- Added ADR-020, exact 100-annotation assignment/import regressions, and the
+  `v1425.explicit_any_class_global_scope_smoke` release gate without raising
+  any typing, complexity, per-file, or recovery ceiling.
+
 ## v14.2.4 - 2026-07-21
 
 - Upgraded the Explicit Any collector to schema 7 so lambda, function,

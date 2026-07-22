@@ -3,7 +3,7 @@
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
 | ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.3.0 | ADR-016 restores the reviewed v14.1.2 structure and freezes per-file ceilings plus aggregate module count, thousand-line count, largest-module size, and total oversized lines. |
-| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.3.0 | Schema-7 metrics freeze alias-, control-flow-, shadow-, lambda-scope-, definition-time-scope-, and lexical-scope-aware total, layer, affected-file, and per-file explicit-`Any` budgets; no file, layer, or total budget may grow. |
+| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.3.0 | Schema-8 metrics freeze alias-, control-flow-, shadow-, lambda-scope-, definition-time-scope-, class-global-, and lexical-scope-aware total, layer, affected-file, and per-file explicit-`Any` budgets; unresolved Any-relevant scope flow is blocking and no file, layer, or total budget may grow. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -107,3 +107,11 @@ async-function, and class definition-time expressions in their enclosing
 scope. The current active tree has no definition-time alias attack pattern, so
 total, layer, affected-file, per-file, and recovery ceilings remain unchanged.
 ARCH-014 and TYPE-003 remain open through v14.3.0.
+
+## v14.2.5 Class-Global Scope Hotfix
+
+ADR-020 upgrades the collector to schema 8 and models module bindings written
+from an immediately executed class body through `global`. Any-relevant dynamic
+`global` or `nonlocal` flow that cannot be modeled exactly becomes a hard
+quality blocker. The active tree has no such blocker and all schema 7 ceilings
+remain unchanged. ARCH-014 and TYPE-003 remain open through v14.3.0.

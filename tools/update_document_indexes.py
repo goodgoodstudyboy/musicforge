@@ -23,7 +23,9 @@ def build_material_index() -> dict[str, object]:
                 "path": relative,
                 "title": heading,
                 "version": version,
-                "status": "active" if "v14.2.4-MusicForgeExplicitAny定义时作用域收集器安全修复" in path.name else "historical",
+                "status": "active"
+                if "v14.2.5-MusicForgeExplicitAnyClassGlobal作用域收集器安全修复" in path.name
+                else "historical",
             }
         )
     return {"schema_version": 1, "archive_policy": "original_paths_preserved", "documents": rows}

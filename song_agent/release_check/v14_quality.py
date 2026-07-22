@@ -17,8 +17,8 @@ from song_agent.platform.verification.hashing import canonical_text_bytes, sha25
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.2.4"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 7
+QUALITY_POLICY_VERSION = "14.2.5"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 8
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -33,6 +33,7 @@ V1421_STABILIZATION_ADR = "docs/architecture/ADR-016-v1421-stabilization-rollbac
 V1422_COLLECTOR_ADR = "docs/architecture/ADR-017-v1422-explicit-any-scope-collector.md"
 V1423_LAMBDA_COLLECTOR_ADR = "docs/architecture/ADR-018-v1423-explicit-any-lambda-scope.md"
 V1424_DEFINITION_TIME_COLLECTOR_ADR = "docs/architecture/ADR-019-v1424-explicit-any-definition-time-scope.md"
+V1425_CLASS_GLOBAL_COLLECTOR_ADR = "docs/architecture/ADR-020-v1425-explicit-any-class-global-scope.md"
 V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d"
 V1421_MODULE_DEBT_CEILINGS_HASH = "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b"
 V1421_RECOVERY_LIMITS: dict[str, Any] = {
@@ -108,6 +109,7 @@ def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
     implementation_count = 0
     explicit_any_by_file: Counter[str] = Counter()
     explicit_any_by_layer: Counter[str] = Counter()
+    explicit_any_scope_blockers: list[dict[str, Any]] = []
     public_dynamic: list[dict[str, Any]] = []
     untyped_public: list[dict[str, Any]] = []
     for path in _active_python_files(root):
@@ -116,10 +118,13 @@ def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
         implementation_count += source.count("ImplementationDocument")
         tree = ast.parse(source, filename=str(path))
         relative = path.relative_to(root).as_posix()
-        explicit_any = _explicit_any_annotation_count(tree)
+        explicit_any, scope_blockers = _explicit_any_annotation_analysis(tree)
         if explicit_any:
             explicit_any_by_file[relative] = explicit_any
             explicit_any_by_layer[_typing_layer(relative)] += explicit_any
+        explicit_any_scope_blockers.extend(
+            {"path": relative, "detail": detail} for detail in scope_blockers
+        )
         for function, owner in _public_functions(tree):
             annotations = _function_annotations(function, skip_receiver=owner is not None)
             if function.returns is None or any(annotation is None for annotation in annotations):
@@ -144,6 +149,8 @@ def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
         "explicit_any_affected_file_count": len(explicit_any_by_file),
         "explicit_any_by_layer": dict(sorted(explicit_any_by_layer.items())),
         "explicit_any_by_file": dict(sorted(explicit_any_by_file.items())),
+        "explicit_any_scope_blocker_count": len(explicit_any_scope_blockers),
+        "explicit_any_scope_blockers": explicit_any_scope_blockers,
         "public_implementation_document_count": len(public_dynamic),
         "public_implementation_documents": public_dynamic,
         "untyped_public_function_count": len(untyped_public),
@@ -477,6 +484,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "explicit_any_scope_probe": _explicit_any_scope_probe(),
         "explicit_any_lambda_scope_probe": _explicit_any_lambda_scope_probe(),
         "explicit_any_definition_time_scope_probe": _explicit_any_definition_time_probe(),
+        "explicit_any_class_global_scope_probe": _explicit_any_class_global_scope_probe(),
         "explicit_any_collector_schema_version": int(
             (policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0
         ),
@@ -500,6 +508,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and details["explicit_any_scope_probe"]
         and details["explicit_any_lambda_scope_probe"]
         and details["explicit_any_definition_time_scope_probe"]
+        and details["explicit_any_class_global_scope_probe"]
         and details["explicit_any_collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
         and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
@@ -562,11 +571,12 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
     )
     policy_blockers = [*_policy_blockers(policy), *_typing_blockers(typing, policy), *complexity["blockers"]]
     checks = {
-        "collector_schema_v7": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "collector_schema_current": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "collector_nested_scope_probe": _explicit_any_alias_probe(),
         "collector_control_flow_scope_probe": _explicit_any_scope_probe(),
         "collector_lambda_scope_probe": _explicit_any_lambda_scope_probe(),
         "collector_definition_time_scope_probe": _explicit_any_definition_time_probe(),
+        "collector_class_global_scope_probe": _explicit_any_class_global_scope_probe(),
         "generated_v142_modules_absent": not violations["generated_modules"],
         "splitter_absent": not violations["splitter_present"],
         "active_suppressions_absent": not violations["suppressions"],
@@ -653,9 +663,10 @@ def run_v1424_explicit_any_definition_time_scope_smoke(root: Path) -> tuple[bool
     stabilization = dict(policy.get("stabilization") or {})
     definition_hotfix = dict(stabilization.get("definition_time_collector_hotfix") or {})
     checks = {
-        "collector_schema_v7": typing["collector_schema_version"] == 7,
-        "policy_schema_v7": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0) == 7,
-        "policy_version_v1424": policy.get("release_version") == "14.2.4",
+        "collector_schema_current": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_schema_current": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
         "definition_time_scope_probe": _explicit_any_definition_time_probe(),
         "definition_time_collector_decision_present": stabilization.get("definition_time_collector_decision")
         == V1424_DEFINITION_TIME_COLLECTOR_ADR
@@ -674,6 +685,35 @@ def run_v1424_explicit_any_definition_time_scope_smoke(root: Path) -> tuple[bool
     return all(checks.values()), json.dumps(detail, sort_keys=True)
 
 
+def run_v1425_explicit_any_class_global_scope_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing = collect_typing_metrics(root)
+    stabilization = dict(policy.get("stabilization") or {})
+    class_global_hotfix = dict(stabilization.get("class_global_collector_hotfix") or {})
+    checks = {
+        "collector_schema_v8": typing["collector_schema_version"] == 8,
+        "policy_schema_v8": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0) == 8,
+        "policy_version_v1425": policy.get("release_version") == "14.2.5",
+        "class_global_scope_probe": _explicit_any_class_global_scope_probe(),
+        "active_scope_flow_clear": int(typing.get("explicit_any_scope_blocker_count") or 0) == 0,
+        "class_global_collector_decision_present": stabilization.get("class_global_collector_decision")
+        == V1425_CLASS_GLOBAL_COLLECTOR_ADR
+        and (root / V1425_CLASS_GLOBAL_COLLECTOR_ADR).is_file(),
+        "class_global_collector_migration_recorded": int(class_global_hotfix.get("from_schema_version") or 0) == 7
+        and int(class_global_hotfix.get("to_schema_version") or 0) == 8,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+        "quality_policy_passed": not _policy_blockers(policy) and not _typing_blockers(typing, policy),
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "explicit_any_count": typing["explicit_any_count"],
+        "affected_file_count": typing["explicit_any_affected_file_count"],
+        "scope_flow_blockers": typing.get("explicit_any_scope_blockers") or [],
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
 def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
     limits = policy.get("typing") or {}
     blockers: list[str] = []
@@ -681,6 +721,12 @@ def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[st
         blockers.append("v14_quality_typing_explicit_any_collector_schema")
     if int(metrics.get("collector_schema_version") or 0) != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION:
         blockers.append("v14_quality_typing_metrics_collector_schema")
+    blockers.extend(
+        "v14_quality_typing_explicit_any_scope_flow:"
+        f"{row.get('path', '<unknown>')}:{row.get('detail', 'unsupported')}"
+        for row in metrics.get("explicit_any_scope_blockers") or []
+        if isinstance(row, dict)
+    )
     fields = (
         ("raw_dict_str_any_count", "raw_dict_str_any_max_count", "typing_raw_dict_str_any"),
         ("implementation_document_count", "implementation_document_max_count", "typing_implementation_document"),
@@ -778,6 +824,14 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         or int(definition_hotfix.get("to_schema_version") or 0) != 7
     ):
         blockers.append("v14_quality_policy_definition_time_collector_migration")
+    if stabilization.get("class_global_collector_decision") != V1425_CLASS_GLOBAL_COLLECTOR_ADR:
+        blockers.append("v14_quality_policy_class_global_collector_decision")
+    class_global_hotfix = stabilization.get("class_global_collector_hotfix") or {}
+    if (
+        int(class_global_hotfix.get("from_schema_version") or 0) != 7
+        or int(class_global_hotfix.get("to_schema_version") or 0) != 8
+    ):
+        blockers.append("v14_quality_policy_class_global_collector_migration")
     if stabilization.get("hard_limits") != V1421_RECOVERY_LIMITS:
         blockers.append("v14_quality_policy_stabilization_limits")
     if _explicit_any_file_budgets_hash(policy) != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
@@ -831,17 +885,22 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
 
     def __init__(self) -> None:
         self.count = 0
+        self.blockers: list[str] = []
         self._scopes: list[dict[str, str]] = [{}]
         self._potential_scopes: list[dict[str, str]] = []
+        self._scope_kinds: list[str] = ["module"]
+        self._global_names: list[set[str]] = [set()]
+        self._nonlocal_names: list[set[str]] = [set()]
+        self._control_flow_scopes: list[int] = []
 
     def visit_Module(self, node: ast.Module) -> None:
-        self._visit_scope_body(node.body, push_scope=False)
+        self._visit_scope_body(node.body, push_scope=False, scope_kind="module")
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._visit_expressions(node.decorator_list)
         self._visit_expressions(node.bases)
         self._visit_expressions(keyword.value for keyword in node.keywords)
-        self._visit_scope_body(node.body, push_scope=True)
+        self._visit_scope_body(node.body, push_scope=True, scope_kind="class")
         self._bind(node.name, "other")
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -854,6 +913,14 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         # Defaults run in the enclosing scope when the lambda is created.
         # The body owns no annotations and runs in the lambda scope.
         self._visit_argument_defaults(node.args)
+
+    def visit_Global(self, node: ast.Global) -> None:
+        # Declarations are collected before the lexical scope is visited.
+        return None
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+        # Declarations are collected before the lexical scope is visited.
+        return None
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -948,11 +1015,15 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         states = [base]
         for case in node.cases:
             self._scopes[-1] = dict(base)
-            for name in _match_pattern_names(case.pattern):
-                self._bind(name, "other")
-            if case.guard is not None:
-                self.visit(case.guard)
-            self._visit_statements(case.body)
+            self._control_flow_scopes.append(len(self._scopes) - 1)
+            try:
+                for name in _match_pattern_names(case.pattern):
+                    self._bind(name, "other")
+                if case.guard is not None:
+                    self.visit(case.guard)
+                self._visit_statements(case.body)
+            finally:
+                self._control_flow_scopes.pop()
             states.append(dict(self._scopes[-1]))
         self._scopes[-1] = self._merge_branch_states(states)
 
@@ -976,7 +1047,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             parameter_scope[node.args.vararg.arg] = "other"
         if node.args.kwarg is not None:
             parameter_scope[node.args.kwarg.arg] = "other"
-        self._visit_scope_body(node.body, push_scope=True, initial=parameter_scope)
+        self._visit_scope_body(node.body, push_scope=True, initial=parameter_scope, scope_kind="function")
         self._bind(node.name, "other")
 
     def _visit_argument_defaults(self, arguments: ast.arguments) -> None:
@@ -993,14 +1064,31 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         *,
         push_scope: bool,
         initial: dict[str, str] | None = None,
+        scope_kind: str,
     ) -> None:
+        global_names, nonlocal_names = _scope_declarations(body)
         if push_scope:
             self._scopes.append(dict(initial or {}))
-        self._potential_scopes.append(self._potential_scope_bindings(body))
-        self._visit_statements(body)
-        self._potential_scopes.pop()
-        if push_scope:
-            self._scopes.pop()
+            self._scope_kinds.append(scope_kind)
+            self._global_names.append(global_names)
+            self._nonlocal_names.append(nonlocal_names)
+        else:
+            self._scope_kinds[0] = scope_kind
+            self._global_names[0] = global_names
+            self._nonlocal_names[0] = nonlocal_names
+        excluded = global_names | nonlocal_names
+        self._potential_scopes.append(self._potential_scope_bindings(body, excluded=excluded))
+        try:
+            if global_names & nonlocal_names:
+                self._add_blocker("conflicting_global_nonlocal:" + ",".join(sorted(global_names & nonlocal_names)))
+            self._visit_statements(body)
+        finally:
+            self._potential_scopes.pop()
+            if push_scope:
+                self._scopes.pop()
+                self._scope_kinds.pop()
+                self._global_names.pop()
+                self._nonlocal_names.pop()
 
     def _visit_statements(self, body: list[ast.stmt]) -> None:
         for statement in body:
@@ -1008,7 +1096,11 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
 
     def _visit_branch(self, body: list[ast.stmt], state: dict[str, str]) -> dict[str, str]:
         self._scopes[-1] = dict(state)
-        self._visit_statements(body)
+        self._control_flow_scopes.append(len(self._scopes) - 1)
+        try:
+            self._visit_statements(body)
+        finally:
+            self._control_flow_scopes.pop()
         return dict(self._scopes[-1])
 
     def _visit_try(self, node: ast.Try | ast.TryStar) -> None:
@@ -1017,11 +1109,15 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         states = [normal_state]
         for handler in node.handlers:
             self._scopes[-1] = dict(base)
-            if handler.type is not None:
-                self.visit(handler.type)
-            if handler.name:
-                self._bind(handler.name, "other")
-            self._visit_statements(handler.body)
+            self._control_flow_scopes.append(len(self._scopes) - 1)
+            try:
+                if handler.type is not None:
+                    self.visit(handler.type)
+                if handler.name:
+                    self._bind(handler.name, "other")
+                self._visit_statements(handler.body)
+            finally:
+                self._control_flow_scopes.pop()
             states.append(dict(self._scopes[-1]))
         self._scopes[-1] = self._merge_branch_states(states)
         self._visit_statements(node.finalbody)
@@ -1031,42 +1127,56 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             self.visit(item.context_expr)
             if item.optional_vars is not None:
                 self._bind_target(item.optional_vars, "other")
-        self._visit_statements(node.body)
+        self._control_flow_scopes.append(len(self._scopes) - 1)
+        try:
+            self._visit_statements(node.body)
+        finally:
+            self._control_flow_scopes.pop()
 
     def _visit_for(self, node: ast.For | ast.AsyncFor) -> None:
         self.visit(node.iter)
         base = dict(self._scopes[-1])
         self._scopes[-1] = dict(base)
-        self._bind_target(node.target, "other")
-        self._visit_statements(node.body)
+        self._control_flow_scopes.append(len(self._scopes) - 1)
+        try:
+            self._bind_target(node.target, "other")
+            self._visit_statements(node.body)
+        finally:
+            self._control_flow_scopes.pop()
         merged = self._merge_branch_states([base, dict(self._scopes[-1])])
         if node.orelse:
             orelse_state = self._visit_branch(node.orelse, merged)
             merged = self._merge_branch_states([merged, orelse_state])
         self._scopes[-1] = merged
 
-    def _potential_scope_bindings(self, body: list[ast.stmt]) -> dict[str, str]:
+    def _potential_scope_bindings(self, body: list[ast.stmt], *, excluded: set[str]) -> dict[str, str]:
         statements = list(_lexical_scope_statements(body))
         potential: dict[str, str] = {}
         for statement in statements:
             if isinstance(statement, ast.Import):
                 for alias in statement.names:
                     if alias.name in {"typing", "typing_extensions"}:
-                        _merge_potential_binding(potential, alias.asname or alias.name, "typing-module")
+                        name = alias.asname or alias.name
+                        if name not in excluded:
+                            _merge_potential_binding(potential, name, "typing-module")
             elif isinstance(statement, ast.ImportFrom) and statement.module in {"typing", "typing_extensions"}:
                 for alias in statement.names:
                     if alias.name == "*":
-                        _merge_potential_binding(potential, "Any", "any")
-                        _merge_potential_binding(potential, "TypeAlias", "type-alias-marker")
-                        _merge_potential_binding(potential, "TYPE_CHECKING", "type-checking-marker")
+                        if "Any" not in excluded:
+                            _merge_potential_binding(potential, "Any", "any")
+                        if "TypeAlias" not in excluded:
+                            _merge_potential_binding(potential, "TypeAlias", "type-alias-marker")
+                        if "TYPE_CHECKING" not in excluded:
+                            _merge_potential_binding(potential, "TYPE_CHECKING", "type-checking-marker")
                         continue
                     kind = {
                         "Any": "any",
                         "TypeAlias": "type-alias-marker",
                         "TYPE_CHECKING": "type-checking-marker",
                     }.get(alias.name)
-                    if kind:
-                        _merge_potential_binding(potential, alias.asname or alias.name, kind)
+                    name = alias.asname or alias.name
+                    if kind and name not in excluded:
+                        _merge_potential_binding(potential, name, kind)
 
         changed = True
         while changed:
@@ -1102,11 +1212,48 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                     continue
                 for target in targets:
                     for name in _assignment_target_names(target):
-                        changed = _merge_potential_binding(potential, name, kind) or changed
+                        if name not in excluded:
+                            changed = _merge_potential_binding(potential, name, kind) or changed
         return potential
 
     def _bind(self, name: str, kind: str) -> None:
-        self._scopes[-1][name] = kind
+        target_index = self._binding_scope_index(name)
+        if target_index is None:
+            if self._binding_is_relevant(kind) or self._binding_is_relevant(self._resolve_outer_name(name)):
+                self._add_blocker(f"unresolved_nonlocal:{name}")
+            return
+        current_index = len(self._scopes) - 1
+        if target_index != current_index:
+            previous = self._scopes[target_index].get(name, "")
+            relevant = self._binding_is_relevant(kind) or self._binding_is_relevant(previous)
+            if relevant and "function" in self._scope_kinds[1 : current_index + 1]:
+                self._add_blocker(f"runtime_redirect:{self._scope_kinds[current_index]}:{name}")
+            if relevant and self._control_flow_scopes and self._control_flow_scopes[-1] != target_index:
+                self._add_blocker(f"cross_scope_control_flow:{name}")
+        self._scopes[target_index][name] = kind
+
+    def _binding_scope_index(self, name: str) -> int | None:
+        current_index = len(self._scopes) - 1
+        if name in self._global_names[current_index]:
+            return 0
+        if name in self._nonlocal_names[current_index]:
+            for index in range(current_index - 1, 0, -1):
+                if self._scope_kinds[index] != "function":
+                    continue
+                if name in self._scopes[index] or (
+                    index < len(self._potential_scopes) and name in self._potential_scopes[index]
+                ):
+                    return index
+            return None
+        return current_index
+
+    @staticmethod
+    def _binding_is_relevant(kind: str) -> bool:
+        return kind in {"any", "typing-module", "any-or-typing-module", "type-alias-marker"}
+
+    def _add_blocker(self, detail: str) -> None:
+        if detail not in self.blockers:
+            self.blockers.append(detail)
 
     def _merge_branch_states(self, states: list[dict[str, str]]) -> dict[str, str]:
         merged: dict[str, str] = {}
@@ -1186,6 +1333,15 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         return False
 
     def _resolve_name(self, name: str) -> str:
+        target_index = self._binding_scope_index(name)
+        if target_index is None:
+            return ""
+        if target_index != len(self._scopes) - 1:
+            if name in self._scopes[target_index]:
+                return self._scopes[target_index][name]
+            if target_index < len(self._potential_scopes):
+                return self._potential_scopes[target_index].get(name, "")
+            return ""
         for index in range(len(self._scopes) - 1, -1, -1):
             scope = self._scopes[index]
             if name in scope:
@@ -1224,6 +1380,17 @@ def _lexical_scope_statements(body: list[ast.stmt]) -> Iterable[ast.stmt]:
             nested.extend(case.body for case in statement.cases)
         for branch in nested:
             yield from _lexical_scope_statements(branch)
+
+
+def _scope_declarations(body: list[ast.stmt]) -> tuple[set[str], set[str]]:
+    global_names: set[str] = set()
+    nonlocal_names: set[str] = set()
+    for statement in _lexical_scope_statements(body):
+        if isinstance(statement, ast.Global):
+            global_names.update(statement.names)
+        elif isinstance(statement, ast.Nonlocal):
+            nonlocal_names.update(statement.names)
+    return global_names, nonlocal_names
 
 
 def _assignment_target_names(target: ast.expr) -> set[str]:
@@ -1283,9 +1450,13 @@ def _binding_matches(binding: str, expected: str) -> bool:
 
 
 def _explicit_any_annotation_count(tree: ast.Module) -> int:
+    return _explicit_any_annotation_analysis(tree)[0]
+
+
+def _explicit_any_annotation_analysis(tree: ast.Module) -> tuple[int, list[str]]:
     collector = _ExplicitAnyCollector()
     collector.visit(tree)
-    return collector.count
+    return collector.count, list(collector.blockers)
 
 
 def _annotation_any_count(annotation: ast.expr, any_names: set[str], module_names: set[str]) -> int:
@@ -1506,6 +1677,71 @@ def _explicit_any_definition_time_probe() -> bool:
         and _explicit_any_annotation_count(function_tree) == 100
         and _explicit_any_annotation_count(definition_tree) == 5
         and _explicit_any_annotation_count(ordered_tree) == 0
+    )
+
+
+def _explicit_any_class_global_scope_probe() -> bool:
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    prefix = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+    )
+    assignment = ast.parse(
+        prefix
+        + "    class Probe:\n"
+        "        global Alias\n"
+        "        Alias = t.Any\n"
+        + annotations
+        + "\n"
+    )
+    imported = ast.parse(
+        prefix
+        + "    class Probe:\n"
+        "        global Alias\n"
+        "        from typing import Any as Alias\n"
+        + annotations
+        + "\n"
+    )
+    assignment_count, assignment_blockers = _explicit_any_annotation_analysis(assignment)
+    import_count, import_blockers = _explicit_any_annotation_analysis(imported)
+    growth_metrics = {
+        "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "raw_dict_str_any_count": 0,
+        "implementation_document_count": 0,
+        "explicit_any_count": assignment_count,
+        "explicit_any_affected_file_count": 1,
+        "explicit_any_by_layer": {"interfaces": assignment_count},
+        "explicit_any_by_file": {"song_agent/interfaces/api/class_global_probe.py": assignment_count},
+        "explicit_any_scope_blockers": [],
+        "public_implementation_document_count": 0,
+        "untyped_public_function_count": 0,
+    }
+    growth_policy = {
+        "typing": {
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {"song_agent/interfaces/api/class_global_probe.py": 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+    growth_blockers = _typing_blockers(growth_metrics, growth_policy)
+    return (
+        assignment_count == 100
+        and not assignment_blockers
+        and import_count == 100
+        and not import_blockers
+        and any("typing_explicit_any:" in blocker for blocker in growth_blockers)
+        and any("typing_explicit_any_layer" in blocker for blocker in growth_blockers)
+        and any("typing_explicit_any_file" in blocker for blocker in growth_blockers)
     )
 
 
