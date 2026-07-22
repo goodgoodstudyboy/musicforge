@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.5 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.6 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -237,4 +237,15 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Any-relevant runtime, cross-control-flow, or unresolved nonlocal binding
   flows fail closed instead of silently producing a zero count.
 - Existing schema 7 measurements and every typing, complexity, per-file, and
+  recovery ceiling remain unchanged.
+
+## v14.2.6 Indirect-Target Scope Hotfix
+
+- Explicit Any collector schema 9 marks `for`/`async for`, `with`/`async with`,
+  and `match` capture targets as uncertain when their value cannot be derived
+  exactly.
+- A later annotation that resolves through an uncertain target is counted and
+  emits a hard scope-flow blocker instead of silently resolving to non-Any.
+- Ordinary indirect bindings that are not used as annotations remain valid.
+- Existing schema 8 measurements and every typing, complexity, per-file, and
   recovery ceiling remain unchanged.

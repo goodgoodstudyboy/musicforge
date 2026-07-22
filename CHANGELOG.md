@@ -4,6 +4,18 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.6 - 2026-07-22
+
+- Upgraded the Explicit Any collector to schema 9 so indirect `for`, `with`,
+  and `match` targets redirected through `global`/`nonlocal` cannot silently
+  become trusted non-Any bindings.
+- Added an explicit uncertain binding state that fails closed when a later
+  annotation depends on an indirect binding the collector cannot derive
+  exactly, while ordinary non-type indirect targets remain valid.
+- Added ADR-021, runtime/Ruff/strict-mypy 100-annotation attack regressions,
+  and the `v1426.explicit_any_indirect_target_scope_smoke` release gate without
+  raising any typing, complexity, per-file, or recovery ceiling.
+
 ## v14.2.5 - 2026-07-22
 
 - Upgraded the Explicit Any collector to schema 8 so `global` assignment and

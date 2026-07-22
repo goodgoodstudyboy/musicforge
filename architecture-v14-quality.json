@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "b9b13e335d033f4b63f951f7dd0169b1f528402a2b6a1abdde0aed2e6175c83f",
-    "source_tree_hash": "a3b94ff8a79c524e2269c468ee02b6d9476312e7f9a224c9c7a5b20c5d0b1258"
+    "report_sha256": "2896209ba7cdfbbaf3a7d51d738a7e4f24c2ac742081bb729840a61e1ad7749a",
+    "source_tree_hash": "b8f625da62840c32e4b53e57d3d8e316c858a3508df4bcacf3c8b8218df15cc2"
   },
-  "integrity_hash": "d875e26572921a1eca455e184915c7ff2739a7f42097926dd15e34d2d683a2ff",
+  "integrity_hash": "abd21d3cbed858229ffa34f2b3d121f2fa2d8ce011d3233c5b1e781714c48f19",
   "module_size_debt": [
     {
       "expires_version": "14.3.0",
@@ -732,7 +732,7 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.2.5",
+  "release_version": "14.2.6",
   "schema_version": 1,
   "stabilization": {
     "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
@@ -782,6 +782,13 @@
       "raw_dict_str_any_max_count": 5605,
       "total_oversized_module_max_lines": 124043
     },
+    "indirect_target_collector_decision": "docs/architecture/ADR-021-v1426-explicit-any-indirect-target-scope.md",
+    "indirect_target_collector_hotfix": {
+      "corrected_explicit_any_count": 11993,
+      "from_schema_version": 8,
+      "previous_explicit_any_ceiling": 12040,
+      "to_schema_version": 9
+    },
     "lambda_collector_decision": "docs/architecture/ADR-018-v1423-explicit-any-lambda-scope.md",
     "lambda_collector_hotfix": {
       "corrected_explicit_any_count": 11993,
@@ -795,7 +802,7 @@
   "typing": {
     "activation_baseline_dict_str_any_count": 12535,
     "explicit_any_affected_file_max_count": 461,
-    "explicit_any_collector_schema_version": 8,
+    "explicit_any_collector_schema_version": 9,
     "explicit_any_file_budgets": {
       "song_agent/application/audio_campaigns/release_coverage.py": 7,
       "song_agent/application/evidence_policy_gate.py": 1,

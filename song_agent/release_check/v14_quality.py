@@ -17,8 +17,8 @@ from song_agent.platform.verification.hashing import canonical_text_bytes, sha25
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.2.5"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 8
+QUALITY_POLICY_VERSION = "14.2.6"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 9
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -34,6 +34,7 @@ V1422_COLLECTOR_ADR = "docs/architecture/ADR-017-v1422-explicit-any-scope-collec
 V1423_LAMBDA_COLLECTOR_ADR = "docs/architecture/ADR-018-v1423-explicit-any-lambda-scope.md"
 V1424_DEFINITION_TIME_COLLECTOR_ADR = "docs/architecture/ADR-019-v1424-explicit-any-definition-time-scope.md"
 V1425_CLASS_GLOBAL_COLLECTOR_ADR = "docs/architecture/ADR-020-v1425-explicit-any-class-global-scope.md"
+V1426_INDIRECT_TARGET_COLLECTOR_ADR = "docs/architecture/ADR-021-v1426-explicit-any-indirect-target-scope.md"
 V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d"
 V1421_MODULE_DEBT_CEILINGS_HASH = "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b"
 V1421_RECOVERY_LIMITS: dict[str, Any] = {
@@ -485,6 +486,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "explicit_any_lambda_scope_probe": _explicit_any_lambda_scope_probe(),
         "explicit_any_definition_time_scope_probe": _explicit_any_definition_time_probe(),
         "explicit_any_class_global_scope_probe": _explicit_any_class_global_scope_probe(),
+        "explicit_any_indirect_target_scope_probe": _explicit_any_indirect_target_scope_probe(),
         "explicit_any_collector_schema_version": int(
             (policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0
         ),
@@ -509,6 +511,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and details["explicit_any_lambda_scope_probe"]
         and details["explicit_any_definition_time_scope_probe"]
         and details["explicit_any_class_global_scope_probe"]
+        and details["explicit_any_indirect_target_scope_probe"]
         and details["explicit_any_collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
         and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
@@ -577,6 +580,7 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
         "collector_lambda_scope_probe": _explicit_any_lambda_scope_probe(),
         "collector_definition_time_scope_probe": _explicit_any_definition_time_probe(),
         "collector_class_global_scope_probe": _explicit_any_class_global_scope_probe(),
+        "collector_indirect_target_scope_probe": _explicit_any_indirect_target_scope_probe(),
         "generated_v142_modules_absent": not violations["generated_modules"],
         "splitter_absent": not violations["splitter_present"],
         "active_suppressions_absent": not violations["suppressions"],
@@ -691,9 +695,10 @@ def run_v1425_explicit_any_class_global_scope_smoke(root: Path) -> tuple[bool, s
     stabilization = dict(policy.get("stabilization") or {})
     class_global_hotfix = dict(stabilization.get("class_global_collector_hotfix") or {})
     checks = {
-        "collector_schema_v8": typing["collector_schema_version"] == 8,
-        "policy_schema_v8": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0) == 8,
-        "policy_version_v1425": policy.get("release_version") == "14.2.5",
+        "collector_schema_current": typing["collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_schema_current": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
         "class_global_scope_probe": _explicit_any_class_global_scope_probe(),
         "active_scope_flow_clear": int(typing.get("explicit_any_scope_blocker_count") or 0) == 0,
         "class_global_collector_decision_present": stabilization.get("class_global_collector_decision")
@@ -701,6 +706,35 @@ def run_v1425_explicit_any_class_global_scope_smoke(root: Path) -> tuple[bool, s
         and (root / V1425_CLASS_GLOBAL_COLLECTOR_ADR).is_file(),
         "class_global_collector_migration_recorded": int(class_global_hotfix.get("from_schema_version") or 0) == 7
         and int(class_global_hotfix.get("to_schema_version") or 0) == 8,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+        "quality_policy_passed": not _policy_blockers(policy) and not _typing_blockers(typing, policy),
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "explicit_any_count": typing["explicit_any_count"],
+        "affected_file_count": typing["explicit_any_affected_file_count"],
+        "scope_flow_blockers": typing.get("explicit_any_scope_blockers") or [],
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
+def run_v1426_explicit_any_indirect_target_scope_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing = collect_typing_metrics(root)
+    stabilization = dict(policy.get("stabilization") or {})
+    indirect_hotfix = dict(stabilization.get("indirect_target_collector_hotfix") or {})
+    checks = {
+        "collector_schema_v9": typing["collector_schema_version"] == 9,
+        "policy_schema_v9": int((policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0) == 9,
+        "policy_version_v1426": policy.get("release_version") == "14.2.6",
+        "indirect_target_scope_probe": _explicit_any_indirect_target_scope_probe(),
+        "active_scope_flow_clear": int(typing.get("explicit_any_scope_blocker_count") or 0) == 0,
+        "indirect_target_collector_decision_present": stabilization.get("indirect_target_collector_decision")
+        == V1426_INDIRECT_TARGET_COLLECTOR_ADR
+        and (root / V1426_INDIRECT_TARGET_COLLECTOR_ADR).is_file(),
+        "indirect_target_collector_migration_recorded": int(indirect_hotfix.get("from_schema_version") or 0) == 8
+        and int(indirect_hotfix.get("to_schema_version") or 0) == 9,
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
         "quality_policy_passed": not _policy_blockers(policy) and not _typing_blockers(typing, policy),
     }
@@ -832,6 +866,14 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         or int(class_global_hotfix.get("to_schema_version") or 0) != 8
     ):
         blockers.append("v14_quality_policy_class_global_collector_migration")
+    if stabilization.get("indirect_target_collector_decision") != V1426_INDIRECT_TARGET_COLLECTOR_ADR:
+        blockers.append("v14_quality_policy_indirect_target_collector_decision")
+    indirect_hotfix = stabilization.get("indirect_target_collector_hotfix") or {}
+    if (
+        int(indirect_hotfix.get("from_schema_version") or 0) != 8
+        or int(indirect_hotfix.get("to_schema_version") or 0) != 9
+    ):
+        blockers.append("v14_quality_policy_indirect_target_collector_migration")
     if stabilization.get("hard_limits") != V1421_RECOVERY_LIMITS:
         blockers.append("v14_quality_policy_stabilization_limits")
     if _explicit_any_file_budgets_hash(policy) != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
@@ -1018,7 +1060,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             self._control_flow_scopes.append(len(self._scopes) - 1)
             try:
                 for name in _match_pattern_names(case.pattern):
-                    self._bind(name, "other")
+                    self._bind(name, "uncertain")
                 if case.guard is not None:
                     self.visit(case.guard)
                 self._visit_statements(case.body)
@@ -1126,7 +1168,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         for item in node.items:
             self.visit(item.context_expr)
             if item.optional_vars is not None:
-                self._bind_target(item.optional_vars, "other")
+                self._bind_target(item.optional_vars, "uncertain")
         self._control_flow_scopes.append(len(self._scopes) - 1)
         try:
             self._visit_statements(node.body)
@@ -1139,7 +1181,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._scopes[-1] = dict(base)
         self._control_flow_scopes.append(len(self._scopes) - 1)
         try:
-            self._bind_target(node.target, "other")
+            self._bind_target(node.target, "uncertain")
             self._visit_statements(node.body)
         finally:
             self._control_flow_scopes.pop()
@@ -1288,11 +1330,11 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     def _expression_binding_kind(self, value: ast.expr) -> str:
         if isinstance(value, ast.Name):
             binding = self._resolve_name(value.id)
-            if binding in {"any", "typing-module", "any-or-typing-module"}:
+            if binding in {"any", "typing-module", "any-or-typing-module", "uncertain"}:
                 return binding
-        return "any" if self._annotation_any_count(value) > 0 else "other"
+        return "any" if self._annotation_any_count(value, fail_on_uncertain=False) > 0 else "other"
 
-    def _annotation_any_count(self, annotation: ast.expr) -> int:
+    def _annotation_any_count(self, annotation: ast.expr, *, fail_on_uncertain: bool = True) -> int:
         count = 0
         qualified_names = {
             id(node.value)
@@ -1303,22 +1345,26 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             and _binding_matches(self._resolve_name(node.value.id), "typing-module")
         }
         for node in ast.walk(annotation):
-            if (
-                isinstance(node, ast.Name)
-                and id(node) not in qualified_names
-                and _binding_matches(self._resolve_name(node.id), "any")
-            ):
-                count += 1
+            if isinstance(node, ast.Name) and id(node) not in qualified_names:
+                binding = self._resolve_name(node.id)
+                if binding == "uncertain" and fail_on_uncertain:
+                    self._add_blocker(f"uncertain_annotation_binding:{node.id}")
+                    count += 1
+                elif _binding_matches(binding, "any"):
+                    count += 1
             elif isinstance(node, ast.Attribute) and node.attr == "Any" and isinstance(node.value, ast.Name):
                 if _binding_matches(self._resolve_name(node.value.id), "typing-module"):
                     count += 1
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                count += _quoted_annotation_any_count(
-                    node.value,
-                    self._names_for("any"),
-                    self._names_for("typing-module"),
-                )
+                count += self._quoted_annotation_any_count(node.value, fail_on_uncertain=fail_on_uncertain)
         return count
+
+    def _quoted_annotation_any_count(self, value: str, *, fail_on_uncertain: bool) -> int:
+        try:
+            expression = ast.parse(value, mode="eval")
+        except SyntaxError:
+            return 0
+        return self._annotation_any_count(expression.body, fail_on_uncertain=fail_on_uncertain)
 
     def _names_for(self, kind: str) -> set[str]:
         candidates = {name for scope in self._scopes for name in scope}
@@ -1431,6 +1477,8 @@ def _merge_potential_binding(bindings: dict[str, str], name: str, kind: str) -> 
 
 def _merge_binding_kinds(kinds: Iterable[str]) -> str:
     values = set(kinds)
+    if "uncertain" in values:
+        return "uncertain"
     if "any-or-typing-module" in values or {"any", "typing-module"}.issubset(values):
         return "any-or-typing-module"
     priority = {
@@ -1743,6 +1791,70 @@ def _explicit_any_class_global_scope_probe() -> bool:
         and any("typing_explicit_any_layer" in blocker for blocker in growth_blockers)
         and any("typing_explicit_any_file" in blocker for blocker in growth_blockers)
     )
+
+
+def _explicit_any_indirect_target_scope_probe() -> bool:
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    variants = (
+        "        for Alias in (t.Any,):\n            pass\n",
+        "        with contextlib.nullcontext(t.Any) as Alias:\n            pass\n",
+        "        match t.Any:\n            case Alias:\n                pass\n",
+    )
+    for body in variants:
+        source = (
+            "from __future__ import annotations\n"
+            "import contextlib\n"
+            "import typing as t\n"
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    Alias = int\n"
+            "else:\n"
+            "    class Probe:\n"
+            "        global Alias\n"
+            + body
+            + annotations
+            + "\n"
+        )
+        count, scope_blockers = _explicit_any_annotation_analysis(ast.parse(source))
+        metrics = {
+            "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "raw_dict_str_any_count": 0,
+            "implementation_document_count": 0,
+            "explicit_any_count": count,
+            "explicit_any_affected_file_count": 1,
+            "explicit_any_by_layer": {"interfaces": count},
+            "explicit_any_by_file": {"song_agent/interfaces/api/indirect_target_probe.py": count},
+            "explicit_any_scope_blockers": [
+                {"path": "song_agent/interfaces/api/indirect_target_probe.py", "detail": detail}
+                for detail in scope_blockers
+            ],
+            "public_implementation_document_count": 0,
+            "untyped_public_function_count": 0,
+        }
+        policy = {
+            "typing": {
+                "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+                "raw_dict_str_any_max_count": 0,
+                "implementation_document_max_count": 0,
+                "explicit_any_max_count": 99,
+                "explicit_any_affected_file_max_count": 1,
+                "explicit_any_layer_budgets": {"interfaces": 99},
+                "explicit_any_file_budgets": {"song_agent/interfaces/api/indirect_target_probe.py": 99},
+                "public_implementation_document_max_count": 0,
+                "untyped_public_function_max_count": 0,
+            }
+        }
+        blockers = _typing_blockers(metrics, policy)
+        if not (
+            count == 100
+            and "uncertain_annotation_binding:Alias" in scope_blockers
+            and any("typing_explicit_any_scope_flow" in blocker for blocker in blockers)
+            and any("typing_explicit_any:" in blocker for blocker in blockers)
+            and any("typing_explicit_any_layer" in blocker for blocker in blockers)
+            and any("typing_explicit_any_file" in blocker for blocker in blockers)
+        ):
+            return False
+    return True
 
 
 def _typing_layer(relative: str) -> str:

@@ -172,6 +172,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v1423.explicit_any_lambda_scope_smoke",
         "v1424.explicit_any_definition_time_scope_smoke",
         "v1425.explicit_any_class_global_scope_smoke",
+        "v1426.explicit_any_indirect_target_scope_smoke",
     ]
 
 

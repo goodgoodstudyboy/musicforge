@@ -58,9 +58,11 @@ bodies from outer collector state. v14.2.4 upgrades the Explicit `Any`
 collector to schema 7 and evaluates lambda/function/class definition-time
 expressions in their enclosing scope. v14.2.5 upgrades the collector to schema
 8, models module bindings declared `global` by class bodies, and fails closed
-on unresolved Any-relevant cross-scope flows. ADR-016 through ADR-020 keep ARCH-014
-and TYPE-003 open; these hotfixes do not claim that the original v14.2 cleanup
-targets were completed.
+on unresolved Any-relevant cross-scope flows. v14.2.6 upgrades the collector to
+schema 9 and treats indirect `for`, `with`, and `match` target bindings as
+uncertain until an annotation proves the binding quality-relevant. ADR-016
+through ADR-021 keep ARCH-014 and TYPE-003 open; these hotfixes do not claim
+that the original v14.2 cleanup targets were completed.
 
 ```powershell
 python -m mypy --no-incremental
