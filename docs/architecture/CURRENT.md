@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.7 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.8 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -260,4 +260,17 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Only an annotation that consumes the uncertain value emits a hard blocker;
   ordinary runtime-only values remain non-blocking.
 - Existing schema 9 measurements and every typing, complexity, per-file, and
+  recovery ceiling remain unchanged.
+
+## v14.2.8 Object Alias Flow Hotfix
+
+- Explicit Any collector schema 11 tracks may-alias object identities across
+  direct names, multi-level aliases, class objects, and branch merges.
+- Attribute/subscript writes through any possible alias taint the complete
+  alias group; ordinary rebind creates a new identity and disconnects the old
+  group.
+- Unknown ordinary indirect values remain distinct from Any-related
+  uncertainty, so normal runtime code is not polluted while annotation
+  consumption still fails closed.
+- Existing schema 10 measurements and every typing, complexity, per-file, and
   recovery ceiling remain unchanged.

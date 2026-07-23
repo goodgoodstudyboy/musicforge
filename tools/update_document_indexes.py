@@ -24,7 +24,7 @@ def build_material_index() -> dict[str, object]:
                 "title": heading,
                 "version": version,
                 "status": "active"
-                if "v14.2.7-MusicForgeExplicitAny派生不确定绑定传播安全修复" in path.name
+                if "v14.2.8-MusicForgeExplicitAny对象别名数据流安全修复" in path.name
                 else "historical",
             }
         )

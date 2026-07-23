@@ -133,3 +133,13 @@ expression now retains an uncertain dependency instead of being reclassified
 as trusted `other`; the hard blocker remains deferred until an annotation
 consumes that value. The active tree has no such blocker and all schema 9
 ceilings remain unchanged. ARCH-014 and TYPE-003 remain open through v14.3.0.
+
+## v14.2.8 Object Alias Flow Hotfix
+
+ADR-023 upgrades the collector to schema 11. Names now retain possible object
+identities across assignment and branch merge, so mutation through an alias
+cannot be read back through another name as trusted `other`. Ordinary rebind
+disconnects the previous alias group. The active tree remains at 11,993
+Explicit Any annotations, 461 affected files, and zero scope blockers; all
+schema 10 ceilings remain unchanged. ARCH-014 and TYPE-003 remain open through
+v14.3.0, where the collector must move to a mature semantic data-flow model.

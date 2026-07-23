@@ -4,6 +4,19 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.8 - 2026-07-23
+
+- Upgraded the Explicit Any collector to schema 11 with lexical-scope
+  may-alias identity tracking for direct, multi-level, class-object, and
+  branch aliases.
+- Attribute/subscript writes, in-place augmented mutation, and direct or
+  derived Any-related dynamic escape now taint every possible alias, while
+  ordinary reassignment disconnects the previous alias group and ordinary
+  unresolved values do not pollute unrelated types.
+- Added ADR-023, runtime/Ruff/strict-mypy object-alias regressions, and the
+  `v1428.explicit_any_object_alias_scope_smoke` critical release gate without
+  raising any typing, complexity, per-file, or recovery ceiling.
+
 ## v14.2.7 - 2026-07-23
 
 - Upgraded the Explicit Any collector to schema 10 so an uncertain binding

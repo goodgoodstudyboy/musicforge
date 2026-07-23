@@ -17,6 +17,7 @@ from song_agent.release_check.v14_quality import (
     V1425_CLASS_GLOBAL_COLLECTOR_ADR,
     V1426_INDIRECT_TARGET_COLLECTOR_ADR,
     V1427_DERIVED_UNCERTAIN_COLLECTOR_ADR,
+    V1428_OBJECT_ALIAS_COLLECTOR_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
     collect_complexity_metrics,
@@ -208,7 +209,7 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
 
 
 def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
-    document["release_version"] = "14.2.7"
+    document["release_version"] = "14.2.8"
     rows = document.get("module_size_debt")
     complexity = document.get("complexity")
     if not isinstance(rows, list) or not isinstance(complexity, dict):
@@ -236,6 +237,7 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         "class_global_collector_decision": V1425_CLASS_GLOBAL_COLLECTOR_ADR,
         "indirect_target_collector_decision": V1426_INDIRECT_TARGET_COLLECTOR_ADR,
         "derived_uncertain_collector_decision": V1427_DERIVED_UNCERTAIN_COLLECTOR_ADR,
+        "object_alias_collector_decision": V1428_OBJECT_ALIAS_COLLECTOR_ADR,
         "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
         "collector_migration": {
             "from_schema_version": 2,
@@ -275,6 +277,12 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         },
         "derived_uncertain_collector_hotfix": {
             "from_schema_version": 9,
+            "to_schema_version": 10,
+            "previous_explicit_any_ceiling": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
+            "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),
+        },
+        "object_alias_collector_hotfix": {
+            "from_schema_version": 10,
             "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "previous_explicit_any_ceiling": V1421_RECOVERY_LIMITS["explicit_any_max_count"],
             "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),

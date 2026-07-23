@@ -70,6 +70,13 @@ calls, conditionals, Boolean expressions, and chained assignments can no
 longer turn an unresolved indirect binding into trusted `other`. ADR-022 keeps
 the existing ceilings unchanged and retains ARCH-014 and TYPE-003 for v14.3.
 
+v14.2.8 upgrades the collector to schema 11 and tracks possible object
+identities across direct, multi-level, class-object, and branch aliases. A
+write through any alias now taints every possible name for that object, while
+ordinary reassignment disconnects the old group. ADR-023 keeps all schema 10
+ceilings unchanged and requires a semantic-analysis-backed data-flow model for
+the next collector redesign.
+
 ```powershell
 python -m mypy --no-incremental
 python -m ruff check song_agent tests tools
