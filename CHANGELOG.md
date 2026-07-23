@@ -4,6 +4,18 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.7 - 2026-07-23
+
+- Upgraded the Explicit Any collector to schema 10 so an uncertain binding
+  remains uncertain across subscripts, attributes, containers, calls,
+  conditional/Boolean expressions, and chained assignments.
+- Added exact runtime/Ruff/strict-mypy regressions for derived class-global
+  `for`, `with`, and `match` attacks, including all three ratchet layers and a
+  non-annotation negative case.
+- Added ADR-022 and the
+  `v1427.explicit_any_derived_uncertain_scope_smoke` release gate without
+  raising any typing, complexity, per-file, or recovery ceiling.
+
 ## v14.2.6 - 2026-07-22
 
 - Upgraded the Explicit Any collector to schema 9 so indirect `for`, `with`,

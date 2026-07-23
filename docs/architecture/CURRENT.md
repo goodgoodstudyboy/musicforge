@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.6 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.7 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -248,4 +248,16 @@ boundary violations, dependency exceptions, or compatibility imports.
   emits a hard scope-flow blocker instead of silently resolving to non-Any.
 - Ordinary indirect bindings that are not used as annotations remain valid.
 - Existing schema 8 measurements and every typing, complexity, per-file, and
+  recovery ceiling remain unchanged.
+
+## v14.2.7 Derived Uncertain Flow Hotfix
+
+- Explicit Any collector schema 10 preserves uncertain dependencies across
+  complete right-hand-side expression trees.
+- Subscripts, attributes, containers, calls, conditional expressions, Boolean
+  expressions, and chained assignments cannot downgrade an uncertain binding
+  to trusted `other`.
+- Only an annotation that consumes the uncertain value emits a hard blocker;
+  ordinary runtime-only values remain non-blocking.
+- Existing schema 9 measurements and every typing, complexity, per-file, and
   recovery ceiling remain unchanged.

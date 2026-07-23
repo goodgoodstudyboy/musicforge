@@ -54,6 +54,7 @@ def test_release_check_definitions_are_valid() -> None:
     assert "v1424.explicit_any_definition_time_scope_smoke" in {definition.check_id for definition in definitions}
     assert "v1425.explicit_any_class_global_scope_smoke" in {definition.check_id for definition in definitions}
     assert "v1426.explicit_any_indirect_target_scope_smoke" in {definition.check_id for definition in definitions}
+    assert "v1427.explicit_any_derived_uncertain_scope_smoke" in {definition.check_id for definition in definitions}
     assert by_id["v1212.receiver_acceptance_change_control_zip_security"].duration_budget_seconds == 90
     assert by_id["pytest.full"].timeout_seconds >= 6000
 
@@ -112,6 +113,7 @@ def test_release_check_profile_and_filters() -> None:
         "v1424.explicit_any_definition_time_scope_smoke",
         "v1425.explicit_any_class_global_scope_smoke",
         "v1426.explicit_any_indirect_target_scope_smoke",
+        "v1427.explicit_any_derived_uncertain_scope_smoke",
     ]
     assert "v75.release_check_matrix_smoke" not in {definition.check_id for definition in ga}
     assert [definition.check_id for definition in v10] == [

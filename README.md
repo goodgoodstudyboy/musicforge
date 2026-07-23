@@ -64,6 +64,12 @@ uncertain until an annotation proves the binding quality-relevant. ADR-016
 through ADR-021 keep ARCH-014 and TYPE-003 open; these hotfixes do not claim
 that the original v14.2 cleanup targets were completed.
 
+v14.2.7 upgrades the collector to schema 10 and preserves `uncertain` through
+derived right-hand-side expressions. Subscripts, attributes, containers,
+calls, conditionals, Boolean expressions, and chained assignments can no
+longer turn an unresolved indirect binding into trusted `other`. ADR-022 keeps
+the existing ceilings unchanged and retains ARCH-014 and TYPE-003 for v14.3.
+
 ```powershell
 python -m mypy --no-incremental
 python -m ruff check song_agent tests tools

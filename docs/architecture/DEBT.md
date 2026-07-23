@@ -125,3 +125,11 @@ annotation depends on that binding, collection fails closed and counts the
 annotation against the ratchet. The active tree has no such blocker and all
 schema 8 ceilings remain unchanged. ARCH-014 and TYPE-003 remain open through
 v14.3.0.
+
+## v14.2.7 Derived Uncertain Flow Hotfix
+
+ADR-022 upgrades the collector to schema 10. A compound right-hand-side
+expression now retains an uncertain dependency instead of being reclassified
+as trusted `other`; the hard blocker remains deferred until an annotation
+consumes that value. The active tree has no such blocker and all schema 9
+ceilings remain unchanged. ARCH-014 and TYPE-003 remain open through v14.3.0.
