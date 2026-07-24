@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.8 is a local-first modular monolith. It remains one Python
+MusicForge v14.2.9 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -273,4 +273,16 @@ boundary violations, dependency exceptions, or compatibility imports.
   uncertainty, so normal runtime code is not polluted while annotation
   consumption still fails closed.
 - Existing schema 10 measurements and every typing, complexity, per-file, and
+  recovery ceiling remain unchanged.
+
+## v14.2.9 Alias Data-Flow Kernel
+
+- Collector schema 12 delegates identity allocation, exact member cells,
+  unpacking, branch joins, dynamic escape, origin reachability, and taint to an
+  independent abstract data-flow kernel.
+- Destructuring, subscript, attribute, and call-return aliases cannot launder
+  an Any-related mutation into a trusted annotation binding.
+- Dynamic results use distinct identities with possible origins, so mutation
+  fails closed without treating ordinary factories as aliases of their class.
+- Existing schema 11 measurements and every typing, complexity, per-file, and
   recovery ceiling remain unchanged.

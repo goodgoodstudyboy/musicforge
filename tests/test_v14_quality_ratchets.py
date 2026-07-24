@@ -27,6 +27,7 @@ from song_agent.release_check.v14_quality import (
     run_v1426_explicit_any_indirect_target_scope_smoke,
     run_v1427_explicit_any_derived_uncertain_scope_smoke,
     run_v1428_explicit_any_object_alias_scope_smoke,
+    run_v1429_explicit_any_alias_dataflow_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -1069,6 +1070,141 @@ def test_v1428_object_alias_rebind_breaks_previous_group(tmp_path: Path) -> None
     assert typing["explicit_any_scope_blocker_count"] == 0
 
 
+@pytest.mark.parametrize(
+    ("extra_source", "class_body"),
+    [
+        (
+            "",
+            "        Holder = [None]\n"
+            "        Ref, = (Holder,)\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+        (
+            "",
+            "        Holder = [None]\n"
+            "        Store = [Holder]\n"
+            "        Ref = Store[0]\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+        (
+            "",
+            "        Holder = [None]\n"
+            "        class Box:\n"
+            "            pass\n"
+            "        Box.value = Holder\n"
+            "        Ref = Box.value\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+        (
+            "from typing import TypeVar\n"
+            "T = TypeVar(\"T\")\n"
+            "def identity(value: T) -> T:\n"
+            "    return value\n",
+            "        Holder = [None]\n"
+            "        Ref = identity(Holder)\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+    ],
+)
+def test_v1429_non_direct_alias_sources_fail_closed(
+    tmp_path: Path,
+    extra_source: str,
+    class_body: str,
+) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "non_direct_alias_growth.py"
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    source = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        f"{extra_source}"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+        "    class Probe:\n"
+        "        global Alias\n"
+        "        for Alias in ((t.Any,),):\n"
+        "            pass\n"
+        f"{class_body}"
+        f"{annotations}\n"
+    )
+    target.write_text(source, encoding="utf-8")
+    namespace: dict[str, object] = {}
+    exec(compile(source, str(target), "exec"), namespace)
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {"song_agent/interfaces/api/non_direct_alias_growth.py": 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+    blockers = _typing_blockers(typing, policy)
+    ruff = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--config", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    mypy = subprocess.run(
+        [sys.executable, "-m", "mypy", "--strict", "--config-file", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert namespace["Alias"] is __import__("typing").Any
+    assert len(namespace["__annotations__"]) == 100
+    assert ruff.returncode == 0, ruff.stdout + ruff.stderr
+    assert mypy.returncode == 0, mypy.stdout + mypy.stderr
+    assert typing["explicit_any_count"] == 100
+    assert typing["explicit_any_scope_blockers"] == [
+        {
+            "path": "song_agent/interfaces/api/non_direct_alias_growth.py",
+            "detail": "uncertain_annotation_binding:Alias",
+        }
+    ]
+    assert any("typing_explicit_any_scope_flow" in value for value in blockers)
+    assert any("typing_explicit_any:" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+def test_v1429_dynamic_alias_without_any_mutation_does_not_poison_source(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "safe_dynamic_alias.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import TypeVar\n"
+        "T = TypeVar(\"T\")\n"
+        "def identity(value: T) -> T:\n"
+        "    return value\n"
+        "Holder = [int]\n"
+        "Ref = identity(Holder)\n"
+        "Ref[0] = str\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 0
+    assert typing["explicit_any_scope_blocker_count"] == 0
+
+
 def test_v1427_derived_non_type_global_without_annotation_is_not_blocked(tmp_path: Path) -> None:
     target = tmp_path / "song_agent" / "interfaces" / "api" / "ordinary_derived_global.py"
     target.parent.mkdir(parents=True)
@@ -1369,6 +1505,12 @@ def test_v1427_explicit_any_derived_uncertain_scope_smoke_is_self_consistent() -
 
 def test_v1428_explicit_any_object_alias_scope_smoke_is_self_consistent() -> None:
     passed, detail = run_v1428_explicit_any_object_alias_scope_smoke(ROOT)
+
+    assert passed, detail
+
+
+def test_v1429_explicit_any_alias_dataflow_smoke_is_self_consistent() -> None:
+    passed, detail = run_v1429_explicit_any_alias_dataflow_smoke(ROOT)
 
     assert passed, detail
 

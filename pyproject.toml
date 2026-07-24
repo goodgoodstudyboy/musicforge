@@ -1,6 +1,6 @@
 [project]
 name = "song-agent"
-version = "14.2.8"
+version = "14.2.9"
 description = "Open songwriting agent that uses LLM APIs and open renderers."
 requires-python = ">=3.11"
 dependencies = []
@@ -73,5 +73,6 @@ files = [
   "song_agent/application",
   "song_agent/domains",
   "song_agent/capabilities",
-  "song_agent/interfaces"
+  "song_agent/interfaces",
+  "song_agent/release_check/explicit_any_dataflow.py"
 ]

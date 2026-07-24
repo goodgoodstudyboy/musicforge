@@ -14,11 +14,17 @@ import tomllib
 from typing import Any, Iterable
 
 from song_agent.platform.verification.hashing import canonical_text_bytes, sha256_text_file, stable_hash
+from song_agent.release_check.explicit_any_dataflow import (
+    ANY_RELEVANT_KINDS,
+    ExplicitAnyDataFlow,
+    FlowValue,
+    merge_flow_kinds,
+)
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.2.8"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 11
+QUALITY_POLICY_VERSION = "14.2.9"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 12
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -26,6 +32,8 @@ MYPY_ROOTS = (
     "song_agent/capabilities",
     "song_agent/interfaces",
 )
+MYPY_CRITICAL_TARGETS = ("song_agent/release_check/explicit_any_dataflow.py",)
+MYPY_TARGETS = (*MYPY_ROOTS, *MYPY_CRITICAL_TARGETS)
 COVERAGE_ROOTS = (*MYPY_ROOTS, "song_agent/release_check")
 MYPY_ERROR = re.compile(r"^(.*?):\d+: error: .*\[([^\]]+)\]\s*$")
 FUNCTION_LIMITS = {"interface_api": 100, "interface_cli": 120, "application": 150, "domain": 200}
@@ -37,6 +45,7 @@ V1425_CLASS_GLOBAL_COLLECTOR_ADR = "docs/architecture/ADR-020-v1425-explicit-any
 V1426_INDIRECT_TARGET_COLLECTOR_ADR = "docs/architecture/ADR-021-v1426-explicit-any-indirect-target-scope.md"
 V1427_DERIVED_UNCERTAIN_COLLECTOR_ADR = "docs/architecture/ADR-022-v1427-explicit-any-derived-uncertain-flow.md"
 V1428_OBJECT_ALIAS_COLLECTOR_ADR = "docs/architecture/ADR-023-v1428-explicit-any-object-alias-flow.md"
+V1429_ALIAS_DATAFLOW_ADR = "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md"
 V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d"
 V1421_MODULE_DEBT_CEILINGS_HASH = "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b"
 V1421_RECOVERY_LIMITS: dict[str, Any] = {
@@ -166,7 +175,7 @@ def collect_mypy_metrics(root: Path) -> dict[str, Any]:
         sys.executable,
         "-m",
         "mypy",
-        *MYPY_ROOTS,
+        *MYPY_TARGETS,
         "--follow-imports=skip",
         "--no-incremental",
         "--show-error-codes",
@@ -376,6 +385,7 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
         },
         "mypy": {
             "active_roots": list(MYPY_ROOTS),
+            "critical_targets": list(MYPY_CRITICAL_TARGETS),
             "max_total_errors": mypy["total_errors"],
             "error_budgets": mypy["error_budgets"],
             "strict_required": True,
@@ -482,6 +492,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "policy_integrity": policy_integrity,
         "mypy_budget": int((policy.get("mypy") or {}).get("max_total_errors") or 0),
         "mypy_roots": list((policy.get("mypy") or {}).get("active_roots") or []),
+        "mypy_critical_targets": list((policy.get("mypy") or {}).get("critical_targets") or []),
         "ruff_status": "passed" if ruff.returncode == 0 else "failed",
         "explicit_any_alias_probe": _explicit_any_alias_probe(),
         "explicit_any_scope_probe": _explicit_any_scope_probe(),
@@ -491,6 +502,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "explicit_any_indirect_target_scope_probe": _explicit_any_indirect_target_scope_probe(),
         "explicit_any_derived_uncertain_scope_probe": _explicit_any_derived_uncertain_scope_probe(),
         "explicit_any_object_alias_scope_probe": _explicit_any_object_alias_scope_probe(),
+        "explicit_any_alias_dataflow_probe": _explicit_any_alias_dataflow_probe(),
         "explicit_any_collector_schema_version": int(
             (policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0
         ),
@@ -509,6 +521,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and policy.get("release_version") == QUALITY_POLICY_VERSION
         and details["mypy_budget"] == 0
         and details["mypy_roots"] == list(MYPY_ROOTS)
+        and details["mypy_critical_targets"] == list(MYPY_CRITICAL_TARGETS)
         and ruff.returncode == 0
         and details["explicit_any_alias_probe"]
         and details["explicit_any_scope_probe"]
@@ -518,6 +531,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and details["explicit_any_indirect_target_scope_probe"]
         and details["explicit_any_derived_uncertain_scope_probe"]
         and details["explicit_any_object_alias_scope_probe"]
+        and details["explicit_any_alias_dataflow_probe"]
         and details["explicit_any_collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
         and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
@@ -546,7 +560,7 @@ def collect_v1421_static_violations(root: Path) -> dict[str, Any]:
         "splitter_present": (root / "tools" / "split_v142_oversized_modules.py").exists(),
         "suppressions": sorted(suppressions),
         "runtime_global_binders": sorted(runtime_global_binders),
-        "mypy_roots_complete": list(mypy_config.get("files") or []) == list(MYPY_ROOTS),
+        "mypy_roots_complete": list(mypy_config.get("files") or []) == list(MYPY_TARGETS),
         "mypy_exclude": mypy_config.get("exclude"),
     }
 
@@ -589,6 +603,7 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
         "collector_indirect_target_scope_probe": _explicit_any_indirect_target_scope_probe(),
         "collector_derived_uncertain_scope_probe": _explicit_any_derived_uncertain_scope_probe(),
         "collector_object_alias_scope_probe": _explicit_any_object_alias_scope_probe(),
+        "collector_alias_dataflow_probe": _explicit_any_alias_dataflow_probe(),
         "generated_v142_modules_absent": not violations["generated_modules"],
         "splitter_absent": not violations["splitter_present"],
         "active_suppressions_absent": not violations["suppressions"],
@@ -817,6 +832,39 @@ def run_v1428_explicit_any_object_alias_scope_smoke(root: Path) -> tuple[bool, s
     return all(checks.values()), json.dumps(detail, sort_keys=True)
 
 
+def run_v1429_explicit_any_alias_dataflow_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    dataflow_migration = dict(stabilization.get("alias_dataflow_collector_hotfix") or {})
+    static_violations = collect_v1421_static_violations(root)
+    checks = {
+        "policy_schema_current": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "alias_dataflow_probe": _explicit_any_alias_dataflow_probe(),
+        "dataflow_kernel_present": (root / "song_agent/release_check/explicit_any_dataflow.py").is_file(),
+        "dataflow_kernel_mypy_checked": bool(static_violations["mypy_roots_complete"])
+        and (policy.get("mypy") or {}).get("critical_targets") == list(MYPY_CRITICAL_TARGETS),
+        "alias_dataflow_decision_present": stabilization.get("alias_dataflow_collector_decision")
+        == V1429_ALIAS_DATAFLOW_ADR
+        and (root / V1429_ALIAS_DATAFLOW_ADR).is_file(),
+        "alias_dataflow_migration_recorded": int(dataflow_migration.get("from_schema_version") or 0) == 11
+        and int(dataflow_migration.get("to_schema_version") or 0) == 12,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+        # The v141 check in every publishing profile owns the full active-tree
+        # scan. This check remains a fast schema/data-flow attack gate.
+        "quality_policy_passed": not _policy_blockers(policy),
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "explicit_any_ceiling": int(typing_limits.get("explicit_any_max_count") or 0),
+        "affected_file_ceiling": int(typing_limits.get("explicit_any_affected_file_max_count") or 0),
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
 def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
     limits = policy.get("typing") or {}
     blockers: list[str] = []
@@ -888,6 +936,9 @@ def _mypy_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]
 
 def _policy_blockers(policy: dict[str, Any]) -> list[str]:
     blockers: list[str] = []
+    mypy = policy.get("mypy") or {}
+    if mypy.get("active_roots") != list(MYPY_ROOTS) or mypy.get("critical_targets") != list(MYPY_CRITICAL_TARGETS):
+        blockers.append("v14_quality_policy_mypy_targets")
     expected = stable_hash({key: value for key, value in policy.items() if key != "integrity_hash"})
     if policy.get("integrity_hash") != expected:
         blockers.append("v14_quality_policy_integrity")
@@ -959,6 +1010,14 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         or int(alias_hotfix.get("to_schema_version") or 0) != 11
     ):
         blockers.append("v14_quality_policy_object_alias_collector_migration")
+    if stabilization.get("alias_dataflow_collector_decision") != V1429_ALIAS_DATAFLOW_ADR:
+        blockers.append("v14_quality_policy_alias_dataflow_collector_decision")
+    dataflow_hotfix = stabilization.get("alias_dataflow_collector_hotfix") or {}
+    if (
+        int(dataflow_hotfix.get("from_schema_version") or 0) != 11
+        or int(dataflow_hotfix.get("to_schema_version") or 0) != 12
+    ):
+        blockers.append("v14_quality_policy_alias_dataflow_collector_migration")
     if stabilization.get("hard_limits") != V1421_RECOVERY_LIMITS:
         blockers.append("v14_quality_policy_stabilization_limits")
     if _explicit_any_file_budgets_hash(policy) != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
@@ -1014,8 +1073,8 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self.count = 0
         self.blockers: list[str] = []
         self._scopes: list[dict[str, str]] = [{}]
-        self._aliases: list[dict[str, frozenset[int]]] = [{}]
-        self._next_alias_identity = 0
+        self._aliases: list[dict[str, FlowValue]] = [{}]
+        self._dataflow = ExplicitAnyDataFlow()
         self._potential_scopes: list[dict[str, str]] = []
         self._scope_kinds: list[str] = ["module"]
         self._global_names: list[set[str]] = [set()]
@@ -1030,7 +1089,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._visit_expressions(node.bases)
         self._visit_expressions(keyword.value for keyword in node.keywords)
         self._visit_scope_body(node.body, push_scope=True, scope_kind="class")
-        self._bind(node.name, "other")
+        self._bind(node.name, "other", aliases=self._dataflow.object())
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._visit_function(node)
@@ -1055,14 +1114,14 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         for alias in node.names:
             name = alias.asname or alias.name.split(".", 1)[0]
             kind = "typing-module" if alias.name in {"typing", "typing_extensions"} else "other"
-            self._bind(name, kind)
+            self._bind(name, kind, aliases=self._dataflow.scalar(kind))
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         for alias in node.names:
             if alias.name == "*" and node.module in {"typing", "typing_extensions"}:
-                self._bind("Any", "any")
-                self._bind("TypeAlias", "type-alias-marker")
-                self._bind("TYPE_CHECKING", "type-checking-marker")
+                self._bind("Any", "any", aliases=self._dataflow.scalar("any"))
+                self._bind("TypeAlias", "type-alias-marker", aliases=self._dataflow.scalar("type-alias-marker"))
+                self._bind("TYPE_CHECKING", "type-checking-marker", aliases=self._dataflow.scalar("type-checking-marker"))
                 continue
             name = alias.asname or alias.name
             kind = "other"
@@ -1072,68 +1131,63 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                     "TypeAlias": "type-alias-marker",
                     "TYPE_CHECKING": "type-checking-marker",
                 }.get(alias.name, "other")
-            self._bind(name, kind)
+            self._bind(name, kind, aliases=self._dataflow.scalar(kind))
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         if not self._is_type_alias_annotation(node.annotation):
             self.count += self._annotation_any_count(node.annotation)
-        kind = self._expression_binding_kind(node.value) if node.value is not None else "other"
-        aliases = self._expression_aliases(node.value) if node.value is not None else self._new_alias_identity()
+        value = self._expression_value(node.value) if node.value is not None else self._dataflow.scalar()
         if node.value is not None:
             self.visit(node.value)
-        self._bind_target(node.target, kind, aliases=aliases)
+        self._bind_target(node.target, value)
 
     def visit_Assign(self, node: ast.Assign) -> None:
-        kind = self._expression_binding_kind(node.value)
-        aliases = self._expression_aliases(node.value)
+        value = self._expression_value(node.value)
         self.visit(node.value)
         for target in node.targets:
-            self._bind_target(target, kind, aliases=aliases)
+            self._bind_target(target, value)
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
-        target_kind = self._expression_binding_kind(node.target)
-        value_kind = self._expression_binding_kind(node.value)
-        aliases = self._target_aliases(node.target)
+        target_value = self._expression_value(node.target)
+        source_value = self._expression_value(node.value)
         self.visit(node.value)
-        kinds = {target_kind, value_kind}
-        any_capable = {"any", "typing-module", "any-or-typing-module", "uncertain"}
-        kind = "uncertain" if kinds & any_capable else "unknown" if "unknown" in kinds else "other"
-        if isinstance(node.target, ast.Name) and kind in {"uncertain", "unknown"}:
+        kind = merge_flow_kinds((target_value.kind, source_value.kind))
+        value = self._dataflow.join((target_value, source_value), kind=kind)
+        if isinstance(node.target, ast.Name) and kind in ANY_RELEVANT_KINDS:
             # Augmented assignment can mutate an object in place. A write
             # through one name must therefore taint every possible alias.
-            self._taint_alias_group(node.target.id, kind=kind)
-        self._bind_target(node.target, kind, aliases=aliases)
+            self._taint_alias_group(
+                node.target.id,
+                kind="unknown" if kind == "unknown" else "uncertain",
+            )
+        self._bind_target(node.target, value)
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
-        kind = self._expression_binding_kind(node.value)
-        aliases = self._expression_aliases(node.value)
+        value = self._expression_value(node.value)
         self.visit(node.value)
-        self._bind_target(node.target, kind, aliases=aliases)
+        self._bind_target(node.target, value)
 
     def visit_Call(self, node: ast.Call) -> None:
+        arguments = [*node.args, *(keyword.value for keyword in node.keywords)]
         uncertain_arguments = [
             value
-            for value in (*node.args, *(keyword.value for keyword in node.keywords))
-            if self._expression_binding_kind(value) in {"any", "typing-module", "any-or-typing-module", "uncertain"}
+            for value in arguments
+            if self._expression_value(value).kind in {"any", "typing-module", "any-or-typing-module", "uncertain"}
         ]
         if uncertain_arguments:
-            candidates: list[ast.expr] = [
-                value
-                for value in (*node.args, *(keyword.value for keyword in node.keywords))
-                if value not in uncertain_arguments
-            ]
+            candidates = [value for value in arguments if value not in uncertain_arguments]
             if isinstance(node.func, ast.Attribute):
                 candidates.append(node.func.value)
             for candidate in candidates:
-                for name in self._expression_alias_names(candidate):
-                    self._taint_alias_group(name)
+                self._taint_value(self._expression_value(candidate))
         self.generic_visit(node)
 
     def visit_TypeAlias(self, node: ast.AST) -> None:
         name = getattr(node, "name", None)
         value = getattr(node, "value", None)
         if isinstance(name, ast.Name) and isinstance(value, ast.expr):
-            self._bind(name.id, self._expression_binding_kind(value))
+            flow = self._expression_value(value)
+            self._bind(name.id, flow.kind, aliases=flow)
 
     def visit_If(self, node: ast.If) -> None:
         self.visit(node.test)
@@ -1177,7 +1231,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._aliases[-1] = merged_aliases
 
     def visit_Match(self, node: ast.Match) -> None:
-        target_kind = self._indirect_target_kind(node.subject)
+        target_value = self._indirect_target_value(node.subject)
         self.visit(node.subject)
         base = dict(self._scopes[-1])
         base_aliases = dict(self._aliases[-1])
@@ -1189,7 +1243,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             self._control_flow_scopes.append(len(self._scopes) - 1)
             try:
                 for name in _match_pattern_names(case.pattern):
-                    self._bind(name, target_kind)
+                    self._bind(name, target_value.kind, aliases=target_value)
                 if case.guard is not None:
                     self.visit(case.guard)
                 self._visit_statements(case.body)
@@ -1221,7 +1275,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         if node.args.kwarg is not None:
             parameter_scope[node.args.kwarg.arg] = "other"
         self._visit_scope_body(node.body, push_scope=True, initial=parameter_scope, scope_kind="function")
-        self._bind(node.name, "other")
+        self._bind(node.name, "other", aliases=self._dataflow.object())
 
     def _visit_argument_defaults(self, arguments: ast.arguments) -> None:
         self._visit_expressions(arguments.defaults)
@@ -1242,7 +1296,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         global_names, nonlocal_names = _scope_declarations(body)
         if push_scope:
             self._scopes.append(dict(initial or {}))
-            self._aliases.append({name: self._new_alias_identity() for name in (initial or {})})
+            self._aliases.append({name: self._dataflow.object(escaped=True) for name in (initial or {})})
             self._scope_kinds.append(scope_kind)
             self._global_names.append(global_names)
             self._nonlocal_names.append(nonlocal_names)
@@ -1273,8 +1327,8 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self,
         body: list[ast.stmt],
         state: dict[str, str],
-        aliases: dict[str, frozenset[int]],
-    ) -> tuple[dict[str, str], dict[str, frozenset[int]]]:
+        aliases: dict[str, FlowValue],
+    ) -> tuple[dict[str, str], dict[str, FlowValue]]:
         self._scopes[-1] = dict(state)
         self._aliases[-1] = dict(aliases)
         self._control_flow_scopes.append(len(self._scopes) - 1)
@@ -1310,10 +1364,10 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
 
     def _visit_with(self, node: ast.With | ast.AsyncWith) -> None:
         for item in node.items:
-            target_kind = self._indirect_target_kind(item.context_expr)
+            target_value = self._indirect_target_value(item.context_expr)
             self.visit(item.context_expr)
             if item.optional_vars is not None:
-                self._bind_target(item.optional_vars, target_kind)
+                self._bind_target(item.optional_vars, target_value)
         self._control_flow_scopes.append(len(self._scopes) - 1)
         try:
             self._visit_statements(node.body)
@@ -1321,7 +1375,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             self._control_flow_scopes.pop()
 
     def _visit_for(self, node: ast.For | ast.AsyncFor) -> None:
-        target_kind = self._indirect_target_kind(node.iter)
+        target_value = self._indirect_target_value(node.iter)
         self.visit(node.iter)
         base = dict(self._scopes[-1])
         base_aliases = dict(self._aliases[-1])
@@ -1329,7 +1383,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._aliases[-1] = dict(base_aliases)
         self._control_flow_scopes.append(len(self._scopes) - 1)
         try:
-            self._bind_target(node.target, target_kind)
+            self._bind_target(node.target, target_value)
             self._visit_statements(node.body)
         finally:
             self._control_flow_scopes.pop()
@@ -1409,7 +1463,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                             changed = _merge_potential_binding(potential, name, kind) or changed
         return potential
 
-    def _bind(self, name: str, kind: str, *, aliases: frozenset[int] | None = None) -> None:
+    def _bind(self, name: str, kind: str, *, aliases: FlowValue | None = None) -> None:
         target_index = self._binding_scope_index(name)
         if target_index is None:
             if self._binding_is_relevant(kind) or self._binding_is_relevant(self._resolve_outer_name(name)):
@@ -1424,7 +1478,8 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if relevant and self._control_flow_scopes and self._control_flow_scopes[-1] != target_index:
                 self._add_blocker(f"cross_scope_control_flow:{name}")
         self._scopes[target_index][name] = kind
-        self._aliases[target_index][name] = aliases or self._new_alias_identity()
+        value = aliases.with_kind(kind) if aliases is not None else self._dataflow.object(kind)
+        self._aliases[target_index][name] = value
 
     def _binding_scope_index(self, name: str) -> int | None:
         current_index = len(self._scopes) - 1
@@ -1463,13 +1518,12 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 merged[name] = _merge_binding_kinds(kinds)
         return merged
 
-    @staticmethod
-    def _merge_branch_aliases(states: list[dict[str, frozenset[int]]]) -> dict[str, frozenset[int]]:
-        merged: dict[str, frozenset[int]] = {}
+    def _merge_branch_aliases(self, states: list[dict[str, FlowValue]]) -> dict[str, FlowValue]:
+        merged: dict[str, FlowValue] = {}
         for name in set().union(*(state.keys() for state in states)):
-            identities = frozenset().union(*(state.get(name, frozenset()) for state in states))
-            if identities:
-                merged[name] = identities
+            values = [state[name] for state in states if name in state]
+            if values:
+                merged[name] = self._dataflow.join(values)
         return merged
 
     def _resolve_outer_name(self, name: str) -> str:
@@ -1483,78 +1537,110 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     def _bind_target(
         self,
         target: ast.expr,
-        kind: str,
-        *,
-        aliases: frozenset[int] | None = None,
+        value: FlowValue,
     ) -> None:
         if isinstance(target, ast.Name):
-            self._bind(target.id, kind, aliases=aliases)
+            self._bind(target.id, value.kind, aliases=value)
             return
         if isinstance(target, (ast.Tuple, ast.List)):
-            for item in target.elts:
-                self._bind_target(item, kind, aliases=aliases)
+            unpacked = self._dataflow.unpack(value, len(target.elts))
+            for item, item_value in zip(target.elts, unpacked, strict=True):
+                if isinstance(item, ast.Starred):
+                    item_value = self._dataflow.escape((value,), kind=value.kind)
+                    self._bind_target(item.value, item_value)
+                else:
+                    self._bind_target(item, item_value)
             return
-        if isinstance(target, (ast.Attribute, ast.Subscript)) and kind in {
-            "any",
-            "typing-module",
-            "any-or-typing-module",
-            "uncertain",
-            "unknown",
-        }:
-            root_name = self._mutation_root_name(target)
-            if root_name:
-                self._taint_alias_group(root_name, kind="uncertain" if kind != "unknown" else "unknown")
+        if isinstance(target, (ast.Attribute, ast.Subscript)):
+            base = self._expression_value(target.value)
+            if value.kind in ANY_RELEVANT_KINDS:
+                kind = "unknown" if value.kind == "unknown" else "uncertain"
+                self._taint_value(base, kind=kind)
+            self._dataflow.write_member(base, self._member_key(target), value)
 
     def _taint_alias_group(self, root_name: str, *, kind: str = "uncertain") -> None:
-        identities = self._resolve_aliases(root_name)
-        if not identities:
+        value = self._resolve_flow(root_name)
+        if not value.identities:
             self._bind(root_name, kind)
             return
-        matched = False
+        self._taint_value(value, kind=kind)
+
+    def _taint_value(self, value: FlowValue, *, kind: str = "uncertain") -> None:
+        identities = self._dataflow.taint(value, kind)
+        if not identities:
+            return
         for index, scope_aliases in enumerate(self._aliases):
             for name, candidate in scope_aliases.items():
-                if identities & candidate:
-                    self._scopes[index][name] = kind
-                    matched = True
-        if not matched:
-            self._bind(root_name, kind)
+                if identities & candidate.identities:
+                    merged = merge_flow_kinds((self._scopes[index].get(name, "other"), kind))
+                    self._scopes[index][name] = merged
+                    scope_aliases[name] = candidate.with_kind(merged)
 
-    def _new_alias_identity(self) -> frozenset[int]:
-        self._next_alias_identity += 1
-        return frozenset({self._next_alias_identity})
-
-    def _expression_aliases(self, value: ast.expr) -> frozenset[int]:
+    def _expression_value(self, value: ast.expr) -> FlowValue:
+        kind = self._expression_binding_kind(value)
         if isinstance(value, ast.Name):
-            return self._resolve_aliases(value.id) or self._new_alias_identity()
+            return self._resolve_flow(value.id).with_kind(kind)
         if isinstance(value, ast.NamedExpr):
-            return self._expression_aliases(value.value)
+            return self._expression_value(value.value).with_kind(kind)
         if isinstance(value, ast.IfExp):
-            return self._expression_aliases(value.body) | self._expression_aliases(value.orelse)
+            return self._dataflow.join(
+                (self._expression_value(value.body), self._expression_value(value.orelse)),
+                kind=kind,
+            )
         if isinstance(value, ast.BoolOp):
-            return frozenset().union(*(self._expression_aliases(item) for item in value.values))
-        return self._new_alias_identity()
-
-    def _target_aliases(self, target: ast.expr) -> frozenset[int]:
-        if isinstance(target, ast.Name):
-            return self._resolve_aliases(target.id) or self._new_alias_identity()
-        root_name = self._mutation_root_name(target) if isinstance(target, (ast.Attribute, ast.Subscript)) else ""
-        return self._resolve_aliases(root_name) if root_name else self._new_alias_identity()
-
-    def _expression_alias_names(self, value: ast.expr) -> set[str]:
-        return {
-            node.id
+            return self._dataflow.join((self._expression_value(item) for item in value.values), kind=kind)
+        if isinstance(value, (ast.Tuple, ast.List, ast.Set)):
+            return self._dataflow.container((self._expression_value(item) for item in value.elts), kind=kind)
+        if isinstance(value, ast.Dict):
+            entries: list[tuple[str | None, FlowValue]] = []
+            for key, item in zip(value.keys, value.values, strict=True):
+                entries.append((self._static_key(key), self._expression_value(item)))
+            return self._dataflow.mapping(entries, kind=kind)
+        if isinstance(value, (ast.Attribute, ast.Subscript)):
+            base = self._expression_value(value.value)
+            read = self._dataflow.read_member(base, self._member_key(value))
+            return read.with_kind(merge_flow_kinds((kind, read.kind)))
+        if isinstance(value, ast.Call):
+            candidates = [self._expression_value(item) for item in value.args]
+            candidates.extend(self._expression_value(keyword.value) for keyword in value.keywords)
+            if isinstance(value.func, ast.Attribute):
+                candidates.append(self._expression_value(value.func.value))
+            return self._dataflow.escape(candidates, kind=kind)
+        if isinstance(value, ast.Lambda):
+            return self._dataflow.object(kind, escaped=True)
+        loaded = [
+            self._resolve_flow(node.id)
             for node in ast.walk(value)
-            if isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and self._resolve_aliases(node.id)
-        }
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+        ]
+        if any(item.identities for item in loaded):
+            return self._dataflow.escape(loaded, kind=kind)
+        return self._dataflow.scalar(kind)
+
+    def _resolve_flow(self, name: str) -> FlowValue:
+        target_index = self._binding_scope_index(name)
+        if target_index is None:
+            return self._dataflow.scalar(self._resolve_name(name))
+        if target_index != len(self._aliases) - 1:
+            value = self._aliases[target_index].get(name)
+            return value or self._dataflow.scalar(self._resolve_name(name))
+        for index in range(len(self._aliases) - 1, -1, -1):
+            value = self._aliases[index].get(name)
+            if value is not None:
+                return value.with_kind(self._resolve_name(name) or value.kind)
+        return self._dataflow.scalar(self._resolve_name(name))
 
     @staticmethod
-    def _mutation_root_name(target: ast.Attribute | ast.Subscript) -> str:
-        value: ast.expr = target.value
-        while isinstance(value, (ast.Attribute, ast.Subscript)):
-            value = value.value
-        return value.id if isinstance(value, ast.Name) else ""
+    def _static_key(value: ast.expr | None) -> str | None:
+        if isinstance(value, ast.Constant) and isinstance(value.value, (str, int, bytes)):
+            return repr(value.value)
+        return None
+
+    def _member_key(self, value: ast.Attribute | ast.Subscript) -> tuple[str, str] | None:
+        if isinstance(value, ast.Attribute):
+            return ("attr", value.attr)
+        key = self._static_key(value.slice)
+        return ("index", key) if key is not None else None
 
     def _expression_binding_kind(self, value: ast.expr) -> str:
         if isinstance(value, ast.Name):
@@ -1585,6 +1671,15 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if source_kind in {"any", "typing-module", "any-or-typing-module", "uncertain"}
             else "unknown"
         )
+
+    def _indirect_target_value(self, source: ast.expr) -> FlowValue:
+        value = self._expression_value(source)
+        kind = (
+            "uncertain"
+            if value.kind in {"any", "typing-module", "any-or-typing-module", "uncertain"}
+            else "unknown"
+        )
+        return self._dataflow.escape((value,), kind=kind)
 
     def _annotation_any_count(self, annotation: ast.expr, *, fail_on_uncertain: bool = True) -> int:
         count = 0
@@ -1649,16 +1744,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         return ""
 
     def _resolve_aliases(self, name: str) -> frozenset[int]:
-        target_index = self._binding_scope_index(name)
-        if target_index is None:
-            return frozenset()
-        if target_index != len(self._aliases) - 1:
-            return self._aliases[target_index].get(name, frozenset())
-        for index in range(len(self._aliases) - 1, -1, -1):
-            aliases = self._aliases[index]
-            if name in aliases:
-                return aliases[name]
-        return frozenset()
+        return self._resolve_flow(name).identities
 
 
 def _match_pattern_names(pattern: ast.pattern) -> set[str]:
@@ -2285,6 +2371,116 @@ def _explicit_any_object_alias_scope_probe() -> bool:
     )
     rebind_count, rebind_blockers = _explicit_any_annotation_analysis(rebind)
     return rebind_count == 0 and not rebind_blockers
+
+
+def _explicit_any_alias_dataflow_probe() -> bool:
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    variants = (
+        (
+            "",
+            "        Holder = [None]\n"
+            "        Ref, = (Holder,)\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+        (
+            "",
+            "        Holder = [None]\n"
+            "        Store = [Holder]\n"
+            "        Ref = Store[0]\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+        (
+            "",
+            "        Holder = [None]\n"
+            "        class Box:\n"
+            "            pass\n"
+            "        Box.value = Holder\n"
+            "        Ref = Box.value\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+        (
+            "from typing import TypeVar\n"
+            "T = TypeVar(\"T\")\n"
+            "def identity(value: T) -> T:\n"
+            "    return value\n",
+            "        Holder = [None]\n"
+            "        Ref = identity(Holder)\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+        ),
+    )
+    for extra_source, body in variants:
+        source = (
+            "from __future__ import annotations\n"
+            "import typing as t\n"
+            "from typing import TYPE_CHECKING\n"
+            + extra_source
+            + "if TYPE_CHECKING:\n"
+            "    Alias = int\n"
+            "else:\n"
+            "    class Probe:\n"
+            "        global Alias\n"
+            "        for Alias in ((t.Any,),):\n"
+            "            pass\n"
+            + body
+            + annotations
+            + "\n"
+        )
+        count, scope_blockers = _explicit_any_annotation_analysis(ast.parse(source))
+        metrics = {
+            "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "raw_dict_str_any_count": 0,
+            "implementation_document_count": 0,
+            "explicit_any_count": count,
+            "explicit_any_affected_file_count": 1,
+            "explicit_any_by_layer": {"interfaces": count},
+            "explicit_any_by_file": {"song_agent/interfaces/api/alias_dataflow_probe.py": count},
+            "explicit_any_scope_blockers": [
+                {"path": "song_agent/interfaces/api/alias_dataflow_probe.py", "detail": detail}
+                for detail in scope_blockers
+            ],
+            "public_implementation_document_count": 0,
+            "untyped_public_function_count": 0,
+        }
+        policy = {
+            "typing": {
+                "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+                "raw_dict_str_any_max_count": 0,
+                "implementation_document_max_count": 0,
+                "explicit_any_max_count": 99,
+                "explicit_any_affected_file_max_count": 1,
+                "explicit_any_layer_budgets": {"interfaces": 99},
+                "explicit_any_file_budgets": {"song_agent/interfaces/api/alias_dataflow_probe.py": 99},
+                "public_implementation_document_max_count": 0,
+                "untyped_public_function_max_count": 0,
+            }
+        }
+        blockers = _typing_blockers(metrics, policy)
+        if not (
+            count == 100
+            and "uncertain_annotation_binding:Alias" in scope_blockers
+            and any("typing_explicit_any_scope_flow" in blocker for blocker in blockers)
+            and any("typing_explicit_any:" in blocker for blocker in blockers)
+            and any("typing_explicit_any_layer" in blocker for blocker in blockers)
+            and any("typing_explicit_any_file" in blocker for blocker in blockers)
+        ):
+            return False
+    safe = ast.parse(
+        "from typing import TypeVar\n"
+        "T = TypeVar(\"T\")\n"
+        "def identity(value: T) -> T:\n"
+        "    return value\n"
+        "Holder = [int]\n"
+        "Ref = identity(Holder)\n"
+        "Ref[0] = str\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n"
+    )
+    safe_count, safe_blockers = _explicit_any_annotation_analysis(safe)
+    return safe_count == 0 and not safe_blockers
 
 
 def _typing_layer(relative: str) -> str:

@@ -1,5 +1,5 @@
 {
-  "file_count": 1012,
+  "file_count": 1013,
   "files": {
     "song_agent/__init__.py": {
       "summary": {
@@ -2726,8 +2726,8 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_signoff.py": {
       "summary": {
-        "covered_lines": 455,
-        "missing_lines": 79,
+        "covered_lines": 456,
+        "missing_lines": 78,
         "num_statements": 534
       }
     },
@@ -5902,6 +5902,13 @@
         "num_statements": 5
       }
     },
+    "song_agent/release_check/explicit_any_dataflow.py": {
+      "summary": {
+        "covered_lines": 149,
+        "missing_lines": 6,
+        "num_statements": 155
+      }
+    },
     "song_agent/release_check/fixtures/__init__.py": {
       "summary": {
         "covered_lines": 2,
@@ -6009,15 +6016,15 @@
     },
     "song_agent/release_check/v14_quality.py": {
       "summary": {
-        "covered_lines": 995,
-        "missing_lines": 137,
-        "num_statements": 1132
+        "covered_lines": 1052,
+        "missing_lines": 143,
+        "num_statements": 1195
       }
     },
     "song_agent/release_check/v14_reviewer.py": {
       "summary": {
-        "covered_lines": 128,
-        "missing_lines": 40,
+        "covered_lines": 129,
+        "missing_lines": 39,
         "num_statements": 168
       }
     },
@@ -7088,5 +7095,5 @@
   },
   "package_type": "musicforge_v14_coverage_evidence",
   "schema_version": 2,
-  "source_report_semantic_hash": "3ec2468a2ae90b940585945f848180092360f0209be881fa5b12abe3de63adf9"
+  "source_report_semantic_hash": "b09e07036297f2ea942cffa1deb47cbb83f33f448633b9327b144c4046c5e944"
 }

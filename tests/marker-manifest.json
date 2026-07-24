@@ -95,6 +95,7 @@
     "tests/test_edits.py": "unit",
     "tests/test_encoded_audio_acceptance.py": "integration",
     "tests/test_evidence_graph_policy.py": "unit",
+    "tests/test_explicit_any_dataflow.py": "unit",
     "tests/test_final_export.py": "unit",
     "tests/test_format_decisions.py": "integration",
     "tests/test_ga_readiness.py": "integration",

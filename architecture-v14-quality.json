@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "3b9277f5004096003e58954b82491379e6f953ffbc910c8a7becffa865f3d680",
-    "source_tree_hash": "5bc5e5da4bc9f7e442f4fec0c60993a69bb45dd5f3aa398e633766dd10e4f280"
+    "report_sha256": "79105a00b254fecde851a011a91978024f7077cedf1fea7c324954e1e034120c",
+    "source_tree_hash": "ac1eb005a6817f5188dcb7eb78deb5d1013a93980dcfb28fae207f3e5cb5fa88"
   },
-  "integrity_hash": "6e1eb954db8b9f1acd9c29709013e011fe1bd75980b3bf976b7016ce27c1dcc3",
+  "integrity_hash": "f671afb532e050173e6eb8584ff26ef3431299e745a08187346ab2e433a750b3",
   "module_size_debt": [
     {
       "expires_version": "14.3.0",
@@ -727,14 +727,24 @@
       "song_agent/capabilities",
       "song_agent/interfaces"
     ],
+    "critical_targets": [
+      "song_agent/release_check/explicit_any_dataflow.py"
+    ],
     "error_budgets": {},
     "max_total_errors": 0,
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.2.8",
+  "release_version": "14.2.9",
   "schema_version": 1,
   "stabilization": {
+    "alias_dataflow_collector_decision": "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md",
+    "alias_dataflow_collector_hotfix": {
+      "corrected_explicit_any_count": 11993,
+      "from_schema_version": 11,
+      "previous_explicit_any_ceiling": 12040,
+      "to_schema_version": 12
+    },
     "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
     "class_global_collector_decision": "docs/architecture/ADR-020-v1425-explicit-any-class-global-scope.md",
     "class_global_collector_hotfix": {
@@ -816,7 +826,7 @@
   "typing": {
     "activation_baseline_dict_str_any_count": 12535,
     "explicit_any_affected_file_max_count": 461,
-    "explicit_any_collector_schema_version": 11,
+    "explicit_any_collector_schema_version": 12,
     "explicit_any_file_budgets": {
       "song_agent/application/audio_campaigns/release_coverage.py": 7,
       "song_agent/application/evidence_policy_gate.py": 1,

@@ -77,6 +77,12 @@ ordinary reassignment disconnects the old group. ADR-023 keeps all schema 10
 ceilings unchanged and requires a semantic-analysis-backed data-flow model for
 the next collector redesign.
 
+v14.2.9 upgrades the collector to schema 12 and moves alias semantics into an
+independent abstract data-flow kernel. Exact literal members, destructuring,
+attributes, subscripts, dynamic call results, possible origins, and
+mutation-time taint now share one model instead of per-syntax alias patches.
+ADR-024 preserves every schema 11 ceiling.
+
 ```powershell
 python -m mypy --no-incremental
 python -m ruff check song_agent tests tools

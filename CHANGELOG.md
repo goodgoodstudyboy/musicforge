@@ -4,6 +4,18 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.9 - 2026-07-24
+
+- Replaced incremental object-alias handling with an independent schema 12
+  abstract data-flow kernel for identities, member cells, dynamic escape,
+  possible origins, reachability, and mutation-time taint.
+- Closed destructuring, subscript, attribute, and call-return alias laundering
+  while retaining safe rebind behavior and avoiding ordinary factory-call
+  false positives.
+- Added ADR-024, kernel unit tests, runtime/Ruff/strict-mypy attack regressions,
+  and `v1429.explicit_any_alias_dataflow_smoke` without raising any typing,
+  complexity, per-file, or recovery ceiling.
+
 ## v14.2.8 - 2026-07-23
 
 - Upgraded the Explicit Any collector to schema 11 with lexical-scope

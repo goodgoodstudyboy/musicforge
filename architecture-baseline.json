@@ -26,7 +26,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 1016,
+  "module_count": 1017,
   "modules": [
     {
       "context": null,
@@ -5109,6 +5109,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check.checks.trust",
       "path": "song_agent/release_check/checks/trust.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.explicit_any_dataflow",
+      "path": "song_agent/release_check/explicit_any_dataflow.py"
     },
     {
       "context": null,

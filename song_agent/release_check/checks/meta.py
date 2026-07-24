@@ -40,6 +40,7 @@ from song_agent.release_check.v14_quality import (
     run_v1426_explicit_any_indirect_target_scope_smoke,
     run_v1427_explicit_any_derived_uncertain_scope_smoke,
     run_v1428_explicit_any_object_alias_scope_smoke,
+    run_v1429_explicit_any_alias_dataflow_smoke,
 )
 
 
@@ -128,6 +129,7 @@ CALLABLES = {
     "_v1426_explicit_any_indirect_target_scope_smoke": run_v1426_explicit_any_indirect_target_scope_smoke,
     "_v1427_explicit_any_derived_uncertain_scope_smoke": run_v1427_explicit_any_derived_uncertain_scope_smoke,
     "_v1428_explicit_any_object_alias_scope_smoke": run_v1428_explicit_any_object_alias_scope_smoke,
+    "_v1429_explicit_any_alias_dataflow_smoke": run_v1429_explicit_any_alias_dataflow_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

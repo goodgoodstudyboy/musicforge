@@ -175,6 +175,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v1426.explicit_any_indirect_target_scope_smoke",
         "v1427.explicit_any_derived_uncertain_scope_smoke",
         "v1428.explicit_any_object_alias_scope_smoke",
+        "v1429.explicit_any_alias_dataflow_smoke",
     ]
 
 

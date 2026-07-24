@@ -447,9 +447,15 @@
     },
     {
       "path": "material/v14.2.8-MusicForgeExplicitAny对象别名数据流安全修复施工图-2026-07-23.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.2.8 MusicForge Explicit Any 对象别名数据流安全修复施工图",
       "version": "14.2.8"
+    },
+    {
+      "path": "material/v14.2.9-MusicForgeExplicitAny别名数据流内核重构施工图-2026-07-24.md",
+      "status": "active",
+      "title": "v14.2.9 MusicForge Explicit Any 别名数据流内核重构施工图",
+      "version": "14.2.9"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",
