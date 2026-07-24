@@ -28,6 +28,7 @@ from song_agent.release_check.v14_quality import (
     run_v1427_explicit_any_derived_uncertain_scope_smoke,
     run_v1428_explicit_any_object_alias_scope_smoke,
     run_v1429_explicit_any_alias_dataflow_smoke,
+    run_v14210_explicit_any_alias_fail_closed_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -1205,6 +1206,191 @@ def test_v1429_dynamic_alias_without_any_mutation_does_not_poison_source(tmp_pat
     assert typing["explicit_any_scope_blocker_count"] == 0
 
 
+@pytest.mark.parametrize(
+    ("case_name", "class_body", "expected_scope_blocker"),
+    [
+        (
+            "annotation_only",
+            "        Holder = [None]\n"
+            "        Ref = Holder\n"
+            "        Ref: object\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+            "uncertain_annotation_binding:Alias",
+        ),
+        (
+            "starred_suffix",
+            "        Holder = [None]\n"
+            "        Head, *Middle, Ref = (None, None, None, Holder)\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+            "uncertain_annotation_binding:Alias",
+        ),
+        (
+            "interprocedural_write",
+            "        Holder = [None]\n"
+            "        def store(target):\n"
+            "            target[0] = Alias\n"
+            "        store(Holder)\n"
+            "        Alias = Holder[0][0]\n",
+            "unsupported_interprocedural_any_write",
+        ),
+    ],
+)
+def test_v14210_alias_dataflow_cases_fail_closed_at_every_ratchet_layer(
+    tmp_path: Path,
+    case_name: str,
+    class_body: str,
+    expected_scope_blocker: str,
+) -> None:
+    relative = f"song_agent/interfaces/api/v14210_{case_name}.py"
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    source = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+        "    class Probe:\n"
+        "        global Alias\n"
+        "        for Alias in ((t.Any,),):\n"
+        "            pass\n"
+        f"{class_body}"
+        f"{annotations}\n"
+    )
+    target.write_text(source, encoding="utf-8")
+    namespace: dict[str, object] = {}
+    exec(compile(source, str(target), "exec"), namespace)
+
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {relative: 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+    blockers = _typing_blockers(typing, policy)
+    ruff = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--config", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    mypy = subprocess.run(
+        [sys.executable, "-m", "mypy", "--strict", "--config-file", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert namespace["Alias"] is __import__("typing").Any
+    assert len(namespace["__annotations__"]) == 100
+    assert ruff.returncode == 0, ruff.stdout + ruff.stderr
+    assert mypy.returncode == 0, mypy.stdout + mypy.stderr
+    assert typing["explicit_any_count"] == 100
+    assert any(
+        row["detail"] == expected_scope_blocker
+        or row["detail"].startswith(expected_scope_blocker + ":")
+        for row in typing["explicit_any_scope_blockers"]
+    )
+    assert any("typing_explicit_any_scope_flow" in value for value in blockers)
+    assert any("typing_explicit_any:" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+def test_v14210_safe_interprocedural_member_write_does_not_create_a_blocker(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "safe_interprocedural_write.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "def store(target: list[type[object]]) -> None:\n"
+        "    target[0] = str\n"
+        "Holder: list[type[object]] = [int]\n"
+        "store(Holder)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 0
+    assert typing["explicit_any_scope_blocker_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "call",
+    ["store(Holder)", "store(target=Holder)", "writer(Holder)"],
+)
+def test_v14210_parameter_alias_write_summary_propagates_to_callers(
+    tmp_path: Path,
+    call: str,
+) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "parameter_alias_write.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        "Holder = [None]\n"
+        "def store(target):\n"
+        "    alias = target\n"
+        "    target = [None]\n"
+        "    alias[0] = Any\n"
+        "writer = store\n"
+        f"{call}\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 1
+    assert any(
+        row["detail"].startswith("unsupported_interprocedural_any_write:any")
+        for row in typing["explicit_any_scope_blockers"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("statement", "expected"),
+    [
+        ("target.append(Any)", "unsupported_interprocedural_any_call"),
+        ("setattr(target, 'value', Any)", "unsupported_interprocedural_any_call"),
+    ],
+)
+def test_v14210_unresolved_any_call_effects_fail_closed(
+    tmp_path: Path,
+    statement: str,
+    expected: str,
+) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "unresolved_call_effect.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        "Holder = []\n"
+        "def store(target):\n"
+        f"    {statement}\n"
+        "store(Holder)\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert any(row["detail"] == expected for row in typing["explicit_any_scope_blockers"])
+
+
 def test_v1427_derived_non_type_global_without_annotation_is_not_blocked(tmp_path: Path) -> None:
     target = tmp_path / "song_agent" / "interfaces" / "api" / "ordinary_derived_global.py"
     target.parent.mkdir(parents=True)
@@ -1515,6 +1701,12 @@ def test_v1429_explicit_any_alias_dataflow_smoke_is_self_consistent() -> None:
     assert passed, detail
 
 
+def test_v14210_explicit_any_alias_fail_closed_smoke_is_self_consistent() -> None:
+    passed, detail = run_v14210_explicit_any_alias_fail_closed_smoke(ROOT)
+
+    assert passed, detail
+
+
 def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() -> None:
     baseline = json.loads((ROOT / "architecture-v14-quality.json").read_text(encoding="utf-8"))
     typing_forged = json.loads(json.dumps(baseline))
@@ -1528,9 +1720,22 @@ def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() ->
     module_forged["integrity_hash"] = stable_hash(
         {key: value for key, value in module_forged.items() if key != "integrity_hash"}
     )
+    schema13_forged = json.loads(json.dumps(baseline))
+    schema13_forged["typing"]["explicit_any_max_count"] += 1
+    schema13_forged["typing"]["explicit_any_affected_file_max_count"] += 1
+    schema13_forged["typing"]["explicit_any_layer_budgets"]["interfaces"] += 1
+    schema13_forged["stabilization"]["alias_fail_closed_collector_hotfix"][
+        "previous_explicit_any_ceiling"
+    ] += 1
+    schema13_forged["integrity_hash"] = stable_hash(
+        {key: value for key, value in schema13_forged.items() if key != "integrity_hash"}
+    )
 
     assert "v14_quality_policy_stabilization_typing_file_budgets" in _policy_blockers(typing_forged)
     assert "v14_quality_policy_stabilization_module_debt" in _policy_blockers(module_forged)
+    schema13_blockers = _policy_blockers(schema13_forged)
+    assert "v14_quality_policy_alias_fail_closed_collector_migration" in schema13_blockers
+    assert "v14_quality_policy_alias_fail_closed_ceilings" in schema13_blockers
 
 
 def test_v14_source_tree_hash_is_independent_of_line_endings(tmp_path: Path) -> None:

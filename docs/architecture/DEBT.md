@@ -3,7 +3,7 @@
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
 | ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.3.0 | ADR-016 restores the reviewed v14.1.2 structure and freezes per-file ceilings plus aggregate module count, thousand-line count, largest-module size, and total oversized lines. |
-| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.3.0 | Schema-12 metrics use an explicit alias data-flow kernel and freeze total, layer, affected-file, and per-file explicit-`Any` budgets; unresolved Any-relevant scope flow is blocking and no file, layer, or total budget may grow. |
+| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.3.0 | Schema-13 metrics use an explicit alias data-flow kernel plus bounded direct-call write effects and freeze total, layer, affected-file, and per-file explicit-`Any` budgets; unresolved Any-relevant scope flow is blocking and no file, layer, or total budget may grow. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -152,3 +152,14 @@ abstract data-flow kernel. Non-direct aliases transported through literals,
 attributes, subscripts, and calls can no longer launder an Any mutation.
 Active measurements and all schema 11 ceilings remain unchanged. ARCH-014 and
 TYPE-003 remain open through v14.3.0.
+
+## v14.2.10 Alias Fail-Closed Semantics
+
+ADR-025 upgrades the collector to schema 13. Value-less annotations no longer
+change runtime binding state, known-length extended unpacking maps suffixes
+from the end, and unresolved-length results retain their full provenance.
+Any/uncertain member writes through unresolved function parameters are hard
+blockers, while bounded direct-name call summaries propagate the effect to the
+caller. The active tree remains at 11,993 Explicit Any annotations, 461
+affected files, and zero scope blockers; all schema 12 ceilings remain
+unchanged. ARCH-014 and TYPE-003 remain open through v14.3.0.

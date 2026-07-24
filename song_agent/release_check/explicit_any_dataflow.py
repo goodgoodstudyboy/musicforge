@@ -27,6 +27,7 @@ class FlowValue:
 class _ObjectState:
     cells: dict[CellKey, FlowValue] = field(default_factory=dict)
     wildcard: FlowValue | None = None
+    length: int | None = None
     escaped: bool = False
     origins: frozenset[int] = frozenset()
     taint: str = "other"
@@ -67,7 +68,9 @@ class ExplicitAnyDataFlow:
     def container(self, elements: Iterable[FlowValue], *, kind: str = "other") -> FlowValue:
         value = self.object(kind)
         state = self._objects[next(iter(value.identities))]
-        for index, element in enumerate(elements):
+        rows = tuple(elements)
+        state.length = len(rows)
+        for index, element in enumerate(rows):
             state.cells[("index", str(index))] = element
         return value
 
@@ -143,11 +146,58 @@ class ExplicitAnyDataFlow:
                 state.cells[key] = self.join((current, value)) if current else value
         return identities
 
-    def unpack(self, value: FlowValue, count: int) -> tuple[FlowValue, ...]:
-        rows: list[FlowValue] = []
-        for index in range(count):
-            rows.append(self.read_member(value, ("index", str(index))))
-        return tuple(rows)
+    def unpack(
+        self,
+        value: FlowValue,
+        count: int,
+        *,
+        starred_index: int | None = None,
+    ) -> tuple[FlowValue, ...]:
+        if starred_index is None:
+            return tuple(self.read_member(value, ("index", str(index))) for index in range(count))
+        if not 0 <= starred_index < count:
+            raise ValueError("starred_index must identify an unpack target")
+
+        length = self._known_length(value)
+        suffix_count = count - starred_index - 1
+        if length is None or length < count - 1:
+            # A starred suffix cannot be mapped safely without the source
+            # length. Preserve every possible origin and make each result an
+            # unknown value so annotation consumption fails closed.
+            return tuple(self.escape((value,), kind="unknown") for _ in range(count))
+
+        prefix = [
+            self.read_member(value, ("index", str(index)))
+            for index in range(starred_index)
+        ]
+        middle_end = length - suffix_count
+        middle = self.container(
+            self.read_member(value, ("index", str(index)))
+            for index in range(starred_index, middle_end)
+        )
+        suffix = [
+            self.read_member(value, ("index", str(index)))
+            for index in range(middle_end, length)
+        ]
+        return tuple([*prefix, middle, *suffix])
+
+    def has_unresolved_escape(self, value: FlowValue) -> bool:
+        """Return whether a value depends on an escaped object with no source origin."""
+
+        pending = list(value.identities | value.origins)
+        seen: set[int] = set()
+        while pending:
+            identity = pending.pop()
+            if identity in seen:
+                continue
+            seen.add(identity)
+            state = self._objects.get(identity)
+            if state is None:
+                return True
+            if state.escaped and not state.origins:
+                return True
+            pending.extend(state.origins - seen)
+        return value.escaped and not (value.identities or value.origins)
 
     def taint(self, value: FlowValue, kind: str) -> frozenset[int]:
         affected = self.taint_reachable(value)
@@ -193,6 +243,17 @@ class ExplicitAnyDataFlow:
             for value in values:
                 pending.extend(value.identities - seen)
         return frozenset(seen)
+
+    def _known_length(self, value: FlowValue) -> int | None:
+        if value.escaped or not value.identities:
+            return None
+        lengths: set[int] = set()
+        for identity in value.identities:
+            state = self._objects.get(identity)
+            if state is None or state.escaped or state.wildcard is not None or state.length is None:
+                return None
+            lengths.add(state.length)
+        return next(iter(lengths)) if len(lengths) == 1 else None
 
     def _new_identity(self) -> int:
         self._next_identity += 1

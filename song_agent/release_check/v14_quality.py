@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from collections import Counter
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
 import json
@@ -23,8 +24,8 @@ from song_agent.release_check.explicit_any_dataflow import (
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.2.9"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 12
+QUALITY_POLICY_VERSION = "14.2.10"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 13
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -46,6 +47,16 @@ V1426_INDIRECT_TARGET_COLLECTOR_ADR = "docs/architecture/ADR-021-v1426-explicit-
 V1427_DERIVED_UNCERTAIN_COLLECTOR_ADR = "docs/architecture/ADR-022-v1427-explicit-any-derived-uncertain-flow.md"
 V1428_OBJECT_ALIAS_COLLECTOR_ADR = "docs/architecture/ADR-023-v1428-explicit-any-object-alias-flow.md"
 V1429_ALIAS_DATAFLOW_ADR = "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md"
+V14210_ALIAS_FAIL_CLOSED_ADR = "docs/architecture/ADR-025-v14210-explicit-any-alias-fail-closed.md"
+V14210_EXPLICIT_ANY_CEILING = 11993
+V14210_AFFECTED_FILE_CEILING = 461
+V14210_LAYER_CEILINGS = {
+    "application": 72,
+    "capabilities": 13,
+    "domains": 6545,
+    "interfaces": 5167,
+    "platform": 196,
+}
 V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d"
 V1421_MODULE_DEBT_CEILINGS_HASH = "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b"
 V1421_RECOVERY_LIMITS: dict[str, Any] = {
@@ -503,6 +514,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "explicit_any_derived_uncertain_scope_probe": _explicit_any_derived_uncertain_scope_probe(),
         "explicit_any_object_alias_scope_probe": _explicit_any_object_alias_scope_probe(),
         "explicit_any_alias_dataflow_probe": _explicit_any_alias_dataflow_probe(),
+        "explicit_any_alias_fail_closed_probe": _explicit_any_alias_fail_closed_probe(),
         "explicit_any_collector_schema_version": int(
             (policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0
         ),
@@ -532,6 +544,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and details["explicit_any_derived_uncertain_scope_probe"]
         and details["explicit_any_object_alias_scope_probe"]
         and details["explicit_any_alias_dataflow_probe"]
+        and details["explicit_any_alias_fail_closed_probe"]
         and details["explicit_any_collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
         and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
@@ -604,6 +617,7 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
         "collector_derived_uncertain_scope_probe": _explicit_any_derived_uncertain_scope_probe(),
         "collector_object_alias_scope_probe": _explicit_any_object_alias_scope_probe(),
         "collector_alias_dataflow_probe": _explicit_any_alias_dataflow_probe(),
+        "collector_alias_fail_closed_probe": _explicit_any_alias_fail_closed_probe(),
         "generated_v142_modules_absent": not violations["generated_modules"],
         "splitter_absent": not violations["splitter_present"],
         "active_suppressions_absent": not violations["suppressions"],
@@ -865,6 +879,40 @@ def run_v1429_explicit_any_alias_dataflow_smoke(root: Path) -> tuple[bool, str]:
     return all(checks.values()), json.dumps(detail, sort_keys=True)
 
 
+def run_v14210_explicit_any_alias_fail_closed_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    migration = dict(stabilization.get("alias_fail_closed_collector_hotfix") or {})
+    checks = {
+        "policy_schema_current": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "alias_fail_closed_probe": _explicit_any_alias_fail_closed_probe(),
+        "alias_fail_closed_decision_present": stabilization.get("alias_fail_closed_collector_decision")
+        == V14210_ALIAS_FAIL_CLOSED_ADR
+        and (root / V14210_ALIAS_FAIL_CLOSED_ADR).is_file(),
+        "alias_fail_closed_migration_recorded": int(migration.get("from_schema_version") or 0) == 12
+        and int(migration.get("to_schema_version") or 0) == 13,
+        "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
+        == V14210_EXPLICIT_ANY_CEILING
+        and int(migration.get("previous_explicit_any_ceiling") or 0) == V14210_EXPLICIT_ANY_CEILING,
+        "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
+        == V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": typing_limits.get("explicit_any_layer_budgets")
+        == V14210_LAYER_CEILINGS,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+        "quality_policy_passed": not _policy_blockers(policy),
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "explicit_any_ceiling": int(typing_limits.get("explicit_any_max_count") or 0),
+        "affected_file_ceiling": int(typing_limits.get("explicit_any_affected_file_max_count") or 0),
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
 def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
     limits = policy.get("typing") or {}
     blockers: list[str] = []
@@ -1018,6 +1066,28 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         or int(dataflow_hotfix.get("to_schema_version") or 0) != 12
     ):
         blockers.append("v14_quality_policy_alias_dataflow_collector_migration")
+    if stabilization.get("alias_fail_closed_collector_decision") != V14210_ALIAS_FAIL_CLOSED_ADR:
+        blockers.append("v14_quality_policy_alias_fail_closed_collector_decision")
+    fail_closed_hotfix = stabilization.get("alias_fail_closed_collector_hotfix") or {}
+    if (
+        int(fail_closed_hotfix.get("from_schema_version") or 0) != 12
+        or int(fail_closed_hotfix.get("to_schema_version") or 0) != 13
+        or int(fail_closed_hotfix.get("previous_explicit_any_ceiling") or 0)
+        != V14210_EXPLICIT_ANY_CEILING
+        or int(fail_closed_hotfix.get("previous_affected_file_ceiling") or 0)
+        != V14210_AFFECTED_FILE_CEILING
+        or int(fail_closed_hotfix.get("corrected_explicit_any_count") or 0)
+        != V14210_EXPLICIT_ANY_CEILING
+    ):
+        blockers.append("v14_quality_policy_alias_fail_closed_collector_migration")
+    typing = policy.get("typing") or {}
+    if (
+        int(typing.get("explicit_any_max_count") or 0) != V14210_EXPLICIT_ANY_CEILING
+        or int(typing.get("explicit_any_affected_file_max_count") or 0)
+        != V14210_AFFECTED_FILE_CEILING
+        or typing.get("explicit_any_layer_budgets") != V14210_LAYER_CEILINGS
+    ):
+        blockers.append("v14_quality_policy_alias_fail_closed_ceilings")
     if stabilization.get("hard_limits") != V1421_RECOVERY_LIMITS:
         blockers.append("v14_quality_policy_stabilization_limits")
     if _explicit_any_file_budgets_hash(policy) != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
@@ -1066,6 +1136,15 @@ def _function_annotations(
     return annotations
 
 
+@dataclass(frozen=True)
+class _FunctionWriteSummary:
+    positional: tuple[str, ...]
+    keyword_only: frozenset[str]
+    vararg: str | None
+    kwarg: str | None
+    any_write_parameters: frozenset[str]
+
+
 class _ExplicitAnyCollector(ast.NodeVisitor):
     """Count effective Any annotations without losing nested lexical scopes."""
 
@@ -1080,6 +1159,9 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._global_names: list[set[str]] = [set()]
         self._nonlocal_names: list[set[str]] = [set()]
         self._control_flow_scopes: list[int] = []
+        self._function_parameter_flows: list[dict[str, FlowValue]] = []
+        self._function_any_writes: list[set[str]] = []
+        self._function_write_summaries: dict[int, _FunctionWriteSummary] = {}
 
     def visit_Module(self, node: ast.Module) -> None:
         self._visit_scope_body(node.body, push_scope=False, scope_kind="module")
@@ -1136,9 +1218,12 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         if not self._is_type_alias_annotation(node.annotation):
             self.count += self._annotation_any_count(node.annotation)
-        value = self._expression_value(node.value) if node.value is not None else self._dataflow.scalar()
-        if node.value is not None:
-            self.visit(node.value)
+        if node.value is None:
+            # A value-less annotation records metadata only. It does not
+            # rebind the runtime name or break an existing alias group.
+            return
+        value = self._expression_value(node.value)
+        self.visit(node.value)
         self._bind_target(node.target, value)
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -1169,17 +1254,26 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         arguments = [*node.args, *(keyword.value for keyword in node.keywords)]
-        uncertain_arguments = [
+        any_relevant_arguments = [
             value
             for value in arguments
-            if self._expression_value(value).kind in {"any", "typing-module", "any-or-typing-module", "uncertain"}
+            if self._expression_value(value).kind
+            in {"any", "typing-module", "any-or-typing-module", "uncertain"}
         ]
-        if uncertain_arguments:
-            candidates = [value for value in arguments if value not in uncertain_arguments]
+        if any_relevant_arguments:
+            candidates = [value for value in arguments if value not in any_relevant_arguments]
             if isinstance(node.func, ast.Attribute):
                 candidates.append(node.func.value)
             for candidate in candidates:
                 self._taint_value(self._expression_value(candidate))
+            self._record_unresolved_call_effect(node, candidates)
+        summaries = {
+            self._function_write_summaries[identity]
+            for identity in self._expression_value(node.func).identities
+            if identity in self._function_write_summaries
+        }
+        for summary in summaries:
+            self._apply_function_write_summary(node, summary)
         self.generic_visit(node)
 
     def visit_TypeAlias(self, node: ast.AST) -> None:
@@ -1262,20 +1356,69 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 self.count += self._annotation_any_count(annotation)
         if node.returns is not None:
             self.count += self._annotation_any_count(node.returns)
-        parameter_scope = {
-            argument.arg: "other"
-            for argument in (
-                *node.args.posonlyargs,
-                *node.args.args,
-                *node.args.kwonlyargs,
-            )
-        }
+        positional = tuple(argument.arg for argument in (*node.args.posonlyargs, *node.args.args))
+        keyword_only = frozenset(argument.arg for argument in node.args.kwonlyargs)
+        parameter_scope = {name: "other" for name in (*positional, *keyword_only)}
         if node.args.vararg is not None:
             parameter_scope[node.args.vararg.arg] = "other"
         if node.args.kwarg is not None:
             parameter_scope[node.args.kwarg.arg] = "other"
-        self._visit_scope_body(node.body, push_scope=True, initial=parameter_scope, scope_kind="function")
-        self._bind(node.name, "other", aliases=self._dataflow.object())
+        parameter_flows = {
+            name: self._dataflow.object(escaped=True)
+            for name in parameter_scope
+        }
+        self._function_parameter_flows.append(parameter_flows)
+        self._function_any_writes.append(set())
+        try:
+            self._visit_scope_body(
+                node.body,
+                push_scope=True,
+                initial=parameter_scope,
+                initial_aliases=parameter_flows,
+                scope_kind="function",
+            )
+            writes = frozenset(self._function_any_writes[-1])
+        finally:
+            self._function_any_writes.pop()
+            self._function_parameter_flows.pop()
+        summary = _FunctionWriteSummary(
+            positional=positional,
+            keyword_only=keyword_only,
+            vararg=node.args.vararg.arg if node.args.vararg is not None else None,
+            kwarg=node.args.kwarg.arg if node.args.kwarg is not None else None,
+            any_write_parameters=writes,
+        )
+        function_value = self._dataflow.object()
+        for identity in function_value.identities:
+            self._function_write_summaries[identity] = summary
+        self._bind(node.name, "other", aliases=function_value)
+
+    def _apply_function_write_summary(self, node: ast.Call, summary: _FunctionWriteSummary) -> None:
+        for index, argument in enumerate(node.args):
+            parameter = summary.positional[index] if index < len(summary.positional) else summary.vararg
+            if parameter in summary.any_write_parameters:
+                self._taint_value(self._expression_value(argument))
+        for keyword in node.keywords:
+            if keyword.arg is None:
+                if summary.kwarg in summary.any_write_parameters:
+                    self._taint_value(self._expression_value(keyword.value))
+                continue
+            if keyword.arg in summary.any_write_parameters:
+                self._taint_value(self._expression_value(keyword.value))
+
+    def _record_unresolved_call_effect(self, node: ast.Call, candidates: list[ast.expr]) -> None:
+        unresolved: list[FlowValue] = []
+        if isinstance(node.func, ast.Attribute):
+            receiver = self._expression_value(node.func.value)
+            if self._dataflow.has_unresolved_escape(receiver):
+                unresolved.append(receiver)
+        for candidate in candidates:
+            value = self._expression_value(candidate)
+            if self._dataflow.has_unresolved_escape(value):
+                unresolved.append(value)
+        for value in unresolved:
+            self._add_blocker("unsupported_interprocedural_any_call")
+            self._record_function_parameter_write(value)
 
     def _visit_argument_defaults(self, arguments: ast.arguments) -> None:
         self._visit_expressions(arguments.defaults)
@@ -1291,12 +1434,17 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         *,
         push_scope: bool,
         initial: dict[str, str] | None = None,
+        initial_aliases: dict[str, FlowValue] | None = None,
         scope_kind: str,
     ) -> None:
         global_names, nonlocal_names = _scope_declarations(body)
         if push_scope:
             self._scopes.append(dict(initial or {}))
-            self._aliases.append({name: self._dataflow.object(escaped=True) for name in (initial or {})})
+            self._aliases.append(
+                dict(initial_aliases)
+                if initial_aliases is not None
+                else {name: self._dataflow.object(escaped=True) for name in (initial or {})}
+            )
             self._scope_kinds.append(scope_kind)
             self._global_names.append(global_names)
             self._nonlocal_names.append(nonlocal_names)
@@ -1543,10 +1691,14 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             self._bind(target.id, value.kind, aliases=value)
             return
         if isinstance(target, (ast.Tuple, ast.List)):
-            unpacked = self._dataflow.unpack(value, len(target.elts))
+            starred = [index for index, item in enumerate(target.elts) if isinstance(item, ast.Starred)]
+            unpacked = self._dataflow.unpack(
+                value,
+                len(target.elts),
+                starred_index=starred[0] if starred else None,
+            )
             for item, item_value in zip(target.elts, unpacked, strict=True):
                 if isinstance(item, ast.Starred):
-                    item_value = self._dataflow.escape((value,), kind=value.kind)
                     self._bind_target(item.value, item_value)
                 else:
                     self._bind_target(item, item_value)
@@ -1554,9 +1706,23 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         if isinstance(target, (ast.Attribute, ast.Subscript)):
             base = self._expression_value(target.value)
             if value.kind in ANY_RELEVANT_KINDS:
+                if value.kind != "unknown" and self._dataflow.has_unresolved_escape(base):
+                    root_name = _expression_root_name(target.value)
+                    self._add_blocker(
+                        f"unsupported_interprocedural_any_write:{value.kind}:{root_name or '<dynamic>'}"
+                    )
+                    self._record_function_parameter_write(base)
                 kind = "unknown" if value.kind == "unknown" else "uncertain"
                 self._taint_value(base, kind=kind)
             self._dataflow.write_member(base, self._member_key(target), value)
+
+    def _record_function_parameter_write(self, base: FlowValue) -> None:
+        if not self._function_parameter_flows:
+            return
+        base_reachable = self._dataflow.taint_reachable(base)
+        for name, parameter in self._function_parameter_flows[-1].items():
+            if base_reachable & self._dataflow.taint_reachable(parameter):
+                self._function_any_writes[-1].add(name)
 
     def _taint_alias_group(self, root_name: str, *, kind: str = "uncertain") -> None:
         value = self._resolve_flow(root_name)
@@ -1847,6 +2013,13 @@ def _binding_matches(binding: str, expected: str) -> bool:
     return binding == expected or (
         binding == "any-or-typing-module" and expected in {"any", "typing-module"}
     )
+
+
+def _expression_root_name(value: ast.expr) -> str:
+    current = value
+    while isinstance(current, (ast.Attribute, ast.Subscript)):
+        current = current.value
+    return current.id if isinstance(current, ast.Name) else ""
 
 
 def _explicit_any_annotation_count(tree: ast.Module) -> int:
@@ -2481,6 +2654,94 @@ def _explicit_any_alias_dataflow_probe() -> bool:
     )
     safe_count, safe_blockers = _explicit_any_annotation_analysis(safe)
     return safe_count == 0 and not safe_blockers
+
+
+def _explicit_any_alias_fail_closed_probe() -> bool:
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    variants = (
+        (
+            "        Holder = [None]\n"
+            "        Ref = Holder\n"
+            "        Ref: object\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+            "uncertain_annotation_binding:Alias",
+        ),
+        (
+            "        Holder = [None]\n"
+            "        Head, *Middle, Ref = (None, None, None, Holder)\n"
+            "        Ref[0] = Alias\n"
+            "        Alias = Holder[0][0]\n",
+            "uncertain_annotation_binding:Alias",
+        ),
+        (
+            "        Holder = [None]\n"
+            "        def store(target):\n"
+            "            target[0] = Alias\n"
+            "        store(Holder)\n"
+            "        Alias = Holder[0][0]\n",
+            "unsupported_interprocedural_any_write",
+        ),
+    )
+    for body, expected_blocker in variants:
+        source = (
+            "from __future__ import annotations\n"
+            "import typing as t\n"
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    Alias = int\n"
+            "else:\n"
+            "    class Probe:\n"
+            "        global Alias\n"
+            "        for Alias in ((t.Any,),):\n"
+            "            pass\n"
+            + body
+            + annotations
+            + "\n"
+        )
+        count, scope_blockers = _explicit_any_annotation_analysis(ast.parse(source))
+        metrics = {
+            "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "raw_dict_str_any_count": 0,
+            "implementation_document_count": 0,
+            "explicit_any_count": count,
+            "explicit_any_affected_file_count": 1,
+            "explicit_any_by_layer": {"interfaces": count},
+            "explicit_any_by_file": {"song_agent/interfaces/api/alias_fail_closed_probe.py": count},
+            "explicit_any_scope_blockers": [
+                {"path": "song_agent/interfaces/api/alias_fail_closed_probe.py", "detail": detail}
+                for detail in scope_blockers
+            ],
+            "public_implementation_document_count": 0,
+            "untyped_public_function_count": 0,
+        }
+        policy = {
+            "typing": {
+                "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+                "raw_dict_str_any_max_count": 0,
+                "implementation_document_max_count": 0,
+                "explicit_any_max_count": 99,
+                "explicit_any_affected_file_max_count": 1,
+                "explicit_any_layer_budgets": {"interfaces": 99},
+                "explicit_any_file_budgets": {"song_agent/interfaces/api/alias_fail_closed_probe.py": 99},
+                "public_implementation_document_max_count": 0,
+                "untyped_public_function_max_count": 0,
+            }
+        }
+        blockers = _typing_blockers(metrics, policy)
+        if not (
+            count == 100
+            and any(
+                detail == expected_blocker or detail.startswith(expected_blocker + ":")
+                for detail in scope_blockers
+            )
+            and any("typing_explicit_any_scope_flow" in blocker for blocker in blockers)
+            and any("typing_explicit_any:" in blocker for blocker in blockers)
+            and any("typing_explicit_any_layer" in blocker for blocker in blockers)
+            and any("typing_explicit_any_file" in blocker for blocker in blockers)
+        ):
+            return False
+    return True
 
 
 def _typing_layer(relative: str) -> str:

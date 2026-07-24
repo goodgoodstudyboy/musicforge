@@ -4,6 +4,16 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.2.10 - 2026-07-24
+
+- Upgraded the Explicit Any collector to schema 13 and aligned value-less
+  annotations plus extended unpack suffixes with Python runtime semantics.
+- Added bounded direct-call member-write summaries and a fail-closed blocker
+  for Any/uncertain writes through unresolved interprocedural objects.
+- Added ADR-025, data-flow unit tests, three runtime/Ruff/strict-mypy attack
+  regressions, and `v14210.explicit_any_alias_fail_closed_smoke` without
+  raising any typing, complexity, per-file, or recovery ceiling.
+
 ## v14.2.9 - 2026-07-24
 
 - Replaced incremental object-alias handling with an independent schema 12

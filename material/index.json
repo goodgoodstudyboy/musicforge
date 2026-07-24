@@ -410,6 +410,12 @@
       "version": "14.2.1"
     },
     {
+      "path": "material/v14.2.10-MusicForgeExplicitAny别名FailClosed语义收口施工图-2026-07-24.md",
+      "status": "active",
+      "title": "v14.2.10 MusicForge Explicit Any 别名 Fail-Closed 语义收口施工图",
+      "version": "14.2.10"
+    },
+    {
       "path": "material/v14.2.2-MusicForgeExplicitAny作用域收集器安全修复施工图-2026-07-20.md",
       "status": "historical",
       "title": "v14.2.2 MusicForge Explicit Any 作用域收集器安全修复施工图",
@@ -453,7 +459,7 @@
     },
     {
       "path": "material/v14.2.9-MusicForgeExplicitAny别名数据流内核重构施工图-2026-07-24.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.2.9 MusicForge Explicit Any 别名数据流内核重构施工图",
       "version": "14.2.9"
     },

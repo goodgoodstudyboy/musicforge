@@ -83,6 +83,12 @@ attributes, subscripts, dynamic call results, possible origins, and
 mutation-time taint now share one model instead of per-syntax alias patches.
 ADR-024 preserves every schema 11 ceiling.
 
+v14.2.10 upgrades the collector to schema 13. Value-less annotations preserve
+their runtime aliases, starred unpack maps suffix values from the end, and a
+bounded direct-call effect summary propagates Any/uncertain member writes back
+to caller-owned objects. Unsupported Any-relevant interprocedural writes fail
+closed. ADR-025 preserves every schema 12 ceiling.
+
 ```powershell
 python -m mypy --no-incremental
 python -m ruff check song_agent tests tools
