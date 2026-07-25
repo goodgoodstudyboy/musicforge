@@ -177,6 +177,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v1428.explicit_any_object_alias_scope_smoke",
         "v1429.explicit_any_alias_dataflow_smoke",
         "v14210.explicit_any_alias_fail_closed_smoke",
+        "v143.explicit_any_call_effect_dataflow_smoke",
     ]
 
 

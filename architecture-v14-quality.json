@@ -2,7 +2,7 @@
   "complexity": {
     "aggregate_debt": {
       "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_largest_module_lines": 2226,
       "max_modules_over_1000_lines": 37,
       "max_oversized_module_count": 137,
@@ -28,693 +28,693 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "6bf2e084a77367a2038001444166e79db3e782db63dba53aafc9a7b8ed889410",
-    "source_tree_hash": "cdcc45ff30e1ff25774718cd5797deb463d9f243e83596af9b2be116272a0b3b"
+    "report_sha256": "3419bf5dbab9d9020166f6a69fdc9c2a95855f3aec0176c24b0b5559b2114249",
+    "source_tree_hash": "f8746549b33407a6feef64da2873a3f941be5db8732f889070a878bc886dec69"
   },
-  "integrity_hash": "1c0c496aef2bc33db4c5b2a5c2b87a3b4bfde3925f23571449bfd6fbdc11a4e6",
+  "integrity_hash": "5bfe4758543d26aa748dc7b9d67972a4a959875bb048c1229387672d684659da",
   "module_size_debt": [
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 909,
       "path": "song_agent/domains/creation/agent/multinode_pipeline.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1107,
       "path": "song_agent/domains/creation/encoded_audio_acceptance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1078,
       "path": "song_agent/domains/creation/final_export.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 715,
       "path": "song_agent/domains/creation/planning_rule_governance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 811,
       "path": "song_agent/domains/creation/planning_rule_impact.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1014,
       "path": "song_agent/domains/creation/planning_rule_simulation.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 688,
       "path": "song_agent/domains/creation/provider_edits.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 964,
       "path": "song_agent/domains/delivery/delivery_qa.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 682,
       "path": "song_agent/domains/delivery/distribution.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 645,
       "path": "song_agent/domains/delivery/distribution_export.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 611,
       "path": "song_agent/domains/delivery/distribution_layout.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 767,
       "path": "song_agent/domains/delivery/distribution_templates.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 948,
       "path": "song_agent/domains/delivery/distribution_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1011,
       "path": "song_agent/domains/delivery/format_decisions.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 687,
       "path": "song_agent/domains/delivery/release_export.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 843,
       "path": "song_agent/domains/delivery/release_metadata.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1562,
       "path": "song_agent/domains/delivery/release_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 832,
       "path": "song_agent/domains/delivery/releases.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1114,
       "path": "song_agent/domains/delivery/rights_clearance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1326,
       "path": "song_agent/domains/delivery/submission_evidence.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 887,
       "path": "song_agent/domains/delivery/submissions.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 825,
       "path": "song_agent/domains/program/unified_command_center.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 857,
       "path": "song_agent/domains/program/unified_command_center_continuous_review.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 790,
       "path": "song_agent/domains/program/unified_command_center_drift_response.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 836,
       "path": "song_agent/domains/program/unified_command_center_evidence_review.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 630,
       "path": "song_agent/domains/program/unified_command_center_evidence_review_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 984,
       "path": "song_agent/domains/program/unified_command_center_release_train.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 941,
       "path": "song_agent/domains/program/unified_command_center_release_train_handoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 701,
       "path": "song_agent/domains/program/unified_command_center_release_train_handoff_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 631,
       "path": "song_agent/domains/program/unified_command_center_release_train_lifecycle.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 982,
       "path": "song_agent/domains/program/unified_command_center_reviewer_decision_board.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 922,
       "path": "song_agent/domains/program/unified_command_center_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1205,
       "path": "song_agent/domains/program/unified_release_program.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 881,
       "path": "song_agent/domains/program/unified_release_program_continuity.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1066,
       "path": "song_agent/domains/program/unified_release_program_continuity_acceptance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 774,
       "path": "song_agent/domains/program/unified_release_program_continuity_acceptance_change.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 650,
       "path": "song_agent/domains/program/unified_release_program_continuity_command_center.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1537,
       "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1154,
       "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 764,
       "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1071,
       "path": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1014,
       "path": "song_agent/domains/program/unified_release_program_continuity_command_center_signoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 605,
       "path": "song_agent/domains/program/unified_release_program_continuity_command_center_signoff_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1450,
       "path": "song_agent/domains/program/unified_release_program_handoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 875,
       "path": "song_agent/domains/program/unified_release_program_handoff_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 804,
       "path": "song_agent/domains/program/unified_release_program_operations.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 666,
       "path": "song_agent/domains/program/unified_release_program_vault.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 986,
       "path": "song_agent/domains/program/unified_release_program_vault_operations.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 668,
       "path": "song_agent/domains/program/unified_release_program_vault_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1167,
       "path": "song_agent/domains/quality/acceptance_analytics.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 813,
       "path": "song_agent/domains/quality/acceptance_fix_plan_reviews.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 783,
       "path": "song_agent/domains/quality/acceptance_fix_planning.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 957,
       "path": "song_agent/domains/quality/acceptance_fix_sprints.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 761,
       "path": "song_agent/domains/quality/acceptance_kb.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 786,
       "path": "song_agent/domains/quality/audio_campaign_remediation.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 875,
       "path": "song_agent/domains/quality/audio_campaigns.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 897,
       "path": "song_agent/domains/quality/audio_encoding.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 934,
       "path": "song_agent/domains/quality/audio_fix_sprints.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1023,
       "path": "song_agent/domains/quality/audio_lab.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1049,
       "path": "song_agent/domains/quality/audio_review_evidence.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1525,
       "path": "song_agent/domains/quality/audio_revision.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 617,
       "path": "song_agent/domains/quality/candidate_groups.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 935,
       "path": "song_agent/domains/quality/human_review_pack.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1041,
       "path": "song_agent/domains/quality/mastering_qa.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 712,
       "path": "song_agent/domains/quality/mix_controls.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1410,
       "path": "song_agent/domains/quality/music_acceptance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 742,
       "path": "song_agent/domains/quality/release_audio_certification.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 737,
       "path": "song_agent/domains/quality/release_audio_command_center.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 653,
       "path": "song_agent/domains/quality/release_audio_command_center_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 704,
       "path": "song_agent/domains/quality/release_audio_quality_action_signoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 734,
       "path": "song_agent/domains/quality/release_audio_quality_actions.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 744,
       "path": "song_agent/domains/quality/release_audio_regression_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 798,
       "path": "song_agent/domains/quality/release_audio_timeline.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 602,
       "path": "song_agent/domains/quality/review_edits.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 608,
       "path": "song_agent/domains/quality/review_sprint_actions.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 677,
       "path": "song_agent/domains/quality/review_sprint_closeout.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1003,
       "path": "song_agent/domains/quality/review_sprint_metrics.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 802,
       "path": "song_agent/domains/quality/review_sprints.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1638,
       "path": "song_agent/domains/quality/review_tasks.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 843,
       "path": "song_agent/domains/studio/assets.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 688,
       "path": "song_agent/domains/studio/editor_audition.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 898,
       "path": "song_agent/domains/studio/editor_clips.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1057,
       "path": "song_agent/domains/studio/editor_templates.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 798,
       "path": "song_agent/domains/studio/library_index.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1205,
       "path": "song_agent/domains/studio/project_repository.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 729,
       "path": "song_agent/domains/studio/reference_analysis.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 731,
       "path": "song_agent/domains/studio/references.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1638,
       "path": "song_agent/domains/studio/song_editor.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 2130,
       "path": "song_agent/domains/trust/ga_readiness.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 2226,
       "path": "song_agent/domains/trust/ga_readiness_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1828,
       "path": "song_agent/domains/trust/public_trust_center.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1372,
       "path": "song_agent/domains/trust/public_trust_center_acceptance_board.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 637,
       "path": "song_agent/domains/trust/public_trust_center_acceptance_board_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 661,
       "path": "song_agent/domains/trust/public_trust_center_anchor_registry.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 679,
       "path": "song_agent/domains/trust/public_trust_center_anchor_transparency.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1350,
       "path": "song_agent/domains/trust/public_trust_center_core_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 866,
       "path": "song_agent/domains/trust/public_trust_center_distribution_kit_acceptance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1045,
       "path": "song_agent/domains/trust/public_trust_center_publication.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1069,
       "path": "song_agent/domains/trust/public_trust_center_publication_monitoring.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 720,
       "path": "song_agent/domains/trust/public_trust_center_publication_monitoring_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 697,
       "path": "song_agent/domains/trust/public_trust_center_publication_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1040,
       "path": "song_agent/domains/trust/release_operations.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 817,
       "path": "song_agent/domains/trust/release_operations_audit.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 738,
       "path": "song_agent/domains/trust/release_operations_runbook.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 741,
       "path": "song_agent/domains/trust/release_operations_signoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 932,
       "path": "song_agent/domains/trust/release_portfolio_audit.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1005,
       "path": "song_agent/domains/trust/release_portfolio_governance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 639,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 717,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 729,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 624,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_review_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 648,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_portal_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 672,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_registry.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 754,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 962,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 629,
       "path": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 799,
       "path": "song_agent/domains/trust/release_portfolio_governance_audit.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 940,
       "path": "song_agent/domains/trust/release_portfolio_governance_evidence_vault.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 996,
       "path": "song_agent/domains/trust/release_portfolio_governance_final_board.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 797,
       "path": "song_agent/domains/trust/release_portfolio_governance_reviewer_pack.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 830,
       "path": "song_agent/domains/trust/release_portfolio_governance_signoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 852,
       "path": "song_agent/domains/trust/trust_operations_assurance_watch.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 765,
       "path": "song_agent/domains/trust/trust_operations_assurance_watch_signoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 661,
       "path": "song_agent/domains/trust/trust_operations_assurance_watch_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 781,
       "path": "song_agent/domains/trust/trust_operations_continuous_assurance.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 607,
       "path": "song_agent/domains/trust/trust_operations_continuous_assurance_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 759,
       "path": "song_agent/domains/trust/trust_operations_control_signoff.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 658,
       "path": "song_agent/domains/trust/trust_operations_controls.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 722,
       "path": "song_agent/domains/trust/trust_operations_controls_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 882,
       "path": "song_agent/domains/trust/trust_operations_final_readiness.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 716,
       "path": "song_agent/domains/trust/trust_operations_final_readiness_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1118,
       "path": "song_agent/domains/trust/trust_operations_hub.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 606,
       "path": "song_agent/domains/trust/trust_operations_hub_incident_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1171,
       "path": "song_agent/domains/trust/trust_operations_hub_incidents.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 1297,
       "path": "song_agent/domains/trust/trust_operations_hub_verifier.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 724,
       "path": "song_agent/domains/trust/trust_operations_incident_knowledge.py"
     },
     {
-      "expires_version": "14.3.0",
+      "expires_version": "14.4.0",
       "max_lines": 651,
       "path": "song_agent/domains/trust/trust_operations_incident_knowledge_verifier.py"
     }
@@ -735,7 +735,7 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.2.10",
+  "release_version": "14.3.0",
   "schema_version": 1,
   "stabilization": {
     "alias_dataflow_collector_decision": "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md",
@@ -754,6 +754,14 @@
       "to_schema_version": 13
     },
     "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
+    "call_effect_dataflow_collector_decision": "docs/architecture/ADR-026-v143-explicit-any-call-effect-dataflow.md",
+    "call_effect_dataflow_collector_migration": {
+      "corrected_explicit_any_count": 11993,
+      "from_schema_version": 13,
+      "previous_affected_file_ceiling": 461,
+      "previous_explicit_any_ceiling": 11993,
+      "to_schema_version": 14
+    },
     "class_global_collector_decision": "docs/architecture/ADR-020-v1425-explicit-any-class-global-scope.md",
     "class_global_collector_hotfix": {
       "corrected_explicit_any_count": 11993,
@@ -774,6 +782,7 @@
       "recovered_explicit_any_count": 12040,
       "to_schema_version": 4
     },
+    "debt_schedule_decision": "docs/architecture/ADR-027-v143-debt-sequencing.md",
     "definition_time_collector_decision": "docs/architecture/ADR-019-v1424-explicit-any-definition-time-scope.md",
     "definition_time_collector_hotfix": {
       "corrected_explicit_any_count": 11993,
@@ -834,7 +843,7 @@
   "typing": {
     "activation_baseline_dict_str_any_count": 12535,
     "explicit_any_affected_file_max_count": 461,
-    "explicit_any_collector_schema_version": 13,
+    "explicit_any_collector_schema_version": 14,
     "explicit_any_file_budgets": {
       "song_agent/application/audio_campaigns/release_coverage.py": 7,
       "song_agent/application/evidence_policy_gate.py": 1,

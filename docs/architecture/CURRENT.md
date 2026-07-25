@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.2.10 is a local-first modular monolith. It remains one Python
+MusicForge v14.3.0 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -297,4 +297,15 @@ boundary violations, dependency exceptions, or compatibility imports.
   writes to caller-owned objects; unsupported interprocedural Any writes are
   hard scope blockers.
 - Existing schema 12 measurements and every typing, complexity, per-file, and
+  recovery ceiling remain unchanged.
+
+## v14.3.0 Generic Call-Effect Data Flow
+
+- Collector schema 14 records unresolved calls as may-alias components before
+  any participant becomes Any-related.
+- Component-level member, wildcard, escape, and taint state preserves delayed
+  writes through methods, method aliases, attributes, and nested containers.
+- Local function summaries expose parameter storage and returned aliases;
+  known pure builtins use declarative effects only when not shadowed.
+- Existing schema 13 measurements and every typing, complexity, per-file, and
   recovery ceiling remain unchanged.

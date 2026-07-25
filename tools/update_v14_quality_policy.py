@@ -22,6 +22,8 @@ from song_agent.release_check.v14_quality import (
     V14210_ALIAS_FAIL_CLOSED_ADR,
     V14210_AFFECTED_FILE_CEILING,
     V14210_EXPLICIT_ANY_CEILING,
+    V143_CALL_EFFECT_DATAFLOW_ADR,
+    V143_DEBT_SCHEDULE_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
     collect_complexity_metrics,
@@ -195,13 +197,13 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
     if current_total >= previous_total:
         raise RuntimeError(f"Oversized module lines must decrease: {current_total}>={previous_total}.")
     document["module_size_debt"] = [
-        {"path": path, "max_lines": lines, "expires_version": "14.3.0"}
+        {"path": path, "max_lines": lines, "expires_version": "14.4.0"}
         for path, lines in sorted(current.items())
     ]
     aggregate = dict(metrics["aggregate"])
     complexity["aggregate_debt"] = {
         "architecture_decision": V1421_STABILIZATION_ADR,
-        "expires_version": "14.3.0",
+        "expires_version": "14.4.0",
         "previous_oversized_module_count": len(previous),
         "previous_total_oversized_module_lines": previous_total,
         "required_total_line_reduction": previous_total - current_total,
@@ -213,19 +215,19 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
 
 
 def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
-    document["release_version"] = "14.2.10"
+    document["release_version"] = "14.3.0"
     rows = document.get("module_size_debt")
     complexity = document.get("complexity")
     if not isinstance(rows, list) or not isinstance(complexity, dict):
         raise RuntimeError("Existing v14 complexity policy is invalid.")
     for row in rows:
         if isinstance(row, dict):
-            row["expires_version"] = "14.3.0"
+            row["expires_version"] = "14.4.0"
     aggregate = dict(complexity.get("aggregate_debt") or {})
     aggregate.update(
         {
             "architecture_decision": V1421_STABILIZATION_ADR,
-            "expires_version": "14.3.0",
+            "expires_version": "14.4.0",
             "max_oversized_module_count": V1421_RECOVERY_LIMITS["oversized_module_max_count"],
             "max_modules_over_1000_lines": V1421_RECOVERY_LIMITS["modules_over_1000_max_count"],
             "max_largest_module_lines": V1421_RECOVERY_LIMITS["largest_module_max_lines"],
@@ -244,6 +246,8 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         "object_alias_collector_decision": V1428_OBJECT_ALIAS_COLLECTOR_ADR,
         "alias_dataflow_collector_decision": V1429_ALIAS_DATAFLOW_ADR,
         "alias_fail_closed_collector_decision": V14210_ALIAS_FAIL_CLOSED_ADR,
+        "call_effect_dataflow_collector_decision": V143_CALL_EFFECT_DATAFLOW_ADR,
+        "debt_schedule_decision": V143_DEBT_SCHEDULE_ADR,
         "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
         "collector_migration": {
             "from_schema_version": 2,
@@ -301,6 +305,13 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         },
         "alias_fail_closed_collector_hotfix": {
             "from_schema_version": 12,
+            "to_schema_version": 13,
+            "previous_explicit_any_ceiling": V14210_EXPLICIT_ANY_CEILING,
+            "previous_affected_file_ceiling": V14210_AFFECTED_FILE_CEILING,
+            "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),
+        },
+        "call_effect_dataflow_collector_migration": {
+            "from_schema_version": 13,
             "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "previous_explicit_any_ceiling": V14210_EXPLICIT_ANY_CEILING,
             "previous_affected_file_ceiling": V14210_AFFECTED_FILE_CEILING,

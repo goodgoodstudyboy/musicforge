@@ -24,7 +24,7 @@ def build_material_index() -> dict[str, object]:
                 "title": heading,
                 "version": version,
                 "status": "active"
-                if "v14.2.10-MusicForgeExplicitAny别名FailClosed语义收口" in path.name
+                if "v14.3.0-MusicForgeExplicitAny通用调用效果数据流" in path.name
                 else "historical",
             }
         )

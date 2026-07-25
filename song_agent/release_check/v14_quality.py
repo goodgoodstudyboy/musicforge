@@ -24,8 +24,8 @@ from song_agent.release_check.explicit_any_dataflow import (
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.2.10"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 13
+QUALITY_POLICY_VERSION = "14.3.0"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 14
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -48,6 +48,8 @@ V1427_DERIVED_UNCERTAIN_COLLECTOR_ADR = "docs/architecture/ADR-022-v1427-explici
 V1428_OBJECT_ALIAS_COLLECTOR_ADR = "docs/architecture/ADR-023-v1428-explicit-any-object-alias-flow.md"
 V1429_ALIAS_DATAFLOW_ADR = "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md"
 V14210_ALIAS_FAIL_CLOSED_ADR = "docs/architecture/ADR-025-v14210-explicit-any-alias-fail-closed.md"
+V143_CALL_EFFECT_DATAFLOW_ADR = "docs/architecture/ADR-026-v143-explicit-any-call-effect-dataflow.md"
+V143_DEBT_SCHEDULE_ADR = "docs/architecture/ADR-027-v143-debt-sequencing.md"
 V14210_EXPLICIT_ANY_CEILING = 11993
 V14210_AFFECTED_FILE_CEILING = 461
 V14210_LAYER_CEILINGS = {
@@ -56,6 +58,10 @@ V14210_LAYER_CEILINGS = {
     "domains": 6545,
     "interfaces": 5167,
     "platform": 196,
+}
+KNOWN_CALL_EFFECTS = {
+    "isinstance": "pure_scalar",
+    "issubclass": "pure_scalar",
 }
 V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH = "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d"
 V1421_MODULE_DEBT_CEILINGS_HASH = "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b"
@@ -374,7 +380,7 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
         lines = len(path.read_text(encoding="utf-8").splitlines())
         if lines > maximum:
             module_debt.append(
-                {"path": path.relative_to(root).as_posix(), "max_lines": lines, "expires_version": "14.3.0"}
+                {"path": path.relative_to(root).as_posix(), "max_lines": lines, "expires_version": "14.4.0"}
             )
     report = coverage_report or root / "runs/v14-quality/coverage.json"
     coverage_bound = coverage_report is not None and report.is_file()
@@ -410,7 +416,7 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
             "new_module_max_lines": 400,
             "aggregate_debt": {
                 "architecture_decision": V1421_STABILIZATION_ADR,
-                "expires_version": "14.3.0",
+                "expires_version": "14.4.0",
                 "max_oversized_module_count": V1421_RECOVERY_LIMITS["oversized_module_max_count"],
                 "max_modules_over_1000_lines": V1421_RECOVERY_LIMITS["modules_over_1000_max_count"],
                 "max_largest_module_lines": V1421_RECOVERY_LIMITS["largest_module_max_lines"],
@@ -515,6 +521,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         "explicit_any_object_alias_scope_probe": _explicit_any_object_alias_scope_probe(),
         "explicit_any_alias_dataflow_probe": _explicit_any_alias_dataflow_probe(),
         "explicit_any_alias_fail_closed_probe": _explicit_any_alias_fail_closed_probe(),
+        "explicit_any_call_effect_dataflow_probe": _explicit_any_call_effect_dataflow_probe(),
         "explicit_any_collector_schema_version": int(
             (policy.get("typing") or {}).get("explicit_any_collector_schema_version") or 0
         ),
@@ -545,6 +552,7 @@ def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:
         and details["explicit_any_object_alias_scope_probe"]
         and details["explicit_any_alias_dataflow_probe"]
         and details["explicit_any_alias_fail_closed_probe"]
+        and details["explicit_any_call_effect_dataflow_probe"]
         and details["explicit_any_collector_schema_version"] == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
         and details["complexity_decision_present"]
         and details["ci_budget_ratchet"]
@@ -913,6 +921,46 @@ def run_v14210_explicit_any_alias_fail_closed_smoke(root: Path) -> tuple[bool, s
     return all(checks.values()), json.dumps(detail, sort_keys=True)
 
 
+def run_v143_explicit_any_call_effect_dataflow_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    migration = dict(stabilization.get("call_effect_dataflow_collector_migration") or {})
+    typing = collect_typing_metrics(root)
+    checks = {
+        "policy_schema_current": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "call_effect_dataflow_probe": _explicit_any_call_effect_dataflow_probe(),
+        "call_effect_decision_present": stabilization.get("call_effect_dataflow_collector_decision")
+        == V143_CALL_EFFECT_DATAFLOW_ADR
+        and (root / V143_CALL_EFFECT_DATAFLOW_ADR).is_file(),
+        "debt_schedule_decision_present": stabilization.get("debt_schedule_decision")
+        == V143_DEBT_SCHEDULE_ADR
+        and (root / V143_DEBT_SCHEDULE_ADR).is_file(),
+        "call_effect_migration_recorded": int(migration.get("from_schema_version") or 0) == 13
+        and int(migration.get("to_schema_version") or 0) == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
+        == V14210_EXPLICIT_ANY_CEILING
+        and int(migration.get("previous_explicit_any_ceiling") or 0) == V14210_EXPLICIT_ANY_CEILING,
+        "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
+        == V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": typing_limits.get("explicit_any_layer_budgets")
+        == V14210_LAYER_CEILINGS,
+        "active_scope_flow_clear": int(typing.get("explicit_any_scope_blocker_count") or 0) == 0,
+        "active_total_within_ceiling": int(typing.get("explicit_any_count") or 0)
+        <= V14210_EXPLICIT_ANY_CEILING,
+    }
+    detail = {
+        "checks": checks,
+        "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "explicit_any_count": int(typing.get("explicit_any_count") or 0),
+        "explicit_any_ceiling": int(typing_limits.get("explicit_any_max_count") or 0),
+        "scope_flow_blockers": typing.get("explicit_any_scope_blockers") or [],
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
 def _typing_blockers(metrics: dict[str, Any], policy: dict[str, Any]) -> list[str]:
     limits = policy.get("typing") or {}
     blockers: list[str] = []
@@ -1080,6 +1128,21 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         != V14210_EXPLICIT_ANY_CEILING
     ):
         blockers.append("v14_quality_policy_alias_fail_closed_collector_migration")
+    if stabilization.get("call_effect_dataflow_collector_decision") != V143_CALL_EFFECT_DATAFLOW_ADR:
+        blockers.append("v14_quality_policy_call_effect_dataflow_collector_decision")
+    if stabilization.get("debt_schedule_decision") != V143_DEBT_SCHEDULE_ADR:
+        blockers.append("v14_quality_policy_debt_schedule_decision")
+    call_effect_migration = stabilization.get("call_effect_dataflow_collector_migration") or {}
+    if (
+        int(call_effect_migration.get("from_schema_version") or 0) != 13
+        or int(call_effect_migration.get("to_schema_version") or 0)
+        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+        or int(call_effect_migration.get("previous_explicit_any_ceiling") or 0)
+        != V14210_EXPLICIT_ANY_CEILING
+        or int(call_effect_migration.get("previous_affected_file_ceiling") or 0)
+        != V14210_AFFECTED_FILE_CEILING
+    ):
+        blockers.append("v14_quality_policy_call_effect_dataflow_collector_migration")
     typing = policy.get("typing") or {}
     if (
         int(typing.get("explicit_any_max_count") or 0) != V14210_EXPLICIT_ANY_CEILING
@@ -1143,6 +1206,10 @@ class _FunctionWriteSummary:
     vararg: str | None
     kwarg: str | None
     any_write_parameters: frozenset[str]
+    may_alias_parameter_groups: tuple[frozenset[str], ...]
+    may_store_alias_bindings: tuple[tuple[str, FlowValue], ...]
+    returns_alias_of: frozenset[str]
+    receiver_binding: str
 
 
 class _ExplicitAnyCollector(ast.NodeVisitor):
@@ -1161,7 +1228,11 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._control_flow_scopes: list[int] = []
         self._function_parameter_flows: list[dict[str, FlowValue]] = []
         self._function_any_writes: list[set[str]] = []
+        self._function_return_flows: list[list[FlowValue]] = []
+        self._function_identity_checkpoints: list[int] = []
+        self._function_may_store_aliases: list[dict[str, list[FlowValue]]] = []
         self._function_write_summaries: dict[int, _FunctionWriteSummary] = {}
+        self._call_results: dict[int, FlowValue] = {}
 
     def visit_Module(self, node: ast.Module) -> None:
         self._visit_scope_body(node.body, push_scope=False, scope_kind="module")
@@ -1170,8 +1241,18 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._visit_expressions(node.decorator_list)
         self._visit_expressions(node.bases)
         self._visit_expressions(keyword.value for keyword in node.keywords)
-        self._visit_scope_body(node.body, push_scope=True, scope_kind="class")
-        self._bind(node.name, "other", aliases=self._dataflow.object())
+        _members, member_aliases = self._visit_scope_body(node.body, push_scope=True, scope_kind="class")
+        decorator_semantics = tuple(self._decorator_semantics(value) for value in node.decorator_list)
+        surface_is_trusted = all(value == "identity-class" for value in decorator_semantics)
+        class_value = self._dataflow.object(
+            escaped=not surface_is_trusted,
+            callable_role="class" if surface_is_trusted else "callable",
+        )
+        if surface_is_trusted:
+            for name, value in member_aliases.items():
+                if any(identity in self._function_write_summaries for identity in value.identities):
+                    self._dataflow.write_member(class_value, ("attr", name), value)
+        self._bind(node.name, "other", aliases=class_value)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._visit_function(node)
@@ -1195,7 +1276,12 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             name = alias.asname or alias.name.split(".", 1)[0]
-            kind = "typing-module" if alias.name in {"typing", "typing_extensions"} else "other"
+            if alias.name in {"typing", "typing_extensions"}:
+                kind = "typing-module"
+            elif alias.name == "dataclasses":
+                kind = "dataclasses-module"
+            else:
+                kind = "other"
             self._bind(name, kind, aliases=self._dataflow.scalar(kind))
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
@@ -1213,6 +1299,8 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                     "TypeAlias": "type-alias-marker",
                     "TYPE_CHECKING": "type-checking-marker",
                 }.get(alias.name, "other")
+            elif node.module == "dataclasses" and alias.name == "dataclass":
+                kind = "dataclass-decorator"
             self._bind(name, kind, aliases=self._dataflow.scalar(kind))
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
@@ -1253,6 +1341,11 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._bind_target(node.target, value)
 
     def visit_Call(self, node: ast.Call) -> None:
+        self._call_result(node)
+        if self._known_call_effect(node) == "pure_scalar":
+            self.generic_visit(node)
+            return
+        summaries = self._call_summaries(node)
         arguments = [*node.args, *(keyword.value for keyword in node.keywords)]
         any_relevant_arguments = [
             value
@@ -1260,21 +1353,24 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if self._expression_value(value).kind
             in {"any", "typing-module", "any-or-typing-module", "uncertain"}
         ]
-        if any_relevant_arguments:
+        if any_relevant_arguments and not summaries:
             candidates = [value for value in arguments if value not in any_relevant_arguments]
             if isinstance(node.func, ast.Attribute):
                 candidates.append(node.func.value)
             for candidate in candidates:
                 self._taint_value(self._expression_value(candidate))
             self._record_unresolved_call_effect(node, candidates)
-        summaries = {
-            self._function_write_summaries[identity]
-            for identity in self._expression_value(node.func).identities
-            if identity in self._function_write_summaries
-        }
         for summary in summaries:
-            self._apply_function_write_summary(node, summary)
+            self._apply_function_summary(node, summary)
         self.generic_visit(node)
+
+    def visit_Return(self, node: ast.Return) -> None:
+        if node.value is None:
+            return
+        value = self._expression_value(node.value)
+        self.visit(node.value)
+        if self._function_return_flows:
+            self._function_return_flows[-1].append(value)
 
     def visit_TypeAlias(self, node: ast.AST) -> None:
         name = getattr(node, "name", None)
@@ -1351,6 +1447,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         self._visit_expressions(node.decorator_list)
         self._visit_argument_defaults(node.args)
+        decorator_semantics = tuple(self._decorator_semantics(value) for value in node.decorator_list)
         for annotation in _function_annotations(node, skip_receiver=False):
             if annotation is not None:
                 self.count += self._annotation_any_count(annotation)
@@ -1363,12 +1460,25 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             parameter_scope[node.args.vararg.arg] = "other"
         if node.args.kwarg is not None:
             parameter_scope[node.args.kwarg.arg] = "other"
+        identity_checkpoint = self._dataflow.checkpoint()
         parameter_flows = {
             name: self._dataflow.object(escaped=True)
             for name in parameter_scope
         }
+        if (
+            self._scope_kinds[-1] == "class"
+            and "classmethod" in decorator_semantics
+            and positional
+        ):
+            parameter_flows[positional[0]] = self._dataflow.object(
+                escaped=True,
+                callable_role="class",
+            )
         self._function_parameter_flows.append(parameter_flows)
         self._function_any_writes.append(set())
+        self._function_return_flows.append([])
+        self._function_identity_checkpoints.append(identity_checkpoint)
+        self._function_may_store_aliases.append({})
         try:
             self._visit_scope_body(
                 node.body,
@@ -1378,33 +1488,234 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 scope_kind="function",
             )
             writes = frozenset(self._function_any_writes[-1])
+            return_flows = tuple(self._function_return_flows[-1])
+            may_store_aliases = dict(self._function_may_store_aliases[-1])
         finally:
+            self._function_may_store_aliases.pop()
+            self._function_identity_checkpoints.pop()
+            self._function_return_flows.pop()
             self._function_any_writes.pop()
             self._function_parameter_flows.pop()
+        alias_groups = self._parameter_alias_groups(parameter_flows)
+        may_store_alias_bindings = tuple(
+            (name, captured)
+            for name in sorted(may_store_aliases)
+            for captured in self._unique_flow_values(may_store_aliases[name])
+        )
+        returns_alias_of = frozenset(
+            name
+            for name, parameter in parameter_flows.items()
+            if any(self._dataflow.related(parameter, returned) for returned in return_flows)
+        )
+        if self._scope_kinds[-1] != "class" or "staticmethod" in decorator_semantics:
+            receiver_binding = "none"
+        elif "classmethod" in decorator_semantics:
+            receiver_binding = "always"
+        else:
+            receiver_binding = "maybe"
         summary = _FunctionWriteSummary(
             positional=positional,
             keyword_only=keyword_only,
             vararg=node.args.vararg.arg if node.args.vararg is not None else None,
             kwarg=node.args.kwarg.arg if node.args.kwarg is not None else None,
             any_write_parameters=writes,
+            may_alias_parameter_groups=alias_groups,
+            may_store_alias_bindings=may_store_alias_bindings,
+            returns_alias_of=returns_alias_of,
+            receiver_binding=receiver_binding,
         )
-        function_value = self._dataflow.object()
-        for identity in function_value.identities:
-            self._function_write_summaries[identity] = summary
+        summary_is_trusted = all(
+            value in {"staticmethod", "classmethod"}
+            for value in decorator_semantics
+        )
+        function_value = self._dataflow.object(
+            escaped=not summary_is_trusted,
+            callable_role="function" if summary_is_trusted else "callable",
+        )
+        if summary_is_trusted:
+            for identity in function_value.identities:
+                self._function_write_summaries[identity] = summary
         self._bind(node.name, "other", aliases=function_value)
 
-    def _apply_function_write_summary(self, node: ast.Call, summary: _FunctionWriteSummary) -> None:
-        for index, argument in enumerate(node.args):
-            parameter = summary.positional[index] if index < len(summary.positional) else summary.vararg
-            if parameter in summary.any_write_parameters:
-                self._taint_value(self._expression_value(argument))
+    def _decorator_semantics(self, value: ast.expr) -> str:
+        if isinstance(value, ast.Call):
+            return self._decorator_semantics(value.func)
+        if isinstance(value, ast.Name):
+            binding = self._resolve_name(value.id)
+            if value.id in {"staticmethod", "classmethod"} and not binding:
+                return value.id
+            if binding == "dataclass-decorator":
+                return "identity-class"
+            return "unknown"
+        if isinstance(value, ast.Attribute) and value.attr == "dataclass":
+            if isinstance(value.value, ast.Name) and self._resolve_name(value.value.id) == "dataclasses-module":
+                return "identity-class"
+        return "unknown"
+
+    def _apply_function_summary(self, node: ast.Call, summary: _FunctionWriteSummary) -> None:
+        arguments = self._bound_call_arguments(node, summary)
+        for parameter, template in summary.may_store_alias_bindings:
+            for value in arguments.get(parameter, ()):
+                self._record_function_may_store((value, template))
+                self._dataflow.connect((template, value), expose_members=True)
+        for parameter in summary.any_write_parameters:
+            for value in arguments.get(parameter, ()):
+                self._taint_value(value)
+        for group in summary.may_alias_parameter_groups:
+            values = [value for parameter in group for value in arguments.get(parameter, ())]
+            if len(values) > 1:
+                self._record_function_may_store(values)
+                self._dataflow.connect(values, expose_members=True)
+            relevant = [value.kind for value in values if value.kind in ANY_RELEVANT_KINDS]
+            if relevant:
+                kind = "unknown" if "unknown" in relevant else "uncertain"
+                for value in values:
+                    if value.kind not in ANY_RELEVANT_KINDS:
+                        self._taint_value(value, kind=kind)
+
+    def _parameter_alias_groups(
+        self,
+        parameters: dict[str, FlowValue],
+    ) -> tuple[frozenset[str], ...]:
+        by_root: dict[int, set[str]] = {}
+        for name, parameter in parameters.items():
+            for root in self._dataflow.component_roots(parameter):
+                by_root.setdefault(root, set()).add(name)
+        groups = [frozenset(group) for group in by_root.values() if len(group) > 1]
+        return tuple(sorted(groups, key=lambda group: tuple(sorted(group))))
+
+    def _bound_call_arguments(
+        self,
+        node: ast.Call,
+        summary: _FunctionWriteSummary,
+    ) -> dict[str, tuple[FlowValue, ...]]:
+        result: dict[str, list[FlowValue]] = {}
+        if summary.receiver_binding != "always":
+            for index, argument in enumerate(node.args):
+                parameter = summary.positional[index] if index < len(summary.positional) else summary.vararg
+                if parameter is not None:
+                    result.setdefault(parameter, []).append(self._expression_value(argument))
+
+        # A function declared in class scope may be observed through a bound
+        # descriptor or copied from the class as an unbound callable. Keep
+        # both positional interpretations. This is conservative, but avoids
+        # losing a may-store-alias effect when a classmethod or method is
+        # assigned to a local name before it is called.
+        if (
+            summary.receiver_binding in {"always", "maybe"}
+            and summary.positional
+            and summary.positional[0] in {"self", "cls"}
+        ):
+            if isinstance(node.func, ast.Attribute):
+                result.setdefault(summary.positional[0], []).append(self._expression_value(node.func.value))
+            for index, argument in enumerate(node.args):
+                position = index + 1
+                parameter = summary.positional[position] if position < len(summary.positional) else summary.vararg
+                if parameter is not None:
+                    result.setdefault(parameter, []).append(self._expression_value(argument))
         for keyword in node.keywords:
-            if keyword.arg is None:
-                if summary.kwarg in summary.any_write_parameters:
-                    self._taint_value(self._expression_value(keyword.value))
-                continue
-            if keyword.arg in summary.any_write_parameters:
-                self._taint_value(self._expression_value(keyword.value))
+            parameter = summary.kwarg if keyword.arg is None else keyword.arg
+            if parameter is not None:
+                result.setdefault(parameter, []).append(self._expression_value(keyword.value))
+        return {name: tuple(values) for name, values in result.items()}
+
+    def _call_result(self, node: ast.Call) -> FlowValue:
+        cached = self._call_results.get(id(node))
+        if cached is not None:
+            return cached
+        kind = self._expression_binding_kind(node)
+        function = self._expression_value(node.func)
+        summaries = self._call_summaries(node, function=function)
+        if self._known_call_effect(node, function=function) == "pure_scalar":
+            result = self._dataflow.scalar(kind)
+        elif summaries:
+            returned: list[FlowValue] = []
+            for summary in summaries:
+                arguments = self._bound_call_arguments(node, summary)
+                returned.extend(
+                    value
+                    for parameter in summary.returns_alias_of
+                    for value in arguments.get(parameter, ())
+                )
+            result = (
+                self._dataflow.join(returned, kind=kind)
+                if returned
+                else self._dataflow.object(kind, escaped=True)
+            )
+        else:
+            # A direct callable object is not itself a storage receiver. Keep
+            # it out of the alias component unless it came from an unresolved
+            # member read (for example ``sink = store.append``), where its
+            # origins carry the bound receiver needed by the call effect.
+            participates_as_receiver = bool(function.origins) or (
+                bool(function.identities)
+                and function.callable_role not in {"class", "function"}
+            )
+            participants = [function] if participates_as_receiver else []
+            participants.extend(self._expression_value(argument) for argument in node.args)
+            participants.extend(self._expression_value(keyword.value) for keyword in node.keywords)
+            if isinstance(node.func, ast.Attribute):
+                participants.append(self._expression_value(node.func.value))
+            self._record_function_may_store(participants)
+            result = self._dataflow.call_effect(participants, kind=kind)
+        self._call_results[id(node)] = result
+        return result
+
+    def _record_function_may_store(self, values: Iterable[FlowValue]) -> None:
+        if not self._function_parameter_flows:
+            return
+        rows = tuple(values)
+        checkpoint = self._function_identity_checkpoints[-1]
+        parameters = self._function_parameter_flows[-1]
+        parameter_names = {
+            name
+            for name, parameter in parameters.items()
+            if any(self._dataflow.related(parameter, value) for value in rows)
+        }
+        if not parameter_names:
+            return
+        captured = [
+            prior
+            for value in rows
+            if (prior := self._dataflow.prior_component(value, checkpoint)) is not None
+        ]
+        for name in parameter_names:
+            parameter = parameters[name]
+            for value in captured:
+                if not self._dataflow.related(parameter, value):
+                    self._function_may_store_aliases[-1].setdefault(name, []).append(value)
+
+    @staticmethod
+    def _unique_flow_values(values: Iterable[FlowValue]) -> tuple[FlowValue, ...]:
+        return tuple(dict.fromkeys(values))
+
+    def _call_summaries(
+        self,
+        node: ast.Call,
+        *,
+        function: FlowValue | None = None,
+    ) -> set[_FunctionWriteSummary]:
+        resolved = function if function is not None else self._expression_value(node.func)
+        return {
+            self._function_write_summaries[identity]
+            for identity in resolved.identities
+            if identity in self._function_write_summaries
+        }
+
+    def _known_call_effect(
+        self,
+        node: ast.Call,
+        *,
+        function: FlowValue | None = None,
+    ) -> str | None:
+        if not isinstance(node.func, ast.Name):
+            return None
+        if any(node.func.id in scope for scope in (*self._scopes, *self._potential_scopes)):
+            return None
+        resolved = function if function is not None else self._expression_value(node.func)
+        if resolved.identities or resolved.origins:
+            return None
+        return KNOWN_CALL_EFFECTS.get(node.func.id)
 
     def _record_unresolved_call_effect(self, node: ast.Call, candidates: list[ast.expr]) -> None:
         unresolved: list[FlowValue] = []
@@ -1436,7 +1747,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         initial: dict[str, str] | None = None,
         initial_aliases: dict[str, FlowValue] | None = None,
         scope_kind: str,
-    ) -> None:
+    ) -> tuple[dict[str, str], dict[str, FlowValue]]:
         global_names, nonlocal_names = _scope_declarations(body)
         if push_scope:
             self._scopes.append(dict(initial or {}))
@@ -1458,6 +1769,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if global_names & nonlocal_names:
                 self._add_blocker("conflicting_global_nonlocal:" + ",".join(sorted(global_names & nonlocal_names)))
             self._visit_statements(body)
+            result = dict(self._scopes[-1]), dict(self._aliases[-1])
         finally:
             self._potential_scopes.pop()
             if push_scope:
@@ -1466,6 +1778,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 self._scope_kinds.pop()
                 self._global_names.pop()
                 self._nonlocal_names.pop()
+        return result
 
     def _visit_statements(self, body: list[ast.stmt]) -> None:
         for statement in body:
@@ -1705,6 +2018,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             return
         if isinstance(target, (ast.Attribute, ast.Subscript)):
             base = self._expression_value(target.value)
+            self._record_function_may_store((base, value))
             if value.kind in ANY_RELEVANT_KINDS:
                 if value.kind != "unknown" and self._dataflow.has_unresolved_escape(base):
                     root_name = _expression_root_name(target.value)
@@ -1714,6 +2028,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                     self._record_function_parameter_write(base)
                 kind = "unknown" if value.kind == "unknown" else "uncertain"
                 self._taint_value(base, kind=kind)
+            self._dataflow.connect((base, value), expose_members=False)
             self._dataflow.write_member(base, self._member_key(target), value)
 
     def _record_function_parameter_write(self, base: FlowValue) -> None:
@@ -1762,18 +2077,26 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             for key, item in zip(value.keys, value.values, strict=True):
                 entries.append((self._static_key(key), self._expression_value(item)))
             return self._dataflow.mapping(entries, kind=kind)
+        if isinstance(value, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+            sources = [self._expression_value(value.elt)]
+            for generator in value.generators:
+                sources.append(self._expression_value(generator.iter))
+                sources.extend(self._expression_value(condition) for condition in generator.ifs)
+            return self._dataflow.escape(sources, kind=kind)
+        if isinstance(value, ast.DictComp):
+            sources = [self._expression_value(value.key), self._expression_value(value.value)]
+            for generator in value.generators:
+                sources.append(self._expression_value(generator.iter))
+                sources.extend(self._expression_value(condition) for condition in generator.ifs)
+            return self._dataflow.escape(sources, kind=kind)
         if isinstance(value, (ast.Attribute, ast.Subscript)):
             base = self._expression_value(value.value)
             read = self._dataflow.read_member(base, self._member_key(value))
             return read.with_kind(merge_flow_kinds((kind, read.kind)))
         if isinstance(value, ast.Call):
-            candidates = [self._expression_value(item) for item in value.args]
-            candidates.extend(self._expression_value(keyword.value) for keyword in value.keywords)
-            if isinstance(value.func, ast.Attribute):
-                candidates.append(self._expression_value(value.func.value))
-            return self._dataflow.escape(candidates, kind=kind)
+            return self._call_result(value).with_kind(kind)
         if isinstance(value, ast.Lambda):
-            return self._dataflow.object(kind, escaped=True)
+            return self._dataflow.object(kind, escaped=True, callable_role="callable")
         loaded = [
             self._resolve_flow(node.id)
             for node in ast.walk(value)
@@ -1913,6 +2236,16 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         return self._resolve_flow(name).identities
 
 
+def _decorator_name(value: ast.expr) -> str:
+    if isinstance(value, ast.Name):
+        return value.id
+    if isinstance(value, ast.Attribute):
+        return value.attr
+    if isinstance(value, ast.Call):
+        return _decorator_name(value.func)
+    return ""
+
+
 def _match_pattern_names(pattern: ast.pattern) -> set[str]:
     names: set[str] = set()
     for node in ast.walk(pattern):
@@ -1997,12 +2330,19 @@ def _merge_binding_kinds(kinds: Iterable[str]) -> str:
         return "uncertain"
     if "unknown" in values:
         return "unknown"
+    decorator_markers = values & {"dataclass-decorator", "dataclasses-module"}
+    if decorator_markers and values != decorator_markers:
+        return "unknown"
+    if len(decorator_markers) > 1:
+        return "unknown"
     if "any-or-typing-module" in values or {"any", "typing-module"}.issubset(values):
         return "any-or-typing-module"
     priority = {
         "other": 0,
         "type-checking-marker": 1,
         "type-alias-marker": 2,
+        "dataclass-decorator": 2,
+        "dataclasses-module": 2,
         "typing-module": 3,
         "any": 4,
     }
@@ -2735,6 +3075,120 @@ def _explicit_any_alias_fail_closed_probe() -> bool:
                 detail == expected_blocker or detail.startswith(expected_blocker + ":")
                 for detail in scope_blockers
             )
+            and any("typing_explicit_any_scope_flow" in blocker for blocker in blockers)
+            and any("typing_explicit_any:" in blocker for blocker in blockers)
+            and any("typing_explicit_any_layer" in blocker for blocker in blockers)
+            and any("typing_explicit_any_file" in blocker for blocker in blockers)
+        ):
+            return False
+    return True
+
+
+def _explicit_any_call_effect_dataflow_probe() -> bool:
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    variants = (
+        "        Holder = [None]\n        Store = []\n        Store.append(Holder)\n        Ref = Store[0]\n",
+        "        Holder = [None]\n        Store = []\n        Store.extend([Holder])\n        Ref = Store[0]\n",
+        "        Holder = [None]\n        class Box: pass\n        setattr(Box, 'value', Holder)\n        Ref = Box.value\n",
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(target, value):\n            target.append(value)\n"
+            "        retain(Store, Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        global Store\n        Store = []\n"
+            "        def retain(value):\n            Store.append(value)\n"
+            "        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n        sink = Store.append\n"
+            "        sink(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        class Helper:\n            @classmethod\n"
+            "            def retain(cls, target, value):\n                target.append(value)\n"
+            "        Holder = [None]\n        Store = []\n        sink = Helper.retain\n"
+            "        sink(Store, Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        def identity(value):\n            return value\n"
+            "        Ref = identity(Holder)\n"
+        ),
+        (
+            "        def transport(fn):\n            def wrapped(target, value):\n"
+            "                target.append(value)\n            return wrapped\n"
+            "        @transport\n        def observe(target, value):\n            return None\n"
+            "        Holder = [None]\n        Store = []\n        observe(Store, Holder)\n"
+            "        Ref = Store[0]\n"
+        ),
+        (
+            "        def transport(cls):\n            class Replacement:\n"
+            "                @staticmethod\n                def observe(target, value):\n"
+            "                    target.append(value)\n            return Replacement\n"
+            "        @transport\n        class Helper:\n            @staticmethod\n"
+            "            def observe(target, value):\n                return None\n"
+            "        Holder = [None]\n        Store = []\n        Helper.observe(Store, Holder)\n"
+            "        Ref = Store[0]\n"
+        ),
+        (
+            "        class Sink:\n            def __init__(self):\n"
+            "                self.values = []\n            def __call__(self, value):\n"
+            "                self.values.append(value)\n"
+            "        Holder = [None]\n        sink = Sink()\n        sink(Holder)\n"
+            "        Ref = sink.values[0]\n"
+        ),
+    )
+    for body in variants:
+        source = (
+            "from __future__ import annotations\n"
+            "import typing as t\n"
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    Alias = int\n"
+            "else:\n"
+            "    class Probe:\n"
+            "        global Alias\n"
+            "        for Alias in ((t.Any,),):\n"
+            "            pass\n"
+            + body
+            + "        Ref[0] = Alias\n"
+            + "        Alias = Holder[0][0]\n"
+            + annotations
+            + "\n"
+        )
+        count, scope_blockers = _explicit_any_annotation_analysis(ast.parse(source))
+        metrics = {
+            "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "raw_dict_str_any_count": 0,
+            "implementation_document_count": 0,
+            "explicit_any_count": count,
+            "explicit_any_affected_file_count": 1,
+            "explicit_any_by_layer": {"interfaces": count},
+            "explicit_any_by_file": {"song_agent/interfaces/api/call_effect_probe.py": count},
+            "explicit_any_scope_blockers": [
+                {"path": "song_agent/interfaces/api/call_effect_probe.py", "detail": detail}
+                for detail in scope_blockers
+            ],
+            "public_implementation_document_count": 0,
+            "untyped_public_function_count": 0,
+        }
+        policy = {
+            "typing": {
+                "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+                "raw_dict_str_any_max_count": 0,
+                "implementation_document_max_count": 0,
+                "explicit_any_max_count": 99,
+                "explicit_any_affected_file_max_count": 1,
+                "explicit_any_layer_budgets": {"interfaces": 99},
+                "explicit_any_file_budgets": {"song_agent/interfaces/api/call_effect_probe.py": 99},
+                "public_implementation_document_max_count": 0,
+                "untyped_public_function_max_count": 0,
+            }
+        }
+        blockers = _typing_blockers(metrics, policy)
+        if not (
+            count == 100
+            and any(detail.endswith("annotation_binding:Alias") for detail in scope_blockers)
             and any("typing_explicit_any_scope_flow" in blocker for blocker in blockers)
             and any("typing_explicit_any:" in blocker for blocker in blockers)
             and any("typing_explicit_any_layer" in blocker for blocker in blockers)

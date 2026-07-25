@@ -102,3 +102,44 @@ def test_rebinding_creates_an_independent_alias_group() -> None:
     affected = flow.taint(rebound, "uncertain")
 
     assert affected.isdisjoint(original.identities)
+
+
+def test_call_effect_connects_receiver_arguments_and_future_member_reads() -> None:
+    flow = ExplicitAnyDataFlow()
+    holder = flow.container((flow.scalar(),))
+    store = flow.container(())
+
+    flow.call_effect((store, holder))
+    reference = flow.read_member(store, ("index", "0"))
+    flow.taint(reference, "uncertain")
+
+    assert flow.related(store, holder)
+    assert flow.read_member(holder, ("index", "0")).kind == "uncertain"
+
+
+def test_call_effect_transports_nested_object_origins_without_eager_graph_cloning() -> None:
+    flow = ExplicitAnyDataFlow()
+    holder = flow.container((flow.scalar(),))
+    argument = flow.container((holder,))
+    store = flow.container(())
+
+    flow.call_effect((store, argument))
+    reference = flow.read_member(store, ("index", "0"))
+    flow.taint(reference, "uncertain")
+
+    assert holder.identities <= flow.taint_reachable(reference)
+    assert flow.read_member(holder, ("index", "0")).kind == "uncertain"
+
+
+def test_prior_component_excludes_function_local_analysis_objects() -> None:
+    flow = ExplicitAnyDataFlow()
+    captured = flow.container(())
+    checkpoint = flow.checkpoint()
+    parameter = flow.object(escaped=True)
+    temporary = flow.object(escaped=True)
+
+    flow.connect((captured, parameter, temporary), expose_members=True)
+
+    prior = flow.prior_component(parameter, checkpoint)
+    assert prior is not None
+    assert prior.identities == captured.identities

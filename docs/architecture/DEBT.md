@@ -2,8 +2,8 @@
 
 | ID | Debt | Owner | Deadline | Blocking condition |
 |---|---|---|---|---|
-| ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.3.0 | ADR-016 restores the reviewed v14.1.2 structure and freezes per-file ceilings plus aggregate module count, thousand-line count, largest-module size, and total oversized lines. |
-| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.3.0 | Schema-13 metrics use an explicit alias data-flow kernel plus bounded direct-call write effects and freeze total, layer, affected-file, and per-file explicit-`Any` budgets; unresolved Any-relevant scope flow is blocking and no file, layer, or total budget may grow. |
+| ARCH-014 | Migrated domain modules listed in `architecture-v14-quality.json` exceed the default 600-line module budget. | Bounded-context owners | v14.4.0 | ADR-027 gives the schema-14 call-effect P1 priority in v14.3 and preserves every existing complexity ceiling during the one-release move. |
+| TYPE-003 | Active-tree type precision still relies on explicit `Any` annotations, especially in API route contexts and legacy-shaped domain documents. | Platform, application, interface, and bounded-context owners | v14.4.0 | Schema-14 metrics use generic call-effect data flow and freeze total, layer, affected-file, and per-file budgets; ADR-027 permits no budget increase during the one-release move. |
 
 Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
@@ -163,3 +163,15 @@ blockers, while bounded direct-name call summaries propagate the effect to the
 caller. The active tree remains at 11,993 Explicit Any annotations, 461
 affected files, and zero scope blockers; all schema 12 ceilings remain
 unchanged. ARCH-014 and TYPE-003 remain open through v14.3.0.
+
+## v14.3.0 Generic Call-Effect Data Flow
+
+ADR-026 upgrades the collector to schema 14. Unknown calls now record ordinary
+object transport in a union-find may-alias component, and local function
+summaries record parameter storage and alias returns. Delayed Any mutation can
+no longer rely on a pre-taint call to erase provenance. The active tree remains
+at 11,993 Explicit Any annotations, 461 affected files, and zero scope
+blockers; all schema 13 ceilings remain unchanged. ARCH-014 and TYPE-003 remain
+open and require separate debt-reduction work after this security boundary is
+stable. ADR-027 moves both deadlines once to v14.4.0 without changing any
+numeric ceiling and prohibits new business scope before closure.

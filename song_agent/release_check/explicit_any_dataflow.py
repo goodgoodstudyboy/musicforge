@@ -18,6 +18,7 @@ class FlowValue:
     identities: frozenset[int] = frozenset()
     escaped: bool = False
     origins: frozenset[int] = frozenset()
+    callable_role: str = ""
 
     def with_kind(self, kind: str) -> FlowValue:
         return replace(self, kind=kind)
@@ -27,6 +28,7 @@ class FlowValue:
 class _ObjectState:
     cells: dict[CellKey, FlowValue] = field(default_factory=dict)
     wildcard: FlowValue | None = None
+    call_exposed: bool = False
     length: int | None = None
     escaped: bool = False
     origins: frozenset[int] = frozenset()
@@ -45,9 +47,21 @@ class ExplicitAnyDataFlow:
     def __init__(self) -> None:
         self._next_identity = 0
         self._objects: dict[int, _ObjectState] = {}
+        self._parents: dict[int, int] = {}
+        self._members: dict[int, set[int]] = {}
+        self._component_cells: dict[int, dict[CellKey, FlowValue]] = {}
+        self._component_wildcards: dict[int, FlowValue | None] = {}
+        self._component_exposed: dict[int, bool] = {}
+        self._component_escaped: dict[int, bool] = {}
+        self._component_taints: dict[int, str] = {}
 
     def scalar(self, kind: str = "other") -> FlowValue:
         return FlowValue(kind=kind)
+
+    def checkpoint(self) -> int:
+        """Return the highest identity allocated before a nested analysis."""
+
+        return self._next_identity
 
     def object(
         self,
@@ -55,14 +69,17 @@ class ExplicitAnyDataFlow:
         *,
         escaped: bool = False,
         origins: frozenset[int] = frozenset(),
+        callable_role: str = "",
     ) -> FlowValue:
         identity = self._new_identity()
         self._objects[identity] = _ObjectState(escaped=escaped, origins=origins)
+        self._component_escaped[identity] = escaped
         return FlowValue(
             kind=kind,
             identities=frozenset({identity}),
             escaped=escaped,
             origins=origins,
+            callable_role=callable_role,
         )
 
     def container(self, elements: Iterable[FlowValue], *, kind: str = "other") -> FlowValue:
@@ -71,7 +88,9 @@ class ExplicitAnyDataFlow:
         rows = tuple(elements)
         state.length = len(rows)
         for index, element in enumerate(rows):
-            state.cells[("index", str(index))] = element
+            key = ("index", str(index))
+            state.cells[key] = element
+            self._component_cells[self._find(next(iter(value.identities)))][key] = element
         return value
 
     def mapping(self, entries: Iterable[tuple[str | None, FlowValue]], *, kind: str = "other") -> FlowValue:
@@ -80,9 +99,15 @@ class ExplicitAnyDataFlow:
         for key, element in entries:
             if key is None:
                 state.wildcard = self.join((state.wildcard, element)) if state.wildcard else element
+                root = self._find(next(iter(value.identities)))
+                current = self._component_wildcards[root]
+                self._component_wildcards[root] = self.join((current, element)) if current else element
             else:
                 cell = ("index", key)
                 state.cells[cell] = self.join((state.cells[cell], element)) if cell in state.cells else element
+                root = self._find(next(iter(value.identities)))
+                current = self._component_cells[root].get(cell)
+                self._component_cells[root][cell] = self.join((current, element)) if current else element
         return value
 
     def join(self, values: Iterable[FlowValue | None], *, kind: str | None = None) -> FlowValue:
@@ -92,6 +117,8 @@ class ExplicitAnyDataFlow:
         merged_kind = kind or merge_flow_kinds(value.kind for value in rows)
         identities = frozenset().union(*(value.identities for value in rows))
         origins = frozenset().union(*(value.origins for value in rows))
+        roles = {value.callable_role for value in rows if value.callable_role}
+        callable_role = next(iter(roles)) if len(roles) == 1 else ("callable" if roles else "")
         escaped = any(value.escaped for value in rows) or any(
             self._objects.get(identity, _ObjectState()).escaped for identity in identities
         )
@@ -100,50 +127,137 @@ class ExplicitAnyDataFlow:
             identities=identities,
             escaped=escaped,
             origins=origins,
+            callable_role=callable_role,
         )
 
     def escape(self, values: Iterable[FlowValue], *, kind: str = "other") -> FlowValue:
         merged = self.join(values, kind=kind)
         origins = self.taint_reachable(merged)
-        return self.object(kind, escaped=True, origins=origins)
+        return self.object(kind, escaped=True, origins=origins, callable_role=merged.callable_role)
+
+    def call_effect(self, values: Iterable[FlowValue], *, kind: str = "other") -> FlowValue:
+        """Conservatively model an unresolved call's alias and storage effects.
+
+        A call may retain any object participant, store one participant inside
+        another, and return an alias derived from that set. The component is
+        built even when no participant is Any-related yet so a later mutation
+        cannot launder the earlier alias transport.
+        """
+
+        rows = tuple(values)
+        component = self.connect(rows, expose_members=True)
+        result = self.object(kind, escaped=True, origins=component)
+        self.connect((*rows, result), expose_members=False)
+        return result
+
+    def connect(
+        self,
+        values: Iterable[FlowValue],
+        *,
+        expose_members: bool,
+    ) -> frozenset[int]:
+        """Join values into one may-alias component without claiming equality."""
+
+        rows = tuple(values)
+        component: set[int] = set()
+        for value in rows:
+            component.update(value.identities)
+            component.update(value.origins)
+        if not component:
+            return frozenset()
+
+        frozen = frozenset(component)
+        root = next(iter(frozen))
+        for identity in frozen - {root}:
+            root = self._union(root, identity)
+        connected = self._component(root)
+        for identity in frozen:
+            state = self._objects.get(identity)
+            if state is None:
+                continue
+            state.escaped = True
+            if expose_members:
+                state.call_exposed = True
+        if expose_members:
+            self._component_exposed[self._find(root)] = True
+        self._component_escaped[self._find(root)] = True
+        return connected
+
+    def related(self, left: FlowValue, right: FlowValue) -> bool:
+        """Return whether two values may expose the same runtime object."""
+
+        return bool(self.component_roots(left) & self.component_roots(right))
+
+    def has_storage_effect(self, value: FlowValue) -> bool:
+        """Return whether a value may be retained by a call or object write."""
+
+        for root in self.component_roots(value):
+            if self._component_exposed.get(root, False):
+                return True
+            if len(self._members.get(root, ())) > 1:
+                return True
+        return False
+
+    def prior_component(self, value: FlowValue, checkpoint: int) -> FlowValue | None:
+        """Return captured identities that predate a nested function analysis."""
+
+        identities: set[int] = set()
+        for root in self.component_roots(value):
+            identities.update(
+                identity
+                for identity in self._members.get(root, {root})
+                if identity <= checkpoint
+            )
+        if not identities:
+            return None
+        return FlowValue(identities=frozenset(identities), escaped=True)
+
+    def component_roots(self, value: FlowValue) -> frozenset[int]:
+        return frozenset(
+            self._find(identity)
+            for identity in value.identities | value.origins
+            if identity in self._parents
+        )
 
     def read_member(self, base: FlowValue, key: CellKey | None) -> FlowValue:
         values: list[FlowValue] = []
         unresolved = base.escaped
-        for identity in base.identities:
-            state = self._objects.get(identity)
-            if state is None:
-                unresolved = True
-                continue
-            if state.taint in ANY_RELEVANT_KINDS:
-                values.append(FlowValue(kind=state.taint))
-            if key is not None and key in state.cells:
-                values.append(state.cells[key])
+        roots = self.component_roots(base)
+        for root in roots:
+            taint = self._component_taints.get(root, "other")
+            if taint in ANY_RELEVANT_KINDS:
+                values.append(FlowValue(kind=taint))
+            cells = self._component_cells.get(root, {})
+            if key is not None and key in cells:
+                values.append(cells[key])
             elif key is None:
-                values.extend(state.cells.values())
+                values.extend(cells.values())
                 unresolved = True
             else:
                 unresolved = True
-            if state.wildcard is not None:
-                values.append(state.wildcard)
+            wildcard = self._component_wildcards.get(root)
+            if wildcard is not None:
+                values.append(wildcard)
                 unresolved = True
-            unresolved = unresolved or state.escaped
+            if self._component_exposed.get(root, False):
+                values.append(FlowValue(identities=frozenset({root}), escaped=True, origins=frozenset({root})))
+                unresolved = True
+            unresolved = unresolved or self._component_escaped.get(root, False)
         if unresolved or not values:
             escaped = self.escape((base,), kind="other")
             values.append(escaped)
         return self.join(values)
 
     def write_member(self, base: FlowValue, key: CellKey | None, value: FlowValue) -> frozenset[int]:
-        identities = self.reachable(base.identities) if base.escaped else base.identities
-        for identity in identities:
-            state = self._objects.get(identity)
-            if state is None:
-                continue
+        roots = self.component_roots(base)
+        identities = frozenset().union(*(self._members.get(root, {root}) for root in roots))
+        for root in roots:
             if key is None:
-                state.wildcard = self.join((state.wildcard, value)) if state.wildcard else value
+                current = self._component_wildcards.get(root)
+                self._component_wildcards[root] = self.join((current, value)) if current else value
             else:
-                current = state.cells.get(key)
-                state.cells[key] = self.join((current, value)) if current else value
+                current = self._component_cells[root].get(key)
+                self._component_cells[root][key] = self.join((current, value)) if current else value
         return identities
 
     def unpack(
@@ -184,71 +298,74 @@ class ExplicitAnyDataFlow:
     def has_unresolved_escape(self, value: FlowValue) -> bool:
         """Return whether a value depends on an escaped object with no source origin."""
 
-        pending = list(value.identities | value.origins)
-        seen: set[int] = set()
-        while pending:
-            identity = pending.pop()
-            if identity in seen:
+        for root in self.component_roots(value):
+            if not self._component_escaped.get(root, False):
                 continue
-            seen.add(identity)
-            state = self._objects.get(identity)
-            if state is None:
+            members = self._members.get(root, {root})
+            if any(
+                identity not in self._objects
+                or (self._objects[identity].escaped and not self._objects[identity].origins)
+                for identity in members
+            ):
                 return True
-            if state.escaped and not state.origins:
-                return True
-            pending.extend(state.origins - seen)
         return value.escaped and not (value.identities or value.origins)
 
     def taint(self, value: FlowValue, kind: str) -> frozenset[int]:
         affected = self.taint_reachable(value)
-        for identity in affected:
-            state = self._objects.get(identity)
-            if state is not None:
-                state.taint = merge_flow_kinds((state.taint, kind))
+        for root in {self._find(identity) for identity in affected if identity in self._parents}:
+            self._component_taints[root] = merge_flow_kinds((self._component_taints[root], kind))
         return affected
 
     def taint_reachable(self, value: FlowValue) -> frozenset[int]:
-        pending = list(value.identities | value.origins)
+        pending = list(self.component_roots(value))
+        seen_roots: set[int] = set()
         seen: set[int] = set()
         while pending:
-            identity = pending.pop()
-            if identity in seen:
+            root = self._find(pending.pop())
+            if root in seen_roots:
                 continue
-            seen.add(identity)
-            state = self._objects.get(identity)
-            if state is None:
-                continue
-            pending.extend(state.origins - seen)
-            values = list(state.cells.values())
-            if state.wildcard is not None:
-                values.append(state.wildcard)
+            seen_roots.add(root)
+            seen.update(self._members.get(root, {root}))
+            values = list(self._component_cells.get(root, {}).values())
+            wildcard = self._component_wildcards.get(root)
+            if wildcard is not None:
+                values.append(wildcard)
             for item in values:
-                pending.extend((item.identities | item.origins) - seen)
+                pending.extend(self.component_roots(item) - seen_roots)
         return frozenset(seen)
 
     def reachable(self, identities: frozenset[int]) -> frozenset[int]:
-        pending = list(identities)
+        pending = [self._find(identity) for identity in identities if identity in self._parents]
+        seen_roots: set[int] = set()
         seen: set[int] = set()
         while pending:
-            identity = pending.pop()
-            if identity in seen:
+            root = self._find(pending.pop())
+            if root in seen_roots:
                 continue
-            seen.add(identity)
-            state = self._objects.get(identity)
-            if state is None:
-                continue
-            values = list(state.cells.values())
-            if state.wildcard is not None:
-                values.append(state.wildcard)
+            seen_roots.add(root)
+            seen.update(self._members.get(root, {root}))
+            values = list(self._component_cells.get(root, {}).values())
+            wildcard = self._component_wildcards.get(root)
+            if wildcard is not None:
+                values.append(wildcard)
             for value in values:
-                pending.extend(value.identities - seen)
+                pending.extend(self.component_roots(value) - seen_roots)
         return frozenset(seen)
 
     def _known_length(self, value: FlowValue) -> int | None:
-        if value.escaped or not value.identities:
+        roots = self.component_roots(value)
+        if value.escaped or len(roots) != 1:
+            return None
+        root = next(iter(roots))
+        if (
+            self._component_escaped.get(root, False)
+            or self._component_exposed.get(root, False)
+            or self._component_wildcards.get(root) is not None
+            or len(self._members.get(root, ())) != 1
+        ):
             return None
         lengths: set[int] = set()
-        for identity in value.identities:
+        for identity in self._members.get(root, ()):
             state = self._objects.get(identity)
             if state is None or state.escaped or state.wildcard is not None or state.length is None:
                 return None
@@ -257,7 +374,56 @@ class ExplicitAnyDataFlow:
 
     def _new_identity(self) -> int:
         self._next_identity += 1
-        return self._next_identity
+        identity = self._next_identity
+        self._parents[identity] = identity
+        self._members[identity] = {identity}
+        self._component_cells[identity] = {}
+        self._component_wildcards[identity] = None
+        self._component_exposed[identity] = False
+        self._component_escaped[identity] = False
+        self._component_taints[identity] = "other"
+        return identity
+
+    def _find(self, identity: int) -> int:
+        parent = self._parents.get(identity, identity)
+        if parent != identity:
+            parent = self._find(parent)
+            self._parents[identity] = parent
+        return parent
+
+    def _union(self, left: int, right: int) -> int:
+        left_root = self._find(left)
+        right_root = self._find(right)
+        if left_root == right_root:
+            return left_root
+        if len(self._members[left_root]) < len(self._members[right_root]):
+            left_root, right_root = right_root, left_root
+        self._parents[right_root] = left_root
+        self._members[left_root].update(self._members.pop(right_root))
+        left_cells = self._component_cells[left_root]
+        for key, value in self._component_cells.pop(right_root).items():
+            current = left_cells.get(key)
+            left_cells[key] = self.join((current, value)) if current else value
+        left_wildcard = self._component_wildcards[left_root]
+        right_wildcard = self._component_wildcards.pop(right_root)
+        if right_wildcard is not None:
+            self._component_wildcards[left_root] = (
+                self.join((left_wildcard, right_wildcard)) if left_wildcard else right_wildcard
+            )
+        self._component_exposed[left_root] = self._component_exposed[left_root] or self._component_exposed.pop(
+            right_root
+        )
+        self._component_escaped[left_root] = self._component_escaped[left_root] or self._component_escaped.pop(
+            right_root
+        )
+        self._component_taints[left_root] = merge_flow_kinds(
+            (self._component_taints[left_root], self._component_taints.pop(right_root))
+        )
+        return left_root
+
+    def _component(self, identity: int) -> frozenset[int]:
+        root = self._find(identity)
+        return frozenset(self._members.get(root, {identity}))
 
 
 def merge_flow_kinds(kinds: Iterable[str]) -> str:

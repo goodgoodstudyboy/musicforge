@@ -4,6 +4,17 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.3.0 - 2026-07-25
+
+- Replaced call-time Any heuristics with a generic call-effect data-flow model
+  that records ordinary alias transport before later Any mutation.
+- Added union-find may-alias components, component-level member and taint
+  state, directed local-function may-store/return summaries, callable roles,
+  comprehension result flow, and bound-method origins.
+- Added ADR-026, eleven runtime/Ruff/strict-mypy attack regressions, safe
+  controls, and `v143.explicit_any_call_effect_dataflow_smoke` while preserving
+  every schema 13 typing, file, layer, complexity, and recovery ceiling.
+
 ## v14.2.10 - 2026-07-24
 
 - Upgraded the Explicit Any collector to schema 13 and aligned value-less

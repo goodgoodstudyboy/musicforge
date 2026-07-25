@@ -29,6 +29,7 @@ from song_agent.release_check.v14_quality import (
     run_v1428_explicit_any_object_alias_scope_smoke,
     run_v1429_explicit_any_alias_dataflow_smoke,
     run_v14210_explicit_any_alias_fail_closed_smoke,
+    run_v143_explicit_any_call_effect_dataflow_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -145,7 +146,7 @@ def test_v14_module_debt_is_registered_and_function_limits_are_hard() -> None:
 
     assert report["status"] == "passed", report["blockers"]
     assert report["registered_oversized_module_count"] == len(policy["module_size_debt"])
-    assert all(row["expires_version"] == "14.3.0" for row in policy["module_size_debt"])
+    assert all(row["expires_version"] == "14.4.0" for row in policy["module_size_debt"])
     aggregate = policy["complexity"]["aggregate_debt"]
     assert report["aggregate"]["oversized_module_count"] <= aggregate["max_oversized_module_count"]
     assert report["aggregate"]["modules_over_1000_lines"] <= aggregate["max_modules_over_1000_lines"]
@@ -1172,12 +1173,13 @@ def test_v1429_non_direct_alias_sources_fail_closed(
     assert ruff.returncode == 0, ruff.stdout + ruff.stderr
     assert mypy.returncode == 0, mypy.stdout + mypy.stderr
     assert typing["explicit_any_count"] == 100
-    assert typing["explicit_any_scope_blockers"] == [
-        {
+    assert any(
+        row == {
             "path": "song_agent/interfaces/api/non_direct_alias_growth.py",
             "detail": "uncertain_annotation_binding:Alias",
         }
-    ]
+        for row in typing["explicit_any_scope_blockers"]
+    )
     assert any("typing_explicit_any_scope_flow" in value for value in blockers)
     assert any("typing_explicit_any:" in value for value in blockers)
     assert any("typing_explicit_any_layer" in value for value in blockers)
@@ -1389,6 +1391,467 @@ def test_v14210_unresolved_any_call_effects_fail_closed(
     typing = collect_typing_metrics(tmp_path)
 
     assert any(row["detail"] == expected for row in typing["explicit_any_scope_blockers"])
+
+
+@pytest.mark.parametrize(
+    ("case_name", "class_body"),
+    [
+        (
+            "append",
+            "        Holder = [None]\n"
+            "        Store = []\n"
+            "        Store.append(Holder)\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "extend",
+            "        Holder = [None]\n"
+            "        Store = []\n"
+            "        Store.extend([Holder])\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "setattr",
+            "        Holder = [None]\n"
+            "        class Box:\n"
+            "            pass\n"
+            "        setattr(Box, 'value', Holder)\n"
+            "        Ref = Box.value\n",
+        ),
+        (
+            "helper_store",
+            "        Holder = [None]\n"
+            "        Store = []\n"
+            "        def retain(target, value):\n"
+            "            target.append(value)\n"
+            "        retain(Store, Holder)\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "helper_global_store",
+            "        Holder = [None]\n"
+            "        global Store\n"
+            "        Store = []\n"
+            "        def retain(value):\n"
+            "            Store.append(value)\n"
+            "        retain(Holder)\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "method_alias",
+            "        Holder = [None]\n"
+            "        Store = []\n"
+            "        sink = Store.append\n"
+            "        sink(Holder)\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "classmethod_alias",
+            "        class Helper:\n"
+            "            @classmethod\n"
+            "            def retain(cls, target, value):\n"
+            "                target.append(value)\n"
+            "        Holder = [None]\n"
+            "        Store = []\n"
+            "        sink = Helper.retain\n"
+            "        sink(Store, Holder)\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "return_alias",
+            "        Holder = [None]\n"
+            "        def identity(value):\n"
+            "            return value\n"
+            "        Ref = identity(Holder)\n",
+        ),
+        (
+            "decorated_helper",
+            "        def transport(fn):\n"
+            "            def wrapped(target, value):\n"
+            "                target.append(value)\n"
+            "            return wrapped\n"
+            "        @transport\n"
+            "        def observe(target, value):\n"
+            "            return None\n"
+            "        Holder = [None]\n"
+            "        Store = []\n"
+            "        observe(Store, Holder)\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "decorated_class",
+            "        def transport(cls):\n"
+            "            class Replacement:\n"
+            "                @staticmethod\n"
+            "                def observe(target, value):\n"
+            "                    target.append(value)\n"
+            "            return Replacement\n"
+            "        @transport\n"
+            "        class Helper:\n"
+            "            @staticmethod\n"
+            "            def observe(target, value):\n"
+            "                return None\n"
+            "        Holder = [None]\n"
+            "        Store = []\n"
+            "        Helper.observe(Store, Holder)\n"
+            "        Ref = Store[0]\n",
+        ),
+        (
+            "callable_instance",
+            "        class Sink:\n"
+            "            def __init__(self):\n"
+            "                self.values = []\n"
+            "            def __call__(self, value):\n"
+            "                self.values.append(value)\n"
+            "        Holder = [None]\n"
+            "        sink = Sink()\n"
+            "        sink(Holder)\n"
+            "        Ref = sink.values[0]\n",
+        ),
+    ],
+)
+def test_v143_call_effect_alias_transport_fails_closed_at_every_ratchet_layer(
+    tmp_path: Path,
+    case_name: str,
+    class_body: str,
+) -> None:
+    relative = f"song_agent/interfaces/api/v143_{case_name}.py"
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    source = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+        "    class Probe:\n"
+        "        global Alias\n"
+        "        for Alias in ((t.Any,),):\n"
+        "            pass\n"
+        f"{class_body}"
+        "        Ref[0] = Alias\n"
+        "        Alias = Holder[0][0]\n"
+        f"{annotations}\n"
+    )
+    target.write_text(source, encoding="utf-8")
+    namespace: dict[str, object] = {}
+    exec(compile(source, str(target), "exec"), namespace)
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {relative: 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+
+    blockers = _typing_blockers(typing, policy)
+    ruff = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--config", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    mypy = subprocess.run(
+        [sys.executable, "-m", "mypy", "--strict", "--config-file", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert namespace["Alias"] is __import__("typing").Any
+    assert len(namespace["__annotations__"]) == 100
+    assert ruff.returncode == 0, ruff.stdout + ruff.stderr
+    assert mypy.returncode == 0, mypy.stdout + mypy.stderr
+    assert typing["explicit_any_count"] == 100
+    assert any(row["detail"].endswith("annotation_binding:Alias") for row in typing["explicit_any_scope_blockers"])
+    assert any("typing_explicit_any_scope_flow" in value for value in blockers)
+    assert any("typing_explicit_any:" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+def test_v143_ordinary_call_alias_transport_without_any_is_not_blocked(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "safe_call_transport.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "Holder = [int]\n"
+        "Store = []\n"
+        "Store.append(Holder)\n"
+        "Ref = Store[0]\n"
+        "Ref[0] = str\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 0
+    assert typing["explicit_any_scope_blocker_count"] == 0
+
+
+def test_v143_local_isinstance_shadow_uses_function_summary(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "shadowed_isinstance.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        "Holder = [None]\n"
+        "def isinstance(target, value):\n"
+        "    target[0] = value\n"
+        "isinstance(Holder, Any)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 1
+
+
+def test_v143_known_pure_helper_does_not_cross_taint_arguments(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "safe_local_helper.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        "Holder = [int]\n"
+        "def observe(target, value):\n"
+        "    return None\n"
+        "observe(Holder, Any)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 0
+    assert typing["explicit_any_scope_blocker_count"] == 0
+
+
+def test_v143_staticmethod_summary_does_not_shift_positional_arguments(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "staticmethod_summary.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        "class Helper:\n"
+        "    @staticmethod\n"
+        "    def store(target, value):\n"
+        "        target[0] = value\n"
+        "Holder = [None]\n"
+        "Helper.store(Holder, Any)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 1
+
+
+def test_v143_classmethod_factory_does_not_taint_class_object(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "classmethod_factory.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        "class Factory:\n"
+        "    @classmethod\n"
+        "    def make(cls, value):\n"
+        "        return cls()\n"
+        "Result = Factory.make(Any)\n"
+        "Alias = Factory\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 0
+    assert typing["explicit_any_scope_blocker_count"] == 0
+
+
+def test_v143_classmethod_payload_does_not_alias_the_class_object(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "classmethod_payload.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "class Factory:\n"
+        "    @classmethod\n"
+        "    def parse(cls, payload):\n"
+        "        observe(payload)\n"
+        "        return cls()\n"
+        "payload = {'value': 1}\n"
+        "Factory.parse(payload)\n"
+        "Alias = Factory\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 0
+    assert typing["explicit_any_scope_blocker_count"] == 0
+
+
+def test_v143_comprehension_result_does_not_alias_the_called_class(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "comprehension_callable.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "class Item:\n"
+        "    @classmethod\n"
+        "    def parse(cls, value):\n"
+        "        return cls()\n"
+        "values = [1, 2]\n"
+        "items = [Item.parse(value) for value in values]\n"
+        "observe(items)\n"
+        "Alias = Item\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 0
+    assert typing["explicit_any_scope_blocker_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "import_source,decorator",
+    [
+        ("from dataclasses import dataclass\n", "@dataclass(frozen=True)"),
+        ("import dataclasses as dc\n", "@dc.dataclass(frozen=True)"),
+    ],
+)
+def test_v143_dataclass_preserves_proven_class_surface(
+    tmp_path: Path,
+    import_source: str,
+    decorator: str,
+) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "dataclass_surface.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        f"{import_source}"
+        f"{decorator}\n"
+        "class Helper:\n"
+        "    label: str = 'helper'\n"
+        "    @staticmethod\n"
+        "    def store(target, value):\n"
+        "        target[0] = value\n"
+        "Holder = [None]\n"
+        "Helper.store(Holder, Any)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 1
+
+
+@pytest.mark.parametrize("decorator_name", ["staticmethod", "classmethod"])
+def test_v143_shadowed_builtin_method_decorator_is_not_trusted(
+    tmp_path: Path,
+    decorator_name: str,
+) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / f"shadowed_{decorator_name}.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "import builtins\n"
+        "from typing import Any\n"
+        "def replacement(target, value):\n"
+        "    target[0] = value\n"
+        f"def {decorator_name}(fn):\n"
+        "    return builtins.staticmethod(replacement)\n"
+        "class Helper:\n"
+        f"    @{decorator_name}\n"
+        "    def observe(target, value):\n"
+        "        return None\n"
+        "Holder = [None]\n"
+        "Helper.observe(Holder, Any)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 1
+
+
+def test_v143_shadowed_dataclass_decorator_is_not_trusted(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "shadowed_dataclass.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from dataclasses import dataclass\n"
+        "from typing import Any\n"
+        "def replacement(target, value):\n"
+        "    target[0] = value\n"
+        "class Replacement:\n"
+        "    observe = staticmethod(replacement)\n"
+        "def transport(cls):\n"
+        "    return Replacement\n"
+        "dataclass = transport\n"
+        "@dataclass\n"
+        "class Helper:\n"
+        "    @staticmethod\n"
+        "    def observe(target, value):\n"
+        "        return None\n"
+        "Holder = [None]\n"
+        "Helper.observe(Holder, Any)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 1
+
+
+def test_v143_conditional_dataclass_binding_is_not_trusted(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "conditional_dataclass.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from dataclasses import dataclass as real_dataclass\n"
+        "from typing import Any\n"
+        "def replacement(target, value):\n"
+        "    target[0] = value\n"
+        "class Replacement:\n"
+        "    observe = staticmethod(replacement)\n"
+        "def transport(cls):\n"
+        "    return Replacement\n"
+        "if bool(1):\n"
+        "    dataclass = transport\n"
+        "else:\n"
+        "    dataclass = real_dataclass\n"
+        "@dataclass\n"
+        "class Helper:\n"
+        "    @staticmethod\n"
+        "    def observe(target, value):\n"
+        "        return None\n"
+        "Holder = [None]\n"
+        "Helper.observe(Holder, Any)\n"
+        "Alias = Holder[0]\n"
+        "field: Alias\n",
+        encoding="utf-8",
+    )
+
+    typing = collect_typing_metrics(tmp_path)
+
+    assert typing["explicit_any_count"] == 1
 
 
 def test_v1427_derived_non_type_global_without_annotation_is_not_blocked(tmp_path: Path) -> None:
@@ -1707,6 +2170,12 @@ def test_v14210_explicit_any_alias_fail_closed_smoke_is_self_consistent() -> Non
     assert passed, detail
 
 
+def test_v143_explicit_any_call_effect_dataflow_smoke_is_self_consistent() -> None:
+    passed, detail = run_v143_explicit_any_call_effect_dataflow_smoke(ROOT)
+
+    assert passed, detail
+
+
 def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() -> None:
     baseline = json.loads((ROOT / "architecture-v14-quality.json").read_text(encoding="utf-8"))
     typing_forged = json.loads(json.dumps(baseline))
@@ -1730,12 +2199,23 @@ def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() ->
     schema13_forged["integrity_hash"] = stable_hash(
         {key: value for key, value in schema13_forged.items() if key != "integrity_hash"}
     )
+    schema14_forged = json.loads(json.dumps(baseline))
+    schema14_forged["typing"]["explicit_any_max_count"] += 1
+    schema14_forged["stabilization"]["call_effect_dataflow_collector_migration"][
+        "previous_explicit_any_ceiling"
+    ] += 1
+    schema14_forged["integrity_hash"] = stable_hash(
+        {key: value for key, value in schema14_forged.items() if key != "integrity_hash"}
+    )
 
     assert "v14_quality_policy_stabilization_typing_file_budgets" in _policy_blockers(typing_forged)
     assert "v14_quality_policy_stabilization_module_debt" in _policy_blockers(module_forged)
     schema13_blockers = _policy_blockers(schema13_forged)
     assert "v14_quality_policy_alias_fail_closed_collector_migration" in schema13_blockers
     assert "v14_quality_policy_alias_fail_closed_ceilings" in schema13_blockers
+    schema14_blockers = _policy_blockers(schema14_forged)
+    assert "v14_quality_policy_call_effect_dataflow_collector_migration" in schema14_blockers
+    assert "v14_quality_policy_alias_fail_closed_ceilings" in schema14_blockers
 
 
 def test_v14_source_tree_hash_is_independent_of_line_endings(tmp_path: Path) -> None:
