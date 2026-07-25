@@ -465,9 +465,15 @@
     },
     {
       "path": "material/v14.3.0-MusicForgeExplicitAny通用调用效果数据流施工图-2026-07-25.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.3.0 MusicForge Explicit Any 通用调用效果数据流施工图",
       "version": "14.3.0"
+    },
+    {
+      "path": "material/v14.3.1-MusicForgeCallEffectDataFlow性能稳定化施工图-2026-07-26.md",
+      "status": "active",
+      "title": "v14.3.1 MusicForge Call-Effect Data Flow 性能稳定化施工图",
+      "version": "14.3.1"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",

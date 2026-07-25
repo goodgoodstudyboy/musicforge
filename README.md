@@ -89,7 +89,7 @@ bounded direct-call effect summary propagates Any/uncertain member writes back
 to caller-owned objects. Unsupported Any-relevant interprocedural writes fail
 closed. ADR-025 preserves every schema 12 ceiling.
 
-v14.3.0 upgrades the collector to schema 14 and replaces call-time Any
+v14.3.1 uses collector schema 14 and replaces call-time Any
 heuristics with a generic call-effect data-flow model. Unknown calls record
 may-alias transport even before values become Any-related; local function
 summaries cover parameter storage and alias returns, and bound-method aliases

@@ -4,6 +4,16 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.3.1 - 2026-07-26
+
+- Compacted call-effect flow values to union-find representatives while
+  retaining component-level member, escape, and taint semantics.
+- Removed the component-member set amplification that made the v14 interface
+  boundary check exceed its unchanged 180-second CI budget.
+- Added ADR-028, a 1,000-object compaction regression, and
+  `v1431.call_effect_component_compaction_smoke` without raising any quality,
+  complexity, coverage, or performance ceiling.
+
 ## v14.3.0 - 2026-07-25
 
 - Replaced call-time Any heuristics with a generic call-effect data-flow model

@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "3419bf5dbab9d9020166f6a69fdc9c2a95855f3aec0176c24b0b5559b2114249",
-    "source_tree_hash": "f8746549b33407a6feef64da2873a3f941be5db8732f889070a878bc886dec69"
+    "report_sha256": "27171676b9cac2b643831431746e775f22ea190442b553eb17e605f2f81f4e22",
+    "source_tree_hash": "75e9d019e9b1f6fb020067c4606a41924d5ec74f33a168794b005bf18f4adb2b"
   },
-  "integrity_hash": "5bfe4758543d26aa748dc7b9d67972a4a959875bb048c1229387672d684659da",
+  "integrity_hash": "8c05826a8cfc13eb50998cfee14d8c8502ea4178b77694a13a145cf59fedddf3",
   "module_size_debt": [
     {
       "expires_version": "14.4.0",
@@ -735,7 +735,7 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.3.0",
+  "release_version": "14.3.1",
   "schema_version": 1,
   "stabilization": {
     "alias_dataflow_collector_decision": "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md",
@@ -754,6 +754,7 @@
       "to_schema_version": 13
     },
     "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
+    "call_effect_component_compaction_decision": "docs/architecture/ADR-028-v1431-call-effect-component-compaction.md",
     "call_effect_dataflow_collector_decision": "docs/architecture/ADR-026-v143-explicit-any-call-effect-dataflow.md",
     "call_effect_dataflow_collector_migration": {
       "corrected_explicit_any_count": 11993,

@@ -127,7 +127,7 @@ def test_call_effect_transports_nested_object_origins_without_eager_graph_clonin
     reference = flow.read_member(store, ("index", "0"))
     flow.taint(reference, "uncertain")
 
-    assert holder.identities <= flow.taint_reachable(reference)
+    assert flow.component_roots(holder) <= flow.taint_reachable(reference)
     assert flow.read_member(holder, ("index", "0")).kind == "uncertain"
 
 
@@ -142,4 +142,16 @@ def test_prior_component_excludes_function_local_analysis_objects() -> None:
 
     prior = flow.prior_component(parameter, checkpoint)
     assert prior is not None
-    assert prior.identities == captured.identities
+    assert flow.related(prior, captured)
+
+
+def test_large_call_component_keeps_flow_values_compact() -> None:
+    flow = ExplicitAnyDataFlow()
+    values = tuple(flow.object() for _ in range(500))
+
+    result = flow.call_effect(values)
+    combined = flow.join((*values, result))
+
+    assert len(result.origins) == 1
+    assert len(combined.identities) == 1
+    assert len(flow.component_roots(combined)) == 1

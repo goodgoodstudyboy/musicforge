@@ -175,3 +175,10 @@ blockers; all schema 13 ceilings remain unchanged. ARCH-014 and TYPE-003 remain
 open and require separate debt-reduction work after this security boundary is
 stable. ADR-027 moves both deadlines once to v14.4.0 without changing any
 numeric ceiling and prohibits new business scope before closure.
+
+## v14.3.1 Call-Effect Component Compaction
+
+ADR-028 compacts flow values to union-find representatives and keeps component
+membership internal to the data-flow kernel. The change restores the unchanged
+CI duration gate without reducing analysis coverage or increasing any debt
+ceiling. ARCH-014 and TYPE-003 remain open through v14.4.0 under ADR-027.

@@ -24,7 +24,7 @@ from song_agent.release_check.explicit_any_dataflow import (
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.3.0"
+QUALITY_POLICY_VERSION = "14.3.1"
 EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 14
 MYPY_ROOTS = (
     "song_agent/platform",
@@ -50,6 +50,7 @@ V1429_ALIAS_DATAFLOW_ADR = "docs/architecture/ADR-024-v1429-explicit-any-alias-d
 V14210_ALIAS_FAIL_CLOSED_ADR = "docs/architecture/ADR-025-v14210-explicit-any-alias-fail-closed.md"
 V143_CALL_EFFECT_DATAFLOW_ADR = "docs/architecture/ADR-026-v143-explicit-any-call-effect-dataflow.md"
 V143_DEBT_SCHEDULE_ADR = "docs/architecture/ADR-027-v143-debt-sequencing.md"
+V1431_COMPONENT_COMPACTION_ADR = "docs/architecture/ADR-028-v1431-call-effect-component-compaction.md"
 V14210_EXPLICIT_ANY_CEILING = 11993
 V14210_AFFECTED_FILE_CEILING = 461
 V14210_LAYER_CEILINGS = {
@@ -593,13 +594,20 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
     violations = collect_v1421_static_violations(root)
     stabilization = dict(policy.get("stabilization") or {})
     hard_limits = V1421_RECOVERY_LIMITS
+    actual_layer_limits = {
+        str(layer): int(count) for layer, count in dict(typing["explicit_any_by_layer"]).items()
+    }
+    hard_layer_limits = {
+        str(layer): int(count)
+        for layer, count in dict(hard_limits["explicit_any_layer_max_counts"]).items()
+    }
     actual_limits = {
         "active_python_file_max_count": int(typing["active_python_file_count"]),
         "explicit_any_max_count": int(typing["explicit_any_count"]),
         "explicit_any_affected_file_max_count": int(typing["explicit_any_affected_file_count"]),
         "raw_dict_str_any_max_count": int(typing["raw_dict_str_any_count"]),
         "implementation_document_max_count": int(typing["implementation_document_count"]),
-        "explicit_any_layer_max_counts": dict(typing["explicit_any_by_layer"]),
+        "explicit_any_layer_max_counts": actual_layer_limits,
         "oversized_module_max_count": int(complexity["aggregate"]["oversized_module_count"]),
         "modules_over_1000_max_count": int(complexity["aggregate"]["modules_over_1000_lines"]),
         "largest_module_max_lines": int(complexity["aggregate"]["largest_module_lines"]),
@@ -610,8 +618,8 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
         for key, maximum in hard_limits.items()
         if key != "explicit_any_layer_max_counts"
     ) and all(
-        int(actual_limits["explicit_any_layer_max_counts"].get(layer, 0)) <= int(maximum)
-        for layer, maximum in hard_limits["explicit_any_layer_max_counts"].items()
+        actual_layer_limits.get(layer, 0) <= maximum
+        for layer, maximum in hard_layer_limits.items()
     )
     policy_blockers = [*_policy_blockers(policy), *_typing_blockers(typing, policy), *complexity["blockers"]]
     checks = {
@@ -957,6 +965,43 @@ def run_v143_explicit_any_call_effect_dataflow_smoke(root: Path) -> tuple[bool, 
         "explicit_any_count": int(typing.get("explicit_any_count") or 0),
         "explicit_any_ceiling": int(typing_limits.get("explicit_any_max_count") or 0),
         "scope_flow_blockers": typing.get("explicit_any_scope_blockers") or [],
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
+def run_v1431_call_effect_component_compaction_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    flow = ExplicitAnyDataFlow()
+    values = tuple(flow.object() for _ in range(1000))
+    result = flow.call_effect(values)
+    combined = flow.join((*values, result))
+    flow.taint(result, "uncertain")
+    checks = {
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "collector_schema_unchanged": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "component_result_compact": len(result.origins) == 1,
+        "component_join_compact": len(combined.identities) == 1,
+        "component_root_compact": len(flow.component_roots(combined)) == 1,
+        "component_taint_preserved": flow.read_member(values[0], None).kind == "uncertain",
+        "compaction_decision_present": stabilization.get("call_effect_component_compaction_decision")
+        == V1431_COMPONENT_COMPACTION_ADR
+        and (root / V1431_COMPONENT_COMPACTION_ADR).is_file(),
+        "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
+        == V14210_EXPLICIT_ANY_CEILING,
+        "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
+        == V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
+        == V14210_LAYER_CEILINGS,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "component_size": len(values),
     }
     return all(checks.values()), json.dumps(detail, sort_keys=True)
 

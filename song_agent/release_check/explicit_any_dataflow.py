@@ -72,13 +72,14 @@ class ExplicitAnyDataFlow:
         callable_role: str = "",
     ) -> FlowValue:
         identity = self._new_identity()
-        self._objects[identity] = _ObjectState(escaped=escaped, origins=origins)
+        canonical_origins = self._canonical_roots(origins)
+        self._objects[identity] = _ObjectState(escaped=escaped, origins=canonical_origins)
         self._component_escaped[identity] = escaped
         return FlowValue(
             kind=kind,
             identities=frozenset({identity}),
             escaped=escaped,
-            origins=origins,
+            origins=canonical_origins,
             callable_role=callable_role,
         )
 
@@ -115,8 +116,12 @@ class ExplicitAnyDataFlow:
         if not rows:
             return self.scalar(kind or "other")
         merged_kind = kind or merge_flow_kinds(value.kind for value in rows)
-        identities = frozenset().union(*(value.identities for value in rows))
-        origins = frozenset().union(*(value.origins for value in rows))
+        identities = self._canonical_roots(
+            frozenset().union(*(value.identities for value in rows))
+        )
+        origins = self._canonical_roots(
+            frozenset().union(*(value.origins for value in rows))
+        )
         roles = {value.callable_role for value in rows if value.callable_role}
         callable_role = next(iter(roles)) if len(roles) == 1 else ("callable" if roles else "")
         escaped = any(value.escaped for value in rows) or any(
@@ -161,8 +166,7 @@ class ExplicitAnyDataFlow:
         rows = tuple(values)
         component: set[int] = set()
         for value in rows:
-            component.update(value.identities)
-            component.update(value.origins)
+            component.update(self.component_roots(value))
         if not component:
             return frozenset()
 
@@ -170,7 +174,7 @@ class ExplicitAnyDataFlow:
         root = next(iter(frozen))
         for identity in frozen - {root}:
             root = self._union(root, identity)
-        connected = self._component(root)
+        root = self._find(root)
         for identity in frozen:
             state = self._objects.get(identity)
             if state is None:
@@ -181,7 +185,7 @@ class ExplicitAnyDataFlow:
         if expose_members:
             self._component_exposed[self._find(root)] = True
         self._component_escaped[self._find(root)] = True
-        return connected
+        return frozenset({root})
 
     def related(self, left: FlowValue, right: FlowValue) -> bool:
         """Return whether two values may expose the same runtime object."""
@@ -203,11 +207,8 @@ class ExplicitAnyDataFlow:
 
         identities: set[int] = set()
         for root in self.component_roots(value):
-            identities.update(
-                identity
-                for identity in self._members.get(root, {root})
-                if identity <= checkpoint
-            )
+            if any(identity <= checkpoint for identity in self._members.get(root, {root})):
+                identities.add(root)
         if not identities:
             return None
         return FlowValue(identities=frozenset(identities), escaped=True)
@@ -250,7 +251,7 @@ class ExplicitAnyDataFlow:
 
     def write_member(self, base: FlowValue, key: CellKey | None, value: FlowValue) -> frozenset[int]:
         roots = self.component_roots(base)
-        identities = frozenset().union(*(self._members.get(root, {root}) for root in roots))
+        identities = roots
         for root in roots:
             if key is None:
                 current = self._component_wildcards.get(root)
@@ -325,7 +326,7 @@ class ExplicitAnyDataFlow:
             if root in seen_roots:
                 continue
             seen_roots.add(root)
-            seen.update(self._members.get(root, {root}))
+            seen.add(root)
             values = list(self._component_cells.get(root, {}).values())
             wildcard = self._component_wildcards.get(root)
             if wildcard is not None:
@@ -343,7 +344,7 @@ class ExplicitAnyDataFlow:
             if root in seen_roots:
                 continue
             seen_roots.add(root)
-            seen.update(self._members.get(root, {root}))
+            seen.add(root)
             values = list(self._component_cells.get(root, {}).values())
             wildcard = self._component_wildcards.get(root)
             if wildcard is not None:
@@ -384,6 +385,13 @@ class ExplicitAnyDataFlow:
         self._component_taints[identity] = "other"
         return identity
 
+    def _canonical_roots(self, identities: Iterable[int]) -> frozenset[int]:
+        return frozenset(
+            self._find(identity)
+            for identity in identities
+            if identity in self._parents
+        )
+
     def _find(self, identity: int) -> int:
         parent = self._parents.get(identity, identity)
         if parent != identity:
@@ -420,11 +428,6 @@ class ExplicitAnyDataFlow:
             (self._component_taints[left_root], self._component_taints.pop(right_root))
         )
         return left_root
-
-    def _component(self, identity: int) -> frozenset[int]:
-        root = self._find(identity)
-        return frozenset(self._members.get(root, {identity}))
-
 
 def merge_flow_kinds(kinds: Iterable[str]) -> str:
     values = set(kinds)

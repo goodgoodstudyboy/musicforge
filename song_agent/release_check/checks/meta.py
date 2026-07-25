@@ -43,6 +43,7 @@ from song_agent.release_check.v14_quality import (
     run_v1429_explicit_any_alias_dataflow_smoke,
     run_v14210_explicit_any_alias_fail_closed_smoke,
     run_v143_explicit_any_call_effect_dataflow_smoke,
+    run_v1431_call_effect_component_compaction_smoke,
 )
 
 
@@ -134,6 +135,7 @@ CALLABLES = {
     "_v1429_explicit_any_alias_dataflow_smoke": run_v1429_explicit_any_alias_dataflow_smoke,
     "_v14210_explicit_any_alias_fail_closed_smoke": run_v14210_explicit_any_alias_fail_closed_smoke,
     "_v143_explicit_any_call_effect_dataflow_smoke": run_v143_explicit_any_call_effect_dataflow_smoke,
+    "_v1431_call_effect_component_compaction_smoke": run_v1431_call_effect_component_compaction_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,
