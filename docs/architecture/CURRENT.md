@@ -316,3 +316,6 @@ boundary violations, dependency exceptions, or compatibility imports.
   14 semantics.
 - Assignment, call-summary, and visitor phases reuse one immutable flow value
   for each AST expression occurrence.
+- Annotation counting is single-pass; quoted strings reuse parsed syntax but
+  always resolve names against the current lexical scope. Potential-binding
+  discovery follows the same single-pass rule.

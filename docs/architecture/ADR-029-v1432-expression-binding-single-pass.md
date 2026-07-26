@@ -27,6 +27,12 @@ call-summary construction, and visitor traversal reuse that value instead of
 repeating equivalent call-effect and member-read analysis. Distinct expression
 occurrences never share a cached value.
 
+Annotation counting likewise uses one iterative traversal. Quoted annotation
+strings cache only their parsed AST, never their binding-dependent count, so
+the same spelling can still resolve differently before and after a lexical
+rebind. Parsed syntax is immutable and shared across source-file collectors;
+potential-binding classification uses the same single-pass traversal.
+
 Collector schema 14 remains authoritative because this is an equivalent
 execution strategy, not a semantic migration. The Explicit Any total, layer,
 file, complexity, coverage, recovery, and 180-second performance ceilings must
@@ -38,6 +44,8 @@ not increase.
 - A dedicated expression probe reports exactly 100 Any annotations.
 - A regression confirms repeated analysis of one AST occurrence returns the
   same immutable flow value.
+- A scope-sensitive regression confirms one quoted parse can produce different
+  counts across lexical rebindings.
 - `v1432.expression_binding_single_pass_smoke` is required by v14, latest,
   security, GA, and full profiles.
 - The existing `v140.interface_application_boundary_smoke` remains the hard CI

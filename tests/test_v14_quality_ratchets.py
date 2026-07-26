@@ -12,6 +12,7 @@ from song_agent.release_check.v14_quality import (
     EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
     QUALITY_POLICY_VERSION,
     _ExplicitAnyCollector,
+    _annotation_any_count,
     _mypy_blockers,
     _policy_blockers,
     _typing_blockers,
@@ -2203,6 +2204,36 @@ def test_v1432_expression_value_is_reused_for_one_ast_occurrence() -> None:
     second = collector._expression_value(assignment.value)
 
     assert first is second
+
+
+def test_v1432_quoted_annotation_parse_cache_keeps_scope_sensitive_counts() -> None:
+    tree = ast.parse(
+        "from typing import Any as Alias\n"
+        "before: 'Alias'\n"
+        "Alias = int\n"
+        "after: 'Alias'\n"
+    )
+    collector = _ExplicitAnyCollector()
+
+    collector.visit(tree)
+
+    assert collector.count == 1
+    assert set(collector._quoted_annotation_expressions) == {"Alias"}
+
+
+def test_v1432_single_pass_annotation_scan_only_deduplicates_confirmed_typing_base() -> None:
+    tree = ast.parse(
+        "from typing import Any as Alias\n"
+        "field: Alias.Any\n"
+    )
+    collector = _ExplicitAnyCollector()
+
+    collector.visit(tree)
+
+    assert collector.count == 1
+    annotation = ast.parse("Alias.Any", mode="eval").body
+    assert _annotation_any_count(annotation, {"Alias"}, set()) == 1
+    assert _annotation_any_count(annotation, set(), {"Alias"}) == 1
 
 
 def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() -> None:

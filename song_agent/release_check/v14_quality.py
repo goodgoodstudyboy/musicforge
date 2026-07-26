@@ -1022,6 +1022,9 @@ def run_v1432_expression_binding_single_pass_smoke(root: Path) -> tuple[bool, st
     probe_count, probe_blockers = _explicit_any_annotation_analysis(ast.parse(probe_source))
     scanner_source = inspect.getsource(_ExplicitAnyCollector._expression_binding_kind)
     value_source = inspect.getsource(_ExplicitAnyCollector._expression_value)
+    annotation_source = inspect.getsource(_ExplicitAnyCollector._annotation_any_count)
+    quoted_source = inspect.getsource(_ExplicitAnyCollector._quoted_annotation_any_count)
+    static_annotation_source = inspect.getsource(_annotation_any_count)
     checks = {
         "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
         "collector_schema_unchanged": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
@@ -1032,6 +1035,11 @@ def run_v1432_expression_binding_single_pass_smoke(root: Path) -> tuple[bool, st
         and "ast.walk(value)" not in scanner_source,
         "expression_value_memoized": "self._expression_values.get(id(value))" in value_source
         and "self._expression_values[id(value)] = result" in value_source,
+        "annotation_scan_single_pass": "pending: list[ast.AST]" in annotation_source
+        and "ast.walk(annotation)" not in annotation_source,
+        "quoted_annotation_parse_memoized": "self._quoted_annotation_expressions[value]" in quoted_source,
+        "static_annotation_scan_single_pass": "pending: list[ast.AST]" in static_annotation_source
+        and "ast.walk(annotation)" not in static_annotation_source,
         "expression_scan_decision_present": stabilization.get("expression_binding_single_pass_decision")
         == V1432_EXPRESSION_SCAN_ADR
         and (root / V1432_EXPRESSION_SCAN_ADR).is_file(),
@@ -1326,6 +1334,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._function_write_summaries: dict[int, _FunctionWriteSummary] = {}
         self._call_results: dict[int, FlowValue] = {}
         self._expression_values: dict[int, FlowValue] = {}
+        self._quoted_annotation_expressions: dict[str, ast.expr | None] = {}
 
     def visit_Module(self, node: ast.Module) -> None:
         self._visit_scope_body(node.body, push_scope=False, scope_kind="module")
@@ -2309,35 +2318,37 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
 
     def _annotation_any_count(self, annotation: ast.expr, *, fail_on_uncertain: bool = True) -> int:
         count = 0
-        qualified_names = {
-            id(node.value)
-            for node in ast.walk(annotation)
-            if isinstance(node, ast.Attribute)
-            and node.attr == "Any"
-            and isinstance(node.value, ast.Name)
-            and _binding_matches(self._resolve_name(node.value.id), "typing-module")
-        }
-        for node in ast.walk(annotation):
-            if isinstance(node, ast.Name) and id(node) not in qualified_names:
+        pending: list[ast.AST] = [annotation]
+        while pending:
+            node = pending.pop()
+            if isinstance(node, ast.Attribute) and node.attr == "Any" and isinstance(node.value, ast.Name):
+                if _binding_matches(self._resolve_name(node.value.id), "typing-module"):
+                    count += 1
+                    # A confirmed typing-module base belongs to this
+                    # qualified reference and must not be counted again.
+                    continue
+            if isinstance(node, ast.Name):
                 binding = self._resolve_name(node.id)
                 if binding in {"uncertain", "unknown"} and fail_on_uncertain:
                     self._add_blocker(f"{binding}_annotation_binding:{node.id}")
                     count += 1
                 elif _binding_matches(binding, "any"):
                     count += 1
-            elif isinstance(node, ast.Attribute) and node.attr == "Any" and isinstance(node.value, ast.Name):
-                if _binding_matches(self._resolve_name(node.value.id), "typing-module"):
-                    count += 1
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
                 count += self._quoted_annotation_any_count(node.value, fail_on_uncertain=fail_on_uncertain)
+            else:
+                pending.extend(ast.iter_child_nodes(node))
         return count
 
     def _quoted_annotation_any_count(self, value: str, *, fail_on_uncertain: bool) -> int:
-        try:
-            expression = ast.parse(value, mode="eval")
-        except SyntaxError:
-            return 0
-        return self._annotation_any_count(expression.body, fail_on_uncertain=fail_on_uncertain)
+        if value not in self._quoted_annotation_expressions:
+            self._quoted_annotation_expressions[value] = _parse_quoted_annotation(value)
+        expression = self._quoted_annotation_expressions[value]
+        return (
+            self._annotation_any_count(expression, fail_on_uncertain=fail_on_uncertain)
+            if expression is not None
+            else 0
+        )
 
     def _names_for(self, kind: str) -> set[str]:
         candidates = {name for scope in self._scopes for name in scope}
@@ -2511,35 +2522,33 @@ def _explicit_any_annotation_analysis(tree: ast.Module) -> tuple[int, list[str]]
 
 def _annotation_any_count(annotation: ast.expr, any_names: set[str], module_names: set[str]) -> int:
     count = 0
-    qualified_names = {
-        id(node.value)
-        for node in ast.walk(annotation)
-        if isinstance(node, ast.Attribute)
-        and node.attr == "Any"
-        and isinstance(node.value, ast.Name)
-        and node.value.id in module_names
-    }
-    for node in ast.walk(annotation):
-        if isinstance(node, ast.Name) and id(node) not in qualified_names and node.id in any_names:
-            count += 1
-        elif (
-            isinstance(node, ast.Attribute)
-            and node.attr == "Any"
-            and isinstance(node.value, ast.Name)
-            and node.value.id in module_names
-        ):
+    pending: list[ast.AST] = [annotation]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, ast.Attribute) and node.attr == "Any" and isinstance(node.value, ast.Name):
+            if node.value.id in module_names:
+                count += 1
+                continue
+        if isinstance(node, ast.Name) and node.id in any_names:
             count += 1
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             count += _quoted_annotation_any_count(node.value, any_names, module_names)
+        else:
+            pending.extend(ast.iter_child_nodes(node))
     return count
 
 
 def _quoted_annotation_any_count(value: str, any_names: set[str], module_names: set[str]) -> int:
+    expression = _parse_quoted_annotation(value)
+    return _annotation_any_count(expression, any_names, module_names) if expression is not None else 0
+
+
+@lru_cache(maxsize=None)
+def _parse_quoted_annotation(value: str) -> ast.expr | None:
     try:
-        expression = ast.parse(value, mode="eval")
+        return ast.parse(value, mode="eval").body
     except SyntaxError:
-        return 0
-    return _annotation_any_count(expression.body, any_names, module_names)
+        return None
 
 
 def _explicit_any_alias_probe() -> bool:
