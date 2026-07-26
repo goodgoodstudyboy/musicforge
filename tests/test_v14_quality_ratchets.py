@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 import subprocess
@@ -10,6 +11,7 @@ import pytest
 from song_agent.release_check.v14_quality import (
     EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
     QUALITY_POLICY_VERSION,
+    _ExplicitAnyCollector,
     _mypy_blockers,
     _policy_blockers,
     _typing_blockers,
@@ -2188,6 +2190,19 @@ def test_v1432_expression_binding_single_pass_smoke_is_self_consistent() -> None
     passed, detail = run_v1432_expression_binding_single_pass_smoke(ROOT)
 
     assert passed, detail
+
+
+def test_v1432_expression_value_is_reused_for_one_ast_occurrence() -> None:
+    tree = ast.parse("holder = [None]\nref = holder[0]")
+    collector = _ExplicitAnyCollector()
+    collector.visit(tree)
+    assignment = tree.body[1]
+
+    assert isinstance(assignment, ast.Assign)
+    first = collector._expression_value(assignment.value)
+    second = collector._expression_value(assignment.value)
+
+    assert first is second
 
 
 def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() -> None:

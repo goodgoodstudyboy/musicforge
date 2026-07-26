@@ -9,8 +9,10 @@ and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.m
 - Replaced four repeated AST walks per expression with one binding scan while
   preserving the schema 14 Any, unknown, quoted-annotation, and shadowing
   semantics.
+- Reused one immutable `FlowValue` per AST expression occurrence so assignment,
+  call-summary, and visitor phases do not repeat equivalent data-flow work.
 - Reduced the v14 interface/application boundary gate from about 51 seconds to
-  about 39 seconds locally after v14.3.1 still exceeded the unchanged
+  about 31 seconds locally after v14.3.1 still exceeded the unchanged
   180-second budget on Windows CI.
 - Added ADR-029 and `v1432.expression_binding_single_pass_smoke`; no quality,
   complexity, coverage, or performance ceiling was raised.

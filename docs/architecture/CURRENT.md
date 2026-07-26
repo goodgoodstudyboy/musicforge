@@ -314,3 +314,5 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Expression binding classification performs one linear scan that jointly
   resolves uncertain, unknown, and Any dependencies without changing schema
   14 semantics.
+- Assignment, call-summary, and visitor phases reuse one immutable flow value
+  for each AST expression occurrence.

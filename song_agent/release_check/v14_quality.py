@@ -1021,6 +1021,7 @@ def run_v1432_expression_binding_single_pass_smoke(root: Path) -> tuple[bool, st
     )
     probe_count, probe_blockers = _explicit_any_annotation_analysis(ast.parse(probe_source))
     scanner_source = inspect.getsource(_ExplicitAnyCollector._expression_binding_kind)
+    value_source = inspect.getsource(_ExplicitAnyCollector._expression_value)
     checks = {
         "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
         "collector_schema_unchanged": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
@@ -1029,6 +1030,8 @@ def run_v1432_expression_binding_single_pass_smoke(root: Path) -> tuple[bool, st
         "single_pass_worklist": "pending: list[ast.AST]" in scanner_source,
         "legacy_expression_rescans_absent": "_expression_depends_on_kind" not in scanner_source
         and "ast.walk(value)" not in scanner_source,
+        "expression_value_memoized": "self._expression_values.get(id(value))" in value_source
+        and "self._expression_values[id(value)] = result" in value_source,
         "expression_scan_decision_present": stabilization.get("expression_binding_single_pass_decision")
         == V1432_EXPRESSION_SCAN_ADR
         and (root / V1432_EXPRESSION_SCAN_ADR).is_file(),
@@ -1322,6 +1325,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._function_may_store_aliases: list[dict[str, list[FlowValue]]] = []
         self._function_write_summaries: dict[int, _FunctionWriteSummary] = {}
         self._call_results: dict[int, FlowValue] = {}
+        self._expression_values: dict[int, FlowValue] = {}
 
     def visit_Module(self, node: ast.Module) -> None:
         self._visit_scope_body(node.body, push_scope=False, scope_kind="module")
@@ -2147,6 +2151,17 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                     scope_aliases[name] = candidate.with_kind(merged)
 
     def _expression_value(self, value: ast.expr) -> FlowValue:
+        cached = self._expression_values.get(id(value))
+        if cached is not None:
+            return cached
+        if isinstance(value, ast.Call):
+            result = self._call_result(value)
+        else:
+            result = self._expression_value_uncached(value)
+        self._expression_values[id(value)] = result
+        return result
+
+    def _expression_value_uncached(self, value: ast.expr) -> FlowValue:
         kind = self._expression_binding_kind(value)
         if isinstance(value, ast.Name):
             return self._resolve_flow(value.id).with_kind(kind)
@@ -2182,8 +2197,6 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             base = self._expression_value(value.value)
             read = self._dataflow.read_member(base, self._member_key(value))
             return read.with_kind(merge_flow_kinds((kind, read.kind)))
-        if isinstance(value, ast.Call):
-            return self._call_result(value).with_kind(kind)
         if isinstance(value, ast.Lambda):
             return self._dataflow.object(kind, escaped=True, callable_role="callable")
         loaded = [

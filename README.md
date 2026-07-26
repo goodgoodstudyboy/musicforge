@@ -95,8 +95,9 @@ may-alias transport even before values become Any-related; local function
 summaries cover parameter storage and alias returns, and bound-method aliases
 retain their receivers. Flow values retain canonical union-find roots, and
 expression binding classification resolves uncertain, unknown, and Any
-dependencies in one linear scan. ADR-026 through ADR-029 preserve every schema
-13 ceiling.
+dependencies in one linear scan. Each AST expression occurrence reuses one
+immutable flow result across collector phases. ADR-026 through ADR-029 preserve
+every schema 13 ceiling.
 
 ```powershell
 python -m mypy --no-incremental

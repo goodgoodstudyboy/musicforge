@@ -187,5 +187,6 @@ ceiling. ARCH-014 and TYPE-003 remain open through v14.4.0 under ADR-027.
 
 ADR-029 removes repeated expression-tree walks after v14.3.1 still exceeded
 the unchanged Windows CI duration gate. Collector schema 14 and all existing
-debt ceilings remain unchanged. ARCH-014 and TYPE-003 remain open through
-v14.4.0 under ADR-027.
+debt ceilings remain unchanged. Equivalent analyses of one AST expression
+occurrence reuse one immutable flow value. ARCH-014 and TYPE-003 remain open
+through v14.4.0 under ADR-027.
