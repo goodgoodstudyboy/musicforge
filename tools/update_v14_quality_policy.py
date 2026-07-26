@@ -24,6 +24,7 @@ from song_agent.release_check.v14_quality import (
     V14210_EXPLICIT_ANY_CEILING,
     V143_CALL_EFFECT_DATAFLOW_ADR,
     V1431_COMPONENT_COMPACTION_ADR,
+    V1432_EXPRESSION_SCAN_ADR,
     V143_DEBT_SCHEDULE_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
@@ -216,7 +217,7 @@ def _ratchet_complexity_policy(document: dict[str, object], root: Path) -> None:
 
 
 def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
-    document["release_version"] = "14.3.1"
+    document["release_version"] = "14.3.2"
     rows = document.get("module_size_debt")
     complexity = document.get("complexity")
     if not isinstance(rows, list) or not isinstance(complexity, dict):
@@ -249,6 +250,7 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         "alias_fail_closed_collector_decision": V14210_ALIAS_FAIL_CLOSED_ADR,
         "call_effect_dataflow_collector_decision": V143_CALL_EFFECT_DATAFLOW_ADR,
         "call_effect_component_compaction_decision": V1431_COMPONENT_COMPACTION_ADR,
+        "expression_binding_single_pass_decision": V1432_EXPRESSION_SCAN_ADR,
         "debt_schedule_decision": V143_DEBT_SCHEDULE_ADR,
         "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
         "collector_migration": {

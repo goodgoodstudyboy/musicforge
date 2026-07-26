@@ -182,3 +182,10 @@ ADR-028 compacts flow values to union-find representatives and keeps component
 membership internal to the data-flow kernel. The change restores the unchanged
 CI duration gate without reducing analysis coverage or increasing any debt
 ceiling. ARCH-014 and TYPE-003 remain open through v14.4.0 under ADR-027.
+
+## v14.3.2 Expression Binding Scan
+
+ADR-029 removes repeated expression-tree walks after v14.3.1 still exceeded
+the unchanged Windows CI duration gate. Collector schema 14 and all existing
+debt ceilings remain unchanged. ARCH-014 and TYPE-003 remain open through
+v14.4.0 under ADR-027.

@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.3.1 is a local-first modular monolith. It remains one Python
+MusicForge v14.3.2 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -299,7 +299,7 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Existing schema 12 measurements and every typing, complexity, per-file, and
   recovery ceiling remain unchanged.
 
-## v14.3.1 Generic Call-Effect Data Flow
+## v14.3.2 Generic Call-Effect Data Flow
 
 - Collector schema 14 records unresolved calls as may-alias components before
   any participant becomes Any-related.
@@ -311,3 +311,6 @@ boundary violations, dependency exceptions, or compatibility imports.
   recovery ceiling remain unchanged.
 - Flow values retain only canonical component representatives, preventing
   member-set amplification while preserving component-level analysis state.
+- Expression binding classification performs one linear scan that jointly
+  resolves uncertain, unknown, and Any dependencies without changing schema
+  14 semantics.

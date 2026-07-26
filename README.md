@@ -89,11 +89,14 @@ bounded direct-call effect summary propagates Any/uncertain member writes back
 to caller-owned objects. Unsupported Any-relevant interprocedural writes fail
 closed. ADR-025 preserves every schema 12 ceiling.
 
-v14.3.1 uses collector schema 14 and replaces call-time Any
+v14.3.2 uses collector schema 14 and replaces call-time Any
 heuristics with a generic call-effect data-flow model. Unknown calls record
 may-alias transport even before values become Any-related; local function
 summaries cover parameter storage and alias returns, and bound-method aliases
-retain their receivers. ADR-026 preserves every schema 13 ceiling.
+retain their receivers. Flow values retain canonical union-find roots, and
+expression binding classification resolves uncertain, unknown, and Any
+dependencies in one linear scan. ADR-026 through ADR-029 preserve every schema
+13 ceiling.
 
 ```powershell
 python -m mypy --no-incremental

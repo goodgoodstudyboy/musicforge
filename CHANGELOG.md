@@ -4,6 +4,17 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.3.2 - 2026-07-26
+
+- Replaced four repeated AST walks per expression with one binding scan while
+  preserving the schema 14 Any, unknown, quoted-annotation, and shadowing
+  semantics.
+- Reduced the v14 interface/application boundary gate from about 51 seconds to
+  about 39 seconds locally after v14.3.1 still exceeded the unchanged
+  180-second budget on Windows CI.
+- Added ADR-029 and `v1432.expression_binding_single_pass_smoke`; no quality,
+  complexity, coverage, or performance ceiling was raised.
+
 ## v14.3.1 - 2026-07-26
 
 - Compacted call-effect flow values to union-find representatives while

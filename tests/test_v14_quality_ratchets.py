@@ -31,6 +31,7 @@ from song_agent.release_check.v14_quality import (
     run_v14210_explicit_any_alias_fail_closed_smoke,
     run_v143_explicit_any_call_effect_dataflow_smoke,
     run_v1431_call_effect_component_compaction_smoke,
+    run_v1432_expression_binding_single_pass_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -2179,6 +2180,12 @@ def test_v143_explicit_any_call_effect_dataflow_smoke_is_self_consistent() -> No
 
 def test_v1431_call_effect_component_compaction_smoke_is_self_consistent() -> None:
     passed, detail = run_v1431_call_effect_component_compaction_smoke(ROOT)
+
+    assert passed, detail
+
+
+def test_v1432_expression_binding_single_pass_smoke_is_self_consistent() -> None:
+    passed, detail = run_v1432_expression_binding_single_pass_smoke(ROOT)
 
     assert passed, detail
 

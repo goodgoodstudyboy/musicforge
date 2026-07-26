@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "27171676b9cac2b643831431746e775f22ea190442b553eb17e605f2f81f4e22",
-    "source_tree_hash": "75e9d019e9b1f6fb020067c4606a41924d5ec74f33a168794b005bf18f4adb2b"
+    "report_sha256": "0a5e0c1a3c87fae5a56f7dfc58a030417a57c20ca40bc07a7807721a7ec472db",
+    "source_tree_hash": "4fdf56adac474bd525fb6184f0ccd09f0372c7622531d205ca52385866558fd3"
   },
-  "integrity_hash": "8c05826a8cfc13eb50998cfee14d8c8502ea4178b77694a13a145cf59fedddf3",
+  "integrity_hash": "30f2aaac80fc606159ed22ddccd55077eba837ee93fab331f671759587ed68fb",
   "module_size_debt": [
     {
       "expires_version": "14.4.0",
@@ -735,7 +735,7 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.3.1",
+  "release_version": "14.3.2",
   "schema_version": 1,
   "stabilization": {
     "alias_dataflow_collector_decision": "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md",
@@ -799,6 +799,7 @@
       "to_schema_version": 10
     },
     "explicit_any_file_budgets_hash": "950a9252b03d600d36776ef8aebe51b1392fe917b70b0f9d976a94589f24476d",
+    "expression_binding_single_pass_decision": "docs/architecture/ADR-029-v1432-expression-binding-single-pass.md",
     "hard_limits": {
       "active_python_file_max_count": 700,
       "explicit_any_affected_file_max_count": 470,

@@ -179,6 +179,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v14210.explicit_any_alias_fail_closed_smoke",
         "v143.explicit_any_call_effect_dataflow_smoke",
         "v1431.call_effect_component_compaction_smoke",
+        "v1432.expression_binding_single_pass_smoke",
     ]
 
 

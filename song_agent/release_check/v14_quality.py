@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
+import inspect
 import json
 from pathlib import Path
 import re
@@ -24,7 +25,7 @@ from song_agent.release_check.explicit_any_dataflow import (
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.3.1"
+QUALITY_POLICY_VERSION = "14.3.2"
 EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 14
 MYPY_ROOTS = (
     "song_agent/platform",
@@ -51,6 +52,7 @@ V14210_ALIAS_FAIL_CLOSED_ADR = "docs/architecture/ADR-025-v14210-explicit-any-al
 V143_CALL_EFFECT_DATAFLOW_ADR = "docs/architecture/ADR-026-v143-explicit-any-call-effect-dataflow.md"
 V143_DEBT_SCHEDULE_ADR = "docs/architecture/ADR-027-v143-debt-sequencing.md"
 V1431_COMPONENT_COMPACTION_ADR = "docs/architecture/ADR-028-v1431-call-effect-component-compaction.md"
+V1432_EXPRESSION_SCAN_ADR = "docs/architecture/ADR-029-v1432-expression-binding-single-pass.md"
 V14210_EXPLICIT_ANY_CEILING = 11993
 V14210_AFFECTED_FILE_CEILING = 461
 V14210_LAYER_CEILINGS = {
@@ -1002,6 +1004,48 @@ def run_v1431_call_effect_component_compaction_smoke(root: Path) -> tuple[bool, 
         "checks": checks,
         "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "component_size": len(values),
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
+def run_v1432_expression_binding_single_pass_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    probe_source = "\n".join(
+        [
+            "from typing import Any as Alias",
+            "values = [Alias if flag else int for flag in flags]",
+            *[f"field_{index}: Alias" for index in range(100)],
+        ]
+    )
+    probe_count, probe_blockers = _explicit_any_annotation_analysis(ast.parse(probe_source))
+    scanner_source = inspect.getsource(_ExplicitAnyCollector._expression_binding_kind)
+    checks = {
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "collector_schema_unchanged": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "expression_probe_exact": probe_count == 100 and not probe_blockers,
+        "single_pass_worklist": "pending: list[ast.AST]" in scanner_source,
+        "legacy_expression_rescans_absent": "_expression_depends_on_kind" not in scanner_source
+        and "ast.walk(value)" not in scanner_source,
+        "expression_scan_decision_present": stabilization.get("expression_binding_single_pass_decision")
+        == V1432_EXPRESSION_SCAN_ADR
+        and (root / V1432_EXPRESSION_SCAN_ADR).is_file(),
+        "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
+        == V14210_EXPLICIT_ANY_CEILING,
+        "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
+        == V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
+        == V14210_LAYER_CEILINGS,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "probe_count": probe_count,
+        "probe_blockers": probe_blockers,
     }
     return all(checks.values()), json.dumps(detail, sort_keys=True)
 
@@ -2181,22 +2225,57 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             binding = self._resolve_name(value.id)
             if binding in {"any", "typing-module", "any-or-typing-module", "uncertain", "unknown"}:
                 return binding
-        if self._expression_depends_on_uncertain(value):
+        uncertain = False
+        unknown = False
+        any_count = 0
+        bindings: dict[str, str] = {}
+
+        def resolved(name: str) -> str:
+            binding = bindings.get(name)
+            if binding is None:
+                binding = self._resolve_name(name)
+                bindings[name] = binding
+            return binding
+
+        pending: list[ast.AST] = [value]
+        while pending:
+            node = pending.pop()
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "Any"
+                and isinstance(node.value, ast.Name)
+            ):
+                binding = resolved(node.value.id)
+                if isinstance(node.value.ctx, ast.Load):
+                    uncertain = uncertain or binding == "uncertain"
+                    unknown = unknown or binding == "unknown"
+                if _binding_matches(binding, "typing-module"):
+                    any_count += 1
+                # The base name is part of the qualified reference. Counting
+                # an Any alias here as a second annotation would change the
+                # established ``Alias.Any`` shadowing semantics.
+                continue
+            if isinstance(node, ast.Name):
+                binding = resolved(node.id)
+                if isinstance(node.ctx, ast.Load):
+                    uncertain = uncertain or binding == "uncertain"
+                    unknown = unknown or binding == "unknown"
+                if _binding_matches(binding, "any"):
+                    any_count += 1
+                continue
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                any_count += self._quoted_annotation_any_count(
+                    node.value,
+                    fail_on_uncertain=False,
+                )
+                continue
+            pending.extend(ast.iter_child_nodes(node))
+
+        if uncertain:
             return "uncertain"
-        if self._expression_depends_on_kind(value, "unknown"):
+        if unknown:
             return "unknown"
-        return "any" if self._annotation_any_count(value, fail_on_uncertain=False) > 0 else "other"
-
-    def _expression_depends_on_uncertain(self, value: ast.expr) -> bool:
-        return self._expression_depends_on_kind(value, "uncertain")
-
-    def _expression_depends_on_kind(self, value: ast.expr, kind: str) -> bool:
-        return any(
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and self._resolve_name(node.id) == kind
-            for node in ast.walk(value)
-        )
+        return "any" if any_count else "other"
 
     def _indirect_target_kind(self, source: ast.expr) -> str:
         source_kind = self._expression_binding_kind(source)
