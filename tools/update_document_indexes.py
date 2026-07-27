@@ -24,7 +24,7 @@ def build_material_index() -> dict[str, object]:
                 "title": heading,
                 "version": version,
                 "status": "active"
-                if "v14.3.2-MusicForgeExpressionBinding单遍扫描性能稳定化" in path.name
+                if "v14.3.3-MusicForge调用绑定与Lambda效果闭环" in path.name
                 else "historical",
             }
         )

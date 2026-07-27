@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "93d7e35128e5201969feb80773521adb018e3b6ad92afe55afaa6bb8c52c8354",
-    "source_tree_hash": "3a95dbf8e74a6039ba3194e8034d5153ce39eecb6c490e36e9931472b44d12d5"
+    "report_sha256": "1a7a195923b9fbbab2f1862cb8c3422fd98dcea086a570c07cda617ea094cd62",
+    "source_tree_hash": "5efaa49af850fb4aafb7eb576e4c478b8d1fb6b212de3767bc65d88acc2e89b8"
   },
-  "integrity_hash": "b3f9e551c71d48591639d83e663b7454a60798b018ebe3e229e6e62c58f3b290",
+  "integrity_hash": "6c6f88ba0de0243df335753870b0bb5f5e6f34f8748563c6765b100196c0985d",
   "module_size_debt": [
     {
       "expires_version": "14.4.0",
@@ -735,7 +735,7 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.3.2",
+  "release_version": "14.3.3",
   "schema_version": 1,
   "stabilization": {
     "alias_dataflow_collector_decision": "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md",
@@ -754,6 +754,14 @@
       "to_schema_version": 13
     },
     "architecture_decision": "docs/architecture/ADR-016-v1421-stabilization-rollback.md",
+    "call_binding_lambda_effect_collector_migration": {
+      "corrected_explicit_any_count": 11993,
+      "from_schema_version": 14,
+      "previous_affected_file_ceiling": 461,
+      "previous_explicit_any_ceiling": 11993,
+      "to_schema_version": 15
+    },
+    "call_binding_lambda_effect_decision": "docs/architecture/ADR-030-v1433-call-binding-lambda-effects.md",
     "call_effect_component_compaction_decision": "docs/architecture/ADR-028-v1431-call-effect-component-compaction.md",
     "call_effect_dataflow_collector_decision": "docs/architecture/ADR-026-v143-explicit-any-call-effect-dataflow.md",
     "call_effect_dataflow_collector_migration": {
@@ -845,7 +853,7 @@
   "typing": {
     "activation_baseline_dict_str_any_count": 12535,
     "explicit_any_affected_file_max_count": 461,
-    "explicit_any_collector_schema_version": 14,
+    "explicit_any_collector_schema_version": 15,
     "explicit_any_file_budgets": {
       "song_agent/application/audio_campaigns/release_coverage.py": 7,
       "song_agent/application/evidence_policy_gate.py": 1,

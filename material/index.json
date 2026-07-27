@@ -477,9 +477,15 @@
     },
     {
       "path": "material/v14.3.2-MusicForgeExpressionBinding单遍扫描性能稳定化施工图-2026-07-26.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.3.2 MusicForge Expression Binding 单遍扫描性能稳定化施工图",
       "version": "14.3.2"
+    },
+    {
+      "path": "material/v14.3.3-MusicForge调用绑定与Lambda效果闭环施工图-2026-07-27.md",
+      "status": "active",
+      "title": "v14.3.3 MusicForge Call Binding and Lambda Effect Closure",
+      "version": "14.3.3"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",

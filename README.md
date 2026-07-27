@@ -89,7 +89,7 @@ bounded direct-call effect summary propagates Any/uncertain member writes back
 to caller-owned objects. Unsupported Any-relevant interprocedural writes fail
 closed. ADR-025 preserves every schema 12 ceiling.
 
-v14.3.2 uses collector schema 14 and replaces call-time Any
+v14.3.3 uses collector schema 15 and replaces call-time Any
 heuristics with a generic call-effect data-flow model. Unknown calls record
 may-alias transport even before values become Any-related; local function
 summaries cover parameter storage and alias returns, and bound-method aliases
@@ -98,7 +98,12 @@ expression binding classification resolves uncertain, unknown, and Any
 dependencies in one linear scan. Each AST expression occurrence reuses one
 immutable flow result across collector phases; quoted annotation syntax is
 parsed once per process while its bindings remain scope-sensitive. ADR-026
-through ADR-029 preserve every schema 13 ceiling.
+through ADR-029 preserve every schema 13 ceiling. ADR-030 adds conservative
+Python argument binding for defaults, variadics, and literal expansions, and
+uses the same effect summary for named functions and lambdas. Incomplete
+bindings fall back to the generic may-alias call effect, while rebinding a
+captured free variable fails closed at annotation use; no existing ceiling is
+raised.
 
 ```powershell
 python -m mypy --no-incremental

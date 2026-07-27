@@ -25,8 +25,9 @@ from song_agent.release_check.explicit_any_dataflow import (
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.3.2"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 14
+QUALITY_POLICY_VERSION = "14.3.3"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 15
+V143_CALL_EFFECT_SCHEMA_VERSION = 14
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -53,6 +54,7 @@ V143_CALL_EFFECT_DATAFLOW_ADR = "docs/architecture/ADR-026-v143-explicit-any-cal
 V143_DEBT_SCHEDULE_ADR = "docs/architecture/ADR-027-v143-debt-sequencing.md"
 V1431_COMPONENT_COMPACTION_ADR = "docs/architecture/ADR-028-v1431-call-effect-component-compaction.md"
 V1432_EXPRESSION_SCAN_ADR = "docs/architecture/ADR-029-v1432-expression-binding-single-pass.md"
+V1433_CALL_BINDING_ADR = "docs/architecture/ADR-030-v1433-call-binding-lambda-effects.md"
 V14210_EXPLICIT_ANY_CEILING = 11993
 V14210_AFFECTED_FILE_CEILING = 461
 V14210_LAYER_CEILINGS = {
@@ -949,7 +951,7 @@ def run_v143_explicit_any_call_effect_dataflow_smoke(root: Path) -> tuple[bool, 
         == V143_DEBT_SCHEDULE_ADR
         and (root / V143_DEBT_SCHEDULE_ADR).is_file(),
         "call_effect_migration_recorded": int(migration.get("from_schema_version") or 0) == 13
-        and int(migration.get("to_schema_version") or 0) == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        and int(migration.get("to_schema_version") or 0) == V143_CALL_EFFECT_SCHEMA_VERSION,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
         == V14210_EXPLICIT_ANY_CEILING
         and int(migration.get("previous_explicit_any_ceiling") or 0) == V14210_EXPLICIT_ANY_CEILING,
@@ -1057,6 +1059,41 @@ def run_v1432_expression_binding_single_pass_smoke(root: Path) -> tuple[bool, st
         "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "probe_count": probe_count,
         "probe_blockers": probe_blockers,
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
+def run_v1433_call_binding_lambda_effect_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    migration = dict(stabilization.get("call_binding_lambda_effect_collector_migration") or {})
+    checks = {
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "collector_schema_current": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "call_binding_attack_corpus": _explicit_any_call_effect_dataflow_probe(),
+        "call_binding_decision_present": stabilization.get("call_binding_lambda_effect_decision")
+        == V1433_CALL_BINDING_ADR
+        and (root / V1433_CALL_BINDING_ADR).is_file(),
+        "migration_recorded": int(migration.get("from_schema_version") or 0)
+        == V143_CALL_EFFECT_SCHEMA_VERSION
+        and int(migration.get("to_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
+        == V14210_EXPLICIT_ANY_CEILING
+        and int(migration.get("previous_explicit_any_ceiling") or 0)
+        == V14210_EXPLICIT_ANY_CEILING,
+        "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
+        == V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
+        == V14210_LAYER_CEILINGS,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
     }
     return all(checks.values()), json.dumps(detail, sort_keys=True)
 
@@ -1236,13 +1273,27 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
     if (
         int(call_effect_migration.get("from_schema_version") or 0) != 13
         or int(call_effect_migration.get("to_schema_version") or 0)
-        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+        != V143_CALL_EFFECT_SCHEMA_VERSION
         or int(call_effect_migration.get("previous_explicit_any_ceiling") or 0)
         != V14210_EXPLICIT_ANY_CEILING
         or int(call_effect_migration.get("previous_affected_file_ceiling") or 0)
         != V14210_AFFECTED_FILE_CEILING
     ):
         blockers.append("v14_quality_policy_call_effect_dataflow_collector_migration")
+    if stabilization.get("call_binding_lambda_effect_decision") != V1433_CALL_BINDING_ADR:
+        blockers.append("v14_quality_policy_call_binding_lambda_effect_decision")
+    call_binding_migration = stabilization.get("call_binding_lambda_effect_collector_migration") or {}
+    if (
+        int(call_binding_migration.get("from_schema_version") or 0)
+        != V143_CALL_EFFECT_SCHEMA_VERSION
+        or int(call_binding_migration.get("to_schema_version") or 0)
+        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+        or int(call_binding_migration.get("previous_explicit_any_ceiling") or 0)
+        != V14210_EXPLICIT_ANY_CEILING
+        or int(call_binding_migration.get("previous_affected_file_ceiling") or 0)
+        != V14210_AFFECTED_FILE_CEILING
+    ):
+        blockers.append("v14_quality_policy_call_binding_lambda_effect_collector_migration")
     typing = policy.get("typing") or {}
     if (
         int(typing.get("explicit_any_max_count") or 0) != V14210_EXPLICIT_ANY_CEILING
@@ -1302,14 +1353,26 @@ def _function_annotations(
 @dataclass(frozen=True)
 class _FunctionWriteSummary:
     positional: tuple[str, ...]
-    keyword_only: frozenset[str]
+    positional_only_count: int
+    keyword_only: tuple[str, ...]
     vararg: str | None
     kwarg: str | None
+    default_bindings: tuple[tuple[str, FlowValue], ...]
     any_write_parameters: frozenset[str]
     may_alias_parameter_groups: tuple[frozenset[str], ...]
+    exposes_parameter_members: frozenset[str]
     may_store_alias_bindings: tuple[tuple[str, FlowValue], ...]
     returns_alias_of: frozenset[str]
+    returns_captured_bindings: tuple[FlowValue, ...]
+    returned_callable_templates: tuple[FlowValue, ...]
     receiver_binding: str
+
+
+@dataclass(frozen=True)
+class _BoundCallArguments:
+    arguments: dict[str, tuple[FlowValue, ...]]
+    participants: tuple[FlowValue, ...]
+    complete: bool
 
 
 class _ExplicitAnyCollector(ast.NodeVisitor):
@@ -1332,7 +1395,9 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._function_identity_checkpoints: list[int] = []
         self._function_may_store_aliases: list[dict[str, list[FlowValue]]] = []
         self._function_write_summaries: dict[int, _FunctionWriteSummary] = {}
+        self._late_bound_capture_identities: set[int] = set()
         self._call_results: dict[int, FlowValue] = {}
+        self._call_bindings: dict[tuple[int, int], _BoundCallArguments] = {}
         self._expression_values: dict[int, FlowValue] = {}
         self._quoted_annotation_expressions: dict[str, ast.expr | None] = {}
 
@@ -1363,9 +1428,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._visit_function(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
-        # Defaults run in the enclosing scope when the lambda is created.
-        # The body owns no annotations and runs in the lambda scope.
-        self._visit_argument_defaults(node.args)
+        self._expression_value(node)
 
     def visit_Global(self, node: ast.Global) -> None:
         # Declarations are collected before the lexical scope is visited.
@@ -1455,15 +1518,19 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if self._expression_value(value).kind
             in {"any", "typing-module", "any-or-typing-module", "uncertain"}
         ]
-        if any_relevant_arguments and not summaries:
+        bindings = [(summary, self._bound_call_arguments(node, summary)) for summary in summaries]
+        complete_bindings = [(summary, binding) for summary, binding in bindings if binding.complete]
+        if any_relevant_arguments and (
+            not summaries or len(complete_bindings) != len(summaries)
+        ):
             candidates = [value for value in arguments if value not in any_relevant_arguments]
             if isinstance(node.func, ast.Attribute):
                 candidates.append(node.func.value)
             for candidate in candidates:
                 self._taint_value(self._expression_value(candidate))
             self._record_unresolved_call_effect(node, candidates)
-        for summary in summaries:
-            self._apply_function_summary(node, summary)
+        for summary, binding in complete_bindings:
+            self._apply_function_summary(summary, binding)
         self.generic_visit(node)
 
     def visit_Return(self, node: ast.Return) -> None:
@@ -1547,6 +1614,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._aliases[-1] = self._merge_branch_aliases(alias_states)
 
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        default_bindings = self._argument_default_bindings(node.args)
         self._visit_expressions(node.decorator_list)
         self._visit_argument_defaults(node.args)
         decorator_semantics = tuple(self._decorator_semantics(value) for value in node.decorator_list)
@@ -1555,23 +1623,60 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 self.count += self._annotation_any_count(annotation)
         if node.returns is not None:
             self.count += self._annotation_any_count(node.returns)
-        positional = tuple(argument.arg for argument in (*node.args.posonlyargs, *node.args.args))
-        keyword_only = frozenset(argument.arg for argument in node.args.kwonlyargs)
+        if self._scope_kinds[-1] != "class" or "staticmethod" in decorator_semantics:
+            receiver_binding = "none"
+        elif "classmethod" in decorator_semantics:
+            receiver_binding = "always"
+        else:
+            receiver_binding = "maybe"
+        summary = self._build_callable_summary(
+            node.args,
+            node.body,
+            default_bindings=default_bindings,
+            receiver_binding=receiver_binding,
+            class_receiver="classmethod" in decorator_semantics,
+        )
+        summary_is_trusted = all(
+            value in {"staticmethod", "classmethod"}
+            for value in decorator_semantics
+        )
+        function_value = self._register_callable_summary(summary, trusted=summary_is_trusted)
+        self._bind(node.name, "other", aliases=function_value)
+
+    def _lambda_value(self, node: ast.Lambda, *, kind: str) -> FlowValue:
+        default_bindings = self._argument_default_bindings(node.args)
+        self._visit_argument_defaults(node.args)
+        summary = self._build_callable_summary(
+            node.args,
+            [ast.Return(value=node.body)],
+            default_bindings=default_bindings,
+            receiver_binding="none",
+            class_receiver=False,
+        )
+        return self._register_callable_summary(summary, trusted=True, kind=kind)
+
+    def _build_callable_summary(
+        self,
+        arguments: ast.arguments,
+        body: list[ast.stmt],
+        *,
+        default_bindings: tuple[tuple[str, FlowValue], ...],
+        receiver_binding: str,
+        class_receiver: bool,
+    ) -> _FunctionWriteSummary:
+        positional = tuple(argument.arg for argument in (*arguments.posonlyargs, *arguments.args))
+        keyword_only = tuple(argument.arg for argument in arguments.kwonlyargs)
         parameter_scope = {name: "other" for name in (*positional, *keyword_only)}
-        if node.args.vararg is not None:
-            parameter_scope[node.args.vararg.arg] = "other"
-        if node.args.kwarg is not None:
-            parameter_scope[node.args.kwarg.arg] = "other"
+        if arguments.vararg is not None:
+            parameter_scope[arguments.vararg.arg] = "other"
+        if arguments.kwarg is not None:
+            parameter_scope[arguments.kwarg.arg] = "other"
         identity_checkpoint = self._dataflow.checkpoint()
         parameter_flows = {
             name: self._dataflow.object(escaped=True)
             for name in parameter_scope
         }
-        if (
-            self._scope_kinds[-1] == "class"
-            and "classmethod" in decorator_semantics
-            and positional
-        ):
+        if class_receiver and positional:
             parameter_flows[positional[0]] = self._dataflow.object(
                 escaped=True,
                 callable_role="class",
@@ -1583,7 +1688,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._function_may_store_aliases.append({})
         try:
             self._visit_scope_body(
-                node.body,
+                body,
                 push_scope=True,
                 initial=parameter_scope,
                 initial_aliases=parameter_flows,
@@ -1599,6 +1704,11 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             self._function_any_writes.pop()
             self._function_parameter_flows.pop()
         alias_groups = self._parameter_alias_groups(parameter_flows)
+        exposes_parameter_members = frozenset(
+            name
+            for name, parameter in parameter_flows.items()
+            if self._dataflow.has_storage_effect(parameter)
+        )
         may_store_alias_bindings = tuple(
             (name, captured)
             for name in sorted(may_store_aliases)
@@ -1609,35 +1719,90 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             for name, parameter in parameter_flows.items()
             if any(self._dataflow.related(parameter, returned) for returned in return_flows)
         )
-        if self._scope_kinds[-1] != "class" or "staticmethod" in decorator_semantics:
-            receiver_binding = "none"
-        elif "classmethod" in decorator_semantics:
-            receiver_binding = "always"
-        else:
-            receiver_binding = "maybe"
-        summary = _FunctionWriteSummary(
+        returns_captured_bindings = self._unique_flow_values(
+            captured
+            for returned in return_flows
+            if (captured := self._dataflow.prior_component(returned, identity_checkpoint)) is not None
+        )
+        returned_callable_templates = self._unique_flow_values(
+            returned
+            for returned in return_flows
+            if returned.callable_role in {"function", "callable"}
+            and any(identity in self._function_write_summaries for identity in returned.identities)
+        )
+        return _FunctionWriteSummary(
             positional=positional,
+            positional_only_count=len(arguments.posonlyargs),
             keyword_only=keyword_only,
-            vararg=node.args.vararg.arg if node.args.vararg is not None else None,
-            kwarg=node.args.kwarg.arg if node.args.kwarg is not None else None,
+            vararg=arguments.vararg.arg if arguments.vararg is not None else None,
+            kwarg=arguments.kwarg.arg if arguments.kwarg is not None else None,
+            default_bindings=default_bindings,
             any_write_parameters=writes,
             may_alias_parameter_groups=alias_groups,
+            exposes_parameter_members=exposes_parameter_members,
             may_store_alias_bindings=may_store_alias_bindings,
             returns_alias_of=returns_alias_of,
+            returns_captured_bindings=returns_captured_bindings,
+            returned_callable_templates=returned_callable_templates,
             receiver_binding=receiver_binding,
         )
-        summary_is_trusted = all(
-            value in {"staticmethod", "classmethod"}
-            for value in decorator_semantics
-        )
+
+    def _register_callable_summary(
+        self,
+        summary: _FunctionWriteSummary,
+        *,
+        trusted: bool,
+        kind: str = "other",
+    ) -> FlowValue:
         function_value = self._dataflow.object(
-            escaped=not summary_is_trusted,
-            callable_role="function" if summary_is_trusted else "callable",
+            kind,
+            escaped=not trusted,
+            callable_role="function" if trusted else "callable",
         )
-        if summary_is_trusted:
+        if trusted:
             for identity in function_value.identities:
                 self._function_write_summaries[identity] = summary
-        self._bind(node.name, "other", aliases=function_value)
+        closure_values = self._unique_flow_values(
+            [
+                *(value for _name, value in summary.may_store_alias_bindings),
+                *summary.returns_captured_bindings,
+            ]
+        )
+        self._late_bound_capture_identities.update(
+            identity
+            for value in closure_values
+            for identity in self._dataflow.component_identities(value)
+        )
+        retained_values = self._unique_flow_values(
+            [
+                *(value for _name, value in summary.default_bindings),
+                *closure_values,
+            ]
+        )
+        if retained_values:
+            self._dataflow.connect((function_value, *retained_values), expose_members=False)
+        return function_value
+
+    def _argument_default_bindings(
+        self,
+        arguments: ast.arguments,
+    ) -> tuple[tuple[str, FlowValue], ...]:
+        positional = (*arguments.posonlyargs, *arguments.args)
+        positional_defaults = zip(
+            positional[len(positional) - len(arguments.defaults) :],
+            arguments.defaults,
+            strict=True,
+        )
+        rows = [
+            (argument.arg, self._expression_value(default))
+            for argument, default in positional_defaults
+        ]
+        rows.extend(
+            (argument.arg, self._expression_value(default))
+            for argument, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True)
+            if default is not None
+        )
+        return tuple(rows)
 
     def _decorator_semantics(self, value: ast.expr) -> str:
         if isinstance(value, ast.Call):
@@ -1654,8 +1819,18 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 return "identity-class"
         return "unknown"
 
-    def _apply_function_summary(self, node: ast.Call, summary: _FunctionWriteSummary) -> None:
-        arguments = self._bound_call_arguments(node, summary)
+    def _apply_function_summary(
+        self,
+        summary: _FunctionWriteSummary,
+        binding: _BoundCallArguments,
+    ) -> None:
+        arguments = binding.arguments
+        for parameter in summary.exposes_parameter_members:
+            for value in arguments.get(parameter, ()):
+                members = self._dataflow.stored_value_closure((value,))[1:]
+                if members:
+                    self._record_function_may_store((value, *members))
+                    self._dataflow.connect((value, *members), expose_members=True)
         for parameter, template in summary.may_store_alias_bindings:
             for value in arguments.get(parameter, ()):
                 self._record_function_may_store((value, template))
@@ -1690,36 +1865,103 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self,
         node: ast.Call,
         summary: _FunctionWriteSummary,
-    ) -> dict[str, tuple[FlowValue, ...]]:
-        result: dict[str, list[FlowValue]] = {}
-        if summary.receiver_binding != "always":
-            for index, argument in enumerate(node.args):
-                parameter = summary.positional[index] if index < len(summary.positional) else summary.vararg
-                if parameter is not None:
-                    result.setdefault(parameter, []).append(self._expression_value(argument))
+    ) -> _BoundCallArguments:
+        cache_key = (id(node), id(summary))
+        cached = self._call_bindings.get(cache_key)
+        if cached is not None:
+            return cached
 
-        # A function declared in class scope may be observed through a bound
-        # descriptor or copied from the class as an unbound callable. Keep
-        # both positional interpretations. This is conservative, but avoids
-        # losing a may-store-alias effect when a classmethod or method is
-        # assigned to a local name before it is called.
-        if (
-            summary.receiver_binding in {"always", "maybe"}
-            and summary.positional
-            and summary.positional[0] in {"self", "cls"}
-        ):
-            if isinstance(node.func, ast.Attribute):
-                result.setdefault(summary.positional[0], []).append(self._expression_value(node.func.value))
-            for index, argument in enumerate(node.args):
-                position = index + 1
-                parameter = summary.positional[position] if position < len(summary.positional) else summary.vararg
-                if parameter is not None:
-                    result.setdefault(parameter, []).append(self._expression_value(argument))
+        positional_values: list[FlowValue] = []
+        keyword_values: list[tuple[str, FlowValue]] = []
+        participants: list[FlowValue] = []
+        complete = True
+        for argument in node.args:
+            if isinstance(argument, ast.Starred):
+                packed = self._expression_value(argument.value)
+                participants.append(packed)
+                if isinstance(argument.value, (ast.Tuple, ast.List)) and not any(
+                    isinstance(item, ast.Starred) for item in argument.value.elts
+                ):
+                    positional_values.extend(self._expression_value(item) for item in argument.value.elts)
+                else:
+                    complete = False
+            else:
+                value = self._expression_value(argument)
+                positional_values.append(value)
+                participants.append(value)
         for keyword in node.keywords:
-            parameter = summary.kwarg if keyword.arg is None else keyword.arg
-            if parameter is not None:
-                result.setdefault(parameter, []).append(self._expression_value(keyword.value))
-        return {name: tuple(values) for name, values in result.items()}
+            packed = self._expression_value(keyword.value)
+            participants.append(packed)
+            if keyword.arg is not None:
+                keyword_values.append((keyword.arg, packed))
+                continue
+            if not isinstance(keyword.value, ast.Dict):
+                complete = False
+                continue
+            for key, value_node in zip(keyword.value.keys, keyword.value.values, strict=True):
+                if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+                    complete = False
+                    continue
+                keyword_values.append((key.value, self._expression_value(value_node)))
+
+        bind_receiver = summary.receiver_binding == "always" or (
+            summary.receiver_binding == "maybe" and isinstance(node.func, ast.Attribute)
+        )
+        if bind_receiver:
+            if isinstance(node.func, ast.Attribute):
+                receiver = self._expression_value(node.func.value)
+                positional_values.insert(0, receiver)
+                participants.append(receiver)
+            else:
+                complete = False
+
+        assigned: dict[str, FlowValue] = {}
+        extra_positional: list[FlowValue] = []
+        extra_keywords: list[tuple[str | None, FlowValue]] = []
+        for index, value in enumerate(positional_values):
+            if index < len(summary.positional):
+                assigned[summary.positional[index]] = value
+            else:
+                extra_positional.append(value)
+        if extra_positional and summary.vararg is None:
+            complete = False
+        if summary.vararg is not None:
+            assigned[summary.vararg] = self._dataflow.container(extra_positional)
+
+        positional_only = set(summary.positional[: summary.positional_only_count])
+        accepted_keywords = set(summary.positional[summary.positional_only_count :]) | set(summary.keyword_only)
+        for name, value in keyword_values:
+            if name in accepted_keywords:
+                if name in assigned:
+                    complete = False
+                else:
+                    assigned[name] = value
+            elif summary.kwarg is not None:
+                extra_keywords.append((repr(name), value))
+            else:
+                complete = False
+            if name in positional_only and summary.kwarg is None:
+                complete = False
+        if summary.kwarg is not None:
+            assigned[summary.kwarg] = self._dataflow.mapping(extra_keywords)
+
+        defaults = dict(summary.default_bindings)
+        for parameter in (*summary.positional, *summary.keyword_only):
+            if parameter in assigned:
+                continue
+            if parameter in defaults:
+                assigned[parameter] = defaults[parameter]
+                participants.append(defaults[parameter])
+            else:
+                complete = False
+        arguments = {name: (value,) for name, value in assigned.items()}
+        result = _BoundCallArguments(
+            arguments=arguments,
+            participants=self._unique_flow_values(participants),
+            complete=complete,
+        )
+        self._call_bindings[cache_key] = result
+        return result
 
     def _call_result(self, node: ast.Call) -> FlowValue:
         cached = self._call_results.get(id(node))
@@ -1730,15 +1972,28 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         summaries = self._call_summaries(node, function=function)
         if self._known_call_effect(node, function=function) == "pure_scalar":
             result = self._dataflow.scalar(kind)
-        elif summaries:
+        bindings = [(summary, self._bound_call_arguments(node, summary)) for summary in summaries]
+        if summaries and all(binding.complete for _summary, binding in bindings):
             returned: list[FlowValue] = []
-            for summary in summaries:
-                arguments = self._bound_call_arguments(node, summary)
+            for summary, binding in bindings:
+                arguments = binding.arguments
                 returned.extend(
                     value
                     for parameter in summary.returns_alias_of
-                    for value in arguments.get(parameter, ())
+                    for argument in arguments.get(parameter, ())
+                    for value in (argument, *self._dataflow.stored_values(argument))
                 )
+                returned.extend(summary.returns_captured_bindings)
+                for template in summary.returned_callable_templates:
+                    related = [
+                        value
+                        for parameter, parameter_values in arguments.items()
+                        if parameter in summary.returns_alias_of
+                        for value in parameter_values
+                    ]
+                    if related:
+                        self._dataflow.connect((template, *related), expose_members=False)
+                    returned.append(self._dataflow.join((template, *related), kind=kind))
             result = (
                 self._dataflow.join(returned, kind=kind)
                 if returned
@@ -1754,10 +2009,19 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 and function.callable_role not in {"class", "function"}
             )
             participants = [function] if participates_as_receiver else []
-            participants.extend(self._expression_value(argument) for argument in node.args)
+            participants.extend(
+                self._expression_value(argument.value if isinstance(argument, ast.Starred) else argument)
+                for argument in node.args
+            )
             participants.extend(self._expression_value(keyword.value) for keyword in node.keywords)
             if isinstance(node.func, ast.Attribute):
                 participants.append(self._expression_value(node.func.value))
+            for summary, binding in bindings:
+                participants.extend(binding.participants)
+                participants.extend(value for _name, value in summary.default_bindings)
+                participants.extend(value for _name, value in summary.may_store_alias_bindings)
+                participants.extend(summary.returns_captured_bindings)
+            participants = list(self._dataflow.stored_value_closure(participants))
             self._record_function_may_store(participants)
             result = self._dataflow.call_effect(participants, kind=kind)
         self._call_results[id(node)] = result
@@ -1800,7 +2064,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         resolved = function if function is not None else self._expression_value(node.func)
         return {
             self._function_write_summaries[identity]
-            for identity in resolved.identities
+            for identity in self._dataflow.component_identities(resolved)
             if identity in self._function_write_summaries
         }
 
@@ -2040,8 +2304,19 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 self._add_blocker(f"runtime_redirect:{self._scope_kinds[current_index]}:{name}")
             if relevant and self._control_flow_scopes and self._control_flow_scopes[-1] != target_index:
                 self._add_blocker(f"cross_scope_control_flow:{name}")
-        self._scopes[target_index][name] = kind
         value = aliases.with_kind(kind) if aliases is not None else self._dataflow.object(kind)
+        previous_value = self._aliases[target_index].get(name)
+        if previous_value is not None and (
+            self._late_bound_capture_identities
+            & self._dataflow.component_identities(previous_value)
+        ):
+            # Closures resolve names when called, not when defined. Until the
+            # collector has binding-cell analysis, retain both generations
+            # and fail closed if the late-bound name reaches an annotation.
+            self._dataflow.connect((previous_value, value), expose_members=True)
+            kind = "unknown"
+            value = self._dataflow.join((previous_value, value), kind=kind)
+        self._scopes[target_index][name] = kind
         self._aliases[target_index][name] = value
 
     def _binding_scope_index(self, name: str) -> int | None:
@@ -2207,7 +2482,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             read = self._dataflow.read_member(base, self._member_key(value))
             return read.with_kind(merge_flow_kinds((kind, read.kind)))
         if isinstance(value, ast.Lambda):
-            return self._dataflow.object(kind, escaped=True, callable_role="callable")
+            return self._lambda_value(value, kind=kind)
         loaded = [
             self._resolve_flow(node.id)
             for node in ast.walk(value)
@@ -3282,6 +3557,94 @@ def _explicit_any_call_effect_dataflow_probe() -> bool:
             "                self.values.append(value)\n"
             "        Holder = [None]\n        sink = Sink()\n        sink(Holder)\n"
             "        Ref = sink.values[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(value, target=Store):\n            target.append(value)\n"
+            "        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(value, *, target=Store):\n            target.append(value)\n"
+            "        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(*values):\n            Store.append(values[0])\n"
+            "        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(**values):\n"
+            "            values['target'].append(values['value'])\n"
+            "        retain(target=Store, value=Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(value, target):\n            target.append(value)\n"
+            "        retain(*(Holder, Store))\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(value, target):\n            target.append(value)\n"
+            "        retain(**{'value': Holder, 'target': Store})\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(value, target):\n            target.append(value)\n"
+            "        packed = (Holder, Store)\n        retain(*packed)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(value, target):\n            target.append(value)\n"
+            "        packed = {'value': Holder, 'target': Store}\n"
+            "        retain(**packed)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        retain = lambda value: Store.append(value)\n"
+            "        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        retain = lambda value, target=Store: target.append(value)\n"
+            "        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def retain(value):\n            Store.append(value)\n"
+            "        Store = []\n        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        registry = {'retain': lambda value: Store.append(value)}\n"
+            "        retain = registry['retain']\n"
+            "        Store = []\n        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def factory(target):\n            return lambda value: target.append(value)\n"
+            "        retain = factory(Store)\n        retain(Holder)\n        Ref = Store[0]\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = [Holder]\n"
+            "        registry = {'get': lambda: Store[0]}\n"
+            "        Ref = registry['get']()\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = [Holder]\n"
+            "        def get():\n            return Store[0]\n"
+            "        Ref = get()\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def first(*values):\n            return values[0]\n"
+            "        Ref = first(Holder)\n"
+        ),
+        (
+            "        Holder = [None]\n        Store = []\n"
+            "        def get(**values):\n            return values['target']\n"
+            "        Ref = get(target=Holder)\n"
         ),
     )
     for body in variants:

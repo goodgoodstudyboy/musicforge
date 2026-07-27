@@ -220,6 +220,47 @@ class ExplicitAnyDataFlow:
             if identity in self._parents
         )
 
+    def component_identities(self, value: FlowValue) -> frozenset[int]:
+        """Return every original identity represented by a may-alias value."""
+
+        return frozenset(
+            identity
+            for root in self.component_roots(value)
+            for identity in self._members.get(root, {root})
+        )
+
+    def stored_values(self, value: FlowValue) -> tuple[FlowValue, ...]:
+        """Return values held directly by any object in the alias component."""
+
+        rows: list[FlowValue] = []
+        for root in self.component_roots(value):
+            rows.extend(self._component_cells.get(root, {}).values())
+            wildcard = self._component_wildcards.get(root)
+            if wildcard is not None:
+                rows.append(wildcard)
+        return tuple(dict.fromkeys(rows))
+
+    def stored_value_closure(self, values: Iterable[FlowValue]) -> tuple[FlowValue, ...]:
+        """Return participants plus every statically known nested stored value."""
+
+        pending = list(values)
+        rows: list[FlowValue] = []
+        seen_roots: set[int] = set()
+        while pending:
+            value = pending.pop()
+            rows.append(value)
+            roots = self.component_roots(value)
+            fresh = roots - seen_roots
+            if not fresh:
+                continue
+            seen_roots.update(fresh)
+            for root in fresh:
+                pending.extend(self._component_cells.get(root, {}).values())
+                wildcard = self._component_wildcards.get(root)
+                if wildcard is not None:
+                    pending.append(wildcard)
+        return tuple(dict.fromkeys(rows))
+
     def read_member(self, base: FlowValue, key: CellKey | None) -> FlowValue:
         values: list[FlowValue] = []
         unresolved = base.escaped

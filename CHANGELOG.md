@@ -4,6 +4,21 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.3.3 - 2026-07-27
+
+- Added one conservative Python call binder for positional-only,
+  keyword-only, default, variadic, and literal expanded arguments.
+- Persisted definition-time default values in callable summaries and routed
+  incomplete bindings through generic may-alias effects instead of partial
+  summaries.
+- Unified lambda and named-function effect analysis, including closure storage
+  and callable identity across factory returns and compacted components.
+- Added runtime/Ruff/strict-mypy call-binding, lambda, and late-bound closure
+  attack regressions, expanded the v14.3 attack corpus, and added
+  `v1433.call_binding_lambda_effect_smoke`.
+- Upgraded the Explicit Any collector to schema 15 without raising any typing,
+  file, layer, complexity, recovery, coverage, or performance ceiling.
+
 ## v14.3.2 - 2026-07-26
 
 - Replaced four repeated AST walks per expression with one binding scan while

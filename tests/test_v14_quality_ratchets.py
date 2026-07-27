@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import textwrap
 
 import pytest
 
@@ -35,6 +36,7 @@ from song_agent.release_check.v14_quality import (
     run_v143_explicit_any_call_effect_dataflow_smoke,
     run_v1431_call_effect_component_compaction_smoke,
     run_v1432_expression_binding_single_pass_smoke,
+    run_v1433_call_binding_lambda_effect_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -1586,6 +1588,204 @@ def test_v143_call_effect_alias_transport_fails_closed_at_every_ratchet_layer(
     assert any("typing_explicit_any_file" in value for value in blockers)
 
 
+@pytest.mark.parametrize(
+    ("case_name", "body"),
+    [
+        (
+            "positional_default",
+            "        def retain(value, target=Store):\n"
+            "            target.append(value)\n"
+            "        retain(Holder)\n",
+        ),
+        (
+            "keyword_only_default",
+            "        def retain(value, *, target=Store):\n"
+            "            target.append(value)\n"
+            "        retain(Holder)\n",
+        ),
+        (
+            "varargs",
+            "        def retain(*values):\n"
+            "            Store.append(values[0])\n"
+            "        retain(Holder)\n",
+        ),
+        (
+            "kwargs",
+            "        def retain(**values):\n"
+            "            values['target'].append(values['value'])\n"
+            "        retain(target=Store, value=Holder)\n",
+        ),
+        (
+            "starred_positional",
+            "        def retain(value, target):\n"
+            "            target.append(value)\n"
+            "        retain(*(Holder, Store))\n",
+        ),
+        (
+            "expanded_keyword",
+            "        def retain(value, target):\n"
+            "            target.append(value)\n"
+            "        retain(**{'value': Holder, 'target': Store})\n",
+        ),
+        (
+            "dynamic_starred_positional",
+            "        def retain(value, target):\n"
+            "            target.append(value)\n"
+            "        packed = (Holder, Store)\n"
+            "        retain(*packed)\n",
+        ),
+        (
+            "dynamic_expanded_keyword",
+            "        def retain(value, target):\n"
+            "            target.append(value)\n"
+            "        packed = {'value': Holder, 'target': Store}\n"
+            "        retain(**packed)\n",
+        ),
+        (
+            "lambda_closure",
+            "        registry = {'retain': lambda value: Store.append(value)}\n"
+            "        retain = registry['retain']\n"
+            "        retain(Holder)\n",
+        ),
+        (
+            "lambda_default",
+            "        registry = {'retain': lambda value, target=Store: target.append(value)}\n"
+            "        retain = registry['retain']\n"
+            "        retain(Holder)\n",
+        ),
+        (
+            "function_late_bound_rebind",
+            "        def retain(value):\n"
+            "            Store.append(value)\n"
+            "        Store = []\n"
+            "        retain(Holder)\n",
+        ),
+        (
+            "lambda_late_bound_rebind",
+            "        registry = {'retain': lambda value: Store.append(value)}\n"
+            "        retain = registry['retain']\n"
+            "        Store = []\n"
+            "        retain(Holder)\n",
+        ),
+        (
+            "lambda_factory",
+            "        def factory(target):\n"
+            "            return lambda value: target.append(value)\n"
+            "        retain = factory(Store)\n"
+            "        retain(Holder)\n",
+        ),
+    ],
+)
+def test_v1433_callable_binding_and_lambda_effects_fail_closed(
+    tmp_path: Path,
+    case_name: str,
+    body: str,
+) -> None:
+    relative = f"song_agent/interfaces/api/v1433_{case_name}.py"
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"field_{index}: Alias" for index in range(100))
+    source = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+        "    for Alias in ((t.Any,),):\n"
+        "        pass\n"
+        "    Holder = [None]\n"
+        "    Store = []\n"
+        + textwrap.indent(textwrap.dedent(body), "    ")
+        + "    Ref = Store[0]\n"
+        + "    Ref[0] = Alias\n"
+        + "    Alias = Holder[0][0]\n"
+        + textwrap.indent(annotations, "    ")
+        + "\n"
+    )
+    target.write_text(source, encoding="utf-8")
+    namespace: dict[str, object] = {}
+    exec(compile(source, str(target), "exec"), namespace)
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {relative: 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+    blockers = _typing_blockers(typing, policy)
+    ruff = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--config", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    mypy = subprocess.run(
+        [sys.executable, "-m", "mypy", "--strict", "--config-file", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert namespace["Alias"] is __import__("typing").Any
+    assert len(namespace["__annotations__"]) == 100
+    assert ruff.returncode == 0, ruff.stdout + ruff.stderr
+    assert mypy.returncode == 0, mypy.stdout + mypy.stderr
+    assert typing["explicit_any_count"] == 100
+    assert any(row["detail"].endswith("annotation_binding:Alias") for row in typing["explicit_any_scope_blockers"])
+    assert any("typing_explicit_any_scope_flow" in value for value in blockers)
+    assert any("typing_explicit_any:" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "    registry = {'get': lambda: Holder}\n    Ref = registry['get']()\n",
+        "    def get():\n        return Holder\n    Ref = get()\n",
+        "    def first(*values):\n        return values[0]\n    Ref = first(Holder)\n",
+        "    def get(**values):\n        return values['target']\n    Ref = get(target=Holder)\n",
+    ],
+)
+def test_v1433_callable_return_aliases_preserve_captured_and_member_origins(body: str) -> None:
+    annotations = "\n".join(f"    field_{index}: Alias" for index in range(100))
+    source = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+        "    for Alias in ((t.Any,),):\n"
+        "        pass\n"
+        "    Holder = [None]\n"
+        + body
+        + "    Ref[0] = Alias\n"
+        + "    Alias = Holder[0][0]\n"
+        + annotations
+        + "\n"
+    )
+    namespace: dict[str, object] = {}
+    exec(compile(source, "<v1433-return-alias>", "exec"), namespace)
+    collector = _ExplicitAnyCollector()
+    collector.visit(ast.parse(source))
+
+    assert namespace["Alias"] is __import__("typing").Any
+    assert len(namespace["__annotations__"]) == 100
+    assert collector.count == 100
+    assert any(value.endswith("annotation_binding:Alias") for value in collector.blockers)
+
+
 def test_v143_ordinary_call_alias_transport_without_any_is_not_blocked(tmp_path: Path) -> None:
     target = tmp_path / "song_agent" / "interfaces" / "api" / "safe_call_transport.py"
     target.parent.mkdir(parents=True)
@@ -2193,6 +2393,12 @@ def test_v1432_expression_binding_single_pass_smoke_is_self_consistent() -> None
     assert passed, detail
 
 
+def test_v1433_call_binding_lambda_effect_smoke_is_self_consistent() -> None:
+    passed, detail = run_v1433_call_binding_lambda_effect_smoke(ROOT)
+
+    assert passed, detail
+
+
 def test_v1432_expression_value_is_reused_for_one_ast_occurrence() -> None:
     tree = ast.parse("holder = [None]\nref = holder[0]")
     collector = _ExplicitAnyCollector()
@@ -2267,6 +2473,13 @@ def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() ->
     schema14_forged["integrity_hash"] = stable_hash(
         {key: value for key, value in schema14_forged.items() if key != "integrity_hash"}
     )
+    schema15_forged = json.loads(json.dumps(baseline))
+    schema15_forged["stabilization"]["call_binding_lambda_effect_collector_migration"][
+        "previous_explicit_any_ceiling"
+    ] += 1
+    schema15_forged["integrity_hash"] = stable_hash(
+        {key: value for key, value in schema15_forged.items() if key != "integrity_hash"}
+    )
 
     assert "v14_quality_policy_stabilization_typing_file_budgets" in _policy_blockers(typing_forged)
     assert "v14_quality_policy_stabilization_module_debt" in _policy_blockers(module_forged)
@@ -2276,6 +2489,9 @@ def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() ->
     schema14_blockers = _policy_blockers(schema14_forged)
     assert "v14_quality_policy_call_effect_dataflow_collector_migration" in schema14_blockers
     assert "v14_quality_policy_alias_fail_closed_ceilings" in schema14_blockers
+    assert "v14_quality_policy_call_binding_lambda_effect_collector_migration" in _policy_blockers(
+        schema15_forged
+    )
 
 
 def test_v14_source_tree_hash_is_independent_of_line_endings(tmp_path: Path) -> None:

@@ -117,6 +117,42 @@ def test_call_effect_connects_receiver_arguments_and_future_member_reads() -> No
     assert flow.read_member(holder, ("index", "0")).kind == "uncertain"
 
 
+def test_component_identities_preserve_pre_union_callable_lookup_keys() -> None:
+    flow = ExplicitAnyDataFlow()
+    callable_value = flow.object(callable_role="function")
+    captured = flow.object()
+    original = callable_value.identities
+
+    flow.connect((captured, callable_value), expose_members=False)
+
+    assert original <= flow.component_identities(callable_value)
+    assert original <= flow.component_identities(captured)
+
+
+def test_stored_values_expose_variadic_container_members() -> None:
+    flow = ExplicitAnyDataFlow()
+    first = flow.object()
+    second = flow.object()
+    positional = flow.container((first, second))
+    keywords = flow.mapping(((repr("target"), first), (repr("value"), second)))
+
+    assert flow.stored_values(positional) == (first, second)
+    assert set(flow.stored_values(keywords)) == {first, second}
+
+
+def test_stored_value_closure_preserves_nested_dynamic_expansion_participants() -> None:
+    flow = ExplicitAnyDataFlow()
+    holder = flow.object()
+    store = flow.object()
+    packed = flow.container((flow.container((holder,)), store))
+
+    closure = flow.stored_value_closure((packed,))
+
+    assert packed in closure
+    assert holder in closure
+    assert store in closure
+
+
 def test_call_effect_transports_nested_object_origins_without_eager_graph_cloning() -> None:
     flow = ExplicitAnyDataFlow()
     holder = flow.container((flow.scalar(),))

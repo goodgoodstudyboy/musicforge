@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.3.2 is a local-first modular monolith. It remains one Python
+MusicForge v14.3.3 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -319,3 +319,19 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Annotation counting is single-pass; quoted strings reuse parsed syntax but
   always resolve names against the current lexical scope. Potential-binding
   discovery follows the same single-pass rule.
+
+## v14.3.3 Call Binding and Lambda Effects
+
+- Collector schema 15 binds positional-only, keyword-only, default, variadic,
+  and literal expanded call arguments through one conservative binder.
+- Incomplete static binding falls back to the generic may-alias call effect;
+  partial summaries are never treated as authoritative.
+- Named functions and lambdas share effect-summary construction, including
+  definition-time defaults, closure storage, alias returns, and factory-return
+  callable identity.
+- Rebinding a retained free variable is conservatively marked unknown so a
+  stale definition-time capture cannot authorize a later type annotation.
+- Compacted components retain access to original callable identities and
+  variadic containers expose their stored participants at the call site.
+- Existing schema 14 measurements and all typing, file, layer, complexity,
+  recovery, coverage, and performance ceilings remain unchanged.

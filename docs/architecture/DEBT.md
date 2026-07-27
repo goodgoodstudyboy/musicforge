@@ -191,3 +191,14 @@ debt ceilings remain unchanged. Equivalent analyses of one AST expression
 occurrence reuse one immutable flow value, and quoted annotations cache syntax
 across files without caching scope-dependent counts. ARCH-014 and TYPE-003
 remain open through v14.4.0 under ADR-027.
+
+## v14.3.3 Call Binding and Lambda Effects
+
+ADR-030 upgrades the collector to schema 15. Local callable summaries now
+preserve definition-time defaults and complete Python parameter structure;
+literal expansion is bound precisely, while incomplete binding falls back to
+generic call effects. Lambdas share named-function effect analysis and retain
+closure provenance through factory returns. The active tree remains at 11,993
+Explicit Any annotations, 461 affected files, and zero scope blockers; no
+schema 14 ceiling changes. ARCH-014 and TYPE-003 remain open through v14.4.0
+under ADR-027.
