@@ -62,9 +62,17 @@ uses the existing generic call-effect model instead of failing open.
 - Existing schema 14 call-effect, shadowing, compaction, and single-pass
   regressions remain green.
 - Function-summary may-store analysis resolves each participant and parameter
-  component once per operation. This removes repeated union-find queries while
-  preserving the same conservative alias comparisons and the existing
-  180-second Windows CI ceiling.
+  component once per operation, then computes captured pre-function roots once
+  for the complete participant set. Every captured root still connects to the
+  same matched parameter, preserving the conservative alias relation.
+- Generic call effects join all participants once, then connect the result to
+  that already-merged component. Common one-identity component sets are reused
+  while union-find roots are still resolved on every read.
+- Typing metrics skip per-annotation source slicing when a source file does not
+  contain `ImplementationDocument`. This is an exact file-level precondition,
+  not a sampling or evidence omission.
+- These changes remove repeated graph and source work while retaining the
+  existing 180-second Windows CI ceiling.
 
 ## Consequences
 

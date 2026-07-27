@@ -152,7 +152,9 @@ class ExplicitAnyDataFlow:
         rows = tuple(values)
         component = self.connect(rows, expose_members=True)
         result = self.object(kind, escaped=True, origins=component)
-        self.connect((*rows, result), expose_members=False)
+        if component:
+            merged = FlowValue(identities=component, escaped=True)
+            self.connect((merged, result), expose_members=False)
         return result
 
     def connect(
@@ -224,9 +226,41 @@ class ExplicitAnyDataFlow:
         return FlowValue(identities=frozenset(identities), escaped=True)
 
     def component_roots(self, value: FlowValue) -> frozenset[int]:
+        identities = value.identities
+        origins = value.origins
+        if not identities and not origins:
+            return frozenset()
+        if not origins and len(identities) == 1:
+            identity = next(iter(identities))
+            if identity not in self._parents:
+                return frozenset()
+            root = self._find(identity)
+            return identities if root == identity else frozenset({root})
+        if not identities and len(origins) == 1:
+            identity = next(iter(origins))
+            if identity not in self._parents:
+                return frozenset()
+            root = self._find(identity)
+            return origins if root == identity else frozenset({root})
+        if len(identities) == 1 and len(origins) == 1:
+            identity = next(iter(identities))
+            origin = next(iter(origins))
+            identity_root = self._find(identity) if identity in self._parents else None
+            origin_root = self._find(origin) if origin in self._parents else None
+            if identity_root is None:
+                return frozenset() if origin_root is None else frozenset({origin_root})
+            if origin_root is None:
+                return identities if identity_root == identity else frozenset({identity_root})
+            if origin_root == identity_root:
+                if identity_root == identity:
+                    return identities
+                if origin_root == origin:
+                    return origins
+                return frozenset({identity_root})
+            return frozenset({identity_root, origin_root})
         return frozenset(
             self._find(identity)
-            for identity in value.identities | value.origins
+            for identity in identities | origins
             if identity in self._parents
         )
 

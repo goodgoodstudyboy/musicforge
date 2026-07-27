@@ -117,6 +117,20 @@ def test_call_effect_connects_receiver_arguments_and_future_member_reads() -> No
     assert flow.read_member(holder, ("index", "0")).kind == "uncertain"
 
 
+def test_call_effect_connects_every_participant_to_the_result() -> None:
+    flow = ExplicitAnyDataFlow()
+    first = flow.object()
+    second = flow.object()
+    third = flow.object()
+
+    result = flow.call_effect((first, second, third))
+
+    expected = flow.component_roots(result)
+    assert expected == flow.component_roots(first)
+    assert expected == flow.component_roots(second)
+    assert expected == flow.component_roots(third)
+
+
 def test_component_identities_preserve_pre_union_callable_lookup_keys() -> None:
     flow = ExplicitAnyDataFlow()
     callable_value = flow.object(callable_role="function")
@@ -191,6 +205,20 @@ def test_prior_component_roots_matches_value_lookup() -> None:
     roots = flow.component_roots(local)
 
     assert flow.prior_component_roots(roots, checkpoint) == flow.prior_component(local, checkpoint)
+
+
+def test_component_roots_fast_path_tracks_later_union() -> None:
+    flow = ExplicitAnyDataFlow()
+    first = flow.object()
+    second = flow.object()
+
+    assert flow.component_roots(first) == first.identities
+    assert flow.component_roots(second) == second.identities
+
+    flow.connect((first, second), expose_members=False)
+
+    assert flow.component_roots(first) == flow.component_roots(second)
+    assert len(flow.component_roots(first)) == 1
 
 
 def test_large_call_component_keeps_flow_values_compact() -> None:

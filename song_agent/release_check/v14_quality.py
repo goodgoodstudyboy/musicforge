@@ -146,10 +146,12 @@ def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
     explicit_any_scope_blockers: list[dict[str, Any]] = []
     public_dynamic: list[dict[str, Any]] = []
     untyped_public: list[dict[str, Any]] = []
-    for path in _active_python_files(root):
+    active_files = _active_python_files(root)
+    for path in active_files:
         source = path.read_text(encoding="utf-8")
         raw_count += source.count("dict[str, Any]")
-        implementation_count += source.count("ImplementationDocument")
+        implementation_occurrences = source.count("ImplementationDocument")
+        implementation_count += implementation_occurrences
         tree = ast.parse(source, filename=str(path))
         relative = path.relative_to(root).as_posix()
         explicit_any, scope_blockers = _explicit_any_annotation_analysis(tree)
@@ -166,7 +168,7 @@ def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
                     {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
                 )
             annotated_nodes = [function.returns, *annotations]
-            if any(
+            if implementation_occurrences and any(
                 "ImplementationDocument" in (ast.get_source_segment(source, node) or "")
                 for node in annotated_nodes
                 if node is not None
@@ -176,7 +178,7 @@ def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
                 )
     return {
         "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
-        "active_python_file_count": len(_active_python_files(root)),
+        "active_python_file_count": len(active_files),
         "raw_dict_str_any_count": raw_count,
         "implementation_document_count": implementation_count,
         "explicit_any_count": sum(explicit_any_by_file.values()),
@@ -2041,23 +2043,26 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             name: self._dataflow.component_roots(parameter)
             for name, parameter in parameters.items()
         }
+        participant_roots = frozenset().union(
+            *(roots for _value, roots in row_roots)
+        )
         parameter_names = {
             name
             for name, roots in parameter_roots.items()
-            if any(roots & value_roots for _value, value_roots in row_roots)
+            if roots & participant_roots
         }
         if not parameter_names:
             return
-        captured = [
-            prior
-            for _value, roots in row_roots
-            if (prior := self._dataflow.prior_component_roots(roots, checkpoint)) is not None
-        ]
+        captured = self._dataflow.prior_component_roots(participant_roots, checkpoint)
+        if captured is None:
+            return
         for name in parameter_names:
             roots = parameter_roots[name]
-            for value in captured:
-                if not roots & value.identities:
-                    self._function_may_store_aliases[-1].setdefault(name, []).append(value)
+            captured_roots = captured.identities - roots
+            if captured_roots:
+                self._function_may_store_aliases[-1].setdefault(name, []).append(
+                    FlowValue(identities=captured_roots, escaped=True)
+                )
 
     @staticmethod
     def _unique_flow_values(values: Iterable[FlowValue]) -> tuple[FlowValue, ...]:
