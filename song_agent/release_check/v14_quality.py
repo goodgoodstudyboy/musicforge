@@ -2033,22 +2033,30 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         rows = tuple(values)
         checkpoint = self._function_identity_checkpoints[-1]
         parameters = self._function_parameter_flows[-1]
+        row_roots = tuple(
+            (value, self._dataflow.component_roots(value))
+            for value in rows
+        )
+        parameter_roots = {
+            name: self._dataflow.component_roots(parameter)
+            for name, parameter in parameters.items()
+        }
         parameter_names = {
             name
-            for name, parameter in parameters.items()
-            if any(self._dataflow.related(parameter, value) for value in rows)
+            for name, roots in parameter_roots.items()
+            if any(roots & value_roots for _value, value_roots in row_roots)
         }
         if not parameter_names:
             return
         captured = [
             prior
-            for value in rows
-            if (prior := self._dataflow.prior_component(value, checkpoint)) is not None
+            for _value, roots in row_roots
+            if (prior := self._dataflow.prior_component_roots(roots, checkpoint)) is not None
         ]
         for name in parameter_names:
-            parameter = parameters[name]
+            roots = parameter_roots[name]
             for value in captured:
-                if not self._dataflow.related(parameter, value):
+                if not roots & value.identities:
                     self._function_may_store_aliases[-1].setdefault(name, []).append(value)
 
     @staticmethod

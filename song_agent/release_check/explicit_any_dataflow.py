@@ -205,8 +205,18 @@ class ExplicitAnyDataFlow:
     def prior_component(self, value: FlowValue, checkpoint: int) -> FlowValue | None:
         """Return captured identities that predate a nested function analysis."""
 
+        return self.prior_component_roots(self.component_roots(value), checkpoint)
+
+    def prior_component_roots(
+        self,
+        roots: Iterable[int],
+        checkpoint: int,
+    ) -> FlowValue | None:
+        """Return captured roots without resolving the same value twice."""
+
         identities: set[int] = set()
-        for root in self.component_roots(value):
+        for identity in roots:
+            root = self._find(identity)
             if any(identity <= checkpoint for identity in self._members.get(root, {root})):
                 identities.add(root)
         if not identities:

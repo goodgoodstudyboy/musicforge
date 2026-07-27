@@ -181,6 +181,18 @@ def test_prior_component_excludes_function_local_analysis_objects() -> None:
     assert flow.related(prior, captured)
 
 
+def test_prior_component_roots_matches_value_lookup() -> None:
+    flow = ExplicitAnyDataFlow()
+    captured = flow.container(())
+    checkpoint = flow.checkpoint()
+    local = flow.object(escaped=True)
+    flow.connect((captured, local), expose_members=True)
+
+    roots = flow.component_roots(local)
+
+    assert flow.prior_component_roots(roots, checkpoint) == flow.prior_component(local, checkpoint)
+
+
 def test_large_call_component_keeps_flow_values_compact() -> None:
     flow = ExplicitAnyDataFlow()
     values = tuple(flow.object() for _ in range(500))

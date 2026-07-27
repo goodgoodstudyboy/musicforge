@@ -16,6 +16,8 @@ and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.m
 - Added runtime/Ruff/strict-mypy call-binding, lambda, and late-bound closure
   attack regressions, expanded the v14.3 attack corpus, and added
   `v1433.call_binding_lambda_effect_smoke`.
+- Batched function-summary may-store component comparisons so the expanded
+  call model remains below the unchanged 180-second Windows CI budget.
 - Upgraded the Explicit Any collector to schema 15 without raising any typing,
   file, layer, complexity, recovery, coverage, or performance ceiling.
 

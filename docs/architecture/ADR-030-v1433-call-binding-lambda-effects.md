@@ -61,6 +61,10 @@ uses the existing generic call-effect model instead of failing open.
   security, GA, full, and publish profiles.
 - Existing schema 14 call-effect, shadowing, compaction, and single-pass
   regressions remain green.
+- Function-summary may-store analysis resolves each participant and parameter
+  component once per operation. This removes repeated union-find queries while
+  preserving the same conservative alias comparisons and the existing
+  180-second Windows CI ceiling.
 
 ## Consequences
 
