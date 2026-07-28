@@ -211,3 +211,12 @@ cell and is re-resolved when effects are applied, including sibling `nonlocal`
 and helper `global` rebindings. The active tree remains at 11,993 Explicit Any annotations, 461
 affected files, and zero scope blockers. ARCH-014 and TYPE-003 remain open
 through v14.4.0 under ADR-027; no debt ceiling is extended or increased.
+
+## v14.3.5 First-Created Module Globals
+
+ADR-032 upgrades the collector to schema 17. Ordinary callable free names with
+no enclosing function owner now use the module lexical cell, including names
+first created by a sibling helper's `global` write. Invalid explicit
+`nonlocal` references remain fail-closed. The active Explicit Any, affected
+file, layer, per-file, complexity, recovery, coverage, and performance
+ceilings are unchanged. ARCH-014 and TYPE-003 retain their v14.4.0 deadline.

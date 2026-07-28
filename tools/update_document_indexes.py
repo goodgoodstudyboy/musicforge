@@ -24,7 +24,7 @@ def build_material_index() -> dict[str, object]:
                 "title": heading,
                 "version": version,
                 "status": "active"
-                if "v14.3.4-MusicForge延迟绑定词法捕获闭环与测试性能收口" in path.name
+                if "v14.3.5-MusicForge首次全局绑定词法捕获闭环" in path.name
                 else "historical",
             }
         )

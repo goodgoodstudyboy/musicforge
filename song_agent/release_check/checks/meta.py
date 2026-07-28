@@ -47,6 +47,7 @@ from song_agent.release_check.v14_quality import (
     run_v1432_expression_binding_single_pass_smoke,
     run_v1433_call_binding_lambda_effect_smoke,
     run_v1434_late_bound_lexical_capture_smoke,
+    run_v1435_first_global_lexical_capture_smoke,
 )
 
 
@@ -142,6 +143,7 @@ CALLABLES = {
     "_v1432_expression_binding_single_pass_smoke": run_v1432_expression_binding_single_pass_smoke,
     "_v1433_call_binding_lambda_effect_smoke": run_v1433_call_binding_lambda_effect_smoke,
     "_v1434_late_bound_lexical_capture_smoke": run_v1434_late_bound_lexical_capture_smoke,
+    "_v1435_first_global_lexical_capture_smoke": run_v1435_first_global_lexical_capture_smoke,
     "_v1218_interface_registry_smoke": run_interface_registry_smoke,
     "_v1220_release_check_governance_smoke": run_release_check_governance_smoke,
     "_v130_lts_cutover_smoke": run_lts_cutover_smoke,

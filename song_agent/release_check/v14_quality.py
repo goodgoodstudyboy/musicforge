@@ -25,10 +25,11 @@ from song_agent.release_check.explicit_any_dataflow import (
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.3.4"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 16
+QUALITY_POLICY_VERSION = "14.3.5"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 17
 V143_CALL_EFFECT_SCHEMA_VERSION = 14
 V1433_CALL_BINDING_SCHEMA_VERSION = 15
+V1434_LEXICAL_CAPTURE_SCHEMA_VERSION = 16
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -57,6 +58,7 @@ V1431_COMPONENT_COMPACTION_ADR = "docs/architecture/ADR-028-v1431-call-effect-co
 V1432_EXPRESSION_SCAN_ADR = "docs/architecture/ADR-029-v1432-expression-binding-single-pass.md"
 V1433_CALL_BINDING_ADR = "docs/architecture/ADR-030-v1433-call-binding-lambda-effects.md"
 V1434_LEXICAL_CAPTURE_ADR = "docs/architecture/ADR-031-v1434-late-bound-lexical-captures.md"
+V1435_FIRST_GLOBAL_CAPTURE_ADR = "docs/architecture/ADR-032-v1435-first-global-lexical-captures.md"
 V14210_EXPLICIT_ANY_CEILING = 11993
 V14210_AFFECTED_FILE_CEILING = 461
 V14210_LAYER_CEILINGS = {
@@ -1118,6 +1120,39 @@ def run_v1434_late_bound_lexical_capture_smoke(root: Path) -> tuple[bool, str]:
         "migration_recorded": int(migration.get("from_schema_version") or 0)
         == V1433_CALL_BINDING_SCHEMA_VERSION
         and int(migration.get("to_schema_version") or 0)
+        == V1434_LEXICAL_CAPTURE_SCHEMA_VERSION,
+        "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
+        == V14210_EXPLICIT_ANY_CEILING,
+        "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
+        == V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
+        == V14210_LAYER_CEILINGS,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
+def run_v1435_first_global_lexical_capture_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    migration = dict(stabilization.get("first_global_lexical_capture_collector_migration") or {})
+    checks = {
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "collector_schema_current": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "first_global_capture_attack_corpus": _explicit_any_first_global_capture_probe(),
+        "first_global_capture_decision_present": stabilization.get("first_global_lexical_capture_decision")
+        == V1435_FIRST_GLOBAL_CAPTURE_ADR
+        and (root / V1435_FIRST_GLOBAL_CAPTURE_ADR).is_file(),
+        "migration_recorded": int(migration.get("from_schema_version") or 0)
+        == V1434_LEXICAL_CAPTURE_SCHEMA_VERSION
+        and int(migration.get("to_schema_version") or 0)
         == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
         == V14210_EXPLICIT_ANY_CEILING,
@@ -1338,13 +1373,27 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         int(lexical_capture_migration.get("from_schema_version") or 0)
         != V1433_CALL_BINDING_SCHEMA_VERSION
         or int(lexical_capture_migration.get("to_schema_version") or 0)
-        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+        != V1434_LEXICAL_CAPTURE_SCHEMA_VERSION
         or int(lexical_capture_migration.get("previous_explicit_any_ceiling") or 0)
         != V14210_EXPLICIT_ANY_CEILING
         or int(lexical_capture_migration.get("previous_affected_file_ceiling") or 0)
         != V14210_AFFECTED_FILE_CEILING
     ):
         blockers.append("v14_quality_policy_late_bound_lexical_capture_collector_migration")
+    if stabilization.get("first_global_lexical_capture_decision") != V1435_FIRST_GLOBAL_CAPTURE_ADR:
+        blockers.append("v14_quality_policy_first_global_lexical_capture_decision")
+    first_global_migration = stabilization.get("first_global_lexical_capture_collector_migration") or {}
+    if (
+        int(first_global_migration.get("from_schema_version") or 0)
+        != V1434_LEXICAL_CAPTURE_SCHEMA_VERSION
+        or int(first_global_migration.get("to_schema_version") or 0)
+        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+        or int(first_global_migration.get("previous_explicit_any_ceiling") or 0)
+        != V14210_EXPLICIT_ANY_CEILING
+        or int(first_global_migration.get("previous_affected_file_ceiling") or 0)
+        != V14210_AFFECTED_FILE_CEILING
+    ):
+        blockers.append("v14_quality_policy_first_global_lexical_capture_collector_migration")
     typing = policy.get("typing") or {}
     if (
         int(typing.get("explicit_any_max_count") or 0) != V14210_EXPLICIT_ANY_CEILING
@@ -2660,7 +2709,12 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 None,
             )
             if owner_index is None:
-                return None
+                # A function free name with no enclosing function owner is a
+                # module-global lookup at call time. The module binding may be
+                # created only through a sibling helper's ``global`` write, so
+                # absence from the module's static bound-name set is not proof
+                # that the capture is unresolved.
+                owner_index = 0
         key = (self._scope_ids[owner_index], name)
         cell = self._lexical_cells.get(key)
         if cell is None:
@@ -3829,7 +3883,7 @@ def _explicit_any_call_effect_dataflow_probe() -> bool:
             "        retain(Holder)\n        Ref = Store[0]\n"
         ),
         (
-            "        Holder = [None]\n        Store = []\n"
+            "        Holder = [None]\n        global Store\n        Store = []\n"
             "        def retain(*values):\n            Store.append(values[0])\n"
             "        retain(Holder)\n        Ref = Store[0]\n"
         ),
@@ -3861,7 +3915,7 @@ def _explicit_any_call_effect_dataflow_probe() -> bool:
             "        retain(**packed)\n        Ref = Store[0]\n"
         ),
         (
-            "        Holder = [None]\n        Store = []\n"
+            "        Holder = [None]\n        global Store\n        Store = []\n"
             "        retain = lambda value: Store.append(value)\n"
             "        retain(Holder)\n        Ref = Store[0]\n"
         ),
@@ -3876,12 +3930,12 @@ def _explicit_any_call_effect_dataflow_probe() -> bool:
             "        retain = factory(Store)\n        retain(Holder)\n        Ref = Store[0]\n"
         ),
         (
-            "        Holder = [None]\n        Store = [Holder]\n"
+            "        Holder = [None]\n        global Store\n        Store = [Holder]\n"
             "        registry = {'get': lambda: Store[0]}\n"
             "        Ref = registry['get']()\n"
         ),
         (
-            "        Holder = [None]\n        Store = [Holder]\n"
+            "        Holder = [None]\n        global Store\n        Store = [Holder]\n"
             "        def get():\n            return Store[0]\n"
             "        Ref = get()\n"
         ),
@@ -4086,6 +4140,114 @@ def _explicit_any_late_bound_capture_probe() -> bool:
                 "explicit_any_affected_file_max_count": 1,
                 "explicit_any_layer_budgets": {"interfaces": 99},
                 "explicit_any_file_budgets": {"song_agent/interfaces/api/late_bound_capture_probe.py": 99},
+                "public_implementation_document_max_count": 0,
+                "untyped_public_function_max_count": 0,
+            }
+        }
+        blockers = _typing_blockers(metrics, policy)
+        if not (
+            count == 100
+            and any(detail.endswith("annotation_binding:Alias") for detail in scope_blockers)
+            and any("typing_explicit_any_scope_flow" in blocker for blocker in blockers)
+            and any("typing_explicit_any:" in blocker for blocker in blockers)
+            and any("typing_explicit_any_layer" in blocker for blocker in blockers)
+            and any("typing_explicit_any_file" in blocker for blocker in blockers)
+        ):
+            return False
+    return True
+
+
+def _explicit_any_first_global_capture_probe() -> bool:
+    annotations = "\n".join(f"    field_{index}: Alias" for index in range(100))
+    variants = (
+        (
+            "    def retain(value: object) -> None:\n"
+            "        Store.append(value)  # type: ignore[name-defined]  # noqa: F821\n"
+            "    def replace() -> None:\n"
+            "        global Store\n"
+            "        Store = []  # type: ignore[var-annotated]\n"
+            "    replace()\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    retain = lambda value: Store.append(value)  # type: ignore[name-defined]  # noqa: E731, F821\n"
+            "    def replace() -> None:\n"
+            "        global Store\n"
+            "        Store = []  # type: ignore[var-annotated]\n"
+            "    replace()\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    def factory() -> Callable[[object], None]:\n"
+            "        def retain(value: object) -> None:\n"
+            "            Store.append(value)  # type: ignore[name-defined]  # noqa: F821\n"
+            "        return retain\n"
+            "    def replace() -> None:\n"
+            "        global Store\n"
+            "        Store = []  # type: ignore[var-annotated]\n"
+            "    replace()\n"
+            "    retain = factory()\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    def outer() -> Callable[[object], None]:\n"
+            "        def middle() -> Callable[[object], None]:\n"
+            "            def retain(value: object) -> None:\n"
+            "                Store.append(value)  # type: ignore[name-defined]  # noqa: F821\n"
+            "            return retain\n"
+            "        return middle()\n"
+            "    def replace() -> None:\n"
+            "        global Store\n"
+            "        Store = []  # type: ignore[var-annotated]\n"
+            "    replace()\n"
+            "    retain = outer()\n"
+            "    retain(Holder)\n"
+        ),
+    )
+    for body in variants:
+        source = (
+            "from __future__ import annotations\n"
+            "from collections.abc import Callable  # noqa: F401\n"
+            "import typing as t\n"
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    Alias = int\n"
+            "else:\n"
+            "    for Alias in ((t.Any,),):\n"
+            "        pass\n"
+            "    Holder = [None]\n"
+            + body
+            + "    Ref = Store[0]\n"
+            "    Ref[0] = Alias\n"
+            "    Alias = Holder[0][0]\n"
+            + annotations
+            + "\n"
+        )
+        count, scope_blockers = _explicit_any_annotation_analysis(ast.parse(source))
+        metrics = {
+            "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "raw_dict_str_any_count": 0,
+            "implementation_document_count": 0,
+            "explicit_any_count": count,
+            "explicit_any_affected_file_count": 1,
+            "explicit_any_by_layer": {"interfaces": count},
+            "explicit_any_by_file": {"song_agent/interfaces/api/first_global_capture_probe.py": count},
+            "explicit_any_scope_blockers": [
+                {"path": "song_agent/interfaces/api/first_global_capture_probe.py", "detail": detail}
+                for detail in scope_blockers
+            ],
+            "public_implementation_document_count": 0,
+            "untyped_public_function_count": 0,
+        }
+        policy = {
+            "typing": {
+                "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+                "raw_dict_str_any_max_count": 0,
+                "implementation_document_max_count": 0,
+                "explicit_any_max_count": 99,
+                "explicit_any_affected_file_max_count": 1,
+                "explicit_any_layer_budgets": {"interfaces": 99},
+                "explicit_any_file_budgets": {"song_agent/interfaces/api/first_global_capture_probe.py": 99},
                 "public_implementation_document_max_count": 0,
                 "untyped_public_function_max_count": 0,
             }

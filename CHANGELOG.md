@@ -4,6 +4,19 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.3.5 - 2026-07-29
+
+- Resolved ordinary callable free names without an enclosing function owner
+  through a stable module lexical cell, including names first created by a
+  sibling helper's `global` write.
+- Preserved fail-closed handling for invalid explicit `nonlocal` references;
+  the module fallback applies only to normal Python global-name lookup.
+- Added named-function, lambda, factory, and nested-function runtime, Ruff,
+  strict-mypy, collector, four-layer ratchet, and release-check regressions
+  for first-created module globals.
+- Upgraded the Explicit Any collector to schema 17 without raising typing,
+  file, layer, complexity, recovery, coverage, or performance ceilings.
+
 ## v14.3.4 - 2026-07-28
 
 - Replaced definition-time-only closure retention with stable lexical capture

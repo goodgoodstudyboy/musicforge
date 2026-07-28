@@ -110,6 +110,12 @@ lexical capture cells for every statically resolvable free variable, including
 first binding and sibling `nonlocal`/helper `global` rebinding; no existing
 ceiling is raised.
 
+v14.3.5 upgrades the collector to schema 17. An ordinary callable free name
+that has no enclosing function binding now resolves through the module lexical
+cell even when its first runtime binding is created only by a sibling helper's
+`global` write. Explicit invalid `nonlocal` references remain fail-closed.
+ADR-032 preserves every schema 16 quality and performance ceiling.
+
 ```powershell
 python -m mypy --no-incremental
 python -m ruff check song_agent tests tools

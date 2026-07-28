@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.3.4 is a local-first modular monolith. It remains one Python
+MusicForge v14.3.5 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -348,3 +348,16 @@ boundary violations, dependency exceptions, or compatibility imports.
   merged with their closure object graph.
 - The active tree remains at 11,993 Explicit Any annotations, 461 affected
   files, and zero scope blockers, with every existing ceiling unchanged.
+
+## v14.3.5 First-Created Module Globals
+
+- Collector schema 17 resolves an ordinary callable free name through a
+  stable module lexical cell when no enclosing function owns the name.
+- A sibling helper may create that module binding through `global` after the
+  captured callable is defined; both paths update and resolve the same cell.
+- Explicit `nonlocal` still requires an enclosing function owner and remains
+  fail-closed when no such owner exists.
+- Named functions, lambdas, factories, and nested returned functions share
+  the same rule and attack corpus.
+- Every schema 16 typing, file, layer, complexity, recovery, coverage, and
+  performance ceiling remains unchanged.
