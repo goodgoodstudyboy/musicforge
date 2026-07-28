@@ -17,6 +17,10 @@ python -m pip install -e .[dev]
 python -m song_agent.cli doctor
 ```
 
+The default test run uses bounded adaptive xdist parallelism. GitHub Actions
+keeps four workers; developer machines use four to eight based on available
+logical CPUs while preserving the 3,600-second full-suite hard budget.
+
 On POSIX shells:
 
 ```bash
@@ -89,7 +93,7 @@ bounded direct-call effect summary propagates Any/uncertain member writes back
 to caller-owned objects. Unsupported Any-relevant interprocedural writes fail
 closed. ADR-025 preserves every schema 12 ceiling.
 
-v14.3.3 uses collector schema 15 and replaces call-time Any
+v14.3.4 uses collector schema 16 and replaces call-time Any
 heuristics with a generic call-effect data-flow model. Unknown calls record
 may-alias transport even before values become Any-related; local function
 summaries cover parameter storage and alias returns, and bound-method aliases
@@ -101,9 +105,10 @@ parsed once per process while its bindings remain scope-sensitive. ADR-026
 through ADR-029 preserve every schema 13 ceiling. ADR-030 adds conservative
 Python argument binding for defaults, variadics, and literal expansions, and
 uses the same effect summary for named functions and lambdas. Incomplete
-bindings fall back to the generic may-alias call effect, while rebinding a
-captured free variable fails closed at annotation use; no existing ceiling is
-raised.
+bindings fall back to the generic may-alias call effect. ADR-031 adds stable
+lexical capture cells for every statically resolvable free variable, including
+first binding and sibling `nonlocal`/helper `global` rebinding; no existing
+ceiling is raised.
 
 ```powershell
 python -m mypy --no-incremental

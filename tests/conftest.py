@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -20,6 +21,15 @@ _SLOW_ACTIVE_TEST_PREFIXES = (
 )
 _PRIMARY_MARKERS = frozenset({"unit", "contract", "integration", "legacy"})
 _MARKER_MANIFEST = Path(__file__).with_name("marker-manifest.json")
+
+
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    """Use proven CI parallelism while exploiting larger developer machines."""
+    del config
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        return 4
+    logical_cpus = os.cpu_count() or 4
+    return min(8, max(4, logical_cpus // 2))
 
 
 def pytest_configure(config: pytest.Config) -> None:

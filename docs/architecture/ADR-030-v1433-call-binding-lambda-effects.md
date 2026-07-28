@@ -31,9 +31,9 @@ return-value and mutation-effect analysis.
 - Lambdas use the same callable summary builder as named functions. Their
   defaults, body effects, free-variable storage, alias returns, and factory
   return identity remain attached to the callable component.
-- Rebinding a free variable retained by a function or lambda is treated as an
-  unknown late-bound capture. Until binding-cell analysis exists, annotation
-  use fails closed instead of trusting the definition-time object identity.
+- Rebinding a free variable retained by a function or lambda fails closed.
+  ADR-031 replaces the definition-time identity fallback with stable lexical
+  capture cells, including names first bound after callable definition.
 - Callable summaries are resolved through all original identities in a
   compacted may-alias component, not only its current union-find root.
 

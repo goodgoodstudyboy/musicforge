@@ -1,6 +1,6 @@
 # Current Architecture
 
-MusicForge v14.3.3 is a local-first modular monolith. It remains one Python
+MusicForge v14.3.4 is a local-first modular monolith. It remains one Python
 process, one installation, and one local workspace. All active product paths
 follow `interfaces -> application -> domains -> platform`. The six bounded
 contexts are Creation, Studio, Quality, Delivery, Trust, and Program. Retained
@@ -329,9 +329,22 @@ boundary violations, dependency exceptions, or compatibility imports.
 - Named functions and lambdas share effect-summary construction, including
   definition-time defaults, closure storage, alias returns, and factory-return
   callable identity.
-- Rebinding a retained free variable is conservatively marked unknown so a
-  stale definition-time capture cannot authorize a later type annotation.
+- ADR-031 supersedes the identity-only rebinding fallback with stable lexical
+  cells for every statically resolvable free variable.
 - Compacted components retain access to original callable identities and
   variadic containers expose their stored participants at the call site.
 - Existing schema 14 measurements and all typing, file, layer, complexity,
   recovery, coverage, and performance ceilings remain unchanged.
+
+## v14.3.4 Late-Bound Lexical Captures
+
+- Collector schema 16 keys relevant closure captures by stable lexical scope
+  ID and name instead of requiring a definition-time object identity.
+- Named functions, lambdas, factories, and nested returned functions resolve
+  later first bindings through the same cell and call-summary authority.
+- Sibling `nonlocal` and helper `global` rebindings update the same owner cell;
+  the owner body does not need a direct post-definition assignment.
+- Returned callable capture substitution is explicit; callable objects are not
+  merged with their closure object graph.
+- The active tree remains at 11,993 Explicit Any annotations, 461 affected
+  files, and zero scope blockers, with every existing ceiling unchanged.

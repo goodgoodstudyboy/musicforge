@@ -25,9 +25,10 @@ from song_agent.release_check.explicit_any_dataflow import (
 
 
 QUALITY_POLICY_PATH = "architecture-v14-quality.json"
-QUALITY_POLICY_VERSION = "14.3.3"
-EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 15
+QUALITY_POLICY_VERSION = "14.3.4"
+EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION = 16
 V143_CALL_EFFECT_SCHEMA_VERSION = 14
+V1433_CALL_BINDING_SCHEMA_VERSION = 15
 MYPY_ROOTS = (
     "song_agent/platform",
     "song_agent/application",
@@ -55,6 +56,7 @@ V143_DEBT_SCHEDULE_ADR = "docs/architecture/ADR-027-v143-debt-sequencing.md"
 V1431_COMPONENT_COMPACTION_ADR = "docs/architecture/ADR-028-v1431-call-effect-component-compaction.md"
 V1432_EXPRESSION_SCAN_ADR = "docs/architecture/ADR-029-v1432-expression-binding-single-pass.md"
 V1433_CALL_BINDING_ADR = "docs/architecture/ADR-030-v1433-call-binding-lambda-effects.md"
+V1434_LEXICAL_CAPTURE_ADR = "docs/architecture/ADR-031-v1434-late-bound-lexical-captures.md"
 V14210_EXPLICIT_ANY_CEILING = 11993
 V14210_AFFECTED_FILE_CEILING = 461
 V14210_LAYER_CEILINGS = {
@@ -1081,10 +1083,43 @@ def run_v1433_call_binding_lambda_effect_smoke(root: Path) -> tuple[bool, str]:
         "migration_recorded": int(migration.get("from_schema_version") or 0)
         == V143_CALL_EFFECT_SCHEMA_VERSION
         and int(migration.get("to_schema_version") or 0)
-        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        == V1433_CALL_BINDING_SCHEMA_VERSION,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
         == V14210_EXPLICIT_ANY_CEILING
         and int(migration.get("previous_explicit_any_ceiling") or 0)
+        == V14210_EXPLICIT_ANY_CEILING,
+        "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
+        == V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
+        == V14210_LAYER_CEILINGS,
+        "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
+    }
+    detail = {
+        "status": "passed" if all(checks.values()) else "failed",
+        "checks": checks,
+        "collector_schema": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+    }
+    return all(checks.values()), json.dumps(detail, sort_keys=True)
+
+
+def run_v1434_late_bound_lexical_capture_smoke(root: Path) -> tuple[bool, str]:
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    typing_limits = dict(policy.get("typing") or {})
+    stabilization = dict(policy.get("stabilization") or {})
+    migration = dict(stabilization.get("late_bound_lexical_capture_collector_migration") or {})
+    checks = {
+        "policy_version_current": policy.get("release_version") == QUALITY_POLICY_VERSION,
+        "collector_schema_current": int(typing_limits.get("explicit_any_collector_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "late_bound_capture_attack_corpus": _explicit_any_late_bound_capture_probe(),
+        "lexical_capture_decision_present": stabilization.get("late_bound_lexical_capture_decision")
+        == V1434_LEXICAL_CAPTURE_ADR
+        and (root / V1434_LEXICAL_CAPTURE_ADR).is_file(),
+        "migration_recorded": int(migration.get("from_schema_version") or 0)
+        == V1433_CALL_BINDING_SCHEMA_VERSION
+        and int(migration.get("to_schema_version") or 0)
+        == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+        "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
         == V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
         == V14210_AFFECTED_FILE_CEILING,
@@ -1289,13 +1324,27 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         int(call_binding_migration.get("from_schema_version") or 0)
         != V143_CALL_EFFECT_SCHEMA_VERSION
         or int(call_binding_migration.get("to_schema_version") or 0)
-        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+        != V1433_CALL_BINDING_SCHEMA_VERSION
         or int(call_binding_migration.get("previous_explicit_any_ceiling") or 0)
         != V14210_EXPLICIT_ANY_CEILING
         or int(call_binding_migration.get("previous_affected_file_ceiling") or 0)
         != V14210_AFFECTED_FILE_CEILING
     ):
         blockers.append("v14_quality_policy_call_binding_lambda_effect_collector_migration")
+    if stabilization.get("late_bound_lexical_capture_decision") != V1434_LEXICAL_CAPTURE_ADR:
+        blockers.append("v14_quality_policy_late_bound_lexical_capture_decision")
+    lexical_capture_migration = stabilization.get("late_bound_lexical_capture_collector_migration") or {}
+    if (
+        int(lexical_capture_migration.get("from_schema_version") or 0)
+        != V1433_CALL_BINDING_SCHEMA_VERSION
+        or int(lexical_capture_migration.get("to_schema_version") or 0)
+        != EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION
+        or int(lexical_capture_migration.get("previous_explicit_any_ceiling") or 0)
+        != V14210_EXPLICIT_ANY_CEILING
+        or int(lexical_capture_migration.get("previous_affected_file_ceiling") or 0)
+        != V14210_AFFECTED_FILE_CEILING
+    ):
+        blockers.append("v14_quality_policy_late_bound_lexical_capture_collector_migration")
     typing = policy.get("typing") or {}
     if (
         int(typing.get("explicit_any_max_count") or 0) != V14210_EXPLICIT_ANY_CEILING
@@ -1353,6 +1402,13 @@ def _function_annotations(
 
 
 @dataclass(frozen=True)
+class _LexicalCapture:
+    scope_id: int
+    name: str
+    cell: FlowValue
+
+
+@dataclass(frozen=True)
 class _FunctionWriteSummary:
     positional: tuple[str, ...]
     positional_only_count: int
@@ -1367,7 +1423,9 @@ class _FunctionWriteSummary:
     returns_alias_of: frozenset[str]
     returns_captured_bindings: tuple[FlowValue, ...]
     returned_callable_templates: tuple[FlowValue, ...]
+    returned_callable_capture_bindings: tuple[tuple[FlowValue, str, FlowValue], ...]
     receiver_binding: str
+    lexical_captures: tuple[_LexicalCapture, ...]
 
 
 @dataclass(frozen=True)
@@ -1388,6 +1446,9 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._dataflow = ExplicitAnyDataFlow()
         self._potential_scopes: list[dict[str, str]] = []
         self._scope_kinds: list[str] = ["module"]
+        self._scope_ids: list[int] = [0]
+        self._scope_bound_names: list[set[str]] = [set()]
+        self._next_scope_id = 1
         self._global_names: list[set[str]] = [set()]
         self._nonlocal_names: list[set[str]] = [set()]
         self._control_flow_scopes: list[int] = []
@@ -1396,8 +1457,10 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._function_return_flows: list[list[FlowValue]] = []
         self._function_identity_checkpoints: list[int] = []
         self._function_may_store_aliases: list[dict[str, list[FlowValue]]] = []
+        self._function_lexical_captures: list[dict[tuple[int, str], FlowValue]] = []
         self._function_write_summaries: dict[int, _FunctionWriteSummary] = {}
-        self._late_bound_capture_identities: set[int] = set()
+        self._lexical_cells: dict[tuple[int, str], FlowValue] = {}
+        self._lexical_cell_bindings: dict[tuple[int, str], FlowValue] = {}
         self._call_results: dict[int, FlowValue] = {}
         self._call_bindings: dict[tuple[int, int], _BoundCallArguments] = {}
         self._expression_values: dict[int, FlowValue] = {}
@@ -1688,6 +1751,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         self._function_return_flows.append([])
         self._function_identity_checkpoints.append(identity_checkpoint)
         self._function_may_store_aliases.append({})
+        self._function_lexical_captures.append({})
         try:
             self._visit_scope_body(
                 body,
@@ -1699,7 +1763,9 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             writes = frozenset(self._function_any_writes[-1])
             return_flows = tuple(self._function_return_flows[-1])
             may_store_aliases = dict(self._function_may_store_aliases[-1])
+            lexical_captures = dict(self._function_lexical_captures[-1])
         finally:
+            self._function_lexical_captures.pop()
             self._function_may_store_aliases.pop()
             self._function_identity_checkpoints.pop()
             self._function_return_flows.pop()
@@ -1732,6 +1798,24 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if returned.callable_role in {"function", "callable"}
             and any(identity in self._function_write_summaries for identity in returned.identities)
         )
+        returned_callable_capture_bindings = tuple(
+            (template, name, captured)
+            for template in returned_callable_templates
+            for identity in template.identities
+            if identity in self._function_write_summaries
+            for captured in self._unique_flow_values(
+                [
+                    *(capture.cell for capture in self._function_write_summaries[identity].lexical_captures),
+                    *(
+                        value
+                        for _parameter, value in self._function_write_summaries[identity].may_store_alias_bindings
+                    ),
+                    *self._function_write_summaries[identity].returns_captured_bindings,
+                ]
+            )
+            for name, parameter in parameter_flows.items()
+            if self._dataflow.related(captured, parameter)
+        )
         return _FunctionWriteSummary(
             positional=positional,
             positional_only_count=len(arguments.posonlyargs),
@@ -1746,7 +1830,12 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             returns_alias_of=returns_alias_of,
             returns_captured_bindings=returns_captured_bindings,
             returned_callable_templates=returned_callable_templates,
+            returned_callable_capture_bindings=returned_callable_capture_bindings,
             receiver_binding=receiver_binding,
+            lexical_captures=tuple(
+                _LexicalCapture(scope_id=scope_id, name=name, cell=cell)
+                for (scope_id, name), cell in sorted(lexical_captures.items())
+            ),
         )
 
     def _register_callable_summary(
@@ -1764,25 +1853,6 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         if trusted:
             for identity in function_value.identities:
                 self._function_write_summaries[identity] = summary
-        closure_values = self._unique_flow_values(
-            [
-                *(value for _name, value in summary.may_store_alias_bindings),
-                *summary.returns_captured_bindings,
-            ]
-        )
-        self._late_bound_capture_identities.update(
-            identity
-            for value in closure_values
-            for identity in self._dataflow.component_identities(value)
-        )
-        retained_values = self._unique_flow_values(
-            [
-                *(value for _name, value in summary.default_bindings),
-                *closure_values,
-            ]
-        )
-        if retained_values:
-            self._dataflow.connect((function_value, *retained_values), expose_members=False)
         return function_value
 
     def _argument_default_bindings(
@@ -1826,6 +1896,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         summary: _FunctionWriteSummary,
         binding: _BoundCallArguments,
     ) -> None:
+        self._refresh_lexical_captures(summary)
         arguments = binding.arguments
         for parameter in summary.exposes_parameter_members:
             for value in arguments.get(parameter, ()):
@@ -1995,6 +2066,12 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                     ]
                     if related:
                         self._dataflow.connect((template, *related), expose_members=False)
+                    for returned_template, parameter, capture in summary.returned_callable_capture_bindings:
+                        if returned_template != template:
+                            continue
+                        parameter_values = arguments.get(parameter, ())
+                        if parameter_values:
+                            self._dataflow.connect((capture, *parameter_values), expose_members=True)
                     returned.append(self._dataflow.join((template, *related), kind=kind))
             result = (
                 self._dataflow.join(returned, kind=kind)
@@ -2023,6 +2100,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 participants.extend(value for _name, value in summary.default_bindings)
                 participants.extend(value for _name, value in summary.may_store_alias_bindings)
                 participants.extend(summary.returns_captured_bindings)
+                participants.extend(capture.cell for capture in summary.lexical_captures)
             participants = list(self._dataflow.stored_value_closure(participants))
             self._record_function_may_store(participants)
             result = self._dataflow.call_effect(participants, kind=kind)
@@ -2054,15 +2132,28 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         if not parameter_names:
             return
         captured = self._dataflow.prior_component_roots(participant_roots, checkpoint)
-        if captured is None:
+        capture_by_identity = {
+            identity: cell
+            for cell in self._function_lexical_captures[-1].values()
+            for identity in cell.identities
+        }
+        lexical_captures = self._unique_flow_values(
+            capture_by_identity[identity]
+            for value, _roots in row_roots
+            for identity in (*value.identities, *value.origins)
+            if identity in capture_by_identity
+        )
+        if captured is None and not lexical_captures:
             return
         for name in parameter_names:
             roots = parameter_roots[name]
-            captured_roots = captured.identities - roots
+            captured_roots = captured.identities - roots if captured is not None else frozenset()
             if captured_roots:
                 self._function_may_store_aliases[-1].setdefault(name, []).append(
                     FlowValue(identities=captured_roots, escaped=True)
                 )
+            for lexical_capture in lexical_captures:
+                self._function_may_store_aliases[-1].setdefault(name, []).append(lexical_capture)
 
     @staticmethod
     def _unique_flow_values(values: Iterable[FlowValue]) -> tuple[FlowValue, ...]:
@@ -2128,7 +2219,10 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         scope_kind: str,
     ) -> tuple[dict[str, str], dict[str, FlowValue]]:
         global_names, nonlocal_names = _scope_declarations(body)
+        bound_names = (_scope_bound_names(body) | set(initial or {})) - global_names - nonlocal_names
         if push_scope:
+            scope_id = self._next_scope_id
+            self._next_scope_id += 1
             self._scopes.append(dict(initial or {}))
             self._aliases.append(
                 dict(initial_aliases)
@@ -2136,10 +2230,13 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 else {name: self._dataflow.object(escaped=True) for name in (initial or {})}
             )
             self._scope_kinds.append(scope_kind)
+            self._scope_ids.append(scope_id)
+            self._scope_bound_names.append(bound_names)
             self._global_names.append(global_names)
             self._nonlocal_names.append(nonlocal_names)
         else:
             self._scope_kinds[0] = scope_kind
+            self._scope_bound_names[0] = bound_names
             self._global_names[0] = global_names
             self._nonlocal_names[0] = nonlocal_names
         excluded = global_names | nonlocal_names
@@ -2149,12 +2246,19 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
                 self._add_blocker("conflicting_global_nonlocal:" + ",".join(sorted(global_names & nonlocal_names)))
             self._visit_statements(body)
             result = dict(self._scopes[-1]), dict(self._aliases[-1])
+            scope_id = self._scope_ids[-1]
+            for name, value in result[1].items():
+                key = (scope_id, name)
+                if key in self._lexical_cells:
+                    self._lexical_cell_bindings[key] = value
         finally:
             self._potential_scopes.pop()
             if push_scope:
                 self._scopes.pop()
                 self._aliases.pop()
                 self._scope_kinds.pop()
+                self._scope_ids.pop()
+                self._scope_bound_names.pop()
                 self._global_names.pop()
                 self._nonlocal_names.pop()
         return result
@@ -2318,17 +2422,11 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if relevant and self._control_flow_scopes and self._control_flow_scopes[-1] != target_index:
                 self._add_blocker(f"cross_scope_control_flow:{name}")
         value = aliases.with_kind(kind) if aliases is not None else self._dataflow.object(kind)
-        previous_value = self._aliases[target_index].get(name)
-        if previous_value is not None and (
-            self._late_bound_capture_identities
-            & self._dataflow.component_identities(previous_value)
-        ):
-            # Closures resolve names when called, not when defined. Until the
-            # collector has binding-cell analysis, retain both generations
-            # and fail closed if the late-bound name reaches an annotation.
-            self._dataflow.connect((previous_value, value), expose_members=True)
-            kind = "unknown"
-            value = self._dataflow.join((previous_value, value), kind=kind)
+        cell_key = (self._scope_ids[target_index], name)
+        lexical_cell = self._lexical_cells.get(cell_key)
+        if lexical_cell is not None:
+            self._dataflow.connect((lexical_cell, value), expose_members=True)
+            self._lexical_cell_bindings[cell_key] = value
         self._scopes[target_index][name] = kind
         self._aliases[target_index][name] = value
 
@@ -2340,9 +2438,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             for index in range(current_index - 1, 0, -1):
                 if self._scope_kinds[index] != "function":
                     continue
-                if name in self._scopes[index] or (
-                    index < len(self._potential_scopes) and name in self._potential_scopes[index]
-                ):
+                if name in self._scopes[index] or name in self._scope_bound_names[index]:
                     return index
             return None
         return current_index
@@ -2506,6 +2602,9 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         return self._dataflow.scalar(kind)
 
     def _resolve_flow(self, name: str) -> FlowValue:
+        capture = self._lexical_capture(name)
+        if capture is not None:
+            return capture.with_kind(self._resolve_name(name) or capture.kind)
         target_index = self._binding_scope_index(name)
         if target_index is None:
             return self._dataflow.scalar(self._resolve_name(name))
@@ -2517,6 +2616,78 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
             if value is not None:
                 return value.with_kind(self._resolve_name(name) or value.kind)
         return self._dataflow.scalar(self._resolve_name(name))
+
+    def _lexical_capture(self, name: str) -> FlowValue | None:
+        if not self._function_lexical_captures:
+            return None
+        function_index = next(
+            (index for index in range(len(self._scope_kinds) - 1, 0, -1) if self._scope_kinds[index] == "function"),
+            None,
+        )
+        if function_index is None:
+            return None
+        if name in self._global_names[function_index]:
+            owner_index = 0
+        elif name in self._nonlocal_names[function_index]:
+            owner_index = next(
+                (
+                    index
+                    for index in range(function_index - 1, 0, -1)
+                    if self._scope_kinds[index] == "function"
+                    and (
+                        name in self._scopes[index]
+                        or name in self._scope_bound_names[index]
+                        or (index < len(self._potential_scopes) and name in self._potential_scopes[index])
+                    )
+                ),
+                None,
+            )
+            if owner_index is None:
+                return None
+        elif name in self._scope_bound_names[function_index]:
+            return None
+        else:
+            owner_index = next(
+                (
+                    index
+                    for index in range(function_index - 1, -1, -1)
+                    if self._scope_kinds[index] != "class"
+                    and (
+                        name in self._scope_bound_names[index]
+                        or name in self._scopes[index]
+                    )
+                ),
+                None,
+            )
+            if owner_index is None:
+                return None
+        key = (self._scope_ids[owner_index], name)
+        cell = self._lexical_cells.get(key)
+        if cell is None:
+            cell = self._dataflow.object(escaped=True)
+            self._lexical_cells[key] = cell
+        current = self._aliases[owner_index].get(name) or self._lexical_cell_bindings.get(key)
+        if current is not None:
+            self._dataflow.connect((cell, current), expose_members=True)
+            self._lexical_cell_bindings[key] = current
+        self._function_lexical_captures[-1][key] = cell
+        return cell
+
+    def _refresh_lexical_captures(self, summary: _FunctionWriteSummary) -> None:
+        for capture in summary.lexical_captures:
+            key = (capture.scope_id, capture.name)
+            current = next(
+                (
+                    self._aliases[index].get(capture.name)
+                    for index, scope_id in enumerate(self._scope_ids)
+                    if scope_id == capture.scope_id and self._aliases[index].get(capture.name) is not None
+                ),
+                None,
+            )
+            current = current or self._lexical_cell_bindings.get(key)
+            if current is None:
+                continue
+            self._dataflow.connect((capture.cell, current), expose_members=True)
 
     @staticmethod
     def _static_key(value: ast.expr | None) -> str | None:
@@ -2722,6 +2893,82 @@ def _scope_declarations(body: list[ast.stmt]) -> tuple[set[str], set[str]]:
         elif isinstance(statement, ast.Nonlocal):
             nonlocal_names.update(statement.names)
     return global_names, nonlocal_names
+
+
+def _scope_bound_names(body: list[ast.stmt]) -> set[str]:
+    names: set[str] = set()
+    for statement in _lexical_scope_statements(body):
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(statement.name)
+        elif isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            names.update(name for target in targets for name in _assignment_target_names(target))
+        elif isinstance(statement, (ast.For, ast.AsyncFor)):
+            names.update(_assignment_target_names(statement.target))
+        elif isinstance(statement, (ast.With, ast.AsyncWith)):
+            names.update(
+                name
+                for item in statement.items
+                if item.optional_vars is not None
+                for name in _assignment_target_names(item.optional_vars)
+            )
+        elif isinstance(statement, (ast.Import, ast.ImportFrom)):
+            names.update(
+                alias.asname or alias.name.split(".", 1)[0]
+                for alias in statement.names
+                if alias.name != "*"
+            )
+        elif isinstance(statement, ast.Match):
+            names.update(name for case in statement.cases for name in _match_pattern_names(case.pattern))
+        elif isinstance(statement, (ast.Try, ast.TryStar)):
+            names.update(handler.name for handler in statement.handlers if handler.name)
+    names.update(_scope_named_expression_lines(body))
+    return names
+
+
+def _scope_named_expression_lines(body: list[ast.stmt]) -> dict[str, tuple[int, ...]]:
+    class Collector(ast.NodeVisitor):
+        def __init__(self) -> None:
+            self.lines: dict[str, list[int]] = {}
+
+        def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+            for name in _assignment_target_names(node.target):
+                self.lines.setdefault(name, []).append(int(node.lineno))
+            self.visit(node.value)
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self._visit_definition_expressions(node)
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self._visit_definition_expressions(node)
+
+        def _visit_definition_expressions(
+            self,
+            node: ast.FunctionDef | ast.AsyncFunctionDef,
+        ) -> None:
+            for value in (*node.decorator_list, *node.args.defaults):
+                self.visit(value)
+            for value in node.args.kw_defaults:
+                if value is not None:
+                    self.visit(value)
+
+        def visit_Lambda(self, node: ast.Lambda) -> None:
+            for value in node.args.defaults:
+                self.visit(value)
+            for value in node.args.kw_defaults:
+                if value is not None:
+                    self.visit(value)
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            for value in (*node.decorator_list, *node.bases):
+                self.visit(value)
+            for keyword in node.keywords:
+                self.visit(keyword.value)
+
+    collector = Collector()
+    for statement in body:
+        collector.visit(statement)
+    return {name: tuple(values) for name, values in collector.lines.items()}
 
 
 def _assignment_target_names(target: ast.expr) -> set[str]:
@@ -3625,17 +3872,6 @@ def _explicit_any_call_effect_dataflow_probe() -> bool:
         ),
         (
             "        Holder = [None]\n        Store = []\n"
-            "        def retain(value):\n            Store.append(value)\n"
-            "        Store = []\n        retain(Holder)\n        Ref = Store[0]\n"
-        ),
-        (
-            "        Holder = [None]\n        Store = []\n"
-            "        registry = {'retain': lambda value: Store.append(value)}\n"
-            "        retain = registry['retain']\n"
-            "        Store = []\n        retain(Holder)\n        Ref = Store[0]\n"
-        ),
-        (
-            "        Holder = [None]\n        Store = []\n"
             "        def factory(target):\n            return lambda value: target.append(value)\n"
             "        retain = factory(Store)\n        retain(Holder)\n        Ref = Store[0]\n"
         ),
@@ -3703,6 +3939,153 @@ def _explicit_any_call_effect_dataflow_probe() -> bool:
                 "explicit_any_affected_file_max_count": 1,
                 "explicit_any_layer_budgets": {"interfaces": 99},
                 "explicit_any_file_budgets": {"song_agent/interfaces/api/call_effect_probe.py": 99},
+                "public_implementation_document_max_count": 0,
+                "untyped_public_function_max_count": 0,
+            }
+        }
+        blockers = _typing_blockers(metrics, policy)
+        if not (
+            count == 100
+            and any(detail.endswith("annotation_binding:Alias") for detail in scope_blockers)
+            and any("typing_explicit_any_scope_flow" in blocker for blocker in blockers)
+            and any("typing_explicit_any:" in blocker for blocker in blockers)
+            and any("typing_explicit_any_layer" in blocker for blocker in blockers)
+            and any("typing_explicit_any_file" in blocker for blocker in blockers)
+        ):
+            return False
+    return True
+
+
+def _explicit_any_late_bound_capture_probe() -> bool:
+    annotations = "\n".join(f"    field_{index}: Alias" for index in range(100))
+    variants = (
+        (
+            "    def retain(value):\n"
+            "        Store.append(value)\n"
+            "    Store = []\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    registry = {'retain': lambda value: Store.append(value)}\n"
+            "    Store = []\n"
+            "    registry['retain'](Holder)\n"
+        ),
+        (
+            "    Store = []\n"
+            "    def retain(value):\n"
+            "        Store.append(value)\n"
+            "    Store = []\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    Store = []\n"
+            "    registry = {'retain': lambda value: Store.append(value)}\n"
+            "    Store = []\n"
+            "    registry['retain'](Holder)\n"
+        ),
+        (
+            "    def factory():\n"
+            "        def retain(value):\n"
+            "            Store.append(value)\n"
+            "        Store = []\n"
+            "        return retain, Store\n"
+            "    retain, Store = factory()\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    def outer():\n"
+            "        def middle():\n"
+            "            def retain(value):\n"
+            "                Store.append(value)\n"
+            "            Store = []\n"
+            "            return retain, Store\n"
+            "        return middle()\n"
+            "    retain, Store = outer()\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    def retain(value):\n"
+            "        Store.append(value)\n"
+            "    registry = {'store': (Store := [])}\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    def factory():\n"
+            "        def retain(value):\n"
+            "            nonlocal Store\n"
+            "            Store.append(value)\n"
+            "        Store = []\n"
+            "        return retain, Store\n"
+            "    retain, Store = factory()\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    def factory():\n"
+            "        Store = []\n"
+            "        def retain(value):\n"
+            "            Store.append(value)\n"
+            "        def replace():\n"
+            "            nonlocal Store\n"
+            "            Store = []\n"
+            "        replace()\n"
+            "        return retain, Store\n"
+            "    retain, Store = factory()\n"
+            "    retain(Holder)\n"
+        ),
+        (
+            "    Store = []\n"
+            "    def retain(value):\n"
+            "        Store.append(value)\n"
+            "    def replace():\n"
+            "        global Store\n"
+            "        Store = []\n"
+            "    replace()\n"
+            "    retain(Holder)\n"
+        ),
+    )
+    for body in variants:
+        source = (
+            "from __future__ import annotations\n"
+            "import typing as t\n"
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    Alias = int\n"
+            "else:\n"
+            "    for Alias in ((t.Any,),):\n"
+            "        pass\n"
+            "    Holder = [None]\n"
+            + body
+            + "    Ref = Store[0]\n"
+            "    Ref[0] = Alias\n"
+            "    Alias = Holder[0][0]\n"
+            + annotations
+            + "\n"
+        )
+        count, scope_blockers = _explicit_any_annotation_analysis(ast.parse(source))
+        metrics = {
+            "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "raw_dict_str_any_count": 0,
+            "implementation_document_count": 0,
+            "explicit_any_count": count,
+            "explicit_any_affected_file_count": 1,
+            "explicit_any_by_layer": {"interfaces": count},
+            "explicit_any_by_file": {"song_agent/interfaces/api/late_bound_capture_probe.py": count},
+            "explicit_any_scope_blockers": [
+                {"path": "song_agent/interfaces/api/late_bound_capture_probe.py", "detail": detail}
+                for detail in scope_blockers
+            ],
+            "public_implementation_document_count": 0,
+            "untyped_public_function_count": 0,
+        }
+        policy = {
+            "typing": {
+                "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+                "raw_dict_str_any_max_count": 0,
+                "implementation_document_max_count": 0,
+                "explicit_any_max_count": 99,
+                "explicit_any_affected_file_max_count": 1,
+                "explicit_any_layer_budgets": {"interfaces": 99},
+                "explicit_any_file_budgets": {"song_agent/interfaces/api/late_bound_capture_probe.py": 99},
                 "public_implementation_document_max_count": 0,
                 "untyped_public_function_max_count": 0,
             }

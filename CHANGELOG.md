@@ -4,6 +4,21 @@ This file contains the current v14 major line. Earlier history is preserved in
 [`docs/changelog/CHANGELOG-v13.0-v13.8.md`](docs/changelog/CHANGELOG-v13.0-v13.8.md)
 and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.md).
 
+## v14.3.4 - 2026-07-28
+
+- Replaced definition-time-only closure retention with stable lexical capture
+  cells for every statically resolvable free variable.
+- Re-resolved captured cells at call-summary application and preserved capture
+  substitution through factories and nested returned callables.
+- Added named-function, lambda, factory, nested-function, named-expression,
+  explicit/sibling `nonlocal`, and helper `global` runtime, Ruff, strict-mypy,
+  collector, four-layer ratchet, and release-check regressions.
+- Upgraded the Explicit Any collector to schema 16 without raising typing,
+  file, layer, complexity, recovery, coverage, or performance ceilings.
+- Kept the local full pytest hard budget at 3,600 seconds and changed default
+  xdist parallelism from a fixed four workers to a bounded adaptive policy:
+  four workers on GitHub Actions and four to eight workers locally.
+
 ## v14.3.3 - 2026-07-27
 
 - Added one conservative Python call binder for positional-only,

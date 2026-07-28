@@ -388,7 +388,7 @@ def _test_layers_separated(root: Path) -> bool:
     coverage = json.loads((root / "coverage-governance.json").read_text(encoding="utf-8"))
     markers = ("legacy_early", "legacy_trust", "legacy_audio", "legacy_program")
     return (
-        "addopts = \"-m 'not legacy' -n 4 --dist load\"" in project
+        "addopts = \"-m 'not legacy' -n auto --dist load\"" in project
         and "pytest-xdist" in project
         and all(
             f'"song_agent/{name}"' in project
@@ -411,6 +411,7 @@ def _test_layers_separated(root: Path) -> bool:
         and "slow and not legacy and ${{ matrix.layer }} and slow_partition_${{ matrix.partition }}" in nightly
         and "shard: [unit, contract, integration_partition_0, integration_partition_1]" in quality
         and "def _declared_primary_marker" in conftest
+        and "def pytest_xdist_auto_num_workers" in conftest
         and marker_manifest.is_file()
         and (coverage.get("active") or {}).get("enforcement") == "hard"
         and (coverage.get("compatibility") or {}).get("enforcement") == "soft"

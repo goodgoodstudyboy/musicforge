@@ -1,6 +1,6 @@
 [project]
 name = "song-agent"
-version = "14.3.3"
+version = "14.3.4"
 description = "Open songwriting agent that uses LLM APIs and open renderers."
 requires-python = ">=3.11"
 dependencies = []
@@ -28,7 +28,7 @@ exclude = ["tests*", "material*", "runs*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not legacy' -n 4 --dist load"
+addopts = "-m 'not legacy' -n auto --dist load"
 markers = [
   "unit: deterministic isolated tests",
   "contract: public schema, registry, and compatibility contracts",

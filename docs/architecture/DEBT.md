@@ -202,3 +202,12 @@ closure provenance through factory returns. The active tree remains at 11,993
 Explicit Any annotations, 461 affected files, and zero scope blockers; no
 schema 14 ceiling changes. ARCH-014 and TYPE-003 remain open through v14.4.0
 under ADR-027.
+
+## v14.3.4 Late-Bound Lexical Captures
+
+ADR-031 upgrades the collector to schema 16 and closes the definition-order
+gap in schema 15. Every statically resolvable free name uses a stable lexical
+cell and is re-resolved when effects are applied, including sibling `nonlocal`
+and helper `global` rebindings. The active tree remains at 11,993 Explicit Any annotations, 461
+affected files, and zero scope blockers. ARCH-014 and TYPE-003 remain open
+through v14.4.0 under ADR-027; no debt ceiling is extended or increased.

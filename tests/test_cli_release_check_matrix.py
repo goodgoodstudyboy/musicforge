@@ -181,6 +181,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v1431.call_effect_component_compaction_smoke",
         "v1432.expression_binding_single_pass_smoke",
         "v1433.call_binding_lambda_effect_smoke",
+        "v1434.late_bound_lexical_capture_smoke",
     ]
 
 

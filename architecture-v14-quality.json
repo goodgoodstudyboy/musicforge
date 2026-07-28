@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "49ad4c63bddcaa4eb7057dbbd9ee524e765163070c8a5c7b0a00d740789c71e1",
-    "source_tree_hash": "a317a1ac31d6c29a885c421f786d1c0bb6b65756f5b71c2e9ecfb71e47398b38"
+    "report_sha256": "8e1c6ef68dbed23328b0b87c9a4366aa8a05c4c5a04629a00101a3628a7665a1",
+    "source_tree_hash": "c4113aaeb1667cbd1389d8506da37efdd1f8378220e6bde23c60a1d8480ed782"
   },
-  "integrity_hash": "2f1440c42d39a1102aa763bb08cc6016dccf2d6ab0aa74c4ae5ae996ce8f7e18",
+  "integrity_hash": "ae01deee9f48e13355957d5eee6146bd21608b24744bedda4dede5701a79a3bb",
   "module_size_debt": [
     {
       "expires_version": "14.4.0",
@@ -735,7 +735,7 @@
     "strict_required": true
   },
   "package_type": "musicforge_v14_quality_policy",
-  "release_version": "14.3.3",
+  "release_version": "14.3.4",
   "schema_version": 1,
   "stabilization": {
     "alias_dataflow_collector_decision": "docs/architecture/ADR-024-v1429-explicit-any-alias-dataflow.md",
@@ -840,6 +840,14 @@
       "previous_explicit_any_ceiling": 12040,
       "to_schema_version": 6
     },
+    "late_bound_lexical_capture_collector_migration": {
+      "corrected_explicit_any_count": 11993,
+      "from_schema_version": 15,
+      "previous_affected_file_ceiling": 461,
+      "previous_explicit_any_ceiling": 11993,
+      "to_schema_version": 16
+    },
+    "late_bound_lexical_capture_decision": "docs/architecture/ADR-031-v1434-late-bound-lexical-captures.md",
     "module_debt_ceilings_hash": "9e3bae0ce93f17d5d8f801cd2851d9fc1e5322d49eba25e0beca264ab8ea331b",
     "object_alias_collector_decision": "docs/architecture/ADR-023-v1428-explicit-any-object-alias-flow.md",
     "object_alias_collector_hotfix": {
@@ -853,7 +861,7 @@
   "typing": {
     "activation_baseline_dict_str_any_count": 12535,
     "explicit_any_affected_file_max_count": 461,
-    "explicit_any_collector_schema_version": 15,
+    "explicit_any_collector_schema_version": 16,
     "explicit_any_file_budgets": {
       "song_agent/application/audio_campaigns/release_coverage.py": 7,
       "song_agent/application/evidence_policy_gate.py": 1,

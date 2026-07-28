@@ -11,6 +11,7 @@ from song_agent.release_check.performance import (
     PROFILE_DURATION_BUDGET_SECONDS,
     performance_summary,
 )
+from tests.conftest import pytest_xdist_auto_num_workers
 
 
 def _slow_definition(*, warning_only: bool) -> ReleaseCheckDefinition:
@@ -109,3 +110,16 @@ def test_full_pytest_uses_aggregate_budget_and_only_suppresses_duplicate_zip_war
     assert definition.duration_budget_seconds == 3600
     assert definition.budget_warning_only is False
     assert definition.command[-2:] == ("-W", "ignore:Duplicate name:UserWarning")
+
+
+def test_default_xdist_workers_are_adaptive_without_changing_ci_parallelism(monkeypatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setattr("tests.conftest.os.cpu_count", lambda: 32)
+    assert pytest_xdist_auto_num_workers(None) == 8
+
+    monkeypatch.setattr("tests.conftest.os.cpu_count", lambda: 8)
+    assert pytest_xdist_auto_num_workers(None) == 4
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setattr("tests.conftest.os.cpu_count", lambda: 32)
+    assert pytest_xdist_auto_num_workers(None) == 4

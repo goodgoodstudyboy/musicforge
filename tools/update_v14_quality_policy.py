@@ -28,6 +28,8 @@ from song_agent.release_check.v14_quality import (
     V1431_COMPONENT_COMPACTION_ADR,
     V1432_EXPRESSION_SCAN_ADR,
     V1433_CALL_BINDING_ADR,
+    V1433_CALL_BINDING_SCHEMA_VERSION,
+    V1434_LEXICAL_CAPTURE_ADR,
     V143_DEBT_SCHEDULE_ADR,
     active_source_tree_hash,
     build_v14_quality_policy,
@@ -255,6 +257,7 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         "call_effect_component_compaction_decision": V1431_COMPONENT_COMPACTION_ADR,
         "expression_binding_single_pass_decision": V1432_EXPRESSION_SCAN_ADR,
         "call_binding_lambda_effect_decision": V1433_CALL_BINDING_ADR,
+        "late_bound_lexical_capture_decision": V1434_LEXICAL_CAPTURE_ADR,
         "debt_schedule_decision": V143_DEBT_SCHEDULE_ADR,
         "strategy": "rollback_generated_v142_split_to_v14.1.2_structure",
         "collector_migration": {
@@ -327,6 +330,13 @@ def _apply_v1421_stabilization_policy(document: dict[str, object]) -> None:
         },
         "call_binding_lambda_effect_collector_migration": {
             "from_schema_version": V143_CALL_EFFECT_SCHEMA_VERSION,
+            "to_schema_version": V1433_CALL_BINDING_SCHEMA_VERSION,
+            "previous_explicit_any_ceiling": V14210_EXPLICIT_ANY_CEILING,
+            "previous_affected_file_ceiling": V14210_AFFECTED_FILE_CEILING,
+            "corrected_explicit_any_count": int((document.get("typing") or {}).get("explicit_any_max_count") or 0),
+        },
+        "late_bound_lexical_capture_collector_migration": {
+            "from_schema_version": V1433_CALL_BINDING_SCHEMA_VERSION,
             "to_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
             "previous_explicit_any_ceiling": V14210_EXPLICIT_ANY_CEILING,
             "previous_affected_file_ceiling": V14210_AFFECTED_FILE_CEILING,

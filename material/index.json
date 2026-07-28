@@ -483,9 +483,15 @@
     },
     {
       "path": "material/v14.3.3-MusicForge调用绑定与Lambda效果闭环施工图-2026-07-27.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.3.3 MusicForge Call Binding and Lambda Effect Closure",
       "version": "14.3.3"
+    },
+    {
+      "path": "material/v14.3.4-MusicForge延迟绑定词法捕获闭环与测试性能收口施工图-2026-07-28.md",
+      "status": "active",
+      "title": "v14.3.4 MusicForge Late-Bound Lexical Capture Closure",
+      "version": "14.3.4"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",

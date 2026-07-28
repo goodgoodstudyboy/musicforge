@@ -37,6 +37,7 @@ from song_agent.release_check.v14_quality import (
     run_v1431_call_effect_component_compaction_smoke,
     run_v1432_expression_binding_single_pass_smoke,
     run_v1433_call_binding_lambda_effect_smoke,
+    run_v1434_late_bound_lexical_capture_smoke,
 )
 from song_agent.platform.contracts import as_document, as_float, as_int, as_list, as_path, as_text
 from song_agent.platform.verification.hashing import stable_hash
@@ -1749,6 +1750,163 @@ def test_v1433_callable_binding_and_lambda_effects_fail_closed(
 
 
 @pytest.mark.parametrize(
+    ("case_name", "body"),
+    [
+        (
+            "named_function",
+            "def retain(value):\n"
+            "    Store.append(value)\n"
+            "Store = []\n"
+            "retain(Holder)\n",
+        ),
+        (
+            "lambda",
+            "registry = {'retain': lambda value: Store.append(value)}\n"
+            "Store = []\n"
+            "registry['retain'](Holder)\n",
+        ),
+        (
+            "factory",
+            "def factory():\n"
+            "    def retain(value):\n"
+            "        Store.append(value)\n"
+            "    Store = []\n"
+            "    return retain, Store\n"
+            "retain, Store = factory()\n"
+            "retain(Holder)\n",
+        ),
+        (
+            "nested_function",
+            "def outer():\n"
+            "    def middle():\n"
+            "        def retain(value):\n"
+            "            Store.append(value)\n"
+            "        Store = []\n"
+            "        return retain, Store\n"
+            "    return middle()\n"
+            "retain, Store = outer()\n"
+            "retain(Holder)\n",
+        ),
+        (
+            "named_expression",
+            "def retain(value):\n"
+            "    Store.append(value)\n"
+            "registry = {'store': (Store := [])}\n"
+            "retain(Holder)\n",
+        ),
+        (
+            "explicit_nonlocal",
+            "def factory():\n"
+            "    def retain(value):\n"
+            "        nonlocal Store\n"
+            "        Store.append(value)\n"
+            "    Store = []\n"
+            "    return retain, Store\n"
+            "retain, Store = factory()\n"
+            "retain(Holder)\n",
+        ),
+        (
+            "sibling_nonlocal_rebind",
+            "def factory():\n"
+            "    Store = []\n"
+            "    def retain(value):\n"
+            "        Store.append(value)\n"
+            "    def replace():\n"
+            "        nonlocal Store\n"
+            "        Store = []\n"
+            "    replace()\n"
+            "    return retain, Store\n"
+            "retain, Store = factory()\n"
+            "retain(Holder)\n",
+        ),
+        (
+            "helper_global_rebind",
+            "Store = []\n"
+            "def retain(value):\n"
+            "    Store.append(value)\n"
+            "def replace():\n"
+            "    global Store\n"
+            "    Store = []\n"
+            "replace()\n"
+            "retain(Holder)\n",
+        ),
+    ],
+)
+def test_v1434_late_bound_lexical_captures_fail_closed(
+    tmp_path: Path,
+    case_name: str,
+    body: str,
+) -> None:
+    relative = f"song_agent/interfaces/api/v1434_{case_name}.py"
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    annotations = "\n".join(f"    field_{index}: Alias" for index in range(100))
+    source = (
+        "from __future__ import annotations\n"
+        "import typing as t\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    Alias = int\n"
+        "else:\n"
+        "    for Alias in ((t.Any,),):\n"
+        "        pass\n"
+        "    Holder = [None]\n"
+        + textwrap.indent(body, "    ")
+        + "    Ref = Store[0]\n"
+        "    Ref[0] = Alias\n"
+        "    Alias = Holder[0][0]\n"
+        + annotations
+        + "\n"
+    )
+    target.write_text(source, encoding="utf-8")
+    namespace: dict[str, object] = {}
+    exec(compile(source, str(target), "exec"), namespace)
+    typing = collect_typing_metrics(tmp_path)
+    policy = {
+        "typing": {
+            "raw_dict_str_any_max_count": 0,
+            "implementation_document_max_count": 0,
+            "explicit_any_collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+            "explicit_any_max_count": 99,
+            "explicit_any_affected_file_max_count": 1,
+            "explicit_any_layer_budgets": {"interfaces": 99},
+            "explicit_any_file_budgets": {relative: 99},
+            "public_implementation_document_max_count": 0,
+            "untyped_public_function_max_count": 0,
+        }
+    }
+    blockers = _typing_blockers(typing, policy)
+    ruff = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--config", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    mypy = subprocess.run(
+        [sys.executable, "-m", "mypy", "--strict", "--config-file", str(ROOT / "pyproject.toml"), str(target)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert namespace["Alias"] is __import__("typing").Any
+    assert len(namespace["__annotations__"]) == 100
+    assert ruff.returncode == 0, ruff.stdout + ruff.stderr
+    assert mypy.returncode == 0, mypy.stdout + mypy.stderr
+    assert typing["explicit_any_count"] == 100
+    assert any(
+        row["detail"].endswith("annotation_binding:Alias")
+        for row in typing["explicit_any_scope_blockers"]
+    )
+    assert any("typing_explicit_any_scope_flow" in value for value in blockers)
+    assert any("typing_explicit_any:" in value for value in blockers)
+    assert any("typing_explicit_any_layer" in value for value in blockers)
+    assert any("typing_explicit_any_file" in value for value in blockers)
+
+
+@pytest.mark.parametrize(
     "body",
     [
         "    registry = {'get': lambda: Holder}\n    Ref = registry['get']()\n",
@@ -2395,6 +2553,12 @@ def test_v1432_expression_binding_single_pass_smoke_is_self_consistent() -> None
 
 def test_v1433_call_binding_lambda_effect_smoke_is_self_consistent() -> None:
     passed, detail = run_v1433_call_binding_lambda_effect_smoke(ROOT)
+
+    assert passed, detail
+
+
+def test_v1434_late_bound_lexical_capture_smoke_is_self_consistent() -> None:
+    passed, detail = run_v1434_late_bound_lexical_capture_smoke(ROOT)
 
     assert passed, detail
 
