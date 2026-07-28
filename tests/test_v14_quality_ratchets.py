@@ -20,8 +20,10 @@ from song_agent.release_check.v14_quality import (
     active_source_tree_hash,
     collect_v1421_static_violations,
     collect_complexity_metrics,
+    collect_interface_application_metrics,
     collect_typing_metrics,
     evaluate_v14_quality,
+    run_v14_interface_application_boundary_smoke,
     run_v141_quality_debt_closure_smoke,
     run_v1421_stabilization_rollback_smoke,
     run_v1422_explicit_any_scope_smoke,
@@ -72,6 +74,42 @@ def test_v14_typing_and_complexity_ratchets_pass_without_hiding_public_debt() ->
     assert report["typing"]["public_implementation_document_count"] == 0
     assert report["typing"]["untyped_public_function_count"] == 0
     assert report["complexity"]["oversized_function_count"] == 0
+
+
+def test_v14_interface_boundary_uses_dedicated_structure_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_repeated_typing_scan(_root: Path) -> dict[str, object]:
+        raise AssertionError("interface boundary must not repeat Explicit Any data-flow analysis")
+
+    monkeypatch.setattr(
+        "song_agent.release_check.v14_quality.collect_typing_metrics",
+        fail_repeated_typing_scan,
+    )
+
+    passed, detail = run_v14_interface_application_boundary_smoke(ROOT)
+    metrics = collect_interface_application_metrics(ROOT)
+
+    assert passed, detail
+    assert metrics["untyped_public_function_count"] == 0
+    assert metrics["public_implementation_document_count"] == 0
+
+
+def test_v14_interface_boundary_structure_scan_detects_public_contract_debt(tmp_path: Path) -> None:
+    target = tmp_path / "song_agent" / "interfaces" / "api" / "contract_debt.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "def missing_annotation(value):\n"
+        "    return value\n\n"
+        "def dynamic_document(value: ImplementationDocument) -> ImplementationDocument:\n"
+        "    return value\n",
+        encoding="utf-8",
+    )
+
+    metrics = collect_interface_application_metrics(tmp_path)
+
+    assert metrics["untyped_public_function_count"] == 1
+    assert metrics["public_implementation_document_count"] == 1
 
 
 def test_v14_migration_tools_are_idempotent() -> None:

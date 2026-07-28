@@ -317,6 +317,51 @@ def _collect_complexity_metrics_uncached(root: Path, policy: dict[str, Any]) -> 
     }
 
 
+def collect_interface_application_metrics(root: Path) -> dict[str, Any]:
+    resolved = root.resolve()
+    source_hash = active_source_tree_hash(resolved)
+    return deepcopy(_collect_interface_application_metrics_cached(str(resolved), source_hash))
+
+
+@lru_cache(maxsize=8)
+def _collect_interface_application_metrics_cached(root: str, source_hash: str) -> dict[str, Any]:
+    path = Path(root)
+    metrics = _collect_interface_application_metrics_uncached(path)
+    if active_source_tree_hash(path) != source_hash:
+        raise RuntimeError("Active source changed while collecting interface metrics.")
+    return metrics
+
+
+def _collect_interface_application_metrics_uncached(root: Path) -> dict[str, Any]:
+    public_dynamic: list[dict[str, Any]] = []
+    untyped_public: list[dict[str, Any]] = []
+    for path in _active_python_files(root):
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        relative = path.relative_to(root).as_posix()
+        for function, owner in _public_functions(tree):
+            annotations = _function_annotations(function, skip_receiver=owner is not None)
+            if function.returns is None or any(annotation is None for annotation in annotations):
+                untyped_public.append(
+                    {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
+                )
+            annotated_nodes = [function.returns, *annotations]
+            if any(
+                "ImplementationDocument" in (ast.get_source_segment(source, node) or "")
+                for node in annotated_nodes
+                if node is not None
+            ):
+                public_dynamic.append(
+                    {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
+                )
+    return {
+        "public_implementation_document_count": len(public_dynamic),
+        "public_implementation_documents": public_dynamic,
+        "untyped_public_function_count": len(untyped_public),
+        "untyped_public_functions": untyped_public,
+    }
+
+
 def collect_coverage_metrics(root: Path, policy: dict[str, Any]) -> dict[str, Any]:
     coverage_policy = policy.get("coverage") or {}
     report_path = _rooted(root, str(coverage_policy.get("report_path") or "runs/v14-quality/coverage.json"))
@@ -468,17 +513,33 @@ def build_v14_quality_policy(root: Path, *, coverage_report: Path | None = None)
 
 
 def run_v14_interface_application_boundary_smoke(root: Path) -> tuple[bool, str]:
-    report = evaluate_v14_quality(root, run_mypy=False, require_coverage=False)
-    blockers = [
-        value
-        for value in report["blockers"]
-        if "coverage" not in value and "mypy" not in value and "typing_raw" not in value
-    ]
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    complexity = collect_complexity_metrics(root, policy)
+    interface = collect_interface_application_metrics(root)
+    blockers = _policy_blockers(policy)
+    blockers.extend(complexity["blockers"])
+    typing_policy = policy.get("typing") or {}
+    if int(interface["public_implementation_document_count"]) > int(
+        typing_policy.get("public_implementation_document_max_count") or 0
+    ):
+        blockers.append(
+            "v14_quality_typing_public_dynamic:"
+            f"{interface['public_implementation_document_count']}"
+            f">{typing_policy.get('public_implementation_document_max_count')}"
+        )
+    if int(interface["untyped_public_function_count"]) > int(
+        typing_policy.get("untyped_public_function_max_count") or 0
+    ):
+        blockers.append(
+            "v14_quality_typing_untyped_public:"
+            f"{interface['untyped_public_function_count']}"
+            f">{typing_policy.get('untyped_public_function_max_count')}"
+        )
     detail = {
         "status": "passed" if not blockers else "failed",
-        "oversized_functions": report["complexity"]["oversized_function_count"],
-        "untyped_public": report["typing"]["untyped_public_function_count"],
-        "public_dynamic_documents": report["typing"]["public_implementation_document_count"],
+        "oversized_functions": complexity["oversized_function_count"],
+        "untyped_public": interface["untyped_public_function_count"],
+        "public_dynamic_documents": interface["public_implementation_document_count"],
         "blockers": blockers,
     }
     return not blockers, json.dumps(detail, sort_keys=True)

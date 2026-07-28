@@ -14,6 +14,9 @@ and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.m
 - Added named-function, lambda, factory, and nested-function runtime, Ruff,
   strict-mypy, collector, four-layer ratchet, and release-check regressions
   for first-created module globals.
+- Split the interface/application boundary scan from the independent Explicit
+  Any data-flow gate, reducing repeated full-tree analysis while retaining the
+  existing 180-second hard budget and both release checks.
 - Upgraded the Explicit Any collector to schema 17 without raising typing,
   file, layer, complexity, recovery, coverage, or performance ceilings.
 
