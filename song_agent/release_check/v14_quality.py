@@ -224,20 +224,13 @@ def collect_mypy_metrics(root: Path) -> dict[str, Any]:
         except ValueError:
             pass
         budgets[f"{path}|{match.group(2)}"] += 1
-    strict = subprocess.run(
-        [sys.executable, "-m", "mypy", "--no-incremental", "--no-pretty", "--no-color-output"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
     return {
         "status": "measured" if completed.returncode in {0, 1} else "tool_failed",
         "command_returncode": completed.returncode,
         "total_errors": sum(budgets.values()),
         "error_budgets": dict(sorted(budgets.items())),
-        "strict_status": "passed" if strict.returncode == 0 else "failed",
-        "strict_returncode": strict.returncode,
+        "strict_status": "passed" if completed.returncode == 0 else "failed",
+        "strict_returncode": completed.returncode,
     }
 
 
@@ -546,17 +539,25 @@ def run_v14_interface_application_boundary_smoke(root: Path) -> tuple[bool, str]
 
 
 def run_v14_typing_coverage_ratchet_smoke(root: Path) -> tuple[bool, str]:
-    report = evaluate_v14_quality(root)
+    policy = json.loads((root / QUALITY_POLICY_PATH).read_text(encoding="utf-8"))
+    blockers = _policy_blockers(policy)
+    typing = collect_typing_metrics(root)
+    blockers.extend(_typing_blockers(typing, policy))
+    mypy = collect_mypy_metrics(root)
+    blockers.extend(_mypy_blockers(mypy, policy))
+    coverage = collect_coverage_metrics(root, policy)
+    blockers.extend(coverage["blockers"])
+    status = "passed" if not blockers else "failed"
     detail = {
-        "status": report["status"],
-        "raw_dict_str_any": report["typing"]["raw_dict_str_any_count"],
-        "explicit_any": report["typing"]["explicit_any_count"],
-        "mypy_errors": report["mypy"]["total_errors"],
-        "strict_mypy": report["mypy"]["strict_status"],
-        "coverage": report["coverage"]["layers"],
-        "blockers": report["blockers"],
+        "status": status,
+        "raw_dict_str_any": typing["raw_dict_str_any_count"],
+        "explicit_any": typing["explicit_any_count"],
+        "mypy_errors": mypy["total_errors"],
+        "strict_mypy": mypy["strict_status"],
+        "coverage": coverage["layers"],
+        "blockers": blockers,
     }
-    return report["status"] == "passed", json.dumps(detail, sort_keys=True)
+    return not blockers, json.dumps(detail, sort_keys=True)
 
 
 def run_v141_quality_debt_closure_smoke(root: Path) -> tuple[bool, str]:

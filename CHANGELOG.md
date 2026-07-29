@@ -17,6 +17,9 @@ and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.m
 - Split the interface/application boundary scan from the independent Explicit
   Any data-flow gate, reducing repeated full-tree analysis while retaining the
   existing 180-second hard budget and both release checks.
+- Consolidated the two equivalent active-tree mypy subprocesses into one
+  authoritative run and removed complexity work duplicated by the separate
+  boundary gate; the 240-second typing/coverage budget remains unchanged.
 - Upgraded the Explicit Any collector to schema 17 without raising typing,
   file, layer, complexity, recovery, coverage, or performance ceilings.
 

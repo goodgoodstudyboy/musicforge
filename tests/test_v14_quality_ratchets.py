@@ -112,6 +112,29 @@ def test_v14_interface_boundary_structure_scan_detects_public_contract_debt(tmp_
     assert metrics["public_implementation_document_count"] == 1
 
 
+def test_v14_mypy_metrics_use_one_authoritative_active_tree_run(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("song_agent.release_check.v14_quality.subprocess.run", fake_run)
+
+    from song_agent.release_check.v14_quality import collect_mypy_metrics
+
+    metrics = collect_mypy_metrics(tmp_path)
+
+    assert len(calls) == 1
+    assert calls[0][0:3] == [sys.executable, "-m", "mypy"]
+    assert metrics["status"] == "measured"
+    assert metrics["strict_status"] == "passed"
+    assert metrics["strict_returncode"] == 0
+
+
 def test_v14_migration_tools_are_idempotent() -> None:
     assert migrate_private_document_types(ROOT, write=False)["changed_file_count"] == 0
     assert split_active_functions(ROOT, write=False) == {"changed_files": [], "skipped": []}
