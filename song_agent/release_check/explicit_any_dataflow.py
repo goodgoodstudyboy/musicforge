@@ -54,6 +54,10 @@ class ExplicitAnyDataFlow:
         self._component_exposed: dict[int, bool] = {}
         self._component_escaped: dict[int, bool] = {}
         self._component_taints: dict[int, str] = {}
+        self._component_roots_cache: dict[
+            tuple[frozenset[int], frozenset[int]], frozenset[int]
+        ] = {}
+        self._component_members_cache: dict[int, frozenset[int]] = {}
 
     def scalar(self, kind: str = "other") -> FlowValue:
         return FlowValue(kind=kind)
@@ -230,39 +234,48 @@ class ExplicitAnyDataFlow:
         origins = value.origins
         if not identities and not origins:
             return frozenset()
+        cache_key = (identities, origins)
+        cached = self._component_roots_cache.get(cache_key)
+        if cached is not None:
+            return cached
         if not origins and len(identities) == 1:
             identity = next(iter(identities))
             if identity not in self._parents:
                 return frozenset()
             root = self._find(identity)
-            return identities if root == identity else frozenset({root})
-        if not identities and len(origins) == 1:
+            result = identities if root == identity else frozenset({root})
+        elif not identities and len(origins) == 1:
             identity = next(iter(origins))
             if identity not in self._parents:
                 return frozenset()
             root = self._find(identity)
-            return origins if root == identity else frozenset({root})
-        if len(identities) == 1 and len(origins) == 1:
+            result = origins if root == identity else frozenset({root})
+        elif len(identities) == 1 and len(origins) == 1:
             identity = next(iter(identities))
             origin = next(iter(origins))
             identity_root = self._find(identity) if identity in self._parents else None
             origin_root = self._find(origin) if origin in self._parents else None
             if identity_root is None:
-                return frozenset() if origin_root is None else frozenset({origin_root})
-            if origin_root is None:
-                return identities if identity_root == identity else frozenset({identity_root})
-            if origin_root == identity_root:
+                result = frozenset() if origin_root is None else frozenset({origin_root})
+            elif origin_root is None:
+                result = identities if identity_root == identity else frozenset({identity_root})
+            elif origin_root == identity_root:
                 if identity_root == identity:
-                    return identities
-                if origin_root == origin:
-                    return origins
-                return frozenset({identity_root})
-            return frozenset({identity_root, origin_root})
-        return frozenset(
-            self._find(identity)
-            for identity in identities | origins
-            if identity in self._parents
-        )
+                    result = identities
+                elif origin_root == origin:
+                    result = origins
+                else:
+                    result = frozenset({identity_root})
+            else:
+                result = frozenset({identity_root, origin_root})
+        else:
+            result = frozenset(
+                self._find(identity)
+                for identity in identities | origins
+                if identity in self._parents
+            )
+        self._component_roots_cache[cache_key] = result
+        return result
 
     def component_identities(self, value: FlowValue) -> frozenset[int]:
         """Return every original identity represented by a may-alias value."""
@@ -270,8 +283,16 @@ class ExplicitAnyDataFlow:
         return frozenset(
             identity
             for root in self.component_roots(value)
-            for identity in self._members.get(root, {root})
+            for identity in self._component_members(root)
         )
+
+    def _component_members(self, root: int) -> frozenset[int]:
+        canonical = self._find(root)
+        cached = self._component_members_cache.get(canonical)
+        if cached is None:
+            cached = frozenset(self._members.get(canonical, {canonical}))
+            self._component_members_cache[canonical] = cached
+        return cached
 
     def stored_values(self, value: FlowValue) -> tuple[FlowValue, ...]:
         """Return values held directly by any object in the alias component."""
@@ -289,9 +310,13 @@ class ExplicitAnyDataFlow:
 
         pending = list(values)
         rows: list[FlowValue] = []
+        seen_values: set[FlowValue] = set()
         seen_roots: set[int] = set()
         while pending:
             value = pending.pop()
+            if value in seen_values:
+                continue
+            seen_values.add(value)
             rows.append(value)
             roots = self.component_roots(value)
             fresh = roots - seen_roots
@@ -303,7 +328,7 @@ class ExplicitAnyDataFlow:
                 wildcard = self._component_wildcards.get(root)
                 if wildcard is not None:
                     pending.append(wildcard)
-        return tuple(dict.fromkeys(rows))
+        return tuple(rows)
 
     def read_member(self, base: FlowValue, key: CellKey | None) -> FlowValue:
         values: list[FlowValue] = []
@@ -512,6 +537,8 @@ class ExplicitAnyDataFlow:
         self._component_taints[left_root] = merge_flow_kinds(
             (self._component_taints[left_root], self._component_taints.pop(right_root))
         )
+        self._component_roots_cache.clear()
+        self._component_members_cache.clear()
         return left_root
 
 def merge_flow_kinds(kinds: Iterable[str]) -> str:

@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "1409ed3d3889870b11c9f223f8c3ca1a54c4220ac91c81d190a1feb651c10477",
-    "source_tree_hash": "03161266314a500cb4f9879067c2fb482ac324c2835cd9c5ae6b0a0e0812c718"
+    "report_sha256": "f0165fd6da5caebabf20a939e85a5ffa70a5df04cebb86d761387527c44bbcc1",
+    "source_tree_hash": "d5b8a0a9bdf2d6961543b1b5a9db4d52ba336e77e0bcc216577990cc2c295d3d"
   },
-  "integrity_hash": "548ced590824b1b7a55122d509a5345a1ebfb81689916ab27a53e670591c3cd8",
+  "integrity_hash": "3df9ccbbf09eeb6eb9685e20b13171c100de3d55f19e69605f05df8fa3c7f9ee",
   "module_size_debt": [
     {
       "expires_version": "14.4.0",

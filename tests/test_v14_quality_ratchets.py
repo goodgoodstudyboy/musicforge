@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable, Iterable, Iterator
 import json
 from pathlib import Path
 import subprocess
@@ -2461,6 +2462,82 @@ def test_v1421_typing_cache_uses_content_hash_for_same_length_changes(tmp_path: 
 
     assert first["explicit_any_count"] == 1
     assert second["explicit_any_count"] == 0
+
+
+def test_v1435_parallel_typing_collection_matches_single_file_metrics(tmp_path: Path) -> None:
+    from song_agent.release_check.v14_quality import _collect_typing_file_metrics
+
+    target = tmp_path / "song_agent" / "application" / "parallel_probe.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "from typing import Any\n"
+        "value: Any\n"
+        "def route(item: Any) -> Any:\n"
+        "    return item\n",
+        encoding="utf-8",
+    )
+
+    row = _collect_typing_file_metrics((str(target), str(tmp_path)))
+    aggregate = collect_typing_metrics(tmp_path)
+
+    assert row["explicit_any_count"] == 3
+    assert aggregate["explicit_any_count"] == row["explicit_any_count"]
+    assert aggregate["explicit_any_by_file"] == {"song_agent/application/parallel_probe.py": 3}
+
+
+def test_v1435_typing_collection_avoids_nested_xdist_process_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from song_agent.release_check.v14_quality import _typing_worker_count
+
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw0")
+
+    assert _typing_worker_count() == 1
+
+
+def test_v1435_typing_collection_uses_bounded_parallel_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import song_agent.release_check.v14_quality as quality
+
+    observed: dict[str, int] = {}
+
+    class ImmediateExecutor:
+        def __init__(self, *, max_workers: int) -> None:
+            observed["max_workers"] = max_workers
+
+        def __enter__(self) -> ImmediateExecutor:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def map(
+            self,
+            function: Callable[[tuple[str, str]], dict[str, object]],
+            arguments: Iterable[tuple[str, str]],
+            *,
+            chunksize: int,
+        ) -> Iterator[dict[str, object]]:
+            observed["chunksize"] = chunksize
+            return map(function, arguments)
+
+    root = tmp_path / "song_agent" / "application"
+    root.mkdir(parents=True)
+    for index in range(quality.TYPING_PARALLEL_FILE_THRESHOLD):
+        (root / f"parallel_{index:02d}.py").write_text(
+            "from typing import Any\nvalue: Any\n",
+            encoding="utf-8",
+        )
+    monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
+    monkeypatch.setattr(quality, "ProcessPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(quality, "_typing_worker_count", lambda: quality.TYPING_MAX_WORKERS)
+
+    metrics = quality._collect_typing_metrics_uncached(tmp_path)
+
+    assert metrics["explicit_any_count"] == quality.TYPING_PARALLEL_FILE_THRESHOLD
+    assert observed == {"max_workers": quality.TYPING_MAX_WORKERS, "chunksize": 4}
 
 
 def test_v1421_static_gate_detects_generated_split_suppressions_and_mypy_exclusion(tmp_path: Path) -> None:

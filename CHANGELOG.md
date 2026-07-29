@@ -20,6 +20,10 @@ and [`docs/changelog/CHANGELOG-v0-v13.6.md`](docs/changelog/CHANGELOG-v0-v13.6.m
 - Consolidated the two equivalent active-tree mypy subprocesses into one
   authoritative run and removed complexity work duplicated by the separate
   boundary gate; the 240-second typing/coverage budget remains unchanged.
+- Parallelized independent per-file Explicit Any analysis with a bounded
+  process pool while keeping pytest-xdist workers single-process, and cached
+  may-alias component roots with union-aware invalidation. The collector
+  schema, findings, source scope, and performance ceilings remain unchanged.
 - Upgraded the Explicit Any collector to schema 17 without raising typing,
   file, layer, complexity, recovery, coverage, or performance ceilings.
 

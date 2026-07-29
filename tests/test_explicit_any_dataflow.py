@@ -221,6 +221,28 @@ def test_component_roots_fast_path_tracks_later_union() -> None:
     assert len(flow.component_roots(first)) == 1
 
 
+def test_component_identity_cache_tracks_later_union() -> None:
+    flow = ExplicitAnyDataFlow()
+    first = flow.object()
+    second = flow.object()
+
+    assert flow.component_identities(first) == first.identities
+
+    flow.connect((first, second), expose_members=True)
+
+    assert flow.component_identities(first) == first.identities | second.identities
+
+
+def test_stored_value_closure_deduplicates_repeated_references() -> None:
+    flow = ExplicitAnyDataFlow()
+    child = flow.object()
+    packed = flow.container((child, child, child))
+
+    closure = flow.stored_value_closure((packed, packed))
+
+    assert closure == (packed, child)
+
+
 def test_large_call_component_keeps_flow_values_compact() -> None:
     flow = ExplicitAnyDataFlow()
     values = tuple(flow.object() for _ in range(500))

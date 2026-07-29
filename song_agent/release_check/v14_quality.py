@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import ast
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache
 import hashlib
 import inspect
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -61,6 +63,8 @@ V1434_LEXICAL_CAPTURE_ADR = "docs/architecture/ADR-031-v1434-late-bound-lexical-
 V1435_FIRST_GLOBAL_CAPTURE_ADR = "docs/architecture/ADR-032-v1435-first-global-lexical-captures.md"
 V14210_EXPLICIT_ANY_CEILING = 11993
 V14210_AFFECTED_FILE_CEILING = 461
+TYPING_PARALLEL_FILE_THRESHOLD = 32
+TYPING_MAX_WORKERS = 4
 V14210_LAYER_CEILINGS = {
     "application": 72,
     "capabilities": 13,
@@ -151,35 +155,27 @@ def _collect_typing_metrics_uncached(root: Path) -> dict[str, Any]:
     public_dynamic: list[dict[str, Any]] = []
     untyped_public: list[dict[str, Any]] = []
     active_files = _active_python_files(root)
-    for path in active_files:
-        source = path.read_text(encoding="utf-8")
-        raw_count += source.count("dict[str, Any]")
-        implementation_occurrences = source.count("ImplementationDocument")
-        implementation_count += implementation_occurrences
-        tree = ast.parse(source, filename=str(path))
-        relative = path.relative_to(root).as_posix()
-        explicit_any, scope_blockers = _explicit_any_annotation_analysis(tree)
+    arguments = tuple((str(path), str(root)) for path in active_files)
+    worker_count = _typing_worker_count()
+    if len(arguments) >= TYPING_PARALLEL_FILE_THRESHOLD and worker_count > 1:
+        with ProcessPoolExecutor(max_workers=worker_count) as executor:
+            file_metrics = executor.map(_collect_typing_file_metrics, arguments, chunksize=4)
+            rows = tuple(file_metrics)
+    else:
+        rows = tuple(_collect_typing_file_metrics(argument) for argument in arguments)
+    for row in rows:
+        relative = str(row["path"])
+        raw_count += int(row["raw_dict_str_any_count"])
+        implementation_count += int(row["implementation_document_count"])
+        explicit_any = int(row["explicit_any_count"])
         if explicit_any:
             explicit_any_by_file[relative] = explicit_any
             explicit_any_by_layer[_typing_layer(relative)] += explicit_any
         explicit_any_scope_blockers.extend(
-            {"path": relative, "detail": detail} for detail in scope_blockers
+            {"path": relative, "detail": detail} for detail in row["scope_blockers"]
         )
-        for function, owner in _public_functions(tree):
-            annotations = _function_annotations(function, skip_receiver=owner is not None)
-            if function.returns is None or any(annotation is None for annotation in annotations):
-                untyped_public.append(
-                    {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
-                )
-            annotated_nodes = [function.returns, *annotations]
-            if implementation_occurrences and any(
-                "ImplementationDocument" in (ast.get_source_segment(source, node) or "")
-                for node in annotated_nodes
-                if node is not None
-            ):
-                public_dynamic.append(
-                    {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
-                )
+        public_dynamic.extend(row["public_implementation_documents"])
+        untyped_public.extend(row["untyped_public_functions"])
     return {
         "collector_schema_version": EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "active_python_file_count": len(active_files),
@@ -351,6 +347,49 @@ def _collect_interface_application_metrics_uncached(root: Path) -> dict[str, Any
         "public_implementation_document_count": len(public_dynamic),
         "public_implementation_documents": public_dynamic,
         "untyped_public_function_count": len(untyped_public),
+        "untyped_public_functions": untyped_public,
+    }
+
+
+def _typing_worker_count() -> int:
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return 1
+    main_module = sys.modules.get("__main__")
+    main_path = str(getattr(main_module, "__file__", "") or "")
+    if os.name == "nt" and (not main_path or main_path.startswith("<")):
+        return 1
+    return min(TYPING_MAX_WORKERS, max(1, os.cpu_count() or 1))
+
+
+def _collect_typing_file_metrics(argument: tuple[str, str]) -> dict[str, Any]:
+    path = Path(argument[0])
+    root = Path(argument[1])
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    relative = path.relative_to(root).as_posix()
+    implementation_occurrences = source.count("ImplementationDocument")
+    explicit_any, scope_blockers = _explicit_any_annotation_analysis(tree)
+    public_dynamic: list[dict[str, Any]] = []
+    untyped_public: list[dict[str, Any]] = []
+    for function, owner in _public_functions(tree):
+        annotations = _function_annotations(function, skip_receiver=owner is not None)
+        row = {"path": relative, "owner": owner or "", "name": function.name, "line": function.lineno}
+        if function.returns is None or any(annotation is None for annotation in annotations):
+            untyped_public.append(row)
+        annotated_nodes = [function.returns, *annotations]
+        if implementation_occurrences and any(
+            "ImplementationDocument" in (ast.get_source_segment(source, node) or "")
+            for node in annotated_nodes
+            if node is not None
+        ):
+            public_dynamic.append(row)
+    return {
+        "path": relative,
+        "raw_dict_str_any_count": source.count("dict[str, Any]"),
+        "implementation_document_count": implementation_occurrences,
+        "explicit_any_count": explicit_any,
+        "scope_blockers": scope_blockers,
+        "public_implementation_documents": public_dynamic,
         "untyped_public_functions": untyped_public,
     }
 
@@ -2221,7 +2260,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
     def _record_function_may_store(self, values: Iterable[FlowValue]) -> None:
         if not self._function_parameter_flows:
             return
-        rows = tuple(values)
+        rows = self._unique_flow_values(values)
         checkpoint = self._function_identity_checkpoints[-1]
         parameters = self._function_parameter_flows[-1]
         row_roots = tuple(
