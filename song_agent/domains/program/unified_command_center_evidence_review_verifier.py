@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
-
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 import json as json
 import re as re
 import zipfile as zipfile
@@ -540,7 +540,7 @@ def _finish(
     warnings = [check["check_id"] for check in checks if check.get("status") == "failed" and check.get("severity") != "blocking"]
     status = "failed" if blockers else "warning" if warnings else "passed"
     report = {
-        "package_type": package_type,
+        "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.program.unified_command_center_evidence_review_verifier._finish"),
         "schema_version": UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_SCHEMA_VERSION,
         "status": status,
         "summary": summary,

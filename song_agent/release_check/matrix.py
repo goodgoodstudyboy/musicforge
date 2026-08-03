@@ -503,6 +503,7 @@ _RAW_CHECK_DEFINITIONS: tuple[ReleaseCheckDefinition, ...] = (
     _callable("v1433.call_binding_lambda_effect_smoke", "v14.3.3 callable binding and lambda effects", "_v1433_call_binding_lambda_effect_smoke", group="quality", version="14.3.3", risk="critical", timeout_seconds=180, tags=("v14", "ga", "typing", "security", "ratchet", "dataflow"), profiles=V14_PROFILES, duration_budget_seconds=150, budget_enforced_profiles=V14_PROFILES),
     _callable("v1434.late_bound_lexical_capture_smoke", "v14.3.4 late-bound lexical captures", "_v1434_late_bound_lexical_capture_smoke", group="quality", version="14.3.4", risk="critical", timeout_seconds=180, tags=("v14", "ga", "typing", "security", "ratchet", "dataflow"), profiles=V14_PROFILES, duration_budget_seconds=150, budget_enforced_profiles=V14_PROFILES),
     _callable("v1435.first_global_lexical_capture_smoke", "v14.3.5 first-global lexical captures", "_v1435_first_global_lexical_capture_smoke", group="quality", version="14.3.5", risk="critical", timeout_seconds=180, tags=("v14", "ga", "typing", "security", "ratchet", "dataflow"), profiles=V14_PROFILES, duration_budget_seconds=150, budget_enforced_profiles=V14_PROFILES),
+    _callable("v144.wave0_catalog_baseline_smoke", "v14.4 Wave 0 capability catalog and frozen baseline", "_v144_wave0_catalog_baseline_smoke", group="architecture", version="14.4.0", risk="critical", timeout_seconds=180, tags=("v14", "ga", "architecture", "capabilities", "freeze", "ratchet"), profiles=V14_PROFILES, duration_budget_seconds=120, budget_enforced_profiles=V14_PROFILES),
 )
 
 

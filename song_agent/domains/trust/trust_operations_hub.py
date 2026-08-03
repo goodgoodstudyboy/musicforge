@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import hashlib as hashlib
 import json as json
@@ -829,7 +830,6 @@ class TrustOperationsHubStore:
 
 
 
-
 def _default_requirements() -> dict[str, bool]:
     return {
         "require_public_trust_center_verified": True,
@@ -860,7 +860,7 @@ def _source_paths(payload: ImplementationDocument) -> ImplementationDocument:
 
 
 def _evidence_from_verification(evidence_id: str, component_type: str, report: ImplementationDocument, path: Path) -> ImplementationDocument:
-    return {"evidence_id": evidence_id, "component_type": component_type, "path_hint": str(path.name), "package_type": report.get("package_type"), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash"), "verification_report_hash": verification_hash(report), "source_hash": report.get("source_hash"), "status": report.get("status") or "missing", "summary": _as_document(report.get("summary")), "current_state_refs": {"publication_channel_state_hash": report.get("channel_state_hash")}}
+    return {"evidence_id": evidence_id, "component_type": component_type, "path_hint": str(path.name), "package_type": _require_registered_package_type(report.get("package_type"), writer_id="song_agent.domains.trust.trust_operations_hub._evidence_from_verification"), "zip_sha256": report.get("zip_sha256"), "manifest_hash": report.get("manifest_hash"), "verification_report_hash": verification_hash(report), "source_hash": report.get("source_hash"), "status": report.get("status") or "missing", "summary": _as_document(report.get("summary")), "current_state_refs": {"publication_channel_state_hash": report.get("channel_state_hash")}}
 
 
 def _delivery_component_id(spec: dict[str, str], report: ImplementationDocument, index: int) -> str:
@@ -879,7 +879,7 @@ def _delivery_evidence_from_verification(component_id: str, component_type: str,
         "component_type": component_type,
         "requirement": requirement,
         "path_hint": str(path.name),
-        "package_type": report.get("package_type"),
+        "package_type": _require_registered_package_type(report.get("package_type"), writer_id="song_agent.domains.trust.trust_operations_hub._delivery_evidence_from_verification"),
         "zip_sha256": report.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes"),
         "manifest_hash": report.get("manifest_hash"),

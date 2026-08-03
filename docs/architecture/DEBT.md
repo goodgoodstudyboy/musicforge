@@ -9,6 +9,11 @@ Debt entries cannot be closed by deleting tests or weakening runtime
 verification. Closure requires migrated production callers and differential
 tests.
 
+v14.4 Wave 0 freezes the capability, authority, dependency, and quality
+baselines without moving either deadline. ARCH-014 and TYPE-003 remain open and
+must close in v14.4.0; ADR-033 authorizes no further extension or ceiling
+increase.
+
 Closed in v12.15: ARCH-003. All active v12 Program/Continuity verifier
 envelopes now use `platform.verification`; the remaining legacy-domain helper
 counts are locked to a lower ratchet and may only decrease.

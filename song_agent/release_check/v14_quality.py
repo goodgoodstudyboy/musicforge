@@ -39,7 +39,21 @@ MYPY_ROOTS = (
     "song_agent/capabilities",
     "song_agent/interfaces",
 )
-MYPY_CRITICAL_TARGETS = ("song_agent/release_check/explicit_any_dataflow.py",)
+MYPY_CRITICAL_TARGETS = (
+    "song_agent/release_check/explicit_any_dataflow.py",
+    "song_agent/release_check/v14_wave0.py",
+    "song_agent/release_check/v14_wave0_catalog_model.py",
+    "song_agent/release_check/v14_wave0_inventory.py",
+    "song_agent/release_check/v14_wave0_package_effects.py",
+    "song_agent/release_check/v14_wave0_package_inventory.py",
+    "song_agent/release_check/v14_wave0_package_registry.py",
+    "song_agent/release_check/v14_wave0_package_scan.py",
+    "song_agent/release_check/v14_wave0_ratchet.py",
+    "song_agent/release_check/v14_wave0_registry.py",
+    "song_agent/release_check/v14_wave0_source.py",
+    "song_agent/release_check/v14_wave0_state_registry.py",
+    "song_agent/release_check/v14_wave0_surfaces.py",
+)
 MYPY_TARGETS = (*MYPY_ROOTS, *MYPY_CRITICAL_TARGETS)
 COVERAGE_ROOTS = (*MYPY_ROOTS, "song_agent/release_check")
 MYPY_ERROR = re.compile(r"^(.*?):\d+: error: .*\[([^\]]+)\]\s*$")

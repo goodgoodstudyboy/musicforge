@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts.coercion import as_list as _as_list
+from song_agent.platform.contracts import as_list as _as_list
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
@@ -51,7 +52,7 @@ class TrustRoutesPublicTrustCenterAcceptanceBoard(TrustRouteContext):
             return (True, None)
         if _split_state['subaction'] == 'export' and len(parts) == 3:
             _split_state['manifest'] = self.public_trust_center_acceptance_board_store.export_board(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _split_state['manifest'].get('package_type')}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            self._send_json({'ok': True, 'center_id': center_id, 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _require_registered_package_type(_split_state['manifest'].get('package_type'), writer_id="song_agent.interfaces.api.routes.trust_parts.public_trust_center_acceptance_board.TrustRoutesPublicTrustCenterAcceptanceBoard._handle_public_trust_center_acceptance_board_part_01")}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
             return (True, None)
         if _split_state['subaction'] == 'zip' and len(parts) == 3:
             _split_state['zip_info'] = self.public_trust_center_acceptance_board_store.build_zip(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())

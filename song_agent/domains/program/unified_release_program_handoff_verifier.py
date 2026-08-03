@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
-
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 import json as json
 import re as re
 import zipfile as zipfile
@@ -783,7 +783,7 @@ def _public_external_manifest(manifest: ImplementationDocument) -> Implementatio
         public_items.append(public_row)
     public = {
         "schema_version": manifest.get("schema_version") or UNIFIED_RELEASE_PROGRAM_HANDOFF_SCHEMA_VERSION,
-        "package_type": manifest.get("package_type") or UNIFIED_RELEASE_PROGRAM_HANDOFF_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE,
+        "package_type": _require_registered_package_type(manifest.get("package_type") or UNIFIED_RELEASE_PROGRAM_HANDOFF_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE, writer_id="song_agent.domains.program.unified_release_program_handoff_verifier._public_external_manifest"),
         "program_id": manifest.get("program_id"),
         "handoff_id": manifest.get("handoff_id"),
         "created_at": manifest.get("created_at"),

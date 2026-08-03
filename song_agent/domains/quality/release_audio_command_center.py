@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any as _InferenceType
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
 import shutil as shutil
@@ -557,7 +558,7 @@ def _public_verification_summary(component_key: str, report: ImplementationDocum
     summary = _as_document(report.get("summary"))
     public = {
         "component_key": component_key,
-        "package_type": report.get("package_type"),
+        "package_type": _require_registered_package_type(report.get("package_type"), writer_id="song_agent.domains.quality.release_audio_command_center._public_verification_summary"),
         "status": report.get("status"),
         "zip_sha256": report.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes"),
@@ -725,7 +726,6 @@ def _sha256_path(path: Path | str | None) -> str | None:
     if not path or not Path(path).exists() or not Path(path).is_file():
         return None
     import hashlib
-
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):

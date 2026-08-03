@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import hashlib as hashlib
 import json as json
@@ -449,7 +450,7 @@ class ReleasePortfolioGovernanceEvidenceVaultStore:
         return {
                 "package_id": package_id,
                 "role": role,
-                "package_type": package_type,
+                "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.trust.release_portfolio_governance_evidence_vault.ReleasePortfolioGovernanceEvidenceVaultStore._package_binding"),
                 "queue_id": queue_id,
                 "signoff_hash": signoff_hash,
                 "signoff_status": signoff_status,
@@ -643,7 +644,6 @@ def build_chain_of_custody(*, portfolio_id: str, source_hash: str, packages: lis
     data = {"schema_version": EVIDENCE_VAULT_SCHEMA_VERSION, "portfolio_id": portfolio_id, "generated_at": generated_at, "source_hash": source_hash, "summary": {"event_count": len(events), "current_count": sum(1 for item in events if item.get("current"))}, "events": events}
     data["integrity_hash"] = evidence_vault_chain_hash(data)
     return sanitize_metadata(data, blocked_keys=EVIDENCE_VAULT_BLOCKED_KEYS)
-
 
 
 

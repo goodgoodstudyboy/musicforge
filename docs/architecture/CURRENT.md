@@ -20,6 +20,37 @@ code. Historical release checks are read-only compatibility paths.
 - `song_agent/release_check/`: domain-owned matrix, runner, performance, and
   check providers. The historical monolith is archive-only.
 
+## v14.4 Wave 0 Candidate
+
+- Product functionality and public surfaces are frozen at v14.3.5.
+<!-- v14.4-wave0-summary:start -->
+- Four human-maintained registries define 146 semantic capabilities, all 132 Store roles and physical namespaces, 542 observed package types, 2,687 legacy raw-write sites, and 246 schemas. Source scanning only verifies these declarations.
+<!-- v14.4-wave0-summary:end -->
+- `capability-catalog.json` binds each observed Store, CLI, API, Studio,
+  package, verifier, schema, test, and release-check surface to one capability.
+- `architecture-v14.4-wave0-baseline.json` freezes complete registry metadata
+  and exact registry envelope contracts plus dependency edge identities, while
+  quality limits use directional ratchets that allow debt reduction. The
+  updater cannot bootstrap a deleted baseline.
+- Every state namespace carries source-backed expression evidence. Server
+  startup, doctor, and the Wave 0 gate use one platform resolver for all 95
+  declared roots and fail closed on missing, ambiguous, equal, or overlapping
+  physical writer paths. The 375 current overlap pairs are exact,
+  baseline-bound migration exceptions that fail once the version reaches
+  v14.4.0. A signed package-data policy makes the same guard available in a
+  wheel installed outside the repository.
+- Package scanning freezes raw mapping-write sites, resolves lexical key and
+  mutation-call aliases, and covers subscript, `update`, `setdefault`,
+  `__setitem__`, `operator.setitem`, `getattr`, comprehensions, generator
+  updates, keyword dict, pair-based dict writes, and ordinary/async/lambda
+  helper effects. Failed dynamic binding and unknown callable shapes are
+  callsite-level blocking candidates rather than trusted omissions.
+- `v144.wave0_catalog_baseline_smoke` blocks metadata re-signing, dependency
+  edge swaps, physical writer conflicts, unregistered inline package types,
+  surface growth, and quality regressions.
+- This is an uncommitted Wave 0 candidate. Wave 1 and release publication are
+  blocked pending independent review.
+
 ## v12.14 Changes
 
 - `JobState` is owned by `application/jobs/model.py`; `server.JobState` remains

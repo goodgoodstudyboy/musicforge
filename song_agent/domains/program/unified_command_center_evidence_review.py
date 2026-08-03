@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import base64 as base64
 import json as json
@@ -679,7 +680,7 @@ def _manifest_document(center_id: str, review_id: str, source: ImplementationDoc
     for rel in sorted(entries - {"manifest.json"}):
         path = root / rel
         files.append({"path": rel, "sha256": _sha256_path(path), "size_bytes": path.stat().st_size if path.exists() else 0})
-    manifest = {"package_type": package_type, "schema_version": UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_SCHEMA_VERSION, "center_id": center_id, "review_id": review_id, "evidence_id": evidence_id, "source_hash": source.get("source_hash"), "files": files, "summary": {"replay_status": status, "required_evidence_status": status, "manual_review_required": True}, "source": {"review_source_hash": source.get("integrity_hash")}}
+    manifest = {"package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.program.unified_command_center_evidence_review._manifest_document"), "schema_version": UNIFIED_COMMAND_CENTER_EVIDENCE_REVIEW_SCHEMA_VERSION, "center_id": center_id, "review_id": review_id, "evidence_id": evidence_id, "source_hash": source.get("source_hash"), "files": files, "summary": {"replay_status": status, "required_evidence_status": status, "manual_review_required": True}, "source": {"review_source_hash": source.get("integrity_hash")}}
     manifest["integrity_hash"] = _integrity_hash(manifest)
     return manifest
 
@@ -726,7 +727,7 @@ def _review_verifier_kwargs(paths: ImplementationDocument) -> ImplementationDocu
 
 def _summary_from_path(path: Any, label: str) -> ImplementationDocument:
     if not path or not Path(path).exists():
-        doc: ImplementationDocument = {"package_type": f"musicforge_{label}_summary", "status": "not_applicable", "label": label}
+        doc: ImplementationDocument = {"package_type": _require_registered_package_type(f"musicforge_{label}_summary", writer_id="song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"), "status": "not_applicable", "label": label}
     else:
         source = read_json(Path(path))
         doc = {key: source.get(key) for key in ("package_type", "status", "zip_sha256", "zip_size_bytes", "manifest_hash", "integrity_hash") if key in source}
@@ -814,7 +815,6 @@ def _sha256_path(path: Any) -> str | None:
     if not path.exists() or not path.is_file():
         return None
     import hashlib
-
     h = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 from song_agent.platform.verification import (
     is_safe_zip_entry as _is_safe_zip_entry,
     raw_central_directory_entry_names as _raw_zip_entry_names,
 )
-
 import hashlib as hashlib
 import json as json
 import os as os
@@ -485,7 +485,7 @@ def _evidence_from_external(row: ImplementationDocument) -> ImplementationDocume
         "evidence_type": row.get("evidence_type"),
         "component_id": row.get("component_id"),
         "required": required,
-        "package_type": row.get("package_type"),
+        "package_type": _require_registered_package_type(row.get("package_type"), writer_id="song_agent.domains.trust.trust_operations_continuous_assurance_verifier._evidence_from_external"),
         "status": row.get("status"),
         "zip_sha256": row.get("zip_sha256"),
         "zip_size_bytes": row.get("zip_size_bytes"),

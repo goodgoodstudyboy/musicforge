@@ -7,6 +7,8 @@ from pathlib import Path
 from song_agent.platform.verification.hashing import stable_hash
 from song_agent.release_check.v14_quality import (
     EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+    MYPY_CRITICAL_TARGETS,
+    MYPY_ROOTS,
     QUALITY_POLICY_VERSION,
     V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH,
     V1421_MODULE_DEBT_CEILINGS_HASH,
@@ -112,6 +114,8 @@ def _ratchet_mypy_policy(document: dict[str, object], metrics: dict[str, object]
     budgets = metrics.get("error_budgets")
     if not isinstance(budgets, dict):
         raise RuntimeError("Measured mypy error budgets are invalid.")
+    policy["active_roots"] = list(MYPY_ROOTS)
+    policy["critical_targets"] = list(MYPY_CRITICAL_TARGETS)
     policy["max_total_errors"] = current
     policy["error_budgets"] = dict(sorted((str(key), int(value)) for key, value in budgets.items()))
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any as _InferenceType
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import hashlib as hashlib
 import json as json
@@ -649,7 +650,6 @@ class TrustOperationsFinalReadinessStore:
 
 
 
-
 def _verifier_payload(payload: ImplementationDocument) -> ImplementationDocument:
     return {
         "hub_package_path": payload.get("hub_package_path"),
@@ -720,7 +720,7 @@ def _row_from_verification_report(
         "component_id": component_id,
         "required": required,
         "status": status,
-        "package_type": report.get("package_type") if report else None,
+        "package_type": _require_registered_package_type(report.get("package_type") if report else None, writer_id="song_agent.domains.trust.trust_operations_final_readiness._row_from_verification_report"),
         "package_sha256": package_sha,
         "package_size_bytes": package_size,
         "manifest_hash": manifest_hash or report.get("manifest_hash"),

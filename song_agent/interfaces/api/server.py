@@ -3,11 +3,14 @@ from __future__ import annotations
 from typing import Any as _InferenceType
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path as _Path
 from typing import Any
 
 from song_agent.domains.creation.auth import AuthConfig
 
 from song_agent.application.program import ProgramApplicationService
+from song_agent.platform.persistence.file_artifacts import load_runtime_state_authority_policy
+from song_agent.platform.persistence.repository import validate_runtime_state_composition
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 from .router import api_inventory, configure_route_registry
@@ -168,6 +171,10 @@ class MusicForgeHTTPServer(ThreadingHTTPServer):
         self.edit_preset_store = EditPresetStore()
         self.prompt_template_store = PromptTemplateStore()
         self.editor_template_store = EditorTemplateStore()
+        state_blockers = runtime_state_authority_blockers(self)
+        if state_blockers:
+            super().server_close()
+            raise RuntimeError("State authority runtime validation failed: " + ", ".join(state_blockers))
         self.batch_runner = BatchRunner(self.batch_store, self.job_store, self.project_store)
         self.watchdog_stop = threading.Event()
         self.watchdog_thread = _start_watchdog(self.job_store, self.watchdog_stop)
@@ -203,6 +210,18 @@ def create_server(
 ) -> MusicForgeHTTPServer:
     return MusicForgeHTTPServer((host, port), auth_config=auth_config)
 
+
+def runtime_state_authority_blockers(composition: object, workspace: _Path | None = None) -> list[str]:
+    registry, baseline_hash, blockers = load_runtime_state_authority_policy()
+    if blockers:
+        return blockers
+    return validate_runtime_state_composition(
+        registry,
+        composition,
+        (workspace or _Path.cwd()).resolve(),
+        baseline_integrity_hash=baseline_hash,
+    )
+
 def serve(
     host: str = "127.0.0.1",
     port: int = 8787,
@@ -224,4 +243,11 @@ def serve(
         server.server_close()
 
 
-__all__ = ["MusicForgeHandler", "MusicForgeHTTPServer", "create_server", "serve", "api_inventory"]
+__all__ = [
+    "MusicForgeHandler",
+    "MusicForgeHTTPServer",
+    "create_server",
+    "serve",
+    "api_inventory",
+    "runtime_state_authority_blockers",
+]

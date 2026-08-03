@@ -28,10 +28,10 @@
       "verification_kernel": 85.0
     },
     "report_path": "architecture-v14-coverage.json",
-    "report_sha256": "f0165fd6da5caebabf20a939e85a5ffa70a5df04cebb86d761387527c44bbcc1",
-    "source_tree_hash": "d5b8a0a9bdf2d6961543b1b5a9db4d52ba336e77e0bcc216577990cc2c295d3d"
+    "report_sha256": "c93e6a305edaac4f8241f0dc363c2c81947f2d7e8e347e5c671367f6786a0954",
+    "source_tree_hash": "dc3c490114e850f10de130e68caeb5394dae949dc6e011a7aca4fb2beb9a7d13"
   },
-  "integrity_hash": "3df9ccbbf09eeb6eb9685e20b13171c100de3d55f19e69605f05df8fa3c7f9ee",
+  "integrity_hash": "f09dd4cf146ac55c935c4b3f6973faf21861442d76aab3614358a813e3d2e867",
   "module_size_debt": [
     {
       "expires_version": "14.4.0",
@@ -728,7 +728,19 @@
       "song_agent/interfaces"
     ],
     "critical_targets": [
-      "song_agent/release_check/explicit_any_dataflow.py"
+      "song_agent/release_check/explicit_any_dataflow.py",
+      "song_agent/release_check/v14_wave0.py",
+      "song_agent/release_check/v14_wave0_catalog_model.py",
+      "song_agent/release_check/v14_wave0_inventory.py",
+      "song_agent/release_check/v14_wave0_package_effects.py",
+      "song_agent/release_check/v14_wave0_package_inventory.py",
+      "song_agent/release_check/v14_wave0_package_registry.py",
+      "song_agent/release_check/v14_wave0_package_scan.py",
+      "song_agent/release_check/v14_wave0_ratchet.py",
+      "song_agent/release_check/v14_wave0_registry.py",
+      "song_agent/release_check/v14_wave0_source.py",
+      "song_agent/release_check/v14_wave0_state_registry.py",
+      "song_agent/release_check/v14_wave0_surfaces.py"
     ],
     "error_budgets": {},
     "max_total_errors": 0,

@@ -46,9 +46,6 @@ def _execute_verify_distribution_package(argv: list[str]) -> None:
     pass
 
 
-
-
-
     parser = build_verify_distribution_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_distribution_package(
@@ -80,9 +77,6 @@ def _execute_verify_submission_package(argv: list[str]) -> None:
     pass
 
 
-
-
-
     parser = build_verify_submission_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_submission_package(
@@ -110,9 +104,6 @@ def handle_verify_submission_package(argv: list[str]) -> None:
 def _execute_verify_submission_evidence_package(argv: list[str]) -> None:
     raw_args = ['verify-submission-evidence-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_submission_evidence_parser()
@@ -144,8 +135,6 @@ def _execute_verify_release_operations_package(argv: list[str]) -> None:
     pass
 
 
-
-
     parser = build_verify_release_operations_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_operations_package(
@@ -171,9 +160,6 @@ def handle_verify_release_operations_package(argv: list[str]) -> None:
 def _execute_verify_release_operations_runbook_package(argv: list[str]) -> None:
     raw_args = ['verify-release-operations-runbook-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_operations_runbook_parser()
@@ -203,9 +189,6 @@ def _execute_verify_release_operations_archive_package(argv: list[str]) -> None:
     pass
 
 
-
-
-
     parser = build_verify_release_operations_archive_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_operations_archive_package(
@@ -230,9 +213,6 @@ def handle_verify_release_operations_archive_package(argv: list[str]) -> None:
 def _execute_verify_release_operations_audit_package(argv: list[str]) -> None:
     raw_args = ['verify-release-operations-audit-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_operations_audit_parser()
@@ -261,9 +241,6 @@ def handle_verify_release_operations_audit_package(argv: list[str]) -> None:
 def _execute_verify_release_operations_reviewer_pack(argv: list[str]) -> None:
     raw_args = ['verify-release-operations-reviewer-pack', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_operations_reviewer_pack_parser()

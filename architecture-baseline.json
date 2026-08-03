@@ -26,7 +26,7 @@
     "song_agent/server.py": 30,
     "song_agent/webui.py": 3
   },
-  "module_count": 1017,
+  "module_count": 1029,
   "modules": [
     {
       "context": null,
@@ -5217,6 +5217,78 @@
       "layer": "release_check",
       "module": "song_agent.release_check.v14_reviewer",
       "path": "song_agent/release_check/v14_reviewer.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0",
+      "path": "song_agent/release_check/v14_wave0.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_catalog_model",
+      "path": "song_agent/release_check/v14_wave0_catalog_model.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_inventory",
+      "path": "song_agent/release_check/v14_wave0_inventory.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_package_effects",
+      "path": "song_agent/release_check/v14_wave0_package_effects.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_package_inventory",
+      "path": "song_agent/release_check/v14_wave0_package_inventory.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_package_registry",
+      "path": "song_agent/release_check/v14_wave0_package_registry.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_package_scan",
+      "path": "song_agent/release_check/v14_wave0_package_scan.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_ratchet",
+      "path": "song_agent/release_check/v14_wave0_ratchet.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_registry",
+      "path": "song_agent/release_check/v14_wave0_registry.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_source",
+      "path": "song_agent/release_check/v14_wave0_source.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_state_registry",
+      "path": "song_agent/release_check/v14_wave0_state_registry.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave0_surfaces",
+      "path": "song_agent/release_check/v14_wave0_surfaces.py"
     },
     {
       "context": null,

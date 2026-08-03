@@ -9,9 +9,6 @@ def _execute_verify_public_trust_center_distribution_kit_package(argv: list[str]
     pass
 
 
-
-
-
     parser = build_verify_public_trust_center_distribution_kit_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_public_trust_center_distribution_kit_package(
@@ -50,9 +47,6 @@ def _execute_verify_public_trust_center_distribution_kit_accepted_evidence_packa
     pass
 
 
-
-
-
     parser = build_verify_public_trust_center_distribution_kit_accepted_evidence_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_public_trust_center_distribution_kit_accepted_evidence_package(
@@ -78,9 +72,6 @@ def handle_verify_public_trust_center_distribution_kit_accepted_evidence_package
 def _execute_verify_public_trust_center_acceptance_board_package(argv: list[str]) -> None:
     raw_args = ['verify-public-trust-center-acceptance-board-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_public_trust_center_acceptance_board_parser()
@@ -116,9 +107,6 @@ def _execute_verify_public_trust_center_acceptance_board_signoff_archive_package
     pass
 
 
-
-
-
     parser = build_verify_public_trust_center_acceptance_board_signoff_archive_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_public_trust_center_acceptance_board_signoff_archive_package(
@@ -149,9 +137,6 @@ def handle_verify_public_trust_center_acceptance_board_signoff_archive_package(a
 def _execute_verify_public_trust_center_publication_package(argv: list[str]) -> None:
     raw_args = ['verify-public-trust-center-publication-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_public_trust_center_publication_parser()
@@ -185,9 +170,6 @@ def _execute_verify_public_trust_center_publication_mirror(argv: list[str]) -> N
     pass
 
 
-
-
-
     parser = build_verify_public_trust_center_publication_mirror_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_public_trust_center_publication_mirror(
@@ -214,9 +196,6 @@ def handle_verify_public_trust_center_publication_mirror(argv: list[str]) -> Non
 def _execute_verify_public_trust_center_publication_monitoring_package(argv: list[str]) -> None:
     raw_args = ['verify-public-trust-center-publication-monitoring-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_public_trust_center_publication_monitoring_parser()
@@ -249,9 +228,6 @@ def handle_verify_public_trust_center_publication_monitoring_package(argv: list[
 def _execute_verify_trust_operations_hub_package(argv: list[str]) -> None:
     raw_args = ['verify-trust-operations-hub-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_trust_operations_hub_parser()

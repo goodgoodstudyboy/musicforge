@@ -59,7 +59,7 @@ def _trust_center_fixture(tmp_path: Path, monkeypatch):
     ack_report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(ack_store.evidence_zip_path(portfolio_id), strict=True, require_accepted=True)
     write_release_portfolio_governance_attestation_transparency_acknowledgement_verification_report(ack_report, ack_store.evidence_verification_report_path(portfolio_id))
     store = PublicTrustCenterStore(
-        release_store=ReleaseStore(),
+        release_store=ReleaseStore(tmp_path / "releases"),
         portfolio_store=ack_store.transparency_store.attestation_store.portfolio_store,
         registry_store=ack_store.transparency_store.registry_store,
         portal_store=ack_store.transparency_store.portal_store,

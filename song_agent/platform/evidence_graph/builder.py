@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json
 from pathlib import Path
@@ -269,7 +270,7 @@ def _manifest_identity(
         "generation": generation,
         "current_generation": current_generation,
         "current": row.get("current", True) is True,
-        "package_type": _text(row.get("package_type")) or package_type,
+        "package_type": _require_registered_package_type(_text(row.get("package_type")) or package_type, writer_id="song_agent.platform.evidence_graph.builder._manifest_identity"),
         "source_hash": _text(row.get("source_hash")),
     }
 

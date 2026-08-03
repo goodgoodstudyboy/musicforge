@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 from song_agent.platform.verification.hashing import integrity_hash
 
 
@@ -49,7 +50,7 @@ def build_verification_report(
     ]
     report: dict[str, Any] = {
         "schema_version": int(schema_version),
-        "package_type": str(package_type),
+        "package_type": _require_registered_package_type(str(package_type), writer_id="song_agent.platform.verification.model.build_verification_report"),
         "status": "failed" if failed else "warning" if warning_status and warnings else "passed",
         "zip_sha256": summary.get("zip_sha256"),
         "zip_size_bytes": summary.get("zip_size_bytes", 0),

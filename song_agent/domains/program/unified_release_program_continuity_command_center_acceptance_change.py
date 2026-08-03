@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
 import shutil as shutil
@@ -448,7 +449,6 @@ class UnifiedReleaseProgramContinuityCommandCenterAcceptanceChangeStore:
                 return read_json(export_dir / "manifest.json")
             export_dir.mkdir(parents=True, exist_ok=True)
             files: list[dict[str, Any]] = []
-
             def write_entry(rel: str, value: dict[str, Any] | str) -> None:
                 path = export_dir / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -1110,7 +1110,7 @@ def _package_manifest(package_type: str, program_id: str, files: list[Implementa
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_ACCEPTANCE_CHANGE_SCHEMA_VERSION,
-            "package_type": package_type,
+            "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change._package_manifest"),
             "program_id": program_id,
             "created_at": now_iso(),
             "source": source,

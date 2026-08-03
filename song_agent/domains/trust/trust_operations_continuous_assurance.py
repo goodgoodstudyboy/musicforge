@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_text as _as_text
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import hashlib as hashlib
 import json as json
@@ -489,7 +490,6 @@ class TrustOperationsAssuranceStore:
 
 
 
-
 def _default_policy(now: str | None = None) -> ImplementationDocument:
     now = now or _now()
     policy = {
@@ -557,7 +557,7 @@ def _evidence_row_from_external(row: ImplementationDocument, *, required: bool) 
         "evidence_type": row.get("evidence_type"),
         "component_id": row.get("component_id"),
         "required": required,
-        "package_type": row.get("package_type"),
+        "package_type": _require_registered_package_type(row.get("package_type"), writer_id="song_agent.domains.trust.trust_operations_continuous_assurance._evidence_row_from_external"),
         "status": row.get("status"),
         "zip_sha256": row.get("zip_sha256"),
         "zip_size_bytes": row.get("zip_size_bytes"),

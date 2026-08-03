@@ -27,7 +27,8 @@ from song_agent.projectio import write_json
 from song_agent.interfaces.api.routes.delivery import DeliveryRoutes
 
 
-FAKE_VERIFICATION_PACKAGE_TYPE = "musicforge_test_evidence_verification"
+FAKE_PACKAGE_TYPE = "musicforge_unified_release_program"
+FAKE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_release_program_verification"
 
 
 def fake_runtime_verifier(package_path: Path | str, *, strict: bool = False) -> dict:
@@ -65,7 +66,7 @@ def _registry(component_type: str = "unified_release_program") -> CapabilityRegi
             runtime=RuntimeVerificationSpec(
                 module=__name__,
                 function="fake_runtime_verifier",
-                package_type="musicforge_test_evidence",
+                package_type=FAKE_PACKAGE_TYPE,
                 verification_package_type=FAKE_VERIFICATION_PACKAGE_TYPE,
                 defaults=(("strict", True),),
             ),
@@ -186,7 +187,7 @@ def test_evidence_graph_rejects_capability_without_interface_metadata(tmp_path: 
             runtime=RuntimeVerificationSpec(
                 module=__name__,
                 function="fake_runtime_verifier",
-                package_type="musicforge_test_evidence",
+                package_type=FAKE_PACKAGE_TYPE,
                 verification_package_type=FAKE_VERIFICATION_PACKAGE_TYPE,
                 defaults=(("strict", True),),
             ),

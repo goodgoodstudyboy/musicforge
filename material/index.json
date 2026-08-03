@@ -495,9 +495,15 @@
     },
     {
       "path": "material/v14.3.5-MusicForge首次全局绑定词法捕获闭环施工图-2026-07-29.md",
-      "status": "active",
+      "status": "historical",
       "title": "v14.3.5 MusicForge First-Created Module Global Capture Closure",
       "version": "14.3.5"
+    },
+    {
+      "path": "material/v14.4.0-MusicForge架构债务兑现产品面收敛与可持续演进施工图-2026-07-29.md",
+      "status": "active",
+      "title": "MusicForge v14.4.0 架构债务兑现、产品面收敛与可持续演进施工图",
+      "version": "14.4.0"
     },
     {
       "path": "material/v2.0.0-可视化编曲编辑与版本化收口施工图-2026-05-08.md",

@@ -11,9 +11,6 @@ def _execute_verify_release_portfolio_governance_attestation_portal(argv: list[s
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_attestation_portal_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_attestation_portal(
@@ -43,9 +40,6 @@ def _execute_verify_release_portfolio_governance_attestation_portal_review_pack(
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_attestation_portal_review_pack_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_attestation_portal_review_pack(
@@ -70,9 +64,6 @@ def handle_verify_release_portfolio_governance_attestation_portal_review_pack(ar
 def _execute_verify_release_portfolio_governance_attestation_portal_response(argv: list[str]) -> None:
     raw_args = ['verify-release-portfolio-governance-attestation-portal-response', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_portfolio_governance_attestation_portal_response_parser()
@@ -102,9 +93,6 @@ def _execute_verify_release_portfolio_governance_attestation_accepted_evidence(a
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_attestation_accepted_evidence_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_attestation_accepted_evidence(
@@ -129,9 +117,6 @@ def handle_verify_release_portfolio_governance_attestation_accepted_evidence(arg
 def _execute_verify_release_portfolio_governance_attestation_transparency(argv: list[str]) -> None:
     raw_args = ['verify-release-portfolio-governance-attestation-transparency', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_portfolio_governance_attestation_transparency_parser()
@@ -163,9 +148,6 @@ def _execute_verify_release_portfolio_governance_attestation_transparency_acknow
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_attestation_transparency_acknowledgement_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_attestation_transparency_acknowledgement_package(
@@ -193,9 +175,6 @@ def handle_verify_release_portfolio_governance_attestation_transparency_acknowle
 def _execute_verify_public_trust_center_package(argv: list[str]) -> None:
     raw_args = ['verify-public-trust-center-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_public_trust_center_parser()
@@ -251,9 +230,6 @@ def _execute_verify_public_trust_center_anchor_registry_package(argv: list[str])
     pass
 
 
-
-
-
     parser = build_verify_public_trust_center_anchor_registry_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_public_trust_center_anchor_registry_package(
@@ -280,9 +256,6 @@ def handle_verify_public_trust_center_anchor_registry_package(argv: list[str]) -
 def _execute_verify_public_trust_center_anchor_transparency_package(argv: list[str]) -> None:
     raw_args = ['verify-public-trust-center-anchor-transparency-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_public_trust_center_anchor_transparency_parser()

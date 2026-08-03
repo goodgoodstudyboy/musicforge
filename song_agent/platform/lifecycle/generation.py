@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from song_agent.platform.contracts.lifecycle import GenerationRef
+from song_agent.platform.contracts import GenerationRef
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 from song_agent.platform.verification.hashing import integrity_hash
 
 
@@ -23,7 +24,7 @@ class GenerationService:
     ) -> dict[str, Any]:
         document: dict[str, Any] = {
             "schema_version": schema_version,
-            "package_type": package_type,
+            "package_type": _require_registered_package_type(package_type, writer_id="song_agent.platform.lifecycle.generation.GenerationService.build_document"),
             **reference.to_dict(),
         }
         document.pop("subject_id")

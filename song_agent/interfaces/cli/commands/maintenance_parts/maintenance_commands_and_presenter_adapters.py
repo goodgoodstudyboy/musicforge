@@ -277,6 +277,16 @@ def run_doctor(*, provider_test: bool = False) -> None:
         print(f"provider config: warning {exc}")
         if provider_test:
             print(f"provider test: failed ({exc})")
+    from song_agent.interfaces.api.server import create_server
+
+    try:
+        server = create_server("127.0.0.1", 0)
+    except RuntimeError as exc:
+        print(f"state authority runtime: failed ({exc})")
+        raise SystemExit(1) from exc
+    else:
+        server.server_close()
+        print("state authority runtime: ok")
     print("local deterministic mode: ok")
 
 def _execute_doctor(argv: list[str]) -> None:
@@ -306,9 +316,6 @@ def handle_maintenance(argv: list[str]) -> None:
 def _execute_verify_maintenance_backup(argv: list[str]) -> None:
     raw_args = ['verify-maintenance-backup', *argv]
     pass
-
-
-
 
 
     parser = build_verify_maintenance_backup_parser()

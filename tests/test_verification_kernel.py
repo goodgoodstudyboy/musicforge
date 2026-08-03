@@ -31,6 +31,9 @@ ACTIVE_V12_VERIFIERS = (
     "unified_release_program_continuity_command_center_acceptance_change_verifier.py",
 )
 
+TEST_PACKAGE_TYPE = "musicforge_unified_release_program"
+TEST_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_release_program_verification"
+
 
 def test_text_hash_is_independent_of_platform_line_endings(tmp_path: Path) -> None:
     target = tmp_path / "evidence.txt"
@@ -44,8 +47,8 @@ def test_text_hash_is_independent_of_platform_line_endings(tmp_path: Path) -> No
 
 def _spec(*, nested: bool = False) -> PackageSpec:
     return PackageSpec(
-        package_type="musicforge_test_kernel_package",
-        verification_package_type="musicforge_test_kernel_verification",
+        package_type=TEST_PACKAGE_TYPE,
+        verification_package_type=TEST_VERIFICATION_PACKAGE_TYPE,
         check_prefix="kernel_test",
         required_entries=frozenset({"manifest.json", "data.json", "README.txt"}),
         optional_entries=frozenset({"packages/allowed.zip"}) if nested else frozenset(),
@@ -54,7 +57,7 @@ def _spec(*, nested: bool = False) -> PackageSpec:
     )
 
 
-def _write_package(path: Path, entries: dict[str, bytes] | None = None, *, package_type: str = "musicforge_test_kernel_package") -> Path:
+def _write_package(path: Path, entries: dict[str, bytes] | None = None, *, package_type: str = TEST_PACKAGE_TYPE) -> Path:
     payload = entries or {"data.json": b'{"ok":true}', "README.txt": b"kernel fixture\n"}
     manifest = {
         "schema_version": 1,
@@ -128,7 +131,7 @@ def test_verification_kernel_rejects_duplicate_raw_backslash_trailing_and_spoof(
     missing_file_index = tmp_path / "missing-file-index.zip"
     manifest_without_files = {
         "schema_version": 1,
-        "package_type": "musicforge_test_kernel_package",
+        "package_type": TEST_PACKAGE_TYPE,
     }
     manifest_without_files["integrity_hash"] = integrity_hash(manifest_without_files)
     with zipfile.ZipFile(missing_file_index, "w") as archive:
@@ -142,7 +145,7 @@ def test_verification_kernel_rejects_duplicate_raw_backslash_trailing_and_spoof(
     readme = b"readme"
     manifest = {
         "schema_version": 1,
-        "package_type": "musicforge_test_kernel_package",
+        "package_type": TEST_PACKAGE_TYPE,
         "files": [
             {"path": "data.json", "sha256": sha256_bytes(data)},
             {"path": "data.json", "sha256": sha256_bytes(data)},
@@ -190,7 +193,7 @@ def test_verification_kernel_rejects_non_regular_entries_in_all_modes(tmp_path: 
     readme = b"kernel fixture\n"
     manifest = {
         "schema_version": 1,
-        "package_type": "musicforge_test_kernel_package",
+        "package_type": TEST_PACKAGE_TYPE,
         "files": [
             {"path": "data.json", "sha256": sha256_bytes(data), "size_bytes": len(data)},
             {"path": "README.txt", "sha256": sha256_bytes(readme), "size_bytes": len(readme)},
@@ -220,7 +223,7 @@ def test_verification_kernel_requires_and_checks_manifest_size(tmp_path: Path) -
     readme = b"readme"
     manifest = {
         "schema_version": 1,
-        "package_type": "musicforge_test_kernel_package",
+        "package_type": TEST_PACKAGE_TYPE,
         "files": [
             {"path": "data.json", "sha256": sha256_bytes(data), "size_bytes": len(data) + 1},
             {"path": "README.txt", "sha256": sha256_bytes(readme)},

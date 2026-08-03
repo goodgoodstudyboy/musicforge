@@ -40,9 +40,6 @@ def _execute_verify_release_portfolio_audit_package(argv: list[str]) -> None:
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_audit_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_audit_package(
@@ -69,9 +66,6 @@ def handle_verify_release_portfolio_audit_package(argv: list[str]) -> None:
 def _execute_verify_release_portfolio_governance_package(argv: list[str]) -> None:
     raw_args = ['verify-release-portfolio-governance-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_portfolio_governance_parser()
@@ -101,9 +95,6 @@ def _execute_verify_release_portfolio_governance_archive_package(argv: list[str]
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_archive_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_archive_package(
@@ -129,9 +120,6 @@ def handle_verify_release_portfolio_governance_archive_package(argv: list[str]) 
 def _execute_verify_release_portfolio_governance_audit_package(argv: list[str]) -> None:
     raw_args = ['verify-release-portfolio-governance-audit-package', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_portfolio_governance_audit_parser()
@@ -163,9 +151,6 @@ def _execute_verify_release_portfolio_governance_reviewer_pack(argv: list[str]) 
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_reviewer_pack_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_reviewer_pack(
@@ -194,9 +179,6 @@ def handle_verify_release_portfolio_governance_reviewer_pack(argv: list[str]) ->
 def _execute_verify_release_portfolio_governance_final_board(argv: list[str]) -> None:
     raw_args = ['verify-release-portfolio-governance-final-board', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_portfolio_governance_final_board_parser()
@@ -231,9 +213,6 @@ def _execute_verify_release_portfolio_governance_evidence_vault(argv: list[str])
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_evidence_vault_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_evidence_vault_package(
@@ -265,9 +244,6 @@ def _execute_verify_release_portfolio_governance_attestation(argv: list[str]) ->
     pass
 
 
-
-
-
     parser = build_verify_release_portfolio_governance_attestation_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_release_portfolio_governance_attestation(
@@ -293,9 +269,6 @@ def handle_verify_release_portfolio_governance_attestation(argv: list[str]) -> N
 def _execute_verify_release_portfolio_governance_attestation_registry(argv: list[str]) -> None:
     raw_args = ['verify-release-portfolio-governance-attestation-registry', *argv]
     pass
-
-
-
 
 
     parser = build_verify_release_portfolio_governance_attestation_registry_parser()

@@ -1,0 +1,2051 @@
+{
+  "compatibility_type_contracts": {
+    "forged_package_type": {
+      "kind": "attack_corpus",
+      "writer_ids": [
+        "song_agent.platform.verification.attack_corpus._write_package"
+      ]
+    },
+    "musicforge_continuous-review_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_cr-binding-report_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_distribution_package": {
+      "kind": "top_level_package",
+      "writer_ids": [
+        "song_agent.capabilities.model.RuntimeIdentitySpec.extract",
+        "song_agent.platform.evidence_graph.builder._manifest_identity"
+      ]
+    },
+    "musicforge_drift-response_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_ga-readiness_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_public_trust_center_verification": {
+      "kind": "report",
+      "writer_ids": [
+        "song_agent.domains.trust.trust_operations_hub._evidence_from_verification"
+      ]
+    },
+    "musicforge_release": {
+      "kind": "top_level_package",
+      "writer_ids": [
+        "song_agent.capabilities.model.RuntimeIdentitySpec.extract",
+        "song_agent.platform.evidence_graph.builder._manifest_identity"
+      ]
+    },
+    "musicforge_release-check_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_release_operations": {
+      "kind": "top_level_package",
+      "writer_ids": [
+        "song_agent.capabilities.model.RuntimeIdentitySpec.extract",
+        "song_agent.platform.evidence_graph.builder._manifest_identity"
+      ]
+    },
+    "musicforge_signoff-binding_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_submission_evidence_verification": {
+      "kind": "report",
+      "writer_ids": [
+        "song_agent.domains.trust.trust_operations_continuous_assurance._evidence_row_from_external",
+        "song_agent.domains.trust.trust_operations_continuous_assurance_verifier._evidence_from_external",
+        "song_agent.domains.trust.trust_operations_final_readiness._row_from_verification_report",
+        "song_agent.domains.trust.trust_operations_hub._delivery_evidence_from_verification"
+      ]
+    },
+    "musicforge_submission_package": {
+      "kind": "top_level_package",
+      "writer_ids": [
+        "song_agent.capabilities.model.RuntimeIdentitySpec.extract",
+        "song_agent.platform.evidence_graph.builder._manifest_identity"
+      ]
+    },
+    "musicforge_ucc-archive_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_ucc-handoff_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_ucc_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+      ]
+    },
+    "musicforge_unified_release_program_continuity_acceptance_generation": {
+      "kind": "document",
+      "writer_ids": [
+        "song_agent.platform.lifecycle.generation.GenerationService.build_document"
+      ]
+    },
+    "musicforge_unified_release_program_continuity_command_center_acceptance_accepted_evidence_verification": {
+      "kind": "report",
+      "writer_ids": [
+        "song_agent.platform.verification.model.build_verification_report"
+      ]
+    },
+    "musicforge_unified_release_program_continuity_command_center_acceptance_generation": {
+      "kind": "document",
+      "writer_ids": [
+        "song_agent.platform.lifecycle.generation.GenerationService.build_document"
+      ]
+    },
+    "musicforge_unified_release_program_continuity_command_center_acceptance_review_pack_verification": {
+      "kind": "report",
+      "writer_ids": [
+        "song_agent.platform.verification.model.build_verification_report"
+      ]
+    },
+    "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive_verification": {
+      "kind": "report",
+      "writer_ids": [
+        "song_agent.platform.verification.model.build_verification_report"
+      ]
+    },
+    "musicforge_unified_release_program_handoff_operations_verification_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_release_program_handoff._verification_summary_from_state"
+      ]
+    },
+    "musicforge_unified_release_program_handoff_program_verification_summary": {
+      "kind": "sidecar",
+      "writer_ids": [
+        "song_agent.domains.program.unified_release_program_handoff._verification_summary_from_state"
+      ]
+    },
+    "musicforge_v13_migration_evidence_verification": {
+      "kind": "report",
+      "writer_ids": [
+        "song_agent.platform.verification.model.build_verification_report"
+      ]
+    },
+    "operations": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._generic_package_fingerprint"
+      ]
+    },
+    "operations_archive": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._generic_package_fingerprint"
+      ]
+    },
+    "operations_audit": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._generic_package_fingerprint"
+      ]
+    },
+    "operations_reviewer_pack": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._generic_package_fingerprint"
+      ]
+    },
+    "portal": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._package_summary",
+        "song_agent.domains.trust.public_trust_center._verification_sidecar_document"
+      ]
+    },
+    "registry": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._package_summary",
+        "song_agent.domains.trust.public_trust_center._verification_sidecar_document"
+      ]
+    },
+    "transparency": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._package_summary",
+        "song_agent.domains.trust.public_trust_center._verification_sidecar_document"
+      ]
+    },
+    "transparency_acknowledgement": {
+      "kind": "legacy_label",
+      "writer_ids": [
+        "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._package_summary",
+        "song_agent.domains.trust.public_trust_center._verification_sidecar_document"
+      ]
+    }
+  },
+  "formal_type_kinds": {
+    "audio_campaign": "document",
+    "audio_campaign_archive": "top_level_package",
+    "audio_campaign_archive_verification": "report",
+    "audio_campaign_remediation": "document",
+    "audio_campaign_remediation_verification": "report",
+    "audio_campaign_verification": "report",
+    "musicforge_distribution_verification": "report",
+    "musicforge_evidence_graph_manifest": "sidecar",
+    "musicforge_final_handoff_pack": "top_level_package",
+    "musicforge_final_handoff_pack_verification": "report",
+    "musicforge_final_handoff_package_index": "sidecar",
+    "musicforge_final_handoff_report": "report",
+    "musicforge_ga_readiness_report": "report",
+    "musicforge_ga_readiness_verification_report": "report",
+    "musicforge_legacy_workspace_migration_plan": "document",
+    "musicforge_legacy_workspace_migration_report": "report",
+    "musicforge_lts_maintenance_backup": "document",
+    "musicforge_lts_maintenance_backup_verification_report": "report",
+    "musicforge_lts_maintenance_check_report": "report",
+    "musicforge_lts_maintenance_status": "document",
+    "musicforge_lts_migration_state": "document",
+    "musicforge_lts_restore_plan": "document",
+    "musicforge_lts_upgrade_preflight_report": "report",
+    "musicforge_public_trust_center": "document",
+    "musicforge_public_trust_center_acceptance_board": "document",
+    "musicforge_public_trust_center_acceptance_board_change_request": "document",
+    "musicforge_public_trust_center_acceptance_board_conflict_report": "report",
+    "musicforge_public_trust_center_acceptance_board_policy": "document",
+    "musicforge_public_trust_center_acceptance_board_report": "report",
+    "musicforge_public_trust_center_acceptance_board_signoff": "document",
+    "musicforge_public_trust_center_acceptance_board_signoff_archive": "top_level_package",
+    "musicforge_public_trust_center_acceptance_board_signoff_archive_report": "report",
+    "musicforge_public_trust_center_anchor_checkpoint": "document",
+    "musicforge_public_trust_center_anchor_registry": "document",
+    "musicforge_public_trust_center_anchor_registry_report": "report",
+    "musicforge_public_trust_center_anchor_transparency": "document",
+    "musicforge_public_trust_center_anchor_transparency_report": "report",
+    "musicforge_public_trust_center_config": "document",
+    "musicforge_public_trust_center_delivery_anchor": "document",
+    "musicforge_public_trust_center_delivery_fingerprint_summary": "sidecar",
+    "musicforge_public_trust_center_delivery_verification_summary": "report",
+    "musicforge_public_trust_center_distribution_kit": "top_level_package",
+    "musicforge_public_trust_center_distribution_kit_acceptance_response": "top_level_package",
+    "musicforge_public_trust_center_distribution_kit_accepted_evidence": "top_level_package",
+    "musicforge_public_trust_center_distribution_kit_accepted_evidence_report": "report",
+    "musicforge_public_trust_center_distribution_kit_report": "report",
+    "musicforge_public_trust_center_package_verification_summary": "report",
+    "musicforge_public_trust_center_publication": "document",
+    "musicforge_public_trust_center_publication_channel": "document",
+    "musicforge_public_trust_center_publication_channel_state": "document",
+    "musicforge_public_trust_center_publication_drift_report": "report",
+    "musicforge_public_trust_center_publication_incident_report": "report",
+    "musicforge_public_trust_center_publication_monitor": "document",
+    "musicforge_public_trust_center_publication_monitor_run": "document",
+    "musicforge_public_trust_center_publication_monitoring": "document",
+    "musicforge_public_trust_center_publication_monitoring_verification": "report",
+    "musicforge_public_trust_center_publication_probe_results": "document",
+    "musicforge_public_trust_center_publication_report": "report",
+    "musicforge_public_trust_center_report": "report",
+    "musicforge_release_operations_verification": "report",
+    "musicforge_release_train_handoff_accepted_evidence": "top_level_package",
+    "musicforge_release_train_handoff_accepted_evidence_summary": "sidecar",
+    "musicforge_release_train_handoff_evidence_inventory": "top_level_package",
+    "musicforge_release_train_handoff_external_evidence_manifest": "sidecar",
+    "musicforge_release_train_handoff_file_index": "sidecar",
+    "musicforge_release_train_handoff_gap_plan": "top_level_package",
+    "musicforge_release_train_handoff_readiness_matrix": "top_level_package",
+    "musicforge_release_train_handoff_record": "top_level_package",
+    "musicforge_release_train_handoff_report": "report",
+    "musicforge_release_train_handoff_response": "document",
+    "musicforge_release_train_handoff_response_binding_summary": "sidecar",
+    "musicforge_release_train_handoff_response_summary": "sidecar",
+    "musicforge_release_train_handoff_response_verification": "report",
+    "musicforge_release_train_handoff_signoff": "top_level_package",
+    "musicforge_release_train_handoff_signoff_binding_summary": "sidecar",
+    "musicforge_release_train_handoff_source": "sidecar",
+    "musicforge_release_verification": "report",
+    "musicforge_submission_verification": "report",
+    "musicforge_trust_operations_assurance_drift_action_pack": "document",
+    "musicforge_trust_operations_assurance_policy": "document",
+    "musicforge_trust_operations_assurance_run_index": "sidecar",
+    "musicforge_trust_operations_assurance_schedule": "document",
+    "musicforge_trust_operations_assurance_watch": "document",
+    "musicforge_trust_operations_assurance_watch_closeout": "document",
+    "musicforge_trust_operations_assurance_watch_drift_action_pack_summary": "sidecar",
+    "musicforge_trust_operations_assurance_watch_external_summary": "sidecar",
+    "musicforge_trust_operations_assurance_watch_manifest": "sidecar",
+    "musicforge_trust_operations_assurance_watch_queue": "document",
+    "musicforge_trust_operations_assurance_watch_queue_summary": "sidecar",
+    "musicforge_trust_operations_assurance_watch_signoff": "document",
+    "musicforge_trust_operations_assurance_watch_signoff_archive": "top_level_package",
+    "musicforge_trust_operations_assurance_watch_signoff_change_request": "document",
+    "musicforge_trust_operations_assurance_watch_signoff_change_requests": "document",
+    "musicforge_trust_operations_assurance_watch_signoff_external_verification_summary": "report",
+    "musicforge_trust_operations_assurance_watch_signoff_manifest": "sidecar",
+    "musicforge_trust_operations_assurance_watch_signoff_report": "report",
+    "musicforge_trust_operations_assurance_watch_signoff_source": "sidecar",
+    "musicforge_trust_operations_assurance_watch_signoff_verification": "report",
+    "musicforge_trust_operations_assurance_watch_verification": "report",
+    "musicforge_trust_operations_blocker_register": "document",
+    "musicforge_trust_operations_continuous_assurance_archive": "top_level_package",
+    "musicforge_trust_operations_continuous_assurance_evidence_index": "sidecar",
+    "musicforge_trust_operations_continuous_assurance_external_verification_summary": "report",
+    "musicforge_trust_operations_continuous_assurance_manifest": "sidecar",
+    "musicforge_trust_operations_continuous_assurance_report": "report",
+    "musicforge_trust_operations_continuous_assurance_run": "document",
+    "musicforge_trust_operations_continuous_assurance_verification": "report",
+    "musicforge_trust_operations_control": "document",
+    "musicforge_trust_operations_control_assessment": "document",
+    "musicforge_trust_operations_control_blocker_summary": "sidecar",
+    "musicforge_trust_operations_control_catalog": "document",
+    "musicforge_trust_operations_control_change_request": "document",
+    "musicforge_trust_operations_control_evidence_bindings": "sidecar",
+    "musicforge_trust_operations_control_exception": "document",
+    "musicforge_trust_operations_control_manifest": "sidecar",
+    "musicforge_trust_operations_control_manual_actions": "document",
+    "musicforge_trust_operations_control_package": "top_level_package",
+    "musicforge_trust_operations_control_policy_bundle": "document",
+    "musicforge_trust_operations_control_results": "document",
+    "musicforge_trust_operations_control_signoff": "document",
+    "musicforge_trust_operations_control_signoff_archive": "top_level_package",
+    "musicforge_trust_operations_control_signoff_change_requests": "document",
+    "musicforge_trust_operations_control_signoff_exceptions": "document",
+    "musicforge_trust_operations_control_signoff_manifest": "sidecar",
+    "musicforge_trust_operations_control_signoff_report": "report",
+    "musicforge_trust_operations_control_signoff_source_verification": "report",
+    "musicforge_trust_operations_control_signoff_verification": "report",
+    "musicforge_trust_operations_control_verification": "report",
+    "musicforge_trust_operations_delivery_blocker_register": "document",
+    "musicforge_trust_operations_delivery_evidence_index": "sidecar",
+    "musicforge_trust_operations_delivery_manual_action_queue": "document",
+    "musicforge_trust_operations_delivery_readiness_matrix": "document",
+    "musicforge_trust_operations_evidence_binding_index": "sidecar",
+    "musicforge_trust_operations_final_delivery_verification_summary": "report",
+    "musicforge_trust_operations_final_evidence_index": "sidecar",
+    "musicforge_trust_operations_final_handoff_change_request": "top_level_package",
+    "musicforge_trust_operations_final_handoff_change_requests": "top_level_package",
+    "musicforge_trust_operations_final_handoff_signoff": "top_level_package",
+    "musicforge_trust_operations_final_handoff_verification": "report",
+    "musicforge_trust_operations_final_readiness_certificate": "document",
+    "musicforge_trust_operations_final_readiness_manifest": "sidecar",
+    "musicforge_trust_operations_final_readiness_report": "report",
+    "musicforge_trust_operations_final_verification_summary": "report",
+    "musicforge_trust_operations_hub": "document",
+    "musicforge_trust_operations_hub_change_request": "document",
+    "musicforge_trust_operations_hub_incident_board": "document",
+    "musicforge_trust_operations_hub_incident_manifest": "sidecar",
+    "musicforge_trust_operations_hub_incident_report": "report",
+    "musicforge_trust_operations_hub_incident_verification": "report",
+    "musicforge_trust_operations_hub_report": "report",
+    "musicforge_trust_operations_hub_runbook": "document",
+    "musicforge_trust_operations_hub_runbook_manifest": "sidecar",
+    "musicforge_trust_operations_hub_runbook_result": "document",
+    "musicforge_trust_operations_hub_runbook_verification": "report",
+    "musicforge_trust_operations_hub_signoff": "document",
+    "musicforge_trust_operations_hub_signoff_summary": "sidecar",
+    "musicforge_trust_operations_hub_verification": "report",
+    "musicforge_trust_operations_incident_board": "document",
+    "musicforge_trust_operations_incident_guard_run_summary": "sidecar",
+    "musicforge_trust_operations_incident_knowledge": "document",
+    "musicforge_trust_operations_incident_knowledge_base": "document",
+    "musicforge_trust_operations_incident_knowledge_entries": "document",
+    "musicforge_trust_operations_incident_knowledge_manifest": "sidecar",
+    "musicforge_trust_operations_incident_knowledge_report": "report",
+    "musicforge_trust_operations_incident_knowledge_source_summary": "sidecar",
+    "musicforge_trust_operations_incident_knowledge_verification": "report",
+    "musicforge_trust_operations_incident_recurrence_report": "report",
+    "musicforge_trust_operations_incident_regression_guards": "document",
+    "musicforge_trust_operations_manual_action_queue": "document",
+    "musicforge_trust_operations_readiness_matrix": "document",
+    "musicforge_trust_operations_source_state": "sidecar",
+    "musicforge_trust_operations_verification_summary_index": "report",
+    "musicforge_unified_command_center": "document",
+    "musicforge_unified_command_center_archive": "top_level_package",
+    "musicforge_unified_command_center_archive_verification": "report",
+    "musicforge_unified_command_center_change_request": "document",
+    "musicforge_unified_command_center_change_request_index": "sidecar",
+    "musicforge_unified_command_center_continuous_review": "document",
+    "musicforge_unified_command_center_continuous_review_change_request_drafts": "document",
+    "musicforge_unified_command_center_continuous_review_incident_board": "document",
+    "musicforge_unified_command_center_continuous_review_package_fingerprints": "top_level_package",
+    "musicforge_unified_command_center_continuous_review_plan": "document",
+    "musicforge_unified_command_center_continuous_review_runbook": "document",
+    "musicforge_unified_command_center_continuous_review_runbook_result": "document",
+    "musicforge_unified_command_center_continuous_review_source": "sidecar",
+    "musicforge_unified_command_center_continuous_review_verification": "report",
+    "musicforge_unified_command_center_drift_report": "report",
+    "musicforge_unified_command_center_drift_response": "document",
+    "musicforge_unified_command_center_drift_response_action_queue": "document",
+    "musicforge_unified_command_center_drift_response_action_results": "document",
+    "musicforge_unified_command_center_drift_response_case": "document",
+    "musicforge_unified_command_center_drift_response_change_request_binding_report": "report",
+    "musicforge_unified_command_center_drift_response_change_request_bindings": "sidecar",
+    "musicforge_unified_command_center_drift_response_closeout": "document",
+    "musicforge_unified_command_center_drift_response_package_fingerprints": "top_level_package",
+    "musicforge_unified_command_center_drift_response_plan": "document",
+    "musicforge_unified_command_center_drift_response_recheck_summary": "sidecar",
+    "musicforge_unified_command_center_drift_response_source": "sidecar",
+    "musicforge_unified_command_center_drift_response_verification": "report",
+    "musicforge_unified_command_center_evidence_graph": "document",
+    "musicforge_unified_command_center_evidence_inventory": "document",
+    "musicforge_unified_command_center_evidence_review": "document",
+    "musicforge_unified_command_center_evidence_review_acceptance": "document",
+    "musicforge_unified_command_center_evidence_review_acceptance_report": "report",
+    "musicforge_unified_command_center_evidence_review_acceptance_verification": "report",
+    "musicforge_unified_command_center_evidence_review_change_request_drafts": "document",
+    "musicforge_unified_command_center_evidence_review_external_proof_index": "sidecar",
+    "musicforge_unified_command_center_evidence_review_index": "sidecar",
+    "musicforge_unified_command_center_evidence_review_manual_checklist": "document",
+    "musicforge_unified_command_center_evidence_review_narrative": "document",
+    "musicforge_unified_command_center_evidence_review_replay_plan": "document",
+    "musicforge_unified_command_center_evidence_review_replay_result": "document",
+    "musicforge_unified_command_center_evidence_review_response": "document",
+    "musicforge_unified_command_center_evidence_review_response_binding_summary": "sidecar",
+    "musicforge_unified_command_center_evidence_review_response_public": "document",
+    "musicforge_unified_command_center_evidence_review_response_verification_summary": "report",
+    "musicforge_unified_command_center_evidence_review_source": "sidecar",
+    "musicforge_unified_command_center_evidence_review_verification": "report",
+    "musicforge_unified_command_center_gap_plan": "document",
+    "musicforge_unified_command_center_readiness_matrix": "document",
+    "musicforge_unified_command_center_record": "document",
+    "musicforge_unified_command_center_recovery_drill_report": "report",
+    "musicforge_unified_command_center_release_train": "document",
+    "musicforge_unified_command_center_release_train_archive_history_entry": "event",
+    "musicforge_unified_command_center_release_train_archive_history_index": "event",
+    "musicforge_unified_command_center_release_train_archive_history_ledger": "event",
+    "musicforge_unified_command_center_release_train_change_approval": "document",
+    "musicforge_unified_command_center_release_train_change_control": "document",
+    "musicforge_unified_command_center_release_train_change_control_index": "sidecar",
+    "musicforge_unified_command_center_release_train_change_control_report": "report",
+    "musicforge_unified_command_center_release_train_change_control_source": "sidecar",
+    "musicforge_unified_command_center_release_train_change_control_verification": "report",
+    "musicforge_unified_command_center_release_train_change_impact_report": "report",
+    "musicforge_unified_command_center_release_train_change_request": "document",
+    "musicforge_unified_command_center_release_train_change_request_binding_report": "report",
+    "musicforge_unified_command_center_release_train_change_request_summaries": "document",
+    "musicforge_unified_command_center_release_train_change_reset_coverage": "document",
+    "musicforge_unified_command_center_release_train_current_readiness_assertion": "document",
+    "musicforge_unified_command_center_release_train_dependency_graph": "document",
+    "musicforge_unified_command_center_release_train_evidence_inventory": "document",
+    "musicforge_unified_command_center_release_train_external_evidence_manifest": "sidecar",
+    "musicforge_unified_command_center_release_train_go_no_go_report": "report",
+    "musicforge_unified_command_center_release_train_handoff": "top_level_package",
+    "musicforge_unified_command_center_release_train_handoff_verification": "report",
+    "musicforge_unified_command_center_release_train_items": "document",
+    "musicforge_unified_command_center_release_train_lifecycle": "document",
+    "musicforge_unified_command_center_release_train_lifecycle_evidence_fingerprint_index": "sidecar",
+    "musicforge_unified_command_center_release_train_lifecycle_gap_plan": "document",
+    "musicforge_unified_command_center_release_train_lifecycle_report": "report",
+    "musicforge_unified_command_center_release_train_lifecycle_source": "sidecar",
+    "musicforge_unified_command_center_release_train_lifecycle_verification": "report",
+    "musicforge_unified_command_center_release_train_readiness_matrix": "document",
+    "musicforge_unified_command_center_release_train_record": "document",
+    "musicforge_unified_command_center_release_train_reset_proof": "document",
+    "musicforge_unified_command_center_release_train_safe_runbook": "document",
+    "musicforge_unified_command_center_release_train_safe_runbook_result": "document",
+    "musicforge_unified_command_center_release_train_signoff": "document",
+    "musicforge_unified_command_center_release_train_signoff_binding": "sidecar",
+    "musicforge_unified_command_center_release_train_signoff_succession_map": "document",
+    "musicforge_unified_command_center_release_train_source": "sidecar",
+    "musicforge_unified_command_center_release_train_verification": "report",
+    "musicforge_unified_command_center_release_train_wave_plan": "document",
+    "musicforge_unified_command_center_report": "report",
+    "musicforge_unified_command_center_reviewer_decision_board": "document",
+    "musicforge_unified_command_center_reviewer_decision_board_accepted_evidence_index": "sidecar",
+    "musicforge_unified_command_center_reviewer_decision_board_conflict_report": "report",
+    "musicforge_unified_command_center_reviewer_decision_board_decision_matrix": "document",
+    "musicforge_unified_command_center_reviewer_decision_board_decision_report": "report",
+    "musicforge_unified_command_center_reviewer_decision_board_finding_ledger": "document",
+    "musicforge_unified_command_center_reviewer_decision_board_manual_checklist": "document",
+    "musicforge_unified_command_center_reviewer_decision_board_quorum_report": "report",
+    "musicforge_unified_command_center_reviewer_decision_board_response_index": "sidecar",
+    "musicforge_unified_command_center_reviewer_decision_board_roster": "document",
+    "musicforge_unified_command_center_reviewer_decision_board_signoff": "document",
+    "musicforge_unified_command_center_reviewer_decision_board_signoff_binding_summary": "sidecar",
+    "musicforge_unified_command_center_reviewer_decision_board_source": "sidecar",
+    "musicforge_unified_command_center_reviewer_decision_board_verification": "report",
+    "musicforge_unified_command_center_runbook_result": "document",
+    "musicforge_unified_command_center_safe_runbook": "document",
+    "musicforge_unified_command_center_signoff": "document",
+    "musicforge_unified_command_center_signoff_binding": "sidecar",
+    "musicforge_unified_command_center_source": "sidecar",
+    "musicforge_unified_command_center_verification": "report",
+    "musicforge_unified_command_center_verification_index": "report",
+    "musicforge_unified_release_program": "document",
+    "musicforge_unified_release_program_accepted_evidence": "document",
+    "musicforge_unified_release_program_accepted_evidence_binding_summary": "sidecar",
+    "musicforge_unified_release_program_accepted_evidence_index": "sidecar",
+    "musicforge_unified_release_program_accepted_evidence_report": "report",
+    "musicforge_unified_release_program_accepted_evidence_verification": "report",
+    "musicforge_unified_release_program_accepted_evidence_verification_summaries": "report",
+    "musicforge_unified_release_program_change_approval": "document",
+    "musicforge_unified_release_program_change_control_report": "report",
+    "musicforge_unified_release_program_change_request": "document",
+    "musicforge_unified_release_program_continuity_acceptance": "document",
+    "musicforge_unified_release_program_continuity_acceptance_accepted_evidence_index": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_archive": "top_level_package",
+    "musicforge_unified_release_program_continuity_acceptance_board": "document",
+    "musicforge_unified_release_program_continuity_acceptance_change_approval": "document",
+    "musicforge_unified_release_program_continuity_acceptance_change_control": "document",
+    "musicforge_unified_release_program_continuity_acceptance_change_control_archive": "top_level_package",
+    "musicforge_unified_release_program_continuity_acceptance_change_control_state": "document",
+    "musicforge_unified_release_program_continuity_acceptance_change_control_verification": "report",
+    "musicforge_unified_release_program_continuity_acceptance_change_request": "document",
+    "musicforge_unified_release_program_continuity_acceptance_change_request_binding_report": "report",
+    "musicforge_unified_release_program_continuity_acceptance_change_request_index": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_current_state": "document",
+    "musicforge_unified_release_program_continuity_acceptance_decision_matrix": "document",
+    "musicforge_unified_release_program_continuity_acceptance_evidence": "document",
+    "musicforge_unified_release_program_continuity_acceptance_evidence_report": "report",
+    "musicforge_unified_release_program_continuity_acceptance_external_evidence_manifest": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_generation_signoff_binding_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_generation_source_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_generation_verification_summary": "report",
+    "musicforge_unified_release_program_continuity_acceptance_lifecycle_report": "report",
+    "musicforge_unified_release_program_continuity_acceptance_receiver_index": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_reset_proof": "document",
+    "musicforge_unified_release_program_continuity_acceptance_reset_proof_binding_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_reset_proof_index": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_response": "document",
+    "musicforge_unified_release_program_continuity_acceptance_response_public_projection": "document",
+    "musicforge_unified_release_program_continuity_acceptance_response_verification": "report",
+    "musicforge_unified_release_program_continuity_acceptance_response_verification_summary": "report",
+    "musicforge_unified_release_program_continuity_acceptance_signoff": "document",
+    "musicforge_unified_release_program_continuity_acceptance_signoff_binding_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_source_binding": "sidecar",
+    "musicforge_unified_release_program_continuity_acceptance_verification": "report",
+    "musicforge_unified_release_program_continuity_archive": "top_level_package",
+    "musicforge_unified_release_program_continuity_command_center": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_accepted_evidence": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_approval": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_control": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive": "top_level_package",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_state": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_verification": "report",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_request": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_request_binding_report": "report",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_change_request_index": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_current_state": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_generation_signoff_binding_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_generation_source_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_generation_verification_summary": "report",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_lifecycle_report": "report",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_reset_proof": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_reset_proof_binding_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_reset_proof_index": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_response": "document",
+    "musicforge_unified_release_program_continuity_command_center_acceptance_review_pack": "document",
+    "musicforge_unified_release_program_continuity_command_center_archive_verification_summary": "report",
+    "musicforge_unified_release_program_continuity_command_center_evidence_inventory": "document",
+    "musicforge_unified_release_program_continuity_command_center_external_evidence_manifest": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_external_evidence_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_final_handoff": "top_level_package",
+    "musicforge_unified_release_program_continuity_command_center_final_handoff_checklist": "top_level_package",
+    "musicforge_unified_release_program_continuity_command_center_final_handoff_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_final_handoff_verification": "report",
+    "musicforge_unified_release_program_continuity_command_center_fingerprint_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_gap_plan": "document",
+    "musicforge_unified_release_program_continuity_command_center_readiness_matrix": "document",
+    "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive": "top_level_package",
+    "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_board": "document",
+    "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_signoff": "document",
+    "musicforge_unified_release_program_continuity_command_center_receiver_checklist": "document",
+    "musicforge_unified_release_program_continuity_command_center_report": "report",
+    "musicforge_unified_release_program_continuity_command_center_runbook_result": "document",
+    "musicforge_unified_release_program_continuity_command_center_runtime_verification_index": "report",
+    "musicforge_unified_release_program_continuity_command_center_safe_runbook": "document",
+    "musicforge_unified_release_program_continuity_command_center_signoff": "document",
+    "musicforge_unified_release_program_continuity_command_center_signoff_archive": "top_level_package",
+    "musicforge_unified_release_program_continuity_command_center_signoff_archive_verification": "report",
+    "musicforge_unified_release_program_continuity_command_center_signoff_binding": "sidecar",
+    "musicforge_unified_release_program_continuity_command_center_signoff_change_approval": "document",
+    "musicforge_unified_release_program_continuity_command_center_signoff_change_request": "document",
+    "musicforge_unified_release_program_continuity_command_center_signoff_policy": "document",
+    "musicforge_unified_release_program_continuity_command_center_signoff_preflight": "document",
+    "musicforge_unified_release_program_continuity_command_center_signoff_reset_proof": "document",
+    "musicforge_unified_release_program_continuity_command_center_signoff_state": "document",
+    "musicforge_unified_release_program_continuity_command_center_verification": "report",
+    "musicforge_unified_release_program_continuity_command_center_verification_summary": "report",
+    "musicforge_unified_release_program_continuity_distribution_custody_checklist": "document",
+    "musicforge_unified_release_program_continuity_distribution_kit": "top_level_package",
+    "musicforge_unified_release_program_continuity_distribution_package_index": "sidecar",
+    "musicforge_unified_release_program_continuity_distribution_receiver_receipt": "document",
+    "musicforge_unified_release_program_continuity_distribution_receiver_receipt_template": "document",
+    "musicforge_unified_release_program_continuity_distribution_redaction_report": "report",
+    "musicforge_unified_release_program_continuity_distribution_source_binding": "sidecar",
+    "musicforge_unified_release_program_continuity_distribution_verification": "report",
+    "musicforge_unified_release_program_continuity_distribution_verification_index": "report",
+    "musicforge_unified_release_program_continuity_external_evidence_manifest": "sidecar",
+    "musicforge_unified_release_program_continuity_policy": "document",
+    "musicforge_unified_release_program_continuity_readiness": "document",
+    "musicforge_unified_release_program_continuity_redaction_report": "report",
+    "musicforge_unified_release_program_continuity_report": "report",
+    "musicforge_unified_release_program_continuity_runbook": "document",
+    "musicforge_unified_release_program_continuity_signoff": "document",
+    "musicforge_unified_release_program_continuity_signoff_binding_summary": "sidecar",
+    "musicforge_unified_release_program_continuity_verification": "report",
+    "musicforge_unified_release_program_continuous_review": "document",
+    "musicforge_unified_release_program_decision_board": "document",
+    "musicforge_unified_release_program_dependency_graph": "document",
+    "musicforge_unified_release_program_evidence_vault": "top_level_package",
+    "musicforge_unified_release_program_evidence_vault_anchor": "top_level_package",
+    "musicforge_unified_release_program_evidence_vault_report": "report",
+    "musicforge_unified_release_program_evidence_vault_source": "sidecar",
+    "musicforge_unified_release_program_evidence_vault_verification": "report",
+    "musicforge_unified_release_program_exception_register": "document",
+    "musicforge_unified_release_program_external_evidence_manifest": "sidecar",
+    "musicforge_unified_release_program_file_index": "sidecar",
+    "musicforge_unified_release_program_gap_plan": "document",
+    "musicforge_unified_release_program_handoff_archive": "top_level_package",
+    "musicforge_unified_release_program_handoff_conflict_report": "report",
+    "musicforge_unified_release_program_handoff_evidence_inventory": "top_level_package",
+    "musicforge_unified_release_program_handoff_external_evidence_manifest": "sidecar",
+    "musicforge_unified_release_program_handoff_gap_plan": "top_level_package",
+    "musicforge_unified_release_program_handoff_public_inventory": "top_level_package",
+    "musicforge_unified_release_program_handoff_public_summary": "sidecar",
+    "musicforge_unified_release_program_handoff_readiness_matrix": "top_level_package",
+    "musicforge_unified_release_program_handoff_report": "report",
+    "musicforge_unified_release_program_handoff_risk_summary": "sidecar",
+    "musicforge_unified_release_program_handoff_signoff": "top_level_package",
+    "musicforge_unified_release_program_handoff_signoff_binding_summary": "sidecar",
+    "musicforge_unified_release_program_handoff_verification": "report",
+    "musicforge_unified_release_program_lifecycle_audit": "document",
+    "musicforge_unified_release_program_lifecycle_index": "sidecar",
+    "musicforge_unified_release_program_operations_archive": "top_level_package",
+    "musicforge_unified_release_program_operations_archive_verification": "report",
+    "musicforge_unified_release_program_operations_evidence_index": "sidecar",
+    "musicforge_unified_release_program_operations_external_evidence_manifest_summary": "sidecar",
+    "musicforge_unified_release_program_operations_program_summary": "sidecar",
+    "musicforge_unified_release_program_operations_program_verification_summary": "report",
+    "musicforge_unified_release_program_operations_runbook": "document",
+    "musicforge_unified_release_program_operations_signoff_summary": "sidecar",
+    "musicforge_unified_release_program_readiness_matrix": "document",
+    "musicforge_unified_release_program_record": "document",
+    "musicforge_unified_release_program_recovery_drill_report": "report",
+    "musicforge_unified_release_program_recovery_plan": "document",
+    "musicforge_unified_release_program_report": "report",
+    "musicforge_unified_release_program_reset_proof": "document",
+    "musicforge_unified_release_program_response_binding_summary": "sidecar",
+    "musicforge_unified_release_program_response_verification_summary": "report",
+    "musicforge_unified_release_program_review_pack": "document",
+    "musicforge_unified_release_program_review_pack_binding_summary": "sidecar",
+    "musicforge_unified_release_program_review_pack_report": "report",
+    "musicforge_unified_release_program_review_pack_verification": "report",
+    "musicforge_unified_release_program_review_response_public_projection": "document",
+    "musicforge_unified_release_program_review_response_verification": "report",
+    "musicforge_unified_release_program_reviewer_form_template": "document",
+    "musicforge_unified_release_program_risk_register": "document",
+    "musicforge_unified_release_program_runbook_results": "document",
+    "musicforge_unified_release_program_signoff": "document",
+    "musicforge_unified_release_program_signoff_binding_summary": "sidecar",
+    "musicforge_unified_release_program_source": "sidecar",
+    "musicforge_unified_release_program_train_items": "document",
+    "musicforge_unified_release_program_vault_chain_of_custody": "top_level_package",
+    "musicforge_unified_release_program_vault_custody_policy": "top_level_package",
+    "musicforge_unified_release_program_vault_custody_review": "top_level_package",
+    "musicforge_unified_release_program_vault_operations_archive": "top_level_package",
+    "musicforge_unified_release_program_vault_operations_report": "report",
+    "musicforge_unified_release_program_vault_operations_signoff": "top_level_package",
+    "musicforge_unified_release_program_vault_operations_signoff_binding_summary": "sidecar",
+    "musicforge_unified_release_program_vault_operations_verification": "report",
+    "musicforge_unified_release_program_vault_package_index": "sidecar",
+    "musicforge_unified_release_program_vault_proof_index": "sidecar",
+    "musicforge_unified_release_program_vault_public_summary": "sidecar",
+    "musicforge_unified_release_program_vault_registry": "top_level_package",
+    "musicforge_unified_release_program_vault_replay_plan": "top_level_package",
+    "musicforge_unified_release_program_vault_replica_checklist": "top_level_package",
+    "musicforge_unified_release_program_vault_rotation_plan": "top_level_package",
+    "musicforge_unified_release_program_vault_transfer_report": "report",
+    "musicforge_unified_release_program_vault_verification_index": "report",
+    "musicforge_unified_release_program_verification": "report",
+    "musicforge_v13_migration_evidence": "document",
+    "musicforge_v13_migration_evidence_anchor": "document",
+    "musicforge_v13_migration_plan": "document",
+    "musicforge_v13_migration_report": "report",
+    "musicforge_v13_rollback_rehearsal": "document",
+    "musicforge_v144_runtime_package_writer_policy": "sidecar",
+    "musicforge_v144_runtime_state_authority_policy": "document",
+    "musicforge_v14_migration_commit_marker": "document",
+    "musicforge_v14_migration_intent": "document",
+    "musicforge_v14_migration_plan": "document",
+    "musicforge_v14_migration_report": "report",
+    "musicforge_v14_migration_rollback": "document",
+    "musicforge_v14_migration_rollback_rehearsal": "document",
+    "release_audio_baseline_registry": "document",
+    "release_audio_baseline_registry_verification": "report",
+    "release_audio_certification": "document",
+    "release_audio_certification_verification": "report",
+    "release_audio_command_center": "document",
+    "release_audio_command_center_evidence_inventory": "document",
+    "release_audio_command_center_gap_plan": "document",
+    "release_audio_command_center_readiness_matrix": "document",
+    "release_audio_command_center_report": "report",
+    "release_audio_command_center_runbook": "document",
+    "release_audio_command_center_runbook_results": "document",
+    "release_audio_command_center_verification": "report",
+    "release_audio_quality_action_queue": "document",
+    "release_audio_quality_action_queue_closeout": "document",
+    "release_audio_quality_action_queue_manual_resolutions": "document",
+    "release_audio_quality_action_queue_signoff": "document",
+    "release_audio_quality_action_queue_signoff_archive": "top_level_package",
+    "release_audio_quality_action_queue_signoff_archive_verification": "report",
+    "release_audio_quality_action_queue_summary": "sidecar",
+    "release_audio_quality_action_queue_verification": "report",
+    "release_audio_quality_observatory": "document",
+    "release_audio_quality_observatory_verification": "report",
+    "release_audio_regression": "document",
+    "release_audio_regression_response": "document",
+    "release_audio_regression_response_verification": "report",
+    "release_audio_regression_verification": "report",
+    "release_audio_timeline": "document",
+    "release_audio_timeline_verification": "report",
+    "release_portfolio_audit": "document",
+    "release_portfolio_governance_archive": "top_level_package",
+    "release_portfolio_governance_attestation_accepted_evidence": "document",
+    "release_portfolio_governance_attestation_accepted_evidence_report": "report",
+    "release_portfolio_governance_attestation_accepted_evidence_verification_summary": "report",
+    "release_portfolio_governance_attestation_portal": "document",
+    "release_portfolio_governance_attestation_portal_report": "report",
+    "release_portfolio_governance_attestation_portal_response": "document",
+    "release_portfolio_governance_attestation_portal_review_pack": "document",
+    "release_portfolio_governance_attestation_registry": "document",
+    "release_portfolio_governance_attestation_registry_report": "report",
+    "release_portfolio_governance_attestation_report": "report",
+    "release_portfolio_governance_attestation_transparency": "document",
+    "release_portfolio_governance_attestation_transparency_acknowledgement_evidence": "document",
+    "release_portfolio_governance_attestation_transparency_acknowledgement_pack": "document",
+    "release_portfolio_governance_attestation_transparency_acknowledgement_response": "document",
+    "release_portfolio_governance_attestation_transparency_feed": "document",
+    "release_portfolio_governance_attestation_transparency_report": "report",
+    "release_portfolio_governance_audit": "document",
+    "release_portfolio_governance_evidence_vault": "top_level_package",
+    "release_portfolio_governance_evidence_vault_report": "report",
+    "release_portfolio_governance_final_board_archive": "top_level_package",
+    "release_portfolio_governance_public_attestation": "document",
+    "release_portfolio_governance_queue": "document",
+    "release_portfolio_governance_reviewer_pack": "document",
+    "release_portfolio_governance_reviewer_report": "report",
+    "test_approval": "document",
+    "test_binding": "sidecar",
+    "test_change_request": "document",
+    "test_signoff": "document"
+  },
+  "integrity_hash": "45879327cf3444f1d9e4993c043d71bc495a0125596ef7791ec7bced312bfe69",
+  "package_type_sets": [
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "musicforge_distribution_package": "top_level_package",
+        "musicforge_release": "top_level_package",
+        "musicforge_release_operations": "top_level_package",
+        "musicforge_submission_package": "top_level_package",
+        "musicforge_unified_release_program": "document",
+        "musicforge_unified_release_program_continuity_acceptance_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center": "document",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_distribution_kit": "top_level_package",
+        "musicforge_unified_release_program_evidence_vault": "top_level_package",
+        "musicforge_unified_release_program_handoff_archive": "top_level_package",
+        "musicforge_unified_release_program_operations_archive": "top_level_package",
+        "musicforge_unified_release_program_vault_operations_archive": "top_level_package",
+        "release_audio_certification": "document",
+        "release_audio_timeline": "document"
+      },
+      "package_types": [
+        "musicforge_distribution_package",
+        "musicforge_release",
+        "musicforge_release_operations",
+        "musicforge_submission_package",
+        "musicforge_unified_release_program",
+        "musicforge_unified_release_program_continuity_acceptance_archive",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_archive",
+        "musicforge_unified_release_program_continuity_command_center",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive",
+        "musicforge_unified_release_program_continuity_distribution_kit",
+        "musicforge_unified_release_program_evidence_vault",
+        "musicforge_unified_release_program_handoff_archive",
+        "musicforge_unified_release_program_operations_archive",
+        "musicforge_unified_release_program_vault_operations_archive",
+        "release_audio_certification",
+        "release_audio_timeline"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.a9a9bad84d34496c",
+      "writer_id": "song_agent.capabilities.model.RuntimeIdentitySpec.extract"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_command_center_evidence_review": "document",
+        "musicforge_unified_command_center_evidence_review_acceptance": "document"
+      },
+      "package_types": [
+        "musicforge_unified_command_center_evidence_review",
+        "musicforge_unified_command_center_evidence_review_acceptance"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.d67a10d19ce1bb98",
+      "writer_id": "song_agent.domains.program.unified_command_center_evidence_review._manifest_document"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "package_type_kinds": {
+        "musicforge_continuous-review_summary": "sidecar",
+        "musicforge_cr-binding-report_summary": "sidecar",
+        "musicforge_drift-response_summary": "sidecar",
+        "musicforge_ga-readiness_summary": "sidecar",
+        "musicforge_release-check_summary": "sidecar",
+        "musicforge_signoff-binding_summary": "sidecar",
+        "musicforge_ucc-archive_summary": "sidecar",
+        "musicforge_ucc-handoff_summary": "sidecar",
+        "musicforge_ucc_summary": "sidecar"
+      },
+      "package_types": [
+        "musicforge_continuous-review_summary",
+        "musicforge_cr-binding-report_summary",
+        "musicforge_drift-response_summary",
+        "musicforge_ga-readiness_summary",
+        "musicforge_release-check_summary",
+        "musicforge_signoff-binding_summary",
+        "musicforge_ucc-archive_summary",
+        "musicforge_ucc-handoff_summary",
+        "musicforge_ucc_summary"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.801cbb6466df7398",
+      "writer_id": "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_command_center_evidence_review_acceptance_verification": "report",
+        "musicforge_unified_command_center_evidence_review_verification": "report"
+      },
+      "package_types": [
+        "musicforge_unified_command_center_evidence_review_acceptance_verification",
+        "musicforge_unified_command_center_evidence_review_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.8cec23dd00e16338",
+      "writer_id": "song_agent.domains.program.unified_command_center_evidence_review_verifier._finish"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_final_handoff_pack_verification": "report",
+        "musicforge_unified_command_center_archive_verification": "report",
+        "musicforge_unified_command_center_continuous_review_verification": "report",
+        "musicforge_unified_command_center_evidence_review_verification": "report",
+        "musicforge_unified_command_center_reviewer_decision_board_verification": "report",
+        "musicforge_unified_command_center_verification": "report"
+      },
+      "package_types": [
+        "musicforge_final_handoff_pack_verification",
+        "musicforge_unified_command_center_archive_verification",
+        "musicforge_unified_command_center_continuous_review_verification",
+        "musicforge_unified_command_center_evidence_review_verification",
+        "musicforge_unified_command_center_reviewer_decision_board_verification",
+        "musicforge_unified_command_center_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.bc65e2a54dd583e9",
+      "writer_id": "song_agent.domains.program.unified_command_center_release_train._evidence_row"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_distribution_verification": "report",
+        "musicforge_lts_maintenance_backup_verification_report": "report",
+        "musicforge_release_operations_verification": "report",
+        "musicforge_release_verification": "report",
+        "musicforge_submission_verification": "report",
+        "musicforge_trust_operations_hub_verification": "report",
+        "release_audio_command_center_verification": "report"
+      },
+      "package_types": [
+        "musicforge_distribution_verification",
+        "musicforge_lts_maintenance_backup_verification_report",
+        "musicforge_release_operations_verification",
+        "musicforge_release_verification",
+        "musicforge_submission_verification",
+        "musicforge_trust_operations_hub_verification",
+        "release_audio_command_center_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.78ad3efc61b13286",
+      "writer_id": "song_agent.domains.program.unified_command_center_verifier._public_report"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_continuity_acceptance_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center": "document"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_continuity_acceptance_archive",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_command_center"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.e5757a1d63904004",
+      "writer_id": "song_agent.domains.program.unified_release_program_continuity_acceptance._package_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_continuity_command_center_acceptance_accepted_evidence": "document",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_review_pack": "document",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive": "top_level_package"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_continuity_command_center_acceptance_accepted_evidence",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_review_pack",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.19e1fbd30089a3a3",
+      "writer_id": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance._manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive": "top_level_package"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.35bffa7b3267f924",
+      "writer_id": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change._package_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_accepted_evidence": "document",
+        "musicforge_unified_release_program_handoff_archive": "top_level_package",
+        "musicforge_unified_release_program_review_pack": "document"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_accepted_evidence",
+        "musicforge_unified_release_program_handoff_archive",
+        "musicforge_unified_release_program_review_pack"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.f0ea212dbecd1c2f",
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff._package_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_handoff_external_evidence_manifest": "sidecar"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_handoff_external_evidence_manifest"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.e2ac2831217150af",
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff._public_external_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_handoff_operations_verification_summary": "sidecar",
+        "musicforge_unified_release_program_handoff_program_verification_summary": "sidecar"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_handoff_operations_verification_summary",
+        "musicforge_unified_release_program_handoff_program_verification_summary"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.bde43e358a403650",
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff._verification_summary_from_state"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_handoff_external_evidence_manifest": "sidecar"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_handoff_external_evidence_manifest"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.a0ecbefadd1a7746",
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff_verifier._public_external_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "audio_campaign_verification": "report"
+      },
+      "package_types": [
+        "audio_campaign_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.92e21c02964b8f7e",
+      "writer_id": "song_agent.domains.quality.audio_campaign_governance._public_verification"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "release_audio_baseline_registry_verification": "report",
+        "release_audio_certification_verification": "report",
+        "release_audio_quality_action_queue_signoff_archive_verification": "report",
+        "release_audio_quality_action_queue_verification": "report",
+        "release_audio_quality_observatory_verification": "report",
+        "release_audio_regression_response_verification": "report",
+        "release_audio_regression_verification": "report",
+        "release_audio_timeline_verification": "report"
+      },
+      "package_types": [
+        "release_audio_baseline_registry_verification",
+        "release_audio_certification_verification",
+        "release_audio_quality_action_queue_signoff_archive_verification",
+        "release_audio_quality_action_queue_verification",
+        "release_audio_quality_observatory_verification",
+        "release_audio_regression_response_verification",
+        "release_audio_regression_verification",
+        "release_audio_timeline_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.2fcf55f7a01b3d86",
+      "writer_id": "song_agent.domains.quality.release_audio_command_center._public_verification_summary"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "release_audio_baseline_registry_verification": "report",
+        "release_audio_certification_verification": "report",
+        "release_audio_quality_action_queue_signoff_archive_verification": "report",
+        "release_audio_quality_action_queue_verification": "report",
+        "release_audio_quality_observatory_verification": "report",
+        "release_audio_regression_response_verification": "report",
+        "release_audio_regression_verification": "report",
+        "release_audio_timeline_verification": "report"
+      },
+      "package_types": [
+        "release_audio_baseline_registry_verification",
+        "release_audio_certification_verification",
+        "release_audio_quality_action_queue_signoff_archive_verification",
+        "release_audio_quality_action_queue_verification",
+        "release_audio_quality_observatory_verification",
+        "release_audio_regression_response_verification",
+        "release_audio_regression_verification",
+        "release_audio_timeline_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.e0ce125dc5542cdc",
+      "writer_id": "song_agent.domains.quality.release_audio_command_center_verifier._public_runtime_report"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "release_audio_baseline_registry_verification": "report",
+        "release_audio_certification_verification": "report",
+        "release_audio_quality_action_queue_signoff_archive_verification": "report",
+        "release_audio_quality_action_queue_verification": "report",
+        "release_audio_quality_observatory_verification": "report",
+        "release_audio_regression_response_verification": "report",
+        "release_audio_regression_verification": "report",
+        "release_audio_timeline_verification": "report"
+      },
+      "package_types": [
+        "release_audio_baseline_registry_verification",
+        "release_audio_certification_verification",
+        "release_audio_quality_action_queue_signoff_archive_verification",
+        "release_audio_quality_action_queue_verification",
+        "release_audio_quality_observatory_verification",
+        "release_audio_regression_response_verification",
+        "release_audio_regression_verification",
+        "release_audio_timeline_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.3aa03414439b8c3f",
+      "writer_id": "song_agent.domains.quality.release_audio_command_center_verifier._public_verification_summary"
+    },
+    {
+      "allowed_package_kinds": [
+        "legacy_label"
+      ],
+      "package_type_kinds": {
+        "operations": "legacy_label",
+        "operations_archive": "legacy_label",
+        "operations_audit": "legacy_label",
+        "operations_reviewer_pack": "legacy_label"
+      },
+      "package_types": [
+        "operations",
+        "operations_archive",
+        "operations_audit",
+        "operations_reviewer_pack"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.fbd34d188465d9fb",
+      "writer_id": "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._generic_package_fingerprint"
+    },
+    {
+      "allowed_package_kinds": [
+        "legacy_label"
+      ],
+      "package_type_kinds": {
+        "portal": "legacy_label",
+        "registry": "legacy_label",
+        "transparency": "legacy_label",
+        "transparency_acknowledgement": "legacy_label"
+      },
+      "package_types": [
+        "portal",
+        "registry",
+        "transparency",
+        "transparency_acknowledgement"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.6de4c9c049124474",
+      "writer_id": "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._package_summary"
+    },
+    {
+      "allowed_package_kinds": [
+        "legacy_label"
+      ],
+      "package_type_kinds": {
+        "portal": "legacy_label",
+        "registry": "legacy_label",
+        "transparency": "legacy_label",
+        "transparency_acknowledgement": "legacy_label"
+      },
+      "package_types": [
+        "portal",
+        "registry",
+        "transparency",
+        "transparency_acknowledgement"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.86a3bf45a6fbaf2f",
+      "writer_id": "song_agent.domains.trust.public_trust_center._verification_sidecar_document"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "release_portfolio_governance_archive": "top_level_package",
+        "release_portfolio_governance_audit": "document",
+        "release_portfolio_governance_final_board_archive": "top_level_package",
+        "release_portfolio_governance_queue": "document",
+        "release_portfolio_governance_reviewer_pack": "document"
+      },
+      "package_types": [
+        "release_portfolio_governance_archive",
+        "release_portfolio_governance_audit",
+        "release_portfolio_governance_final_board_archive",
+        "release_portfolio_governance_queue",
+        "release_portfolio_governance_reviewer_pack"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.48226de8e4b01581",
+      "writer_id": "song_agent.domains.trust.release_portfolio_governance_evidence_vault.ReleasePortfolioGovernanceEvidenceVaultStore._package_binding"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_distribution_verification": "report",
+        "musicforge_release_operations_verification": "report",
+        "musicforge_release_verification": "report",
+        "musicforge_submission_evidence_verification": "report",
+        "musicforge_submission_verification": "report",
+        "musicforge_trust_operations_control_signoff_verification": "report",
+        "musicforge_trust_operations_control_verification": "report",
+        "musicforge_trust_operations_hub_incident_verification": "report",
+        "musicforge_trust_operations_hub_verification": "report",
+        "musicforge_trust_operations_incident_knowledge_verification": "report"
+      },
+      "package_types": [
+        "musicforge_distribution_verification",
+        "musicforge_release_operations_verification",
+        "musicforge_release_verification",
+        "musicforge_submission_evidence_verification",
+        "musicforge_submission_verification",
+        "musicforge_trust_operations_control_signoff_verification",
+        "musicforge_trust_operations_control_verification",
+        "musicforge_trust_operations_hub_incident_verification",
+        "musicforge_trust_operations_hub_verification",
+        "musicforge_trust_operations_incident_knowledge_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.5fdda1e360dcdc66",
+      "writer_id": "song_agent.domains.trust.trust_operations_continuous_assurance._evidence_row_from_external"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_distribution_verification": "report",
+        "musicforge_release_operations_verification": "report",
+        "musicforge_release_verification": "report",
+        "musicforge_submission_evidence_verification": "report",
+        "musicforge_submission_verification": "report",
+        "musicforge_trust_operations_control_signoff_verification": "report",
+        "musicforge_trust_operations_control_verification": "report",
+        "musicforge_trust_operations_hub_incident_verification": "report",
+        "musicforge_trust_operations_hub_verification": "report",
+        "musicforge_trust_operations_incident_knowledge_verification": "report"
+      },
+      "package_types": [
+        "musicforge_distribution_verification",
+        "musicforge_release_operations_verification",
+        "musicforge_release_verification",
+        "musicforge_submission_evidence_verification",
+        "musicforge_submission_verification",
+        "musicforge_trust_operations_control_signoff_verification",
+        "musicforge_trust_operations_control_verification",
+        "musicforge_trust_operations_hub_incident_verification",
+        "musicforge_trust_operations_hub_verification",
+        "musicforge_trust_operations_incident_knowledge_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.48e9add60d41b01f",
+      "writer_id": "song_agent.domains.trust.trust_operations_continuous_assurance_verifier._evidence_from_external"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_distribution_verification": "report",
+        "musicforge_release_operations_verification": "report",
+        "musicforge_release_verification": "report",
+        "musicforge_submission_evidence_verification": "report",
+        "musicforge_submission_verification": "report",
+        "musicforge_trust_operations_assurance_watch_signoff_verification": "report",
+        "musicforge_trust_operations_assurance_watch_verification": "report",
+        "musicforge_trust_operations_continuous_assurance_verification": "report",
+        "musicforge_trust_operations_control_signoff_verification": "report",
+        "musicforge_trust_operations_control_verification": "report",
+        "musicforge_trust_operations_hub_incident_verification": "report",
+        "musicforge_trust_operations_hub_verification": "report",
+        "musicforge_trust_operations_incident_knowledge_verification": "report"
+      },
+      "package_types": [
+        "musicforge_distribution_verification",
+        "musicforge_release_operations_verification",
+        "musicforge_release_verification",
+        "musicforge_submission_evidence_verification",
+        "musicforge_submission_verification",
+        "musicforge_trust_operations_assurance_watch_signoff_verification",
+        "musicforge_trust_operations_assurance_watch_verification",
+        "musicforge_trust_operations_continuous_assurance_verification",
+        "musicforge_trust_operations_control_signoff_verification",
+        "musicforge_trust_operations_control_verification",
+        "musicforge_trust_operations_hub_incident_verification",
+        "musicforge_trust_operations_hub_verification",
+        "musicforge_trust_operations_incident_knowledge_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.b84b565709bb59a4",
+      "writer_id": "song_agent.domains.trust.trust_operations_final_readiness._row_from_verification_report"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_distribution_verification": "report",
+        "musicforge_release_operations_verification": "report",
+        "musicforge_release_verification": "report",
+        "musicforge_submission_evidence_verification": "report",
+        "musicforge_submission_verification": "report"
+      },
+      "package_types": [
+        "musicforge_distribution_verification",
+        "musicforge_release_operations_verification",
+        "musicforge_release_verification",
+        "musicforge_submission_evidence_verification",
+        "musicforge_submission_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.b949a98c39e69ddb",
+      "writer_id": "song_agent.domains.trust.trust_operations_hub._delivery_evidence_from_verification"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_public_trust_center_publication_monitoring_verification": "report",
+        "musicforge_public_trust_center_verification": "report"
+      },
+      "package_types": [
+        "musicforge_public_trust_center_publication_monitoring_verification",
+        "musicforge_public_trust_center_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.71e678b24e6b2f52",
+      "writer_id": "song_agent.domains.trust.trust_operations_hub._evidence_from_verification"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "package_type_kinds": {
+        "musicforge_public_trust_center_acceptance_board": "document"
+      },
+      "package_types": [
+        "musicforge_public_trust_center_acceptance_board"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.adcbb75ae0d4756e",
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_center_acceptance_board.TrustRoutesPublicTrustCenterAcceptanceBoard._handle_public_trust_center_acceptance_board_part_01"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "package_type_kinds": {
+        "musicforge_public_trust_center": "document"
+      },
+      "package_types": [
+        "musicforge_public_trust_center"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.d7fbb0196deb6515",
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_01"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "package_type_kinds": {
+        "musicforge_public_trust_center_anchor_registry": "document"
+      },
+      "package_types": [
+        "musicforge_public_trust_center_anchor_registry"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.112d18722d427ebb",
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_03"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "package_type_kinds": {
+        "musicforge_public_trust_center_anchor_transparency": "document"
+      },
+      "package_types": [
+        "musicforge_public_trust_center_anchor_transparency"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.b0c73f72d054892f",
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_04"
+    },
+    {
+      "allowed_package_kinds": [
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "musicforge_public_trust_center_distribution_kit": "top_level_package"
+      },
+      "package_types": [
+        "musicforge_public_trust_center_distribution_kit"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.cd251357afa5e1ee",
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_05"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "musicforge_distribution_package": "top_level_package",
+        "musicforge_release": "top_level_package",
+        "musicforge_release_operations": "top_level_package",
+        "musicforge_submission_package": "top_level_package",
+        "musicforge_unified_release_program": "document",
+        "musicforge_unified_release_program_continuity_acceptance_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center": "document",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_distribution_kit": "top_level_package",
+        "musicforge_unified_release_program_evidence_vault": "top_level_package",
+        "musicforge_unified_release_program_handoff_archive": "top_level_package",
+        "musicforge_unified_release_program_operations_archive": "top_level_package",
+        "musicforge_unified_release_program_vault_operations_archive": "top_level_package",
+        "release_audio_certification": "document",
+        "release_audio_timeline": "document"
+      },
+      "package_types": [
+        "musicforge_distribution_package",
+        "musicforge_release",
+        "musicforge_release_operations",
+        "musicforge_submission_package",
+        "musicforge_unified_release_program",
+        "musicforge_unified_release_program_continuity_acceptance_archive",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_archive",
+        "musicforge_unified_release_program_continuity_command_center",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive",
+        "musicforge_unified_release_program_continuity_distribution_kit",
+        "musicforge_unified_release_program_evidence_vault",
+        "musicforge_unified_release_program_handoff_archive",
+        "musicforge_unified_release_program_operations_archive",
+        "musicforge_unified_release_program_vault_operations_archive",
+        "release_audio_certification",
+        "release_audio_timeline"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.35654883a4ac930c",
+      "writer_id": "song_agent.platform.evidence_graph.builder._manifest_identity"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_continuity_acceptance_generation": "document",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_generation": "document"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_continuity_acceptance_generation",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_generation"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.4501b6bf613179b4",
+      "writer_id": "song_agent.platform.lifecycle.generation.GenerationService.build_document"
+    },
+    {
+      "allowed_package_kinds": [
+        "attack_corpus",
+        "document",
+        "top_level_package"
+      ],
+      "package_type_kinds": {
+        "forged_package_type": "attack_corpus",
+        "musicforge_unified_release_program": "document",
+        "musicforge_unified_release_program_continuity_acceptance_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center": "document",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive": "top_level_package",
+        "musicforge_unified_release_program_continuity_distribution_kit": "top_level_package",
+        "musicforge_unified_release_program_evidence_vault": "top_level_package",
+        "musicforge_unified_release_program_handoff_archive": "top_level_package",
+        "musicforge_unified_release_program_operations_archive": "top_level_package",
+        "musicforge_unified_release_program_vault_operations_archive": "top_level_package"
+      },
+      "package_types": [
+        "forged_package_type",
+        "musicforge_unified_release_program",
+        "musicforge_unified_release_program_continuity_acceptance_archive",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_archive",
+        "musicforge_unified_release_program_continuity_command_center",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_archive",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive",
+        "musicforge_unified_release_program_continuity_distribution_kit",
+        "musicforge_unified_release_program_evidence_vault",
+        "musicforge_unified_release_program_handoff_archive",
+        "musicforge_unified_release_program_operations_archive",
+        "musicforge_unified_release_program_vault_operations_archive"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.d1f5ad7599f96000",
+      "writer_id": "song_agent.platform.verification.attack_corpus._write_package"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "package_type_kinds": {
+        "musicforge_unified_release_program_accepted_evidence_verification": "report",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_verification": "report",
+        "musicforge_unified_release_program_continuity_acceptance_verification": "report",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_accepted_evidence_verification": "report",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_verification": "report",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_review_pack_verification": "report",
+        "musicforge_unified_release_program_continuity_command_center_final_handoff_verification": "report",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive_verification": "report",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive_verification": "report",
+        "musicforge_unified_release_program_continuity_command_center_verification": "report",
+        "musicforge_unified_release_program_continuity_distribution_verification": "report",
+        "musicforge_unified_release_program_continuity_verification": "report",
+        "musicforge_unified_release_program_evidence_vault_verification": "report",
+        "musicforge_unified_release_program_handoff_verification": "report",
+        "musicforge_unified_release_program_operations_archive_verification": "report",
+        "musicforge_unified_release_program_review_pack_verification": "report",
+        "musicforge_unified_release_program_vault_operations_verification": "report",
+        "musicforge_unified_release_program_verification": "report",
+        "musicforge_v13_migration_evidence_verification": "report"
+      },
+      "package_types": [
+        "musicforge_unified_release_program_accepted_evidence_verification",
+        "musicforge_unified_release_program_continuity_acceptance_change_control_verification",
+        "musicforge_unified_release_program_continuity_acceptance_verification",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_accepted_evidence_verification",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_change_control_verification",
+        "musicforge_unified_release_program_continuity_command_center_acceptance_review_pack_verification",
+        "musicforge_unified_release_program_continuity_command_center_final_handoff_verification",
+        "musicforge_unified_release_program_continuity_command_center_receiver_acceptance_archive_verification",
+        "musicforge_unified_release_program_continuity_command_center_signoff_archive_verification",
+        "musicforge_unified_release_program_continuity_command_center_verification",
+        "musicforge_unified_release_program_continuity_distribution_verification",
+        "musicforge_unified_release_program_continuity_verification",
+        "musicforge_unified_release_program_evidence_vault_verification",
+        "musicforge_unified_release_program_handoff_verification",
+        "musicforge_unified_release_program_operations_archive_verification",
+        "musicforge_unified_release_program_review_pack_verification",
+        "musicforge_unified_release_program_vault_operations_verification",
+        "musicforge_unified_release_program_verification",
+        "musicforge_v13_migration_evidence_verification"
+      ],
+      "policy": "frozen_exact",
+      "purpose": "runtime_writer",
+      "type_set_id": "writer.8a4084728596e17d",
+      "writer_id": "song_agent.platform.verification.model.build_verification_report"
+    }
+  ],
+  "registry_integrity_hash": "c1cf7d2a35580200d0ed3d9c23949451708b2040b3b97d50dedc84d9991bdcf5",
+  "registry_package_type": "musicforge_v144_package_schema_registry",
+  "registry_schema_version": 7,
+  "schema_version": 1,
+  "writer_contracts": [
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.a9a9bad84d34496c",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.capabilities.model.RuntimeIdentitySpec.extract"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "allowed_type_set_id": "writer.d67a10d19ce1bb98",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_command_center_evidence_review._manifest_document"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "allowed_type_set_id": "writer.801cbb6466df7398",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_command_center_evidence_review._summary_from_path"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.8cec23dd00e16338",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_command_center_evidence_review_verifier._finish"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.bc65e2a54dd583e9",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_command_center_release_train._evidence_row"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.78ad3efc61b13286",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": true,
+      "writer_id": "song_agent.domains.program.unified_command_center_verifier._public_report"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.e5757a1d63904004",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_release_program_continuity_acceptance._package_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.19e1fbd30089a3a3",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance._manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.35bffa7b3267f924",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_release_program_continuity_command_center_acceptance_change._package_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.f0ea212dbecd1c2f",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff._package_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "allowed_type_set_id": "writer.e2ac2831217150af",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff._public_external_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "allowed_type_set_id": "writer.bde43e358a403650",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff._verification_summary_from_state"
+    },
+    {
+      "allowed_package_kinds": [
+        "sidecar"
+      ],
+      "allowed_type_set_id": "writer.a0ecbefadd1a7746",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.program.unified_release_program_handoff_verifier._public_external_manifest"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.92e21c02964b8f7e",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.quality.audio_campaign_governance._public_verification"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.2fcf55f7a01b3d86",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.quality.release_audio_command_center._public_verification_summary"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.e0ce125dc5542cdc",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.quality.release_audio_command_center_verifier._public_runtime_report"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.3aa03414439b8c3f",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.quality.release_audio_command_center_verifier._public_verification_summary"
+    },
+    {
+      "allowed_package_kinds": [
+        "legacy_label"
+      ],
+      "allowed_type_set_id": "writer.fbd34d188465d9fb",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._generic_package_fingerprint"
+    },
+    {
+      "allowed_package_kinds": [
+        "legacy_label"
+      ],
+      "allowed_type_set_id": "writer.6de4c9c049124474",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._package_summary"
+    },
+    {
+      "allowed_package_kinds": [
+        "legacy_label"
+      ],
+      "allowed_type_set_id": "writer.86a3bf45a6fbaf2f",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.public_trust_center._verification_sidecar_document"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.48226de8e4b01581",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.release_portfolio_governance_evidence_vault.ReleasePortfolioGovernanceEvidenceVaultStore._package_binding"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.5fdda1e360dcdc66",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.trust_operations_continuous_assurance._evidence_row_from_external"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.48e9add60d41b01f",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.trust_operations_continuous_assurance_verifier._evidence_from_external"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.b84b565709bb59a4",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": true,
+      "writer_id": "song_agent.domains.trust.trust_operations_final_readiness._row_from_verification_report"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.b949a98c39e69ddb",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.trust_operations_hub._delivery_evidence_from_verification"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.71e678b24e6b2f52",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.domains.trust.trust_operations_hub._evidence_from_verification"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "allowed_type_set_id": "writer.adcbb75ae0d4756e",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_center_acceptance_board.TrustRoutesPublicTrustCenterAcceptanceBoard._handle_public_trust_center_acceptance_board_part_01"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "allowed_type_set_id": "writer.d7fbb0196deb6515",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_01"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "allowed_type_set_id": "writer.112d18722d427ebb",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_03"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "allowed_type_set_id": "writer.b0c73f72d054892f",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_04"
+    },
+    {
+      "allowed_package_kinds": [
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.cd251357afa5e1ee",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_05"
+    },
+    {
+      "allowed_package_kinds": [
+        "document",
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.35654883a4ac930c",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.platform.evidence_graph.builder._manifest_identity"
+    },
+    {
+      "allowed_package_kinds": [
+        "document"
+      ],
+      "allowed_type_set_id": "writer.4501b6bf613179b4",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.platform.lifecycle.generation.GenerationService.build_document"
+    },
+    {
+      "allowed_package_kinds": [
+        "attack_corpus",
+        "document",
+        "top_level_package"
+      ],
+      "allowed_type_set_id": "writer.d1f5ad7599f96000",
+      "contract_scope": "attack_corpus",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.platform.verification.attack_corpus._write_package"
+    },
+    {
+      "allowed_package_kinds": [
+        "report"
+      ],
+      "allowed_type_set_id": "writer.8a4084728596e17d",
+      "contract_scope": "production",
+      "guard_alias": "_require_registered_package_type",
+      "guard_binding_hash": "93e0a0249cd7cf0bedc9d932064e707ecdcb3bca61ab12c89da0271c7b6c2052",
+      "guard_symbol": "song_agent.platform.contracts.packages.require_registered_package_type",
+      "nullable": false,
+      "writer_id": "song_agent.platform.verification.model.build_verification_report"
+    }
+  ]
+}

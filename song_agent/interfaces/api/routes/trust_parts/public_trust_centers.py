@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts import as_document as _as_document
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
@@ -53,7 +54,7 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return (True, None)
             _split_state['manifest'] = self.public_trust_center_store.export_center(_split_state['center_id'], self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _split_state['manifest'].get('package_type')}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _require_registered_package_type(_split_state['manifest'].get('package_type'), writer_id="song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_01")}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
             return (True, None)
         if _split_state['action'] == 'zip' and len(_split_state['parts']) == 2:
             if method != 'POST':
@@ -120,7 +121,7 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
                 return (True, None)
             if _split_state['subaction'] == 'export' and len(_split_state['parts']) == 3:
                 _split_state['manifest'] = self.public_trust_center_anchor_registry_store.export_registry(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _split_state['manifest'].get('package_type')}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _require_registered_package_type(_split_state['manifest'].get('package_type'), writer_id="song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_03")}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return (True, None)
             if _split_state['subaction'] == 'zip' and len(_split_state['parts']) == 3:
                 _split_state['zip_info'] = self.public_trust_center_anchor_registry_store.build_zip(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
@@ -172,7 +173,7 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
                 return (True, None)
             if _split_state['subaction'] == 'export' and len(_split_state['parts']) == 3:
                 _split_state['manifest'] = self.public_trust_center_anchor_transparency_store.export_transparency(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _split_state['manifest'].get('package_type')}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _require_registered_package_type(_split_state['manifest'].get('package_type'), writer_id="song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_04")}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return (True, None)
             if _split_state['subaction'] == 'zip' and len(_split_state['parts']) == 3:
                 _split_state['zip_info'] = self.public_trust_center_anchor_transparency_store.build_zip(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
@@ -216,7 +217,7 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
                 return (True, None)
             if _split_state['subaction'] == 'export' and len(_split_state['parts']) == 3:
                 _split_state['manifest'] = self.public_trust_center_distribution_kit_store.export_kit(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _split_state['manifest'].get('package_type')}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                self._send_json({'ok': True, 'center_id': _split_state['center_id'], 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _require_registered_package_type(_split_state['manifest'].get('package_type'), writer_id="song_agent.interfaces.api.routes.trust_parts.public_trust_centers.TrustRoutesPublicTrustCenters._handle_public_trust_centers_part_05")}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return (True, None)
             if _split_state['subaction'] == 'zip' and len(_split_state['parts']) == 3:
                 _split_state['zip_info'] = self.public_trust_center_distribution_kit_store.build_zip(_split_state['center_id'], _split_state['payload'], now=_interfaces_api_runtime._utc_now())

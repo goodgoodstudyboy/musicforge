@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, document_or as _document_or
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
 import shutil as shutil
@@ -432,7 +433,6 @@ class UnifiedReleaseProgramContinuityAcceptanceStore:
                 shutil.rmtree(export_dir)
             export_dir.mkdir(parents=True, exist_ok=True)
             files: list[dict[str, Any]] = []
-
             def write_entry(rel: str, value: dict[str, Any] | str) -> None:
                 path = export_dir / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -1002,7 +1002,7 @@ def _response_payload_hash(payload: ImplementationDocument) -> str:
 
 
 def _package_manifest(package_type: str, program_id: str, files: list[ImplementationDocument], source: ImplementationDocument) -> ImplementationDocument:
-    manifest = sanitize_metadata({"schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_SCHEMA_VERSION, "package_type": package_type, "program_id": program_id, "created_at": now_iso(), "source": source, "files": sorted(files, key=lambda row: row.get("path") or ""), "zip": {}})
+    manifest = sanitize_metadata({"schema_version": UNIFIED_RELEASE_PROGRAM_CONTINUITY_ACCEPTANCE_SCHEMA_VERSION, "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.program.unified_release_program_continuity_acceptance._package_manifest"), "program_id": program_id, "created_at": now_iso(), "source": source, "files": sorted(files, key=lambda row: row.get("path") or ""), "zip": {}})
     manifest["integrity_hash"] = _integrity_hash(manifest)
     return manifest
 

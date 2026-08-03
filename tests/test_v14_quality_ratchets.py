@@ -12,6 +12,8 @@ import pytest
 
 from song_agent.release_check.v14_quality import (
     EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
+    MYPY_CRITICAL_TARGETS,
+    MYPY_ROOTS,
     QUALITY_POLICY_VERSION,
     _ExplicitAnyCollector,
     _annotation_any_count,
@@ -2582,7 +2584,12 @@ def test_v14_mypy_ownership_ratchet_only_moves_down() -> None:
             "error_budgets": {"new.py|attr-defined": 2},
         },
     )
-    assert policy["mypy"] == {"max_total_errors": 2, "error_budgets": {"new.py|attr-defined": 2}}
+    assert policy["mypy"] == {
+        "active_roots": list(MYPY_ROOTS),
+        "critical_targets": list(MYPY_CRITICAL_TARGETS),
+        "max_total_errors": 2,
+        "error_budgets": {"new.py|attr-defined": 2},
+    }
 
     with pytest.raises(RuntimeError, match="cannot grow"):
         _ratchet_mypy_policy(

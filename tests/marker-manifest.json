@@ -335,6 +335,7 @@
     "tests/test_v14_public_contracts.py": "contract",
     "tests/test_v14_quality_ratchets.py": "unit",
     "tests/test_v14_reviewer_package.py": "unit",
+    "tests/test_v144_wave0.py": "contract",
     "tests/test_verification_kernel.py": "unit",
     "tests/test_webui.py": "integration"
   },

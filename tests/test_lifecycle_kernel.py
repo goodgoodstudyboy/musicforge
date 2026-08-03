@@ -149,7 +149,7 @@ def test_generation_and_external_evidence_identity_are_order_independent() -> No
         GenerationService.require_current(1, 2)
     generation = GenerationService.build_document(
         GenerationRef("program-1", 2, "current", previous_generation=1, reset_proof_hash="proof"),
-        package_type="musicforge_test_generation",
+        package_type="musicforge_unified_release_program_continuity_command_center_acceptance_generation",
     )
     assert generation["generation"] == 2
     assert generation["previous_generation"] == 1

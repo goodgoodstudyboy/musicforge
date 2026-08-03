@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list, as_text as _as_text
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
 import shutil as shutil
@@ -236,7 +237,6 @@ class UnifiedReleaseProgramHandoffStore:
                 }
             )
             files: list[dict[str, Any]] = []
-
             def write_entry(rel: str, value: dict[str, Any] | str) -> None:
                 path = export_dir / rel
                 if isinstance(value, str):
@@ -1218,7 +1218,7 @@ def _public_external_manifest(manifest: ImplementationDocument) -> Implementatio
         public_items.append(public_row)
     public = {
         "schema_version": manifest.get("schema_version") or UNIFIED_RELEASE_PROGRAM_HANDOFF_SCHEMA_VERSION,
-        "package_type": manifest.get("package_type") or UNIFIED_RELEASE_PROGRAM_HANDOFF_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE,
+        "package_type": _require_registered_package_type(manifest.get("package_type") or UNIFIED_RELEASE_PROGRAM_HANDOFF_EXTERNAL_EVIDENCE_MANIFEST_PACKAGE_TYPE, writer_id="song_agent.domains.program.unified_release_program_handoff._public_external_manifest"),
         "program_id": manifest.get("program_id"),
         "handoff_id": manifest.get("handoff_id"),
         "created_at": manifest.get("created_at"),
@@ -1237,7 +1237,7 @@ def _package_manifest(package_type: str, program_id: str, handoff_id: str, files
     manifest = sanitize_metadata(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_HANDOFF_SCHEMA_VERSION,
-            "package_type": package_type,
+            "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.program.unified_release_program_handoff._package_manifest"),
             "program_id": program_id,
             "handoff_id": handoff_id,
             "created_at": now_iso(),
@@ -1272,7 +1272,7 @@ def _verification_summary_from_state(kind: str, state: ImplementationDocument) -
     return _with_integrity(
         {
             "schema_version": UNIFIED_RELEASE_PROGRAM_HANDOFF_SCHEMA_VERSION,
-            "package_type": f"musicforge_unified_release_program_handoff_{kind}_verification_summary",
+            "package_type": _require_registered_package_type(f"musicforge_unified_release_program_handoff_{kind}_verification_summary", writer_id="song_agent.domains.program.unified_release_program_handoff._verification_summary_from_state"),
             "status": state.get("status"),
             "zip_sha256": state.get("zip_sha256"),
             "zip_size_bytes": state.get("zip_size_bytes"),

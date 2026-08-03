@@ -21,6 +21,7 @@ from song_agent.release_check_evidence_policy import run_policy_gate_cutover_smo
 from song_agent.release_check_governance_v137 import run_release_check_ci_docs_governance_smoke
 from song_agent.release_check.lts_recertification import run_lts_recertification_smoke
 from song_agent.release_check.v14_architecture import run_v14_architecture_cutover_smoke
+from song_agent.release_check.v14_wave0 import run_v144_wave0_catalog_baseline_smoke
 from song_agent.release_check.v14_compatibility import run_v14_compatibility_zero_smoke
 from song_agent.release_check.v14_certification import (
     run_v14_domain_vertical_slice_smoke,
@@ -120,6 +121,7 @@ CALLABLES = {
     "_v137_release_check_ci_docs_governance_smoke": run_release_check_ci_docs_governance_smoke,
     "_v138_lts_recertification_smoke": run_lts_recertification_smoke,
     "_v140_architecture_cutover_smoke": run_v14_architecture_cutover_smoke,
+    "_v144_wave0_catalog_baseline_smoke": run_v144_wave0_catalog_baseline_smoke,
     "_v140_compatibility_zero_smoke": run_v14_compatibility_zero_smoke,
     "_v140_interface_application_boundary_smoke": run_v14_interface_application_boundary_smoke,
     "_v140_domain_vertical_slice_smoke": run_v14_domain_vertical_slice_smoke,

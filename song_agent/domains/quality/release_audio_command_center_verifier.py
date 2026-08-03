@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
-
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 import json as json
 import re as re
 import zipfile as zipfile
@@ -442,7 +442,7 @@ def _public_runtime_report(report: ImplementationDocument) -> ImplementationDocu
     summary = _as_document(report.get("summary"))
     public_summary = {key: value for key, value in summary.items() if key not in {"zip_path"}}
     public = {
-        "package_type": report.get("package_type"),
+        "package_type": _require_registered_package_type(report.get("package_type"), writer_id="song_agent.domains.quality.release_audio_command_center_verifier._public_runtime_report"),
         "status": report.get("status"),
         "zip_sha256": report.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes"),
@@ -573,7 +573,7 @@ def _public_verification_summary(component_key: str, report: ImplementationDocum
     summary = _as_document(report.get("summary"))
     public = {
         "component_key": component_key,
-        "package_type": report.get("package_type"),
+        "package_type": _require_registered_package_type(report.get("package_type"), writer_id="song_agent.domains.quality.release_audio_command_center_verifier._public_verification_summary"),
         "status": report.get("status"),
         "zip_sha256": report.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes"),

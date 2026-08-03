@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, document_or as _document_or
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import html as html
 import hashlib as hashlib
@@ -745,13 +746,12 @@ class PublicTrustCenterStore:
                 self.operations_reviewer_pack_store.verification_report_path(release_id),
             ))
         return [row for row in rows if row]
-
     def _generic_package_fingerprint(self, package_type: str, release_id: str, zip_path: Path, manifest_path: Path, verification_report_path: Path) -> ImplementationDocument:
         manifest = _read_json_default(manifest_path, default={})
         verification = _read_json_default(verification_report_path, default={})
         row = {
             "release_id": release_id,
-            "package_type": package_type,
+            "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._generic_package_fingerprint"),
             "zip_sha256": _sha256(zip_path),
             "zip_size_bytes": zip_path.stat().st_size if zip_path.exists() else None,
             "manifest_hash": manifest.get("integrity_hash") or _stable_hash_without_zip(manifest),
@@ -817,7 +817,7 @@ class PublicTrustCenterStore:
         package = {
             "portfolio_id": portfolio_id,
             "profile": profile,
-            "package_type": package_type,
+            "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.trust.public_trust_center.PublicTrustCenterStore._package_summary"),
             "zip_sha256": current_zip_sha256,
             "zip_size_bytes": current_zip_size,
             "manifest_hash": current_manifest_hash or verification.get("manifest_hash"),
@@ -1212,7 +1212,7 @@ def _verification_sidecar_document(package: ImplementationDocument, verification
         "package": {
             "portfolio_id": package.get("portfolio_id"),
             "profile": package.get("profile"),
-            "package_type": package.get("package_type"),
+            "package_type": _require_registered_package_type(package.get("package_type"), writer_id="song_agent.domains.trust.public_trust_center._verification_sidecar_document"),
             "zip_sha256": package.get("zip_sha256"),
             "zip_size_bytes": package.get("zip_size_bytes"),
             "manifest_hash": package.get("manifest_hash"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -54,7 +55,7 @@ class RuntimeIdentitySpec:
             "generation": generation,
             "current_generation": current_generation,
             "current": current,
-            "package_type": str(package_type),
+            "package_type": _require_registered_package_type(str(package_type), writer_id="song_agent.capabilities.model.RuntimeIdentitySpec.extract"),
             "source_hash": str(_first_report_value(report, self.source_hash_fields) or ""),
         }
 

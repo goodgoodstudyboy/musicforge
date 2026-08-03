@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import base64 as base64
 import hashlib as hashlib
@@ -1448,7 +1449,7 @@ def _manifest(package_type: str, program_id: str, docs: ImplementationDocument, 
     for rel in sorted(required - {"manifest.json"}):
         data = _serialize(docs[rel])
         files.append({"path": rel, "size_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
-    return _with_integrity({"schema_version": SCHEMA_VERSION, "package_type": package_type, "program_id": program_id, "source": source, "files": files, "zip": {"entries": sorted(required)}})
+    return _with_integrity({"schema_version": SCHEMA_VERSION, "package_type": _require_registered_package_type(package_type, writer_id="song_agent.domains.program.unified_release_program_continuity_command_center_acceptance._manifest"), "program_id": program_id, "source": source, "files": files, "zip": {"entries": sorted(required)}})
 
 
 def _build_zip_from_values(path: Path, docs: ImplementationDocument) -> None:
@@ -1529,7 +1530,6 @@ def _bounded(value: Any, limit: int) -> str:
 
 def _safe_id(value: str) -> str:
     import re
-
     return re.sub(r"[^A-Za-z0-9_.:-]+", "-", str(value)).strip("-")
 
 

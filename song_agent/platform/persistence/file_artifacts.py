@@ -6,8 +6,15 @@ import hashlib
 import json
 import os
 import threading
+from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from song_agent.platform.verification.hashing import integrity_hash, integrity_ok
+
+
+STATE_POLICY_RESOURCE = ("runtime-state-authority-policy.json", "21d23353bc5eb425bd66fdf1742035d8660e7df486d9183ac3b27811fa8cf967")
+RUNTIME_STATE_AUTHORITY_POLICY_TYPE = "musicforge_v144_runtime_state_authority_policy"
 
 
 class FileArtifactStore:
@@ -112,6 +119,106 @@ def read_json_document(path: Path | str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("JSON document must be an object.")
     return value
+
+
+def build_runtime_state_authority_policy(
+    registry: dict[str, object], baseline: dict[str, object]
+) -> dict[str, object]:
+    document: dict[str, object] = {
+        "schema_version": 1,
+        "package_type": RUNTIME_STATE_AUTHORITY_POLICY_TYPE,
+        "state_registry_integrity_hash": registry.get("integrity_hash"),
+        "baseline_integrity_hash": baseline.get("integrity_hash"),
+        "state_registry": registry,
+        "wave0_baseline": baseline,
+    }
+    document["integrity_hash"] = integrity_hash(document)
+    return document
+
+
+def load_runtime_state_authority_policy() -> tuple[dict[str, object], str, list[str]]:
+    try:
+        text = (
+            resources.files("song_agent.platform.persistence")
+            .joinpath(STATE_POLICY_RESOURCE[0])
+            .read_text(encoding="utf-8")
+        )
+        value = json.loads(text)
+    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError, TypeError):
+        return {}, "", ["v144_wave0_state_runtime_policy_missing"]
+    if not isinstance(value, dict):
+        return {}, "", ["v144_wave0_state_runtime_policy_shape"]
+    policy = cast(dict[str, object], value)
+    blockers = validate_runtime_state_authority_policy(policy)
+    if blockers:
+        return {}, "", blockers
+    registry = cast(dict[str, object], policy["state_registry"])
+    baseline = cast(dict[str, object], policy["wave0_baseline"])
+    return registry, str(baseline["integrity_hash"]), []
+
+
+def validate_runtime_state_authority_policy(policy: dict[str, object]) -> list[str]:
+    blockers: list[str] = []
+    if (
+        policy.get("integrity_hash") != STATE_POLICY_RESOURCE[1]
+        or policy.get("package_type") != RUNTIME_STATE_AUTHORITY_POLICY_TYPE
+        or policy.get("schema_version") != 1 or not integrity_ok(policy)
+    ):
+        blockers.append("v144_wave0_state_runtime_policy_integrity")
+    registry = policy.get("state_registry")
+    baseline = policy.get("wave0_baseline")
+    if not isinstance(registry, dict) or not isinstance(baseline, dict):
+        return sorted(set([*blockers, "v144_wave0_state_runtime_policy_documents"]))
+    roots = registry.get("roots")
+    entries = registry.get("entries")
+    exceptions = registry.get("writer_overlap_exceptions")
+    if (
+        registry.get("package_type") != "musicforge_v144_state_authority_registry"
+        or registry.get("schema_version") != 4
+        or not integrity_ok(registry)
+        or not isinstance(roots, list)
+        or not roots
+        or not isinstance(entries, list)
+        or not entries
+        or not isinstance(exceptions, list)
+    ):
+        blockers.append("v144_wave0_state_runtime_registry_integrity")
+    if (
+        baseline.get("package_type") != "musicforge_v144_wave0_baseline"
+        or baseline.get("schema_version") != 5
+        or baseline.get("status") != "frozen"
+        or not integrity_ok(baseline)
+    ):
+        blockers.append("v144_wave0_state_runtime_baseline_integrity")
+    registry_hash = str(registry.get("integrity_hash") or "")
+    baseline_hash = str(baseline.get("integrity_hash") or "")
+    if policy.get("state_registry_integrity_hash") != registry_hash or policy.get("baseline_integrity_hash") != baseline_hash:
+        blockers.append("v144_wave0_state_runtime_policy_binding")
+    freeze = baseline.get("registry_freeze")
+    if not isinstance(freeze, dict) or any(
+        freeze.get(key) != value for key, value in _runtime_state_freeze(cast(dict[str, object], registry)).items()
+    ):
+        blockers.append("v144_wave0_state_runtime_baseline_binding")
+    if isinstance(exceptions, list) and any(
+        not isinstance(row, dict) or row.get("baseline_integrity_hash") != baseline_hash for row in exceptions
+    ):
+        blockers.append("v144_wave0_state_runtime_exception_binding")
+    return sorted(set(blockers))
+
+
+def _runtime_state_freeze(registry: dict[str, object]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for target, key, identity, excluded in (
+        ("state", "entries", "store_id", set()),
+        ("state_roots", "roots", "root_authority_id", set()),
+        ("state_overlap_exceptions", "writer_overlap_exceptions", "exception_id", {"baseline_integrity_hash"}),
+    ):
+        rows = cast(list[dict[str, object]], registry.get(key) or [])
+        result[target] = {
+            str(row.get(identity) or ""): {field: value for field, value in row.items() if field not in {identity, *excluded}}
+            for row in rows
+        }
+    return result
 
 
 def _safe_relative(value: str) -> Path:

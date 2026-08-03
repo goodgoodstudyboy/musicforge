@@ -78,7 +78,7 @@ def run_verification_kernel_smoke(root: Path) -> tuple[bool, str]:
     try:
         spec = PackageSpec(
             package_type="musicforge_release_check_verification_kernel",
-            verification_package_type="musicforge_release_check_verification_kernel_report",
+            verification_package_type="musicforge_unified_release_program_verification",
             check_prefix="v1215_kernel",
             required_entries=frozenset({"manifest.json", "data.json", "README.txt"}),
         )
@@ -162,7 +162,7 @@ def run_shared_kernel_security_smoke(root: Path) -> tuple[bool, str]:
 def _non_regular_entry_rejected(base: Path, file_type: int) -> bool:
     spec = PackageSpec(
         package_type="musicforge_v1301_kernel_package",
-        verification_package_type="musicforge_v1301_kernel_verification",
+        verification_package_type="musicforge_unified_release_program_verification",
         check_prefix="v1301_kernel",
         required_entries=frozenset({"manifest.json", "data.json", "README.txt"}),
     )
@@ -183,7 +183,7 @@ def _non_regular_entry_rejected(base: Path, file_type: int) -> bool:
 def _wrong_manifest_size_rejected(base: Path) -> bool:
     spec = PackageSpec(
         package_type="musicforge_v1301_kernel_package",
-        verification_package_type="musicforge_v1301_kernel_verification",
+        verification_package_type="musicforge_unified_release_program_verification",
         check_prefix="v1301_kernel",
         required_entries=frozenset({"manifest.json", "data.json", "README.txt"}),
     )
@@ -286,8 +286,8 @@ def _forged_evidence_identity_rejected(base: Path) -> bool:
         RuntimeVerificationSpec(
             __name__,
             "_identity_runtime_verifier",
-            "musicforge_v1301_identity_package",
-            "musicforge_v1301_identity_verification",
+            "musicforge_unified_release_program",
+            "musicforge_unified_release_program_verification",
             defaults=(("strict", True),),
         ),
     ))
@@ -305,7 +305,7 @@ def _identity_runtime_verifier(package_path: Path | str, *, strict: bool = True)
     target = Path(package_path)
     fingerprint = sha256_file(target)
     report: dict[str, Any] = {
-        "package_type": "musicforge_v1301_identity_verification",
+        "package_type": "musicforge_unified_release_program_verification",
         "status": "passed" if target.is_file() else "failed",
         "zip_sha256": fingerprint,
         "zip_size_bytes": target.stat().st_size if target.is_file() else 0,

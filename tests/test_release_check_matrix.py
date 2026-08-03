@@ -143,6 +143,7 @@ def test_release_check_profile_and_filters() -> None:
         "v1433.call_binding_lambda_effect_smoke",
         "v1434.late_bound_lexical_capture_smoke",
         "v1435.first_global_lexical_capture_smoke",
+        "v144.wave0_catalog_baseline_smoke",
     ]
     assert "v75.release_check_matrix_smoke" not in {definition.check_id for definition in ga}
     assert [definition.check_id for definition in v10] == [

@@ -11,8 +11,6 @@ def _execute_verify_unified_release_program_operations_package(argv: list[str]) 
     pass
 
 
-
-
     parser = build_verify_unified_release_program_operations_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_unified_release_program_operations_package(
@@ -49,8 +47,6 @@ def _execute_verify_unified_release_program_handoff_package(argv: list[str]) -> 
     pass
 
 
-
-
     parser = build_verify_unified_release_program_handoff_parser()
     args = parser.parse_args(raw_args[1:])
     report = verify_unified_release_program_handoff_package(
@@ -82,8 +78,6 @@ def handle_verify_unified_release_program_handoff_package(argv: list[str]) -> No
 def _execute_verify_unified_release_program_vault_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-vault-package', *argv]
     pass
-
-
 
 
     parser = build_verify_unified_release_program_vault_parser()
@@ -119,7 +113,6 @@ def handle_verify_unified_release_program_vault_package(argv: list[str]) -> None
 def _execute_verify_unified_release_program_vault_operations_package(argv: list[str]) -> None:
     raw_args = ['verify-unified-release-program-vault-operations-package', *argv]
     pass
-
 
 
 

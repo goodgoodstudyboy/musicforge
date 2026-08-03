@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
 import threading as threading
@@ -506,7 +507,7 @@ def _public_verification(verification: ImplementationDocument) -> Implementation
     summary = _as_document(verification.get("summary"))
     public = sanitize_metadata(
         {
-            "package_type": verification.get("package_type"),
+            "package_type": _require_registered_package_type(verification.get("package_type"), writer_id="song_agent.domains.quality.audio_campaign_governance._public_verification"),
             "status": verification.get("status"),
             "ok": verification.get("ok"),
             "summary": {

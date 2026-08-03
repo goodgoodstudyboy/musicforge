@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from typing import Callable
 
-from song_agent.platform.contracts.packages import PackageSpec
+from song_agent.platform.contracts.packages import PackageSpec, require_registered_package_type as _require_registered_package_type
 from song_agent.platform.verification.engine import verify_package_envelope
 from song_agent.platform.verification.hashing import integrity_hash, sha256_bytes
 from song_agent.platform.verification.registry import VerifierCapability, active_verifier_registry
@@ -74,7 +74,7 @@ def _baseline_payloads(spec: PackageSpec) -> dict[str, bytes]:
 def _write_package(path: Path, spec: PackageSpec, payloads: dict[str, bytes]) -> None:
     manifest = {
         "schema_version": 1,
-        "package_type": spec.package_type,
+        "package_type": _require_registered_package_type(spec.package_type, writer_id="song_agent.platform.verification.attack_corpus._write_package"),
         "files": [
             {"path": name, "sha256": sha256_bytes(data), "size_bytes": len(data)}
             for name, data in sorted(payloads.items())

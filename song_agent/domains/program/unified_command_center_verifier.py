@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any as _InferenceType
 
 from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
-
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 import json as json
 import re as re
 import zipfile as zipfile
@@ -702,7 +702,7 @@ def _external_paths(**kwargs: Any) -> dict[str, ImplementationDocument]:
 def _public_report(report: ImplementationDocument) -> ImplementationDocument:
     summary = _as_document(report.get("summary"))
     public = {
-        "package_type": report.get("package_type"),
+        "package_type": _require_registered_package_type(report.get("package_type"), writer_id="song_agent.domains.program.unified_command_center_verifier._public_report"),
         "status": report.get("status"),
         "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes") or summary.get("zip_size_bytes"),

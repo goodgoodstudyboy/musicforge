@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import ImplementationDocument
+from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
 import shutil as shutil
@@ -310,7 +311,6 @@ class UnifiedCommandCenterReleaseTrainStore:
                 shutil.rmtree(archive_dir)
             archive_dir.mkdir(parents=True, exist_ok=True)
             files: list[dict[str, Any]] = []
-
             def write_entry(rel: str, payload: dict[str, Any] | str) -> None:
                 path = archive_dir / rel
                 if isinstance(payload, str):
@@ -711,7 +711,7 @@ def _evidence_row(item: ImplementationDocument, evidence_type: str, external: Im
         "item_id": item.get("item_id"),
         "center_id": item.get("center_id"),
         "evidence_type": evidence_type,
-        "package_type": EXPECTED_EVIDENCE_PACKAGE_TYPES.get(evidence_type),
+        "package_type": _require_registered_package_type(EXPECTED_EVIDENCE_PACKAGE_TYPES.get(evidence_type), writer_id="song_agent.domains.program.unified_command_center_release_train._evidence_row"),
         "zip_sha256": None,
         "zip_size_bytes": None,
         "manifest_hash": None,
