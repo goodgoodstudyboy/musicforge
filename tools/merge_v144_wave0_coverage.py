@@ -60,6 +60,7 @@ WAVE0_CHANGED_SOURCES = (
     "song_agent/release_check/v14_wave0_source.py",
     "song_agent/release_check/v14_wave0_state_registry.py",
     "song_agent/release_check/v14_wave0_surfaces.py",
+    "song_agent/release_check_evidence_policy.py",
     "song_agent/release_check_verification_kernel.py",
 )
 

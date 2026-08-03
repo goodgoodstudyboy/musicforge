@@ -25,7 +25,7 @@ def _smoke_capability(component_type: str = "release") -> CapabilitySpec:
         runtime=RuntimeVerificationSpec(
             module=__name__,
             function="_smoke_runtime_verifier",
-            package_type="musicforge_v1219_smoke",
+            package_type="musicforge_release",
             verification_package_type=_SMOKE_VERIFICATION_TYPE,
             defaults=(("strict", True),),
         ),

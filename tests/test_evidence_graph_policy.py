@@ -24,11 +24,20 @@ from song_agent.platform.evidence_graph.builder import write_evidence_graph_mani
 from song_agent.platform.policy import evaluate_policy, get_policy_profile, policy_profile_ids
 from song_agent.platform.verification.hashing import integrity_hash, sha256_file
 from song_agent.projectio import write_json
+from song_agent.release_check_evidence_policy import run_evidence_policy_smoke, run_policy_gate_cutover_smoke
 from song_agent.interfaces.api.routes.delivery import DeliveryRoutes
 
 
 FAKE_PACKAGE_TYPE = "musicforge_unified_release_program"
 FAKE_VERIFICATION_PACKAGE_TYPE = "musicforge_unified_release_program_verification"
+
+
+def test_release_check_policy_smokes_use_authorized_runtime_identity_package(tmp_path: Path) -> None:
+    evidence_ok, evidence_detail = run_evidence_policy_smoke(tmp_path)
+    cutover_ok, cutover_detail = run_policy_gate_cutover_smoke(Path(__file__).resolve().parents[1])
+
+    assert evidence_ok is True, evidence_detail
+    assert cutover_ok is True, cutover_detail
 
 
 def fake_runtime_verifier(package_path: Path | str, *, strict: bool = False) -> dict:

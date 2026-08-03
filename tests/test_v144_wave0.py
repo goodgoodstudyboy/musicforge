@@ -2053,6 +2053,7 @@ def test_wave0_coverage_contract_declares_every_changed_runtime_surface(baseline
         "song_agent/interfaces/cli/commands/trust_parts/verify_release_portfolio_governance_attestation_portal.py",
         "song_agent/interfaces/cli/commands/trust_parts/verify_trust_operations_assurance_watch.py",
         "song_agent/release_check/v14_wave0_package_registry.py",
+        "song_agent/release_check_evidence_policy.py",
         "song_agent/release_check_verification_kernel.py",
     }
 
