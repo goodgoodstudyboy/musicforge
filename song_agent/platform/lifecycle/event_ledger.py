@@ -1,31 +1,32 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import JsonDocument
 
 import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Callable, Literal
 
+from song_agent.platform.contracts.documents import normalize_json_document
 from song_agent.platform.verification.hashing import sha256_file, stable_hash
 from song_agent.platform.verification.sanitization import sanitize_metadata
 
 
-Sanitizer = Callable[[Any], Any]
-HistoryAdapter = Callable[[tuple[dict[str, Any], ...]], list[dict[str, Any]]]
+Sanitizer = Callable[[JsonDocument], JsonDocument]
+HistoryAdapter = Callable[[tuple[JsonDocument, ...]], list[JsonDocument]]
 HistoryHashMode = Literal["event", "payload"]
 
 
 @dataclass(frozen=True)
 class HistoryValidation:
     valid: bool
-    rows: tuple[dict[str, Any], ...]
+    rows: tuple[JsonDocument, ...]
     error_index: int | None = None
     error_code: str = ""
 
     @property
-    def latest(self) -> dict[str, Any] | None:
+    def latest(self) -> JsonDocument | None:
         return self.rows[-1] if self.rows else None
 
 
@@ -40,7 +41,7 @@ class HistoryMigrationReport:
     target_schema_version: int
     row_count: int
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDocument:
         return {
             "source_path": self.source_path,
             "target_path": self.target_path,
@@ -65,17 +66,17 @@ class HistoryChain:
         self.sanitizer = sanitizer
         self.hash_mode = hash_mode
 
-    def read(self) -> list[dict[str, Any]]:
+    def read(self) -> list[JsonDocument]:
         if not self.path.is_file():
             return []
-        rows: list[dict[str, Any]] = []
+        rows: list[JsonDocument] = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             value = json.loads(line)
             if not isinstance(value, dict):
                 raise ValueError("History rows must be JSON objects.")
-            rows.append(value)
+            rows.append(normalize_json_document(value))
         return rows
 
     def validate(self) -> HistoryValidation:
@@ -98,14 +99,15 @@ class HistoryChain:
             previous = str(row.get("event_hash") or "")
         return HistoryValidation(True, tuple(rows))
 
-    def append(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def append(self, payload: JsonDocument) -> JsonDocument:
         validation = self.validate()
         if not validation.valid:
             raise ValueError(f"Cannot append to invalid history: {validation.error_code}")
+        previous_value = (validation.latest or {}).get("event_hash")
         previous = (
-            (validation.latest or {}).get("event_hash")
-            if self.hash_mode == "payload"
-            else str((validation.latest or {}).get("event_hash") or "")
+            str(previous_value) if previous_value is not None
+            else None if self.hash_mode == "payload"
+            else ""
         )
         event = self._build_current_event(payload, previous_event_hash=previous)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -114,34 +116,39 @@ class HistoryChain:
         return event
 
     @staticmethod
-    def build_event(payload: dict[str, Any], *, previous_event_hash: str = "", sanitizer: Sanitizer = sanitize_metadata) -> dict[str, Any]:
+    def build_event(payload: JsonDocument, *, previous_event_hash: str = "", sanitizer: Sanitizer = sanitize_metadata) -> JsonDocument:
         event = sanitizer({**payload, "previous_event_hash": previous_event_hash})
+        if not isinstance(event, dict):
+            raise ValueError("History sanitizer must return a JSON object.")
         event["payload_hash"] = stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
         event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
         return event
 
-    def _build_current_event(self, payload: ImplementationDocument, *, previous_event_hash: str | None) -> ImplementationDocument:
+    def _build_current_event(self, payload: JsonDocument, *, previous_event_hash: str | None) -> JsonDocument:
         event = self.sanitizer({**payload, "previous_event_hash": previous_event_hash})
+        if not isinstance(event, dict):
+            raise ValueError("History sanitizer must return a JSON object.")
         event["payload_hash"] = self._payload_hash(event)
         event["event_hash"] = stable_hash({key: value for key, value in event.items() if key != "event_hash"})
         return event
 
-    def _payload_hash(self, event: ImplementationDocument) -> str:
+    def _payload_hash(self, event: JsonDocument) -> str:
         if self.hash_mode == "payload":
-            payload = _as_document(event.get("payload"))
+            payload_value = event.get("payload")
+            payload = normalize_json_document(payload_value) if isinstance(payload_value, dict) else {}
             return stable_hash(payload)
         return stable_hash({key: value for key, value in event.items() if key not in {"payload_hash", "event_hash"}})
 
-    def through(self, event_hash: str) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
+    def through(self, event_hash: str) -> list[JsonDocument]:
+        rows: list[JsonDocument] = []
         for row in self.read():
             rows.append(row)
             if row.get("event_hash") == event_hash:
                 return rows
         raise ValueError("History event was not found.")
 
-    def latest_state(self, event_states: dict[str, str], *, default: str = "unsigned") -> dict[str, Any]:
-        state: dict[str, Any] = {"status": default, "event": None}
+    def latest_state(self, event_states: dict[str, str], *, default: str = "unsigned") -> JsonDocument:
+        state: JsonDocument = {"status": default, "event": None}
         for row in self.read():
             event_type = str(row.get("event_type") or "")
             if event_type in event_states:

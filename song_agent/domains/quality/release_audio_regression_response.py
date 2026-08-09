@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list
 
 import json as json
 import shutil as shutil
@@ -351,9 +351,9 @@ class ReleaseAudioRegressionResponseStore:
                 },
             }
         )
-        action_doc = {"schema_version": RELEASE_AUDIO_REGRESSION_RESPONSE_SCHEMA_VERSION, "release_id": release_id, "response_id": plan["response_id"], "source_hash": source_hash, "actions": actions}
-        waiver_doc = {"schema_version": RELEASE_AUDIO_REGRESSION_RESPONSE_SCHEMA_VERSION, "release_id": release_id, "response_id": plan["response_id"], "source_hash": source_hash, "waivers": []}
-        closeout = closeout_override or {
+        action_doc: ImplementationDocument = {"schema_version": RELEASE_AUDIO_REGRESSION_RESPONSE_SCHEMA_VERSION, "release_id": release_id, "response_id": plan["response_id"], "source_hash": source_hash, "actions": actions}
+        waiver_doc: ImplementationDocument = {"schema_version": RELEASE_AUDIO_REGRESSION_RESPONSE_SCHEMA_VERSION, "release_id": release_id, "response_id": plan["response_id"], "source_hash": source_hash, "waivers": []}
+        closeout: ImplementationDocument = closeout_override or {
             "schema_version": RELEASE_AUDIO_REGRESSION_RESPONSE_SCHEMA_VERSION,
             "release_id": release_id,
             "response_id": plan["response_id"],
@@ -362,7 +362,7 @@ class ReleaseAudioRegressionResponseStore:
             "regression_binding_hash": binding.get("integrity_hash"),
             "source_hash": source_hash,
         }
-        docs = {"plan": plan, "actions": action_doc, "waivers": waiver_doc, "closeout": closeout, "binding": binding}
+        docs: dict[str, ImplementationDocument] = {"plan": plan, "actions": action_doc, "waivers": waiver_doc, "closeout": closeout, "binding": binding}
         self._refresh_derived_docs(docs)
         return docs
 

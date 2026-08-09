@@ -9,9 +9,8 @@ from typing import Any
 
 from song_agent.architecture_guardrails import build_architecture_snapshot
 from song_agent.capabilities import capability_registry
+from song_agent.interfaces.bootstrap.api.program import active_lifecycle_registry, active_verifier_registry
 from song_agent.platform.persistence import V14MigrationOrchestrator
-from song_agent.platform.verification.registry import active_verifier_registry
-from song_agent.platform.lifecycle.registry import active_lifecycle_registry
 from song_agent.release_check_lifecycle_kernel import run_lifecycle_kernel_smoke
 from song_agent.release_check_verification_kernel import (
     run_kernel_adoption_smoke,

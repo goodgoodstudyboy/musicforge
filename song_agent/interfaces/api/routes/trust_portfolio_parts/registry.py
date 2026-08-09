@@ -5,8 +5,9 @@ from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfo
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioRegistryRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_registry(self, method, parts, portfolio_id, action) -> bool:
+    def _dispatch_portfolio_registry(self, method: str, parts: list[str], portfolio_id: str, action: str) -> bool:
         if action == 'governance-attestation-registry':
             query = _interfaces_api_runtime.parse_qs(_interfaces_api_runtime.urlparse(self.path).query)
             query_profile = str(query.get('profile', ['public_summary'])[0] or 'public_summary')

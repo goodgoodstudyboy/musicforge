@@ -263,6 +263,10 @@ def _runtime_composition_blockers(root: Path) -> list[str]:
 def build_dependency_snapshot(root: Path) -> dict[str, object]:
     snapshot = cast(dict[str, object], build_architecture_snapshot(root))
     modules = {str(row["module"]): row for row in cast(list[dict[str, object]], snapshot["modules"])}
+    architecture_policy = _read_object(root / "architecture-v14-policy.json")
+    composition_roots = tuple(
+        str(value).replace("\\", "/") for value in cast(list[object], architecture_policy.get("composition_roots") or [])
+    )
     cross_domain: list[dict[str, object]] = []
     interface_domain: list[dict[str, object]] = []
     for pair in cast(list[dict[str, object]], snapshot["import_pairs"]):
@@ -278,7 +282,15 @@ def build_dependency_snapshot(root: Path) -> dict[str, object]:
             and importer_context != imported_context
         ):
             cross_domain.append(pair)
-        if importer.get("layer") == "interface" and imported.get("layer") == "domain":
+        importer_path = str(importer.get("path") or "").replace("\\", "/")
+        is_composition_root = any(
+            importer_path == declared.rstrip("/") or (declared.endswith("/") and importer_path.startswith(declared)) for declared in composition_roots
+        )
+        if (
+            importer.get("layer") == "interface"
+            and imported.get("layer") == "domain"
+            and not is_composition_root
+        ):
             interface_domain.append(pair)
     return {
         "module_count": snapshot["module_count"],

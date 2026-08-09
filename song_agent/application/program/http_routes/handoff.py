@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.application.program.http_context import ProgramHttpContext
+from song_agent.platform.contracts.coercion import as_document
 
 from http import HTTPStatus
 
@@ -19,7 +20,7 @@ class ProgramHandoffHttpRoutes(ProgramHttpContext):
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
             detail = self.unified_release_program_handoff_store.get_handoff(program_id)
-            report = detail.get('report') or {}
+            report = as_document(detail.get('report'))
             self._send_json({'ok': True, **detail, 'summary': report.get('summary', {}), 'status': report.get('status')})
             return True
         if tail == '/handoff/refresh':
@@ -60,7 +61,8 @@ class ProgramHandoffHttpRoutes(ProgramHttpContext):
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
             response = self.unified_release_program_handoff_store.import_response(program_id, self._read_json_body())
-            self._send_json({'ok': response.get('status') == 'imported', 'response': response.get('response'), 'verification': response.get('verification'), 'summary': {'response_id': response.get('response', {}).get('response_id')}, 'status': response.get('status')}, status=HTTPStatus.CREATED)
+            response_document = as_document(response.get('response'))
+            self._send_json({'ok': response.get('status') == 'imported', 'response': response.get('response'), 'verification': response.get('verification'), 'summary': {'response_id': response_document.get('response_id')}, 'status': response.get('status')}, status=HTTPStatus.CREATED)
             return True
         if tail.startswith('/handoff/responses/') and tail.endswith('/accepted-evidence'):
             if method != 'POST':
@@ -68,7 +70,8 @@ class ProgramHandoffHttpRoutes(ProgramHttpContext):
                 return True
             response_id = tail.split('/')[3]
             result = self.unified_release_program_handoff_store.create_accepted_evidence(program_id, response_id)
-            self._send_json({'ok': result.get('status') == 'accepted', **result, 'summary': {'evidence_id': result.get('evidence', {}).get('evidence_id')}}, status=HTTPStatus.CREATED)
+            evidence = as_document(result.get('evidence'))
+            self._send_json({'ok': result.get('status') == 'accepted', **result, 'summary': {'evidence_id': evidence.get('evidence_id')}}, status=HTTPStatus.CREATED)
             return True
         if tail.startswith('/handoff/accepted-evidence/') and tail.endswith('/zip'):
             if method != 'POST':

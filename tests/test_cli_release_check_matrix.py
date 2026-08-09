@@ -184,6 +184,7 @@ def test_release_check_cli_v14_profile_lists_final_certification() -> None:
         "v1434.late_bound_lexical_capture_smoke",
         "v1435.first_global_lexical_capture_smoke",
         "v144.wave0_catalog_baseline_smoke",
+        "v144.wave1_platform_application_interfaces_smoke",
     ]
 
 

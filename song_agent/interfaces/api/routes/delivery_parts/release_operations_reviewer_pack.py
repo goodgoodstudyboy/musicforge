@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
-
 from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
 
-from typing import Any
+from song_agent.application.http_ports.delivery import ReleaseDocument, SongPlan, sanitize_sensitive_text
 
-from song_agent.domains.creation.redaction import sanitize_sensitive_text
-
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
@@ -177,7 +173,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Release Operations Runbook route not found.")
 
-    def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: ImplementationDocument) -> ImplementationDocument:
+    def _get_or_refresh_release_qa(self, release_id: str, *, refresh: bool, options: JsonDocument) -> JsonDocument:
         document = self.release_store.get_release(release_id)
         if not refresh:
             existing = self.release_store.read_qa(release_id, default={})
@@ -191,7 +187,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
         self.release_store.update_qa_summary(release_id, _interfaces_api_runtime.release_qa_summary(report))
         return report
 
-    def _get_or_refresh_release_metadata_qa(self, release_id: str, *, refresh: bool) -> ImplementationDocument:
+    def _get_or_refresh_release_metadata_qa(self, release_id: str, *, refresh: bool) -> JsonDocument:
         document = self.release_store.get_release(release_id)
         metadata = _interfaces_api_runtime.read_release_metadata(self.release_store, release_id, default={})
         if not metadata:
@@ -207,14 +203,14 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
         report = _interfaces_api_runtime.build_release_metadata_qa_report(release=document, metadata=metadata, now=_interfaces_api_runtime._utc_now())
         return _interfaces_api_runtime.write_release_metadata_qa(self.release_store, release_id, report)
 
-    def _ensure_release_export_mutable(self, release_id: str, *, document: Any | None = None) -> None:
+    def _ensure_release_export_mutable(self, release_id: str, *, document: ReleaseDocument | None = None) -> None:
         document = document or self.release_store.get_release(release_id)
         if document.status == "archived":
             raise _interfaces_api_runtime.ReleaseStateError("Archived releases are read-only.")
         if document.status == "signed":
             raise _interfaces_api_runtime.ReleaseStateError("Signed releases cannot rebuild export or ZIP. Reset signoff before exporting again.")
 
-    def _release_declarative_policy_gate(self, payload: ImplementationDocument) -> ImplementationDocument | None:
+    def _release_declarative_policy_gate(self, payload: JsonDocument) -> JsonDocument | None:
         policy_id = str(payload.get("gate_policy") or payload.get("policy") or "").strip()
         if not policy_id:
             return None
@@ -232,10 +228,12 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
         try:
             from song_agent.application.evidence_policy_gate import evaluate_evidence_policy_gate, resolve_workspace_evidence_manifest
 
+            manifest_id = payload.get("evidence_manifest_id")
+            manifest = payload.get("evidence_manifest")
             manifest_path = resolve_workspace_evidence_manifest(
                 workspace,
-                manifest_id=payload.get("evidence_manifest_id"),
-                manifest=payload.get("evidence_manifest"),
+                manifest_id=manifest_id if isinstance(manifest_id, str) else None,
+                manifest=manifest if isinstance(manifest, str) else None,
             )
             result = evaluate_evidence_policy_gate(policy_id, manifest_path, allowed_root=workspace)
             result["message"] = "Release Evidence Graph policy passed." if result["status"] == "passed" else "Release Evidence Graph policy failed."
@@ -251,14 +249,14 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
                 "blockers": ["release_policy_runtime"],
             }
 
-    def _release_mix_gate(self, release_id: str, *, require_stem_health: bool, require_current_mix: bool) -> ImplementationDocument:
+    def _release_mix_gate(self, release_id: str, *, require_stem_health: bool, require_current_mix: bool) -> JsonDocument:
         if not (require_stem_health or require_current_mix):
             return {}
         try:
             document = self.release_store.get_release(release_id)
         except Exception as exc:
             return {"status": "failed", "message": f"Release is unavailable: {sanitize_sensitive_text(str(exc))}"}
-        tracks: list[dict[str, Any]] = []
+        tracks: list[JsonDocument] = []
         blockers: list[str] = []
         for track in document.tracks:
             project_dir = self.project_store.project_dir(track.project_id)
@@ -271,7 +269,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
             stem_report = _interfaces_api_runtime.read_json(stem_health_path) if stem_health_path.exists() else {}
             mix_ok = bool(mix_state) and _interfaces_api_runtime.mix_state_integrity_ok(mix_state)
             mix_stale_reasons: list[str] = []
-            plan: _InterfaceType | None = None
+            plan: SongPlan | None = None
             try:
                 plan = _interfaces_api_runtime.SongPlan.from_dict(_interfaces_api_runtime.read_json(song_plan_path))
             except Exception:
@@ -309,7 +307,7 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
                     "mix_state_hash": _interfaces_api_runtime.mix_state_hash(mix_state) if mix_ok else None,
                     "mix_state_integrity_ok": mix_ok,
                     "mix_state_current": mix_current,
-                    "mix_state_stale_reasons": mix_stale_reasons,
+                    "mix_state_stale_reasons": normalize_json_value(mix_stale_reasons),
                     "stem_health": stem_summary,
                     "stem_health_integrity_ok": _interfaces_api_runtime.stem_health_integrity_ok(stem_report) if stem_report else False,
                     "stem_health_current": stem_ok,
@@ -320,8 +318,8 @@ class DeliveryRoutesReleaseOperationsReviewerPack(DeliveryRouteContext):
             "require_stem_audio_health": require_stem_health,
             "require_current_mix_state": require_current_mix,
             "track_count": len(tracks),
-            "tracks": tracks,
-            "blockers": blockers,
+            "tracks": normalize_json_value(tracks),
+            "blockers": normalize_json_value(blockers),
             "message": "Release mix gate failed." if blockers else "Release mix gate passed.",
         }
 

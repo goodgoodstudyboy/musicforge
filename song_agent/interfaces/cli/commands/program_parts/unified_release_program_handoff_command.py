@@ -1,74 +1,103 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from argparse import Namespace
+from dataclasses import dataclass
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.application.program.http_context import HandoffStorePort
+from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 
-from . import dependencies as _commands_program_parts_dependencies
-
+from .dependencies import (
+    read_json,
+    write_unified_release_program_accepted_evidence_verification_report,
+    write_unified_release_program_continuity_distribution_verification_report,
+    write_unified_release_program_continuity_verification_report,
+    write_unified_release_program_handoff_verification_report,
+    write_unified_release_program_review_pack_verification_report,
+    write_unified_release_program_vault_operations_verification_report,
+    write_unified_release_program_vault_verification_report,
+)
 from .program_component_and_cross_domain_adapters import _program_component
-Any, CommandSpec, Path, ProgramApplicationService, ProviderConfig, ProviderError, SongRequest, UnifiedCommandCenterContinuousReviewStore, UnifiedCommandCenterDriftResponseStore, UnifiedCommandCenterEvidenceReviewStore, UnifiedCommandCenterHandoffStore, UnifiedCommandCenterReleaseTrainChangeControlStore, UnifiedCommandCenterReleaseTrainHandoffStore, UnifiedCommandCenterReleaseTrainLifecycleStore, UnifiedCommandCenterReleaseTrainStore, UnifiedCommandCenterReviewerDecisionBoardStore, UnifiedCommandCenterSignoffStore, UnifiedCommandCenterStore, argparse, build_auth_config, generate_request, json, load_provider_config, os, provider_configured, read_json, sys, test_provider_config, write_interface_document, write_json, write_unified_command_center_archive_verification_report, write_unified_command_center_continuous_review_verification_report, write_unified_command_center_drift_response_verification_report, write_unified_command_center_evidence_review_acceptance_verification_report, write_unified_command_center_evidence_review_verification_report, write_unified_command_center_handoff_verification_report, write_unified_command_center_release_train_change_control_verification_report, write_unified_command_center_release_train_handoff_verification_report, write_unified_command_center_release_train_lifecycle_verification_report, write_unified_command_center_release_train_verification_report, write_unified_command_center_reviewer_decision_board_verification_report, write_unified_command_center_verification_report, write_unified_release_program_accepted_evidence_verification_report, write_unified_release_program_continuity_acceptance_change_verification_report, write_unified_release_program_continuity_acceptance_verification_report, write_unified_release_program_continuity_command_center_verification_report, write_unified_release_program_continuity_distribution_verification_report, write_unified_release_program_continuity_verification_report, write_unified_release_program_handoff_verification_report, write_unified_release_program_operations_verification_report, write_unified_release_program_review_pack_verification_report, write_unified_release_program_vault_operations_verification_report, write_unified_release_program_vault_verification_report, write_unified_release_program_verification_report = _commands_program_parts_dependencies.Any, _commands_program_parts_dependencies.CommandSpec, _commands_program_parts_dependencies.Path, _commands_program_parts_dependencies.ProgramApplicationService, _commands_program_parts_dependencies.ProviderConfig, _commands_program_parts_dependencies.ProviderError, _commands_program_parts_dependencies.SongRequest, _commands_program_parts_dependencies.UnifiedCommandCenterContinuousReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterDriftResponseStore, _commands_program_parts_dependencies.UnifiedCommandCenterEvidenceReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainChangeControlStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainLifecycleStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainStore, _commands_program_parts_dependencies.UnifiedCommandCenterReviewerDecisionBoardStore, _commands_program_parts_dependencies.UnifiedCommandCenterSignoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterStore, _commands_program_parts_dependencies.argparse, _commands_program_parts_dependencies.build_auth_config, _commands_program_parts_dependencies.generate_request, _commands_program_parts_dependencies.json, _commands_program_parts_dependencies.load_provider_config, _commands_program_parts_dependencies.os, _commands_program_parts_dependencies.provider_configured, _commands_program_parts_dependencies.read_json, _commands_program_parts_dependencies.sys, _commands_program_parts_dependencies.test_provider_config, _commands_program_parts_dependencies.write_interface_document, _commands_program_parts_dependencies.write_json, _commands_program_parts_dependencies.write_unified_command_center_archive_verification_report, _commands_program_parts_dependencies.write_unified_command_center_continuous_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_drift_response_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_change_control_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_lifecycle_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_verification_report, _commands_program_parts_dependencies.write_unified_command_center_reviewer_decision_board_verification_report, _commands_program_parts_dependencies.write_unified_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_accepted_evidence_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_change_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_distribution_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_verification_report, _commands_program_parts_dependencies.write_unified_release_program_handoff_verification_report, _commands_program_parts_dependencies.write_unified_release_program_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_review_pack_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_verification_report, _commands_program_parts_dependencies.write_unified_release_program_verification_report
-def _run_unified_release_program_handoff_command(args: argparse.Namespace) -> ImplementationDocument:
-    pass
-    pass
 
 
+@dataclass(slots=True)
+class _HandoffReviewState:
+    result: JsonDocument | None = None
 
 
-
-    store = _program_component("handoff")
-    program_id = args.program_id
-    if args.action == "status":
-        detail = store.get_handoff(program_id)
-        status = (detail.get("report") or {}).get("status") or "unknown"
-        return {"ok": True, **detail, "summary": (detail.get("report") or {}).get("summary", {}), "status": status}
+def _run_handoff_review_action(store: HandoffStorePort, args: Namespace, program_id: str, state: _HandoffReviewState) -> bool:
     if args.action == "refresh":
         report = store.refresh_handoff(program_id, {"external_evidence_manifest": args.external_evidence_manifest})
-        return {"ok": report.get("status") in {"ready_for_review", "ready_for_signoff"}, "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+        state.result = {"ok": report.get("status") in {"ready_for_review", "ready_for_signoff"}, "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
+        return True
     if args.action == "review-pack":
         pack = store.export_review_pack(program_id, {"review_pack_id": args.review_pack_id, "audience": args.audience})
-        return {"ok": pack.get("status") == "ready", "review_pack": pack, "summary": {"review_pack_id": pack.get("review_pack_id")}, "status": pack.get("status")}
+        state.result = {"ok": pack.get("status") == "ready", "review_pack": pack, "summary": {"review_pack_id": pack.get("review_pack_id")}, "status": pack.get("status")}
+        return True
     if args.action == "review-pack-zip":
         result = store.build_review_pack_zip(program_id, args.review_pack_id)
-        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+        result["ok"] = result.get("status") == "passed"
+        result["summary"] = {"zip_sha256": result.get("zip_sha256")}
+        state.result = result
+        return True
     if args.action == "review-pack-verify":
         report = store.verify_review_pack_zip(program_id, args.review_pack_id, {"strict": args.strict})
         if args.report_out is not None:
             write_unified_release_program_review_pack_verification_report(report, args.report_out)
-        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+        state.result = {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+        return True
     if args.action == "import-response":
         response = store.import_response(program_id, read_json(args.response_json))
-        return {"ok": response.get("status") in {"accepted", "accepted_with_notes"}, "response": response.get("response"), "verification": response.get("verification"), "summary": {"response_id": response.get("response", {}).get("response_id")}, "status": response.get("status")}
+        imported = _as_document(response.get("response"))
+        state.result = {"ok": response.get("status") in {"accepted", "accepted_with_notes"}, "response": imported, "verification": response.get("verification"), "summary": {"response_id": imported.get("response_id")}, "status": response.get("status")}
+        return True
     if args.action == "accepted-evidence":
         result = store.create_accepted_evidence(program_id, args.response_id)
-        return {"ok": result.get("status") == "passed", **result, "summary": {"evidence_id": result.get("evidence", {}).get("evidence_id")}}
+        evidence = _as_document(result.get("evidence"))
+        result["ok"] = result.get("status") == "passed"
+        result["summary"] = {"evidence_id": evidence.get("evidence_id")}
+        state.result = result
+        return True
     if args.action == "accepted-evidence-zip":
         result = store.build_accepted_evidence_zip(program_id, args.evidence_id)
-        return {"ok": result.get("status") == "passed", **result, "summary": {"zip_sha256": result.get("zip_sha256")}}
+        result["ok"] = result.get("status") == "passed"
+        result["summary"] = {"zip_sha256": result.get("zip_sha256")}
+        state.result = result
+        return True
     if args.action == "accepted-evidence-verify":
-        report = store.verify_accepted_evidence_zip(
-            program_id,
-            args.evidence_id,
-            {
-                "strict": args.strict,
-                "require_accepted": args.require_accepted,
-                "response_verification_report": args.response_verification_report,
-                "response_binding_summary": args.response_binding_summary,
-            },
-        )
+        report = store.verify_accepted_evidence_zip(program_id, args.evidence_id, {"strict": args.strict, "require_accepted": args.require_accepted, "response_verification_report": args.response_verification_report, "response_binding_summary": args.response_binding_summary})
         if args.report_out is not None:
             write_unified_release_program_accepted_evidence_verification_report(report, args.report_out)
-        return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+        state.result = {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
+        return True
     if args.action == "decision-board":
-        policy: dict[str, _InterfaceType] = {}
+        policy: JsonDocument = {}
         if args.required_roles is not None:
             policy["required_roles"] = args.required_roles
         if args.minimum_acceptances is not None:
             policy["minimum_acceptances"] = args.minimum_acceptances
         if args.minimum_organizations is not None:
             policy["minimum_organizations"] = args.minimum_organizations
+        policy = normalize_json_document(policy)
         board = store.refresh_decision_board(program_id, {"policy": policy} if policy else {})
-        return {"ok": board.get("status") == "ready_for_signoff", "decision_board": board, "summary": board.get("readiness", {}), "status": board.get("status")}
+        state.result = {"ok": board.get("status") == "ready_for_signoff", "decision_board": board, "summary": board.get("readiness", {}), "status": board.get("status")}
+        return True
+    return False
+
+
+def _run_unified_release_program_handoff_command(args: Namespace) -> JsonDocument:
+    store = _program_component("handoff")
+    program_id = args.program_id
+    if args.action == "status":
+        detail = store.get_handoff(program_id)
+        report = _as_document(detail.get("report"))
+        status = report.get("status") or "unknown"
+        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": status}
+    review_state = _HandoffReviewState()
+    if _run_handoff_review_action(store, args, program_id, review_state):
+        if review_state.result is None:
+            raise RuntimeError("Handoff review action completed without a result.")
+        return review_state.result
     if args.action == "signoff":
         signoff = store.signoff_handoff(program_id, {"signed_by": args.signed_by, "role": args.role, "reason": args.reason})
         return {"ok": signoff.get("status") == "signed", "signoff": signoff, "summary": {"signoff_hash": signoff.get("integrity_hash")}, "status": signoff.get("status")}
@@ -105,15 +134,17 @@ def _run_unified_release_program_handoff_command(args: argparse.Namespace) -> Im
         return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
     raise ValueError("Unsupported unified-release-program-handoff command.")
 
-def _run_unified_release_program_vault_command(args: argparse.Namespace) -> ImplementationDocument:
+
+def _run_unified_release_program_vault_command(args: Namespace) -> JsonDocument:
     pass
 
     store = _program_component("vault")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_vault(program_id)
-        status = (detail.get("report") or {}).get("status") or "unknown"
-        return {"ok": True, **detail, "summary": (detail.get("report") or {}).get("summary", {}), "status": status}
+        report = _as_document(detail.get("report"))
+        status = report.get("status") or "unknown"
+        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": status}
     if args.action == "refresh":
         report = store.refresh_vault(program_id)
         return {"ok": report.get("status") == "passed", "report": report, "summary": report.get("summary", {}), "status": report.get("status")}
@@ -150,15 +181,17 @@ def _run_unified_release_program_vault_command(args: argparse.Namespace) -> Impl
         return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
     raise ValueError("Unsupported unified-release-program-vault command.")
 
-def _run_unified_release_program_vault_operations_command(args: argparse.Namespace) -> ImplementationDocument:
+
+def _run_unified_release_program_vault_operations_command(args: Namespace) -> JsonDocument:
     pass
 
     store = _program_component("vault_operations")
     program_id = args.program_id
     if args.action == "status":
         detail = store.get_operations(program_id)
-        report = detail.get("report") or {}
-        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or (detail.get("signoff_state") or {}).get("status") or "unknown"}
+        report = _as_document(detail.get("report"))
+        signoff_state = _as_document(detail.get("signoff_state"))
+        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or signoff_state.get("status") or "unknown"}
     if args.action == "init-policy":
         policy = store.init_policy(program_id, {"review_interval_days": args.review_interval_days})
         return {"ok": policy.get("status") == "active", "policy": policy, "summary": {"policy_hash": policy.get("integrity_hash")}, "status": policy.get("status")}
@@ -175,7 +208,16 @@ def _run_unified_release_program_vault_operations_command(args: argparse.Namespa
         plan = store.create_rotation_plan(program_id, {"force_rotation": args.force_rotation, "reason": args.reason})
         return {"ok": plan.get("status") in {"not_required", "required"}, "rotation_plan": plan, "summary": {"plan_id": plan.get("plan_id")}, "status": plan.get("status")}
     if args.action == "supersede":
-        registry = store.supersede_vault(program_id, {"old_generation_id": args.old_generation_id, "new_generation_id": args.new_generation_id, "vault_zip": args.vault_zip, "vault_anchor": args.vault_anchor, "vault_verification_report": args.vault_verification_report})
+        registry = store.supersede_vault(
+            program_id,
+            {
+                "old_generation_id": args.old_generation_id,
+                "new_generation_id": args.new_generation_id,
+                "vault_zip": args.vault_zip,
+                "vault_anchor": args.vault_anchor,
+                "vault_verification_report": args.vault_verification_report,
+            },
+        )
         return {"ok": registry.get("status") == "current", "registry": registry, "summary": registry.get("summary", {}), "status": registry.get("status")}
     if args.action == "revoke":
         registry = store.revoke_vault(program_id, {"generation_id": args.generation_id, "reason": args.reason})
@@ -211,7 +253,8 @@ def _run_unified_release_program_vault_operations_command(args: argparse.Namespa
         return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
     raise ValueError("Unsupported unified-release-program-vault-ops command.")
 
-def _run_unified_release_program_continuity_command(args: argparse.Namespace) -> ImplementationDocument:
+
+def _run_unified_release_program_continuity_command(args: Namespace) -> JsonDocument:
     pass
 
     store = _program_component("continuity")
@@ -223,8 +266,9 @@ def _run_unified_release_program_continuity_command(args: argparse.Namespace) ->
     }
     if args.action == "status":
         detail = store.get_continuity(program_id)
-        report = detail.get("report") or {}
-        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or (detail.get("signoff_state") or {}).get("status") or "unknown"}
+        report = _as_document(detail.get("report"))
+        signoff_state = _as_document(detail.get("signoff_state"))
+        return {"ok": True, **detail, "summary": report.get("summary", {}), "status": report.get("status") or signoff_state.get("status") or "unknown"}
     if args.action == "init-policy":
         policy = store.init_policy(program_id, {})
         return {"ok": policy.get("status") == "active", "policy": policy, "summary": {"policy_hash": policy.get("integrity_hash")}, "status": policy.get("status")}
@@ -278,7 +322,8 @@ def _run_unified_release_program_continuity_command(args: argparse.Namespace) ->
         return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
     raise ValueError("Unsupported unified-release-program-continuity command.")
 
-def _run_unified_release_program_continuity_distribution_command(args: argparse.Namespace) -> ImplementationDocument:
+
+def _run_unified_release_program_continuity_distribution_command(args: Namespace) -> JsonDocument:
     pass
     pass
 
@@ -297,7 +342,7 @@ def _run_unified_release_program_continuity_distribution_command(args: argparse.
     }
     if args.action == "status":
         detail = store.get_kit(program_id)
-        source = detail.get("source_binding") or {}
+        source = _as_document(detail.get("source_binding"))
         return {"ok": True, **detail, "summary": source, "status": source.get("status") or "unknown"}
     if args.action == "prepare":
         source = store.prepare_kit(program_id, evidence_payload)
@@ -314,7 +359,14 @@ def _run_unified_release_program_continuity_distribution_command(args: argparse.
             write_unified_release_program_continuity_distribution_verification_report(report, args.report_out)
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
     if args.action == "gate":
-        gate = store.gate(program_id, required=True, kit_zip_path=args.kit_zip, verification_report_path=args.verification_report, require_receiver_receipt=args.require_receiver_receipt, receiver_receipt_path=args.receiver_receipt)
+        gate = store.gate(
+            program_id,
+            required=True,
+            kit_zip_path=args.kit_zip,
+            verification_report_path=args.verification_report,
+            require_receiver_receipt=args.require_receiver_receipt,
+            receiver_receipt_path=args.receiver_receipt,
+        )
         return {"ok": gate.get("status") == "passed", "gate": gate, "summary": gate.get("summary", {}), "status": gate.get("status")}
     if args.action == "receipt-template":
         template = store.create_receiver_receipt_template(program_id)
@@ -327,4 +379,11 @@ def _run_unified_release_program_continuity_distribution_command(args: argparse.
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
     raise ValueError("Unsupported unified-release-program-continuity-kit command.")
 
-__all__ = ('_run_unified_release_program_handoff_command', '_run_unified_release_program_vault_command', '_run_unified_release_program_vault_operations_command', '_run_unified_release_program_continuity_command', '_run_unified_release_program_continuity_distribution_command')
+
+__all__ = (
+    "_run_unified_release_program_handoff_command",
+    "_run_unified_release_program_vault_command",
+    "_run_unified_release_program_vault_operations_command",
+    "_run_unified_release_program_continuity_command",
+    "_run_unified_release_program_continuity_distribution_command",
+)

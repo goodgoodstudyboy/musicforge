@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import normalize_json_value
+
 from song_agent.interfaces.api.route_contexts.studio_dispatch import StudioDispatchRouteContext
 
 
@@ -18,7 +20,7 @@ class StudioResourcesDispatch(StudioDispatchRouteContext):
             if method != 'GET':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
-            self._send_json({'ok': True, 'profiles': _interfaces_api_runtime.list_acceptance_profiles()})
+            self._send_json({'ok': True, 'profiles': normalize_json_value(_interfaces_api_runtime.list_acceptance_profiles())})
             return True
         if path == '/api/acceptance/songbook':
             if method != 'GET':

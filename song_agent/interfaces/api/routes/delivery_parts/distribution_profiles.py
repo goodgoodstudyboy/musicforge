@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
-
+from song_agent.application.http_ports import delivery as delivery_ports
 from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
 
 
@@ -9,44 +8,64 @@ import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class DeliveryRoutesDistributionProfiles(DeliveryRouteContext):
     @property
-    def release_store(self) -> _InterfaceType:
+    def audio_revision_store(self) -> delivery_ports.AudioRevisionStore:
+        return self.server.audio_revision_store
+
+    @property
+    def release_store(self) -> delivery_ports.ReleaseStore:
         return self.server.release_store
 
     @property
-    def release_operations_store(self) -> _InterfaceType:
+    def release_operations_store(self) -> delivery_ports.ReleaseOperationsStore:
         return self.server.release_operations_store
 
     @property
-    def release_operations_runbook_store(self) -> _InterfaceType:
+    def release_operations_runbook_store(self) -> delivery_ports.ReleaseOperationsRunbookStore:
         return self.server.release_operations_runbook_store
 
     @property
-    def release_operations_signoff_store(self) -> _InterfaceType:
+    def release_operations_signoff_store(self) -> delivery_ports.ReleaseOperationsSignoffStore:
         return self.server.release_operations_signoff_store
 
     @property
-    def release_operations_audit_store(self) -> _InterfaceType:
+    def release_operations_audit_store(self) -> delivery_ports.ReleaseOperationsAuditStore:
         return self.server.release_operations_audit_store
 
     @property
-    def release_operations_reviewer_pack_store(self) -> _InterfaceType:
+    def release_operations_reviewer_pack_store(self) -> delivery_ports.ReleaseOperationsReviewerPackStore:
         return self.server.release_operations_reviewer_pack_store
 
     @property
-    def distribution_store(self) -> _InterfaceType:
+    def distribution_store(self) -> delivery_ports.DistributionStore:
         return self.server.distribution_store
 
     @property
-    def submission_store(self) -> _InterfaceType:
+    def submission_store(self) -> delivery_ports.SubmissionStore:
         return self.server.submission_store
 
     @property
-    def submission_evidence_store(self) -> _InterfaceType:
+    def submission_evidence_store(self) -> delivery_ports.SubmissionEvidenceStore:
         return self.server.submission_evidence_store
 
     @property
-    def distribution_template_store(self) -> _InterfaceType:
+    def distribution_template_store(self) -> delivery_ports.TemplatePackStore:
         return self.server.distribution_template_store
+
+    @property
+    def encoded_audio_acceptance_store(self) -> delivery_ports.EncodedAudioAcceptanceStore:
+        return self.server.encoded_audio_acceptance_store
+
+    @property
+    def format_decision_store(self) -> delivery_ports.FormatDecisionStore:
+        return self.server.format_decision_store
+
+    @property
+    def project_store(self) -> delivery_ports.ProjectStore:
+        return self.server.project_store
+
+    @property
+    def rights_clearance_store(self) -> delivery_ports.RightsClearanceStore:
+        return self.server.rights_clearance_store
 
     def _handle_distribution_profiles_root(self, method: str) -> None:
         if method != "GET":

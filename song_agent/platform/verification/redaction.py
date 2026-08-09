@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 import zipfile
-from typing import Any, Iterable
+from typing import Iterable, TypeVar, cast
 
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 from song_agent.platform.verification.model import build_check
 
 SENSITIVE_BYTE_PATTERNS = (
@@ -49,6 +50,9 @@ SENSITIVE_VALUE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
+_ValueT = TypeVar("_ValueT")
+
+
 def sanitize_sensitive_text(value: str) -> str:
     text = _strip_unsafe_control_chars(str(value))
     for pattern, replacement in SENSITIVE_VALUE_PATTERNS:
@@ -56,19 +60,20 @@ def sanitize_sensitive_text(value: str) -> str:
     return text
 
 
-def sanitize_metadata(value: Any, *, blocked_keys: set[str] | None = None) -> Any:
+def sanitize_metadata(value: _ValueT, *, blocked_keys: set[str] | None = None) -> _ValueT:
     blocked = blocked_keys or DEFAULT_BLOCKED_METADATA_KEYS
     if isinstance(value, dict):
-        return {
+        sanitized = {
             str(key): sanitize_metadata(item, blocked_keys=blocked)
             for key, item in value.items()
             if str(key).lower() not in blocked
         }
+        return cast(_ValueT, sanitized)
     if isinstance(value, list):
-        return [sanitize_metadata(item, blocked_keys=blocked) for item in value]
+        return cast(_ValueT, [sanitize_metadata(item, blocked_keys=blocked) for item in value])
     if isinstance(value, str):
-        return sanitize_sensitive_text(value)
-    return value
+        return cast(_ValueT, sanitize_sensitive_text(value))
+    return cast(_ValueT, normalize_json_value(value))
 
 
 def _strip_unsafe_control_chars(value: str) -> str:
@@ -80,7 +85,7 @@ def archive_redaction_check(
     *,
     check_id: str,
     suffixes: tuple[str, ...] = (".json", ".jsonl", ".txt", ".md", ".html"),
-) -> dict[str, object]:
+) -> JsonDocument:
     offenders: list[str] = []
     for name in names:
         if not name.lower().endswith(suffixes):

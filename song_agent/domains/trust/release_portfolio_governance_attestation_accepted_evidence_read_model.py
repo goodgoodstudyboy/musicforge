@@ -4,7 +4,7 @@ from song_agent.platform.contracts.coercion import as_document as _as_document, 
 from typing import Any
 from pathlib import Path
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument
 
 import hashlib
 import json

@@ -1,0 +1,69 @@
+from __future__ import annotations
+from __future__ import annotations
+import json
+import hashlib
+import mimetypes
+import os
+import re
+import shutil
+import threading
+import time
+import webbrowser
+from dataclasses import replace
+from datetime import datetime, timezone
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs
+from song_agent.platform.version import VERSION as __version__
+from song_agent.domains.creation.agent.multinode_pipeline import rerun_multinode_from_node
+from song_agent.application.audio_campaigns.release_coverage import audio_campaign_release_track_coverage
+from song_agent.application.generation.service import generate_request
+from song_agent.application.jobs.model import JobState
+from song_agent.platform.auth import AuthConfig, validate_bearer_header
+from song_agent.domains.quality.audio_artifacts import AUDIO_ARTIFACT_FILENAME, audio_artifact_current, audio_artifact_summary, audio_artifact_stale_reasons_for_profile, build_audio_artifact_manifest, read_audio_artifact_manifest, write_audio_artifact_manifest
+from song_agent.domains.studio.assets import AssetStore, apply_asset_refs_to_plan, asset_audio_path, asset_midi_path, asset_public_dict, asset_prompt_summaries, asset_refs_snapshot, extract_assets_from_song_plan, write_asset_refs_snapshot
+from song_agent.domains.creation.batching import BatchDocument, BatchItem, BatchStore, now_iso
+from song_agent.domains.quality.candidate_groups import CandidateGroup, CandidateGroupStore, candidate_audio_path, candidate_group_stale, candidate_midi_path
+from song_agent.domains.quality.audio_profiles import RendererProfile
+from song_agent.domains.creation.renderers.audio import RendererConfig
+from song_agent.domains.quality.candidate_scoring import score_provider_edit_candidate
+from song_agent.domains.creation.edits import EditIntent, EditedSongPlanResult, apply_edit_intent, build_edit_metadata, build_edit_targets, edit_change_summary, edit_variant_type, validate_edit_intent
+from song_agent.domains.creation.edit_presets import EditPresetStore, merge_preset_intent
+from song_agent.domains.studio.editor_clips import EditorClipError, EditorClipUnavailableError, build_clip_insert_patch, build_editor_clip_from_ref, list_editor_clips
+from song_agent.domains.studio.editor_templates import EditorTemplateError, EditorTemplateStore, EditorTemplateUnavailableError, build_multitrack_clip_from_ref, build_multitrack_clip_insert_patch, section_template_public_dict, suggest_lane_mappings, track_template_public_dict
+from song_agent.domains.studio.editor_audition import EditorAuditionError, EditorAuditionStore, EditorAuditionUnavailableError, audition_summary_for_preview
+from song_agent.domains.studio.editor_review import EditorReviewError, audition_asset_payload
+from song_agent.domains.studio.editor_view import build_editor_diff, build_editor_view, build_editor_view_from_result
+from song_agent.domains.creation.final_export import FinalExportError, FinalExportOptions, build_final_export_bundle, build_final_export_zip, final_export_dir, final_export_zip_path, read_final_export_manifest
+from song_agent.domains.delivery.delivery_qa import build_delivery_qa_report, build_delivery_signoff_record, delivery_qa_allows_signoff, delivery_qa_source_hash, delivery_qa_summary, delivery_signoff_summary, mark_delivery_qa_stale, signoff_history_event
+from song_agent.domains.delivery.release_export import ReleaseExportError, build_release_export_bundle, build_release_export_zip, read_release_export_manifest, refresh_release_export_signoff_summary, release_export_summary
+from song_agent.domains.trust.release_operations import ReleaseOperationsError, ReleaseOperationsStore, operations_report_summary
+from song_agent.domains.trust.release_operations_runbook import ReleaseOperationsRunbookError, ReleaseOperationsRunbookNotFoundError, ReleaseOperationsRunbookStateError, ReleaseOperationsRunbookStore, runbook_summary
+from song_agent.domains.trust.release_operations_runbook_verifier import release_operations_runbook_verification_summary, verify_release_operations_runbook_package, write_release_operations_runbook_verification_report
+from song_agent.domains.trust.trust_operations_hub import TrustOperationsHubStore
+from song_agent.domains.trust.trust_operations_controls import TrustOperationsControlNotFoundError, TrustOperationsControlStateError, TrustOperationsControlStore
+from song_agent.domains.trust.trust_operations_control_signoff import TrustOperationsControlSignoffNotFoundError, TrustOperationsControlSignoffStateError, TrustOperationsControlSignoffStore
+from song_agent.domains.trust.trust_operations_control_signoff_verifier import write_trust_operations_control_signoff_verification_report
+from song_agent.domains.trust.trust_operations_controls_verifier import write_trust_operations_control_verification_report
+from song_agent.domains.trust.trust_operations_continuous_assurance import TrustOperationsAssuranceNotFoundError, TrustOperationsAssuranceStateError, TrustOperationsAssuranceStore
+from song_agent.domains.trust.trust_operations_continuous_assurance_verifier import write_trust_operations_assurance_verification_report
+from song_agent.domains.trust.trust_operations_assurance_watch import TrustOperationsAssuranceWatchNotFoundError, TrustOperationsAssuranceWatchStateError, TrustOperationsAssuranceWatchStore
+from song_agent.domains.trust.trust_operations_assurance_watch_verifier import write_trust_operations_assurance_watch_verification_report
+from song_agent.domains.trust.trust_operations_assurance_watch_signoff import TrustOperationsAssuranceWatchSignoffNotFoundError, TrustOperationsAssuranceWatchSignoffStateError, TrustOperationsAssuranceWatchSignoffStore
+from song_agent.domains.trust.trust_operations_assurance_watch_signoff_verifier import write_trust_operations_assurance_watch_signoff_verification_report
+from song_agent.domains.trust.trust_operations_final_readiness import TrustOperationsFinalReadinessNotFoundError, TrustOperationsFinalReadinessStateError, TrustOperationsFinalReadinessStore
+from song_agent.domains.trust.trust_operations_final_readiness_verifier import write_trust_operations_final_handoff_verification_report
+from song_agent.domains.trust.trust_operations_hub_incidents import TrustOperationsIncidentNotFoundError, TrustOperationsIncidentStateError, TrustOperationsIncidentStore
+from song_agent.domains.trust.trust_operations_hub_incident_verifier import write_trust_operations_hub_incident_verification_report
+from song_agent.domains.trust.trust_operations_incident_knowledge import TrustOperationsIncidentKnowledgeStore, TrustOperationsKnowledgeNotFoundError, TrustOperationsKnowledgeStateError
+from song_agent.domains.trust.trust_operations_incident_knowledge_verifier import write_trust_operations_incident_knowledge_verification_report
+from song_agent.domains.trust.release_operations_archive_verifier import release_operations_archive_verification_summary, verify_release_operations_archive_package, write_release_operations_archive_verification_report
+from song_agent.domains.trust.release_operations_audit import ReleaseOperationsAuditError, ReleaseOperationsAuditNotFoundError, ReleaseOperationsAuditStateError, ReleaseOperationsAuditStore, audit_summary
+from song_agent.domains.trust.release_operations_audit_verifier import release_operations_audit_verification_summary, verify_release_operations_audit_package, write_release_operations_audit_verification_report
+from song_agent.domains.trust.release_operations_reviewer_pack import ReleaseOperationsReviewerPackError, ReleaseOperationsReviewerPackNotFoundError, ReleaseOperationsReviewerPackStateError, ReleaseOperationsReviewerPackStore, reviewer_pack_summary
+from song_agent.domains.trust.release_operations_reviewer_pack_verifier import release_operations_reviewer_pack_verification_summary, verify_release_operations_reviewer_pack, write_release_operations_reviewer_pack_verification_report
+from song_agent.domains.trust.release_operations_retrospective import retrospective_summary
+
+__all__ = ['AUDIO_ARTIFACT_FILENAME', 'AssetStore', 'AuthConfig', 'BaseHTTPRequestHandler', 'BatchDocument', 'BatchItem', 'BatchStore', 'CandidateGroup', 'CandidateGroupStore', 'EditIntent', 'EditPresetStore', 'EditedSongPlanResult', 'EditorAuditionError', 'EditorAuditionStore', 'EditorAuditionUnavailableError', 'EditorClipError', 'EditorClipUnavailableError', 'EditorReviewError', 'EditorTemplateError', 'EditorTemplateStore', 'EditorTemplateUnavailableError', 'FinalExportError', 'FinalExportOptions', 'HTTPStatus', 'JobState', 'Path', 'ReleaseExportError', 'ReleaseOperationsAuditError', 'ReleaseOperationsAuditNotFoundError', 'ReleaseOperationsAuditStateError', 'ReleaseOperationsAuditStore', 'ReleaseOperationsError', 'ReleaseOperationsReviewerPackError', 'ReleaseOperationsReviewerPackNotFoundError', 'ReleaseOperationsReviewerPackStateError', 'ReleaseOperationsReviewerPackStore', 'ReleaseOperationsRunbookError', 'ReleaseOperationsRunbookNotFoundError', 'ReleaseOperationsRunbookStateError', 'ReleaseOperationsRunbookStore', 'ReleaseOperationsStore', 'RendererConfig', 'RendererProfile', 'ThreadingHTTPServer', 'TrustOperationsAssuranceNotFoundError', 'TrustOperationsAssuranceStateError', 'TrustOperationsAssuranceStore', 'TrustOperationsAssuranceWatchNotFoundError', 'TrustOperationsAssuranceWatchSignoffNotFoundError', 'TrustOperationsAssuranceWatchSignoffStateError', 'TrustOperationsAssuranceWatchSignoffStore', 'TrustOperationsAssuranceWatchStateError', 'TrustOperationsAssuranceWatchStore', 'TrustOperationsControlNotFoundError', 'TrustOperationsControlSignoffNotFoundError', 'TrustOperationsControlSignoffStateError', 'TrustOperationsControlSignoffStore', 'TrustOperationsControlStateError', 'TrustOperationsControlStore', 'TrustOperationsFinalReadinessNotFoundError', 'TrustOperationsFinalReadinessStateError', 'TrustOperationsFinalReadinessStore', 'TrustOperationsHubStore', 'TrustOperationsIncidentKnowledgeStore', 'TrustOperationsIncidentNotFoundError', 'TrustOperationsIncidentStateError', 'TrustOperationsIncidentStore', 'TrustOperationsKnowledgeNotFoundError', 'TrustOperationsKnowledgeStateError', '__version__', 'annotations', 'apply_asset_refs_to_plan', 'apply_edit_intent', 'asset_audio_path', 'asset_midi_path', 'asset_prompt_summaries', 'asset_public_dict', 'asset_refs_snapshot', 'audio_artifact_current', 'audio_artifact_stale_reasons_for_profile', 'audio_artifact_summary', 'audio_campaign_release_track_coverage', 'audit_summary', 'audition_asset_payload', 'audition_summary_for_preview', 'build_audio_artifact_manifest', 'build_clip_insert_patch', 'build_delivery_qa_report', 'build_delivery_signoff_record', 'build_edit_metadata', 'build_edit_targets', 'build_editor_clip_from_ref', 'build_editor_diff', 'build_editor_view', 'build_editor_view_from_result', 'build_final_export_bundle', 'build_final_export_zip', 'build_multitrack_clip_from_ref', 'build_multitrack_clip_insert_patch', 'build_release_export_bundle', 'build_release_export_zip', 'candidate_audio_path', 'candidate_group_stale', 'candidate_midi_path', 'datetime', 'delivery_qa_allows_signoff', 'delivery_qa_source_hash', 'delivery_qa_summary', 'delivery_signoff_summary', 'edit_change_summary', 'edit_variant_type', 'extract_assets_from_song_plan', 'final_export_dir', 'final_export_zip_path', 'generate_request', 'hashlib', 'json', 'list_editor_clips', 'mark_delivery_qa_stale', 'merge_preset_intent', 'mimetypes', 'now_iso', 'operations_report_summary', 'os', 'parse_qs', 're', 'read_audio_artifact_manifest', 'read_final_export_manifest', 'read_release_export_manifest', 'refresh_release_export_signoff_summary', 'release_export_summary', 'release_operations_archive_verification_summary', 'release_operations_audit_verification_summary', 'release_operations_reviewer_pack_verification_summary', 'release_operations_runbook_verification_summary', 'replace', 'rerun_multinode_from_node', 'retrospective_summary', 'reviewer_pack_summary', 'runbook_summary', 'score_provider_edit_candidate', 'section_template_public_dict', 'shutil', 'signoff_history_event', 'suggest_lane_mappings', 'threading', 'time', 'timezone', 'track_template_public_dict', 'unquote', 'urlparse', 'validate_bearer_header', 'validate_edit_intent', 'verify_release_operations_archive_package', 'verify_release_operations_audit_package', 'verify_release_operations_reviewer_pack', 'verify_release_operations_runbook_package', 'webbrowser', 'write_asset_refs_snapshot', 'write_audio_artifact_manifest', 'write_release_operations_archive_verification_report', 'write_release_operations_audit_verification_report', 'write_release_operations_reviewer_pack_verification_report', 'write_release_operations_runbook_verification_report', 'write_trust_operations_assurance_verification_report', 'write_trust_operations_assurance_watch_signoff_verification_report', 'write_trust_operations_assurance_watch_verification_report', 'write_trust_operations_control_signoff_verification_report', 'write_trust_operations_control_verification_report', 'write_trust_operations_final_handoff_verification_report', 'write_trust_operations_hub_incident_verification_report', 'write_trust_operations_incident_knowledge_verification_report']

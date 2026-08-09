@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from song_agent.interfaces.bootstrap.api.program import active_lifecycle_registry
 from song_agent.platform.lifecycle.attack_corpus import run_active_lifecycle_attack_corpus
-from song_agent.platform.lifecycle.registry import active_lifecycle_registry
 
 
 def test_active_lifecycle_registry_requires_shared_services() -> None:
@@ -16,7 +16,7 @@ def test_active_lifecycle_registry_requires_shared_services() -> None:
 
 
 def test_active_lifecycle_attack_corpus(tmp_path: Path) -> None:
-    report = run_active_lifecycle_attack_corpus(tmp_path)
+    report = run_active_lifecycle_attack_corpus(tmp_path, active_lifecycle_registry)
 
     assert report["status"] == "passed"
     assert report["results"] == {

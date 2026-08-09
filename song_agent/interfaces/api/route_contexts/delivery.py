@@ -1,83 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from song_agent.application.http_ports.delivery import DeliveryRouteContext as DeliveryRouteContext
+else:
 
-class DeliveryRouteContext:
-    """Static inventory of members supplied by runtime composition."""
-
-    _build_distribution_layout: Any
-    _distribution_encoded_audio_acceptance_export_gate: Any
-    _distribution_format_decision_export_gate: Any
-    _ensure_release_export_mutable: Any
-    _get_or_refresh_distribution_qa: Any
-    _get_or_refresh_release_metadata_qa: Any
-    _get_or_refresh_release_qa: Any
-    _get_or_refresh_submission_qa: Any
-    _handle_distribution_route: Any
-    _handle_distribution_route_part_01: Any
-    _handle_distribution_route_part_02: Any
-    _handle_distribution_route_part_03: Any
-    _handle_distribution_route_part_04: Any
-    _handle_distribution_route_part_05: Any
-    _handle_release_acceptance_analytics: Any
-    _handle_release_acceptance_analytics_refresh: Any
-    _handle_release_audio_campaign_plan: Any
-    _handle_release_audio_campaign_remediation: Any
-    _handle_release_audio_certification: Any
-    _handle_release_audio_command_center: Any
-    _handle_release_audio_qa: Any
-    _handle_release_audio_regression: Any
-    _handle_release_audio_regression_response: Any
-    _handle_release_audio_reviews: Any
-    _handle_release_audio_revisions: Any
-    _handle_release_audio_timeline: Any
-    _handle_release_encoded_audio: Any
-    _handle_release_format_decisions: Any
-    _handle_release_mastering: Any
-    _handle_release_operations: Any
-    _handle_release_operations_archive: Any
-    _handle_release_operations_audit: Any
-    _handle_release_operations_change_requests: Any
-    _handle_release_operations_reviewer_pack: Any
-    _handle_release_operations_runbooks: Any
-    _handle_release_operations_signoff: Any
-    _handle_release_rights: Any
-    _handle_release_route_part_01: Any
-    _handle_release_route_part_02: Any
-    _handle_release_route_part_03: Any
-    _handle_release_route_part_04: Any
-    _handle_release_route_part_05: Any
-    _handle_release_signoff: Any
-    _handle_release_signoff_reset: Any
-    _handle_submission_route: Any
-    _handle_submission_route_part_01: Any
-    _handle_submission_route_part_02: Any
-    _handle_submission_route_part_03: Any
-    _handle_submission_route_part_04: Any
-    _handle_submission_route_part_05: Any
-    _handle_submission_route_part_06: Any
-    _optional_json_body: Any
-    _package_rights_clearance_export_gate: Any
-    _read_json_body: Any
-    _send_error: Any
-    _send_file: Any
-    _send_json: Any
-    _submission_payload_with_evidence_summary: Any
-    audio_revision_store: Any
-    distribution_store: Any
-    distribution_template_store: Any
-    encoded_audio_acceptance_store: Any
-    format_decision_store: Any
-    path: Any
-    project_store: Any
-    release_operations_audit_store: Any
-    release_operations_reviewer_pack_store: Any
-    release_operations_runbook_store: Any
-    release_operations_signoff_store: Any
-    release_operations_store: Any
-    release_store: Any
-    rights_clearance_store: Any
-    server: Any
-    submission_evidence_store: Any
-    submission_store: Any
+    class DeliveryRouteContext:
+        """Runtime marker for Delivery route mixins."""

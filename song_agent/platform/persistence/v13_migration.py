@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import (
+    JsonDocument,
+    as_document as _as_document,
+    as_documents as _as_documents,
+    as_int as _as_int,
+    as_list as _as_list,
+)
+from song_agent.platform.contracts.documents import normalize_json_document
 
 import json
 import shutil
@@ -8,9 +15,8 @@ import tempfile
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
-from song_agent.platform.contracts.packages import PackageSpec
+from song_agent.platform.contracts.packages import PackageSpec, SemanticVerificationContext
 from song_agent.platform.persistence.database import MusicForgeDatabase, SCHEMA_VERSION
 from song_agent.platform.persistence.file_artifacts import sha256_path
 from song_agent.platform.persistence.migrations import DEFAULT_LEGACY_ROOTS, LegacyWorkspaceMigrator
@@ -37,9 +43,9 @@ class V13MigrationOrchestrator:
         self.database = MusicForgeDatabase.from_workspace(self.workspace_root)
         self.migrator = LegacyWorkspaceMigrator(self.workspace_root, database=self.database)
 
-    def dry_run(self) -> dict[str, Any]:
+    def dry_run(self) -> JsonDocument:
         legacy = self.migrator.dry_run()
-        document = {
+        document = normalize_json_document({
             "schema_version": 1,
             "package_type": "musicforge_v13_migration_plan",
             "status": legacy["status"],
@@ -57,19 +63,20 @@ class V13MigrationOrchestrator:
                 "legacy_verifiers_retained": True,
                 "active_workflow_index_only": True,
             },
-        }
+        })
         document["integrity_hash"] = integrity_hash(document)
         return document
 
-    def execute(self) -> dict[str, Any]:
+    def execute(self) -> JsonDocument:
         plan = self.dry_run()
         applied = self.migrator.execute()
-        source_preserved = _source_rows(self.workspace_root, plan["files"]) == plan["files"]
+        plan_files = _as_documents(plan.get("files"))
+        source_preserved = _source_rows(self.workspace_root, plan_files) == plan_files
         schema_current = self.database.schema_version() == SCHEMA_VERSION
         backup_verified = applied.get("status") in {"no_changes", "already_applied"} or bool(applied.get("backup_path"))
         target_hash = _database_state_hash(self.database)
         status = "passed" if source_preserved and schema_current and backup_verified else "failed"
-        report = {
+        report = normalize_json_document({
             "schema_version": 1,
             "package_type": "musicforge_v13_migration_report",
             "status": status,
@@ -80,12 +87,12 @@ class V13MigrationOrchestrator:
             "legacy_migration_status": applied.get("status"),
             "verified_backup": backup_verified,
             "source_preserved": source_preserved,
-            "imported_workflow_count": int(applied.get("imported_workflow_count") or 0),
-            "imported_program_document_count": int(applied.get("imported_program_document_count") or 0),
+            "imported_workflow_count": _as_int(applied.get("imported_workflow_count") or 0),
+            "imported_program_document_count": _as_int(applied.get("imported_program_document_count") or 0),
             "backup_path": applied.get("backup_path") or "",
             "rollback_command": f"song-agent-state migrate-rollback {plan['migration_id']}" if plan["file_count"] else "not_required",
             "executed_at": _now(),
-        }
+        })
         report["integrity_hash"] = integrity_hash(report)
         target = self.workspace_root / "state" / "migrations" / "v13" / "migration-report.json"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +101,7 @@ class V13MigrationOrchestrator:
             raise RuntimeError("V13 migration post-verification failed.")
         return report
 
-    def rollback_rehearsal(self) -> dict[str, Any]:
+    def rollback_rehearsal(self) -> JsonDocument:
         with tempfile.TemporaryDirectory(prefix="musicforge-v13-rollback-") as temp:
             clone = Path(temp) / ".musicforge"
             for name in DEFAULT_LEGACY_ROOTS:
@@ -115,10 +122,11 @@ class V13MigrationOrchestrator:
                         "source_restored": True,
                     }
                 )
-            before = _source_rows(clone, plan["files"])
+            plan_files = _as_documents(plan.get("files"))
+            before = _source_rows(clone, plan_files)
             applied = rehearsal.execute()
             rolled_back = rehearsal.migrator.rollback(str(applied["migration_id"]))
-            after = _source_rows(clone, plan["files"])
+            after = _source_rows(clone, plan_files)
             return _integrity_document(
                 {
                     "schema_version": 1,
@@ -132,11 +140,11 @@ class V13MigrationOrchestrator:
 
     def build_evidence_archive(
         self,
-        plan: dict[str, Any],
-        report: dict[str, Any],
-        rollback: dict[str, Any],
+        plan: JsonDocument,
+        report: JsonDocument,
+        rollback: JsonDocument,
         target: Path | str,
-    ) -> tuple[Path, dict[str, Any]]:
+    ) -> tuple[Path, JsonDocument]:
         documents = {
             "migration-plan.json": _json_bytes(plan),
             "migration-report.json": _json_bytes(report),
@@ -158,13 +166,14 @@ class V13MigrationOrchestrator:
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         temp = archive_path.with_suffix(archive_path.suffix + ".tmp")
         with zipfile.ZipFile(temp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("manifest.json", _json_bytes(manifest))
+            archive.writestr("manifest.json", _json_bytes(normalize_json_document(manifest)))
             for name, data in sorted(documents.items()):
                 archive.writestr(name, data)
         temp.replace(archive_path)
         envelope = verify_package_envelope(archive_path, V13_MIGRATION_SPEC, strict=True)
         if envelope.get("status") != "passed":
             raise RuntimeError("V13 migration evidence verification failed.")
+        envelope_summary = _as_document(envelope.get("summary"))
         anchor = _integrity_document(
             {
                 "schema_version": 1,
@@ -174,7 +183,7 @@ class V13MigrationOrchestrator:
                 "target_hash": report["target_hash"],
                 "archive_sha256": sha256_file(archive_path),
                 "archive_size_bytes": archive_path.stat().st_size,
-                "manifest_hash": envelope.get("summary", {}).get("manifest_hash"),
+                "manifest_hash": envelope_summary.get("manifest_hash"),
                 "created_at": _now(),
             }
         )
@@ -200,14 +209,17 @@ def verify_v13_migration_evidence(
     *,
     anchor_path: Path | str | None = None,
     require_anchor: bool = False,
-) -> dict[str, Any]:
+) -> JsonDocument:
     target = Path(path)
     envelope = verify_package_envelope(target, V13_MIGRATION_SPEC, strict=True)
     anchor_target = Path(anchor_path) if anchor_path is not None else migration_anchor_path(target)
     if not require_anchor and anchor_path is None and not anchor_target.is_file():
-        return envelope
-    checks = [*envelope.get("checks", []), *_migration_anchor_checks(target, anchor_target, envelope)]
-    summary = dict(envelope.get("summary") or {})
+        return normalize_json_document(envelope)
+    checks = [
+        *(_as_document(row) for row in _as_list(envelope.get("checks"))),
+        *_migration_anchor_checks(target, anchor_target, normalize_json_document(envelope)),
+    ]
+    summary = _as_document(envelope.get("summary"))
     if anchor_target.is_file():
         try:
             value = json.loads(anchor_target.read_text(encoding="utf-8"))
@@ -222,7 +234,7 @@ def verify_v13_migration_evidence(
     )
 
 
-def _migration_semantic_checks(context: ImplementationDocument) -> list[ImplementationDocument]:
+def _migration_semantic_checks(context: SemanticVerificationContext) -> list[JsonDocument]:
     archive = context["archive"]
     manifest = context["manifest"]
     try:
@@ -268,10 +280,10 @@ def _migration_semantic_checks(context: ImplementationDocument) -> list[Implemen
 def _migration_anchor_checks(
     archive_path: Path,
     anchor_path: Path,
-    envelope: ImplementationDocument,
-) -> list[ImplementationDocument]:
+    envelope: JsonDocument,
+) -> list[JsonDocument]:
     exists = anchor_path.is_file()
-    anchor: dict[str, Any] = {}
+    anchor: JsonDocument = {}
     readable = False
     if exists:
         try:
@@ -281,7 +293,7 @@ def _migration_anchor_checks(
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             readable = False
     summary_value = envelope.get("summary")
-    summary: dict[str, Any] = _as_document(summary_value)
+    summary: JsonDocument = _as_document(summary_value)
     return [
         build_check("v13_migration_anchor_exists", exists, "External migration anchor exists."),
         build_check("v13_migration_anchor_readable", readable, "External migration anchor is a JSON object."),
@@ -309,8 +321,8 @@ def _database_state_hash(database: MusicForgeDatabase) -> str:
     )
 
 
-def _source_rows(root: Path, expected: list[ImplementationDocument]) -> list[ImplementationDocument]:
-    rows = []
+def _source_rows(root: Path, expected: list[JsonDocument]) -> list[JsonDocument]:
+    rows: list[JsonDocument] = []
     for row in expected:
         relative = str(row["path"])
         path = root / relative
@@ -320,13 +332,13 @@ def _source_rows(root: Path, expected: list[ImplementationDocument]) -> list[Imp
     return rows
 
 
-def _integrity_document(document: ImplementationDocument) -> ImplementationDocument:
+def _integrity_document(document: JsonDocument) -> JsonDocument:
     result = dict(document)
     result["integrity_hash"] = integrity_hash(result)
     return result
 
 
-def _json_bytes(document: ImplementationDocument) -> bytes:
+def _json_bytes(document: JsonDocument) -> bytes:
     return (json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 

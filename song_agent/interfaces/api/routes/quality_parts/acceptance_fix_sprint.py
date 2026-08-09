@@ -1,150 +1,217 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from dataclasses import dataclass
 
 from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
+@dataclass(frozen=True)
+class _AcceptanceFixSprintRouteState:
+    fix_sprint_id: str
+    parts: list[str]
+
+
 class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
-    def _handle_acceptance_fix_sprint_route_part_01(self, method: str, route: tuple[str, list[str]], _split_state):
-        if not _split_state['parts']:
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+    def _handle_acceptance_fix_sprint_route_part_01(
+        self,
+        method: str,
+        _route: tuple[str, list[str]],
+        state: _AcceptanceFixSprintRouteState,
+    ) -> tuple[bool, None]:
+        if not state.parts:
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            _split_state['sprint'] = self.acceptance_fix_sprint_store.read_sprint(_split_state['fix_sprint_id'])
-            items = self.acceptance_fix_sprint_store.read_items(_split_state['fix_sprint_id'])
-            self._send_json({'ok': True, 'fix_sprint': _split_state['sprint'].to_dict(), 'items': [item.to_dict() for item in items], 'summary': _interfaces_api_runtime.fix_sprint_summary(_split_state['sprint'], items)})
+            sprint = self.server.acceptance_fix_sprint_store.read_sprint(state.fix_sprint_id)
+            items = self.server.acceptance_fix_sprint_store.read_items(state.fix_sprint_id)
+            self._send_json(
+                {
+                    "ok": True,
+                    "fix_sprint": sprint.to_dict(),
+                    "items": [item.to_dict() for item in items],
+                    "summary": _interfaces_api_runtime.fix_sprint_summary(sprint, items),
+                }
+            )
             return (True, None)
-        if _split_state['parts'] == ['archive']:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["archive"]:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            _split_state['sprint'] = self.acceptance_fix_sprint_store.archive_sprint(_split_state['fix_sprint_id'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'fix_sprint': _split_state['sprint'].to_dict(), 'summary': _interfaces_api_runtime.fix_sprint_summary(_split_state['sprint'])})
+            sprint = self.server.acceptance_fix_sprint_store.archive_sprint(state.fix_sprint_id, now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "summary": _interfaces_api_runtime.fix_sprint_summary(sprint)})
             return (True, None)
-        if _split_state['parts'] == ['refresh-status']:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["refresh-status"]:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            _split_state['sprint'] = self.acceptance_fix_sprint_store.refresh_status(_split_state['fix_sprint_id'], now=_interfaces_api_runtime._utc_now())
-            items = self.acceptance_fix_sprint_store.read_items(_split_state['fix_sprint_id'])
-            self._send_json({'ok': True, 'fix_sprint': _split_state['sprint'].to_dict(), 'items': [item.to_dict() for item in items], 'summary': _interfaces_api_runtime.fix_sprint_summary(_split_state['sprint'], items)})
+            sprint = self.server.acceptance_fix_sprint_store.refresh_status(state.fix_sprint_id, now=_interfaces_api_runtime._utc_now())
+            items = self.server.acceptance_fix_sprint_store.read_items(state.fix_sprint_id)
+            self._send_json(
+                {
+                    "ok": True,
+                    "fix_sprint": sprint.to_dict(),
+                    "items": [item.to_dict() for item in items],
+                    "summary": _interfaces_api_runtime.fix_sprint_summary(sprint, items),
+                }
+            )
             return (True, None)
-        if _split_state['parts'] == ['items']:
-            if method == 'GET':
-                items = self.acceptance_fix_sprint_store.read_items(_split_state['fix_sprint_id'])
-                _split_state['sprint'] = self.acceptance_fix_sprint_store.read_sprint(_split_state['fix_sprint_id'])
-                self._send_json({'ok': True, 'fix_sprint': _split_state['sprint'].to_dict(), 'items': [item.to_dict() for item in items], 'summary': _interfaces_api_runtime.fix_sprint_summary(_split_state['sprint'], items)})
+        if state.parts == ["items"]:
+            if method == "GET":
+                items = self.server.acceptance_fix_sprint_store.read_items(state.fix_sprint_id)
+                sprint = self.server.acceptance_fix_sprint_store.read_sprint(state.fix_sprint_id)
+                self._send_json(
+                    {
+                        "ok": True,
+                        "fix_sprint": sprint.to_dict(),
+                        "items": [item.to_dict() for item in items],
+                        "summary": _interfaces_api_runtime.fix_sprint_summary(sprint, items),
+                    }
+                )
                 return (True, None)
-            if method == 'POST':
-                item = self.acceptance_fix_sprint_store.add_item(_split_state['fix_sprint_id'], self._read_json_body(), now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'item': item.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            if method == "POST":
+                item = self.server.acceptance_fix_sprint_store.add_item(state.fix_sprint_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                self._send_json({"ok": True, "item": item.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return (True, None)
-            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return (True, None)
-        if len(_split_state['parts']) >= 3 and _split_state['parts'][0] == 'items':
-            item_id = _split_state['parts'][1]
-            action = _split_state['parts'][2]
-            if action == 'waive':
-                if method != 'POST':
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if len(state.parts) >= 3 and state.parts[0] == "items":
+            item_id = state.parts[1]
+            action = state.parts[2]
+            if action == "waive":
+                if method != "POST":
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return (True, None)
-                _split_state['payload'] = self._read_json_body()
-                item = self.acceptance_fix_sprint_store.waive_item(_split_state['fix_sprint_id'], item_id, str(_split_state['payload'].get('reason') or _split_state['payload'].get('notes') or ''), now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'item': item.to_dict()})
+                payload = self._read_json_body()
+                item = self.server.acceptance_fix_sprint_store.waive_item(
+                    state.fix_sprint_id,
+                    item_id,
+                    str(payload.get("reason") or payload.get("notes") or ""),
+                    now=_interfaces_api_runtime._utc_now(),
+                )
+                self._send_json({"ok": True, "item": item.to_dict()})
                 return (True, None)
-            if action == 'reopen':
-                if method != 'POST':
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            if action == "reopen":
+                if method != "POST":
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return (True, None)
-                item = self.acceptance_fix_sprint_store.reopen_item(_split_state['fix_sprint_id'], item_id, now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'item': item.to_dict()})
+                item = self.server.acceptance_fix_sprint_store.reopen_item(state.fix_sprint_id, item_id, now=_interfaces_api_runtime._utc_now())
+                self._send_json({"ok": True, "item": item.to_dict()})
                 return (True, None)
-            if action == 'create-review-task':
-                if method != 'POST':
-                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            if action == "create-review-task":
+                if method != "POST":
+                    self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return (True, None)
-                _split_state['result'] = self.acceptance_fix_sprint_store.create_review_tasks(_split_state['fix_sprint_id'], item_id=item_id, now=_interfaces_api_runtime._utc_now())
-                _split_state['created'] = any((_split_state['row'].get('status') == 'created' for _split_state['row'] in _split_state['result'].get('results', []) if isinstance(_split_state['row'], dict)))
-                self._send_json({'ok': True, **_split_state['result']}, status=_interfaces_api_runtime.HTTPStatus.CREATED if _split_state['created'] else _interfaces_api_runtime.HTTPStatus.OK)
+                result = self.server.acceptance_fix_sprint_store.create_review_tasks(state.fix_sprint_id, item_id=item_id, now=_interfaces_api_runtime._utc_now())
+                created = any(row.get("status") == "created" for row in result.get("results", []) if isinstance(row, dict))
+                self._send_json(
+                    {"ok": True, **result},
+                    status=_interfaces_api_runtime.HTTPStatus.CREATED if created else _interfaces_api_runtime.HTTPStatus.OK,
+                )
                 return (True, None)
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Acceptance Fix Sprint item route not found.')
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Acceptance Fix Sprint item route not found.")
             return (True, None)
         return (False, None)
 
-    def _handle_acceptance_fix_sprint_route_part_02(self, method: str, route: tuple[str, list[str]], _split_state):
-        if _split_state['parts'] == ['create-review-tasks']:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+    def _handle_acceptance_fix_sprint_route_part_02(
+        self,
+        method: str,
+        _route: tuple[str, list[str]],
+        state: _AcceptanceFixSprintRouteState,
+    ) -> tuple[bool, None]:
+        if state.parts == ["create-review-tasks"]:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            _split_state['result'] = self.acceptance_fix_sprint_store.create_review_tasks(_split_state['fix_sprint_id'], now=_interfaces_api_runtime._utc_now())
-            _split_state['created'] = any((_split_state['row'].get('status') == 'created' for _split_state['row'] in _split_state['result'].get('results', []) if isinstance(_split_state['row'], dict)))
-            self._send_json({'ok': True, **_split_state['result']}, status=_interfaces_api_runtime.HTTPStatus.CREATED if _split_state['created'] else _interfaces_api_runtime.HTTPStatus.OK)
+            result = self.server.acceptance_fix_sprint_store.create_review_tasks(state.fix_sprint_id, now=_interfaces_api_runtime._utc_now())
+            created = any(row.get("status") == "created" for row in result.get("results", []) if isinstance(row, dict))
+            self._send_json(
+                {"ok": True, **result},
+                status=_interfaces_api_runtime.HTTPStatus.CREATED if created else _interfaces_api_runtime.HTTPStatus.OK,
+            )
             return (True, None)
-        if _split_state['parts'] == ['create-recheck-suite']:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["create-recheck-suite"]:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            _split_state['result'] = self.acceptance_fix_sprint_store.create_recheck_suite(_split_state['fix_sprint_id'], self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, **_split_state['result']}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            result = self.server.acceptance_fix_sprint_store.create_recheck_suite(state.fix_sprint_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
             return (True, None)
-        if _split_state['parts'] == ['link-recheck-suite']:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["link-recheck-suite"]:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            _split_state['payload'] = self._read_json_body()
-            _split_state['sprint'] = self.acceptance_fix_sprint_store.link_recheck_suite(_split_state['fix_sprint_id'], str(_split_state['payload'].get('suite_id') or ''), now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'fix_sprint': _split_state['sprint'].to_dict(), 'summary': _interfaces_api_runtime.fix_sprint_summary(_split_state['sprint'])})
+            payload = self._read_json_body()
+            sprint = self.server.acceptance_fix_sprint_store.link_recheck_suite(state.fix_sprint_id, str(payload.get("suite_id") or ""), now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, "fix_sprint": sprint.to_dict(), "summary": _interfaces_api_runtime.fix_sprint_summary(sprint)})
             return (True, None)
-        if _split_state['parts'] == ['delta']:
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["delta"]:
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            delta = self.acceptance_fix_sprint_store.read_delta(_split_state['fix_sprint_id'])
-            self._send_json({'ok': True, 'delta_report': delta, 'summary': delta.get('summary', {})})
+            delta = self.server.acceptance_fix_sprint_store.read_delta(state.fix_sprint_id)
+            self._send_json({"ok": True, "delta_report": delta, "summary": delta.get("summary", {})})
             return (True, None)
-        if _split_state['parts'] == ['delta', 'refresh']:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["delta", "refresh"]:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            delta = self.acceptance_fix_sprint_store.refresh_delta(_split_state['fix_sprint_id'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'delta_report': delta, 'summary': delta.get('summary', {})})
+            delta = self.server.acceptance_fix_sprint_store.refresh_delta(state.fix_sprint_id, now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, "delta_report": delta, "summary": delta.get("summary", {})})
             return (True, None)
-        if _split_state['parts'] == ['closeout']:
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["closeout"]:
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            closeout = self.acceptance_fix_sprint_store.read_closeout(_split_state['fix_sprint_id'])
-            self._send_json({'ok': True, 'closeout_report': closeout, 'summary': _interfaces_api_runtime.acceptance_fix_closeout_summary(closeout)})
+            closeout = self.server.acceptance_fix_sprint_store.read_closeout(state.fix_sprint_id)
+            self._send_json(
+                {
+                    "ok": True,
+                    "closeout_report": closeout,
+                    "summary": _interfaces_api_runtime.acceptance_fix_closeout_summary(closeout),
+                }
+            )
             return (True, None)
-        if _split_state['parts'] == ['close']:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if state.parts == ["close"]:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            closeout = self.acceptance_fix_sprint_store.close(_split_state['fix_sprint_id'], self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-            _split_state['sprint'] = self.acceptance_fix_sprint_store.read_sprint(_split_state['fix_sprint_id'])
-            self._send_json({'ok': True, 'fix_sprint': _split_state['sprint'].to_dict(), 'closeout_report': closeout, 'summary': _interfaces_api_runtime.acceptance_fix_closeout_summary(closeout)})
+            closeout = self.server.acceptance_fix_sprint_store.close(state.fix_sprint_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+            sprint = self.server.acceptance_fix_sprint_store.read_sprint(state.fix_sprint_id)
+            self._send_json(
+                {
+                    "ok": True,
+                    "fix_sprint": sprint.to_dict(),
+                    "closeout_report": closeout,
+                    "summary": _interfaces_api_runtime.acceptance_fix_closeout_summary(closeout),
+                }
+            )
             return (True, None)
-        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Acceptance Fix Sprint route not found.')
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Acceptance Fix Sprint route not found.")
         return (False, None)
 
     def _handle_acceptance_fix_sprint_route(self, method: str, route: tuple[str, list[str]]) -> None:
-        _split_state: dict[str, _InterfaceType] = {}
-        _split_state['fix_sprint_id'], _split_state['parts'] = route
+        state = _AcceptanceFixSprintRouteState(*route)
         try:
-            _split_result = self._handle_acceptance_fix_sprint_route_part_01(method, route, _split_state)
+            _split_result = self._handle_acceptance_fix_sprint_route_part_01(method, route, state)
             if _split_result[0]:
                 return _split_result[1]
-            _split_result = self._handle_acceptance_fix_sprint_route_part_02(method, route, _split_state)
+            _split_result = self._handle_acceptance_fix_sprint_route_part_02(method, route, state)
             if _split_result[0]:
                 return _split_result[1]
         except _interfaces_api_runtime.AcceptanceFixSprintNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
         except _interfaces_api_runtime.AcceptanceFixSprintStateError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except (_interfaces_api_runtime.AcceptanceFixSprintError, _interfaces_api_runtime.AcceptanceAnalyticsError, _interfaces_api_runtime.AcceptanceNotFoundError, FileNotFoundError, ValueError) as exc:
+        except (
+            _interfaces_api_runtime.AcceptanceFixSprintError,
+            _interfaces_api_runtime.AcceptanceAnalyticsError,
+            _interfaces_api_runtime.AcceptanceNotFoundError,
+            FileNotFoundError,
+            ValueError,
+        ) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
 
     def _handle_acceptance_kb_root(self, method: str) -> None:
@@ -152,7 +219,7 @@ class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
             if method != "GET":
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
-            report = self.acceptance_kb_store.latest_report()
+            report = self.server.acceptance_kb_store.latest_report()
             self._send_json({"ok": True, "knowledge_report": report, "summary": _interfaces_api_runtime.knowledge_report_summary(report)})
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
@@ -162,7 +229,7 @@ class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
             if method != "POST":
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
-            report = self.acceptance_kb_store.refresh(self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+            report = self.server.acceptance_kb_store.refresh(self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
             self._send_json({"ok": True, "knowledge_report": report, "summary": _interfaces_api_runtime.knowledge_report_summary(report)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
@@ -172,7 +239,7 @@ class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
             if method != "GET":
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
-            report = self.acceptance_kb_store.get_report(report_id)
+            report = self.server.acceptance_kb_store.get_report(report_id)
             self._send_json({"ok": True, "knowledge_report": report, "summary": _interfaces_api_runtime.knowledge_report_summary(report)})
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
@@ -186,7 +253,7 @@ class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
                 return
             query = _interfaces_api_runtime.parse_qs(query_string)
             include_hidden = _interfaces_api_runtime._query_value(query, "include_hidden") in {"1", "true", "yes"}
-            entries = self.acceptance_kb_store.list_entries(include_hidden=include_hidden)
+            entries = self.server.acceptance_kb_store.list_entries(include_hidden=include_hidden)
             self._send_json({"ok": True, "entries": [_interfaces_api_runtime.knowledge_entry_summary(entry) for entry in entries], "summary": {"entry_count": len(entries)}})
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
@@ -198,14 +265,14 @@ class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
                 if method != "GET":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                entry = self.acceptance_kb_store.read_entry(entry_id)
+                entry = self.server.acceptance_kb_store.read_entry(entry_id)
                 self._send_json({"ok": True, "entry": entry.to_dict(), "summary": _interfaces_api_runtime.knowledge_entry_summary(entry)})
                 return
             if action in {"hide", "unhide"}:
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                entry = self.acceptance_kb_store.hide_entry(entry_id, hidden=action == "hide", now=_interfaces_api_runtime._utc_now())
+                entry = self.server.acceptance_kb_store.hide_entry(entry_id, hidden=action == "hide", now=_interfaces_api_runtime._utc_now())
                 self._send_json({"ok": True, "entry": entry.to_dict(), "summary": _interfaces_api_runtime.knowledge_entry_summary(entry)})
                 return
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Acceptance KB entry route not found.")
@@ -229,7 +296,7 @@ class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
                 "outcome_status": _interfaces_api_runtime._query_value(query, "outcome_status") or "",
             }
             include_hidden = _interfaces_api_runtime._query_value(query, "include_hidden") in {"1", "true", "yes"}
-            entries = self.acceptance_kb_store.search_entries(payload, include_hidden=include_hidden)
+            entries = self.server.acceptance_kb_store.search_entries(payload, include_hidden=include_hidden)
             self._send_json({"ok": True, "entries": [_interfaces_api_runtime.knowledge_entry_summary(entry) for entry in entries], "summary": {"entry_count": len(entries)}})
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
@@ -239,7 +306,7 @@ class QualityRoutesAcceptanceFixSprint(QualityRouteContext):
             if method != "POST":
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
-            recommendation = self.acceptance_kb_store.recommend(self._optional_json_body())
+            recommendation = self.server.acceptance_kb_store.recommend(self._optional_json_body())
             self._send_json({"ok": True, "recommendation": recommendation})
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))

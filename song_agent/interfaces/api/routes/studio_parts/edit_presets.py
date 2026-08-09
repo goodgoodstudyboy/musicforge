@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.coercion import as_list as _as_list
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
 
-from typing import Any as _InterfaceType
-
+from song_agent.application.jobs.ports import JobRuntimePort
+from song_agent.application.http_ports import studio as studio_ports
+from song_agent.application.http_ports.studio import (
+    AuthConfig,
+    ProjectDocument,
+    QualityGateResult,
+    ReviewSprint,
+)
 from song_agent.interfaces.api.route_contexts.studio import StudioRouteContext
 
-from song_agent.platform.contracts.documents import ImplementationDocument
-
-from typing import Any
-
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -24,23 +27,23 @@ class StudioRoutesEditPresets(StudioRouteContext):
     def do_PATCH(self) -> None:
         self._handle_request("PATCH")
 
-    def log_message(self, format: str, *args: Any) -> None:
+    def log_message(self, format: str, *args: object) -> None:
         return
 
     @property
-    def store(self) -> _InterfaceType:
+    def store(self) -> JobRuntimePort:
         return self.server.job_store
 
     @property
-    def human_review_pack_store(self) -> _InterfaceType:
+    def human_review_pack_store(self) -> studio_ports.HumanReviewPackStore:
         return self.server.human_review_pack_store
 
     @property
-    def edit_preset_store(self) -> _InterfaceType:
+    def edit_preset_store(self) -> studio_ports.EditPresetStore:
         return self.server.edit_preset_store
 
     @property
-    def auth_config(self) -> _InterfaceType:
+    def auth_config(self) -> AuthConfig:
         return self.server.auth_config
 
     def _handle_edit_presets_root(self, method: str) -> None:
@@ -53,7 +56,10 @@ class StudioRoutesEditPresets(StudioRouteContext):
             except ValueError as exc:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
                 return
-            self._send_json({"ok": True, "preset": preset.to_dict(), **self.edit_preset_store.to_response()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            self._send_json(
+                {"ok": True, "preset": preset.to_dict(), **self.edit_preset_store.to_response()},
+                status=_interfaces_api_runtime.HTTPStatus.CREATED,
+            )
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
 
@@ -100,7 +106,7 @@ class StudioRoutesEditPresets(StudioRouteContext):
         self.edit_preset_store.reset()
         self._send_json({"ok": True, **self.edit_preset_store.to_response()})
 
-    def _get_or_refresh_delivery_qa(self, project_id: str, *, refresh: bool) -> ImplementationDocument:
+    def _get_or_refresh_delivery_qa(self, project_id: str, *, refresh: bool) -> JsonDocument:
         project_dir = self.project_store.project_dir(project_id)
         if not refresh:
             existing = self.project_store.read_delivery_qa(project_id, default={})
@@ -114,7 +120,13 @@ class StudioRoutesEditPresets(StudioRouteContext):
                     manifest = _interfaces_api_runtime.read_final_export_manifest(project_dir)
                 except FileNotFoundError:
                     manifest = {}
-                current_hash = _interfaces_api_runtime.delivery_qa_source_hash(project_id=project_id, project_document=document, project_dir=project_dir, project_export=project_export, final_export_manifest=manifest)
+                current_hash = _interfaces_api_runtime.delivery_qa_source_hash(
+                    project_id=project_id,
+                    project_document=document,
+                    project_dir=project_dir,
+                    project_export=project_export,
+                    final_export_manifest=manifest,
+                )
                 if str(existing.get("source_hash") or "") != current_hash:
                     return _interfaces_api_runtime.mark_delivery_qa_stale(existing, current_source_hash=current_hash)
                 return existing
@@ -137,7 +149,13 @@ class StudioRoutesEditPresets(StudioRouteContext):
         )
         return self.project_store.write_delivery_qa(project_id, report, now=_interfaces_api_runtime._utc_now())
 
-    def _set_final_version_with_gate(self, project_id: str, version_id: str, *, force: bool) -> tuple[Any, Any]:
+    def _set_final_version_with_gate(
+        self,
+        project_id: str,
+        version_id: str,
+        *,
+        force: bool,
+    ) -> tuple[ProjectDocument, QualityGateResult]:
         document = self.project_store.get_project(project_id)
         version = next((version for version in document.versions if version.version_id == version_id), None)
         if version is None:
@@ -169,12 +187,12 @@ class StudioRoutesEditPresets(StudioRouteContext):
 
     def _review_sprint_response(
         self,
-        sprint_store: _InterfaceType,
-        task_store: _InterfaceType,
-        sprint: Any,
+        sprint_store: studio_ports.ReviewSprintStore,
+        task_store: studio_ports.ReviewTaskStore,
+        sprint: ReviewSprint,
         *,
         include_events: bool = False,
-    ) -> ImplementationDocument:
+    ) -> JsonDocument:
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
@@ -196,14 +214,20 @@ class StudioRoutesEditPresets(StudioRouteContext):
             "closeout_summary": _interfaces_api_runtime.closeout_report_summary(closeout_report),
             "signoff": signoff,
             "signoff_summary": _interfaces_api_runtime.signoff_summary(signoff),
-            "export_summary": _interfaces_api_runtime.review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data),
+            "export_summary": _interfaces_api_runtime.review_sprint_export_summary(
+                sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data
+            ),
             "tasks": self._review_sprint_task_items(task_store, sprint),
         }
         if include_events:
             response["events"] = sprint_store.read_events(sprint.sprint_id)
-        return response
+        return normalize_json_document(response)
 
-    def _review_sprint_public_payload(self, sprint_store: _InterfaceType, sprint: Any) -> ImplementationDocument:
+    def _review_sprint_public_payload(
+        self,
+        sprint_store: studio_ports.ReviewSprintStore,
+        sprint: ReviewSprint,
+    ) -> JsonDocument:
         summary = sprint_store.read_summary(sprint.sprint_id, default={})
         conflict_report = sprint_store.read_conflict_report(sprint.sprint_id, default={})
         recommendation_report = sprint_store.read_recommendation_report(sprint.sprint_id, default={})
@@ -222,32 +246,42 @@ class StudioRoutesEditPresets(StudioRouteContext):
             "metrics_summary": self._review_sprint_metrics_summary(sprint_store, sprint),
             "closeout_summary": _interfaces_api_runtime.closeout_report_summary(closeout_report),
             "signoff_summary": _interfaces_api_runtime.signoff_summary(signoff),
-            "export_summary": _interfaces_api_runtime.review_sprint_export_summary(sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data),
+            "export_summary": _interfaces_api_runtime.review_sprint_export_summary(
+                sprint, summary, conflict_report, recommendation_report, action_queue_summary_data, judge_summary_data
+            ),
         }
 
-    def _review_sprint_metrics_summary(self, sprint_store: _InterfaceType, sprint: Any) -> ImplementationDocument:
+    def _review_sprint_metrics_summary(
+        self,
+        sprint_store: studio_ports.ReviewSprintStore,
+        sprint: ReviewSprint,
+    ) -> JsonDocument:
         try:
-            metrics_store = _interfaces_api_runtime.ReviewMetricsStore(sprint_store.project_dir)
+            metrics_store = _api_store_factories.review_metrics_store(sprint_store.project_dir)
             return _interfaces_api_runtime.sprint_metrics_summary(metrics_store.read_sprint_metrics(sprint.sprint_id, default={}))
         except (OSError, ValueError, TypeError, FileNotFoundError, _interfaces_api_runtime.json.JSONDecodeError):
             return {}
 
-    def _review_sprint_action_queue_summary(self, sprint_store: _InterfaceType, sprint: Any) -> ImplementationDocument:
+    def _review_sprint_action_queue_summary(
+        self,
+        sprint_store: studio_ports.ReviewSprintStore,
+        sprint: ReviewSprint,
+    ) -> JsonDocument:
         try:
-            queue_store = _interfaces_api_runtime.ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
-            return _interfaces_api_runtime.action_queue_collection_summary(_as_list(queue_store.list_queues(include_archived=True)))
+            queue_store = _api_store_factories.review_sprint_action_queue_store(sprint_store.sprint_dir(sprint.sprint_id))
+            return _interfaces_api_runtime.action_queue_collection_summary(queue_store.list_queues(include_archived=True))
         except (OSError, ValueError, TypeError, FileNotFoundError, _interfaces_api_runtime.json.JSONDecodeError):
             return {}
 
     def _get_or_refresh_sprint_closeout(
         self,
         project_id: str,
-        sprint_store: _InterfaceType,
-        task_store: _InterfaceType,
-        sprint: Any,
+        sprint_store: studio_ports.ReviewSprintStore,
+        task_store: studio_ports.ReviewTaskStore,
+        sprint: ReviewSprint,
         *,
         refresh: bool,
-    ) -> ImplementationDocument:
+    ) -> JsonDocument:
         project_dir = self.project_store.project_dir(project_id)
         if not refresh:
             existing = sprint_store.read_closeout_report(sprint.sprint_id, default={})
@@ -256,8 +290,8 @@ class StudioRoutesEditPresets(StudioRouteContext):
                     project_document = self.project_store.sync_project(project_id, self.store.get_job)
                 except FileNotFoundError:
                     project_document = self.project_store.get_project(project_id)
-                queue_store = _interfaces_api_runtime.ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
-                metrics_store = _interfaces_api_runtime.ReviewMetricsStore(project_dir)
+                queue_store = _api_store_factories.review_sprint_action_queue_store(sprint_store.sprint_dir(sprint.sprint_id))
+                metrics_store = _api_store_factories.review_metrics_store(project_dir)
                 current_hash = _interfaces_api_runtime.closeout_source_hash(
                     sprint=sprint,
                     project_document=project_document,
@@ -283,7 +317,7 @@ class StudioRoutesEditPresets(StudioRouteContext):
             project_document=project_document,
             task_store=task_store,
             sprint_store=sprint_store,
-            queue_store=_interfaces_api_runtime.ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id)),
+            queue_store=_api_store_factories.review_sprint_action_queue_store(sprint_store.sprint_dir(sprint.sprint_id)),
             metrics_report=metrics_report,
             judge_summary=sprint_store.read_judge_summary(sprint.sprint_id, default={}),
             recommendation_report=sprint_store.read_recommendation_report(sprint.sprint_id, default={}),
@@ -295,14 +329,14 @@ class StudioRoutesEditPresets(StudioRouteContext):
     def _get_or_refresh_sprint_metrics(
         self,
         project_id: str,
-        sprint_store: _InterfaceType,
-        task_store: _InterfaceType,
-        sprint: Any,
+        sprint_store: studio_ports.ReviewSprintStore,
+        task_store: studio_ports.ReviewTaskStore,
+        sprint: ReviewSprint,
         *,
         refresh: bool,
-    ) -> ImplementationDocument:
+    ) -> JsonDocument:
         project_dir = self.project_store.project_dir(project_id)
-        metrics_store = _interfaces_api_runtime.ReviewMetricsStore(project_dir)
+        metrics_store = _api_store_factories.review_metrics_store(project_dir)
         if not refresh:
             existing = metrics_store.read_sprint_metrics(sprint.sprint_id, default={})
             if existing:
@@ -311,8 +345,10 @@ class StudioRoutesEditPresets(StudioRouteContext):
             project_document = self.project_store.sync_project(project_id, self.store.get_job)
         except FileNotFoundError:
             project_document = self.project_store.get_project(project_id)
-        provider_records = _interfaces_api_runtime.collect_project_provider_usage_records(project_id, project_document.versions, project_dir)
-        queue_store = _interfaces_api_runtime.ReviewSprintActionQueueStore(sprint_store.sprint_dir(sprint.sprint_id))
+        provider_records = _interfaces_api_runtime.collect_project_provider_usage_records(
+            project_id, project_document.versions, project_dir
+        )
+        queue_store = _api_store_factories.review_sprint_action_queue_store(sprint_store.sprint_dir(sprint.sprint_id))
         report = _interfaces_api_runtime.build_sprint_metrics_report(
             project_id=project_id,
             sprint=sprint,

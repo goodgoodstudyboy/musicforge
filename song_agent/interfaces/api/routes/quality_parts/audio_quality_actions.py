@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts.documents import JsonDocument
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -113,7 +113,7 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
         return (False, None)
 
     def _handle_audio_quality_actions_route(self, method: str, path: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         try:
             _split_result = self._handle_audio_quality_actions_route_part_01(method, path, _split_state)
             if _split_result[0]:
@@ -145,11 +145,11 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
         try:
             if path == "/api/mastering/profiles":
                 if method == "GET":
-                    profiles = [profile.to_dict() for profile in self.mastering_profile_store.list_profiles(include_builtins=True)]
+                    profiles = [profile.to_dict() for profile in self.server.mastering_profile_store.list_profiles(include_builtins=True)]
                     self._send_json({"ok": True, "profiles": profiles})
                     return
                 if method == "POST":
-                    profile = self.mastering_profile_store.create_profile(self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                    profile = self.server.mastering_profile_store.create_profile(self._read_json_body(), now=_interfaces_api_runtime._utc_now())
                     self._send_json({"ok": True, "profile": profile.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                     return
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -162,15 +162,15 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
             profile_id = parts[0]
             if len(parts) == 1:
                 if method == "GET":
-                    profile = self.mastering_profile_store.get_profile(profile_id)
+                    profile = self.server.mastering_profile_store.get_profile(profile_id)
                     self._send_json({"ok": True, "profile": profile.to_dict()})
                     return
                 if method == "PATCH":
-                    profile = self.mastering_profile_store.update_profile(profile_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                    profile = self.server.mastering_profile_store.update_profile(profile_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
                     self._send_json({"ok": True, "profile": profile.to_dict()})
                     return
                 if method == "DELETE":
-                    self.mastering_profile_store.delete_profile(profile_id)
+                    self.server.mastering_profile_store.delete_profile(profile_id)
                     self._send_json({"ok": True, "deleted": True, "profile_id": profile_id})
                     return
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -179,7 +179,7 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                profile = self.mastering_profile_store.clone_profile(profile_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                profile = self.server.mastering_profile_store.clone_profile(profile_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
                 self._send_json({"ok": True, "profile": profile.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Mastering profile route not found.")
@@ -192,10 +192,10 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
         try:
             if path == "/api/audio-encoding/config":
                 if method == "GET":
-                    self._send_json({"ok": True, "config": self.audio_encoding_store.read_config().public_summary()})
+                    self._send_json({"ok": True, "config": self.server.audio_encoding_store.read_config().public_summary()})
                     return
                 if method == "POST":
-                    config = self.audio_encoding_store.write_config(self._read_json_body())
+                    config = self.server.audio_encoding_store.write_config(self._read_json_body())
                     self._send_json({"ok": True, "config": config})
                     return
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -204,21 +204,21 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                self._send_json({"ok": True, **self.audio_encoding_store.test_config()})
+                self._send_json({"ok": True, **self.server.audio_encoding_store.test_config()})
                 return
             if path == "/api/audio-encoding/config/reset":
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                self._send_json({"ok": True, "config": self.audio_encoding_store.reset_config()})
+                self._send_json({"ok": True, "config": self.server.audio_encoding_store.reset_config()})
                 return
             if path == "/api/audio-encoding/profiles":
                 if method == "GET":
-                    profiles = [profile.to_dict() for profile in self.audio_encoding_profile_store.list_profiles(include_builtins=True)]
+                    profiles = [profile.to_dict() for profile in self.server.audio_encoding_profile_store.list_profiles(include_builtins=True)]
                     self._send_json({"ok": True, "profiles": profiles})
                     return
                 if method == "POST":
-                    profile = self.audio_encoding_profile_store.create_profile(self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                    profile = self.server.audio_encoding_profile_store.create_profile(self._read_json_body(), now=_interfaces_api_runtime._utc_now())
                     self._send_json({"ok": True, "profile": profile.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                     return
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -231,15 +231,15 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
             profile_id = parts[0]
             if len(parts) == 1:
                 if method == "GET":
-                    profile = self.audio_encoding_profile_store.get_profile(profile_id)
+                    profile = self.server.audio_encoding_profile_store.get_profile(profile_id)
                     self._send_json({"ok": True, "profile": profile.to_dict()})
                     return
                 if method == "PATCH":
-                    profile = self.audio_encoding_profile_store.update_profile(profile_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
+                    profile = self.server.audio_encoding_profile_store.update_profile(profile_id, self._read_json_body(), now=_interfaces_api_runtime._utc_now())
                     self._send_json({"ok": True, "profile": profile.to_dict()})
                     return
                 if method == "DELETE":
-                    self.audio_encoding_profile_store.delete_profile(profile_id)
+                    self.server.audio_encoding_profile_store.delete_profile(profile_id)
                     self._send_json({"ok": True, "deleted": True, "profile_id": profile_id})
                     return
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -248,7 +248,7 @@ class QualityRoutesAudioQualityActions(QualityRouteContext):
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                profile = self.audio_encoding_profile_store.clone_profile(profile_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                profile = self.server.audio_encoding_profile_store.clone_profile(profile_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
                 self._send_json({"ok": True, "profile": profile.to_dict()}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio encoding profile route not found.")

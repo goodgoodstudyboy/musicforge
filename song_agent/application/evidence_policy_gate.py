@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
 
 from song_agent.capabilities import capability_registry
+from song_agent.platform.contracts.documents import JsonDocument
 from song_agent.platform.evidence_graph import build_evidence_graph
 from song_agent.platform.policy import evaluate_policy, get_policy_profile
 
@@ -43,7 +43,7 @@ def evaluate_evidence_policy_gate(
     manifest_path: Path | str,
     *,
     allowed_root: Path | str | None = None,
-) -> dict[str, Any]:
+) -> JsonDocument:
     graph = build_evidence_graph(manifest_path, registry=capability_registry, allowed_root=allowed_root)
     gate = evaluate_policy(get_policy_profile(policy_id), graph)
     return {

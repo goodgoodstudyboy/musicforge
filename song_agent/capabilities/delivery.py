@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.capabilities.model import CapabilitySpec, RuntimeVerificationSpec
+from song_agent.platform.contracts import JsonValue
 
 
 def _spec(
@@ -10,7 +11,7 @@ def _spec(
     function: str,
     package_type: str,
     verification_package_type: str,
-    defaults: tuple[tuple[str, object], ...],
+    defaults: tuple[tuple[str, JsonValue], ...],
 ) -> CapabilitySpec:
     surface = {
         "release": ("release", "/api/releases", "release.qa"),

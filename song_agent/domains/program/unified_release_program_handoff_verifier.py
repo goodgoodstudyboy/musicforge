@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 import json as json
 import re as re
@@ -434,7 +434,7 @@ def _external_handoff_state(path: Path | str | None, archive_manifest: Implement
             _check("urph_external_evidence_manifest_hash", _public_external_manifest(external).get("integrity_hash") == archive_manifest.get("integrity_hash"), "External Handoff evidence manifest public projection matches archive copy."),
         ]
     )
-    rows = [row for row in external.get("items", []) if isinstance(row, dict)]
+    rows = [row for row in _as_list(external.get("items")) if isinstance(row, dict)]
     by_type = {str(row.get("evidence_type") or ""): row for row in rows}
     checks.extend(_external_program_checks(by_type.get("unified_release_program"), require=require, state=state))
     checks.extend(_external_operations_checks(by_type.get("unified_release_program_operations"), by_type.get("unified_release_program"), require=require, state=state))

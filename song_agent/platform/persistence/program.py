@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts import as_int as _as_int
+from song_agent.platform.contracts.documents import JsonDocument
 
 import json
 import os
+import sqlite3
 import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
 
 from song_agent.platform.persistence.database import SCHEMA_VERSION, MusicForgeDatabase
 from song_agent.platform.persistence.locks import WorkspaceLock
@@ -56,7 +58,7 @@ class ProgramStateRepository:
     def write_projection(
         self,
         path: Path | str,
-        document: dict[str, Any],
+        document: JsonDocument,
         *,
         crash_hook: ProgramCrashHook | None = None,
     ) -> Path:
@@ -84,7 +86,7 @@ class ProgramStateRepository:
             self._commit_index(relative, version, transaction_id)
         return target
 
-    def read_projection(self, path: Path | str) -> dict[str, Any]:
+    def read_projection(self, path: Path | str) -> JsonDocument:
         self._ensure_database()
         target, relative = self._target(path)
         with WorkspaceLock(self.workspace_root, operation=f"program-read:{relative}"):
@@ -121,9 +123,9 @@ class ProgramStateRepository:
 
     def adopt_legacy_document(
         self,
-        connection: Any,
+        connection: sqlite3.Connection,
         relative_path: str,
-        document: dict[str, Any],
+        document: JsonDocument,
         payload: bytes,
         *,
         migration_id: str,
@@ -156,7 +158,7 @@ class ProgramStateRepository:
         authority: Path,
         payload_hash: str,
         transaction_id: str,
-        metadata: ImplementationDocument,
+        metadata: JsonDocument,
     ) -> int:
         now = _now()
         with self.database.transaction() as connection:
@@ -183,12 +185,12 @@ class ProgramStateRepository:
 
     def _insert_document(
         self,
-        connection: Any,
+        connection: sqlite3.Connection,
         relative: str,
         authority: Path,
         payload_hash: str,
         version: int,
-        metadata: ImplementationDocument,
+        metadata: JsonDocument,
         now: str,
     ) -> None:
         connection.execute(
@@ -239,10 +241,10 @@ class ProgramStateRepository:
 
     def _upsert_index(
         self,
-        connection: Any,
+        connection: sqlite3.Connection,
         relative: str,
         version: int,
-        metadata: ImplementationDocument,
+        metadata: JsonDocument,
         payload_hash: str,
         now: str,
     ) -> None:
@@ -252,7 +254,7 @@ class ProgramStateRepository:
             component_type=excluded.component_type, generation=excluded.generation, status=excluded.status,
             current_version=excluded.current_version, payload_hash=excluded.payload_hash, updated_at=excluded.updated_at""",
             (
-                relative, metadata["program_id"], metadata["component_type"], int(metadata["generation"]),
+                relative, metadata["program_id"], metadata["component_type"], _as_int(metadata["generation"]),
                 metadata["status"], version, payload_hash, now,
             ),
         )
@@ -299,7 +301,7 @@ class ProgramStateRepository:
             hook(stage)
 
 
-def write_program_json(path: Path, data: dict[str, Any]) -> Path:
+def write_program_json(path: Path, data: JsonDocument) -> Path:
     workspace = _program_workspace(path)
     if workspace is None:
         _write_bytes_atomic(path, _json_bytes(data))
@@ -307,21 +309,23 @@ def write_program_json(path: Path, data: dict[str, Any]) -> Path:
     return _cached_repository(str(workspace)).write_projection(path, data)
 
 
-def read_program_json(path: Path) -> dict[str, Any]:
+def read_program_json(path: Path) -> JsonDocument:
     workspace = _program_workspace(path)
     if workspace is None:
         return _read_json(path)
     return _cached_repository(str(workspace)).read_projection(path)
 
 
-def program_json_facade(error_type: type[Exception]) -> tuple[Callable[[Path], dict[str, Any]], Callable[[Path, dict[str, Any]], Path]]:
-    def read(path: Path) -> dict[str, Any]:
+def program_json_facade(
+    error_type: type[Exception],
+) -> tuple[Callable[[Path], JsonDocument], Callable[[Path, JsonDocument], Path]]:
+    def read(path: Path) -> JsonDocument:
         try:
             return read_program_json(path)
         except ProgramPersistenceError as exc:
             raise error_type(str(exc)) from exc
 
-    def write(path: Path, data: dict[str, Any]) -> Path:
+    def write(path: Path, data: JsonDocument) -> Path:
         try:
             return write_program_json(path, data)
         except ProgramPersistenceError as exc:
@@ -346,7 +350,7 @@ def _program_workspace(path: Path | str) -> Path | None:
     return None
 
 
-def _document_metadata(relative: str, document: ImplementationDocument) -> ImplementationDocument:
+def _document_metadata(relative: str, document: JsonDocument) -> JsonDocument:
     parts = Path(relative).parts
     program_id = str(document.get("program_id") or (parts[1] if len(parts) > 1 else "unknown"))
     path_text = "/".join(parts).lower()
@@ -362,13 +366,13 @@ def _document_metadata(relative: str, document: ImplementationDocument) -> Imple
     return {
         "program_id": program_id,
         "component_type": component,
-        "generation": int(document.get("current_generation") or document.get("generation") or 1),
+        "generation": _as_int(document.get("current_generation") or document.get("generation") or 1),
         "status": str(document.get("status") or document.get("readiness") or "projection"),
     }
 
 
-def _event(relative: str, version: int, payload_hash: str, event_type: str, previous: str, created_at: str) -> ImplementationDocument:
-    event = {
+def _event(relative: str, version: int, payload_hash: str, event_type: str, previous: str, created_at: str) -> JsonDocument:
+    event: JsonDocument = {
         "relative_path": relative, "document_version": version, "event_type": event_type,
         "previous_event_hash": previous, "payload_hash": payload_hash, "created_at": created_at,
     }
@@ -376,7 +380,7 @@ def _event(relative: str, version: int, payload_hash: str, event_type: str, prev
     return event
 
 
-def _record(row: Any) -> ProgramDocumentRecord:
+def _record(row: sqlite3.Row) -> ProgramDocumentRecord:
     return ProgramDocumentRecord(
         relative_path=str(row["relative_path"]), program_id=str(row["program_id"]),
         component_type=str(row["component_type"]), generation=int(row["generation"]),
@@ -385,14 +389,14 @@ def _record(row: Any) -> ProgramDocumentRecord:
     )
 
 
-def _json_bytes(value: ImplementationDocument) -> bytes:
+def _json_bytes(value: JsonDocument) -> bytes:
     text = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
     if os.linesep != "\n":
         text = text.replace("\n", os.linesep)
     return text.encode("utf-8")
 
 
-def _read_json(path: Path) -> ImplementationDocument:
+def _read_json(path: Path) -> JsonDocument:
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ProgramPersistenceError(f"JSON document is not an object: {path.name}")

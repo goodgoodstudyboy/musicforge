@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument
 
 
 
 class ProgramRoutesUnifiedCommandCenterEvidenceFromPayload:
-    def _unified_command_center_evidence_from_payload(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _unified_command_center_evidence_from_payload(self, payload: JsonDocument) -> JsonDocument:
         evidence = dict(payload or {})
         for key, zip_key, report_key in (
             ("release", "release_zip", "release_verification_report"),

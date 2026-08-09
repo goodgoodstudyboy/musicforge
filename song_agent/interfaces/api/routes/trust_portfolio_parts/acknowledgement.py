@@ -1,14 +1,24 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts.documents import JsonDocument
 
 from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_acknowledgement_part_01_actions_01(self, method, parts, portfolio_id, action, _split_state, query_profile, subaction):
+    def _dispatch_portfolio_acknowledgement_part_01_actions_01(
+        self,
+        method: str,
+        parts: list[str],
+        portfolio_id: str,
+        action: str,
+        _split_state: JsonDocument,
+        query_profile: str,
+        subaction: str,
+    ) -> tuple[bool, bool | None]:
         if subaction == 'pack' and len(parts) >= 4:
             pack_action = parts[3]
             if pack_action == 'refresh' and len(parts) == 4:
@@ -50,7 +60,16 @@ class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
                 return (True, True)
         return (False, None)
 
-    def _dispatch_portfolio_acknowledgement_part_01_actions_02(self, method, parts, portfolio_id, action, _split_state, query_profile, subaction):
+    def _dispatch_portfolio_acknowledgement_part_01_actions_02(
+        self,
+        method: str,
+        parts: list[str],
+        portfolio_id: str,
+        action: str,
+        _split_state: JsonDocument,
+        query_profile: str,
+        subaction: str,
+    ) -> tuple[bool, bool | None]:
         if subaction == 'responses' and len(parts) >= 3:
             if len(parts) == 3:
                 if method != 'GET':
@@ -91,7 +110,16 @@ class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
                 return (True, True)
         return (False, None)
 
-    def _dispatch_portfolio_acknowledgement_part_01_actions_03(self, method, parts, portfolio_id, action, _split_state, query_profile, subaction):
+    def _dispatch_portfolio_acknowledgement_part_01_actions_03(
+        self,
+        method: str,
+        parts: list[str],
+        portfolio_id: str,
+        action: str,
+        _split_state: JsonDocument,
+        query_profile: str,
+        subaction: str,
+    ) -> tuple[bool, bool | None]:
         if subaction == 'evidence' and len(parts) >= 4:
             evidence_action = parts[3]
             if evidence_action == 'refresh' and len(parts) == 4:
@@ -135,7 +163,14 @@ class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
         return (True, True)
         return (False, None)
 
-    def _dispatch_portfolio_acknowledgement_part_01(self, method, parts, portfolio_id, action, _split_state):
+    def _dispatch_portfolio_acknowledgement_part_01(
+        self,
+        method: str,
+        parts: list[str],
+        portfolio_id: str,
+        action: str,
+        _split_state: JsonDocument,
+    ) -> tuple[bool, bool | None]:
         if action == 'governance-attestation-transparency-acknowledgement':
             query = _interfaces_api_runtime.parse_qs(_interfaces_api_runtime.urlparse(self.path).query)
             query_profile = str(query.get('profile', ['public_summary'])[0] or 'public_summary')
@@ -145,10 +180,18 @@ class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
                     return (True, True)
                 pack = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.read_pack(portfolio_id, profile=query_profile, default={})
                 evidence = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.read_evidence(portfolio_id, profile=query_profile, default={})
-                summary = {'status': pack.get('status', 'missing') if pack else 'missing', 'profile': query_profile, 'pack_id': pack.get('pack_id') if pack else None}
+                summary: JsonDocument = {
+                    "status": pack.get("status", "missing") if pack else "missing",
+                    "profile": query_profile,
+                    "pack_id": pack.get("pack_id") if pack else None,
+                }
                 if pack:
                     summary['stale'] = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.pack_is_stale(portfolio_id, pack, profile=query_profile)
-                evidence_summary = _interfaces_api_runtime.portfolio_governance_attestation_transparency_acknowledgement_summary(evidence) if evidence else {'status': 'missing', 'external_review_status': 'missing'}
+                evidence_summary: JsonDocument = (
+                    _interfaces_api_runtime.portfolio_governance_attestation_transparency_acknowledgement_summary(evidence)
+                    if evidence
+                    else {"status": "missing", "external_review_status": "missing"}
+                )
                 if evidence:
                     evidence_summary['stale'] = self.release_portfolio_governance_attestation_transparency_acknowledgement_store.evidence_is_stale(portfolio_id, evidence, profile=query_profile)
                 self._send_json({'ok': True, 'portfolio_id': portfolio_id, 'profile': query_profile, 'pack': pack, 'responses': self.release_portfolio_governance_attestation_transparency_acknowledgement_store.list_responses(portfolio_id, profile=query_profile), 'acknowledgement_evidence': evidence, 'change_requests': self.release_portfolio_governance_attestation_transparency_acknowledgement_store.list_change_requests(portfolio_id, profile=query_profile), 'summary': summary, 'evidence_summary': evidence_summary})
@@ -165,16 +208,23 @@ class TrustPortfolioAcknowledgementRoutes(TrustPortfolioRouteContext):
                 return _split_action_result
         return (False, None)
 
-    def _dispatch_portfolio_acknowledgement_part_02(self, method, parts, portfolio_id, action, _split_state):
+    def _dispatch_portfolio_acknowledgement_part_02(
+        self,
+        method: str,
+        parts: list[str],
+        portfolio_id: str,
+        action: str,
+        _split_state: JsonDocument,
+    ) -> tuple[bool, bool | None]:
         return (True, False)
         return (False, None)
 
-    def _dispatch_portfolio_acknowledgement(self, method, parts, portfolio_id, action) -> bool:
-        _split_state: dict[str, _InferenceType] = {}
+    def _dispatch_portfolio_acknowledgement(self, method: str, parts: list[str], portfolio_id: str, action: str) -> bool:
+        _split_state: JsonDocument = {}
         _split_result = self._dispatch_portfolio_acknowledgement_part_01(method, parts, portfolio_id, action, _split_state)
         if _split_result[0]:
-            return _split_result[1]
+            return bool(_split_result[1])
         _split_result = self._dispatch_portfolio_acknowledgement_part_02(method, parts, portfolio_id, action, _split_state)
         if _split_result[0]:
-            return _split_result[1]
+            return bool(_split_result[1])
         raise RuntimeError("_dispatch_portfolio_acknowledgement did not produce a result.")

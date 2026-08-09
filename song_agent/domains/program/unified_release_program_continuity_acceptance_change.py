@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document
 
 import shutil as shutil
 import zipfile as zipfile
@@ -11,7 +11,7 @@ from song_agent.platform.version import VERSION as __version__
 from song_agent.platform.contracts.lifecycle import GenerationRef as GenerationRef, ResetAuthorization as ResetAuthorization
 from song_agent.platform.lifecycle import ArchiveBuilder as ArchiveBuilder, ChangeRequestService as ChangeRequestService, GenerationService as GenerationService, HistoryChain as HistoryChain, ResetService as ResetService
 from song_agent.platform.persistence import WorkspaceLock as WorkspaceLock
-from song_agent.platform.persistence.program import program_json_facade as program_json_facade
+from song_agent.domains.legacy_documents import _program_json_facade as program_json_facade
 from song_agent.platform.time import now_iso as now_iso
 from song_agent.platform.verification.sanitization import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
 from song_agent.platform.verification.hashing import stable_hash as stable_hash

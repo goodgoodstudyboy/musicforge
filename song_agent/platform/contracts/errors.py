@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
-
-from typing import Any
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 
 
 class DomainError(Exception):
@@ -15,7 +13,7 @@ class DomainError(Exception):
         *,
         http_status: int = 400,
         retryable: bool = False,
-        details: ImplementationDocument | None = None,
+        details: JsonDocument | None = None,
     ) -> None:
         super().__init__(message)
         self.error_code = str(error_code)
@@ -24,11 +22,11 @@ class DomainError(Exception):
         self.retryable = bool(retryable)
         self.details = dict(details or {})
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDocument:
         return {
             "error_code": self.error_code,
             "message": self.message,
             "http_status": self.http_status,
             "retryable": self.retryable,
-            "details": self.details,
+            "details": normalize_json_document(self.details),
         }

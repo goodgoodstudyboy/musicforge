@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
-from song_agent.interfaces.api.runtime_parts.dependencies.program_dependencies import AnalyticsScope
+from song_agent.interfaces.bootstrap.api.program import AnalyticsScope
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, json, parse_qs, unquote
+from song_agent.interfaces.bootstrap.api.core import json, parse_qs, unquote
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import sanitize_metadata
+from song_agent.interfaces.bootstrap.api.creation_quality import sanitize_metadata
 
 def _match_acceptance_fix_sprint_route(path: str) -> tuple[str, list[str]] | None:
     prefix = "/api/acceptance/fix-sprints/"
@@ -181,8 +181,8 @@ def _match_release_track_tail(tail: str) -> tuple[str, str] | None:
         return None
     return unquote(parts[1]), action
 
-def _merge_editor_patch_metadata(left: ImplementationDocument | None, right: ImplementationDocument | None) -> ImplementationDocument:
-    merged: dict[str, Any] = {}
+def _merge_editor_patch_metadata(left: JsonDocument | None, right: JsonDocument | None) -> JsonDocument:
+    merged: JsonDocument = {}
     for source in (left, right):
         if not isinstance(source, dict):
             continue
@@ -190,8 +190,8 @@ def _merge_editor_patch_metadata(left: ImplementationDocument | None, right: Imp
             if key in {"clip_inserts", "template_inserts"}:
                 continue
             merged[key] = value
-    inserts: list[dict[str, Any]] = []
-    template_inserts: list[dict[str, Any]] = []
+    inserts: list[JsonDocument] = []
+    template_inserts: list[JsonDocument] = []
     seen: set[str] = set()
     seen_templates: set[str] = set()
     for source in (left, right):
@@ -208,7 +208,7 @@ def _merge_editor_patch_metadata(left: ImplementationDocument | None, right: Imp
             seen.add(key)
             inserts.append(sanitize_metadata(dict(item)))
     if inserts:
-        merged["clip_inserts"] = inserts[:20]
+        merged["clip_inserts"] = normalize_json_value(inserts[:20])
     for source in (left, right):
         raw_inserts = source.get("template_inserts") if isinstance(source, dict) else None
         if not isinstance(raw_inserts, list):
@@ -223,7 +223,7 @@ def _merge_editor_patch_metadata(left: ImplementationDocument | None, right: Imp
             seen_templates.add(key)
             template_inserts.append(sanitize_metadata(dict(item)))
     if template_inserts:
-        merged["template_inserts"] = template_inserts[:20]
+        merged["template_inserts"] = normalize_json_value(template_inserts[:20])
     return sanitize_metadata(merged)
 
 def _match_editor_template_route(path: str) -> tuple[str, str, str] | None:

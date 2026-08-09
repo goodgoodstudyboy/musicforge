@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping, Sequence
 
+from song_agent.platform.contracts.documents import JsonDocument
 from song_agent.platform.verification.hashing import stable_hash
 from song_agent.platform.verification.model import build_check
 
 
 def history_chain_checks(
-    rows: list[dict[str, Any]],
+    rows: Sequence[Mapping[str, object]],
     *,
     check_prefix: str,
-) -> list[dict[str, Any]]:
-    checks: list[dict[str, Any]] = []
+) -> list[JsonDocument]:
+    checks: list[JsonDocument] = []
     previous = ""
     for index, row in enumerate(rows):
         payload_hash = stable_hash({key: value for key, value in row.items() if key not in {"payload_hash", "event_hash"}})

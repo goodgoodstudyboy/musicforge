@@ -1,15 +1,22 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts import JsonDocument, as_document as _as_document, as_int as _as_int, as_list as _as_list
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Protocol
 
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.evidence_graph.model import EvidenceEdge, EvidenceGraph, EvidenceNode
-from song_agent.platform.verification.hashing import integrity_hash, integrity_ok, sha256_file, stable_hash
+from song_agent.platform.evidence_graph.path_support import (
+    EvidenceGraphBuildError,
+    path_from_row as _path_from_row,
+    proof_hash as _proof_hash,
+    resolve_path as _resolve_path,
+)
+from song_agent.platform.verification.hashing import integrity_hash, integrity_ok, sha256_file
 
 
 EVIDENCE_GRAPH_MANIFEST_PACKAGE_TYPE = "musicforge_evidence_graph_manifest"
@@ -24,16 +31,68 @@ ALLOWED_EDGE_RELATIONS = {
 }
 
 
-class EvidenceGraphBuildError(RuntimeError):
-    pass
+class RuntimeVerificationContract(Protocol):
+    @property
+    def package_type(self) -> str: ...
+
+    @property
+    def verification_package_type(self) -> str: ...
+
+    @property
+    def defaults(self) -> tuple[tuple[str, object], ...]: ...
+
+    @property
+    def proof_arguments(self) -> tuple[tuple[str, str], ...]: ...
+
+    @property
+    def required_proofs(self) -> tuple[str, ...]: ...
+
+    def verify(self, package_path: Path, arguments: Mapping[str, object]) -> JsonDocument: ...
+
+    def extract_identity(
+        self,
+        report: JsonDocument,
+        *,
+        component_type: str,
+    ) -> JsonDocument: ...
+
+
+class CapabilityContract(Protocol):
+    @property
+    def capability_id(self) -> str: ...
+
+    @property
+    def component_type(self) -> str: ...
+
+    @property
+    def runtime(self) -> RuntimeVerificationContract: ...
+
+    @property
+    def cli_commands(self) -> tuple[str, ...]: ...
+
+    @property
+    def api_routes(self) -> tuple[str, ...]: ...
+
+    @property
+    def web_panel(self) -> str: ...
+
+    @property
+    def release_checks(self) -> tuple[str, ...]: ...
+
+    @property
+    def gate_policies(self) -> tuple[str, ...]: ...
+
+
+class CapabilityResolver(Protocol):
+    def resolve_component(self, component_type: str) -> CapabilityContract | None: ...
 
 
 def write_evidence_graph_manifest(
     path: Path | str,
     *,
-    items: list[dict[str, Any]],
-    edges: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
+    items: list[JsonDocument],
+    edges: list[JsonDocument] | None = None,
+) -> JsonDocument:
     document = json.loads(json.dumps({
         "schema_version": 1,
         "package_type": EVIDENCE_GRAPH_MANIFEST_PACKAGE_TYPE,
@@ -50,7 +109,7 @@ def write_evidence_graph_manifest(
 def build_evidence_graph(
     manifest_path: Path | str,
     *,
-    registry: Any | None = None,
+    registry: CapabilityResolver | None = None,
     allowed_root: Path | str | None = None,
 ) -> EvidenceGraph:
     target = Path(manifest_path)
@@ -72,7 +131,7 @@ def build_evidence_graph(
     return _finalize_graph(manifest, nodes, graph_blockers)
 
 
-def _read_evidence_manifest(target: Path) -> ImplementationDocument:
+def _read_evidence_manifest(target: Path) -> JsonDocument:
     try:
         manifest = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -82,7 +141,7 @@ def _read_evidence_manifest(target: Path) -> ImplementationDocument:
     return manifest
 
 
-def _manifest_blockers(manifest: ImplementationDocument) -> list[str]:
+def _manifest_blockers(manifest: JsonDocument) -> list[str]:
     blockers: list[str] = []
     if manifest.get("package_type") != EVIDENCE_GRAPH_MANIFEST_PACKAGE_TYPE:
         blockers.append("evidence_manifest_package_type")
@@ -92,11 +151,11 @@ def _manifest_blockers(manifest: ImplementationDocument) -> list[str]:
 
 
 def _build_nodes(
-    raw_items: list[Any],
+    raw_items: Sequence[object],
     *,
     root: Path,
     allowed_root: Path | None,
-    registry: Any,
+    registry: CapabilityResolver,
     blockers: list[str],
 ) -> list[EvidenceNode]:
     nodes: list[EvidenceNode] = []
@@ -131,7 +190,7 @@ def _build_nodes(
     return nodes
 
 
-def _finalize_graph(manifest: ImplementationDocument, nodes: list[EvidenceNode], blockers: list[str]) -> EvidenceGraph:
+def _finalize_graph(manifest: JsonDocument, nodes: list[EvidenceNode], blockers: list[str]) -> EvidenceGraph:
     edges = _build_edges(manifest, nodes, blockers)
     node_ids = {node.node_id for node in nodes}
     for node in nodes:
@@ -151,11 +210,11 @@ def _finalize_graph(manifest: ImplementationDocument, nodes: list[EvidenceNode],
 
 
 def _build_node(
-    row: ImplementationDocument,
+    row: JsonDocument,
     *,
     root: Path,
     allowed_root: Path | None,
-    registry: Any,
+    registry: CapabilityResolver,
 ) -> EvidenceNode:
     component_type, component_id, evidence_type, generation, node_id, blockers = _node_identity(row)
     warnings: list[str] = []
@@ -223,7 +282,7 @@ def _build_node(
     )
 
 
-def _check_capability_metadata(capability: Any, blockers: list[str]) -> None:
+def _check_capability_metadata(capability: CapabilityContract, blockers: list[str]) -> None:
     metadata = (
         capability.cli_commands,
         capability.api_routes,
@@ -235,12 +294,12 @@ def _check_capability_metadata(capability: Any, blockers: list[str]) -> None:
         blockers.append("evidence_capability_metadata_incomplete")
 
 
-def _node_identity(row: ImplementationDocument) -> tuple[str, str, str, int, str, list[str]]:
+def _node_identity(row: JsonDocument) -> tuple[str, str, str, int, str, list[str]]:
     component_type = _text(row.get("component_type"))
     component_id = _text(row.get("component_id"))
     evidence_type = _text(row.get("evidence_type")) or "package"
     try:
-        generation = max(1, int(row.get("generation") or 1))
+        generation = max(1, _as_int(row.get("generation") or 1))
     except (TypeError, ValueError):
         generation = 1
     node_id = _node_id(component_type, component_id, evidence_type, generation)
@@ -251,17 +310,17 @@ def _node_identity(row: ImplementationDocument) -> tuple[str, str, str, int, str
     return component_type, component_id, evidence_type, generation, node_id, blockers
 
 
-def _claimed_identity(row: ImplementationDocument) -> tuple[str, str, str, int]:
+def _claimed_identity(row: JsonDocument) -> tuple[str, str, str, int]:
     component_type, component_id, evidence_type, generation, _node, _blockers = _node_identity(row)
     return component_type, component_id, evidence_type, generation
 
 
 def _manifest_identity(
-    row: ImplementationDocument,
+    row: JsonDocument,
     *,
     canonical_component_type: str,
     package_type: str,
-) -> ImplementationDocument:
+) -> JsonDocument:
     generation = _positive_int(row.get("generation"), default=1)
     current_generation = _positive_int(row.get("current_generation"), default=generation)
     return {
@@ -276,9 +335,9 @@ def _manifest_identity(
 
 
 def _identity_blockers(
-    manifest: ImplementationDocument,
-    runtime: ImplementationDocument,
-    external: ImplementationDocument,
+    manifest: JsonDocument,
+    runtime: JsonDocument,
+    external: JsonDocument,
 ) -> list[str]:
     blockers: list[str] = []
     required_fields = ("component_type", "component_id", "generation", "current_generation", "package_type", "source_hash")
@@ -298,7 +357,7 @@ def _identity_blockers(
     return blockers
 
 
-def _read_external_report(path: Path | None, package_type: str, blockers: list[str]) -> ImplementationDocument:
+def _read_external_report(path: Path | None, package_type: str, blockers: list[str]) -> JsonDocument:
     if path is None or not path.is_file():
         return {}
     try:
@@ -316,9 +375,15 @@ def _read_external_report(path: Path | None, package_type: str, blockers: list[s
     return report
 
 
-def _resolve_proofs(row: ImplementationDocument, root: Path, allowed_root: Path | None, spec: Any, blockers: list[str]) -> dict[str, Path]:
+def _resolve_proofs(
+    row: JsonDocument,
+    root: Path,
+    allowed_root: Path | None,
+    spec: RuntimeVerificationContract,
+    blockers: list[str],
+) -> dict[str, Path]:
     proof_value = row.get("proofs")
-    proofs: dict[str, Any] = _as_document(proof_value)
+    proofs: JsonDocument = _as_document(proof_value)
     resolved: dict[str, Path] = {}
     for key, _argument in spec.proof_arguments:
         raw_path = proofs.get(key) or row.get(key)
@@ -330,13 +395,18 @@ def _resolve_proofs(row: ImplementationDocument, root: Path, allowed_root: Path 
     return resolved
 
 
-def _run_runtime(package_path: Path | None, proofs: dict[str, Path], spec: Any, blockers: list[str]) -> ImplementationDocument:
-    runtime: dict[str, Any] = {}
+def _run_runtime(
+    package_path: Path | None,
+    proofs: dict[str, Path],
+    spec: RuntimeVerificationContract,
+    blockers: list[str],
+) -> JsonDocument:
+    runtime: JsonDocument = {}
     if package_path is not None and package_path.is_file() and not any(item.startswith("evidence_proof_missing:") for item in blockers):
         kwargs = dict(spec.defaults)
         kwargs.update({argument: proofs[key] for key, argument in spec.proof_arguments if key in proofs})
         try:
-            runtime = spec.verifier()(package_path, **kwargs)
+            runtime = spec.verify(package_path, kwargs)
         except Exception as exc:
             runtime = {"status": "failed", "blockers": ["runtime_verifier_exception"], "error": type(exc).__name__}
     if runtime.get("status") != "passed":
@@ -347,12 +417,12 @@ def _run_runtime(package_path: Path | None, proofs: dict[str, Path], spec: Any, 
 
 
 def _validate_bindings(
-    row: ImplementationDocument,
+    row: JsonDocument,
     package_path: Path | None,
-    runtime: ImplementationDocument,
-    report: ImplementationDocument,
+    runtime: JsonDocument,
+    report: JsonDocument,
     blockers: list[str],
-) -> tuple[str | None, int, ImplementationDocument, ImplementationDocument]:
+) -> tuple[str | None, int, JsonDocument, JsonDocument]:
     actual_hash = sha256_file(package_path) if package_path is not None and package_path.is_file() else None
     actual_size = package_path.stat().st_size if package_path is not None and package_path.is_file() else 0
     runtime_fp = _verification_fingerprint(runtime)
@@ -378,12 +448,12 @@ def _validate_bindings(
     return actual_hash, actual_size, runtime_fp, report_fp
 
 
-def _append_runtime_diagnostics(runtime: ImplementationDocument, blockers: list[str], warnings: list[str]) -> None:
+def _append_runtime_diagnostics(runtime: JsonDocument, blockers: list[str], warnings: list[str]) -> None:
     blocker_value = runtime.get("blockers")
-    runtime_blockers: list[Any] = _as_list(blocker_value)
+    runtime_blockers = _as_list(blocker_value)
     blockers.extend(f"runtime:{item}" for item in runtime_blockers if item)
     warning_value = runtime.get("warnings")
-    runtime_warnings: list[Any] = _as_list(warning_value)
+    runtime_warnings = _as_list(warning_value)
     warnings.extend(f"runtime:{item}" for item in runtime_warnings if item)
 
 
@@ -409,11 +479,11 @@ def _failed_node(
     )
 
 
-def _build_edges(manifest: ImplementationDocument, nodes: list[EvidenceNode], blockers: list[str]) -> list[EvidenceEdge]:
+def _build_edges(manifest: JsonDocument, nodes: list[EvidenceNode], blockers: list[str]) -> list[EvidenceEdge]:
     node_ids = {node.node_id for node in nodes}
     result: list[EvidenceEdge] = []
     edge_value = manifest.get("edges")
-    raw_edges: list[Any] = _as_list(edge_value)
+    raw_edges = _as_list(edge_value)
     for index, raw in enumerate(raw_edges):
         if not isinstance(raw, dict):
             blockers.append(f"evidence_edge_{index}_object")
@@ -453,11 +523,11 @@ def _dependency_cycle(edges: tuple[EvidenceEdge, ...]) -> bool:
     return any(visit(node) for node in graph)
 
 
-def _verification_fingerprint(report: ImplementationDocument) -> ImplementationDocument:
+def _verification_fingerprint(report: JsonDocument) -> JsonDocument:
     summary_value = report.get("summary")
-    summary: dict[str, Any] = _as_document(summary_value)
+    summary: JsonDocument = _as_document(summary_value)
     verification_value = summary.get("verification")
-    verification: dict[str, Any] = _as_document(verification_value)
+    verification: JsonDocument = _as_document(verification_value)
     return {
         "zip_sha256": report.get("zip_sha256") or summary.get("zip_sha256") or verification.get("zip_sha256"),
         "zip_size_bytes": report.get("zip_size_bytes") or summary.get("zip_size_bytes") or verification.get("zip_size_bytes"),
@@ -466,9 +536,9 @@ def _verification_fingerprint(report: ImplementationDocument) -> ImplementationD
     }
 
 
-def _public_runtime_summary(report: ImplementationDocument) -> ImplementationDocument:
+def _public_runtime_summary(report: JsonDocument) -> JsonDocument:
     summary_value = report.get("summary")
-    summary: dict[str, Any] = _as_document(summary_value)
+    summary: JsonDocument = _as_document(summary_value)
     allowed = {
         "status",
         "readiness",
@@ -486,9 +556,9 @@ def _public_runtime_summary(report: ImplementationDocument) -> ImplementationDoc
     return {key: value for key, value in summary.items() if key in allowed and isinstance(value, (str, int, float, bool, type(None)))}
 
 
-def _lifecycle_status(report: ImplementationDocument) -> str:
+def _lifecycle_status(report: JsonDocument) -> str:
     summary_value = report.get("summary")
-    summary: dict[str, Any] = _as_document(summary_value)
+    summary: JsonDocument = _as_document(summary_value)
     for key in ("signoff_status", "lifecycle_status", "readiness", "status"):
         value = summary.get(key)
         if isinstance(value, str) and value:
@@ -496,9 +566,9 @@ def _lifecycle_status(report: ImplementationDocument) -> str:
     return "verified" if report.get("status") == "passed" else "failed"
 
 
-def _dependencies(row: ImplementationDocument) -> tuple[str, ...]:
+def _dependencies(row: JsonDocument) -> tuple[str, ...]:
     dependency_value = row.get("dependencies")
-    values: list[Any] = _as_list(dependency_value)
+    values = _as_list(dependency_value)
     return tuple(sorted({_text(value) for value in values if _text(value)}))
 
 
@@ -506,44 +576,13 @@ def _node_id(component_type: str, component_id: str, evidence_type: str, generat
     return f"{component_type}:{component_id}:{evidence_type}:{generation}"
 
 
-def _path_from_row(root: Path, row: ImplementationDocument, *keys: str, allowed_root: Path | None = None) -> Path | None:
-    for key in keys:
-        value = row.get(key)
-        if value:
-            return _resolve_path(root, str(value), allowed_root=allowed_root)
-    return None
-
-
-def _resolve_path(root: Path, value: str, *, allowed_root: Path | None = None) -> Path:
-    target = Path(value)
-    resolved = (target if target.is_absolute() else root / target).resolve()
-    if allowed_root is not None:
-        try:
-            resolved.relative_to(allowed_root)
-        except ValueError as exc:
-            raise EvidenceGraphBuildError("Evidence manifest references a path outside the allowed workspace.") from exc
-    return resolved
-
-
-def _proof_hash(path: Path | None) -> str:
-    if path is None or not path.is_file():
-        return ""
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return str(sha256_file(path) or "")
-    if isinstance(value, dict) and value.get("integrity_hash"):
-        return str(value["integrity_hash"])
-    return stable_hash(value)
-
-
-def _text(value: Any) -> str:
+def _text(value: object) -> str:
     return str(value or "").strip()
 
 
-def _positive_int(value: Any, *, default: int) -> int:
+def _positive_int(value: object, *, default: int) -> int:
     try:
-        number = int(value)
+        number = _as_int(value)
     except (TypeError, ValueError):
         return default
     return number if number > 0 else default

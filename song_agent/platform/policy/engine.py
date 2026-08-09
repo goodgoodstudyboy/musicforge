@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
-
-from typing import Any
-
 from song_agent.platform.contracts.policy import GateResult, PolicyProfile
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 from song_agent.platform.evidence_graph.model import EvidenceGraph, EvidenceNode
 
 
@@ -13,7 +10,7 @@ class PolicyEvaluationError(RuntimeError):
 
 
 def evaluate_policy(profile: PolicyProfile, graph: EvidenceGraph) -> GateResult:
-    checks: list[dict[str, Any]] = []
+    checks: list[JsonDocument] = []
     blockers: list[str] = list(graph.blockers)
     warnings: list[str] = list(graph.warnings)
 
@@ -94,7 +91,7 @@ def evaluate_policy(profile: PolicyProfile, graph: EvidenceGraph) -> GateResult:
     )
 
 
-def _hard_node_checks(node: EvidenceNode, checks: list[ImplementationDocument], blockers: list[str]) -> None:
+def _hard_node_checks(node: EvidenceNode, checks: list[JsonDocument], blockers: list[str]) -> None:
     values = (
         ("report", node.report_status == "passed", "External verification report is passed."),
         ("runtime", node.runtime_status == "passed", "Current package runtime verification is passed."),
@@ -116,13 +113,13 @@ def _matches(node: EvidenceNode, component_types: tuple[str, ...], evidence_type
 
 
 def _add_check(
-    checks: list[ImplementationDocument],
+    checks: list[JsonDocument],
     check_id: str,
     passed: bool,
     message: str,
-    detail: ImplementationDocument | None = None,
+    detail: JsonDocument | None = None,
 ) -> None:
-    checks.append(
+    checks.append(normalize_json_document(
         {
             "check_id": check_id,
             "status": "passed" if passed else "failed",
@@ -130,4 +127,4 @@ def _add_check(
             "message": message,
             "detail": detail or {},
         }
-    )
+    ))

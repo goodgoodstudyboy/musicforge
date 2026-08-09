@@ -1,47 +1,50 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
-
+from song_agent.application.http_ports import creation as creation_ports
+from song_agent.application.jobs.ports import BatchRunnerPort, BatchStorePort
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
+from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.documents import normalize_json_value
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class CreationRoutesProvider(CreationRouteContext):
     @property
-    def batch_store(self) -> _InterfaceType:
+    def batch_store(self) -> BatchStorePort:
         return self.server.batch_store
 
     @property
-    def batch_runner(self) -> _InterfaceType:
+    def batch_runner(self) -> BatchRunnerPort:
         return self.server.batch_runner
 
     @property
-    def project_store(self) -> _InterfaceType:
+    def project_store(self) -> creation_ports.ProjectStore:
         return self.server.project_store
 
     @property
-    def prompt_template_store(self) -> _InterfaceType:
+    def prompt_template_store(self) -> creation_ports.PromptTemplateStore:
         return self.server.prompt_template_store
 
     @property
-    def editor_template_store(self) -> _InterfaceType:
+    def editor_template_store(self) -> creation_ports.EditorTemplateStore:
         return self.server.editor_template_store
 
     @property
-    def asset_store(self) -> _InterfaceType:
+    def asset_store(self) -> creation_ports.AssetStore:
         return self.server.asset_store
 
     @property
-    def reference_store(self) -> _InterfaceType:
+    def reference_store(self) -> creation_ports.ReferenceStore:
         return self.server.reference_store
 
     @property
-    def library_index_store(self) -> _InterfaceType:
+    def library_index_store(self) -> creation_ports.LibraryIndexStore:
         return self.server.library_index_store
 
     @property
-    def context_pack_store(self) -> _InterfaceType:
+    def context_pack_store(self) -> creation_ports.ContextPackStore:
         return self.server.context_pack_store
 
     def _handle_provider_route(self, method: str) -> None:
@@ -182,18 +185,26 @@ class CreationRoutesProvider(CreationRouteContext):
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 if template_type == "sections":
-                    template = self.editor_template_store.read_section_template(template_id)
-                    self._send_json({"template": _interfaces_api_runtime.section_template_public_dict(template, project_store=self.project_store)})
+                    section_template = self.editor_template_store.read_section_template(template_id)
+                    self._send_json(
+                        {
+                            "template": _interfaces_api_runtime.section_template_public_dict(
+                                section_template, project_store=self.project_store
+                            )
+                        }
+                    )
                     return
-                template = self.editor_template_store.read_track_template(template_id)
-                self._send_json({"template": _interfaces_api_runtime.track_template_public_dict(template)})
+                track_template = self.editor_template_store.read_track_template(template_id)
+                self._send_json({"template": _interfaces_api_runtime.track_template_public_dict(track_template)})
                 return
             if tail in {"/hide", "/unhide"}:
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                template = self.editor_template_store.hide_template("section" if template_type == "sections" else "track", template_id, hidden=tail == "/hide")
-                self._send_json({"ok": True, "template": template})
+                hidden_template = self.editor_template_store.hide_template(
+                    "section" if template_type == "sections" else "track", template_id, hidden=tail == "/hide"
+                )
+                self._send_json({"ok": True, "template": normalize_json_value(hidden_template)})
                 return
             if tail == "/delete":
                 if method != "POST":
@@ -233,7 +244,7 @@ class CreationRoutesProvider(CreationRouteContext):
             ]
             self._send_json(
                 {
-                    "projects": projects,
+                    "projects": normalize_json_value(projects),
                     "filters": {
                         "q": q,
                         "status": status_filter,
@@ -252,11 +263,12 @@ class CreationRoutesProvider(CreationRouteContext):
                 tags=_interfaces_api_runtime._string_list(payload.get("tags")),
             )
             job = None
-            if isinstance(payload.get("request"), dict):
+            request = _as_document(payload.get("request"))
+            if request:
                 request_payload = {
-                    **payload["request"],
-                    "generation_mode": payload.get("generation_mode", payload["request"].get("generation_mode", "local")),
-                    "pipeline_mode": payload.get("pipeline_mode", payload["request"].get("pipeline_mode", "single")),
+                    **request,
+                    "generation_mode": payload.get("generation_mode", request.get("generation_mode", "local")),
+                    "pipeline_mode": payload.get("pipeline_mode", request.get("pipeline_mode", "single")),
                 }
                 if isinstance(payload.get("asset_refs"), list):
                     request_payload["asset_refs"] = payload["asset_refs"]
@@ -285,12 +297,21 @@ class CreationRoutesProvider(CreationRouteContext):
     def _handle_assets_root(self, method: str, query_string: str) -> None:
         if method == "GET":
             query = _interfaces_api_runtime.parse_qs(query_string)
-            filters = {key: _interfaces_api_runtime._query_value(query, key) for key in ("q", "type", "tag", "style", "mood", "min_quality", "favorite")}
+            filters = {
+                key: _interfaces_api_runtime._query_value(query, key)
+                for key in ("q", "type", "tag", "style", "mood", "min_quality", "favorite")
+            }
             include_hidden = _interfaces_api_runtime._query_value(query, "include_hidden") in {"1", "true", "yes"}
             limit_value = _interfaces_api_runtime._query_value(query, "limit")
             limit = int(limit_value) if limit_value else 100
             assets = self.asset_store.list_assets(include_hidden=include_hidden, filters=filters)[: max(1, min(limit, 500))]
-            self._send_json({"assets": [_interfaces_api_runtime.asset_public_dict(asset) for asset in assets], "count": len(assets), "filters": {**filters, "include_hidden": include_hidden}})
+            self._send_json(
+                {
+                    "assets": [_interfaces_api_runtime.asset_public_dict(asset) for asset in assets],
+                    "count": len(assets),
+                    "filters": {**filters, "include_hidden": include_hidden},
+                }
+            )
             return
         if method == "POST":
             try:
@@ -298,7 +319,9 @@ class CreationRoutesProvider(CreationRouteContext):
             except ValueError as exc:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
                 return
-            self._send_json({"ok": True, "asset": _interfaces_api_runtime.asset_public_dict(asset)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            self._send_json(
+                {"ok": True, "asset": _interfaces_api_runtime.asset_public_dict(asset)}, status=_interfaces_api_runtime.HTTPStatus.CREATED
+            )
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
 
@@ -323,5 +346,13 @@ class CreationRoutesProvider(CreationRouteContext):
         payload = self._read_json_body()
         index = self.library_index_store.load_or_build(self.asset_store, self.reference_store)
         result = _interfaces_api_runtime.search_library(index, payload)
-        self.library_index_store.append_event("library_search_requested", {"result_count": result["count"], "query": result.get("query")}, now=_interfaces_api_runtime._utc_now())
+        self.library_index_store.append_event(
+            "library_search_requested",
+            {"result_count": result["count"], "query": result.get("query")},
+            now=_interfaces_api_runtime._utc_now(),
+        )
         self._send_json(result)
+
+    @property
+    def audio_profile_store(self) -> creation_ports.AudioProfileStore:
+        return self.server.audio_profile_store

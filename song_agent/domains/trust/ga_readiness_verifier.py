@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list, _as_path
 
 import json as json
 import re as re

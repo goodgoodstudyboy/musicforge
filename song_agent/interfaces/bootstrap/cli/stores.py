@@ -1,0 +1,245 @@
+from __future__ import annotations
+
+from song_agent.domains.creation.encoded_audio_acceptance import EncodedAudioAcceptanceStore
+from song_agent.domains.creation.node_store import NodeStore
+from song_agent.domains.creation.planning_rule_governance import PlanningRuleGovernanceStore
+from song_agent.domains.creation.planning_rule_impact import PlanningRuleImpactStore
+from song_agent.domains.creation.planning_rule_simulation import PlanningRuleSimulationStore
+from song_agent.domains.delivery.distribution import DistributionStore
+from song_agent.domains.delivery.format_decisions import FormatDecisionStore
+from song_agent.domains.delivery.releases import ReleaseStore
+from song_agent.domains.delivery.submission_evidence import SubmissionEvidenceStore
+from song_agent.domains.delivery.submissions import SubmissionStore
+from song_agent.domains.program.unified_command_center import UnifiedCommandCenterStore
+from song_agent.domains.program.unified_command_center_continuous_review import (
+    UnifiedCommandCenterContinuousReviewStore,
+)
+from song_agent.domains.program.unified_command_center_drift_response import (
+    UnifiedCommandCenterDriftResponseStore,
+)
+from song_agent.domains.program.unified_command_center_evidence_review import (
+    UnifiedCommandCenterEvidenceReviewStore,
+)
+from song_agent.domains.program.unified_command_center_handoff import UnifiedCommandCenterHandoffStore
+from song_agent.domains.program.unified_command_center_release_train import (
+    UnifiedCommandCenterReleaseTrainStore,
+)
+from song_agent.domains.program.unified_command_center_release_train_change_control import (
+    UnifiedCommandCenterReleaseTrainChangeControlStore,
+)
+from song_agent.domains.program.unified_command_center_release_train_handoff import (
+    UnifiedCommandCenterReleaseTrainHandoffStore,
+)
+from song_agent.domains.program.unified_command_center_release_train_lifecycle import (
+    UnifiedCommandCenterReleaseTrainLifecycleStore,
+)
+from song_agent.domains.program.unified_command_center_reviewer_decision_board import (
+    UnifiedCommandCenterReviewerDecisionBoardStore,
+)
+from song_agent.domains.program.unified_command_center_signoff import UnifiedCommandCenterSignoffStore
+from song_agent.domains.quality.acceptance_analytics import AcceptanceAnalyticsStore
+from song_agent.domains.quality.acceptance_fix_plan_reviews import AcceptanceFixPlanReviewStore
+from song_agent.domains.quality.acceptance_fix_planning import AcceptanceFixPlanningStore
+from song_agent.domains.quality.acceptance_fix_sprints import AcceptanceFixSprintStore
+from song_agent.domains.quality.acceptance_kb import AcceptanceKnowledgeBaseStore
+from song_agent.domains.quality.audio_campaign_governance import AudioCampaignGovernanceStore
+from song_agent.domains.quality.audio_campaign_planner import AudioCampaignPlannerStore
+from song_agent.domains.quality.audio_campaign_remediation import AudioCampaignRemediationStore
+from song_agent.domains.quality.audio_campaigns import AudioCampaignStore
+from song_agent.domains.quality.audio_encoding import AudioEncodingStore
+from song_agent.domains.quality.audio_encoding_profiles import AudioEncodingProfileStore
+from song_agent.domains.quality.audio_fix_sprints import AudioFixSprintStore
+from song_agent.domains.quality.audio_lab import AudioLabStore
+from song_agent.domains.quality.audio_profiles import AudioProfileStore
+from song_agent.domains.quality.audio_review_evidence import AudioReviewEvidenceStore
+from song_agent.domains.quality.music_acceptance import AcceptanceStore
+from song_agent.domains.quality.release_audio_baseline_governance import (
+    ReleaseAudioBaselineGovernanceStore,
+)
+from song_agent.domains.quality.release_audio_certification import ReleaseAudioCertificationStore
+from song_agent.domains.quality.release_audio_command_center import ReleaseAudioCommandCenterStore
+from song_agent.domains.quality.release_audio_quality_action_signoff import (
+    ReleaseAudioQualityActionQueueSignoffStore,
+)
+from song_agent.domains.quality.release_audio_quality_actions import (
+    ReleaseAudioQualityActionQueueStore,
+)
+from song_agent.domains.quality.release_audio_quality_observatory import (
+    ReleaseAudioQualityObservatoryStore,
+)
+from song_agent.domains.quality.release_audio_regression import ReleaseAudioRegressionStore
+from song_agent.domains.quality.release_audio_regression_response import (
+    ReleaseAudioRegressionResponseStore,
+)
+from song_agent.domains.quality.release_audio_timeline import ReleaseAudioTimelineStore
+from song_agent.domains.studio.projects import ProjectStore
+from song_agent.domains.trust.public_trust_center import PublicTrustCenterStore
+from song_agent.domains.trust.public_trust_center_acceptance_board import (
+    PublicTrustCenterAcceptanceBoardStore,
+)
+from song_agent.domains.trust.public_trust_center_anchor_registry import (
+    PublicTrustCenterAnchorRegistryStore,
+)
+from song_agent.domains.trust.public_trust_center_anchor_transparency import (
+    PublicTrustCenterAnchorTransparencyStore,
+)
+from song_agent.domains.trust.public_trust_center_distribution_kit import (
+    PublicTrustCenterDistributionKitStore,
+)
+from song_agent.domains.trust.public_trust_center_distribution_kit_acceptance import (
+    PublicTrustCenterDistributionKitAcceptanceStore,
+)
+from song_agent.domains.trust.public_trust_center_publication import PublicTrustCenterPublicationStore
+from song_agent.domains.trust.public_trust_center_publication_monitoring import (
+    PublicTrustCenterPublicationMonitoringStore,
+)
+from song_agent.domains.trust.release_operations import ReleaseOperationsStore
+from song_agent.domains.trust.release_operations_audit import ReleaseOperationsAuditStore
+from song_agent.domains.trust.release_operations_reviewer_pack import (
+    ReleaseOperationsReviewerPackStore,
+)
+from song_agent.domains.trust.release_operations_runbook import ReleaseOperationsRunbookStore
+from song_agent.domains.trust.release_operations_signoff import ReleaseOperationsSignoffStore
+from song_agent.domains.trust.release_portfolio_audit import ReleasePortfolioAuditStore
+from song_agent.domains.trust.release_portfolio_governance import ReleasePortfolioGovernanceStore
+from song_agent.domains.trust.release_portfolio_governance_attestation import (
+    ReleasePortfolioGovernanceAttestationStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_attestation_accepted_evidence import (
+    ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_attestation_portal import (
+    ReleasePortfolioGovernanceAttestationPortalStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_attestation_portal_review import (
+    ReleasePortfolioGovernanceAttestationPortalReviewStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_attestation_registry import (
+    ReleasePortfolioGovernanceAttestationRegistryStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_attestation_transparency import (
+    ReleasePortfolioGovernanceAttestationTransparencyStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_attestation_transparency_acknowledgement import (
+    ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_audit import (
+    ReleasePortfolioGovernanceAuditStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_evidence_vault import (
+    ReleasePortfolioGovernanceEvidenceVaultStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_final_board import (
+    ReleasePortfolioGovernanceFinalBoardStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_reviewer_pack import (
+    ReleasePortfolioGovernanceReviewerPackStore,
+)
+from song_agent.domains.trust.release_portfolio_governance_signoff import (
+    ReleasePortfolioGovernanceSignoffStore,
+)
+from song_agent.domains.trust.trust_operations_assurance_watch import TrustOperationsAssuranceWatchStore
+from song_agent.domains.trust.trust_operations_assurance_watch_signoff import (
+    TrustOperationsAssuranceWatchSignoffStore,
+)
+from song_agent.domains.trust.trust_operations_continuous_assurance import TrustOperationsAssuranceStore
+from song_agent.domains.trust.trust_operations_control_signoff import TrustOperationsControlSignoffStore
+from song_agent.domains.trust.trust_operations_controls import TrustOperationsControlStore
+from song_agent.domains.trust.trust_operations_final_readiness import TrustOperationsFinalReadinessStore
+from song_agent.domains.trust.trust_operations_hub import TrustOperationsHubStore
+from song_agent.domains.trust.trust_operations_hub_incidents import TrustOperationsIncidentStore
+from song_agent.domains.trust.trust_operations_hub_runbook import TrustOperationsHubRunbookStore
+from song_agent.domains.trust.trust_operations_incident_knowledge import (
+    TrustOperationsIncidentKnowledgeStore,
+)
+from song_agent.interfaces.bootstrap import constructor
+
+
+node_store = constructor(NodeStore)
+
+audio_encoding_profile_store = constructor(AudioEncodingProfileStore)
+audio_encoding_store = constructor(AudioEncodingStore)
+distribution_store = constructor(DistributionStore)
+project_store = constructor(ProjectStore)
+release_operations_audit_store = constructor(ReleaseOperationsAuditStore)
+release_operations_reviewer_pack_store = constructor(ReleaseOperationsReviewerPackStore)
+release_operations_runbook_store = constructor(ReleaseOperationsRunbookStore)
+release_operations_signoff_store = constructor(ReleaseOperationsSignoffStore)
+release_operations_store = constructor(ReleaseOperationsStore)
+release_store = constructor(ReleaseStore)
+submission_evidence_store = constructor(SubmissionEvidenceStore)
+submission_store = constructor(SubmissionStore)
+
+unified_command_center_continuous_review_store = constructor(UnifiedCommandCenterContinuousReviewStore)
+unified_command_center_drift_response_store = constructor(UnifiedCommandCenterDriftResponseStore)
+unified_command_center_evidence_review_store = constructor(UnifiedCommandCenterEvidenceReviewStore)
+unified_command_center_handoff_store = constructor(UnifiedCommandCenterHandoffStore)
+unified_command_center_release_train_change_control_store = constructor(UnifiedCommandCenterReleaseTrainChangeControlStore)
+unified_command_center_release_train_handoff_store = constructor(UnifiedCommandCenterReleaseTrainHandoffStore)
+unified_command_center_release_train_lifecycle_store = constructor(UnifiedCommandCenterReleaseTrainLifecycleStore)
+unified_command_center_release_train_store = constructor(UnifiedCommandCenterReleaseTrainStore)
+unified_command_center_reviewer_decision_board_store = constructor(UnifiedCommandCenterReviewerDecisionBoardStore)
+unified_command_center_signoff_store = constructor(UnifiedCommandCenterSignoffStore)
+unified_command_center_store = constructor(UnifiedCommandCenterStore)
+
+acceptance_analytics_store = constructor(AcceptanceAnalyticsStore)
+acceptance_fix_planning_store = constructor(AcceptanceFixPlanningStore)
+acceptance_fix_plan_review_store = constructor(AcceptanceFixPlanReviewStore)
+acceptance_fix_sprint_store = constructor(AcceptanceFixSprintStore)
+acceptance_knowledge_base_store = constructor(AcceptanceKnowledgeBaseStore)
+acceptance_store = constructor(AcceptanceStore)
+audio_campaign_governance_store = constructor(AudioCampaignGovernanceStore)
+audio_campaign_planner_store = constructor(AudioCampaignPlannerStore)
+audio_campaign_remediation_store = constructor(AudioCampaignRemediationStore)
+audio_campaign_store = constructor(AudioCampaignStore)
+audio_fix_sprint_store = constructor(AudioFixSprintStore)
+audio_lab_store = constructor(AudioLabStore)
+audio_profile_store = constructor(AudioProfileStore)
+audio_review_evidence_store = constructor(AudioReviewEvidenceStore)
+encoded_audio_acceptance_store = constructor(EncodedAudioAcceptanceStore)
+format_decision_store = constructor(FormatDecisionStore)
+planning_rule_governance_store = constructor(PlanningRuleGovernanceStore)
+planning_rule_impact_store = constructor(PlanningRuleImpactStore)
+planning_rule_simulation_store = constructor(PlanningRuleSimulationStore)
+release_audio_baseline_governance_store = constructor(ReleaseAudioBaselineGovernanceStore)
+release_audio_certification_store = constructor(ReleaseAudioCertificationStore)
+release_audio_command_center_store = constructor(ReleaseAudioCommandCenterStore)
+release_audio_quality_action_queue_signoff_store = constructor(ReleaseAudioQualityActionQueueSignoffStore)
+release_audio_quality_action_queue_store = constructor(ReleaseAudioQualityActionQueueStore)
+release_audio_quality_observatory_store = constructor(ReleaseAudioQualityObservatoryStore)
+release_audio_regression_response_store = constructor(ReleaseAudioRegressionResponseStore)
+release_audio_regression_store = constructor(ReleaseAudioRegressionStore)
+release_audio_timeline_store = constructor(ReleaseAudioTimelineStore)
+
+public_trust_center_acceptance_board_store = constructor(PublicTrustCenterAcceptanceBoardStore)
+public_trust_center_anchor_registry_store = constructor(PublicTrustCenterAnchorRegistryStore)
+public_trust_center_anchor_transparency_store = constructor(PublicTrustCenterAnchorTransparencyStore)
+public_trust_center_distribution_kit_acceptance_store = constructor(PublicTrustCenterDistributionKitAcceptanceStore)
+public_trust_center_distribution_kit_store = constructor(PublicTrustCenterDistributionKitStore)
+public_trust_center_publication_monitoring_store = constructor(PublicTrustCenterPublicationMonitoringStore)
+public_trust_center_publication_store = constructor(PublicTrustCenterPublicationStore)
+public_trust_center_store = constructor(PublicTrustCenterStore)
+release_portfolio_audit_store = constructor(ReleasePortfolioAuditStore)
+release_portfolio_governance_attestation_accepted_evidence_store = constructor(ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore)
+release_portfolio_governance_attestation_portal_review_store = constructor(ReleasePortfolioGovernanceAttestationPortalReviewStore)
+release_portfolio_governance_attestation_portal_store = constructor(ReleasePortfolioGovernanceAttestationPortalStore)
+release_portfolio_governance_attestation_registry_store = constructor(ReleasePortfolioGovernanceAttestationRegistryStore)
+release_portfolio_governance_attestation_store = constructor(ReleasePortfolioGovernanceAttestationStore)
+release_portfolio_governance_attestation_transparency_acknowledgement_store = constructor(ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore)
+release_portfolio_governance_attestation_transparency_store = constructor(ReleasePortfolioGovernanceAttestationTransparencyStore)
+release_portfolio_governance_audit_store = constructor(ReleasePortfolioGovernanceAuditStore)
+release_portfolio_governance_evidence_vault_store = constructor(ReleasePortfolioGovernanceEvidenceVaultStore)
+release_portfolio_governance_final_board_store = constructor(ReleasePortfolioGovernanceFinalBoardStore)
+release_portfolio_governance_reviewer_pack_store = constructor(ReleasePortfolioGovernanceReviewerPackStore)
+release_portfolio_governance_signoff_store = constructor(ReleasePortfolioGovernanceSignoffStore)
+release_portfolio_governance_store = constructor(ReleasePortfolioGovernanceStore)
+trust_operations_assurance_store = constructor(TrustOperationsAssuranceStore)
+trust_operations_assurance_watch_signoff_store = constructor(TrustOperationsAssuranceWatchSignoffStore)
+trust_operations_assurance_watch_store = constructor(TrustOperationsAssuranceWatchStore)
+trust_operations_control_signoff_store = constructor(TrustOperationsControlSignoffStore)
+trust_operations_control_store = constructor(TrustOperationsControlStore)
+trust_operations_final_readiness_store = constructor(TrustOperationsFinalReadinessStore)
+trust_operations_hub_runbook_store = constructor(TrustOperationsHubRunbookStore)
+trust_operations_hub_store = constructor(TrustOperationsHubStore)
+trust_operations_incident_knowledge_store = constructor(TrustOperationsIncidentKnowledgeStore)
+trust_operations_incident_store = constructor(TrustOperationsIncidentStore)

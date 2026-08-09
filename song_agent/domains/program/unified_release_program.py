@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document
 
 import json as json
 import shutil as shutil
@@ -13,7 +13,7 @@ from typing import Any as Any
 from song_agent.platform.version import VERSION as __version__
 from song_agent.platform.lifecycle import ArchiveBuilder as ArchiveBuilder, HistoryChain as HistoryChain, SignoffService as SignoffService
 from song_agent.platform.persistence import WorkspaceLock as WorkspaceLock
-from song_agent.platform.persistence.program import program_json_facade as program_json_facade
+from song_agent.domains.legacy_documents import _program_json_facade as program_json_facade
 from song_agent.domains.program.ports import ProgramReleaseStore as ProgramReleaseStore
 from song_agent.platform.time import now_iso as now_iso
 from song_agent.platform.verification.hashing import stable_hash as stable_hash
@@ -497,13 +497,13 @@ class UnifiedReleaseProgramStore:
                 "train_handoff_fingerprints": [row.get("fingerprint", {}) | {"item_id": row.get("item_id"), "train_id": row.get("train_id"), "handoff_id": row.get("handoff_id")} for row in item_rows],
             }
         )
-        source["source_hash"] = stable_hash({key: value for key, value in source.items() if key not in {"source_hash", "integrity_hash"}})
+        source["source_hash"] = source_hash = stable_hash({key: value for key, value in source.items() if key not in {"source_hash", "integrity_hash"}})
         source["integrity_hash"] = _integrity_hash(source)
-        dependency = _dependency_graph(program_id, source["source_hash"], item_rows, now)
-        readiness = _readiness_matrix(program_id, source["source_hash"], item_rows, dependency, program, now)
-        risk = _risk_register(program_id, source["source_hash"], readiness, dependency, item_rows, now)
-        gap = _gap_plan(program_id, source["source_hash"], readiness, risk, now)
-        report = _program_report(program_id, source["source_hash"], program, items_doc, external_manifest, dependency, readiness, risk, exceptions, gap, now)
+        dependency = _dependency_graph(program_id, source_hash, item_rows, now)
+        readiness = _readiness_matrix(program_id, source_hash, item_rows, dependency, program, now)
+        risk = _risk_register(program_id, source_hash, readiness, dependency, item_rows, now)
+        gap = _gap_plan(program_id, source_hash, readiness, risk, now)
+        report = _program_report(program_id, source_hash, program, items_doc, external_manifest, dependency, readiness, risk, exceptions, gap, now)
         return {"program": program, "source": source, "items": _items_document(program_id, item_rows), "external_manifest": external_manifest, "dependency": dependency, "readiness": readiness, "risk": risk, "exceptions": exceptions, "gap_plan": gap, "report": report}
 
     def _write_docs(self, program_id: str, docs: ImplementationDocument) -> None:

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
 from song_agent.capabilities.model import CapabilitySpec, RuntimeIdentitySpec, RuntimeVerificationSpec
+from song_agent.platform.contracts import JsonDocument
+from song_agent.platform.contracts.documents import normalize_json_document
 
 # Compatibility export for v12 callers; definitions live in model.py so the
 # registry/provider dependency remains acyclic.
@@ -34,12 +34,9 @@ class CapabilityRegistry:
     def all(self) -> tuple[CapabilitySpec, ...]:
         return tuple(self._by_id[key] for key in sorted(self._by_id))
 
-    def inventory(self) -> list[dict[str, Any]]:
-        from song_agent.platform.verification.registry import active_verifier_registry
-
-        verifier_by_component = {row.component_type: row for row in active_verifier_registry.all()}
+    def inventory(self) -> list[JsonDocument]:
         return [
-            {
+            normalize_json_document({
                 "capability_id": item.capability_id,
                 "component_type": item.component_type,
                 "bounded_context": item.bounded_context,
@@ -47,26 +44,10 @@ class CapabilityRegistry:
                 "package_type": item.runtime.package_type,
                 "verification_package_type": item.runtime.verification_package_type,
                 "required_proofs": list(item.runtime.required_proofs),
-                "manifest_entry": (
-                    verifier_by_component[item.component_type].package_spec().manifest_entry
-                    if item.component_type in verifier_by_component
-                    else ""
-                ),
-                "allowed_entries": (
-                    sorted(verifier_by_component[item.component_type].package_spec().allowed_entries)
-                    if item.component_type in verifier_by_component
-                    else []
-                ),
-                "allowed_entry_patterns": (
-                    list(verifier_by_component[item.component_type].package_spec().allowed_entry_patterns)
-                    if item.component_type in verifier_by_component
-                    else []
-                ),
-                "lifecycle_binding_requirements": (
-                    list(verifier_by_component[item.component_type].lifecycle_bindings)
-                    if item.component_type in verifier_by_component
-                    else []
-                ),
+                "manifest_entry": "manifest.json",
+                "allowed_entries": [],
+                "allowed_entry_patterns": [],
+                "lifecycle_binding_requirements": [],
                 "identity_fields": {
                     "component_id": list(item.runtime.identity.component_id_fields),
                     "generation": list(item.runtime.identity.generation_fields),
@@ -79,7 +60,7 @@ class CapabilityRegistry:
                 "web_panel": item.web_panel,
                 "release_checks": list(item.release_checks),
                 "compatibility_aliases": list(item.compatibility_aliases),
-            }
+            })
             for item in self.all()
         ]
 

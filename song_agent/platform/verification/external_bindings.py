@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Iterable
 
+from song_agent.platform.contracts.documents import JsonDocument
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.verification.manifest import safe_check_key
 from song_agent.platform.verification.model import build_check
@@ -12,7 +13,7 @@ def evidence_identity_checks(
     actual: Iterable[EvidenceRef],
     *,
     check_prefix: str,
-) -> list[dict[str, Any]]:
+) -> list[JsonDocument]:
     expected_rows = list(expected)
     actual_rows = list(actual)
     expected_by_key = {row.identity: row for row in expected_rows}

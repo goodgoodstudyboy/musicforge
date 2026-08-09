@@ -3,7 +3,7 @@ from __future__ import annotations
 from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_int
 
 from song_agent.domains.delivery.releases import stable_hash
 
@@ -103,7 +103,7 @@ def _expected_control_status(method: str, control: ImplementationDocument, sourc
     if method == "fixed_zip_allowlist":
         return "passed" if hub_bound and incident_passed and knowledge_passed else "failed"
     if method == "full_resign_semantic_guard":
-        return "passed" if knowledge_passed and int(knowledge_summary.get("guard_failed_count") or 0) == 0 else "failed"
+        return "passed" if knowledge_passed and _as_int(knowledge_summary.get("guard_failed_count") or 0) == 0 else "failed"
     if method == "signed_immutability":
         return "passed" if hub_bound else "failed"
     if method == "delivery_ready_external":
@@ -111,9 +111,9 @@ def _expected_control_status(method: str, control: ImplementationDocument, sourc
     if method == "incident_closeout_required":
         return "passed" if incident_passed else "failed"
     if method == "incident_knowledge_guard_required":
-        return "passed" if knowledge_passed and int(knowledge_summary.get("guards_passed_count") or 0) > 0 and int(knowledge_summary.get("guard_failed_count") or 0) == 0 else "failed"
+        return "passed" if knowledge_passed and _as_int(knowledge_summary.get("guards_passed_count") or 0) > 0 and _as_int(knowledge_summary.get("guard_failed_count") or 0) == 0 else "failed"
     if method == "recurrence_monitoring_clean":
-        return "passed" if knowledge_passed and int(knowledge_summary.get("recurrence_count") or 0) == 0 else "failed"
+        return "passed" if knowledge_passed and _as_int(knowledge_summary.get("recurrence_count") or 0) == 0 else "failed"
     if method == "redaction_clean":
         return "passed" if hub_bound and incident_passed and knowledge_passed else "failed"
     if method == "release_check_matrix_current":
@@ -121,7 +121,7 @@ def _expected_control_status(method: str, control: ImplementationDocument, sourc
     if method == "knowledge_guard_coverage":
         severity = str(control.get("severity") or "")
         if severity in {"critical", "high"}:
-            return "passed" if knowledge_passed and int(knowledge_summary.get("guards_passed_count") or 0) > 0 and int(knowledge_summary.get("guard_failed_count") or 0) == 0 else "failed"
+            return "passed" if knowledge_passed and _as_int(knowledge_summary.get("guards_passed_count") or 0) > 0 and _as_int(knowledge_summary.get("guard_failed_count") or 0) == 0 else "failed"
         return "passed" if knowledge_passed else "failed"
     return "failed"
 

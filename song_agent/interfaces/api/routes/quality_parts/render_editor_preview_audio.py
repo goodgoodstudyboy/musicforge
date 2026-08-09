@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
+
 from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
 
-from typing import Any
-
 from song_agent.application.interface_persistence import write_interface_document
+from song_agent.application.http_ports.creation import EditorPreview
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class QualityRoutesRenderEditorPreviewAudio(QualityRouteContext):
-    def _render_editor_preview_audio(self, project_id: str, preview_id: str) -> Any:
-        store = _interfaces_api_runtime.EditorPreviewStore(self.project_store.project_dir(project_id))
+    def _render_editor_preview_audio(self, project_id: str, preview_id: str) -> EditorPreview:
+        store = _api_store_factories.editor_preview_store(self.project_store.project_dir(project_id))
         preview = store.read_preview(preview_id)
         preview_dir = store.preview_dir(preview_id)
         midi_path = preview_dir / "song.mid"
@@ -41,7 +43,9 @@ class QualityRoutesRenderEditorPreviewAudio(QualityRouteContext):
                 audio_error=str(_interfaces_api_runtime.sanitize_metadata({"error": str(exc)}).get("error") or "Audio render failed."),
                 now=_interfaces_api_runtime._utc_now(),
             )
-            self.project_store.append_event(project_id, "editor_preview_audio_failed", {"preview_id": preview_id, "error": updated.audio_error})
+            self.project_store.append_event(
+                project_id, "editor_preview_audio_failed", {"preview_id": preview_id, "error": updated.audio_error}
+            )
             raise
         updated = store.update_preview_audio(
             preview_id,
@@ -52,5 +56,7 @@ class QualityRoutesRenderEditorPreviewAudio(QualityRouteContext):
         )
         report["audio"] = _interfaces_api_runtime._audio_report(wav_path)
         write_interface_document(report_path, report)
-        self.project_store.append_event(project_id, "editor_preview_audio_rendered", {"preview_id": preview_id, "size_bytes": wav_path.stat().st_size})
+        self.project_store.append_event(
+            project_id, "editor_preview_audio_rendered", {"preview_id": preview_id, "size_bytes": wav_path.stat().st_size}
+        )
         return updated

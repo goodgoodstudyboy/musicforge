@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.application.program.http_context import ProgramHttpContext
+from song_agent.platform.contracts.coercion import as_document
 
 from http import HTTPStatus
 
@@ -11,7 +12,7 @@ class ProgramContinuityKitHttpRoutes(ProgramHttpContext):
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
             detail = self.unified_release_program_continuity_distribution_store.get_kit(program_id)
-            source = detail.get('source_binding') or {}
+            source = as_document(detail.get('source_binding'))
             self._send_json({'ok': True, **detail, 'summary': source, 'status': source.get('status') or 'unknown'})
             return True
         if tail == '/continuity-kit/prepare':

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.batch_runner_context import BatchRunnerContext
+from song_agent.application.jobs.ports import BatchRunnerContext
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, BatchDocument, HTTPStatus, JobState, Path, now_iso, threading
+from song_agent.interfaces.bootstrap.api.core import BatchDocument, BatchItem, HTTPStatus, JobState, Path, now_iso, threading
+from song_agent.platform.contracts.coercion import as_document, as_documents
+from song_agent.platform.contracts.documents import JsonDocument
 
 class BatchRunnerSyncRunningItems(BatchRunnerContext):
     def _sync_running_items(self, batch_id: str) -> BatchDocument | None:
@@ -75,7 +77,7 @@ class BatchRunnerSyncRunningItems(BatchRunnerContext):
         return changed
 
     @staticmethod
-    def _has_unarchived_prior_project_item(document: BatchDocument, item: Any) -> bool:
+    def _has_unarchived_prior_project_item(document: BatchDocument, item: BatchItem) -> bool:
         for prior in document.items:
             if prior.index >= item.index or prior.project != item.project:
                 continue
@@ -85,7 +87,7 @@ class BatchRunnerSyncRunningItems(BatchRunnerContext):
                 return True
         return False
 
-    def _archive_item_to_project(self, document: BatchDocument, item: Any, job: JobState) -> None:
+    def _archive_item_to_project(self, document: BatchDocument, item: BatchItem, job: JobState) -> None:
         if self.project_store is None or not item.project:
             return
         if item.project_id and item.version_id:
@@ -171,10 +173,11 @@ class BatchRunnerSyncRunningItems(BatchRunnerContext):
                     continue
                 if error is None and status == HTTPStatus.OK:
                     item.audio_status = "completed"
-                    item.audio_path = audio.get("audio")
+                    audio_path = audio.get("audio")
+                    item.audio_path = audio_path if isinstance(audio_path, str) else None
                     item.audio_error = None
                     event_type = "batch_audio_item_completed"
-                    payload = {"item_id": item.item_id, "job_id": job_id, "audio": item.audio_path}
+                    payload: JsonDocument = {"item_id": item.item_id, "job_id": job_id, "audio": item.audio_path}
                 else:
                     item.audio_status = "failed"
                     item.audio_path = None
@@ -243,19 +246,20 @@ class BatchRunnerSyncRunningItems(BatchRunnerContext):
                     continue
                 job = self.job_store.get_job(job_id)
                 if error is None and status == HTTPStatus.OK:
-                    manifest = data.get("manifest", {})
-                    stems = manifest.get("stems", [])
+                    manifest = as_document(data.get("manifest"))
+                    stems = as_documents(manifest.get("stems"))
                     item.stem_manifest_path = str(Path(job.output_dir) / "stems" / "manifest.json") if job else item.stem_manifest_path
                     item.stem_count = len(stems)
                     item.stem_audio_completed_count = sum(1 for stem in stems if stem.get("audio_status") in {"completed", "skipped"})
-                    item.stem_status = data.get("status", "completed")
+                    status_value = data.get("status")
+                    item.stem_status = status_value if isinstance(status_value, str) else "completed"
                     item.stem_error = (
                         "One or more stems failed."
                         if item.stem_status in {"partial_failed", "failed"}
                         else None
                     )
                     event_type = "batch_stem_item_completed"
-                    payload = {"item_id": item.item_id, "job_id": job_id, "status": item.stem_status}
+                    payload: JsonDocument = {"item_id": item.item_id, "job_id": job_id, "status": item.stem_status}
                 else:
                     item.stem_status = "failed"
                     item.stem_error = error or f"Stem render failed with status {status.value}."

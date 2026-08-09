@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_int as _as_int, document_or as _document_or
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_int, _document_or
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
@@ -12,7 +12,7 @@ from typing import Any as Any
 from song_agent.platform.version import VERSION as __version__
 from song_agent.platform.lifecycle import ArchiveBuilder as ArchiveBuilder, HistoryChain as HistoryChain, SignoffService as SignoffService
 from song_agent.platform.persistence import WorkspaceLock as WorkspaceLock
-from song_agent.platform.persistence.program import program_json_facade as program_json_facade
+from song_agent.domains.legacy_documents import _program_json_facade as program_json_facade
 from song_agent.platform.time import now_iso as now_iso
 from song_agent.platform.verification.sanitization import sanitize_metadata as sanitize_metadata, sanitize_sensitive_text as sanitize_sensitive_text
 from song_agent.platform.verification.hashing import stable_hash as stable_hash

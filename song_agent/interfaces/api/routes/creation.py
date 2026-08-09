@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
-
-from song_agent.interfaces.api.route_contexts.core import CoreRouteContext
-
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
@@ -41,7 +38,8 @@ from .creation_parts.batch import CreationRoutesBatch
 
 from .creation_parts.expand_context_pack_payload import CreationRoutesExpandContextPackPayload
 
-class CreationRoutes(CreationRoutesProvider, CreationRoutesLibraryRecommend, CreationRoutesReference, CreationRoutesProjectFinalExport, CreationRoutesProjectEdit, CreationRoutesProjectSectionTemplateCreate, CreationRoutesProjectMix, CreationRoutesProjectEditorAuditionNextAction, CreationRoutesProjectReviewSprint, CreationRoutesSaveReviewSprintRecommendationContextPack, CreationRoutesProjectReviewTask, CreationRoutesAuditionContextPack, CreationRoutesProjectEditPreview, CreationRoutesProjectCandidateGroupsList, CreationRoutesProjectCandidateArtifact, CreationRoutesBatch, CreationRoutesExpandContextPackPayload, CoreRouteContext):
+
+class CreationRoutes(CreationRoutesProvider, CreationRoutesLibraryRecommend, CreationRoutesReference, CreationRoutesProjectFinalExport, CreationRoutesProjectEdit, CreationRoutesProjectSectionTemplateCreate, CreationRoutesProjectMix, CreationRoutesProjectEditorAuditionNextAction, CreationRoutesProjectReviewSprint, CreationRoutesSaveReviewSprintRecommendationContextPack, CreationRoutesProjectReviewTask, CreationRoutesAuditionContextPack, CreationRoutesProjectEditPreview, CreationRoutesProjectCandidateGroupsList, CreationRoutesProjectCandidateArtifact, CreationRoutesBatch, CreationRoutesExpandContextPackPayload):
     def _handle_project_route_part_01(self, method: str, project_id: str, tail: str, query_string: str, _split_state):
         editor_state_version = _interfaces_api_runtime._match_project_editor_state_tail(tail)
         if editor_state_version is not None:
@@ -408,56 +406,56 @@ class CreationRoutes(CreationRoutesProvider, CreationRoutesLibraryRecommend, Cre
         return (False, None)
 
     def _handle_project_route_part_07(self, method: str, project_id: str, tail: str, query_string: str, _split_state):
-        if tail == '/review-metrics/refresh':
+        if tail == "/review-metrics/refresh":
             self._handle_project_review_metrics(method, project_id, refresh=True)
             return (True, None)
-        if tail == '/export':
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if tail == "/export":
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
             try:
                 self.project_store.sync_project(project_id, self.store.get_job)
                 self._send_json(_interfaces_api_runtime.sanitize_metadata(self.project_store.export_project(project_id)))
             except FileNotFoundError:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Project not found.')
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
             return (True, None)
-        if tail == '/events':
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if tail == "/events":
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
             try:
                 self.project_store.get_project(project_id)
-                self._send_json({'events': self.project_store.read_events(project_id)})
+                self._send_json({"events": normalize_json_value(self.project_store.read_events(project_id))})
             except FileNotFoundError:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Project not found.')
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
             return (True, None)
-        if tail in {'/hide', '/unhide'}:
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if tail in {"/hide", "/unhide"}:
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
             try:
-                _split_state['document'] = self.project_store.hide_project(project_id, tail == '/hide')
+                _split_state["document"] = self.project_store.hide_project(project_id, tail == "/hide")
             except FileNotFoundError:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Project not found.')
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
                 return (True, None)
-            self._send_json({'ok': True, **_split_state['document'].to_dict()})
+            self._send_json({"ok": True, **_split_state["document"].to_dict()})
             return (True, None)
-        if tail == '/delete':
-            if method != 'POST':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if tail == "/delete":
+            if method != "POST":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
             try:
                 self.project_store.delete_project(project_id)
             except FileNotFoundError:
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Project not found.')
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
                 return (True, None)
-            self._send_json({'ok': True, 'deleted': True, 'project_id': project_id})
+            self._send_json({"ok": True, "deleted": True, "project_id": project_id})
             return (True, None)
-        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Project route not found.')
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project route not found.")
         return (False, None)
 
     def _handle_project_route(self, method: str, project_id: str, tail: str, query_string: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         _split_result = self._handle_project_route_part_01(method, project_id, tail, query_string, _split_state)
         if _split_result[0]:
             return _split_result[1]

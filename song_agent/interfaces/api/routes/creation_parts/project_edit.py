@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
-from typing import Any
-
-
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
+
 
 class CreationRoutesProjectEdit(CreationRouteContext):
     def _handle_project_edit_part_01(self, method: str, project_id: str, version_id: str, _split_state):
@@ -84,7 +83,7 @@ class CreationRoutesProjectEdit(CreationRouteContext):
         return (False, None)
 
     def _handle_project_edit(self, method: str, project_id: str, version_id: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         _split_result = self._handle_project_edit_part_01(method, project_id, version_id, _split_state)
         if _split_result[0]:
             return _split_result[1]
@@ -171,13 +170,13 @@ class CreationRoutesProjectEdit(CreationRouteContext):
                 "warnings": list(result.warnings),
                 "operation_counts": dict(result.summary.get("operation_counts") or {}),
             }
-            response: dict[str, Any] = {
+            response: JsonDocument = {
                 "ok": True,
                 "project_id": project_id,
                 "version_id": version.version_id,
                 "base_plan_hash": result.patch.base_plan_hash,
                 "operation_count": len(result.patch.operations),
-                "summary": summary,
+                "summary": normalize_json_document(summary),
                 "quality": result.plan.quality.to_dict() if result.plan.quality else {},
                 "validator": {"status": "passed", "checks": ["editor_patch_schema", "song_plan_validation"]},
             }
@@ -231,7 +230,7 @@ class CreationRoutesProjectEdit(CreationRouteContext):
         try:
             _document, version, _parent_job, parent_plan = self._project_edit_parent(project_id, version_id)
             clip = _interfaces_api_runtime.build_editor_clip_from_ref(
-                payload.get("clip_ref"),
+                _as_document(payload.get("clip_ref")),
                 default_project_id=project_id,
                 asset_store=self.asset_store,
                 reference_store=self.reference_store,
@@ -240,8 +239,8 @@ class CreationRoutesProjectEdit(CreationRouteContext):
             existing_patch_data = payload.get("current_patch")
             existing_result = None
             draft_plan = None
-            existing_operations: list[dict[str, Any]] = []
-            existing_metadata: dict[str, Any] = {}
+            existing_operations: list[JsonDocument] = []
+            existing_metadata: JsonDocument = {}
             draft_state = None
             if isinstance(existing_patch_data, dict):
                 existing_result = _interfaces_api_runtime.apply_editor_patch(parent_plan, existing_patch_data)
@@ -249,7 +248,9 @@ class CreationRoutesProjectEdit(CreationRouteContext):
                 existing_operations = list(existing_result.patch.operations)
                 existing_metadata = dict(existing_result.patch.metadata)
                 draft_state = _interfaces_api_runtime.build_editor_view_from_result(existing_result)
-            patch_data, clip_summary, clip_warnings = _interfaces_api_runtime.build_clip_insert_patch(parent_plan, clip, payload, draft_plan=draft_plan, draft_state=draft_state)
+            patch_data, clip_summary, clip_warnings = _interfaces_api_runtime.build_clip_insert_patch(
+                parent_plan, clip, payload, draft_plan=draft_plan, draft_state=draft_state
+            )
             combined_patch = {
                 **patch_data,
                 "operations": [*existing_operations, *patch_data["operations"]],
@@ -299,4 +300,4 @@ class CreationRoutesProjectEdit(CreationRouteContext):
         except ValueError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
             return
-        self._send_json(response)
+        self._send_json(normalize_json_document(response))

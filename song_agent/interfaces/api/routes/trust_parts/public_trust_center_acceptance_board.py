@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from typing import TypedDict
+
+from song_agent.platform.contracts.documents import JsonDocument
 
 from song_agent.platform.contracts import as_list as _as_list
+from song_agent.platform.contracts import as_int as _as_int
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
@@ -10,100 +13,199 @@ from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
+class _AcceptanceBoardRouteState(TypedDict, total=False):
+    subaction: str
+    payload: JsonDocument
+    report: JsonDocument
+    manifest: JsonDocument
+    zip_info: JsonDocument
+
+
 class TrustRoutesPublicTrustCenterAcceptanceBoard(TrustRouteContext):
-    def _handle_public_trust_center_acceptance_board_part_01(self, method: str, center_id: str, parts: list[str], _split_state):
+    def _handle_public_trust_center_acceptance_board_part_01(
+        self,
+        method: str,
+        center_id: str,
+        parts: list[str],
+        _split_state: _AcceptanceBoardRouteState,
+    ) -> tuple[bool, None]:
         if len(parts) == 2:
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            self._send_json({'ok': True, 'center_id': center_id, 'report': self.public_trust_center_acceptance_board_store.read_report(center_id, default={}), 'conflict_report': self.public_trust_center_acceptance_board_store.read_conflict_report(center_id, default={}), 'policy': self.public_trust_center_acceptance_board_store.read_policy(center_id), 'summary': self.public_trust_center_acceptance_board_store.summary(center_id)})
+            self._send_json(
+                {
+                    "ok": True,
+                    "center_id": center_id,
+                    "report": self.public_trust_center_acceptance_board_store.read_report(center_id, default={}),
+                    "conflict_report": self.public_trust_center_acceptance_board_store.read_conflict_report(center_id, default={}),
+                    "policy": self.public_trust_center_acceptance_board_store.read_policy(center_id),
+                    "summary": self.public_trust_center_acceptance_board_store.summary(center_id),
+                }
+            )
             return (True, None)
-        _split_state['subaction'] = parts[2] if len(parts) > 2 else ''
-        if _split_state['subaction'] == 'download' and len(parts) == 3:
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        _split_state["subaction"] = parts[2] if len(parts) > 2 else ""
+        if _split_state["subaction"] == "download" and len(parts) == 3:
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            self._send_file(self.public_trust_center_acceptance_board_store.zip_path(center_id), 'application/zip', filename=f'musicforge-{center_id}-acceptance-board.zip')
+            self._send_file(self.public_trust_center_acceptance_board_store.zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-acceptance-board.zip")
             return (True, None)
-        if _split_state['subaction'] == 'signoff-archive' and len(parts) >= 4 and (parts[3] == 'download'):
-            if method != 'GET':
-                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if _split_state["subaction"] == "signoff-archive" and len(parts) >= 4 and (parts[3] == "download"):
+            if method != "GET":
+                self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return (True, None)
-            self._send_file(self.public_trust_center_acceptance_board_store.signoff_archive_zip_path(center_id), 'application/zip', filename=f'musicforge-{center_id}-acceptance-board-signoff-archive.zip')
+            self._send_file(self.public_trust_center_acceptance_board_store.signoff_archive_zip_path(center_id), "application/zip", filename=f"musicforge-{center_id}-acceptance-board-signoff-archive.zip")
             return (True, None)
-        if _split_state['subaction'] == 'policy' and len(parts) == 3:
-            if method == 'GET':
+        if _split_state["subaction"] == "policy" and len(parts) == 3:
+            if method == "GET":
                 policy = self.public_trust_center_acceptance_board_store.read_policy(center_id)
-                self._send_json({'ok': True, 'center_id': center_id, 'policy': policy})
+                self._send_json({"ok": True, "center_id": center_id, "policy": policy})
                 return (True, None)
-            if method == 'POST':
+            if method == "POST":
                 policy = self.public_trust_center_acceptance_board_store.save_policy(center_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': center_id, 'policy': policy}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                self._send_json({"ok": True, "center_id": center_id, "policy": policy}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return (True, None)
-            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return (True, None)
-        if method != 'POST':
-            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
+        if method != "POST":
+            self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return (True, None)
-        _split_state['payload'] = self._optional_json_body()
-        if _split_state['subaction'] == 'refresh' and len(parts) == 3:
-            _split_state['report'] = self.public_trust_center_acceptance_board_store.refresh_report(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'report': _split_state['report'], 'summary': self.public_trust_center_acceptance_board_store.summary(center_id)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+        _split_state["payload"] = self._optional_json_body()
+        if _split_state["subaction"] == "refresh" and len(parts) == 3:
+            _split_state["report"] = self.public_trust_center_acceptance_board_store.refresh_report(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json(
+                {"ok": True, "center_id": center_id, "report": _split_state["report"], "summary": self.public_trust_center_acceptance_board_store.summary(center_id)},
+                status=_interfaces_api_runtime.HTTPStatus.CREATED,
+            )
             return (True, None)
-        if _split_state['subaction'] == 'export' and len(parts) == 3:
-            _split_state['manifest'] = self.public_trust_center_acceptance_board_store.export_board(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'manifest': _split_state['manifest'], 'summary': {'source_hash': _split_state['manifest'].get('source_hash'), 'package_type': _require_registered_package_type(_split_state['manifest'].get('package_type'), writer_id="song_agent.interfaces.api.routes.trust_parts.public_trust_center_acceptance_board.TrustRoutesPublicTrustCenterAcceptanceBoard._handle_public_trust_center_acceptance_board_part_01")}}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+        if _split_state["subaction"] == "export" and len(parts) == 3:
+            _split_state["manifest"] = self.public_trust_center_acceptance_board_store.export_board(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json(
+                {
+                    "ok": True,
+                    "center_id": center_id,
+                    "manifest": _split_state["manifest"],
+                    "summary": {
+                        "source_hash": _split_state["manifest"].get("source_hash"),
+                        "package_type": _require_registered_package_type(
+                            _split_state["manifest"].get("package_type"),
+                            writer_id="song_agent.interfaces.api.routes.trust_parts.public_trust_center_acceptance_board.TrustRoutesPublicTrustCenterAcceptanceBoard._handle_public_trust_center_acceptance_board_part_01",
+                        ),
+                    },
+                },
+                status=_interfaces_api_runtime.HTTPStatus.CREATED,
+            )
             return (True, None)
-        if _split_state['subaction'] == 'zip' and len(parts) == 3:
-            _split_state['zip_info'] = self.public_trust_center_acceptance_board_store.build_zip(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'zip': _split_state['zip_info']})
+        if _split_state["subaction"] == "zip" and len(parts) == 3:
+            _split_state["zip_info"] = self.public_trust_center_acceptance_board_store.build_zip(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, "center_id": center_id, "zip": _split_state["zip_info"]})
             return (True, None)
         return (False, None)
 
-    def _handle_public_trust_center_acceptance_board_part_02(self, method: str, center_id: str, parts: list[str], _split_state):
-        if _split_state['subaction'] == 'verify' and len(parts) == 3:
-            _split_state['report'] = self.public_trust_center_acceptance_board_store.verify_zip(center_id, {'strict': bool(_split_state['payload'].get('strict', True)), 'require_ready': bool(_split_state['payload'].get('require_ready', False)), 'require_quorum': bool(_split_state['payload'].get('require_quorum', False)), 'require_no_conflicts': bool(_split_state['payload'].get('require_no_conflicts', False)), 'min_accepted_count': int(_split_state['payload'].get('min_accepted_count') or 0), 'min_accepted_organizations': int(_split_state['payload'].get('min_accepted_organizations') or 0), 'required_roles': _as_list(_split_state['payload'].get('required_roles')), 'use_distribution_kit': bool(_split_state['payload'].get('use_distribution_kit', True))})
-            self._send_json({'ok': True, 'center_id': center_id, 'verification': _split_state['report'], 'summary': _split_state['report'].get('summary', {})})
+    def _handle_public_trust_center_acceptance_board_part_02(
+        self,
+        method: str,
+        center_id: str,
+        parts: list[str],
+        _split_state: _AcceptanceBoardRouteState,
+    ) -> tuple[bool, None]:
+        if _split_state["subaction"] == "verify" and len(parts) == 3:
+            _split_state["report"] = self.public_trust_center_acceptance_board_store.verify_zip(
+                center_id,
+                {
+                    "strict": bool(_split_state["payload"].get("strict", True)),
+                    "require_ready": bool(_split_state["payload"].get("require_ready", False)),
+                    "require_quorum": bool(_split_state["payload"].get("require_quorum", False)),
+                    "require_no_conflicts": bool(_split_state["payload"].get("require_no_conflicts", False)),
+                    "min_accepted_count": _as_int(_split_state["payload"].get("min_accepted_count") or 0),
+                    "min_accepted_organizations": _as_int(_split_state["payload"].get("min_accepted_organizations") or 0),
+                    "required_roles": _as_list(_split_state["payload"].get("required_roles")),
+                    "use_distribution_kit": bool(_split_state["payload"].get("use_distribution_kit", True)),
+                },
+            )
+            self._send_json(
+                {
+                    "ok": True,
+                    "center_id": center_id,
+                    "verification": _split_state["report"],
+                    "summary": _split_state["report"].get("summary", {}),
+                }
+            )
             return (True, None)
-        if _split_state['subaction'] == 'signoff-draft' and len(parts) == 3:
-            draft = self.public_trust_center_acceptance_board_store.create_signoff_draft(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'draft': draft}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+        if _split_state["subaction"] == "signoff-draft" and len(parts) == 3:
+            draft = self.public_trust_center_acceptance_board_store.create_signoff_draft(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, "center_id": center_id, "draft": draft}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
             return (True, None)
-        if _split_state['subaction'] == 'signoff' and len(parts) == 3:
-            signoff = self.public_trust_center_acceptance_board_store.signoff(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'signoff': signoff, 'summary': self.public_trust_center_acceptance_board_store.summary(center_id)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+        if _split_state["subaction"] == "signoff" and len(parts) == 3:
+            signoff = self.public_trust_center_acceptance_board_store.signoff(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json(
+                {
+                    "ok": True,
+                    "center_id": center_id,
+                    "signoff": signoff,
+                    "summary": self.public_trust_center_acceptance_board_store.summary(center_id),
+                },
+                status=_interfaces_api_runtime.HTTPStatus.CREATED,
+            )
             return (True, None)
-        if _split_state['subaction'] == 'change-request' and len(parts) == 3:
-            change = self.public_trust_center_acceptance_board_store.create_change_request(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'change_request': change}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+        if _split_state["subaction"] == "change-request" and len(parts) == 3:
+            change = self.public_trust_center_acceptance_board_store.create_change_request(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, "center_id": center_id, "change_request": change}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
             return (True, None)
-        if _split_state['subaction'] == 'change-requests' and len(parts) >= 5 and (parts[4] == 'approve'):
-            change = self.public_trust_center_acceptance_board_store.approve_change_request(center_id, parts[3], _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'change_request': change})
+        if _split_state["subaction"] == "change-requests" and len(parts) >= 5 and (parts[4] == "approve"):
+            change = self.public_trust_center_acceptance_board_store.approve_change_request(center_id, parts[3], _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json({"ok": True, "center_id": center_id, "change_request": change})
             return (True, None)
-        if _split_state['subaction'] == 'reset-signoff' and len(parts) == 3:
-            reset = self.public_trust_center_acceptance_board_store.reset_signoff(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-            self._send_json({'ok': True, 'center_id': center_id, 'reset': reset, 'summary': self.public_trust_center_acceptance_board_store.summary(center_id)})
+        if _split_state["subaction"] == "reset-signoff" and len(parts) == 3:
+            reset = self.public_trust_center_acceptance_board_store.reset_signoff(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+            self._send_json(
+                {
+                    "ok": True,
+                    "center_id": center_id,
+                    "reset": reset,
+                    "summary": self.public_trust_center_acceptance_board_store.summary(center_id),
+                }
+            )
             return (True, None)
-        if _split_state['subaction'] == 'signoff-archive' and len(parts) == 4:
+        if _split_state["subaction"] == "signoff-archive" and len(parts) == 4:
             archive_action = parts[3]
-            if archive_action == 'export':
-                _split_state['manifest'] = self.public_trust_center_acceptance_board_store.export_signoff_archive(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': center_id, 'manifest': _split_state['manifest']}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            if archive_action == "export":
+                _split_state["manifest"] = self.public_trust_center_acceptance_board_store.export_signoff_archive(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+                self._send_json(
+                    {"ok": True, "center_id": center_id, "manifest": _split_state["manifest"]},
+                    status=_interfaces_api_runtime.HTTPStatus.CREATED,
+                )
                 return (True, None)
-            if archive_action == 'zip':
-                _split_state['zip_info'] = self.public_trust_center_acceptance_board_store.build_signoff_archive_zip(center_id, _split_state['payload'], now=_interfaces_api_runtime._utc_now())
-                self._send_json({'ok': True, 'center_id': center_id, 'zip': _split_state['zip_info']})
+            if archive_action == "zip":
+                _split_state["zip_info"] = self.public_trust_center_acceptance_board_store.build_signoff_archive_zip(center_id, _split_state["payload"], now=_interfaces_api_runtime._utc_now())
+                self._send_json({"ok": True, "center_id": center_id, "zip": _split_state["zip_info"]})
                 return (True, None)
-            if archive_action == 'verify':
-                _split_state['report'] = self.public_trust_center_acceptance_board_store.verify_signoff_archive_zip(center_id, {'strict': bool(_split_state['payload'].get('strict', True)), 'require_signed': True, 'require_current': True, 'require_ready': True})
-                self._send_json({'ok': True, 'center_id': center_id, 'verification': _split_state['report'], 'summary': _split_state['report'].get('summary', {})})
+            if archive_action == "verify":
+                _split_state["report"] = self.public_trust_center_acceptance_board_store.verify_signoff_archive_zip(
+                    center_id,
+                    {
+                        "strict": bool(_split_state["payload"].get("strict", True)),
+                        "require_signed": True,
+                        "require_current": True,
+                        "require_ready": True,
+                    },
+                )
+                self._send_json(
+                    {
+                        "ok": True,
+                        "center_id": center_id,
+                        "verification": _split_state["report"],
+                        "summary": _split_state["report"].get("summary", {}),
+                    }
+                )
                 return (True, None)
-        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Public Trust Center Acceptance Board route not found.')
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Public Trust Center Acceptance Board route not found.")
         return (False, None)
 
     def _handle_public_trust_center_acceptance_board(self, method: str, center_id: str, parts: list[str]) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: _AcceptanceBoardRouteState = {}
         try:
             _split_result = self._handle_public_trust_center_acceptance_board_part_01(method, center_id, parts, _split_state)
             if _split_result[0]:
@@ -181,7 +283,11 @@ class TrustRoutesPublicTrustCenterAcceptanceBoard(TrustRouteContext):
                             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                             return
                         evidence = self.public_trust_center_distribution_kit_acceptance_store.refresh_accepted_evidence(center_id, {"response_id": response_id}, now=_interfaces_api_runtime._utc_now())
-                        self._send_file(self.public_trust_center_distribution_kit_acceptance_store.evidence_zip_path(center_id, str(evidence.get("evidence_id") or "")), "application/zip", filename=f"musicforge-{center_id}-distribution-kit-accepted-evidence.zip")
+                        self._send_file(
+                            self.public_trust_center_distribution_kit_acceptance_store.evidence_zip_path(center_id, str(evidence.get("evidence_id") or "")),
+                            "application/zip",
+                            filename=f"musicforge-{center_id}-distribution-kit-accepted-evidence.zip",
+                        )
                         return
                     if method != "POST":
                         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")

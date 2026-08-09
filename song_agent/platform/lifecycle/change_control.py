@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
 
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 from song_agent.platform.contracts.lifecycle import ResetAuthorization
 from song_agent.platform.verification.hashing import integrity_hash, integrity_ok
 
@@ -9,8 +10,8 @@ from song_agent.platform.verification.hashing import integrity_hash, integrity_o
 class ChangeRequestService:
     @staticmethod
     def validate_reset_authorization(
-        request: dict[str, Any],
-        approval: dict[str, Any],
+        request: Mapping[str, object],
+        approval: Mapping[str, object],
         expected: ResetAuthorization,
         *,
         approved_actions_field: str = "approved_actions",
@@ -19,7 +20,12 @@ class ChangeRequestService:
             raise ValueError("Change Request must be approved, valid, and unused.")
         if request.get("program_id") != expected.subject_id or request.get("change_request_id") != expected.request_id:
             raise ValueError("Change Request identity mismatch.")
-        if request.get("change_type") != expected.change_type or expected.action not in set(request.get("allowed_actions") or []):
+        request_actions = request.get("allowed_actions")
+        if (
+            request.get("change_type") != expected.change_type
+            or not isinstance(request_actions, list)
+            or expected.action not in request_actions
+        ):
             raise ValueError("Change Request does not authorize the reset action.")
         if not integrity_ok(approval) or approval.get("status") != "approved":
             raise ValueError("Change Request approval proof is invalid.")
@@ -49,22 +55,23 @@ class ChangeRequestService:
 
 class ResetService:
     @staticmethod
-    def build_proof(payload: dict[str, Any]) -> dict[str, Any]:
-        proof = dict(payload)
+    def build_proof(payload: Mapping[str, object]) -> JsonDocument:
+        proof = normalize_json_document(payload)
         proof["integrity_hash"] = integrity_hash(proof)
         return proof
 
     @staticmethod
     def mark_applied(
-        request: dict[str, Any],
+        request: Mapping[str, object],
         *,
         applied_at: str,
         proof_hash: str,
         event_hash: str,
-        updates: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        result = dict(request)
+        updates: Mapping[str, object] | None = None,
+    ) -> JsonDocument:
+        result = normalize_json_document(request)
         result.update({"status": "applied", "applied_at": applied_at, "reset_proof_hash": proof_hash, "reset_event_hash": event_hash})
-        result.update(updates or {})
+        if updates:
+            result.update(normalize_json_document(updates))
         result["integrity_hash"] = integrity_hash(result)
         return result

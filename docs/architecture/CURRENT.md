@@ -24,7 +24,7 @@ code. Historical release checks are read-only compatibility paths.
 
 - Product functionality and public surfaces are frozen at v14.3.5.
 <!-- v14.4-wave0-summary:start -->
-- Four human-maintained registries define 146 semantic capabilities, all 132 Store roles and physical namespaces, 542 observed package types, 2,687 legacy raw-write sites, and 246 schemas. Source scanning only verifies these declarations.
+- Four human-maintained registries define 146 semantic capabilities, all 132 Store roles and physical namespaces, 542 observed package types, 2,676 legacy raw-write sites, and 246 schemas. Source scanning only verifies these declarations.
 <!-- v14.4-wave0-summary:end -->
 - `capability-catalog.json` binds each observed Store, CLI, API, Studio,
   package, verifier, schema, test, and release-check surface to one capability.

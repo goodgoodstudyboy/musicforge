@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 from song_agent.platform.verification.sanitization import sanitize_metadata
 
 
-def stable_hash(value: Any) -> str:
+def stable_hash(value: object) -> str:
     payload = json.dumps(sanitize_metadata(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def integrity_hash(document: dict[str, Any]) -> str:
+def integrity_hash(document: Mapping[str, object]) -> str:
     return stable_hash({key: value for key, value in document.items() if key != "integrity_hash"})
 
 
-def integrity_ok(document: dict[str, Any]) -> bool:
+def integrity_ok(document: Mapping[str, object]) -> bool:
     return bool(document) and bool(document.get("integrity_hash")) and document.get("integrity_hash") == integrity_hash(document)
 
 

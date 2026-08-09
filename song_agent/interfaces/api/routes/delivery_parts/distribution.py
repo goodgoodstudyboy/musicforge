@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts.documents import JsonDocument
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
@@ -126,7 +126,7 @@ class DeliveryRoutesDistribution(DeliveryRouteContext):
             layout = self._build_distribution_layout(release_id, _split_state['target'])
             if method == 'POST':
                 layout = self.distribution_store.write_layout(release_id, _split_state['target_id'], layout)
-                self.distribution_store.append_event(release_id, 'distribution_layout_refreshed', {'target_id': _split_state['target_id'], 'status': layout.get('summary', {}).get('status')})
+                self.distribution_store.append_event(release_id, 'distribution_layout_refreshed', {'target_id': _split_state['target_id'], 'status': _as_document(layout.get('summary')).get('status')})
             self._send_json({'ok': True, 'release_id': release_id, 'target_id': _split_state['target_id'], 'layout': layout, 'summary': _interfaces_api_runtime.layout_summary(layout)})
             return (True, None)
         if _split_state['action'].startswith('checklist-item:'):
@@ -283,7 +283,7 @@ class DeliveryRoutesDistribution(DeliveryRouteContext):
         return (False, None)
 
     def _handle_distribution_route(self, method: str, release_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         try:
             _split_result = self._handle_distribution_route_part_01(method, release_id, tail, _split_state)
             if _split_result[0]:

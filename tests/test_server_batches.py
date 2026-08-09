@@ -292,7 +292,7 @@ def test_hide_unhide_and_delete_batch(tmp_path, monkeypatch):
 def test_batch_open_folder_requires_post(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     opened = []
-    monkeypatch.setattr("song_agent.server.open_folder", lambda path: opened.append(str(path)))
+    monkeypatch.setattr("song_agent.interfaces.api.runtime.open_folder", lambda path: opened.append(str(path)))
     server = start_test_server()
     try:
         created = import_batch(server)
@@ -345,7 +345,7 @@ def test_render_batch_audio_requires_renderer_config(tmp_path, monkeypatch):
 
 def test_render_batch_audio_completes_items_and_export(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.server.render_audio", fake_render_audio)
+    monkeypatch.setattr("song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio", fake_render_audio)
     server = start_test_server()
     try:
         configure_renderer(tmp_path, server)
@@ -370,7 +370,7 @@ def test_render_batch_audio_completes_items_and_export(tmp_path, monkeypatch):
 
 def test_render_batch_audio_marks_missing_midi_failed(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.server.render_audio", fake_render_audio)
+    monkeypatch.setattr("song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio", fake_render_audio)
     server = start_test_server()
     try:
         configure_renderer(tmp_path, server)
@@ -405,7 +405,7 @@ def test_render_batch_audio_partial_success_and_retry_failed(tmp_path, monkeypat
             raise RendererExecutionError("render failed")
         return fake_render_audio(midi_path, wav_path, config)
 
-    monkeypatch.setattr("song_agent.server.render_audio", flaky_render)
+    monkeypatch.setattr("song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio", flaky_render)
     server = start_test_server()
     try:
         configure_renderer(tmp_path, server)
@@ -431,7 +431,7 @@ def test_render_batch_audio_partial_success_and_retry_failed(tmp_path, monkeypat
 
 def test_render_failed_batch_audio_requires_failed_items(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.server.render_audio", fake_render_audio)
+    monkeypatch.setattr("song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio", fake_render_audio)
     server = start_test_server()
     try:
         configure_renderer(tmp_path, server)

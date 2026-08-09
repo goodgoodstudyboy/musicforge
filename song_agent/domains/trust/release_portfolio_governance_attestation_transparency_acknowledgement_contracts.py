@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.domains.legacy_documents import _as_list
 from typing import Any
 
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS
@@ -71,8 +72,8 @@ def response_template(pack: dict[str, Any]) -> dict[str, Any]:
         "transparency_feed_source_hash": source.get("transparency_feed_source_hash"),
         "reviewer": {"name": "", "organization": "", "role": ""},
         "review_status": "accepted",
-        "reviewed_notice_ids": list(source.get("notice_ids") or []),
-        "reviewed_event_ids": list(source.get("event_ids") or []),
+        "reviewed_notice_ids": _as_list(source.get("notice_ids")),
+        "reviewed_event_ids": _as_list(source.get("event_ids")),
         "comments": "",
         "concerns": [],
         "submitted_at": "",

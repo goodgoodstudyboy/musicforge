@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+from typing import cast
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Path, apply_asset_refs_to_plan, generate_request, write_asset_refs_snapshot
+from song_agent.application.jobs.model import JobState
+from song_agent.platform.contracts.coercion import as_documents as _as_documents
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongPlan, SongRequest, append_event, clear_stem_artifacts, load_provider_config, read_json, render_midi, write_json, write_reference_refs_snapshot
+from song_agent.application.jobs.ports import JobStoreContext
+
+from song_agent.interfaces.bootstrap.api.core import Path, apply_asset_refs_to_plan, generate_request, write_asset_refs_snapshot
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
+
+from song_agent.interfaces.bootstrap.api.creation_quality import ProjectPaths, SongPlan, SongRequest, append_event, clear_stem_artifacts, load_provider_config, read_json, render_midi, write_json, write_reference_refs_snapshot
 
 from song_agent.interfaces.api.runtime_parts.helpers.api_info import _build_summary, _build_validator_report, _utc_now
 
@@ -22,17 +28,17 @@ class JobStoreJob(JobStoreContext):
         _context_snapshot = self._prepare_context_pack_for_job(_split_state['job'])
         asset_snapshot = self._prepare_asset_refs_for_job(_split_state['job'])
         reference_snapshot = self._prepare_reference_refs_for_job(_split_state['job'])
-        plan_path, midi_path = generate_request(_split_state['request'], out_dir=Path(_split_state['job'].output_dir), force=False, provider_config=_split_state['provider_config'], provider_snapshot=_split_state['provider_snapshot'] if _split_state['provider_config'] is not None else None, control=self._control_callback(job_id), pipeline_mode=_split_state['job'].pipeline_mode)
+        plan_path, midi_path = generate_request(_split_state['request'], out_dir=Path(_split_state['job'].output_dir), force=False, provider_config=_split_state['provider_config'], provider_snapshot=_split_state['provider_snapshot'] if _split_state['provider_config'] is not None else None, control=self._control_callback(job_id), pipeline_mode=_split_state['job'].pipeline_mode, node_store_factory=_api_store_factories.node_store)
         if asset_snapshot['asset_refs']:
             plan = SongPlan.from_dict(read_json(plan_path))
             plan = apply_asset_refs_to_plan(plan, self.asset_store, asset_snapshot['asset_refs'])
             write_json(plan_path, plan.to_dict())
             render_midi(plan, midi_path)
             write_asset_refs_snapshot(Path(_split_state['job'].output_dir), asset_snapshot)
-            self.asset_store.mark_used(asset_snapshot['asset_refs'], {'usage_type': 'job_generation', 'job_id': _split_state['job'].job_id})
+            self.asset_store.mark_used(_as_documents(asset_snapshot.get('asset_refs')), {'usage_type': 'job_generation', 'job_id': _split_state['job'].job_id})
         if reference_snapshot['reference_refs']:
             write_reference_refs_snapshot(Path(_split_state['job'].output_dir), reference_snapshot)
-            self.reference_store.mark_used(reference_snapshot['reference_refs'], {'usage_type': 'job_generation', 'job_id': _split_state['job'].job_id})
+            self.reference_store.mark_used(_as_documents(reference_snapshot.get('reference_refs')), {'usage_type': 'job_generation', 'job_id': _split_state['job'].job_id})
         clear_stem_artifacts(Path(_split_state['job'].output_dir))
         _split_state['job'] = self.get_job(job_id)
         if _split_state['job'] is None:
@@ -64,22 +70,27 @@ class JobStoreJob(JobStoreContext):
         return (False, None)
 
     def _run_job(self, job_id: str) -> None:
-        _split_state = {}
-        _split_state['job'] = self.get_job(job_id)
-        if _split_state['job'] is None:
+        job = self.get_job(job_id)
+        if job is None:
             return
-        _split_state['request'] = SongRequest.from_dict(_split_state['job'].input_payload)
-        _split_state['provider_config'] = None
-        _split_state['provider_snapshot'] = _split_state['job'].provider_snapshot
-        if _split_state['provider_snapshot'].get('mode') == 'provider':
-            _split_state['provider_config'], _sources = load_provider_config()
-            _split_state['provider_config'].validate_ready_for_provider()
-            ProjectPaths.create(Path(_split_state['job'].output_dir))
-            write_json(Path(_split_state['job'].output_dir) / 'data' / 'provider-snapshot.json', _split_state['provider_snapshot'])
-        if _split_state['job'].cancel_requested:
-            self._update_job(_split_state['job'], status='cancelled', step='cancelled', message='Job was cancelled before generation started.')
+        request = SongRequest.from_dict(job.input_payload)
+        provider_snapshot = job.provider_snapshot
+        provider_config = None
+        if provider_snapshot.get('mode') == 'provider':
+            provider_config, _sources = load_provider_config()
+            provider_config.validate_ready_for_provider()
+            ProjectPaths.create(Path(job.output_dir))
+            write_json(Path(job.output_dir) / 'data' / 'provider-snapshot.json', provider_snapshot)
+        if job.cancel_requested:
+            self._update_job(job, status='cancelled', step='cancelled', message='Job was cancelled before generation started.')
             return
-        self._update_job(_split_state['job'], status='running', step='generate', message='Generating song plan and MIDI.', attempt_count=_split_state['job'].attempt_count + 1, started_at=_split_state['job'].started_at or _utc_now(), heartbeat_at=_utc_now(), stalled=False)
+        self._update_job(job, status='running', step='generate', message='Generating song plan and MIDI.', attempt_count=job.attempt_count + 1, started_at=job.started_at or _utc_now(), heartbeat_at=_utc_now(), stalled=False)
+        _split_state = {
+            'job': job,
+            'request': request,
+            'provider_config': provider_config,
+            'provider_snapshot': provider_snapshot,
+        }
         try:
             _split_result = self._run_job_part_01(job_id, _split_state)
             if _split_result[0]:
@@ -90,6 +101,6 @@ class JobStoreJob(JobStoreContext):
         except JobCancelled:
             _split_state['job'] = self.get_job(job_id)
             if _split_state['job'] is not None:
-                self._update_job(_split_state['job'], status='cancelled', step='cancelled', message='Job was cancelled at a stage boundary.', finished_at=_utc_now())
+                self._update_job(cast(JobState, _split_state['job']), status='cancelled', step='cancelled', message='Job was cancelled at a stage boundary.', finished_at=_utc_now())
         except Exception as exc:
-            self._update_job(_split_state['job'], status='failed', step='failed', message='Song generation failed.', error=str(exc), last_error=str(exc), finished_at=_utc_now())
+            self._update_job(cast(JobState, _split_state['job']), status='failed', step='failed', message='Song generation failed.', error=str(exc), last_error=str(exc), finished_at=_utc_now())

@@ -7,7 +7,7 @@ import importlib.util
 import json
 import re
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from song_agent import __version__
 
@@ -19,6 +19,7 @@ INTERFACE_MODULES = {
     "song_agent.webui": "web",
 }
 INTERFACE_CONTEXTS = {"cli", "api", "web"}
+VIRTUAL_IMPORT_MODULES = frozenset({"song_agent.interfaces"})
 MEGA_FILE_PATHS = (
     "song_agent/release_checks.py",
     "song_agent/server.py",
@@ -87,7 +88,7 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
         for importer in sorted(imports)
         if ownership[importer]["layer"] not in {"compatibility", "release_check"}
         for imported in sorted(imports[importer])
-        if ownership[imported]["layer"] == "compatibility"
+        if _module_ownership(imported, imported.replace(".", "/"))["layer"] == "compatibility"
     ]
     production_modules = {
         module
@@ -141,6 +142,38 @@ def build_architecture_snapshot(repo_root: Path | str = ".") -> dict[str, Any]:
     _SNAPSHOT_CACHE.clear()
     _SNAPSHOT_CACHE[cache_key] = snapshot
     return copy.deepcopy(snapshot)
+
+
+def boundary_violations_for_sources(sources: Mapping[str, str]) -> list[dict[str, str]]:
+    modules: dict[str, Path] = {}
+    trees: dict[str, ast.AST] = {}
+    referenced: set[str] = set()
+    for raw_path, source in sources.items():
+        path = Path(raw_path.replace("\\", "/"))
+        module = _module_name(Path("."), path)
+        tree = ast.parse(source, filename=raw_path)
+        modules[module] = path
+        trees[module] = tree
+        package = module if path.name == "__init__.py" else module.rpartition(".")[0]
+        for node in ast.walk(tree):
+            targets: set[str] = set()
+            if isinstance(node, ast.Import):
+                targets.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                base = _resolve_import_from(node, package)
+                targets.add(base)
+                targets.update(f"{base}.{alias.name}" for alias in node.names if alias.name != "*")
+            elif isinstance(node, ast.Call):
+                target = _dynamic_internal_import_target(node)
+                if target:
+                    targets.add(target)
+            referenced.update(value for value in targets if value == "song_agent" or value.startswith("song_agent."))
+    for module in referenced:
+        modules.setdefault(module, Path(module.replace(".", "/") + ".py"))
+        trees.setdefault(module, ast.parse(""))
+    ownership = {module: _module_ownership(module, path.as_posix()) for module, path in modules.items()}
+    imports, imported_names, dynamic_internal_imports = _import_graph(modules, trees)
+    return _boundary_violations(ownership, imports, imported_names, dynamic_internal_imports)
 
 
 def build_architecture_baseline(
@@ -360,31 +393,28 @@ def _module_name(root: Path, path: Path) -> str:
     return ".".join(parts)
 
 
+def _matches_module_prefix(module: str, prefix: str) -> bool:
+    return module == prefix or module.startswith(prefix + ".")
+
+
 def _module_ownership(module: str, path: str) -> dict[str, Any]:
-    if module == "song_agent":
-        return _ownership_row(module, path, "compatibility", None)
-    if module.startswith("song_agent.platform"):
+    if _matches_module_prefix(module, "song_agent.platform"):
         return _ownership_row(module, path, "platform", None)
-    if module.startswith("song_agent.application"):
+    if _matches_module_prefix(module, "song_agent.application"):
         return _ownership_row(module, path, "application", None)
-    if module.startswith("song_agent.capabilities"):
+    if _matches_module_prefix(module, "song_agent.capabilities"):
         return _ownership_row(module, path, "application", None)
-    if module.startswith("song_agent.interfaces."):
+    if _matches_module_prefix(module, "song_agent.interfaces"):
         parts = module.split(".")
         context = parts[2] if len(parts) > 2 and parts[2] in INTERFACE_CONTEXTS else None
         return _ownership_row(module, path, "interface", context)
     if module in INTERFACE_MODULES:
         return _ownership_row(module, path, "interface", INTERFACE_MODULES[module])
-    if module in {"song_agent.release_check", "song_agent.release_checks"} or module.startswith("song_agent.release_check_") or module.startswith("song_agent.release_check.") or module == "song_agent.architecture_guardrails":
+    if _matches_module_prefix(module, "song_agent.release_check") or module == "song_agent.release_checks" or module.startswith("song_agent.release_check_") or module == "song_agent.architecture_guardrails":
         return _ownership_row(module, path, "release_check", None)
-    if module.startswith("song_agent.domains."):
-        parts = module.split(".")
-        return _ownership_row(module, path, "domain", parts[2] if len(parts) > 2 else "creation")
-    if module == "song_agent.domains":
-        return _ownership_row(module, path, "domain", None)
-    if module.startswith("song_agent.domains.program.unified_release_program"):
-        return _ownership_row(module, path, "domain", "program")
-    return _ownership_row(module, path, "compatibility", _legacy_domain_context(module))
+    if _matches_module_prefix(module, "song_agent.domains"):
+        return _ownership_row(module, path, "domain", None if module.count(".") < 2 or module == "song_agent.domains.legacy_documents" else module.split(".")[2])
+    return _ownership_row(module, path, "compatibility", None if module == "song_agent" else _legacy_domain_context(module))
 
 
 def _ownership_row(module: str, path: str, layer: str, context: str | None) -> dict[str, Any]:
@@ -513,7 +543,7 @@ def _resolve_import_from(node: ast.ImportFrom, package: str) -> str:
 def _known_module(value: str, known: set[str]) -> str | None:
     candidate = value
     while candidate:
-        if candidate in known:
+        if candidate in known or candidate in VIRTUAL_IMPORT_MODULES:
             return candidate
         candidate = candidate.rpartition(".")[0]
     return None
@@ -568,7 +598,7 @@ def _boundary_violations(
     for importer, targets in imports.items():
         importer_layer = str(ownership[importer]["layer"])
         for imported in targets:
-            imported_layer = str(ownership[imported]["layer"])
+            imported_layer = str(_module_ownership(imported, imported.replace(".", "/"))["layer"])
             reason = ""
             if importer_layer == "platform" and imported_layer != "platform":
                 reason = "platform_must_not_depend_outward"
@@ -576,8 +606,6 @@ def _boundary_violations(
                 reason = "application_must_not_depend_on_interface_or_release_check"
             elif importer_layer == "domain" and imported_layer in {"interface", "release_check"}:
                 reason = "domain_must_not_depend_on_interface_or_release_check"
-            elif importer_layer in {"platform", "application", "domain"} and imported_layer == "release_check":
-                reason = "production_must_not_depend_on_release_check"
             if reason:
                 if (importer, imported) not in DEPENDENCY_EXCEPTIONS:
                     violations.add((importer, imported, reason))
@@ -705,7 +733,7 @@ def _code_metrics(
             for importer, targets in imports.items()
             for imported in targets
             if ownership[importer]["layer"] == "domain"
-            and ownership[imported]["layer"] == "interface"
+            and _module_ownership(imported, imported.replace(".", "/"))["layer"] == "interface"
         ),
         "store_class_count": store_class_count,
         "verifier_module_count": sum(1 for module in modules if module.endswith("_verifier")),

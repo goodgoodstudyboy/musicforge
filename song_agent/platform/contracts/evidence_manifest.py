@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Iterable
 
+from song_agent.platform.contracts.coercion import as_int
+from song_agent.platform.contracts.documents import JsonDocument
 from song_agent.platform.contracts.evidence import EvidenceRef
 
 
@@ -12,10 +14,11 @@ class ExternalEvidenceManifest:
     schema_version: int = 1
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "ExternalEvidenceManifest":
+    def from_dict(cls, value: Mapping[str, object]) -> "ExternalEvidenceManifest":
+        item_rows = value.get("items")
         return cls(
-            schema_version=int(value.get("schema_version") or 1),
-            items=tuple(EvidenceRef.from_dict(row) for row in value.get("items") or [] if isinstance(row, dict)),
+            schema_version=as_int(value.get("schema_version") or 1),
+            items=tuple(EvidenceRef.from_dict(row) for row in item_rows if isinstance(row, dict)) if isinstance(item_rows, list) else (),
         )
 
     def by_identity(self) -> dict[tuple[str, str, str, int], EvidenceRef]:
@@ -34,5 +37,5 @@ class ExternalEvidenceManifest:
             and set(self.by_identity()) == set(actual_by_identity)
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> JsonDocument:
         return {"schema_version": self.schema_version, "items": [item.to_dict() for item in self.items]}

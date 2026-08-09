@@ -8,43 +8,39 @@ import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 class QualityRoutesReleaseAudioCampaignPlan(QualityRouteContext):
     def _handle_release_audio_campaign_plan(self, method: str, release_id: str, tail: str) -> None:
         try:
-            self.audio_campaign_planner_store.release_store = self.release_store
-            self.audio_campaign_planner_store.project_store = self.project_store
-            self.audio_campaign_planner_store.audio_lab_store = self.audio_lab_store
-            self.audio_campaign_planner_store.audio_campaign_store = self.audio_campaign_store
             if tail == "":
                 if method != "GET":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                status = self.audio_campaign_planner_store.status(release_id)
+                status = self.server.audio_campaign_planner_store.status(release_id)
                 self._send_json({"ok": True, **status})
                 return
             if tail == "/refresh":
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                plan = self.audio_campaign_planner_store.refresh_plan(release_id, self._optional_json_body())
+                plan = self.server.audio_campaign_planner_store.refresh_plan(release_id, self._optional_json_body())
                 self._send_json({"ok": plan.get("status") != "blocked", "plan": plan, "summary": plan.get("preflight_summary", {})})
                 return
             if tail == "/preflight":
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                preflight = self.audio_campaign_planner_store.preflight(release_id, self._optional_json_body())
+                preflight = self.server.audio_campaign_planner_store.preflight(release_id, self._optional_json_body())
                 self._send_json({"ok": preflight.get("status") == "passed", "preflight": preflight, "summary": preflight.get("summary", {})})
                 return
             if tail == "/create":
                 if method != "POST":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                result = self.audio_campaign_planner_store.create_campaign_from_release(release_id, self._optional_json_body())
+                result = self.server.audio_campaign_planner_store.create_campaign_from_release(release_id, self._optional_json_body())
                 self._send_json({"ok": True, **result, "summary": result.get("link", {}).get("coverage", {})}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return
             if tail == "/status":
                 if method != "GET":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
-                status = self.audio_campaign_planner_store.status(release_id)
+                status = self.server.audio_campaign_planner_store.status(release_id)
                 self._send_json({"ok": status.get("status") != "failed", **status})
                 return
             if tail == "/link":
@@ -52,7 +48,7 @@ class QualityRoutesReleaseAudioCampaignPlan(QualityRouteContext):
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                     return
                 payload = self._read_json_body()
-                link = self.audio_campaign_planner_store.link_campaign(release_id, str(payload.get("campaign_id") or ""), payload)
+                link = self.server.audio_campaign_planner_store.link_campaign(release_id, str(payload.get("campaign_id") or ""), payload)
                 self._send_json({"ok": True, "link": link, "summary": link.get("coverage", {})}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                 return
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Release Audio Campaign plan route not found.")
@@ -69,11 +65,6 @@ class QualityRoutesReleaseAudioCampaignPlan(QualityRouteContext):
 
     def _handle_release_audio_campaign_remediation(self, method: str, release_id: str, tail: str) -> None:
         try:
-            self.audio_campaign_remediation_store.release_store = self.release_store
-            self.audio_campaign_remediation_store.project_store = self.project_store
-            self.audio_campaign_remediation_store.planner_store = self.audio_campaign_planner_store
-            self.audio_campaign_remediation_store.campaign_store = self.audio_campaign_store
-            self.audio_campaign_remediation_store.fix_sprint_store = self.audio_fix_sprint_store
             if tail in {"", "/"}:
                 if method != "GET":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
@@ -162,12 +153,6 @@ class QualityRoutesReleaseAudioCampaignPlan(QualityRouteContext):
 
     def _handle_release_audio_certification(self, method: str, release_id: str, tail: str) -> None:
         try:
-            self.release_audio_certification_store.release_store = self.release_store
-            self.release_audio_certification_store.project_store = self.project_store
-            self.release_audio_certification_store.planner_store = self.audio_campaign_planner_store
-            self.release_audio_certification_store.campaign_store = self.audio_campaign_store
-            self.release_audio_certification_store.governance_store = self.audio_campaign_governance_store
-            self.release_audio_certification_store.remediation_store = self.audio_campaign_remediation_store
             if tail in {"", "/"}:
                 if method != "GET":
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")

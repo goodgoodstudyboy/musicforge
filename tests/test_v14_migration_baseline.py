@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from song_agent.release_check.v14_baseline import _coverage_totals, build_v14_baseline, verify_v14_baseline
+from tools.v14_baseline import _coverage_totals, build_v14_baseline, verify_v14_baseline
 
 
 ROOT = Path(__file__).resolve().parents[1]

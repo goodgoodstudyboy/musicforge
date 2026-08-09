@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Any
+from dataclasses import dataclass, field
 
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.verification.hashing import stable_hash
 
@@ -13,8 +13,8 @@ class EvidenceEdge:
     target: str
     relation: str
 
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+    def to_dict(self) -> JsonDocument:
+        return {"source": self.source, "target": self.target, "relation": self.relation}
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,7 @@ class EvidenceNode:
     blockers: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     dependencies: tuple[str, ...] = ()
-    runtime_summary: dict[str, Any] = field(default_factory=dict)
+    runtime_summary: JsonDocument = field(default_factory=dict)
 
     @property
     def ready(self) -> bool:
@@ -40,8 +40,20 @@ class EvidenceNode:
             and not self.blockers
         )
 
-    def to_dict(self) -> dict[str, Any]:
-        value = asdict(self)
+    def to_dict(self) -> JsonDocument:
+        value = normalize_json_document({
+            "node_id": self.node_id,
+            "ref": self.ref.to_dict(),
+            "capability_id": self.capability_id,
+            "report_status": self.report_status,
+            "runtime_status": self.runtime_status,
+            "current": self.current,
+            "lifecycle_status": self.lifecycle_status,
+            "blockers": list(self.blockers),
+            "warnings": list(self.warnings),
+            "dependencies": list(self.dependencies),
+            "runtime_summary": self.runtime_summary,
+        })
         value["ready"] = self.ready
         return value
 
@@ -75,8 +87,8 @@ class EvidenceGraph:
     def by_node_id(self) -> dict[str, EvidenceNode]:
         return {node.node_id: node for node in self.nodes}
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
+    def to_dict(self) -> JsonDocument:
+        return normalize_json_document({
             "schema_version": self.schema_version,
             "status": self.status,
             "graph_hash": self.graph_hash,
@@ -89,4 +101,4 @@ class EvidenceGraph:
                 "edge_count": len(self.edges),
                 "ready_count": sum(1 for node in self.nodes if node.ready),
             },
-        }
+        })

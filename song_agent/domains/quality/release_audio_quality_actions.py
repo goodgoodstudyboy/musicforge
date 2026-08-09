@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list
 
 import json as json
 import re as re
@@ -231,7 +231,7 @@ class ReleaseAudioQualityActionQueueStore:
             if self.history_path(queue_id).exists():
                 write_entry("queue-history.jsonl", _read_jsonl(self.history_path(queue_id)))
             write_entry("README.txt", _readme(docs["queue"], docs["summary"]))
-            manifest = sanitize_metadata(
+            manifest: ImplementationDocument = sanitize_metadata(
                 {
                     "package_type": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_PACKAGE_TYPE,
                     "schema_version": RELEASE_AUDIO_QUALITY_ACTION_QUEUE_SCHEMA_VERSION,

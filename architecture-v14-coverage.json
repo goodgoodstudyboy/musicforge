@@ -1,5 +1,5 @@
 {
-  "file_count": 1025,
+  "file_count": 1017,
   "files": {
     "song_agent/__init__.py": {
       "summary": {
@@ -101,9 +101,9 @@
     },
     "song_agent/application/audio_campaigns/release_coverage.py": {
       "summary": {
-        "covered_lines": 28,
+        "covered_lines": 39,
         "missing_lines": 1,
-        "num_statements": 29
+        "num_statements": 40
       }
     },
     "song_agent/application/evidence_policy_gate.py": {
@@ -122,16 +122,51 @@
     },
     "song_agent/application/generation/service.py": {
       "summary": {
-        "covered_lines": 87,
-        "missing_lines": 6,
-        "num_statements": 93
+        "covered_lines": 90,
+        "missing_lines": 7,
+        "num_statements": 97
+      }
+    },
+    "song_agent/application/http_ports/creation.py": {
+      "summary": {
+        "covered_lines": 40,
+        "missing_lines": 0,
+        "num_statements": 40
+      }
+    },
+    "song_agent/application/http_ports/delivery.py": {
+      "summary": {
+        "covered_lines": 29,
+        "missing_lines": 0,
+        "num_statements": 29
+      }
+    },
+    "song_agent/application/http_ports/quality.py": {
+      "summary": {
+        "covered_lines": 55,
+        "missing_lines": 0,
+        "num_statements": 55
+      }
+    },
+    "song_agent/application/http_ports/studio.py": {
+      "summary": {
+        "covered_lines": 35,
+        "missing_lines": 0,
+        "num_statements": 35
+      }
+    },
+    "song_agent/application/http_ports/trust.py": {
+      "summary": {
+        "covered_lines": 42,
+        "missing_lines": 0,
+        "num_statements": 42
       }
     },
     "song_agent/application/interface_persistence.py": {
       "summary": {
-        "covered_lines": 9,
+        "covered_lines": 10,
         "missing_lines": 0,
-        "num_statements": 9
+        "num_statements": 10
       }
     },
     "song_agent/application/jobs/__init__.py": {
@@ -143,9 +178,16 @@
     },
     "song_agent/application/jobs/model.py": {
       "summary": {
-        "covered_lines": 49,
+        "covered_lines": 51,
         "missing_lines": 0,
-        "num_statements": 49
+        "num_statements": 51
+      }
+    },
+    "song_agent/application/jobs/ports.py": {
+      "summary": {
+        "covered_lines": 71,
+        "missing_lines": 31,
+        "num_statements": 102
       }
     },
     "song_agent/application/legacy/__init__.py": {
@@ -157,16 +199,30 @@
     },
     "song_agent/application/legacy/release_signoff.py": {
       "summary": {
-        "covered_lines": 327,
+        "covered_lines": 419,
         "missing_lines": 142,
-        "num_statements": 469
+        "num_statements": 561
+      }
+    },
+    "song_agent/application/legacy/release_signoff_ports.py": {
+      "summary": {
+        "covered_lines": 66,
+        "missing_lines": 0,
+        "num_statements": 66
+      }
+    },
+    "song_agent/application/maintenance.py": {
+      "summary": {
+        "covered_lines": 90,
+        "missing_lines": 9,
+        "num_statements": 99
       }
     },
     "song_agent/application/policy_compatibility.py": {
       "summary": {
-        "covered_lines": 51,
+        "covered_lines": 52,
         "missing_lines": 6,
-        "num_statements": 57
+        "num_statements": 58
       }
     },
     "song_agent/application/program/__init__.py": {
@@ -178,16 +234,16 @@
     },
     "song_agent/application/program/http.py": {
       "summary": {
-        "covered_lines": 67,
+        "covered_lines": 78,
         "missing_lines": 5,
-        "num_statements": 72
+        "num_statements": 83
       }
     },
     "song_agent/application/program/http_context.py": {
       "summary": {
-        "covered_lines": 30,
+        "covered_lines": 316,
         "missing_lines": 0,
-        "num_statements": 30
+        "num_statements": 316
       }
     },
     "song_agent/application/program/http_routes/__init__.py": {
@@ -199,23 +255,23 @@
     },
     "song_agent/application/program/http_routes/acceptance.py": {
       "summary": {
-        "covered_lines": 15,
-        "missing_lines": 57,
-        "num_statements": 72
+        "covered_lines": 16,
+        "missing_lines": 59,
+        "num_statements": 75
       }
     },
     "song_agent/application/program/http_routes/acceptance_change.py": {
       "summary": {
-        "covered_lines": 15,
+        "covered_lines": 16,
         "missing_lines": 58,
-        "num_statements": 73
+        "num_statements": 74
       }
     },
     "song_agent/application/program/http_routes/command_center.py": {
       "summary": {
-        "covered_lines": 13,
+        "covered_lines": 14,
         "missing_lines": 44,
-        "num_statements": 57
+        "num_statements": 58
       }
     },
     "song_agent/application/program/http_routes/command_center_signoff.py": {
@@ -227,23 +283,23 @@
     },
     "song_agent/application/program/http_routes/continuity.py": {
       "summary": {
-        "covered_lines": 21,
+        "covered_lines": 22,
         "missing_lines": 68,
-        "num_statements": 89
+        "num_statements": 90
       }
     },
     "song_agent/application/program/http_routes/continuity_kit.py": {
       "summary": {
-        "covered_lines": 15,
+        "covered_lines": 16,
         "missing_lines": 57,
-        "num_statements": 72
+        "num_statements": 73
       }
     },
     "song_agent/application/program/http_routes/core.py": {
       "summary": {
-        "covered_lines": 34,
-        "missing_lines": 30,
-        "num_statements": 64
+        "covered_lines": 35,
+        "missing_lines": 31,
+        "num_statements": 66
       }
     },
     "song_agent/application/program/http_routes/download.py": {
@@ -255,9 +311,9 @@
     },
     "song_agent/application/program/http_routes/handoff.py": {
       "summary": {
-        "covered_lines": 65,
+        "covered_lines": 68,
         "missing_lines": 59,
-        "num_statements": 124
+        "num_statements": 127
       }
     },
     "song_agent/application/program/http_routes/operations.py": {
@@ -269,16 +325,16 @@
     },
     "song_agent/application/program/http_routes/receiver_acceptance.py": {
       "summary": {
-        "covered_lines": 26,
-        "missing_lines": 56,
-        "num_statements": 82
+        "covered_lines": 27,
+        "missing_lines": 57,
+        "num_statements": 84
       }
     },
     "song_agent/application/program/http_routes/receiver_acceptance_change.py": {
       "summary": {
-        "covered_lines": 19,
+        "covered_lines": 20,
         "missing_lines": 45,
-        "num_statements": 64
+        "num_statements": 65
       }
     },
     "song_agent/application/program/http_routes/root.py": {
@@ -290,9 +346,9 @@
     },
     "song_agent/application/program/http_routes/vault.py": {
       "summary": {
-        "covered_lines": 13,
+        "covered_lines": 14,
         "missing_lines": 45,
-        "num_statements": 58
+        "num_statements": 59
       }
     },
     "song_agent/application/program/http_routes/vault_operations.py": {
@@ -304,16 +360,16 @@
     },
     "song_agent/application/program/policy_gate.py": {
       "summary": {
-        "covered_lines": 39,
+        "covered_lines": 47,
         "missing_lines": 2,
-        "num_statements": 41
+        "num_statements": 49
       }
     },
     "song_agent/application/program/service.py": {
       "summary": {
-        "covered_lines": 48,
+        "covered_lines": 30,
         "missing_lines": 3,
-        "num_statements": 51
+        "num_statements": 33
       }
     },
     "song_agent/application/release_signoff.py": {
@@ -325,9 +381,9 @@
     },
     "song_agent/architecture_guardrails.py": {
       "summary": {
-        "covered_lines": 340,
-        "missing_lines": 26,
-        "num_statements": 366
+        "covered_lines": 370,
+        "missing_lines": 20,
+        "num_statements": 390
       }
     },
     "song_agent/assets.py": {
@@ -493,23 +549,23 @@
     },
     "song_agent/capabilities/delivery.py": {
       "summary": {
-        "covered_lines": 6,
+        "covered_lines": 7,
         "missing_lines": 0,
-        "num_statements": 6
+        "num_statements": 7
       }
     },
     "song_agent/capabilities/model.py": {
       "summary": {
-        "covered_lines": 71,
-        "missing_lines": 0,
-        "num_statements": 71
+        "covered_lines": 73,
+        "missing_lines": 2,
+        "num_statements": 75
       }
     },
     "song_agent/capabilities/program.py": {
       "summary": {
-        "covered_lines": 5,
+        "covered_lines": 6,
         "missing_lines": 0,
-        "num_statements": 5
+        "num_statements": 6
       }
     },
     "song_agent/capabilities/quality.py": {
@@ -521,9 +577,9 @@
     },
     "song_agent/capabilities/registry.py": {
       "summary": {
-        "covered_lines": 34,
+        "covered_lines": 33,
         "missing_lines": 2,
-        "num_statements": 36
+        "num_statements": 35
       }
     },
     "song_agent/cli.py": {
@@ -612,9 +668,9 @@
     },
     "song_agent/domains/__init__.py": {
       "summary": {
-        "covered_lines": 2,
+        "covered_lines": 5,
         "missing_lines": 0,
-        "num_statements": 2
+        "num_statements": 5
       }
     },
     "song_agent/domains/creation/__init__.py": {
@@ -654,9 +710,9 @@
     },
     "song_agent/domains/creation/auth.py": {
       "summary": {
-        "covered_lines": 47,
-        "missing_lines": 5,
-        "num_statements": 52
+        "covered_lines": 3,
+        "missing_lines": 0,
+        "num_statements": 3
       }
     },
     "song_agent/domains/creation/batching.py": {
@@ -836,9 +892,9 @@
     },
     "song_agent/domains/creation/providers/mock.py": {
       "summary": {
-        "covered_lines": 97,
+        "covered_lines": 98,
         "missing_lines": 13,
-        "num_statements": 110
+        "num_statements": 111
       }
     },
     "song_agent/domains/creation/providers/openai_compatible.py": {
@@ -1032,9 +1088,9 @@
     },
     "song_agent/domains/delivery/release_export_manifest.py": {
       "summary": {
-        "covered_lines": 13,
+        "covered_lines": 20,
         "missing_lines": 0,
-        "num_statements": 13
+        "num_statements": 20
       }
     },
     "song_agent/domains/delivery/release_metadata.py": {
@@ -1121,6 +1177,13 @@
         "num_statements": 523
       }
     },
+    "song_agent/domains/legacy_documents.py": {
+      "summary": {
+        "covered_lines": 39,
+        "missing_lines": 5,
+        "num_statements": 44
+      }
+    },
     "song_agent/domains/program/__init__.py": {
       "summary": {
         "covered_lines": 3,
@@ -1130,8 +1193,8 @@
     },
     "song_agent/domains/program/model.py": {
       "summary": {
-        "covered_lines": 31,
-        "missing_lines": 1,
+        "covered_lines": 30,
+        "missing_lines": 2,
         "num_statements": 32
       }
     },
@@ -1249,9 +1312,9 @@
     },
     "song_agent/domains/program/unified_command_center_release_train_lifecycle.py": {
       "summary": {
-        "covered_lines": 325,
+        "covered_lines": 323,
         "missing_lines": 38,
-        "num_statements": 363
+        "num_statements": 361
       }
     },
     "song_agent/domains/program/unified_command_center_release_train_lifecycle_verifier.py": {
@@ -1361,9 +1424,9 @@
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py": {
       "summary": {
-        "covered_lines": 296,
+        "covered_lines": 301,
         "missing_lines": 18,
-        "num_statements": 314
+        "num_statements": 319
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_verifier.py": {
@@ -1389,9 +1452,9 @@
     },
     "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py": {
       "summary": {
-        "covered_lines": 214,
+        "covered_lines": 222,
         "missing_lines": 21,
-        "num_statements": 235
+        "num_statements": 243
       }
     },
     "song_agent/domains/program/unified_release_program_continuity_distribution.py": {
@@ -1984,8 +2047,8 @@
     },
     "song_agent/domains/studio/editor_review.py": {
       "summary": {
-        "covered_lines": 284,
-        "missing_lines": 66,
+        "covered_lines": 283,
+        "missing_lines": 67,
         "num_statements": 350
       }
     },
@@ -2005,8 +2068,8 @@
     },
     "song_agent/domains/studio/library_index.py": {
       "summary": {
-        "covered_lines": 362,
-        "missing_lines": 43,
+        "covered_lines": 361,
+        "missing_lines": 44,
         "num_statements": 405
       }
     },
@@ -2600,9 +2663,9 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py": {
       "summary": {
-        "covered_lines": 26,
+        "covered_lines": 27,
         "missing_lines": 0,
-        "num_statements": 26
+        "num_statements": 27
       }
     },
     "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_verifier.py": {
@@ -2726,8 +2789,8 @@
     },
     "song_agent/domains/trust/release_portfolio_governance_signoff.py": {
       "summary": {
-        "covered_lines": 455,
-        "missing_lines": 79,
+        "covered_lines": 456,
+        "missing_lines": 78,
         "num_statements": 534
       }
     },
@@ -3060,13 +3123,6 @@
         "num_statements": 2
       }
     },
-    "song_agent/interfaces/api/patching.py": {
-      "summary": {
-        "covered_lines": 7,
-        "missing_lines": 0,
-        "num_statements": 7
-      }
-    },
     "song_agent/interfaces/api/route_contexts/__init__.py": {
       "summary": {
         "covered_lines": 0,
@@ -3076,79 +3132,79 @@
     },
     "song_agent/interfaces/api/route_contexts/core.py": {
       "summary": {
-        "covered_lines": 115,
+        "covered_lines": 9,
         "missing_lines": 0,
-        "num_statements": 115
+        "num_statements": 9
       }
     },
     "song_agent/interfaces/api/route_contexts/creation.py": {
       "summary": {
-        "covered_lines": 93,
+        "covered_lines": 3,
         "missing_lines": 0,
-        "num_statements": 93
+        "num_statements": 3
       }
     },
     "song_agent/interfaces/api/route_contexts/delivery.py": {
       "summary": {
-        "covered_lines": 78,
+        "covered_lines": 3,
         "missing_lines": 0,
-        "num_statements": 78
+        "num_statements": 3
       }
     },
     "song_agent/interfaces/api/route_contexts/program.py": {
       "summary": {
-        "covered_lines": 26,
+        "covered_lines": 15,
         "missing_lines": 0,
-        "num_statements": 26
+        "num_statements": 15
       }
     },
     "song_agent/interfaces/api/route_contexts/program_ucc.py": {
       "summary": {
-        "covered_lines": 16,
+        "covered_lines": 14,
         "missing_lines": 0,
-        "num_statements": 16
+        "num_statements": 14
       }
     },
     "song_agent/interfaces/api/route_contexts/quality.py": {
       "summary": {
-        "covered_lines": 93,
+        "covered_lines": 3,
         "missing_lines": 0,
-        "num_statements": 93
+        "num_statements": 3
       }
     },
     "song_agent/interfaces/api/route_contexts/studio.py": {
       "summary": {
-        "covered_lines": 49,
+        "covered_lines": 3,
         "missing_lines": 0,
-        "num_statements": 49
+        "num_statements": 3
       }
     },
     "song_agent/interfaces/api/route_contexts/studio_dispatch.py": {
       "summary": {
-        "covered_lines": 102,
+        "covered_lines": 8,
         "missing_lines": 0,
-        "num_statements": 102
+        "num_statements": 8
       }
     },
     "song_agent/interfaces/api/route_contexts/trust.py": {
       "summary": {
-        "covered_lines": 49,
+        "covered_lines": 3,
         "missing_lines": 0,
-        "num_statements": 49
+        "num_statements": 3
       }
     },
     "song_agent/interfaces/api/route_contexts/trust_portfolio.py": {
       "summary": {
-        "covered_lines": 27,
+        "covered_lines": 3,
         "missing_lines": 0,
-        "num_statements": 27
+        "num_statements": 3
       }
     },
     "song_agent/interfaces/api/router.py": {
       "summary": {
-        "covered_lines": 37,
+        "covered_lines": 38,
         "missing_lines": 2,
-        "num_statements": 39
+        "num_statements": 40
       }
     },
     "song_agent/interfaces/api/routes/__init__.py": {
@@ -3160,9 +3216,9 @@
     },
     "song_agent/interfaces/api/routes/creation.py": {
       "summary": {
-        "covered_lines": 382,
+        "covered_lines": 381,
         "missing_lines": 66,
-        "num_statements": 448
+        "num_statements": 447
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/__init__.py": {
@@ -3174,9 +3230,9 @@
     },
     "song_agent/interfaces/api/routes/creation_parts/audition_context_pack.py": {
       "summary": {
-        "covered_lines": 152,
-        "missing_lines": 62,
-        "num_statements": 214
+        "covered_lines": 161,
+        "missing_lines": 57,
+        "num_statements": 218
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/batch.py": {
@@ -3202,16 +3258,16 @@
     },
     "song_agent/interfaces/api/routes/creation_parts/project_candidate_artifact.py": {
       "summary": {
-        "covered_lines": 146,
+        "covered_lines": 150,
         "missing_lines": 92,
-        "num_statements": 238
+        "num_statements": 242
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/project_candidate_groups_list.py": {
       "summary": {
-        "covered_lines": 135,
-        "missing_lines": 64,
-        "num_statements": 199
+        "covered_lines": 142,
+        "missing_lines": 65,
+        "num_statements": 207
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/project_edit.py": {
@@ -3230,9 +3286,16 @@
     },
     "song_agent/interfaces/api/routes/creation_parts/project_editor_audition_next_action.py": {
       "summary": {
-        "covered_lines": 87,
+        "covered_lines": 89,
         "missing_lines": 29,
-        "num_statements": 116
+        "num_statements": 118
+      }
+    },
+    "song_agent/interfaces/api/routes/creation_parts/project_editor_auditions.py": {
+      "summary": {
+        "covered_lines": 144,
+        "missing_lines": 41,
+        "num_statements": 185
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/project_final_export.py": {
@@ -3244,51 +3307,72 @@
     },
     "song_agent/interfaces/api/routes/creation_parts/project_mix.py": {
       "summary": {
-        "covered_lines": 170,
-        "missing_lines": 156,
-        "num_statements": 326
+        "covered_lines": 15,
+        "missing_lines": 13,
+        "num_statements": 28
+      }
+    },
+    "song_agent/interfaces/api/routes/creation_parts/project_mix_operations.py": {
+      "summary": {
+        "covered_lines": 54,
+        "missing_lines": 76,
+        "num_statements": 130
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/project_review_sprint.py": {
       "summary": {
-        "covered_lines": 241,
-        "missing_lines": 85,
-        "num_statements": 326
+        "covered_lines": 213,
+        "missing_lines": 64,
+        "num_statements": 277
+      }
+    },
+    "song_agent/interfaces/api/routes/creation_parts/project_review_sprint_action_queues.py": {
+      "summary": {
+        "covered_lines": 40,
+        "missing_lines": 21,
+        "num_statements": 61
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/project_review_task.py": {
       "summary": {
-        "covered_lines": 188,
-        "missing_lines": 69,
-        "num_statements": 257
+        "covered_lines": 151,
+        "missing_lines": 38,
+        "num_statements": 189
+      }
+    },
+    "song_agent/interfaces/api/routes/creation_parts/project_review_task_reports_lifecycle.py": {
+      "summary": {
+        "covered_lines": 44,
+        "missing_lines": 18,
+        "num_statements": 62
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/project_section_template_create.py": {
       "summary": {
-        "covered_lines": 78,
+        "covered_lines": 80,
         "missing_lines": 58,
-        "num_statements": 136
+        "num_statements": 138
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/provider.py": {
       "summary": {
-        "covered_lines": 137,
+        "covered_lines": 144,
         "missing_lines": 96,
-        "num_statements": 233
+        "num_statements": 240
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/reference.py": {
       "summary": {
-        "covered_lines": 178,
+        "covered_lines": 177,
         "missing_lines": 100,
-        "num_statements": 278
+        "num_statements": 277
       }
     },
     "song_agent/interfaces/api/routes/creation_parts/save_review_sprint_recommendation_context_pack.py": {
       "summary": {
-        "covered_lines": 122,
-        "missing_lines": 22,
-        "num_statements": 144
+        "covered_lines": 118,
+        "missing_lines": 18,
+        "num_statements": 136
       }
     },
     "song_agent/interfaces/api/routes/delivery.py": {
@@ -3314,9 +3398,9 @@
     },
     "song_agent/interfaces/api/routes/delivery_parts/distribution_profiles.py": {
       "summary": {
-        "covered_lines": 116,
-        "missing_lines": 58,
-        "num_statements": 174
+        "covered_lines": 129,
+        "missing_lines": 60,
+        "num_statements": 189
       }
     },
     "song_agent/interfaces/api/routes/delivery_parts/get_or_refresh_distribution_qa.py": {
@@ -3328,9 +3412,9 @@
     },
     "song_agent/interfaces/api/routes/delivery_parts/get_or_refresh_submission_qa.py": {
       "summary": {
-        "covered_lines": 37,
+        "covered_lines": 36,
         "missing_lines": 5,
-        "num_statements": 42
+        "num_statements": 41
       }
     },
     "song_agent/interfaces/api/routes/delivery_parts/release.py": {
@@ -3363,9 +3447,16 @@
     },
     "song_agent/interfaces/api/routes/maintenance.py": {
       "summary": {
-        "covered_lines": 89,
-        "missing_lines": 34,
-        "num_statements": 123
+        "covered_lines": 55,
+        "missing_lines": 15,
+        "num_statements": 70
+      }
+    },
+    "song_agent/interfaces/api/routes/maintenance_operations.py": {
+      "summary": {
+        "covered_lines": 45,
+        "missing_lines": 20,
+        "num_statements": 65
       }
     },
     "song_agent/interfaces/api/routes/manifest.py": {
@@ -3377,9 +3468,9 @@
     },
     "song_agent/interfaces/api/routes/program.py": {
       "summary": {
-        "covered_lines": 47,
+        "covered_lines": 46,
         "missing_lines": 14,
-        "num_statements": 61
+        "num_statements": 60
       }
     },
     "song_agent/interfaces/api/routes/program_parts/__init__.py": {
@@ -3391,9 +3482,9 @@
     },
     "song_agent/interfaces/api/routes/program_parts/program_application.py": {
       "summary": {
-        "covered_lines": 101,
-        "missing_lines": 3,
-        "num_statements": 104
+        "covered_lines": 7,
+        "missing_lines": 0,
+        "num_statements": 7
       }
     },
     "song_agent/interfaces/api/routes/program_parts/unified_command_center_evidence_from_payload.py": {
@@ -3405,16 +3496,16 @@
     },
     "song_agent/interfaces/api/routes/program_parts/unified_command_center_release_trains.py": {
       "summary": {
-        "covered_lines": 165,
-        "missing_lines": 171,
-        "num_statements": 336
+        "covered_lines": 182,
+        "missing_lines": 173,
+        "num_statements": 355
       }
     },
     "song_agent/interfaces/api/routes/program_registry.py": {
       "summary": {
-        "covered_lines": 26,
+        "covered_lines": 27,
         "missing_lines": 0,
-        "num_statements": 26
+        "num_statements": 27
       }
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/__init__.py": {
@@ -3426,37 +3517,37 @@
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/boards.py": {
       "summary": {
-        "covered_lines": 8,
+        "covered_lines": 9,
         "missing_lines": 67,
-        "num_statements": 75
+        "num_statements": 76
       }
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/core.py": {
       "summary": {
-        "covered_lines": 46,
-        "missing_lines": 40,
-        "num_statements": 86
+        "covered_lines": 55,
+        "missing_lines": 25,
+        "num_statements": 80
       }
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/drifts.py": {
       "summary": {
-        "covered_lines": 50,
-        "missing_lines": 37,
-        "num_statements": 87
+        "covered_lines": 60,
+        "missing_lines": 26,
+        "num_statements": 86
       }
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/evidence_detail.py": {
       "summary": {
-        "covered_lines": 52,
-        "missing_lines": 51,
-        "num_statements": 103
+        "covered_lines": 64,
+        "missing_lines": 42,
+        "num_statements": 106
       }
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/evidence_root.py": {
       "summary": {
-        "covered_lines": 13,
+        "covered_lines": 14,
         "missing_lines": 5,
-        "num_statements": 18
+        "num_statements": 19
       }
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/handoff.py": {
@@ -3468,9 +3559,9 @@
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/reviews.py": {
       "summary": {
-        "covered_lines": 35,
-        "missing_lines": 31,
-        "num_statements": 66
+        "covered_lines": 36,
+        "missing_lines": 33,
+        "num_statements": 69
       }
     },
     "song_agent/interfaces/api/routes/program_ucc_parts/root.py": {
@@ -3496,37 +3587,37 @@
     },
     "song_agent/interfaces/api/routes/quality_parts/acceptance.py": {
       "summary": {
-        "covered_lines": 179,
-        "missing_lines": 149,
+        "covered_lines": 178,
+        "missing_lines": 150,
         "num_statements": 328
       }
     },
     "song_agent/interfaces/api/routes/quality_parts/acceptance_analytics_refresh.py": {
       "summary": {
-        "covered_lines": 138,
+        "covered_lines": 140,
         "missing_lines": 156,
-        "num_statements": 294
+        "num_statements": 296
       }
     },
     "song_agent/interfaces/api/routes/quality_parts/acceptance_fix_sprint.py": {
       "summary": {
-        "covered_lines": 135,
+        "covered_lines": 138,
         "missing_lines": 134,
-        "num_statements": 269
+        "num_statements": 272
       }
     },
     "song_agent/interfaces/api/routes/quality_parts/acceptance_suites.py": {
       "summary": {
-        "covered_lines": 224,
-        "missing_lines": 56,
-        "num_statements": 280
+        "covered_lines": 155,
+        "missing_lines": 54,
+        "num_statements": 209
       }
     },
     "song_agent/interfaces/api/routes/quality_parts/audio_fix_sprint.py": {
       "summary": {
-        "covered_lines": 154,
+        "covered_lines": 153,
         "missing_lines": 153,
-        "num_statements": 307
+        "num_statements": 306
       }
     },
     "song_agent/interfaces/api/routes/quality_parts/audio_quality_actions.py": {
@@ -3552,16 +3643,16 @@
     },
     "song_agent/interfaces/api/routes/quality_parts/release_acceptance_gate.py": {
       "summary": {
-        "covered_lines": 202,
+        "covered_lines": 203,
         "missing_lines": 71,
-        "num_statements": 273
+        "num_statements": 274
       }
     },
     "song_agent/interfaces/api/routes/quality_parts/release_audio_campaign_plan.py": {
       "summary": {
-        "covered_lines": 111,
+        "covered_lines": 96,
         "missing_lines": 117,
-        "num_statements": 228
+        "num_statements": 213
       }
     },
     "song_agent/interfaces/api/routes/quality_parts/release_audio_command_center.py": {
@@ -3608,16 +3699,16 @@
     },
     "song_agent/interfaces/api/routes/quality_parts/render_editor_preview_audio.py": {
       "summary": {
-        "covered_lines": 36,
+        "covered_lines": 37,
         "missing_lines": 4,
-        "num_statements": 40
+        "num_statements": 41
       }
     },
     "song_agent/interfaces/api/routes/studio.py": {
       "summary": {
-        "covered_lines": 52,
+        "covered_lines": 51,
         "missing_lines": 20,
-        "num_statements": 72
+        "num_statements": 71
       }
     },
     "song_agent/interfaces/api/routes/studio_dispatch_parts/__init__.py": {
@@ -3657,9 +3748,9 @@
     },
     "song_agent/interfaces/api/routes/studio_dispatch_parts/jobs.py": {
       "summary": {
-        "covered_lines": 33,
+        "covered_lines": 35,
         "missing_lines": 4,
-        "num_statements": 37
+        "num_statements": 39
       }
     },
     "song_agent/interfaces/api/routes/studio_dispatch_parts/library.py": {
@@ -3671,9 +3762,9 @@
     },
     "song_agent/interfaces/api/routes/studio_dispatch_parts/resources.py": {
       "summary": {
-        "covered_lines": 35,
+        "covered_lines": 36,
         "missing_lines": 4,
-        "num_statements": 39
+        "num_statements": 40
       }
     },
     "song_agent/interfaces/api/routes/studio_dispatch_parts/system.py": {
@@ -3692,44 +3783,51 @@
     },
     "song_agent/interfaces/api/routes/studio_parts/apply_review_task_candidate.py": {
       "summary": {
-        "covered_lines": 191,
-        "missing_lines": 37,
-        "num_statements": 228
+        "covered_lines": 176,
+        "missing_lines": 32,
+        "num_statements": 208
       }
     },
     "song_agent/interfaces/api/routes/studio_parts/edit_presets.py": {
       "summary": {
-        "covered_lines": 150,
+        "covered_lines": 151,
         "missing_lines": 47,
-        "num_statements": 197
+        "num_statements": 198
       }
     },
     "song_agent/interfaces/api/routes/studio_parts/get_or_refresh_sprint_judge_summary.py": {
       "summary": {
-        "covered_lines": 143,
+        "covered_lines": 148,
         "missing_lines": 61,
-        "num_statements": 204
+        "num_statements": 209
       }
     },
     "song_agent/interfaces/api/routes/studio_parts/review_sprint_action_queue.py": {
       "summary": {
-        "covered_lines": 143,
+        "covered_lines": 136,
         "missing_lines": 30,
-        "num_statements": 173
+        "num_statements": 166
+      }
+    },
+    "song_agent/interfaces/api/routes/studio_parts/review_sprint_action_queue_completion.py": {
+      "summary": {
+        "covered_lines": 14,
+        "missing_lines": 0,
+        "num_statements": 14
       }
     },
     "song_agent/interfaces/api/routes/studio_parts/send_html.py": {
       "summary": {
-        "covered_lines": 48,
-        "missing_lines": 3,
-        "num_statements": 51
+        "covered_lines": 74,
+        "missing_lines": 7,
+        "num_statements": 81
       }
     },
     "song_agent/interfaces/api/routes/trust.py": {
       "summary": {
-        "covered_lines": 67,
+        "covered_lines": 66,
         "missing_lines": 6,
-        "num_statements": 73
+        "num_statements": 72
       }
     },
     "song_agent/interfaces/api/routes/trust_parts/__init__.py": {
@@ -3741,23 +3839,23 @@
     },
     "song_agent/interfaces/api/routes/trust_parts/public_trust_center_acceptance_board.py": {
       "summary": {
-        "covered_lines": 144,
+        "covered_lines": 152,
         "missing_lines": 50,
-        "num_statements": 194
+        "num_statements": 202
       }
     },
     "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py": {
       "summary": {
-        "covered_lines": 202,
+        "covered_lines": 214,
         "missing_lines": 90,
-        "num_statements": 292
+        "num_statements": 304
       }
     },
     "song_agent/interfaces/api/routes/trust_parts/release_portfolio_governance_queues.py": {
       "summary": {
-        "covered_lines": 143,
+        "covered_lines": 155,
         "missing_lines": 65,
-        "num_statements": 208
+        "num_statements": 220
       }
     },
     "song_agent/interfaces/api/routes/trust_parts/trust_operations.py": {
@@ -3783,9 +3881,9 @@
     },
     "song_agent/interfaces/api/routes/trust_parts/trust_operations_knowledge.py": {
       "summary": {
-        "covered_lines": 157,
+        "covered_lines": 163,
         "missing_lines": 175,
-        "num_statements": 332
+        "num_statements": 338
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/__init__.py": {
@@ -3797,9 +3895,9 @@
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/accepted_evidence.py": {
       "summary": {
-        "covered_lines": 53,
+        "covered_lines": 54,
         "missing_lines": 16,
-        "num_statements": 69
+        "num_statements": 70
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/acknowledgement.py": {
@@ -3811,30 +3909,30 @@
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/attestation.py": {
       "summary": {
-        "covered_lines": 46,
+        "covered_lines": 47,
         "missing_lines": 12,
-        "num_statements": 58
+        "num_statements": 59
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/audit.py": {
       "summary": {
-        "covered_lines": 49,
+        "covered_lines": 50,
         "missing_lines": 14,
-        "num_statements": 63
+        "num_statements": 64
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/detail.py": {
       "summary": {
-        "covered_lines": 38,
+        "covered_lines": 39,
         "missing_lines": 10,
-        "num_statements": 48
+        "num_statements": 49
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/downloads.py": {
       "summary": {
-        "covered_lines": 80,
-        "missing_lines": 22,
-        "num_statements": 102
+        "covered_lines": 87,
+        "missing_lines": 9,
+        "num_statements": 96
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/final_actions.py": {
@@ -3846,23 +3944,23 @@
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/final_board.py": {
       "summary": {
-        "covered_lines": 56,
-        "missing_lines": 48,
-        "num_statements": 104
+        "covered_lines": 78,
+        "missing_lines": 57,
+        "num_statements": 135
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/portal.py": {
       "summary": {
-        "covered_lines": 48,
+        "covered_lines": 49,
         "missing_lines": 12,
-        "num_statements": 60
+        "num_statements": 61
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/portal_review.py": {
       "summary": {
-        "covered_lines": 64,
-        "missing_lines": 36,
-        "num_statements": 100
+        "covered_lines": 65,
+        "missing_lines": 37,
+        "num_statements": 102
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/registry.py": {
@@ -3874,9 +3972,9 @@
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/reviewer.py": {
       "summary": {
-        "covered_lines": 39,
+        "covered_lines": 40,
         "missing_lines": 12,
-        "num_statements": 51
+        "num_statements": 52
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/root.py": {
@@ -3888,23 +3986,23 @@
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/transparency.py": {
       "summary": {
-        "covered_lines": 60,
+        "covered_lines": 61,
         "missing_lines": 16,
-        "num_statements": 76
+        "num_statements": 77
       }
     },
     "song_agent/interfaces/api/routes/trust_portfolio_parts/vault.py": {
       "summary": {
-        "covered_lines": 39,
+        "covered_lines": 40,
         "missing_lines": 12,
-        "num_statements": 51
+        "num_statements": 52
       }
     },
     "song_agent/interfaces/api/runtime.py": {
       "summary": {
-        "covered_lines": 35,
-        "missing_lines": 1,
-        "num_statements": 36
+        "covered_lines": 30,
+        "missing_lines": 0,
+        "num_statements": 30
       }
     },
     "song_agent/interfaces/api/runtime_parts/__init__.py": {
@@ -3919,13 +4017,6 @@
         "covered_lines": 8,
         "missing_lines": 0,
         "num_statements": 8
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/batch_runner_context.py": {
-      "summary": {
-        "covered_lines": 35,
-        "missing_lines": 0,
-        "num_statements": 35
       }
     },
     "song_agent/interfaces/api/runtime_parts/batch_runner_parts/__init__.py": {
@@ -3944,23 +4035,23 @@
     },
     "song_agent/interfaces/api/runtime_parts/batch_runner_parts/recover_existing_batches.py": {
       "summary": {
-        "covered_lines": 137,
+        "covered_lines": 138,
         "missing_lines": 38,
-        "num_statements": 175
+        "num_statements": 176
       }
     },
     "song_agent/interfaces/api/runtime_parts/batch_runner_parts/render_stems.py": {
       "summary": {
         "covered_lines": 139,
-        "missing_lines": 36,
-        "num_statements": 175
+        "missing_lines": 37,
+        "num_statements": 176
       }
     },
     "song_agent/interfaces/api/runtime_parts/batch_runner_parts/sync_running_items.py": {
       "summary": {
-        "covered_lines": 171,
+        "covered_lines": 175,
         "missing_lines": 46,
-        "num_statements": 217
+        "num_statements": 221
       }
     },
     "song_agent/interfaces/api/runtime_parts/core.py": {
@@ -3968,48 +4059,6 @@
         "covered_lines": 8,
         "missing_lines": 0,
         "num_statements": 8
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/dependencies/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/dependencies/core_dependencies.py": {
-      "summary": {
-        "covered_lines": 67,
-        "missing_lines": 0,
-        "num_statements": 67
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/dependencies/creation_quality_dependencies.py": {
-      "summary": {
-        "covered_lines": 45,
-        "missing_lines": 0,
-        "num_statements": 45
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/dependencies/delivery_quality_dependencies.py": {
-      "summary": {
-        "covered_lines": 37,
-        "missing_lines": 0,
-        "num_statements": 37
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/dependencies/program_dependencies.py": {
-      "summary": {
-        "covered_lines": 41,
-        "missing_lines": 0,
-        "num_statements": 41
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/dependencies/trust_dependencies.py": {
-      "summary": {
-        "covered_lines": 41,
-        "missing_lines": 0,
-        "num_statements": 41
       }
     },
     "song_agent/interfaces/api/runtime_parts/helpers/__init__.py": {
@@ -4028,9 +4077,9 @@
     },
     "song_agent/interfaces/api/runtime_parts/helpers/api_info.py": {
       "summary": {
-        "covered_lines": 108,
+        "covered_lines": 112,
         "missing_lines": 16,
-        "num_statements": 124
+        "num_statements": 128
       }
     },
     "song_agent/interfaces/api/runtime_parts/helpers/context_pack.py": {
@@ -4042,16 +4091,16 @@
     },
     "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py": {
       "summary": {
-        "covered_lines": 88,
+        "covered_lines": 95,
         "missing_lines": 22,
-        "num_statements": 110
+        "num_statements": 117
       }
     },
     "song_agent/interfaces/api/runtime_parts/helpers/job_artifacts.py": {
       "summary": {
-        "covered_lines": 182,
-        "missing_lines": 51,
-        "num_statements": 233
+        "covered_lines": 183,
+        "missing_lines": 52,
+        "num_statements": 235
       }
     },
     "song_agent/interfaces/api/runtime_parts/job_store.py": {
@@ -4059,13 +4108,6 @@
         "covered_lines": 9,
         "missing_lines": 0,
         "num_statements": 9
-      }
-    },
-    "song_agent/interfaces/api/runtime_parts/job_store_context.py": {
-      "summary": {
-        "covered_lines": 33,
-        "missing_lines": 0,
-        "num_statements": 33
       }
     },
     "song_agent/interfaces/api/runtime_parts/job_store_parts/__init__.py": {
@@ -4084,9 +4126,9 @@
     },
     "song_agent/interfaces/api/runtime_parts/job_store_parts/job.py": {
       "summary": {
-        "covered_lines": 73,
+        "covered_lines": 77,
         "missing_lines": 14,
-        "num_statements": 87
+        "num_statements": 91
       }
     },
     "song_agent/interfaces/api/runtime_parts/job_store_parts/load_existing_jobs.py": {
@@ -4105,16 +4147,142 @@
     },
     "song_agent/interfaces/api/runtime_parts/job_store_parts/retry_job.py": {
       "summary": {
-        "covered_lines": 153,
+        "covered_lines": 154,
         "missing_lines": 28,
-        "num_statements": 181
+        "num_statements": 182
       }
     },
     "song_agent/interfaces/api/server.py": {
       "summary": {
-        "covered_lines": 174,
-        "missing_lines": 19,
-        "num_statements": 193
+        "covered_lines": 166,
+        "missing_lines": 15,
+        "num_statements": 181
+      }
+    },
+    "song_agent/interfaces/bootstrap/__init__.py": {
+      "summary": {
+        "covered_lines": 8,
+        "missing_lines": 0,
+        "num_statements": 8
+      }
+    },
+    "song_agent/interfaces/bootstrap/api/core.py": {
+      "summary": {
+        "covered_lines": 68,
+        "missing_lines": 0,
+        "num_statements": 68
+      }
+    },
+    "song_agent/interfaces/bootstrap/api/creation_quality.py": {
+      "summary": {
+        "covered_lines": 62,
+        "missing_lines": 0,
+        "num_statements": 62
+      }
+    },
+    "song_agent/interfaces/bootstrap/api/delivery_quality.py": {
+      "summary": {
+        "covered_lines": 37,
+        "missing_lines": 0,
+        "num_statements": 37
+      }
+    },
+    "song_agent/interfaces/bootstrap/api/program.py": {
+      "summary": {
+        "covered_lines": 54,
+        "missing_lines": 0,
+        "num_statements": 54
+      }
+    },
+    "song_agent/interfaces/bootstrap/api/program_lifecycle_capabilities.py": {
+      "summary": {
+        "covered_lines": 22,
+        "missing_lines": 0,
+        "num_statements": 22
+      }
+    },
+    "song_agent/interfaces/bootstrap/api/program_verifier_capabilities.py": {
+      "summary": {
+        "covered_lines": 18,
+        "missing_lines": 2,
+        "num_statements": 20
+      }
+    },
+    "song_agent/interfaces/bootstrap/api/trust.py": {
+      "summary": {
+        "covered_lines": 41,
+        "missing_lines": 0,
+        "num_statements": 41
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/creation.py": {
+      "summary": {
+        "covered_lines": 23,
+        "missing_lines": 0,
+        "num_statements": 23
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/delivery.py": {
+      "summary": {
+        "covered_lines": 55,
+        "missing_lines": 0,
+        "num_statements": 55
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/maintenance.py": {
+      "summary": {
+        "covered_lines": 16,
+        "missing_lines": 0,
+        "num_statements": 16
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/program.py": {
+      "summary": {
+        "covered_lines": 47,
+        "missing_lines": 0,
+        "num_statements": 47
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/quality.py": {
+      "summary": {
+        "covered_lines": 82,
+        "missing_lines": 0,
+        "num_statements": 82
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/release_check.py": {
+      "summary": {
+        "covered_lines": 20,
+        "missing_lines": 0,
+        "num_statements": 20
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/stores.py": {
+      "summary": {
+        "covered_lines": 170,
+        "missing_lines": 0,
+        "num_statements": 170
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/trust.py": {
+      "summary": {
+        "covered_lines": 68,
+        "missing_lines": 0,
+        "num_statements": 68
+      }
+    },
+    "song_agent/interfaces/bootstrap/cli/trust_verification.py": {
+      "summary": {
+        "covered_lines": 60,
+        "missing_lines": 0,
+        "num_statements": 60
+      }
+    },
+    "song_agent/interfaces/bootstrap/maintenance.py": {
+      "summary": {
+        "covered_lines": 8,
+        "missing_lines": 0,
+        "num_statements": 8
       }
     },
     "song_agent/interfaces/cli/__init__.py": {
@@ -4126,16 +4294,9 @@
     },
     "song_agent/interfaces/cli/app.py": {
       "summary": {
-        "covered_lines": 33,
+        "covered_lines": 32,
         "missing_lines": 0,
-        "num_statements": 33
-      }
-    },
-    "song_agent/interfaces/cli/bindings.py": {
-      "summary": {
-        "covered_lines": 294,
-        "missing_lines": 1,
-        "num_statements": 295
+        "num_statements": 32
       }
     },
     "song_agent/interfaces/cli/commands/__init__.py": {
@@ -4147,9 +4308,9 @@
     },
     "song_agent/interfaces/cli/commands/creation.py": {
       "summary": {
-        "covered_lines": 15,
+        "covered_lines": 7,
         "missing_lines": 0,
-        "num_statements": 15
+        "num_statements": 7
       }
     },
     "song_agent/interfaces/cli/commands/creation_parts/__init__.py": {
@@ -4159,13 +4320,6 @@
         "num_statements": 0
       }
     },
-    "song_agent/interfaces/cli/commands/creation_parts/cross_domain_adapters.py": {
-      "summary": {
-        "covered_lines": 117,
-        "missing_lines": 109,
-        "num_statements": 226
-      }
-    },
     "song_agent/interfaces/cli/commands/creation_parts/dependencies.py": {
       "summary": {
         "covered_lines": 4,
@@ -4173,46 +4327,25 @@
         "num_statements": 4
       }
     },
-    "song_agent/interfaces/cli/commands/creation_parts/dependency_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/commands/creation_parts/dependency_parts/dependency_catalog.py": {
-      "summary": {
-        "covered_lines": 24,
-        "missing_lines": 0,
-        "num_statements": 24
-      }
-    },
     "song_agent/interfaces/cli/commands/creation_parts/generation_commands_and_presenter_adapters.py": {
       "summary": {
-        "covered_lines": 86,
-        "missing_lines": 84,
-        "num_statements": 170
-      }
-    },
-    "song_agent/interfaces/cli/commands/creation_parts/program_trust_parser_adapters.py": {
-      "summary": {
-        "covered_lines": 117,
-        "missing_lines": 109,
-        "num_statements": 226
+        "covered_lines": 51,
+        "missing_lines": 50,
+        "num_statements": 101
       }
     },
     "song_agent/interfaces/cli/commands/creation_parts/verify_unified_command_center_continuous_review.py": {
       "summary": {
-        "covered_lines": 34,
+        "covered_lines": 36,
         "missing_lines": 62,
-        "num_statements": 96
+        "num_statements": 98
       }
     },
     "song_agent/interfaces/cli/commands/delivery.py": {
       "summary": {
-        "covered_lines": 19,
+        "covered_lines": 10,
         "missing_lines": 0,
-        "num_statements": 19
+        "num_statements": 10
       }
     },
     "song_agent/interfaces/cli/commands/delivery_parts/__init__.py": {
@@ -4222,13 +4355,6 @@
         "num_statements": 0
       }
     },
-    "song_agent/interfaces/cli/commands/delivery_parts/cross_domain_adapters.py": {
-      "summary": {
-        "covered_lines": 117,
-        "missing_lines": 109,
-        "num_statements": 226
-      }
-    },
     "song_agent/interfaces/cli/commands/delivery_parts/dependencies.py": {
       "summary": {
         "covered_lines": 4,
@@ -4236,25 +4362,11 @@
         "num_statements": 4
       }
     },
-    "song_agent/interfaces/cli/commands/delivery_parts/dependency_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/commands/delivery_parts/dependency_parts/dependency_catalog.py": {
-      "summary": {
-        "covered_lines": 56,
-        "missing_lines": 0,
-        "num_statements": 56
-      }
-    },
     "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py": {
       "summary": {
-        "covered_lines": 19,
+        "covered_lines": 20,
         "missing_lines": 231,
-        "num_statements": 250
+        "num_statements": 251
       }
     },
     "song_agent/interfaces/cli/commands/delivery_parts/release_train_handoff_payload_from_args.py": {
@@ -4266,30 +4378,30 @@
     },
     "song_agent/interfaces/cli/commands/delivery_parts/verify_release.py": {
       "summary": {
-        "covered_lines": 72,
+        "covered_lines": 73,
         "missing_lines": 98,
-        "num_statements": 170
+        "num_statements": 171
       }
     },
     "song_agent/interfaces/cli/commands/delivery_parts/verify_release_and_adapters.py": {
       "summary": {
-        "covered_lines": 113,
-        "missing_lines": 170,
-        "num_statements": 283
+        "covered_lines": 80,
+        "missing_lines": 141,
+        "num_statements": 221
       }
     },
     "song_agent/interfaces/cli/commands/delivery_parts/verify_unified_release_program_operations.py": {
       "summary": {
-        "covered_lines": 24,
+        "covered_lines": 25,
         "missing_lines": 125,
-        "num_statements": 149
+        "num_statements": 150
       }
     },
     "song_agent/interfaces/cli/commands/maintenance.py": {
       "summary": {
-        "covered_lines": 13,
+        "covered_lines": 10,
         "missing_lines": 0,
-        "num_statements": 13
+        "num_statements": 10
       }
     },
     "song_agent/interfaces/cli/commands/maintenance_parts/__init__.py": {
@@ -4299,13 +4411,6 @@
         "num_statements": 0
       }
     },
-    "song_agent/interfaces/cli/commands/maintenance_parts/cross_domain_adapters.py": {
-      "summary": {
-        "covered_lines": 118,
-        "missing_lines": 108,
-        "num_statements": 226
-      }
-    },
     "song_agent/interfaces/cli/commands/maintenance_parts/dependencies.py": {
       "summary": {
         "covered_lines": 4,
@@ -4313,46 +4418,25 @@
         "num_statements": 4
       }
     },
-    "song_agent/interfaces/cli/commands/maintenance_parts/dependency_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/commands/maintenance_parts/dependency_parts/dependency_catalog.py": {
-      "summary": {
-        "covered_lines": 17,
-        "missing_lines": 0,
-        "num_statements": 17
-      }
-    },
     "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py": {
       "summary": {
-        "covered_lines": 83,
-        "missing_lines": 179,
-        "num_statements": 262
-      }
-    },
-    "song_agent/interfaces/cli/commands/maintenance_parts/program_parser_adapters.py": {
-      "summary": {
-        "covered_lines": 116,
-        "missing_lines": 110,
-        "num_statements": 226
+        "covered_lines": 55,
+        "missing_lines": 151,
+        "num_statements": 206
       }
     },
     "song_agent/interfaces/cli/commands/program.py": {
       "summary": {
-        "covered_lines": 35,
+        "covered_lines": 20,
         "missing_lines": 0,
-        "num_statements": 35
+        "num_statements": 20
       }
     },
     "song_agent/interfaces/cli/commands/program_context.py": {
       "summary": {
-        "covered_lines": 21,
+        "covered_lines": 19,
         "missing_lines": 7,
-        "num_statements": 28
+        "num_statements": 26
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/__init__.py": {
@@ -4369,32 +4453,18 @@
         "num_statements": 4
       }
     },
-    "song_agent/interfaces/cli/commands/program_parts/dependency_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/commands/program_parts/dependency_parts/dependency_catalog.py": {
-      "summary": {
-        "covered_lines": 48,
-        "missing_lines": 0,
-        "num_statements": 48
-      }
-    },
     "song_agent/interfaces/cli/commands/program_parts/program_component_and_cross_domain_adapters.py": {
       "summary": {
-        "covered_lines": 118,
-        "missing_lines": 108,
-        "num_statements": 226
+        "covered_lines": 7,
+        "missing_lines": 1,
+        "num_statements": 8
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/program_evidence_args_and_adapters.py": {
       "summary": {
-        "covered_lines": 55,
-        "missing_lines": 173,
-        "num_statements": 228
+        "covered_lines": 5,
+        "missing_lines": 127,
+        "num_statements": 132
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_command_center.py": {
@@ -4413,9 +4483,9 @@
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_command_center_release_train_change_control_command.py": {
       "summary": {
-        "covered_lines": 14,
+        "covered_lines": 16,
         "missing_lines": 175,
-        "num_statements": 189
+        "num_statements": 191
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_command_center_reviewer_decision_board.py": {
@@ -4427,16 +4497,16 @@
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_acceptance_change.py": {
       "summary": {
-        "covered_lines": 19,
-        "missing_lines": 52,
-        "num_statements": 71
+        "covered_lines": 21,
+        "missing_lines": 55,
+        "num_statements": 76
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_acceptance_command.py": {
       "summary": {
-        "covered_lines": 11,
-        "missing_lines": 202,
-        "num_statements": 213
+        "covered_lines": 14,
+        "missing_lines": 205,
+        "num_statements": 219
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_command_center_acceptance_change.py": {
@@ -4448,16 +4518,16 @@
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_command_center_acceptance_change_command.py": {
       "summary": {
-        "covered_lines": 50,
-        "missing_lines": 225,
-        "num_statements": 275
+        "covered_lines": 54,
+        "missing_lines": 226,
+        "num_statements": 280
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_release_program_handoff_command.py": {
       "summary": {
-        "covered_lines": 12,
-        "missing_lines": 215,
-        "num_statements": 227
+        "covered_lines": 18,
+        "missing_lines": 241,
+        "num_statements": 259
       }
     },
     "song_agent/interfaces/cli/commands/program_parts/unified_release_program_operations.py": {
@@ -4476,9 +4546,9 @@
     },
     "song_agent/interfaces/cli/commands/quality.py": {
       "summary": {
-        "covered_lines": 35,
+        "covered_lines": 17,
         "missing_lines": 0,
-        "num_statements": 35
+        "num_statements": 17
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/__init__.py": {
@@ -4490,9 +4560,9 @@
     },
     "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py": {
       "summary": {
-        "covered_lines": 187,
+        "covered_lines": 188,
         "missing_lines": 43,
-        "num_statements": 230
+        "num_statements": 231
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/audio_fix_sprint.py": {
@@ -4511,16 +4581,9 @@
     },
     "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py": {
       "summary": {
-        "covered_lines": 172,
-        "missing_lines": 70,
-        "num_statements": 242
-      }
-    },
-    "song_agent/interfaces/cli/commands/quality_parts/cross_domain_adapters.py": {
-      "summary": {
-        "covered_lines": 116,
-        "missing_lines": 110,
-        "num_statements": 226
+        "covered_lines": 98,
+        "missing_lines": 0,
+        "num_statements": 98
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/dependencies.py": {
@@ -4530,39 +4593,25 @@
         "num_statements": 4
       }
     },
-    "song_agent/interfaces/cli/commands/quality_parts/dependency_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/commands/quality_parts/dependency_parts/dependency_catalog.py": {
-      "summary": {
-        "covered_lines": 83,
-        "missing_lines": 0,
-        "num_statements": 83
-      }
-    },
     "song_agent/interfaces/cli/commands/quality_parts/planning_rule_governance.py": {
       "summary": {
-        "covered_lines": 94,
+        "covered_lines": 96,
         "missing_lines": 26,
-        "num_statements": 120
+        "num_statements": 122
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/planning_ruleset.py": {
       "summary": {
-        "covered_lines": 100,
-        "missing_lines": 169,
-        "num_statements": 269
+        "covered_lines": 105,
+        "missing_lines": 170,
+        "num_statements": 275
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/release_audio_command_center_command.py": {
       "summary": {
-        "covered_lines": 100,
-        "missing_lines": 155,
-        "num_statements": 255
+        "covered_lines": 105,
+        "missing_lines": 160,
+        "num_statements": 265
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/release_audio_quality_actions.py": {
@@ -4574,23 +4623,23 @@
     },
     "song_agent/interfaces/cli/commands/quality_parts/release_audio_regression_command.py": {
       "summary": {
-        "covered_lines": 11,
+        "covered_lines": 12,
         "missing_lines": 188,
-        "num_statements": 199
+        "num_statements": 200
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py": {
       "summary": {
-        "covered_lines": 124,
+        "covered_lines": 126,
         "missing_lines": 149,
-        "num_statements": 273
+        "num_statements": 275
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/verify_audio_campaign.py": {
       "summary": {
-        "covered_lines": 81,
+        "covered_lines": 82,
         "missing_lines": 77,
-        "num_statements": 158
+        "num_statements": 159
       }
     },
     "song_agent/interfaces/cli/commands/quality_parts/verify_release_audio_certification.py": {
@@ -4602,16 +4651,16 @@
     },
     "song_agent/interfaces/cli/commands/quality_parts/verify_release_audio_quality_observatory.py": {
       "summary": {
-        "covered_lines": 56,
+        "covered_lines": 58,
         "missing_lines": 97,
-        "num_statements": 153
+        "num_statements": 155
       }
     },
     "song_agent/interfaces/cli/commands/release_check.py": {
       "summary": {
-        "covered_lines": 17,
+        "covered_lines": 8,
         "missing_lines": 0,
-        "num_statements": 17
+        "num_statements": 8
       }
     },
     "song_agent/interfaces/cli/commands/release_check_parts/__init__.py": {
@@ -4621,32 +4670,11 @@
         "num_statements": 0
       }
     },
-    "song_agent/interfaces/cli/commands/release_check_parts/cross_domain_adapters.py": {
-      "summary": {
-        "covered_lines": 117,
-        "missing_lines": 109,
-        "num_statements": 226
-      }
-    },
     "song_agent/interfaces/cli/commands/release_check_parts/dependencies.py": {
       "summary": {
         "covered_lines": 4,
         "missing_lines": 0,
         "num_statements": 4
-      }
-    },
-    "song_agent/interfaces/cli/commands/release_check_parts/dependency_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/commands/release_check_parts/dependency_parts/dependency_catalog.py": {
-      "summary": {
-        "covered_lines": 21,
-        "missing_lines": 0,
-        "num_statements": 21
       }
     },
     "song_agent/interfaces/cli/commands/release_check_parts/ga_check.py": {
@@ -4656,18 +4684,11 @@
         "num_statements": 39
       }
     },
-    "song_agent/interfaces/cli/commands/release_check_parts/program_parser_adapters.py": {
-      "summary": {
-        "covered_lines": 116,
-        "missing_lines": 110,
-        "num_statements": 226
-      }
-    },
     "song_agent/interfaces/cli/commands/release_check_parts/release_check_commands_and_presenter_adapters.py": {
       "summary": {
-        "covered_lines": 43,
-        "missing_lines": 205,
-        "num_statements": 248
+        "covered_lines": 11,
+        "missing_lines": 175,
+        "num_statements": 186
       }
     },
     "song_agent/interfaces/cli/commands/release_check_parts/verify_ga_readiness.py": {
@@ -4679,16 +4700,16 @@
     },
     "song_agent/interfaces/cli/commands/studio.py": {
       "summary": {
-        "covered_lines": 38,
+        "covered_lines": 34,
         "missing_lines": 2,
-        "num_statements": 40
+        "num_statements": 36
       }
     },
     "song_agent/interfaces/cli/commands/trust.py": {
       "summary": {
-        "covered_lines": 43,
+        "covered_lines": 23,
         "missing_lines": 0,
-        "num_statements": 43
+        "num_statements": 23
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/__init__.py": {
@@ -4700,9 +4721,9 @@
     },
     "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py": {
       "summary": {
-        "covered_lines": 16,
+        "covered_lines": 17,
         "missing_lines": 269,
-        "num_statements": 285
+        "num_statements": 286
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/dependencies.py": {
@@ -4712,60 +4733,39 @@
         "num_statements": 6
       }
     },
-    "song_agent/interfaces/cli/commands/trust_parts/dependency_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/commands/trust_parts/dependency_parts/dependency_catalog.py": {
-      "summary": {
-        "covered_lines": 67,
-        "missing_lines": 0,
-        "num_statements": 67
-      }
-    },
-    "song_agent/interfaces/cli/commands/trust_parts/dependency_parts/verification_catalog.py": {
-      "summary": {
-        "covered_lines": 60,
-        "missing_lines": 0,
-        "num_statements": 60
-      }
-    },
     "song_agent/interfaces/cli/commands/trust_parts/portfolio_parsers_and_cross_domain_adapters.py": {
       "summary": {
-        "covered_lines": 60,
-        "missing_lines": 216,
-        "num_statements": 276
+        "covered_lines": 12,
+        "missing_lines": 174,
+        "num_statements": 186
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/public_trust_center.py": {
       "summary": {
         "covered_lines": 16,
-        "missing_lines": 203,
-        "num_statements": 219
+        "missing_lines": 202,
+        "num_statements": 218
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py": {
       "summary": {
-        "covered_lines": 19,
-        "missing_lines": 238,
-        "num_statements": 257
+        "covered_lines": 21,
+        "missing_lines": 241,
+        "num_statements": 262
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_store.py": {
       "summary": {
-        "covered_lines": 26,
+        "covered_lines": 27,
         "missing_lines": 121,
-        "num_statements": 147
+        "num_statements": 148
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_audit.py": {
       "summary": {
-        "covered_lines": 16,
+        "covered_lines": 17,
         "missing_lines": 263,
-        "num_statements": 279
+        "num_statements": 280
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_attestation.py": {
@@ -4777,44 +4777,44 @@
     },
     "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_attestation_accepted_evidence.py": {
       "summary": {
-        "covered_lines": 16,
+        "covered_lines": 19,
         "missing_lines": 206,
-        "num_statements": 222
+        "num_statements": 225
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_reviewer_pack.py": {
       "summary": {
-        "covered_lines": 13,
+        "covered_lines": 14,
         "missing_lines": 206,
-        "num_statements": 219
+        "num_statements": 220
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_signoff.py": {
       "summary": {
-        "covered_lines": 21,
-        "missing_lines": 251,
-        "num_statements": 272
+        "covered_lines": 22,
+        "missing_lines": 252,
+        "num_statements": 274
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/trust_operations_control_signoff.py": {
       "summary": {
-        "covered_lines": 18,
-        "missing_lines": 267,
-        "num_statements": 285
+        "covered_lines": 47,
+        "missing_lines": 265,
+        "num_statements": 312
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py": {
       "summary": {
-        "covered_lines": 17,
+        "covered_lines": 20,
         "missing_lines": 240,
-        "num_statements": 257
+        "num_statements": 260
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py": {
       "summary": {
-        "covered_lines": 10,
+        "covered_lines": 13,
         "missing_lines": 108,
-        "num_statements": 118
+        "num_statements": 121
       }
     },
     "song_agent/interfaces/cli/commands/trust_parts/verify_public_trust_center.py": {
@@ -4852,76 +4852,6 @@
         "num_statements": 133
       }
     },
-    "song_agent/interfaces/cli/composition.py": {
-      "summary": {
-        "covered_lines": 10,
-        "missing_lines": 0,
-        "num_statements": 10
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/__init__.py": {
-      "summary": {
-        "covered_lines": 0,
-        "missing_lines": 0,
-        "num_statements": 0
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/creation.py": {
-      "summary": {
-        "covered_lines": 6,
-        "missing_lines": 0,
-        "num_statements": 6
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/delivery.py": {
-      "summary": {
-        "covered_lines": 50,
-        "missing_lines": 0,
-        "num_statements": 50
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/maintenance.py": {
-      "summary": {
-        "covered_lines": 14,
-        "missing_lines": 0,
-        "num_statements": 14
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/program.py": {
-      "summary": {
-        "covered_lines": 146,
-        "missing_lines": 0,
-        "num_statements": 146
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/quality.py": {
-      "summary": {
-        "covered_lines": 140,
-        "missing_lines": 0,
-        "num_statements": 140
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/release_check.py": {
-      "summary": {
-        "covered_lines": 10,
-        "missing_lines": 0,
-        "num_statements": 10
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/studio.py": {
-      "summary": {
-        "covered_lines": 6,
-        "missing_lines": 0,
-        "num_statements": 6
-      }
-    },
-    "song_agent/interfaces/cli/composition_parts/trust.py": {
-      "summary": {
-        "covered_lines": 168,
-        "missing_lines": 0,
-        "num_statements": 168
-      }
-    },
     "song_agent/interfaces/cli/errors.py": {
       "summary": {
         "covered_lines": 4,
@@ -4938,16 +4868,9 @@
     },
     "song_agent/interfaces/web/__init__.py": {
       "summary": {
-        "covered_lines": 2,
-        "missing_lines": 0,
-        "num_statements": 2
-      }
-    },
-    "song_agent/interfaces/web/assets.py": {
-      "summary": {
-        "covered_lines": 29,
-        "missing_lines": 2,
-        "num_statements": 31
+        "covered_lines": 33,
+        "missing_lines": 3,
+        "num_statements": 36
       }
     },
     "song_agent/library_index.py": {
@@ -5083,6 +5006,13 @@
         "num_statements": 0
       }
     },
+    "song_agent/platform/auth.py": {
+      "summary": {
+        "covered_lines": 44,
+        "missing_lines": 4,
+        "num_statements": 48
+      }
+    },
     "song_agent/platform/contracts/__init__.py": {
       "summary": {
         "covered_lines": 9,
@@ -5092,51 +5022,51 @@
     },
     "song_agent/platform/contracts/coercion.py": {
       "summary": {
-        "covered_lines": 27,
-        "missing_lines": 1,
-        "num_statements": 28
+        "covered_lines": 50,
+        "missing_lines": 6,
+        "num_statements": 56
       }
     },
     "song_agent/platform/contracts/documents.py": {
       "summary": {
-        "covered_lines": 7,
-        "missing_lines": 0,
-        "num_statements": 7
+        "covered_lines": 62,
+        "missing_lines": 6,
+        "num_statements": 68
       }
     },
     "song_agent/platform/contracts/errors.py": {
       "summary": {
-        "covered_lines": 6,
+        "covered_lines": 5,
         "missing_lines": 7,
-        "num_statements": 13
+        "num_statements": 12
       }
     },
     "song_agent/platform/contracts/evidence.py": {
       "summary": {
-        "covered_lines": 26,
+        "covered_lines": 28,
         "missing_lines": 0,
-        "num_statements": 26
+        "num_statements": 28
       }
     },
     "song_agent/platform/contracts/evidence_manifest.py": {
       "summary": {
-        "covered_lines": 20,
-        "missing_lines": 2,
-        "num_statements": 22
+        "covered_lines": 22,
+        "missing_lines": 3,
+        "num_statements": 25
       }
     },
     "song_agent/platform/contracts/lifecycle.py": {
       "summary": {
-        "covered_lines": 29,
+        "covered_lines": 30,
         "missing_lines": 1,
-        "num_statements": 30
+        "num_statements": 31
       }
     },
     "song_agent/platform/contracts/packages.py": {
       "summary": {
-        "covered_lines": 132,
+        "covered_lines": 142,
         "missing_lines": 11,
-        "num_statements": 143
+        "num_statements": 153
       }
     },
     "song_agent/platform/contracts/policy.py": {
@@ -5149,8 +5079,8 @@
     "song_agent/platform/contracts/run_state.py": {
       "summary": {
         "covered_lines": 32,
-        "missing_lines": 2,
-        "num_statements": 34
+        "missing_lines": 10,
+        "num_statements": 42
       }
     },
     "song_agent/platform/evidence_graph/__init__.py": {
@@ -5162,9 +5092,9 @@
     },
     "song_agent/platform/evidence_graph/builder.py": {
       "summary": {
-        "covered_lines": 272,
-        "missing_lines": 50,
-        "num_statements": 322
+        "covered_lines": 256,
+        "missing_lines": 44,
+        "num_statements": 300
       }
     },
     "song_agent/platform/evidence_graph/model.py": {
@@ -5172,6 +5102,13 @@
         "covered_lines": 51,
         "missing_lines": 0,
         "num_statements": 51
+      }
+    },
+    "song_agent/platform/evidence_graph/path_support.py": {
+      "summary": {
+        "covered_lines": 27,
+        "missing_lines": 6,
+        "num_statements": 33
       }
     },
     "song_agent/platform/lifecycle/__init__.py": {
@@ -5183,9 +5120,9 @@
     },
     "song_agent/platform/lifecycle/archive.py": {
       "summary": {
-        "covered_lines": 76,
+        "covered_lines": 74,
         "missing_lines": 12,
-        "num_statements": 88
+        "num_statements": 86
       }
     },
     "song_agent/platform/lifecycle/attack_corpus.py": {
@@ -5197,37 +5134,37 @@
     },
     "song_agent/platform/lifecycle/change_control.py": {
       "summary": {
-        "covered_lines": 44,
+        "covered_lines": 47,
         "missing_lines": 6,
-        "num_statements": 50
+        "num_statements": 53
       }
     },
     "song_agent/platform/lifecycle/event_ledger.py": {
       "summary": {
-        "covered_lines": 123,
-        "missing_lines": 20,
-        "num_statements": 143
+        "covered_lines": 128,
+        "missing_lines": 22,
+        "num_statements": 150
       }
     },
     "song_agent/platform/lifecycle/generation.py": {
       "summary": {
-        "covered_lines": 22,
+        "covered_lines": 23,
         "missing_lines": 1,
-        "num_statements": 23
+        "num_statements": 24
       }
     },
     "song_agent/platform/lifecycle/registry.py": {
       "summary": {
-        "covered_lines": 43,
+        "covered_lines": 38,
         "missing_lines": 2,
-        "num_statements": 45
+        "num_statements": 40
       }
     },
     "song_agent/platform/lifecycle/signoff.py": {
       "summary": {
-        "covered_lines": 36,
+        "covered_lines": 37,
         "missing_lines": 1,
-        "num_statements": 37
+        "num_statements": 38
       }
     },
     "song_agent/platform/persistence/__init__.py": {
@@ -5260,23 +5197,23 @@
     },
     "song_agent/platform/persistence/migrations.py": {
       "summary": {
-        "covered_lines": 140,
+        "covered_lines": 143,
         "missing_lines": 14,
-        "num_statements": 154
+        "num_statements": 157
       }
     },
     "song_agent/platform/persistence/program.py": {
       "summary": {
-        "covered_lines": 234,
+        "covered_lines": 236,
         "missing_lines": 12,
-        "num_statements": 246
+        "num_statements": 248
       }
     },
     "song_agent/platform/persistence/recovery.py": {
       "summary": {
-        "covered_lines": 77,
+        "covered_lines": 76,
         "missing_lines": 14,
-        "num_statements": 91
+        "num_statements": 90
       }
     },
     "song_agent/platform/persistence/repository.py": {
@@ -5295,16 +5232,16 @@
     },
     "song_agent/platform/persistence/v13_migration.py": {
       "summary": {
-        "covered_lines": 142,
+        "covered_lines": 145,
         "missing_lines": 12,
-        "num_statements": 154
+        "num_statements": 157
       }
     },
     "song_agent/platform/persistence/v14_migration.py": {
       "summary": {
-        "covered_lines": 189,
+        "covered_lines": 196,
         "missing_lines": 26,
-        "num_statements": 215
+        "num_statements": 222
       }
     },
     "song_agent/platform/policy/__init__.py": {
@@ -5316,9 +5253,9 @@
     },
     "song_agent/platform/policy/engine.py": {
       "summary": {
-        "covered_lines": 51,
+        "covered_lines": 50,
         "missing_lines": 0,
-        "num_statements": 51
+        "num_statements": 50
       }
     },
     "song_agent/platform/policy/profiles.py": {
@@ -5326,6 +5263,13 @@
         "covered_lines": 10,
         "missing_lines": 0,
         "num_statements": 10
+      }
+    },
+    "song_agent/platform/resource_access.py": {
+      "summary": {
+        "covered_lines": 24,
+        "missing_lines": 1,
+        "num_statements": 25
       }
     },
     "song_agent/platform/time.py": {
@@ -5351,16 +5295,16 @@
     },
     "song_agent/platform/verification/engine.py": {
       "summary": {
-        "covered_lines": 65,
+        "covered_lines": 80,
         "missing_lines": 9,
-        "num_statements": 74
+        "num_statements": 89
       }
     },
     "song_agent/platform/verification/external_bindings.py": {
       "summary": {
-        "covered_lines": 22,
+        "covered_lines": 23,
         "missing_lines": 1,
-        "num_statements": 23
+        "num_statements": 24
       }
     },
     "song_agent/platform/verification/hashing.py": {
@@ -5372,44 +5316,44 @@
     },
     "song_agent/platform/verification/history.py": {
       "summary": {
-        "covered_lines": 13,
+        "covered_lines": 14,
         "missing_lines": 0,
-        "num_statements": 13
+        "num_statements": 14
       }
     },
     "song_agent/platform/verification/manifest.py": {
       "summary": {
-        "covered_lines": 27,
+        "covered_lines": 29,
         "missing_lines": 0,
-        "num_statements": 27
+        "num_statements": 29
       }
     },
     "song_agent/platform/verification/model.py": {
       "summary": {
-        "covered_lines": 16,
+        "covered_lines": 20,
         "missing_lines": 1,
-        "num_statements": 17
+        "num_statements": 21
       }
     },
     "song_agent/platform/verification/redaction.py": {
       "summary": {
-        "covered_lines": 33,
+        "covered_lines": 36,
         "missing_lines": 0,
-        "num_statements": 33
+        "num_statements": 36
       }
     },
     "song_agent/platform/verification/registry.py": {
       "summary": {
-        "covered_lines": 81,
+        "covered_lines": 70,
         "missing_lines": 9,
-        "num_statements": 90
+        "num_statements": 79
       }
     },
     "song_agent/platform/verification/sanitization.py": {
       "summary": {
-        "covered_lines": 20,
+        "covered_lines": 23,
         "missing_lines": 0,
-        "num_statements": 20
+        "num_statements": 23
       }
     },
     "song_agent/platform/verification/zip_security.py": {
@@ -5855,9 +5799,9 @@
     },
     "song_agent/release_check/checks/meta.py": {
       "summary": {
-        "covered_lines": 27,
+        "covered_lines": 28,
         "missing_lines": 20,
-        "num_statements": 47
+        "num_statements": 48
       }
     },
     "song_agent/release_check/checks/program.py": {
@@ -5925,9 +5869,9 @@
     },
     "song_agent/release_check/lts_audit.py": {
       "summary": {
-        "covered_lines": 140,
+        "covered_lines": 139,
         "missing_lines": 30,
-        "num_statements": 170
+        "num_statements": 169
       }
     },
     "song_agent/release_check/lts_cutover.py": {
@@ -5986,18 +5930,11 @@
         "num_statements": 123
       }
     },
-    "song_agent/release_check/v14_baseline.py": {
-      "summary": {
-        "covered_lines": 258,
-        "missing_lines": 31,
-        "num_statements": 289
-      }
-    },
     "song_agent/release_check/v14_certification.py": {
       "summary": {
-        "covered_lines": 112,
+        "covered_lines": 111,
         "missing_lines": 23,
-        "num_statements": 135
+        "num_statements": 134
       }
     },
     "song_agent/release_check/v14_compatibility.py": {
@@ -6016,9 +5953,9 @@
     },
     "song_agent/release_check/v14_quality.py": {
       "summary": {
-        "covered_lines": 1808,
-        "missing_lines": 172,
-        "num_statements": 1980
+        "covered_lines": 1814,
+        "missing_lines": 175,
+        "num_statements": 1989
       }
     },
     "song_agent/release_check/v14_reviewer.py": {
@@ -6030,9 +5967,9 @@
     },
     "song_agent/release_check/v14_wave0.py": {
       "summary": {
-        "covered_lines": 169,
-        "missing_lines": 11,
-        "num_statements": 180
+        "covered_lines": 172,
+        "missing_lines": 12,
+        "num_statements": 184
       }
     },
     "song_agent/release_check/v14_wave0_catalog_model.py": {
@@ -6112,6 +6049,13 @@
         "num_statements": 42
       }
     },
+    "song_agent/release_check/v14_wave1.py": {
+      "summary": {
+        "covered_lines": 539,
+        "missing_lines": 45,
+        "num_statements": 584
+      }
+    },
     "song_agent/release_check_architecture.py": {
       "summary": {
         "covered_lines": 4,
@@ -6121,8 +6065,8 @@
     },
     "song_agent/release_check_evidence_policy.py": {
       "summary": {
-        "covered_lines": 16,
-        "missing_lines": 66,
+        "covered_lines": 78,
+        "missing_lines": 4,
         "num_statements": 82
       }
     },
@@ -6618,9 +6562,9 @@
     },
     "song_agent/server.py": {
       "summary": {
-        "covered_lines": 24,
+        "covered_lines": 12,
         "missing_lines": 0,
-        "num_statements": 24
+        "num_statements": 12
       }
     },
     "song_agent/song_editor.py": {
@@ -7179,5 +7123,5 @@
   },
   "package_type": "musicforge_v14_coverage_evidence",
   "schema_version": 2,
-  "source_report_semantic_hash": "1685f37489d40b4e8da80425a9ff7725bb6b983fc98a93c3cf1fd14120278e59"
+  "source_report_semantic_hash": "8662415fa5d3b7d96c354205e1d5d85c1fde05b1d150ae0c8a4a9b451272d1ca"
 }

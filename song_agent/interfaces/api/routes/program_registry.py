@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.route_contexts.core import CoreRouteContext
-
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Protocol
+
+from song_agent.application.program.http_context import ProgramServicePort
+
+
+class ProgramDispatchPort(Protocol):
+    @property
+    def program_application(self) -> ProgramServicePort: ...
 
 
 PROGRAM_ROOT = "/api/unified-release-programs"
@@ -19,7 +24,7 @@ class ProgramRouteSpec:
     response_schema: str = "program-result-v1"
 
 
-class ProgramRouteRegistry(CoreRouteContext):
+class ProgramRouteRegistry:
     def __init__(self) -> None:
         self._specs = tuple(
             ProgramRouteSpec(method, f"{PROGRAM_ROOT}/{{path}}")
@@ -29,7 +34,7 @@ class ProgramRouteRegistry(CoreRouteContext):
     def matches(self, path: str) -> bool:
         return path == PROGRAM_ROOT or path.startswith(f"{PROGRAM_ROOT}/")
 
-    def dispatch(self, port: Any, method: str, path: str) -> bool:
+    def dispatch(self, port: ProgramDispatchPort, method: str, path: str) -> bool:
         if not self.matches(path):
             return False
         port.program_application.dispatch_http(port, method, path)

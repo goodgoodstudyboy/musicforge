@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from song_agent.application.http_ports.creation import QualityGateResult, RendererConfig, RendererProfile, ProjectVersion
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
-from typing import Any
-
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
+
 
 class CreationRoutesProjectFinalExport(CreationRouteContext):
     def _handle_project_final_export(self, method: str, project_id: str) -> None:
@@ -203,19 +203,19 @@ class CreationRoutesProjectFinalExport(CreationRouteContext):
             return
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Delivery signoff route not found.")
 
-    def _renderer_profile_from_payload(self, payload: ImplementationDocument | None) -> Any | None:
+    def _renderer_profile_from_payload(self, payload: JsonDocument | None) -> RendererProfile | None:
         profile_id = str((payload or {}).get("profile_id") or "").strip()
         if not profile_id:
             return None
         return self.audio_profile_store.get_profile(profile_id)
 
-    def _renderer_config_from_payload(self, payload: ImplementationDocument | None) -> Any | None:
+    def _renderer_config_from_payload(self, payload: JsonDocument | None) -> RendererConfig | None:
         profile = self._renderer_profile_from_payload(payload)
         if profile is None:
             return None
         return profile.to_renderer_config()
 
-    def _evaluate_project_version(self, project_id: str, version: Any) -> Any:
+    def _evaluate_project_version(self, project_id: str, version: ProjectVersion) -> QualityGateResult:
         config = _interfaces_api_runtime.load_quality_gate_config(self.project_store.project_dir(project_id))
         return _interfaces_api_runtime.evaluate_quality_gate(_interfaces_api_runtime.Path(version.output_dir), config, now=_interfaces_api_runtime._utc_now())
 

@@ -1,9 +1,0 @@
-from __future__ import annotations
-
-from song_agent.interfaces.cli.bindings import BINDINGS
-
-from song_agent.interfaces.cli.commands.creation_parts.generation_commands_and_presenter_adapters import build_parser as _creation_build_parser
-from song_agent.interfaces.cli.commands.creation_parts.generation_commands_and_presenter_adapters import build_serve_parser as _creation_build_serve_parser
-
-BINDINGS.creation.build_parser = _creation_build_parser
-BINDINGS.creation.build_serve_parser = _creation_build_serve_parser

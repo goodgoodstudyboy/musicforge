@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import JsonDocument, as_document as _as_document
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, json, unquote
+from song_agent.interfaces.bootstrap.api.core import CandidateGroup, Path, json, unquote
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import read_json
+from song_agent.interfaces.bootstrap.api.creation_quality import read_json
 
 def _job_artifacts(
     run_dir: Path,
@@ -32,16 +32,16 @@ def _job_artifacts(
         artifacts["nodes"] = str(nodes_dir)
     return artifacts
 
-def _read_events(path: Path) -> list[ImplementationDocument]:
+def _read_events(path: Path) -> list[JsonDocument]:
     if not path.exists():
         return []
-    events: list[dict[str, Any]] = []
+    events: list[JsonDocument] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             events.append(json.loads(line))
     return events
 
-def _read_critic_report(run_dir: Path) -> ImplementationDocument | None:
+def _read_critic_report(run_dir: Path) -> JsonDocument | None:
     path = run_dir / "data" / "nodes" / "critic.json"
     if not path.exists():
         return None
@@ -52,7 +52,7 @@ def _read_critic_report(run_dir: Path) -> ImplementationDocument | None:
     output = record.get("output")
     return output if isinstance(output, dict) else None
 
-def _read_edit_metadata_for_run(run_dir: Path) -> ImplementationDocument | None:
+def _read_edit_metadata_for_run(run_dir: Path) -> JsonDocument | None:
     path = run_dir / "data" / "edit-metadata.json"
     if not path.exists():
         return None
@@ -62,7 +62,7 @@ def _read_edit_metadata_for_run(run_dir: Path) -> ImplementationDocument | None:
         return None
     return metadata
 
-def _top_ranked_candidate_id(group: Any) -> str | None:
+def _top_ranked_candidate_id(group: CandidateGroup) -> str | None:
     if group.ranking:
         return str(group.ranking[0].get("candidate_id") or "") or None
     ready = [candidate for candidate in group.candidates if candidate.status == "ready"]
@@ -70,15 +70,17 @@ def _top_ranked_candidate_id(group: Any) -> str | None:
         return None
     return max(ready, key=lambda candidate: int(candidate.scores.get("combined") or 0)).candidate_id
 
-def _optional_positive_int(value: Any) -> int | None:
+def _optional_positive_int(value: object) -> int | None:
     if value is None or str(value).strip() == "":
+        return None
+    if not isinstance(value, (str, bytes, bytearray, int, float)):
         return None
     try:
         return max(0, int(value))
     except (TypeError, ValueError):
         return None
 
-def _candidate_source_summary(value: Any) -> ImplementationDocument:
+def _candidate_source_summary(value: object) -> JsonDocument:
     data = _as_document(value)
     return {
         "candidate_group_id": str(data.get("candidate_group_id") or ""),
@@ -91,7 +93,7 @@ def _candidate_source_summary(value: Any) -> ImplementationDocument:
         "created_at": str(data.get("created_at") or ""),
     }
 
-def _prompt_ab_template_ids(value: Any) -> list[str]:
+def _prompt_ab_template_ids(value: object) -> list[str]:
     if not isinstance(value, list):
         raise ValueError("template_ids must be a list.")
     template_ids = [str(item).strip() for item in value if str(item).strip()]

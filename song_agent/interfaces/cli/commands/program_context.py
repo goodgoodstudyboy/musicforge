@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
-from typing import Any
 
 from song_agent.interfaces.cli.commands import program as compatibility
 from song_agent.interfaces.cli.registry import CommandSpec
+from song_agent.platform.contracts.documents import JsonDocument
+from song_agent.platform.contracts.coercion import as_document as _as_document
 
 
 ParserFactory = Callable[[], argparse.ArgumentParser]
-Runner = Callable[[argparse.Namespace], dict[str, Any]]
+Runner = Callable[[argparse.Namespace], JsonDocument]
 
 
 def _execute(
@@ -23,7 +24,7 @@ def _execute(
         result,
         json_output=bool(getattr(args, "json", False)),
     )
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = str(result.get("status") or _as_document(result.get("summary")).get("status") or "")
     if result.get("ok") is False or status in {
         "failed",
         "blocked",
@@ -43,8 +44,6 @@ def _handler(
     def handle(argv: list[str]) -> None:
         _execute(argv, parser_factory, runner)
 
-    handle.__name__ = f"handle_{command.replace('-', '_')}"
-    handle.__module__ = __name__
     return handle
 
 
@@ -52,7 +51,6 @@ def _parser(parser_factory: ParserFactory) -> ParserFactory:
     def build() -> argparse.ArgumentParser:
         return parser_factory()
 
-    build.__module__ = __name__
     return build
 
 

@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
-
 from song_agent.platform.contracts.coercion import as_document as _as_document
 
 from datetime import datetime, timezone
 from http import HTTPStatus
-from typing import Any
+from typing import cast
 
+from song_agent.application.legacy.release_signoff_ports import (
+    DocumentOperation,
+    ErrorSender,
+    GateStorePort,
+    JsonSender,
+    ReleaseSignoffCompositionPort,
+    ReleaseSignoffHandlerPort,
+    ReleaseStorePort,
+)
 from song_agent.application.policy_compatibility import evaluate_legacy_release_policy
-
 from song_agent.domains.quality.audio_encoding import encoded_audio_gate, normalize_required_profiles
 
 from song_agent.domains.delivery.release_export import build_release_export_zip, read_release_export_manifest, refresh_release_export_signoff_summary
@@ -21,12 +27,104 @@ from song_agent.domains.delivery.releases import stable_hash
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-class LegacyReleaseSignoffAdapter:
-    def __init__(self, port: object) -> None:
-        self.port = port
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.port, name)
+class LegacyReleaseSignoffAdapter:
+    _get_or_refresh_release_qa: DocumentOperation
+    _optional_json_body: DocumentOperation
+    _release_acceptance_gate: DocumentOperation
+    _release_audio_campaign_gate: DocumentOperation
+    _release_audio_gate: DocumentOperation
+    _release_declarative_policy_gate: DocumentOperation
+    _release_encoded_audio_acceptance_export_gate: DocumentOperation
+    _release_encoded_audio_export_gate: DocumentOperation
+    _release_format_decision_export_gate: DocumentOperation
+    _release_mastering_export_gate: DocumentOperation
+    _release_rights_clearance_export_gate: DocumentOperation
+    _send_error: ErrorSender
+    _send_json: JsonSender
+    release_store: ReleaseStorePort
+    audio_campaign_remediation_store: GateStorePort
+    encoded_audio_acceptance_store: GateStorePort
+    format_decision_store: GateStorePort
+    mastering_store: GateStorePort
+    release_audio_baseline_governance_store: GateStorePort
+    release_audio_certification_store: GateStorePort
+    release_audio_command_center_store: GateStorePort
+    release_audio_quality_action_queue_store: GateStorePort
+    release_audio_quality_action_signoff_store: GateStorePort
+    release_audio_quality_observatory_store: GateStorePort
+    release_audio_regression_response_store: GateStorePort
+    release_audio_regression_store: GateStorePort
+    release_audio_timeline_store: GateStorePort
+    rights_clearance_store: GateStorePort
+    unified_command_center_continuous_review_store: GateStorePort
+    unified_command_center_drift_response_store: GateStorePort
+    unified_command_center_evidence_review_store: GateStorePort
+    unified_command_center_handoff_store: GateStorePort
+    unified_command_center_release_train_store: GateStorePort
+    unified_command_center_reviewer_decision_board_store: GateStorePort
+    unified_command_center_signoff_store: GateStorePort
+    unified_command_center_store: GateStorePort
+    unified_release_program_continuity_acceptance_store: GateStorePort
+    unified_release_program_continuity_command_center_acceptance_change_store: GateStorePort
+    unified_release_program_continuity_command_center_acceptance_store: GateStorePort
+    unified_release_program_continuity_command_center_signoff_store: GateStorePort
+    unified_release_program_continuity_command_center_store: GateStorePort
+    unified_release_program_continuity_distribution_store: GateStorePort
+    unified_release_program_continuity_store: GateStorePort
+    unified_release_program_handoff_store: GateStorePort
+    unified_release_program_vault_operations_store: GateStorePort
+    unified_release_program_vault_store: GateStorePort
+    def __init__(self, port: object) -> None:
+        dependencies = cast(ReleaseSignoffHandlerPort, port)
+        composition = cast(ReleaseSignoffCompositionPort, dependencies.server)
+        self._get_or_refresh_release_qa = dependencies._get_or_refresh_release_qa
+        self._optional_json_body = dependencies._optional_json_body
+        self._release_acceptance_gate = dependencies._release_acceptance_gate
+        self._release_audio_campaign_gate = dependencies._release_audio_campaign_gate
+        self._release_audio_gate = dependencies._release_audio_gate
+        self._release_declarative_policy_gate = dependencies._release_declarative_policy_gate
+        self._release_encoded_audio_acceptance_export_gate = dependencies._release_encoded_audio_acceptance_export_gate
+        self._release_encoded_audio_export_gate = dependencies._release_encoded_audio_export_gate
+        self._release_format_decision_export_gate = dependencies._release_format_decision_export_gate
+        self._release_mastering_export_gate = dependencies._release_mastering_export_gate
+        self._release_rights_clearance_export_gate = dependencies._release_rights_clearance_export_gate
+        self._send_error = dependencies._send_error
+        self._send_json = dependencies._send_json
+        self.audio_encoding_store = composition.audio_encoding_store
+        self.release_store = composition.release_store
+        self.audio_campaign_remediation_store = composition.audio_campaign_remediation_store
+        self.encoded_audio_acceptance_store = composition.encoded_audio_acceptance_store
+        self.format_decision_store = composition.format_decision_store
+        self.mastering_store = composition.mastering_store
+        self.release_audio_baseline_governance_store = composition.release_audio_baseline_governance_store
+        self.release_audio_certification_store = composition.release_audio_certification_store
+        self.release_audio_command_center_store = composition.release_audio_command_center_store
+        self.release_audio_quality_action_queue_store = composition.release_audio_quality_action_queue_store
+        self.release_audio_quality_action_signoff_store = composition.release_audio_quality_action_signoff_store
+        self.release_audio_quality_observatory_store = composition.release_audio_quality_observatory_store
+        self.release_audio_regression_response_store = composition.release_audio_regression_response_store
+        self.release_audio_regression_store = composition.release_audio_regression_store
+        self.release_audio_timeline_store = composition.release_audio_timeline_store
+        self.rights_clearance_store = composition.rights_clearance_store
+        self.unified_command_center_continuous_review_store = composition.unified_command_center_continuous_review_store
+        self.unified_command_center_drift_response_store = composition.unified_command_center_drift_response_store
+        self.unified_command_center_evidence_review_store = composition.unified_command_center_evidence_review_store
+        self.unified_command_center_handoff_store = composition.unified_command_center_handoff_store
+        self.unified_command_center_release_train_store = composition.unified_command_center_release_train_store
+        self.unified_command_center_reviewer_decision_board_store = composition.unified_command_center_reviewer_decision_board_store
+        self.unified_command_center_signoff_store = composition.unified_command_center_signoff_store
+        self.unified_command_center_store = composition.unified_command_center_store
+        self.unified_release_program_continuity_acceptance_store = composition.unified_release_program_continuity_acceptance_store
+        self.unified_release_program_continuity_command_center_acceptance_change_store = composition.unified_release_program_continuity_command_center_acceptance_change_store
+        self.unified_release_program_continuity_command_center_acceptance_store = composition.unified_release_program_continuity_command_center_acceptance_store
+        self.unified_release_program_continuity_command_center_signoff_store = composition.unified_release_program_continuity_command_center_signoff_store
+        self.unified_release_program_continuity_command_center_store = composition.unified_release_program_continuity_command_center_store
+        self.unified_release_program_continuity_distribution_store = composition.unified_release_program_continuity_distribution_store
+        self.unified_release_program_continuity_store = composition.unified_release_program_continuity_store
+        self.unified_release_program_handoff_store = composition.unified_release_program_handoff_store
+        self.unified_release_program_vault_operations_store = composition.unified_release_program_vault_operations_store
+        self.unified_release_program_vault_store = composition.unified_release_program_vault_store
 
     def _execute_part_01(self, method: str, release_id: str, _split_state):
         if method == 'GET':
@@ -460,7 +558,7 @@ class LegacyReleaseSignoffAdapter:
         return (False, None)
 
     def execute(self, method: str, release_id: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, object] = {}
         _split_result = self._execute_part_01(method, release_id, _split_state)
         if _split_result[0]:
             return _split_result[1]

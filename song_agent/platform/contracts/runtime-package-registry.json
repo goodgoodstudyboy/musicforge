@@ -748,7 +748,7 @@
     "test_change_request": "document",
     "test_signoff": "document"
   },
-  "integrity_hash": "45879327cf3444f1d9e4993c043d71bc495a0125596ef7791ec7bced312bfe69",
+  "integrity_hash": "a15ba1009cda23f5cfa011c57d5c389b527bdb0517dcda10a2a02c4808d40880",
   "package_type_sets": [
     {
       "allowed_package_kinds": [
@@ -1614,7 +1614,7 @@
       "writer_id": "song_agent.platform.verification.model.build_verification_report"
     }
   ],
-  "registry_integrity_hash": "c1cf7d2a35580200d0ed3d9c23949451708b2040b3b97d50dedc84d9991bdcf5",
+  "registry_integrity_hash": "28a3d0f80ff9c697b8d1dbd0aa20bd76f9f29efc51d8e4ea0b17429bbb6d6127",
   "registry_package_type": "musicforge_v144_package_schema_registry",
   "registry_schema_version": 7,
   "schema_version": 1,

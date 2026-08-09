@@ -5,8 +5,9 @@ from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfo
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioRootRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_root(self, method, tail) -> bool:
+    def _dispatch_portfolio_root(self, method: str, tail: str) -> bool:
         if tail in {'', '/'}:
             if method == 'GET':
                 query = _interfaces_api_runtime.parse_qs(_interfaces_api_runtime.urlparse(self.path).query)

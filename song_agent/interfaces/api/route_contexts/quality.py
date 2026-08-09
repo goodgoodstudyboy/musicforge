@@ -1,98 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from song_agent.application.http_ports.quality import QualityRouteContext as QualityRouteContext
+else:
 
-class QualityRouteContext:
-    """Static inventory of members supplied by runtime composition."""
-
-    _handle_acceptance_fix_sprint_route_part_01: Any
-    _handle_acceptance_fix_sprint_route_part_02: Any
-    _handle_acceptance_route_part_01: Any
-    _handle_acceptance_route_part_02: Any
-    _handle_acceptance_route_part_03: Any
-    _handle_audio_campaign_route_part_01: Any
-    _handle_audio_campaign_route_part_02: Any
-    _handle_audio_campaign_route_part_02_actions_01: Any
-    _handle_audio_campaign_route_part_02_actions_02: Any
-    _handle_audio_campaign_route_part_02_actions_03: Any
-    _handle_audio_campaign_route_part_03: Any
-    _handle_audio_lab_route_part_01: Any
-    _handle_audio_lab_route_part_02: Any
-    _handle_audio_lab_route_part_03: Any
-    _handle_audio_quality_actions_route_part_01: Any
-    _handle_audio_quality_actions_route_part_02: Any
-    _handle_audio_quality_actions_route_part_03: Any
-    _handle_release_audio_reviews_part_01: Any
-    _handle_release_audio_reviews_part_02: Any
-    _handle_release_audio_revisions_part_01: Any
-    _handle_release_audio_revisions_part_02: Any
-    _handle_release_audio_revisions_part_03: Any
-    _handle_release_audio_timeline_part_01: Any
-    _handle_release_audio_timeline_part_02: Any
-    _handle_release_encoded_audio_part_01: Any
-    _handle_release_encoded_audio_part_02: Any
-    _handle_suite_acceptance_analytics: Any
-    _handle_suite_acceptance_analytics_refresh: Any
-    _job_audio_artifact_stale_reasons: Any
-    _optional_json_body: Any
-    _planning_simulation_reviews_match_release: Any
-    _project_edit_parent: Any
-    _read_json_body: Any
-    _release_acceptance_analytics_gate: Any
-    _release_acceptance_fix_plan_gate: Any
-    _release_acceptance_fix_plan_review_gate: Any
-    _release_acceptance_fix_sprint_gate: Any
-    _release_acceptance_gate_part_01: Any
-    _release_acceptance_gate_part_02: Any
-    _release_acceptance_gate_part_03: Any
-    _release_acceptance_kb_gate: Any
-    _release_audio_campaign_coverage: Any
-    _release_audio_campaign_final_export_current: Any
-    _release_mix_gate: Any
-    _release_planning_rule_governance_gate: Any
-    _release_planning_rule_impact_gate: Any
-    _release_planning_rule_simulation_gate: Any
-    _renderer_profile_from_payload: Any
-    _send_error: Any
-    _send_file: Any
-    _send_json: Any
-    acceptance_analytics_store: Any
-    acceptance_fix_plan_review_store: Any
-    acceptance_fix_plan_store: Any
-    acceptance_fix_sprint_store: Any
-    acceptance_kb_store: Any
-    acceptance_store: Any
-    audio_campaign_governance_store: Any
-    audio_campaign_planner_store: Any
-    audio_campaign_remediation_store: Any
-    audio_campaign_store: Any
-    audio_encoding_profile_store: Any
-    audio_encoding_store: Any
-    audio_fix_sprint_store: Any
-    audio_lab_store: Any
-    audio_profile_store: Any
-    audio_review_store: Any
-    audio_revision_store: Any
-    encoded_audio_acceptance_store: Any
-    format_decision_store: Any
-    human_review_pack_store: Any
-    mastering_profile_store: Any
-    mastering_store: Any
-    planning_rule_governance_store: Any
-    planning_rule_impact_store: Any
-    planning_rule_simulation_store: Any
-    project_store: Any
-    release_audio_baseline_governance_store: Any
-    release_audio_certification_store: Any
-    release_audio_command_center_store: Any
-    release_audio_quality_action_queue_store: Any
-    release_audio_quality_action_signoff_store: Any
-    release_audio_quality_observatory_store: Any
-    release_audio_regression_response_store: Any
-    release_audio_regression_store: Any
-    release_audio_timeline_store: Any
-    release_store: Any
-    rights_clearance_store: Any
-    server: Any
-    store: Any
+    class QualityRouteContext:
+        """Runtime marker for Quality route mixins."""

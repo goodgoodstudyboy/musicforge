@@ -614,7 +614,7 @@ def test_provider_edit_apply_reuses_preview_usage(tmp_path, monkeypatch):
         snapshot["request_id"] = "req-preview-1"
         return patch, snapshot
 
-    monkeypatch.setattr("song_agent.server.generate_provider_edit_patch", fake_generate)
+    monkeypatch.setattr("song_agent.interfaces.api.runtime.generate_provider_edit_patch", fake_generate)
     server = start_test_server()
     try:
         request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main"})

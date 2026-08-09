@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
 
 from song_agent.platform.contracts import GenerationRef
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 from song_agent.platform.verification.hashing import integrity_hash
 
@@ -20,16 +21,16 @@ class GenerationService:
         *,
         package_type: str,
         schema_version: int = 1,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        document: dict[str, Any] = {
+        extra: Mapping[str, object] | None = None,
+    ) -> JsonDocument:
+        document: JsonDocument = {
             "schema_version": schema_version,
             "package_type": _require_registered_package_type(package_type, writer_id="song_agent.platform.lifecycle.generation.GenerationService.build_document"),
             **reference.to_dict(),
         }
         document.pop("subject_id")
         if extra:
-            document.update(extra)
+            document.update(normalize_json_document(extra))
         document["integrity_hash"] = integrity_hash(document)
         return document
 

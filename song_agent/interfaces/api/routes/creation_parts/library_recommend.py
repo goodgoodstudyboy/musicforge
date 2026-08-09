@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
-from typing import Any
-
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.application.http_ports.creation import CreativeAsset, SongPlan
+from song_agent.platform.contracts.documents import JsonDocument
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
+
 
 class CreationRoutesLibraryRecommend(CreationRouteContext):
     def _handle_library_recommend(self, method: str) -> None:
@@ -241,7 +241,7 @@ class CreationRoutesLibraryRecommend(CreationRouteContext):
         candidate_id = str(payload.get("candidate_id") or "")
         try:
             self.project_store.get_project(project_id)
-            group_store = _interfaces_api_runtime.CandidateGroupStore(self.project_store.project_dir(project_id))
+            group_store = _api_store_factories.candidate_group_store(self.project_store.project_dir(project_id))
             group = group_store.read_group(group_id)
             plan = _interfaces_api_runtime.SongPlan.from_dict(group_store.read_candidate_plan(group.group_id, candidate_id))
             assets = self._create_assets_from_plan(
@@ -262,9 +262,17 @@ class CreationRoutesLibraryRecommend(CreationRouteContext):
         except ValueError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
             return
-        self._send_json({"ok": True, "assets": [_interfaces_api_runtime.asset_public_dict(asset) for asset in assets]}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+        self._send_json(
+            {"ok": True, "assets": [_interfaces_api_runtime.asset_public_dict(asset) for asset in assets]},
+            status=_interfaces_api_runtime.HTTPStatus.CREATED,
+        )
 
-    def _create_assets_from_plan(self, plan: _InterfaceType, source: ImplementationDocument, payload: ImplementationDocument) -> list[Any]:
+    def _create_assets_from_plan(
+        self,
+        plan: SongPlan,
+        source: JsonDocument,
+        payload: JsonDocument,
+    ) -> list[CreativeAsset]:
         assets = []
         for asset_payload in _interfaces_api_runtime.extract_assets_from_song_plan(plan, source, payload):
             assets.append(self.asset_store.create_asset(asset_payload, now=_interfaces_api_runtime._utc_now()))

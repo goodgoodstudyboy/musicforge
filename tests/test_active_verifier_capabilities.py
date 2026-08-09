@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from song_agent.capabilities import capability_registry
+from song_agent.interfaces.bootstrap.api.program import active_verifier_registry
 from song_agent.platform.verification.attack_corpus import run_active_verifier_attack_corpus
-from song_agent.platform.verification.registry import active_verifier_registry
 
 
 def test_active_verifier_registry_is_complete_and_product_registered() -> None:
@@ -27,7 +27,7 @@ def test_active_verifier_registry_is_complete_and_product_registered() -> None:
 
 
 def test_all_active_verifiers_share_the_envelope_attack_corpus(tmp_path: Path) -> None:
-    report = run_active_verifier_attack_corpus(tmp_path)
+    report = run_active_verifier_attack_corpus(tmp_path, active_verifier_registry)
 
     assert report["status"] == "passed"
     assert report["capability_count"] == 13

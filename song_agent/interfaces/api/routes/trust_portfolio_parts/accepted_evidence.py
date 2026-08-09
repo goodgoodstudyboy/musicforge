@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import JsonDocument
+
 from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioAcceptedEvidenceRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_accepted_evidence(self, method, parts, portfolio_id, action) -> bool:
+    def _dispatch_portfolio_accepted_evidence(self, method: str, parts: list[str], portfolio_id: str, action: str) -> bool:
         if action == 'governance-attestation-accepted-evidence':
             query = _interfaces_api_runtime.parse_qs(_interfaces_api_runtime.urlparse(self.path).query)
             query_profile = str(query.get('profile', ['public_summary'])[0] or 'public_summary')
@@ -15,7 +18,11 @@ class TrustPortfolioAcceptedEvidenceRoutes(TrustPortfolioRouteContext):
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                     return True
                 evidence = self.release_portfolio_governance_attestation_accepted_evidence_store.read_evidence(portfolio_id, profile=query_profile, default={})
-                summary = _interfaces_api_runtime.portfolio_governance_attestation_accepted_evidence_summary(evidence) if evidence else {'status': 'missing', 'external_review_status': 'missing', 'profile': query_profile}
+                summary: JsonDocument = (
+                    _interfaces_api_runtime.portfolio_governance_attestation_accepted_evidence_summary(evidence)
+                    if evidence
+                    else {"status": "missing", "external_review_status": "missing", "profile": query_profile}
+                )
                 if evidence:
                     summary['stale'] = self.release_portfolio_governance_attestation_accepted_evidence_store.evidence_is_stale(portfolio_id, evidence, profile=query_profile)
                 verification_path = self.release_portfolio_governance_attestation_accepted_evidence_store.verification_report_path(portfolio_id, query_profile)

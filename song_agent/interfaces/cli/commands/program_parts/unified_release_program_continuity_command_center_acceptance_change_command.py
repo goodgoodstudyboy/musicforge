@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from argparse import Namespace
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 
 from . import dependencies as _commands_program_parts_dependencies
 
-from .program_component_and_cross_domain_adapters import _command_center_acceptance_payload, _print_release_audio_certification_result, _program_component
+from song_agent.interfaces.cli.commands.program_parts.program_component_and_cross_domain_adapters import _program_component
+from song_agent.interfaces.cli.commands.quality_parts.release_audio_command_center_command import (
+    _command_center_acceptance_payload,
+    _print_release_audio_certification_result,
+)
 
 from .unified_command_center import build_unified_command_center_drift_response_parser, build_unified_command_center_evidence_review_parser, build_unified_command_center_parser, build_unified_command_center_review_parser
 
@@ -24,8 +30,14 @@ from .unified_command_center_release_train_change_control_command import _run_un
 from .unified_release_program_handoff_command import _run_unified_release_program_continuity_command, _run_unified_release_program_continuity_distribution_command, _run_unified_release_program_handoff_command, _run_unified_release_program_vault_command, _run_unified_release_program_vault_operations_command
 
 from .unified_release_program_continuity_acceptance_command import _run_unified_release_program_continuity_acceptance_command
-Any, CommandSpec, Path, ProgramApplicationService, ProviderConfig, ProviderError, SongRequest, UnifiedCommandCenterContinuousReviewStore, UnifiedCommandCenterDriftResponseStore, UnifiedCommandCenterEvidenceReviewStore, UnifiedCommandCenterHandoffStore, UnifiedCommandCenterReleaseTrainChangeControlStore, UnifiedCommandCenterReleaseTrainHandoffStore, UnifiedCommandCenterReleaseTrainLifecycleStore, UnifiedCommandCenterReleaseTrainStore, UnifiedCommandCenterReviewerDecisionBoardStore, UnifiedCommandCenterSignoffStore, UnifiedCommandCenterStore, argparse, build_auth_config, generate_request, json, load_provider_config, os, provider_configured, read_json, sys, test_provider_config, write_interface_document, write_json, write_unified_command_center_archive_verification_report, write_unified_command_center_continuous_review_verification_report, write_unified_command_center_drift_response_verification_report, write_unified_command_center_evidence_review_acceptance_verification_report, write_unified_command_center_evidence_review_verification_report, write_unified_command_center_handoff_verification_report, write_unified_command_center_release_train_change_control_verification_report, write_unified_command_center_release_train_handoff_verification_report, write_unified_command_center_release_train_lifecycle_verification_report, write_unified_command_center_release_train_verification_report, write_unified_command_center_reviewer_decision_board_verification_report, write_unified_command_center_verification_report, write_unified_release_program_accepted_evidence_verification_report, write_unified_release_program_continuity_acceptance_change_verification_report, write_unified_release_program_continuity_acceptance_verification_report, write_unified_release_program_continuity_command_center_verification_report, write_unified_release_program_continuity_distribution_verification_report, write_unified_release_program_continuity_verification_report, write_unified_release_program_handoff_verification_report, write_unified_release_program_operations_verification_report, write_unified_release_program_review_pack_verification_report, write_unified_release_program_vault_operations_verification_report, write_unified_release_program_vault_verification_report, write_unified_release_program_verification_report = _commands_program_parts_dependencies.Any, _commands_program_parts_dependencies.CommandSpec, _commands_program_parts_dependencies.Path, _commands_program_parts_dependencies.ProgramApplicationService, _commands_program_parts_dependencies.ProviderConfig, _commands_program_parts_dependencies.ProviderError, _commands_program_parts_dependencies.SongRequest, _commands_program_parts_dependencies.UnifiedCommandCenterContinuousReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterDriftResponseStore, _commands_program_parts_dependencies.UnifiedCommandCenterEvidenceReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainChangeControlStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainLifecycleStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainStore, _commands_program_parts_dependencies.UnifiedCommandCenterReviewerDecisionBoardStore, _commands_program_parts_dependencies.UnifiedCommandCenterSignoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterStore, _commands_program_parts_dependencies.argparse, _commands_program_parts_dependencies.build_auth_config, _commands_program_parts_dependencies.generate_request, _commands_program_parts_dependencies.json, _commands_program_parts_dependencies.load_provider_config, _commands_program_parts_dependencies.os, _commands_program_parts_dependencies.provider_configured, _commands_program_parts_dependencies.read_json, _commands_program_parts_dependencies.sys, _commands_program_parts_dependencies.test_provider_config, _commands_program_parts_dependencies.write_interface_document, _commands_program_parts_dependencies.write_json, _commands_program_parts_dependencies.write_unified_command_center_archive_verification_report, _commands_program_parts_dependencies.write_unified_command_center_continuous_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_drift_response_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_change_control_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_lifecycle_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_verification_report, _commands_program_parts_dependencies.write_unified_command_center_reviewer_decision_board_verification_report, _commands_program_parts_dependencies.write_unified_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_accepted_evidence_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_change_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_distribution_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_verification_report, _commands_program_parts_dependencies.write_unified_release_program_handoff_verification_report, _commands_program_parts_dependencies.write_unified_release_program_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_review_pack_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_verification_report, _commands_program_parts_dependencies.write_unified_release_program_verification_report
-def _run_unified_release_program_continuity_command_center_acceptance_change_command(args: argparse.Namespace) -> ImplementationDocument:
+CommandSpec, Path, ProgramApplicationService, ProviderConfig, ProviderError, SongRequest, UnifiedCommandCenterContinuousReviewStore, UnifiedCommandCenterDriftResponseStore, UnifiedCommandCenterEvidenceReviewStore, UnifiedCommandCenterHandoffStore, UnifiedCommandCenterReleaseTrainChangeControlStore, UnifiedCommandCenterReleaseTrainHandoffStore, UnifiedCommandCenterReleaseTrainLifecycleStore, UnifiedCommandCenterReleaseTrainStore, UnifiedCommandCenterReviewerDecisionBoardStore, UnifiedCommandCenterSignoffStore, UnifiedCommandCenterStore, argparse, build_auth_config, generate_request, json, load_provider_config, os, provider_configured, read_json, sys, test_provider_config, write_interface_document, write_json, write_unified_command_center_archive_verification_report, write_unified_command_center_continuous_review_verification_report, write_unified_command_center_drift_response_verification_report, write_unified_command_center_evidence_review_acceptance_verification_report, write_unified_command_center_evidence_review_verification_report, write_unified_command_center_handoff_verification_report, write_unified_command_center_release_train_change_control_verification_report, write_unified_command_center_release_train_handoff_verification_report, write_unified_command_center_release_train_lifecycle_verification_report, write_unified_command_center_release_train_verification_report, write_unified_command_center_reviewer_decision_board_verification_report, write_unified_command_center_verification_report, write_unified_release_program_accepted_evidence_verification_report, write_unified_release_program_continuity_acceptance_change_verification_report, write_unified_release_program_continuity_acceptance_verification_report, write_unified_release_program_continuity_command_center_verification_report, write_unified_release_program_continuity_distribution_verification_report, write_unified_release_program_continuity_verification_report, write_unified_release_program_handoff_verification_report, write_unified_release_program_operations_verification_report, write_unified_release_program_review_pack_verification_report, write_unified_release_program_vault_operations_verification_report, write_unified_release_program_vault_verification_report, write_unified_release_program_verification_report = _commands_program_parts_dependencies.CommandSpec, _commands_program_parts_dependencies.Path, _commands_program_parts_dependencies.ProgramApplicationService, _commands_program_parts_dependencies.ProviderConfig, _commands_program_parts_dependencies.ProviderError, _commands_program_parts_dependencies.SongRequest, _commands_program_parts_dependencies.UnifiedCommandCenterContinuousReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterDriftResponseStore, _commands_program_parts_dependencies.UnifiedCommandCenterEvidenceReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainChangeControlStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainLifecycleStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainStore, _commands_program_parts_dependencies.UnifiedCommandCenterReviewerDecisionBoardStore, _commands_program_parts_dependencies.UnifiedCommandCenterSignoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterStore, _commands_program_parts_dependencies.argparse, _commands_program_parts_dependencies.build_auth_config, _commands_program_parts_dependencies.generate_request, _commands_program_parts_dependencies.json, _commands_program_parts_dependencies.load_provider_config, _commands_program_parts_dependencies.os, _commands_program_parts_dependencies.provider_configured, _commands_program_parts_dependencies.read_json, _commands_program_parts_dependencies.sys, _commands_program_parts_dependencies.test_provider_config, _commands_program_parts_dependencies.write_interface_document, _commands_program_parts_dependencies.write_json, _commands_program_parts_dependencies.write_unified_command_center_archive_verification_report, _commands_program_parts_dependencies.write_unified_command_center_continuous_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_drift_response_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_change_control_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_lifecycle_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_verification_report, _commands_program_parts_dependencies.write_unified_command_center_reviewer_decision_board_verification_report, _commands_program_parts_dependencies.write_unified_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_accepted_evidence_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_change_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_distribution_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_verification_report, _commands_program_parts_dependencies.write_unified_release_program_handoff_verification_report, _commands_program_parts_dependencies.write_unified_release_program_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_review_pack_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_verification_report, _commands_program_parts_dependencies.write_unified_release_program_verification_report
+
+
+def _result_status(result: JsonDocument) -> str:
+    return str(result.get("status") or _as_document(result.get("summary")).get("status") or "")
+
+
+def _run_unified_release_program_continuity_command_center_acceptance_change_command(args: Namespace) -> JsonDocument:
 
     store = _program_component("receiver_acceptance_change")
     program_id = args.program_id
@@ -40,10 +52,10 @@ def _run_unified_release_program_continuity_command_center_acceptance_change_com
         "require_current_acceptance": args.require_current or True,
         "require_reset_proofs": args.require_reset_proofs or True,
     }
-    payload = {key: value for key, value in payload.items() if value is not None}
+    payload = normalize_json_document({key: value for key, value in payload.items() if value is not None})
     if args.action == "status":
         state = store.get_state(program_id)
-        return {"ok": True, **state, "status": (state.get("state") or {}).get("status") or "not_configured"}
+        return {"ok": True, **state, "status": _as_document(state.get("state")).get("status") or "not_configured"}
     if args.action == "create-cr":
         request = store.create_change_request(
             program_id,
@@ -106,7 +118,7 @@ def _execute_unified_command_center(argv: list[str]) -> None:
     result = _run_unified_command_center_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "runtime_failed", "verification_failed"}:
         raise SystemExit(1)
     return
@@ -121,7 +133,7 @@ def _execute_unified_command_center_review(argv: list[str]) -> None:
     result = _run_unified_command_center_review_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
         raise SystemExit(1)
     return
@@ -136,7 +148,7 @@ def _execute_unified_command_center_drift_response(argv: list[str]) -> None:
     result = _run_unified_command_center_drift_response_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
         raise SystemExit(1)
     return
@@ -151,7 +163,7 @@ def _execute_unified_command_center_evidence_review(argv: list[str]) -> None:
     result = _run_unified_command_center_evidence_review_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
         raise SystemExit(1)
     return
@@ -166,7 +178,7 @@ def _execute_unified_command_center_reviewer_decision_board(argv: list[str]) -> 
     result = _run_unified_command_center_reviewer_decision_board_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale"}:
         raise SystemExit(1)
     return
@@ -181,7 +193,7 @@ def _execute_unified_command_center_release_train(argv: list[str]) -> None:
     result = _run_unified_command_center_release_train_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -196,7 +208,7 @@ def _execute_unified_command_center_release_train_change_control(argv: list[str]
     result = _run_unified_command_center_release_train_change_control_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -211,7 +223,7 @@ def _execute_unified_command_center_release_train_lifecycle(argv: list[str]) -> 
     result = _run_unified_command_center_release_train_lifecycle_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -226,7 +238,7 @@ def _execute_unified_command_center_release_train_handoff(argv: list[str]) -> No
     result = _run_unified_command_center_release_train_handoff_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -241,7 +253,7 @@ def _execute_unified_release_program(argv: list[str]) -> None:
     result = _run_unified_release_program_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -256,7 +268,7 @@ def _execute_unified_release_program_operations(argv: list[str]) -> None:
     result = _run_unified_release_program_operations_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -271,7 +283,7 @@ def _execute_unified_release_program_handoff(argv: list[str]) -> None:
     result = _run_unified_release_program_handoff_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -286,7 +298,7 @@ def _execute_unified_release_program_vault(argv: list[str]) -> None:
     result = _run_unified_release_program_vault_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -301,7 +313,7 @@ def _execute_unified_release_program_vault_ops(argv: list[str]) -> None:
     result = _run_unified_release_program_vault_operations_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -316,7 +328,7 @@ def _execute_unified_release_program_continuity(argv: list[str]) -> None:
     result = _run_unified_release_program_continuity_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -331,7 +343,7 @@ def _execute_unified_release_program_continuity_kit(argv: list[str]) -> None:
     result = _run_unified_release_program_continuity_distribution_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return
@@ -346,7 +358,7 @@ def _execute_unified_release_program_continuity_acceptance(argv: list[str]) -> N
     result = _run_unified_release_program_continuity_acceptance_command(args)
     json_output = bool(getattr(args, "json", False))
     _print_release_audio_certification_result(result, json_output=json_output)
-    status = str(result.get("status") or result.get("summary", {}).get("status") or "")
+    status = _result_status(result)
     if result.get("ok") is False or status in {"failed", "blocked", "stale", "no_go"}:
         raise SystemExit(1)
     return

@@ -4,7 +4,6 @@ import time
 from http.client import HTTPConnection
 from pathlib import Path
 
-import song_agent.server as server_module
 from song_agent.provider import ProviderRequestError
 from song_agent.server import create_server
 
@@ -177,11 +176,7 @@ def test_provider_test_failure_returns_json_error(tmp_path, monkeypatch):
     try:
         request_json(server, "POST", "/api/provider", {"wire_api": "mock", "model": "mock-main"})
         monkeypatch.setattr(
-            "song_agent.provider.test_provider_config",
-            lambda config: _raise(ProviderRequestError("mock provider down")),
-        )
-        monkeypatch.setattr(
-            "song_agent.server.test_provider_config",
+            "song_agent.interfaces.api.runtime.test_provider_config",
             lambda config: _raise(ProviderRequestError("mock provider down")),
         )
         status, data = request_json(server, "POST", "/api/provider/test")
@@ -320,8 +315,7 @@ def test_provider_generation_mode_renders_midi(tmp_path, monkeypatch):
 def test_provider_failure_marks_job_failed(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
-        server_module,
-        "generate_request",
+        "song_agent.interfaces.api.runtime_parts.job_store_parts.job.generate_request",
         lambda request, **kwargs: (_raise(ProviderRequestError("mock failure"))),
     )
     server = start_test_server()

@@ -34,9 +34,8 @@
     "new_flat_module_count": 0
   },
   "composition_roots": [
-    "song_agent/interfaces/api/runtime.py",
-    "song_agent/interfaces/api/runtime_parts/dependencies/",
-    "song_agent/interfaces/cli/commands/"
+    "song_agent/interfaces/api/server.py",
+    "song_agent/interfaces/bootstrap/"
   ],
   "policy": {
     "limit_increase": "forbidden",

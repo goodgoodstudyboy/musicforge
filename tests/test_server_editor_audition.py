@@ -5,6 +5,7 @@ from pathlib import Path
 
 from song_agent.renderers.audio import save_renderer_config_from_dict
 import song_agent.domains.studio.editor_audition as editor_audition_module
+import song_agent.interfaces.api.runtime as api_runtime
 import song_agent.server as server_module
 
 from tests.test_server_edits import create_project_version, request_bytes, request_json, start_test_server, stop_test_server
@@ -172,7 +173,11 @@ def test_preview_and_parent_audio_routes(tmp_path, monkeypatch):
         wav_path.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
         return wav_path
 
-    monkeypatch.setattr(server_module, "render_audio", fake_server_render_audio)
+    monkeypatch.setattr(api_runtime, "render_audio", fake_server_render_audio)
+    monkeypatch.setattr(
+        "song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio",
+        fake_server_render_audio,
+    )
     server = start_test_server()
     try:
         project_id, preview_id = _create_preview(server)
@@ -206,7 +211,7 @@ def test_preview_audio_recomputes_plan_and_midi_before_render(tmp_path, monkeypa
         wav_path.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
         return wav_path
 
-    monkeypatch.setattr(server_module, "render_audio", fake_server_render_audio)
+    monkeypatch.setattr(api_runtime, "render_audio", fake_server_render_audio)
     server = start_test_server()
     try:
         project_id, preview_id = _create_preview(server)
@@ -238,7 +243,7 @@ def test_preview_audio_failure_records_sanitized_status(tmp_path, monkeypatch):
     def failing_render_audio(midi_path, wav_path, config, **kwargs):
         raise server_module.RendererError(f"failed at {tmp_path} with sk-secret-value")
 
-    monkeypatch.setattr(server_module, "render_audio", failing_render_audio)
+    monkeypatch.setattr(api_runtime, "render_audio", failing_render_audio)
     server = start_test_server()
     try:
         project_id, preview_id = _create_preview(server)

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from song_agent.interfaces.bootstrap.cli import stores as _program_stores
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
 from . import dependencies as _commands_program_parts_dependencies
 
-from .program_component_and_cross_domain_adapters import _add_command_center_acceptance_source_args
-Any, CommandSpec, Path, ProgramApplicationService, ProviderConfig, ProviderError, SongRequest, UnifiedCommandCenterContinuousReviewStore, UnifiedCommandCenterDriftResponseStore, UnifiedCommandCenterEvidenceReviewStore, UnifiedCommandCenterHandoffStore, UnifiedCommandCenterReleaseTrainChangeControlStore, UnifiedCommandCenterReleaseTrainHandoffStore, UnifiedCommandCenterReleaseTrainLifecycleStore, UnifiedCommandCenterReleaseTrainStore, UnifiedCommandCenterReviewerDecisionBoardStore, UnifiedCommandCenterSignoffStore, UnifiedCommandCenterStore, argparse, build_auth_config, generate_request, json, load_provider_config, os, provider_configured, read_json, sys, test_provider_config, write_interface_document, write_json, write_unified_command_center_archive_verification_report, write_unified_command_center_continuous_review_verification_report, write_unified_command_center_drift_response_verification_report, write_unified_command_center_evidence_review_acceptance_verification_report, write_unified_command_center_evidence_review_verification_report, write_unified_command_center_handoff_verification_report, write_unified_command_center_release_train_change_control_verification_report, write_unified_command_center_release_train_handoff_verification_report, write_unified_command_center_release_train_lifecycle_verification_report, write_unified_command_center_release_train_verification_report, write_unified_command_center_reviewer_decision_board_verification_report, write_unified_command_center_verification_report, write_unified_release_program_accepted_evidence_verification_report, write_unified_release_program_continuity_acceptance_change_verification_report, write_unified_release_program_continuity_acceptance_verification_report, write_unified_release_program_continuity_command_center_verification_report, write_unified_release_program_continuity_distribution_verification_report, write_unified_release_program_continuity_verification_report, write_unified_release_program_handoff_verification_report, write_unified_release_program_operations_verification_report, write_unified_release_program_review_pack_verification_report, write_unified_release_program_vault_operations_verification_report, write_unified_release_program_vault_verification_report, write_unified_release_program_verification_report = _commands_program_parts_dependencies.Any, _commands_program_parts_dependencies.CommandSpec, _commands_program_parts_dependencies.Path, _commands_program_parts_dependencies.ProgramApplicationService, _commands_program_parts_dependencies.ProviderConfig, _commands_program_parts_dependencies.ProviderError, _commands_program_parts_dependencies.SongRequest, _commands_program_parts_dependencies.UnifiedCommandCenterContinuousReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterDriftResponseStore, _commands_program_parts_dependencies.UnifiedCommandCenterEvidenceReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainChangeControlStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainLifecycleStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainStore, _commands_program_parts_dependencies.UnifiedCommandCenterReviewerDecisionBoardStore, _commands_program_parts_dependencies.UnifiedCommandCenterSignoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterStore, _commands_program_parts_dependencies.argparse, _commands_program_parts_dependencies.build_auth_config, _commands_program_parts_dependencies.generate_request, _commands_program_parts_dependencies.json, _commands_program_parts_dependencies.load_provider_config, _commands_program_parts_dependencies.os, _commands_program_parts_dependencies.provider_configured, _commands_program_parts_dependencies.read_json, _commands_program_parts_dependencies.sys, _commands_program_parts_dependencies.test_provider_config, _commands_program_parts_dependencies.write_interface_document, _commands_program_parts_dependencies.write_json, _commands_program_parts_dependencies.write_unified_command_center_archive_verification_report, _commands_program_parts_dependencies.write_unified_command_center_continuous_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_drift_response_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_change_control_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_lifecycle_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_verification_report, _commands_program_parts_dependencies.write_unified_command_center_reviewer_decision_board_verification_report, _commands_program_parts_dependencies.write_unified_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_accepted_evidence_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_change_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_distribution_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_verification_report, _commands_program_parts_dependencies.write_unified_release_program_handoff_verification_report, _commands_program_parts_dependencies.write_unified_release_program_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_review_pack_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_verification_report, _commands_program_parts_dependencies.write_unified_release_program_verification_report
+from song_agent.interfaces.cli.commands.quality_parts.release_audio_quality_actions import _add_command_center_acceptance_source_args
+CommandSpec, Path, ProgramApplicationService, ProviderConfig, ProviderError, SongRequest, UnifiedCommandCenterContinuousReviewStore, UnifiedCommandCenterDriftResponseStore, UnifiedCommandCenterEvidenceReviewStore, UnifiedCommandCenterHandoffStore, UnifiedCommandCenterReleaseTrainChangeControlStore, UnifiedCommandCenterReleaseTrainHandoffStore, UnifiedCommandCenterReleaseTrainLifecycleStore, UnifiedCommandCenterReleaseTrainStore, UnifiedCommandCenterReviewerDecisionBoardStore, UnifiedCommandCenterSignoffStore, UnifiedCommandCenterStore, argparse, build_auth_config, generate_request, json, load_provider_config, os, provider_configured, read_json, sys, test_provider_config, write_interface_document, write_json, write_unified_command_center_archive_verification_report, write_unified_command_center_continuous_review_verification_report, write_unified_command_center_drift_response_verification_report, write_unified_command_center_evidence_review_acceptance_verification_report, write_unified_command_center_evidence_review_verification_report, write_unified_command_center_handoff_verification_report, write_unified_command_center_release_train_change_control_verification_report, write_unified_command_center_release_train_handoff_verification_report, write_unified_command_center_release_train_lifecycle_verification_report, write_unified_command_center_release_train_verification_report, write_unified_command_center_reviewer_decision_board_verification_report, write_unified_command_center_verification_report, write_unified_release_program_accepted_evidence_verification_report, write_unified_release_program_continuity_acceptance_change_verification_report, write_unified_release_program_continuity_acceptance_verification_report, write_unified_release_program_continuity_command_center_verification_report, write_unified_release_program_continuity_distribution_verification_report, write_unified_release_program_continuity_verification_report, write_unified_release_program_handoff_verification_report, write_unified_release_program_operations_verification_report, write_unified_release_program_review_pack_verification_report, write_unified_release_program_vault_operations_verification_report, write_unified_release_program_vault_verification_report, write_unified_release_program_verification_report = _commands_program_parts_dependencies.CommandSpec, _commands_program_parts_dependencies.Path, _commands_program_parts_dependencies.ProgramApplicationService, _commands_program_parts_dependencies.ProviderConfig, _commands_program_parts_dependencies.ProviderError, _commands_program_parts_dependencies.SongRequest, _commands_program_parts_dependencies.UnifiedCommandCenterContinuousReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterDriftResponseStore, _commands_program_parts_dependencies.UnifiedCommandCenterEvidenceReviewStore, _commands_program_parts_dependencies.UnifiedCommandCenterHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainChangeControlStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainHandoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainLifecycleStore, _commands_program_parts_dependencies.UnifiedCommandCenterReleaseTrainStore, _commands_program_parts_dependencies.UnifiedCommandCenterReviewerDecisionBoardStore, _commands_program_parts_dependencies.UnifiedCommandCenterSignoffStore, _commands_program_parts_dependencies.UnifiedCommandCenterStore, _commands_program_parts_dependencies.argparse, _commands_program_parts_dependencies.build_auth_config, _commands_program_parts_dependencies.generate_request, _commands_program_parts_dependencies.json, _commands_program_parts_dependencies.load_provider_config, _commands_program_parts_dependencies.os, _commands_program_parts_dependencies.provider_configured, _commands_program_parts_dependencies.read_json, _commands_program_parts_dependencies.sys, _commands_program_parts_dependencies.test_provider_config, _commands_program_parts_dependencies.write_interface_document, _commands_program_parts_dependencies.write_json, _commands_program_parts_dependencies.write_unified_command_center_archive_verification_report, _commands_program_parts_dependencies.write_unified_command_center_continuous_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_drift_response_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_command_center_evidence_review_verification_report, _commands_program_parts_dependencies.write_unified_command_center_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_change_control_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_handoff_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_lifecycle_verification_report, _commands_program_parts_dependencies.write_unified_command_center_release_train_verification_report, _commands_program_parts_dependencies.write_unified_command_center_reviewer_decision_board_verification_report, _commands_program_parts_dependencies.write_unified_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_accepted_evidence_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_change_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_acceptance_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_command_center_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_distribution_verification_report, _commands_program_parts_dependencies.write_unified_release_program_continuity_verification_report, _commands_program_parts_dependencies.write_unified_release_program_handoff_verification_report, _commands_program_parts_dependencies.write_unified_release_program_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_review_pack_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_operations_verification_report, _commands_program_parts_dependencies.write_unified_release_program_vault_verification_report, _commands_program_parts_dependencies.write_unified_release_program_verification_report
 def build_unified_release_program_continuity_command_center_acceptance_change_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage Receiver Acceptance Change Control and lifecycle audit.")
     subparsers = parser.add_subparsers(dest="action", required=True)
@@ -88,8 +88,8 @@ def _unified_command_center_requirements_from_args(args: argparse.Namespace) -> 
             requirements[key] = False
     return requirements
 
-def _unified_command_center_evidence_from_args(args: argparse.Namespace) -> ImplementationDocument:
-    evidence: dict[str, _InterfaceType] = {
+def _unified_command_center_evidence_from_args(args: argparse.Namespace) -> JsonDocument:
+    evidence: JsonDocument = {
         "release": {
             "zip": getattr(args, "release_zip", None),
             "verification_report": getattr(args, "release_verification_report", None),
@@ -130,10 +130,10 @@ def _unified_command_center_evidence_from_args(args: argparse.Namespace) -> Impl
     }
     requirements = _unified_command_center_requirements_from_args(args)
     if requirements:
-        evidence["requirements"] = requirements
+        evidence["requirements"] = normalize_json_value(requirements)
     return evidence
 
-def _run_unified_command_center_command(args: argparse.Namespace) -> ImplementationDocument:
+def _run_unified_command_center_command(args: argparse.Namespace) -> JsonDocument:
     pass
     pass
     pass
@@ -141,9 +141,9 @@ def _run_unified_command_center_command(args: argparse.Namespace) -> Implementat
     pass
     pass
 
-    store = UnifiedCommandCenterStore()
-    signoff_store = UnifiedCommandCenterSignoffStore(store)
-    handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
+    store = _program_stores.unified_command_center_store()
+    signoff_store = _program_stores.unified_command_center_signoff_store(store)
+    handoff_store = _program_stores.unified_command_center_handoff_store(signoff_store)
     evidence = _unified_command_center_evidence_from_args(args)
     if args.action == "create":
         payload = {
@@ -159,7 +159,7 @@ def _run_unified_command_center_command(args: argparse.Namespace) -> Implementat
         return {"ok": True, "center": center, "summary": {"center_id": center.get("center_id")}, "status": center.get("status")}
     if args.action == "list":
         centers = store.list_centers()
-        return {"ok": True, "centers": centers, "summary": {"center_count": len(centers)}, "status": "passed"}
+        return {"ok": True, "centers": normalize_json_value(centers), "summary": {"center_count": len(centers)}, "status": "passed"}
     if args.action == "status":
         center = store.read_center(args.center_id)
         report = store.read_report(args.center_id) if store.report_path(args.center_id).exists() else {}
@@ -233,7 +233,7 @@ def _run_unified_command_center_command(args: argparse.Namespace) -> Implementat
         return {"ok": True, **result, "summary": {"change_request_id": args.change_request_id}}
     raise ValueError("Unsupported unified-command-center command.")
 
-def _unified_command_center_review_payload_from_args(args: argparse.Namespace) -> ImplementationDocument:
+def _unified_command_center_review_payload_from_args(args: argparse.Namespace) -> JsonDocument:
     return {
         "review_id": getattr(args, "review_id", None),
         "created_by": getattr(args, "created_by", None),
@@ -249,24 +249,24 @@ def _unified_command_center_review_payload_from_args(args: argparse.Namespace) -
         "release_check_report": getattr(args, "release_check_report", None),
     }
 
-def _run_unified_command_center_review_command(args: argparse.Namespace) -> ImplementationDocument:
+def _run_unified_command_center_review_command(args: argparse.Namespace) -> JsonDocument:
     pass
     pass
     pass
     pass
     pass
 
-    center_store = UnifiedCommandCenterStore()
-    signoff_store = UnifiedCommandCenterSignoffStore(center_store)
-    handoff_store = UnifiedCommandCenterHandoffStore(signoff_store)
-    store = UnifiedCommandCenterContinuousReviewStore(center_store, signoff_store=signoff_store, handoff_store=handoff_store)
+    center_store = _program_stores.unified_command_center_store()
+    signoff_store = _program_stores.unified_command_center_signoff_store(center_store)
+    handoff_store = _program_stores.unified_command_center_handoff_store(signoff_store)
+    store = _program_stores.unified_command_center_continuous_review_store(center_store, signoff_store=signoff_store, handoff_store=handoff_store)
     payload = _unified_command_center_review_payload_from_args(args)
     if args.action == "create":
         plan = store.create_plan(args.center_id, payload)
         return {"ok": True, "plan": plan, "summary": {"review_id": plan.get("review_id")}, "status": plan.get("status")}
     if args.action == "list":
         rows = store.list_reviews(args.center_id)
-        return {"ok": True, "reviews": rows, "summary": {"review_count": len(rows)}, "status": "passed"}
+        return {"ok": True, "reviews": normalize_json_value(rows), "summary": {"review_count": len(rows)}, "status": "passed"}
     if args.action == "status":
         docs = store.read_review(args.center_id, args.review_id)
         drift = docs.get("drift_report") or {}
@@ -297,7 +297,7 @@ def _run_unified_command_center_review_command(args: argparse.Namespace) -> Impl
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
     raise ValueError("Unsupported unified-command-center-review command.")
 
-def _unified_command_center_drift_response_payload_from_args(args: argparse.Namespace) -> ImplementationDocument:
+def _unified_command_center_drift_response_payload_from_args(args: argparse.Namespace) -> JsonDocument:
     return {
         "response_id": getattr(args, "response_id", None),
         "source_review_id": getattr(args, "source_review_id", None),

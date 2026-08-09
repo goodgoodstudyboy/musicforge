@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import JsonDocument
+
 from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioAuditRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_audit(self, method, parts, portfolio_id, action) -> bool:
+    def _dispatch_portfolio_audit(self, method: str, parts: list[str], portfolio_id: str, action: str) -> bool:
         if action == 'governance-audit':
             if len(parts) == 2:
                 if method != 'GET':
@@ -14,7 +17,9 @@ class TrustPortfolioAuditRoutes(TrustPortfolioRouteContext):
                     return True
                 report = self.release_portfolio_governance_audit_store.read_report(portfolio_id, default={})
                 stale = self.release_portfolio_governance_audit_store.report_is_stale(portfolio_id, report) if report else False
-                summary = _interfaces_api_runtime.sanitize_metadata(_interfaces_api_runtime.portfolio_governance_audit_summary(report) if report else {'status': 'missing'})
+                summary: JsonDocument = _interfaces_api_runtime.sanitize_metadata(
+                    _interfaces_api_runtime.portfolio_governance_audit_summary(report) if report else {"status": "missing"}
+                )
                 summary['stale'] = stale
                 self._send_json({'ok': True, 'portfolio_id': portfolio_id, 'report': report, 'summary': summary, 'stale': stale})
                 return True

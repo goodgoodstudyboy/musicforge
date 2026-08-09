@@ -3,11 +3,11 @@ from __future__ import annotations
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from song_agent.domains.creation.agent.multinode_pipeline import generate_multinode_song_plan
 from song_agent.domains.creation.agent.pipeline import SongAgent
 from song_agent.domains.creation.agent.provider_pipeline import generate_provider_song_plan
-from song_agent.domains.creation.node_store import NodeStore
 from song_agent.domains.studio.projectio import ProjectPaths, default_run_dir, read_json, write_json
 from song_agent.domains.creation.provider import ProviderConfig
 from song_agent.domains.quality.quality import validate_song_plan
@@ -15,6 +15,13 @@ from song_agent.domains.creation.renderers.midi import render_midi
 from song_agent.domains.creation.runtime import GraphRunner, PipelineStep, ResumeMismatchError
 from song_agent.domains.creation.schemas.song import SongRequest
 from song_agent.platform.contracts.run_state import ArtifactRef, RunState
+from song_agent.platform.contracts.documents import JsonDocument
+
+if TYPE_CHECKING:
+    from song_agent.domains.creation.node_store import NodeStore
+
+
+NodeStoreFactory = Callable[[Path], "NodeStore"]
 
 
 def generate_request(
@@ -24,9 +31,10 @@ def generate_request(
     resume: bool = False,
     force: bool = False,
     provider_config: ProviderConfig | None = None,
-    provider_snapshot: dict | None = None,
+    provider_snapshot: JsonDocument | None = None,
     control: Callable[[str, str], None] | None = None,
     pipeline_mode: str = "single",
+    node_store_factory: NodeStoreFactory | None = None,
 ) -> tuple[Path, Path]:
     if resume and force:
         raise ValueError("--resume and --force cannot be used together.")
@@ -53,6 +61,7 @@ def generate_request(
             pipeline_mode=pipeline_mode,
             control=control,
             run_options=run_options,
+            node_store_factory=node_store_factory,
         ),
         resume=resume,
         control=control,
@@ -106,10 +115,11 @@ def _build_steps(
     request: SongRequest,
     *,
     provider_config: ProviderConfig | None = None,
-    provider_snapshot: dict | None = None,
+    provider_snapshot: JsonDocument | None = None,
     pipeline_mode: str = "single",
     control: Callable[[str, str], None] | None = None,
     run_options: dict[str, str] | None = None,
+    node_store_factory: NodeStoreFactory | None = None,
 ) -> list[PipelineStep]:
     request_path = paths.data / "request.json"
     options_path = paths.data / "run-options.json"
@@ -126,11 +136,13 @@ def _build_steps(
 
     def compose(state: RunState, current_paths: ProjectPaths) -> None:
         if pipeline_mode == "multinode":
+            if node_store_factory is None:
+                raise RuntimeError("Multinode generation requires a NodeStore factory.")
             plan = generate_multinode_song_plan(
                 request,
                 provider_config=provider_config,
                 provider_snapshot=provider_snapshot,
-                node_store=NodeStore(current_paths.root),
+                node_store=node_store_factory(current_paths.root),
                 control=control,
             )
         elif provider_config is None:

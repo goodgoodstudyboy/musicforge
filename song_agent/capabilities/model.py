@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import JsonDocument, JsonValue, as_document as _as_document
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 from dataclasses import dataclass, field
 from importlib import import_module
-from typing import Any, Callable
+from collections.abc import Mapping
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -29,11 +30,11 @@ class RuntimeIdentitySpec:
 
     def extract(
         self,
-        report: dict[str, Any],
+        report: JsonDocument,
         *,
         component_type: str,
         package_type: str,
-    ) -> dict[str, Any]:
+    ) -> JsonDocument:
         component_id = _first_report_value(report, self.component_id_fields)
         generation = _positive_int(
             _first_report_value(report, self.generation_fields),
@@ -66,15 +67,16 @@ class RuntimeVerificationSpec:
     function: str
     package_type: str
     verification_package_type: str
-    defaults: tuple[tuple[str, Any], ...] = ()
+    defaults: tuple[tuple[str, JsonValue], ...] = ()
     proof_arguments: tuple[tuple[str, str], ...] = ()
     required_proofs: tuple[str, ...] = ()
     identity: RuntimeIdentitySpec = field(default_factory=RuntimeIdentitySpec)
 
-    def verifier(self) -> Callable[..., dict[str, Any]]:
-        return getattr(import_module(self.module), self.function)
+    def verify(self, package_path: Path, arguments: Mapping[str, object]) -> JsonDocument:
+        verifier = getattr(import_module(self.module), self.function)
+        return _as_document(verifier(package_path, **arguments))
 
-    def extract_identity(self, report: dict[str, Any], *, component_type: str) -> dict[str, Any]:
+    def extract_identity(self, report: JsonDocument, *, component_type: str) -> JsonDocument:
         return self.identity.extract(
             report,
             component_type=component_type,
@@ -97,19 +99,19 @@ class CapabilitySpec:
     compatibility_aliases: tuple[str, ...] = ()
 
 
-def _report_containers(report: ImplementationDocument) -> tuple[ImplementationDocument, ...]:
+def _report_containers(report: JsonDocument) -> tuple[JsonDocument, ...]:
     identity_value = report.get("identity")
     summary_value = report.get("summary")
     source_value = report.get("source")
-    identity: dict[str, Any] = _as_document(identity_value)
-    summary: dict[str, Any] = _as_document(summary_value)
+    identity: JsonDocument = _as_document(identity_value)
+    summary: JsonDocument = _as_document(summary_value)
     verification_value = summary.get("verification")
-    verification: dict[str, Any] = _as_document(verification_value)
-    source: dict[str, Any] = _as_document(source_value)
+    verification: JsonDocument = _as_document(verification_value)
+    source: JsonDocument = _as_document(source_value)
     return identity, summary, report, verification, source
 
 
-def _first_report_value(report: ImplementationDocument, fields: tuple[str, ...]) -> Any:
+def _first_report_value(report: JsonDocument, fields: tuple[str, ...]) -> object:
     for container in _report_containers(report):
         for name in fields:
             value = container.get(name)
@@ -118,7 +120,9 @@ def _first_report_value(report: ImplementationDocument, fields: tuple[str, ...])
     return None
 
 
-def _positive_int(value: Any, *, default: int) -> int:
+def _positive_int(value: object, *, default: int) -> int:
+    if not isinstance(value, (str, int, float)):
+        return default
     try:
         number = int(value)
     except (TypeError, ValueError):

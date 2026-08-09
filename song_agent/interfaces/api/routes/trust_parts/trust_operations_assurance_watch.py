@@ -5,6 +5,7 @@ from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustRoutesTrustOperationsAssuranceWatch(TrustRouteContext):
     def _handle_trust_operations_assurance_watch(self, method: str, tail: str) -> None:
         try:

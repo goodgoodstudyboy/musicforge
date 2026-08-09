@@ -1,5 +1,4 @@
 from __future__ import annotations
-from song_agent.interfaces.api.route_contexts.core import CoreRouteContext
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 from .program_parts.program_application import ProgramRoutesProgramApplication
@@ -17,7 +16,7 @@ from .program_ucc_parts.boards import ProgramUccBoardsRoutes
 from .program_ucc_parts.core import ProgramUccCoreRoutes
 from .program_ucc_parts.handoff import ProgramUccHandoffRoutes
 
-class ProgramRoutes(ProgramRoutesProgramApplication, ProgramRoutesUnifiedCommandCenterReleaseTrains, ProgramRoutesUnifiedCommandCenterEvidenceFromPayload, ProgramUccRootRoutes, ProgramUccReviewsRoutes, ProgramUccDriftsRoutes, ProgramUccEvidence_RootRoutes, ProgramUccEvidence_DetailRoutes, ProgramUccBoardsRoutes, ProgramUccCoreRoutes, ProgramUccHandoffRoutes, CoreRouteContext):
+class ProgramRoutes(ProgramRoutesProgramApplication, ProgramRoutesUnifiedCommandCenterReleaseTrains, ProgramRoutesUnifiedCommandCenterEvidenceFromPayload, ProgramUccRootRoutes, ProgramUccReviewsRoutes, ProgramUccDriftsRoutes, ProgramUccEvidence_RootRoutes, ProgramUccEvidence_DetailRoutes, ProgramUccBoardsRoutes, ProgramUccCoreRoutes, ProgramUccHandoffRoutes):
     def _handle_unified_command_centers_route(self, method: str, path: str) -> None:
         try:
             if self._dispatch_ucc_root(method, path):

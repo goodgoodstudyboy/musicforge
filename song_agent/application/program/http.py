@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from http import HTTPStatus
-from typing import Any, Protocol
+from typing import cast
 from song_agent.domains.program.unified_release_program import (
     UnifiedReleaseProgramError,
     UnifiedReleaseProgramNotFoundError,
@@ -67,6 +67,23 @@ from song_agent.domains.program.unified_release_program_vault_operations import 
     UnifiedReleaseProgramVaultOperationsStateError,
 )
 
+from .http_context import (
+    AcceptanceChangeStorePort,
+    AcceptanceStorePort,
+    CommandCenterSignoffStorePort,
+    CommandCenterStorePort,
+    ContinuityDistributionStorePort,
+    ContinuityStorePort,
+    HandoffStorePort,
+    OperationsStorePort,
+    ProgramHttpPort,
+    ProgramServicePort,
+    ProgramStorePort,
+    ReceiverAcceptanceChangeStorePort,
+    ReceiverAcceptanceStorePort,
+    VaultOperationsStorePort,
+    VaultStorePort,
+)
 from .http_routes.root import ProgramRootHttpRoutes
 from .http_routes.core import ProgramCoreHttpRoutes
 from .http_routes.handoff import ProgramHandoffHttpRoutes
@@ -82,25 +99,6 @@ from .http_routes.receiver_acceptance import ProgramReceiverAcceptanceHttpRoutes
 from .http_routes.receiver_acceptance_change import ProgramReceiverAcceptanceChangeHttpRoutes
 from .http_routes.operations import ProgramOperationsHttpRoutes
 from .http_routes.download import ProgramDownloadHttpRoutes
-
-class ProgramComponentProvider(Protocol):
-    def component(self, component: str) -> Any: ...
-
-_COMPONENT_ATTRIBUTES = {
-    "unified_release_program_store": "program",
-    "unified_release_program_operations_store": "operations",
-    "unified_release_program_handoff_store": "handoff",
-    "unified_release_program_vault_store": "vault",
-    "unified_release_program_vault_operations_store": "vault_operations",
-    "unified_release_program_continuity_store": "continuity",
-    "unified_release_program_continuity_distribution_store": "continuity_distribution",
-    "unified_release_program_continuity_acceptance_store": "continuity_acceptance",
-    "unified_release_program_continuity_acceptance_change_store": "continuity_acceptance_change",
-    "unified_release_program_continuity_command_center_store": "command_center",
-    "unified_release_program_continuity_command_center_signoff_store": "command_center_signoff",
-    "unified_release_program_continuity_command_center_acceptance_store": "receiver_acceptance",
-    "unified_release_program_continuity_command_center_acceptance_change_store": "receiver_acceptance_change",
-}
 
 _NOT_FOUND_ERRORS = (
     UnifiedReleaseProgramVaultNotFoundError,
@@ -149,15 +147,57 @@ _PROGRAM_ERRORS = (
 _HANDLED_ERRORS = _NOT_FOUND_ERRORS + _STATE_ERRORS + _PROGRAM_ERRORS
 
 class ProgramHttpApplication(ProgramRootHttpRoutes, ProgramCoreHttpRoutes, ProgramHandoffHttpRoutes, ProgramVaultHttpRoutes, ProgramVaultOperationsHttpRoutes, ProgramContinuityHttpRoutes, ProgramContinuityKitHttpRoutes, ProgramAcceptanceHttpRoutes, ProgramAcceptanceChangeHttpRoutes, ProgramCommandCenterHttpRoutes, ProgramCommandCenterSignoffHttpRoutes, ProgramReceiverAcceptanceHttpRoutes, ProgramReceiverAcceptanceChangeHttpRoutes, ProgramOperationsHttpRoutes, ProgramDownloadHttpRoutes):
-    def __init__(self, service: ProgramComponentProvider, port: object) -> None:
+    def __init__(self, service: ProgramServicePort, port: object) -> None:
         self.service = service
-        self.port = port
-
-    def __getattr__(self, name: str) -> Any:
-        component = _COMPONENT_ATTRIBUTES.get(name)
-        if component is not None:
-            return self.service.component(component)
-        return getattr(self.port, name)
+        http = cast(ProgramHttpPort, port)
+        self._optional_json_body = http._optional_json_body
+        self._read_json_body = http._read_json_body
+        self._send_error = http._send_error
+        self._send_json = http._send_json
+        self.unified_release_program_store = cast(
+            ProgramStorePort, service.component("program")
+        )
+        self.unified_release_program_operations_store = cast(
+            OperationsStorePort, service.component("operations")
+        )
+        self.unified_release_program_handoff_store = cast(
+            HandoffStorePort, service.component("handoff")
+        )
+        self.unified_release_program_vault_store = cast(
+            VaultStorePort, service.component("vault")
+        )
+        self.unified_release_program_vault_operations_store = cast(
+            VaultOperationsStorePort, service.component("vault_operations")
+        )
+        self.unified_release_program_continuity_store = cast(
+            ContinuityStorePort, service.component("continuity")
+        )
+        self.unified_release_program_continuity_distribution_store = cast(
+            ContinuityDistributionStorePort,
+            service.component("continuity_distribution"),
+        )
+        self.unified_release_program_continuity_acceptance_store = cast(
+            AcceptanceStorePort, service.component("continuity_acceptance")
+        )
+        self.unified_release_program_continuity_acceptance_change_store = cast(
+            AcceptanceChangeStorePort,
+            service.component("continuity_acceptance_change"),
+        )
+        self.unified_release_program_continuity_command_center_store = cast(
+            CommandCenterStorePort, service.component("command_center")
+        )
+        self.unified_release_program_continuity_command_center_signoff_store = cast(
+            CommandCenterSignoffStorePort,
+            service.component("command_center_signoff"),
+        )
+        self.unified_release_program_continuity_command_center_acceptance_store = cast(
+            ReceiverAcceptanceStorePort,
+            service.component("receiver_acceptance"),
+        )
+        self.unified_release_program_continuity_command_center_acceptance_change_store = cast(
+            ReceiverAcceptanceChangeStorePort,
+            service.component("receiver_acceptance_change"),
+        )
 
     def dispatch(self, method: str, path: str) -> None:
         try:

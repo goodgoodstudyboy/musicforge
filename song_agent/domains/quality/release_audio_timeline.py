@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list
 
 import json as json
 import shutil as shutil
@@ -666,7 +666,7 @@ def _checks(track_index: ImplementationDocument, trend: ImplementationDocument, 
 
 def _event(release_id: str, timeline_id: str, sequence: int, track_identity: ImplementationDocument, event_type: str, status: str, severity: str, payload: ImplementationDocument, previous_event_hash: str | None) -> ImplementationDocument:
     clean_payload = sanitize_metadata(payload)
-    event = sanitize_metadata(
+    event: ImplementationDocument = sanitize_metadata(
         {
             "schema_version": RELEASE_AUDIO_TIMELINE_SCHEMA_VERSION,
             "event_id": f"rate-evt-{sequence:06d}",

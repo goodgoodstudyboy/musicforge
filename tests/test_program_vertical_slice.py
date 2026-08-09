@@ -1,25 +1,17 @@
 from pathlib import Path
 
-from song_agent.application.program import ProgramApplicationService
-from song_agent.domains.program.model import ProgramComponent, ProgramOperation
+from song_agent.interfaces.bootstrap.api.program import build_program_application
 from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 from song_agent.interfaces.cli.app import REGISTRY
 from song_agent.release_check_program_vertical import run_program_vertical_slice_smoke
 
 
 def test_program_application_service_executes_canonical_domain_store(tmp_path: Path) -> None:
-    service = ProgramApplicationService.build(root=tmp_path / "unified-release-programs")
-    created = service.execute(
-        ProgramOperation(
-            ProgramComponent.PROGRAM,
-            "create_program",
-            ({"name": "Program vertical slice"},),
-        )
-    )
+    service = build_program_application(root=tmp_path / "unified-release-programs")
+    created = service.create_program({"name": "Program vertical slice"})
 
-    assert created.component is ProgramComponent.PROGRAM
     assert type(service.component("program")).__module__.startswith("song_agent.domains.program")
-    assert service.invoke("program", "get_program", created.value["program_id"])["program"]["name"] == "Program vertical slice"
+    assert service.get_program(str(created["program_id"]))["program"]["name"] == "Program vertical slice"
 
 
 def test_program_api_and_cli_use_explicit_registries() -> None:
@@ -40,8 +32,8 @@ def test_program_api_and_cli_use_explicit_registries() -> None:
 
 
 def test_program_application_gate_is_policy_owned(tmp_path: Path) -> None:
-    service = ProgramApplicationService.build(root=tmp_path / "unified-release-programs")
-    created = service.invoke("program", "create_program", {"name": "Policy-owned Program"})
+    service = build_program_application(root=tmp_path / "unified-release-programs")
+    created = service.create_program({"name": "Policy-owned Program"})
 
     legacy = service.evaluate_gate(created["program_id"], {})
     unknown = service.evaluate_gate(

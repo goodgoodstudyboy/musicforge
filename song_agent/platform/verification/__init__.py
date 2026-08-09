@@ -12,7 +12,7 @@ from song_agent.platform.verification.hashing import (
     stable_hash,
 )
 from song_agent.platform.verification.model import build_check, build_verification_report
-from song_agent.platform.verification.registry import VerifierCapability, VerifierCapabilityRegistry, active_verifier_registry
+from song_agent.platform.verification.registry import VerifierCapability, VerifierCapabilityRegistry
 from song_agent.platform.verification.zip_security import (
     is_safe_zip_entry,
     raw_central_directory_entry_names,
@@ -37,6 +37,5 @@ __all__ = [
     "verify_package_envelope",
     "VerifierCapability",
     "VerifierCapabilityRegistry",
-    "active_verifier_registry",
     "zip_has_no_trailing_data",
 ]

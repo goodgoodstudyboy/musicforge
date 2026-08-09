@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import TypedDict
+
 from song_agent.platform.contracts import as_document as _as_document
+from song_agent.platform.contracts.documents import JsonDocument
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
@@ -8,8 +11,23 @@ from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
+class _PublicTrustCenterRouteState(TypedDict, total=False):
+    tail: str
+    parts: list[str]
+    center_id: str
+    action: str
+    subaction: str
+    payload: JsonDocument
+    report: JsonDocument
+    manifest: JsonDocument
+    zip_info: JsonDocument
+
+
 class TrustRoutesPublicTrustCenters(TrustRouteContext):
-    def _handle_public_trust_centers_part_01(self, method: str, path: str, _split_state):
+    def _handle_public_trust_centers_part_01(
+        self, method: str, path: str, _split_state: _PublicTrustCenterRouteState
+    ) -> tuple[bool, None]:
         if _split_state['tail'] in {'', '/'}:
             if method == 'GET':
                 centers = self.public_trust_center_store.list_centers()
@@ -65,7 +83,9 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
             return (True, None)
         return (False, None)
 
-    def _handle_public_trust_centers_part_02(self, method: str, path: str, _split_state):
+    def _handle_public_trust_centers_part_02(
+        self, method: str, path: str, _split_state: _PublicTrustCenterRouteState
+    ) -> tuple[bool, None]:
         if _split_state['action'] == 'verify' and len(_split_state['parts']) == 2:
             if method != 'POST':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -77,7 +97,9 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
             return (True, None)
         return (False, None)
 
-    def _handle_public_trust_centers_part_03(self, method: str, path: str, _split_state):
+    def _handle_public_trust_centers_part_03(
+        self, method: str, path: str, _split_state: _PublicTrustCenterRouteState
+    ) -> tuple[bool, None]:
         if _split_state['action'] == 'anchor-registry':
             if len(_split_state['parts']) == 2:
                 if method != 'GET':
@@ -136,7 +158,9 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
             return (True, None)
         return (False, None)
 
-    def _handle_public_trust_centers_part_04(self, method: str, path: str, _split_state):
+    def _handle_public_trust_centers_part_04(
+        self, method: str, path: str, _split_state: _PublicTrustCenterRouteState
+    ) -> tuple[bool, None]:
         if _split_state['action'] == 'anchor-transparency':
             if len(_split_state['parts']) == 2:
                 if method != 'GET':
@@ -188,7 +212,9 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
             return (True, None)
         return (False, None)
 
-    def _handle_public_trust_centers_part_05(self, method: str, path: str, _split_state):
+    def _handle_public_trust_centers_part_05(
+        self, method: str, path: str, _split_state: _PublicTrustCenterRouteState
+    ) -> tuple[bool, None]:
         if _split_state['action'] == 'distribution-kit':
             if len(_split_state['parts']) == 2:
                 if method != 'GET':
@@ -243,9 +269,9 @@ class TrustRoutesPublicTrustCenters(TrustRouteContext):
         return (False, None)
 
     def _handle_public_trust_centers(self, method: str, path: str) -> None:
-        _split_state = {}
-        prefix = '/api/public-trust-centers'
-        _split_state['tail'] = path[len(prefix):]
+        _split_state: _PublicTrustCenterRouteState = {}
+        prefix = "/api/public-trust-centers"
+        _split_state["tail"] = path[len(prefix) :]
         try:
             _split_result = self._handle_public_trust_centers_part_01(method, path, _split_state)
             if _split_result[0]:

@@ -11,12 +11,15 @@ from typing import Callable
 from song_agent.platform.contracts.packages import PackageSpec, require_registered_package_type as _require_registered_package_type
 from song_agent.platform.verification.engine import verify_package_envelope
 from song_agent.platform.verification.hashing import integrity_hash, sha256_bytes
-from song_agent.platform.verification.registry import VerifierCapability, active_verifier_registry
+from song_agent.platform.verification.registry import VerifierCapability, VerifierCapabilityRegistry
 
 
-def run_active_verifier_attack_corpus(root: Path) -> dict[str, object]:
+def run_active_verifier_attack_corpus(
+    root: Path,
+    registry: VerifierCapabilityRegistry,
+) -> dict[str, object]:
     root.mkdir(parents=True, exist_ok=True)
-    rows = [_run_capability(root, capability) for capability in active_verifier_registry.all()]
+    rows = [_run_capability(root, capability) for capability in registry.all()]
     return {
         "schema_version": 1,
         "status": "passed" if all(row["status"] == "passed" for row in rows) else "failed",

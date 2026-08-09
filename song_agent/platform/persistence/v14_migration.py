@@ -3,10 +3,17 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TypeAlias
 
+from song_agent.platform.contracts import as_documents as _as_documents
+from song_agent.platform.contracts.documents import (
+    JsonDocument,
+    is_json_document,
+    normalize_json_document,
+)
 from song_agent.platform.persistence.database import MusicForgeDatabase, SCHEMA_VERSION
 from song_agent.platform.persistence.file_artifacts import sha256_path, write_json_atomic
 from song_agent.platform.persistence.locks import WorkspaceLock
@@ -19,7 +26,7 @@ V14_MIGRATION_INTENT_TYPE = "musicforge_v14_migration_intent"
 V14_MIGRATION_REPORT_TYPE = "musicforge_v14_migration_report"
 V14_MIGRATION_COMMIT_TYPE = "musicforge_v14_migration_commit_marker"
 V14_MIGRATION_ROLLBACK_TYPE = "musicforge_v14_migration_rollback_rehearsal"
-Document = dict[str, Any]
+Document: TypeAlias = JsonDocument
 
 
 class V14MigrationOrchestrator:
@@ -34,7 +41,7 @@ class V14MigrationOrchestrator:
     def plan(self) -> Document:
         legacy = self.migrator.dry_run()
         migration_id = f"v14-{str(legacy['source_hash'])[:16]}"
-        source_rows = _source_rows(self.workspace_root, legacy.get("files") or [])
+        source_rows = _source_rows(self.workspace_root, _as_documents(legacy.get("files")))
         immutable_rows = _immutable_rows(self.workspace_root, source_rows)
         pointers = _pointer_rows(self.workspace_root)
         return _integrity_document(
@@ -96,13 +103,16 @@ class V14MigrationOrchestrator:
             )
             write_json_atomic(intent_path, intent)
             applied = self.migrator.execute()
-            source_after = _source_rows(self.workspace_root, plan["source_files"])
+            plan_sources = _as_documents(plan.get("source_files"))
+            plan_immutable = _as_documents(plan.get("immutable_artifacts"))
+            plan_pointers = _as_documents(plan.get("current_pointers"))
+            source_after = _source_rows(self.workspace_root, plan_sources)
             immutable_after = _immutable_rows(self.workspace_root, source_after)
             pointers_after = _pointer_rows(self.workspace_root)
-            backup_verified = _backup_matches(self.workspace_root, applied, plan["source_files"])
-            source_preserved = source_after == plan["source_files"]
-            immutable_preserved = immutable_after == plan["immutable_artifacts"]
-            pointers_preserved = pointers_after == plan["current_pointers"]
+            backup_verified = _backup_matches(self.workspace_root, applied, plan_sources)
+            source_preserved = source_after == plan_sources
+            immutable_preserved = immutable_after == plan_immutable
+            pointers_preserved = pointers_after == plan_pointers
             schema_current = self.database.schema_version() == SCHEMA_VERSION
             after_state = _logical_state(self.workspace_root, self.database)
             passed = all(
@@ -159,8 +169,9 @@ class V14MigrationOrchestrator:
         before = _logical_state(self.workspace_root, self.database)
         result = self.migrator.rollback(str(report["legacy_migration_id"]))
         after = _logical_state(self.workspace_root, self.database)
-        source_rows = _source_rows(self.workspace_root, self.plan()["source_files"])
-        source_preserved = bool(source_rows) and source_rows == self.plan()["source_files"]
+        expected_sources = _as_documents(self.plan().get("source_files"))
+        source_rows = _source_rows(self.workspace_root, expected_sources)
+        source_preserved = bool(source_rows) and source_rows == expected_sources
         rollback = _integrity_document(
             {
                 "schema_version": 1,
@@ -202,9 +213,9 @@ class V14MigrationOrchestrator:
             rehearsal = V14MigrationOrchestrator(clone)
             plan = rehearsal.plan()
             before = _logical_state(clone, rehearsal.database)
-            source_before = plan["source_files"]
-            immutable_before = plan["immutable_artifacts"]
-            pointers_before = plan["current_pointers"]
+            source_before = _as_documents(plan.get("source_files"))
+            immutable_before = _as_documents(plan.get("immutable_artifacts"))
+            pointers_before = _as_documents(plan.get("current_pointers"))
             applied = rehearsal.apply()
             rolled_back = rehearsal.rollback(str(plan["migration_id"]))
             source_after = _source_rows(clone, source_before)
@@ -392,16 +403,16 @@ def _read_document(path: Path) -> Document:
     if not path.is_file():
         raise RuntimeError(f"V14 migration evidence is missing: {path.name}")
     try:
-        value: Any = json.loads(path.read_text(encoding="utf-8"))
+        value: object = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"V14 migration evidence is unreadable: {path.name}") from exc
-    if not isinstance(value, dict):
+    if not is_json_document(value):
         raise RuntimeError(f"V14 migration evidence is not an object: {path.name}")
     return value
 
 
-def _integrity_document(document: Document) -> Document:
-    result = dict(document)
+def _integrity_document(document: Mapping[str, object]) -> Document:
+    result = normalize_json_document(document)
     result["integrity_hash"] = integrity_hash(result)
     return result
 

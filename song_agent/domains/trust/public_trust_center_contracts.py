@@ -3,7 +3,7 @@ from __future__ import annotations
 from song_agent.platform.contracts.coercion import as_document as _as_document
 from typing import Any
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument
 
 import html
 from song_agent.domains.creation.redaction import DEFAULT_BLOCKED_METADATA_KEYS

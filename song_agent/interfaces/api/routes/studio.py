@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.route_contexts.core import CoreRouteContext
-
-
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 
-from song_agent.interfaces.web.assets import web_script
+from song_agent.interfaces.web import web_script
 
 from .studio_parts.edit_presets import StudioRoutesEditPresets
 
@@ -27,7 +24,7 @@ from .studio_dispatch_parts.distribution import StudioDistributionDispatch
 from .studio_dispatch_parts.library import StudioLibraryDispatch
 from .studio_dispatch_parts.dynamic import StudioDynamicDispatch
 
-class StudioRoutes(StudioRoutesEditPresets, StudioRoutesGetOrRefreshSprintJudgeSummary, StudioRoutesReviewSprintActionQueue, StudioRoutesApplyReviewTaskCandidate, StudioRoutesSendHtml, StudioSystemDispatch, StudioJobsDispatch, StudioResourcesDispatch, StudioAcceptance_RoutesDispatch, StudioAcceptance_ItemsDispatch, StudioDistributionDispatch, StudioLibraryDispatch, StudioDynamicDispatch, CoreRouteContext):
+class StudioRoutes(StudioRoutesEditPresets, StudioRoutesGetOrRefreshSprintJudgeSummary, StudioRoutesReviewSprintActionQueue, StudioRoutesApplyReviewTaskCandidate, StudioRoutesSendHtml, StudioSystemDispatch, StudioJobsDispatch, StudioResourcesDispatch, StudioAcceptance_RoutesDispatch, StudioAcceptance_ItemsDispatch, StudioDistributionDispatch, StudioLibraryDispatch, StudioDynamicDispatch):
     def _send_javascript(self, source: str) -> None:
         body = source.encode("utf-8")
         self.send_response(_interfaces_api_runtime.HTTPStatus.OK.value)

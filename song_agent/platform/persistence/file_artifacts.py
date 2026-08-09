@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.coercion import JsonDocument, as_document as _as_document
 
 import hashlib
 import json
 import os
 import threading
-from importlib import resources
 from pathlib import Path
-from typing import Any, cast
+from typing import Mapping, Sequence, cast
 
+from song_agent.platform.resource_access import PackagedResource, read_packaged_text
 from song_agent.platform.verification.hashing import integrity_hash, integrity_ok
 
 
-STATE_POLICY_RESOURCE = ("runtime-state-authority-policy.json", "21d23353bc5eb425bd66fdf1742035d8660e7df486d9183ac3b27811fa8cf967")
+STATE_POLICY_RESOURCE = ("runtime-state-authority-policy.json", "36f09b71009a715d8e559da9933d226d2d616ca18e89aef813c987483629c52b")
 RUNTIME_STATE_AUTHORITY_POLICY_TYPE = "musicforge_v144_runtime_state_authority_policy"
 
 
@@ -42,7 +42,7 @@ class FileArtifactStore:
     def current_pointer_path(self, namespace: str) -> Path:
         return self.artifacts_root / _safe_segment(namespace) / "current.json"
 
-    def write_staged(self, transaction_id: str, relative_path: str, data: bytes) -> dict[str, Any]:
+    def write_staged(self, transaction_id: str, relative_path: str, data: bytes) -> JsonDocument:
         relative = _safe_relative(relative_path)
         staging = self.staging_dir(transaction_id)
         path = staging / relative
@@ -52,14 +52,14 @@ class FileArtifactStore:
         path.write_bytes(data)
         return {"path": relative.as_posix(), "sha256": sha256_path(path), "size_bytes": len(data)}
 
-    def write_staged_json(self, transaction_id: str, relative_path: str, value: dict[str, Any]) -> dict[str, Any]:
+    def write_staged_json(self, transaction_id: str, relative_path: str, value: Mapping[str, object]) -> JsonDocument:
         return self.write_staged(
             transaction_id,
             relative_path,
             (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
         )
 
-    def fingerprint_tree(self, root: Path) -> list[dict[str, Any]]:
+    def fingerprint_tree(self, root: Path) -> list[JsonDocument]:
         if not root.is_dir():
             return []
         return [
@@ -71,17 +71,17 @@ class FileArtifactStore:
             for path in sorted(item for item in root.rglob("*") if item.is_file())
         ]
 
-    def verify_tree(self, root: Path, expected: list[dict[str, Any]]) -> bool:
+    def verify_tree(self, root: Path, expected: Sequence[Mapping[str, object]]) -> bool:
         return self.fingerprint_tree(root) == sorted(expected, key=lambda row: str(row.get("path") or ""))
 
-    def read_pointer(self, namespace: str) -> dict[str, Any]:
+    def read_pointer(self, namespace: str) -> JsonDocument:
         path = self.current_pointer_path(namespace)
         if not path.is_file():
             return {}
         value = json.loads(path.read_text(encoding="utf-8"))
         return _as_document(value)
 
-    def write_pointer_atomic(self, namespace: str, value: dict[str, Any]) -> Path:
+    def write_pointer_atomic(self, namespace: str, value: Mapping[str, object]) -> Path:
         path = self.current_pointer_path(namespace)
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.with_suffix(path.suffix + f".{os.getpid()}.tmp")
@@ -98,12 +98,12 @@ def sha256_path(path: Path) -> str:
     return digest.hexdigest()
 
 
-def stable_tree_hash(rows: list[dict[str, Any]]) -> str:
+def stable_tree_hash(rows: Sequence[Mapping[str, object]]) -> str:
     payload = json.dumps(sorted(rows, key=lambda row: str(row.get("path") or "")), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def write_json_atomic(path: Path | str, value: Any) -> Path:
+def write_json_atomic(path: Path | str, value: object) -> Path:
     """Write a JSON projection atomically without depending on legacy project I/O."""
 
     target = Path(path)
@@ -114,16 +114,14 @@ def write_json_atomic(path: Path | str, value: Any) -> Path:
     return target
 
 
-def read_json_document(path: Path | str) -> dict[str, Any]:
+def read_json_document(path: Path | str) -> JsonDocument:
     value = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError("JSON document must be an object.")
     return value
 
 
-def build_runtime_state_authority_policy(
-    registry: dict[str, object], baseline: dict[str, object]
-) -> dict[str, object]:
+def build_runtime_state_authority_policy(registry: dict[str, object], baseline: dict[str, object]) -> dict[str, object]:
     document: dict[str, object] = {
         "schema_version": 1,
         "package_type": RUNTIME_STATE_AUTHORITY_POLICY_TYPE,
@@ -138,11 +136,7 @@ def build_runtime_state_authority_policy(
 
 def load_runtime_state_authority_policy() -> tuple[dict[str, object], str, list[str]]:
     try:
-        text = (
-            resources.files("song_agent.platform.persistence")
-            .joinpath(STATE_POLICY_RESOURCE[0])
-            .read_text(encoding="utf-8")
-        )
+        text = read_packaged_text(PackagedResource.STATE_AUTHORITY_POLICY)
         value = json.loads(text)
     except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError, TypeError):
         return {}, "", ["v144_wave0_state_runtime_policy_missing"]
@@ -162,7 +156,8 @@ def validate_runtime_state_authority_policy(policy: dict[str, object]) -> list[s
     if (
         policy.get("integrity_hash") != STATE_POLICY_RESOURCE[1]
         or policy.get("package_type") != RUNTIME_STATE_AUTHORITY_POLICY_TYPE
-        or policy.get("schema_version") != 1 or not integrity_ok(policy)
+        or policy.get("schema_version") != 1
+        or not integrity_ok(policy)
     ):
         blockers.append("v144_wave0_state_runtime_policy_integrity")
     registry = policy.get("state_registry")

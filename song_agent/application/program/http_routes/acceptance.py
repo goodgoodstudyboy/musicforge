@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.application.program.http_context import ProgramHttpContext
+from song_agent.platform.contracts.coercion import as_document
 
 from http import HTTPStatus
 
@@ -11,7 +12,7 @@ class ProgramAcceptanceHttpRoutes(ProgramHttpContext):
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
             detail = self.unified_release_program_continuity_acceptance_store.get_board(program_id)
-            report = detail.get('report') or {}
+            report = as_document(detail.get('report'))
             self._send_json({'ok': True, **detail, 'summary': report.get('summary', {}), 'status': report.get('status') or 'unknown'})
             return True
         if tail == '/continuity-acceptance/responses':
@@ -19,7 +20,8 @@ class ProgramAcceptanceHttpRoutes(ProgramHttpContext):
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
             result = self.unified_release_program_continuity_acceptance_store.import_response(program_id, self._read_json_body())
-            self._send_json({'ok': result.get('status') == 'imported', **result, 'summary': {'response_id': result.get('response', {}).get('response_id')}, 'status': result.get('status')}, status=HTTPStatus.CREATED)
+            response = as_document(result.get('response'))
+            self._send_json({'ok': result.get('status') == 'imported', **result, 'summary': {'response_id': response.get('response_id')}, 'status': result.get('status')}, status=HTTPStatus.CREATED)
             return True
         if tail.startswith('/continuity-acceptance/responses/') and tail.endswith('/accepted-evidence'):
             if method != 'POST':
@@ -27,7 +29,8 @@ class ProgramAcceptanceHttpRoutes(ProgramHttpContext):
                 return True
             response_id = tail.split('/')[3]
             result = self.unified_release_program_continuity_acceptance_store.create_accepted_evidence(program_id, response_id, self._optional_json_body())
-            self._send_json({'ok': result.get('status') == 'accepted', **result, 'summary': {'evidence_id': result.get('evidence', {}).get('evidence_id')}, 'status': result.get('status')}, status=HTTPStatus.CREATED)
+            evidence = as_document(result.get('evidence'))
+            self._send_json({'ok': result.get('status') == 'accepted', **result, 'summary': {'evidence_id': evidence.get('evidence_id')}, 'status': result.get('status')}, status=HTTPStatus.CREATED)
             return True
         if tail == '/continuity-acceptance/board':
             if method != 'POST':

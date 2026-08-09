@@ -1,5 +1,5 @@
 {
-  "integrity_hash": "e7b7674fcba0072ba7100e058edd915de7de83f7f9fff24082a0a28195e3d040",
+  "integrity_hash": "2232f406f609cb84006dbdef4acc05bbec118a47f16f82c3d7bd5b4bfea836bb",
   "package_type": "musicforge_v144_runtime_package_writer_policy",
   "package_type_sets": [
     {
@@ -866,7 +866,7 @@
       "writer_id": "song_agent.platform.verification.model.build_verification_report"
     }
   ],
-  "registry_integrity_hash": "c1cf7d2a35580200d0ed3d9c23949451708b2040b3b97d50dedc84d9991bdcf5",
+  "registry_integrity_hash": "28a3d0f80ff9c697b8d1dbd0aa20bd76f9f29efc51d8e4ea0b17429bbb6d6127",
   "schema_version": 2,
   "writer_contracts": [
     {

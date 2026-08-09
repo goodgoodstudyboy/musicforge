@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
+
 
 class CreationRoutesBatch(CreationRouteContext):
     def _handle_batch_route_part_01(self, method: str, batch_id: str, tail: str, _split_state):
@@ -131,7 +132,7 @@ class CreationRoutesBatch(CreationRouteContext):
         return (False, None)
 
     def _handle_batch_route(self, method: str, batch_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         _split_result = self._handle_batch_route_part_01(method, batch_id, tail, _split_state)
         if _split_result[0]:
             return _split_result[1]
@@ -274,54 +275,54 @@ class CreationRoutesBatch(CreationRouteContext):
         return (False, None)
 
     def _handle_job_route_part_03(self, method: str, job_id: str, tail: str, _split_state):
-        if tail == '/provider-usage':
-            usage_path = _split_state['run_dir'] / 'data' / 'provider-usage.json'
+        if tail == "/provider-usage":
+            usage_path = _split_state["run_dir"] / "data" / "provider-usage.json"
             if not usage_path.exists():
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Provider usage not found.')
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Provider usage not found.")
                 return (True, None)
-            self._send_json({'job_id': _split_state['job'].job_id, 'usage': _interfaces_api_runtime.read_json(usage_path)})
+            self._send_json({"job_id": _split_state["job"].job_id, "usage": _interfaces_api_runtime.read_json(usage_path)})
             return (True, None)
-        if tail == '/events':
-            self._send_json({'events': _interfaces_api_runtime._read_events(_split_state['run_dir'] / 'logs' / 'events.jsonl')})
+        if tail == "/events":
+            self._send_json({"events": normalize_json_value(_interfaces_api_runtime._read_events(_split_state["run_dir"] / "logs" / "events.jsonl"))})
             return (True, None)
-        if tail == '/artifacts':
-            self._send_json({'artifacts': _interfaces_api_runtime.discover_artifacts(_split_state['run_dir'])})
+        if tail == "/artifacts":
+            self._send_json({"artifacts": normalize_json_value(_interfaces_api_runtime.discover_artifacts(_split_state["run_dir"]))})
             return (True, None)
-        if tail == '/midi':
-            self._send_file(_split_state['run_dir'] / 'renders' / 'song.mid', 'audio/midi')
+        if tail == "/midi":
+            self._send_file(_split_state["run_dir"] / "renders" / "song.mid", "audio/midi")
             return (True, None)
-        if tail == '/audio':
-            audio_path = _split_state['run_dir'] / 'renders' / 'song.wav'
+        if tail == "/audio":
+            audio_path = _split_state["run_dir"] / "renders" / "song.wav"
             if not audio_path.exists():
-                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Audio render is not available for this job.')
+                self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Audio render is not available for this job.")
                 return (True, None)
-            stale_reasons = self._job_audio_artifact_stale_reasons(_split_state['job'])
+            stale_reasons = self._job_audio_artifact_stale_reasons(_split_state["job"])
             if stale_reasons:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, f"Audio artifact is stale: {', '.join(stale_reasons)}.")
                 return (True, None)
-            self._send_file(audio_path, 'audio/wav')
+            self._send_file(audio_path, "audio/wav")
             return (True, None)
-        if tail == '/stems':
-            _split_state['data'], _split_state['status'], _split_state['error'] = self.store.get_job_stems(job_id)
-            if _split_state['error'] is not None:
-                self._send_error(_split_state['status'], _split_state['error'])
+        if tail == "/stems":
+            _split_state["data"], _split_state["status"], _split_state["error"] = self.store.get_job_stems(job_id)
+            if _split_state["error"] is not None:
+                self._send_error(_split_state["status"], _split_state["error"])
                 return (True, None)
-            self._send_json(_split_state['data'], status=_split_state['status'])
+            self._send_json(_split_state["data"], status=_split_state["status"])
             return (True, None)
-        if tail.startswith('/stems/'):
-            self._send_stem_file(_split_state['job'], tail)
+        if tail.startswith("/stems/"):
+            self._send_stem_file(_split_state["job"], tail)
             return (True, None)
-        if tail == '/nodes':
-            self._send_nodes_list(_split_state['job'])
+        if tail == "/nodes":
+            self._send_nodes_list(_split_state["job"])
             return (True, None)
-        if tail.startswith('/nodes/'):
-            self._send_node_route(method, _split_state['job'], tail)
+        if tail.startswith("/nodes/"):
+            self._send_node_route(method, _split_state["job"], tail)
             return (True, None)
-        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Job route not found.')
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Job route not found.")
         return (False, None)
 
     def _handle_job_route(self, method: str, job_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         _split_result = self._handle_job_route_part_01(method, job_id, tail, _split_state)
         if _split_result[0]:
             return _split_result[1]

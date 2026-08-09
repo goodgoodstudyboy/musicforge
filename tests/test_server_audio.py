@@ -155,7 +155,7 @@ def test_renderer_test_succeeds_with_fake_runner(tmp_path, monkeypatch):
     soundfont = tmp_path / "font.sf2"
     soundfont.write_bytes(b"font")
     monkeypatch.setattr(
-        "song_agent.server.test_renderer_config",
+        "song_agent.interfaces.api.runtime.test_renderer_config",
         lambda config: {
             "ok": True,
             "renderer": {
@@ -202,7 +202,10 @@ def test_render_audio_writes_wav_with_fake_renderer(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     soundfont = tmp_path / "font.sf2"
     soundfont.write_bytes(b"font")
-    monkeypatch.setattr("song_agent.server.render_audio", lambda midi, wav, config: fake_render_audio(midi, wav))
+    monkeypatch.setattr(
+        "song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio",
+        lambda midi, wav, config: fake_render_audio(midi, wav),
+    )
     server = start_test_server()
     try:
         final = create_completed_job(server)
@@ -228,7 +231,10 @@ def test_render_audio_writes_wav_with_fake_renderer(tmp_path, monkeypatch):
 
 def test_audio_endpoint_returns_wav(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.server.render_audio", lambda midi, wav, config: fake_render_audio(midi, wav))
+    monkeypatch.setattr(
+        "song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio",
+        lambda midi, wav, config: fake_render_audio(midi, wav),
+    )
     soundfont = tmp_path / "font.sf2"
     soundfont.write_bytes(b"font")
     server = start_test_server()
@@ -268,7 +274,10 @@ def test_render_audio_failure_does_not_mark_job_failed(tmp_path, monkeypatch):
 
         raise RendererExecutionError("render failed")
 
-    monkeypatch.setattr("song_agent.server.render_audio", failing_render)
+    monkeypatch.setattr(
+        "song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio",
+        failing_render,
+    )
     server = start_test_server()
     try:
         final = create_completed_job(server, "Audio Failure Song")

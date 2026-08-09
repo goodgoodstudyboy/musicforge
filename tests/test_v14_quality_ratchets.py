@@ -142,7 +142,9 @@ def test_v14_migration_tools_are_idempotent() -> None:
     assert migrate_private_document_types(ROOT, write=False)["changed_file_count"] == 0
     assert split_active_functions(ROOT, write=False) == {"changed_files": [], "skipped": []}
     assert split_interfaces(ROOT, write=False) == {"selected": 0, "changed_files": [], "skipped": []}
-    assert adopt_composition_types(ROOT, write=False)["changed_files"] == []
+    composition = adopt_composition_types(ROOT, write=False)
+    assert composition["changed_files"] == []
+    assert composition["status"] == "retired_by_v14.4_wave1"
     assert adopt_document_coercions(ROOT, write=False)["changed_files"] == []
     assert consolidate_contract_imports(ROOT, write=False)["changed_files"] == []
 
@@ -240,7 +242,8 @@ def test_v141_quality_policy_closes_active_mypy_debt_and_checks_full_repository(
     typing = collect_typing_metrics(ROOT)
     assert policy["typing"]["explicit_any_collector_schema_version"] == typing["collector_schema_version"]
     assert policy["typing"]["explicit_any_max_count"] == typing["explicit_any_count"]
-    assert set(policy["typing"]["explicit_any_layer_budgets"]) >= {"platform", "application", "capabilities"}
+    assert policy["typing"]["explicit_any_layer_budgets"] == {"domains": typing["explicit_any_count"]}
+    assert typing["explicit_any_by_layer"] == {"domains": typing["explicit_any_count"]}
     assert '"song_agent/domains"' in configured
     assert "python -m ruff check song_agent tests tools" in workflow
     assert "python -m mypy --no-incremental" in workflow
@@ -2901,7 +2904,8 @@ def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() ->
     schema13_forged = json.loads(json.dumps(baseline))
     schema13_forged["typing"]["explicit_any_max_count"] += 1
     schema13_forged["typing"]["explicit_any_affected_file_max_count"] += 1
-    schema13_forged["typing"]["explicit_any_layer_budgets"]["interfaces"] += 1
+    layer = next(iter(schema13_forged["typing"]["explicit_any_layer_budgets"]))
+    schema13_forged["typing"]["explicit_any_layer_budgets"][layer] += 1
     schema13_forged["stabilization"]["alias_fail_closed_collector_hotfix"][
         "previous_explicit_any_ceiling"
     ] += 1
@@ -2924,14 +2928,14 @@ def test_v1421_policy_full_resign_cannot_reallocate_file_or_module_ceilings() ->
         {key: value for key, value in schema15_forged.items() if key != "integrity_hash"}
     )
 
-    assert "v14_quality_policy_stabilization_typing_file_budgets" in _policy_blockers(typing_forged)
+    assert "v14_quality_policy_wave1_typing_ratchet" in _policy_blockers(typing_forged)
     assert "v14_quality_policy_stabilization_module_debt" in _policy_blockers(module_forged)
     schema13_blockers = _policy_blockers(schema13_forged)
     assert "v14_quality_policy_alias_fail_closed_collector_migration" in schema13_blockers
-    assert "v14_quality_policy_alias_fail_closed_ceilings" in schema13_blockers
+    assert "v14_quality_policy_wave1_typing_ratchet" in schema13_blockers
     schema14_blockers = _policy_blockers(schema14_forged)
     assert "v14_quality_policy_call_effect_dataflow_collector_migration" in schema14_blockers
-    assert "v14_quality_policy_alias_fail_closed_ceilings" in schema14_blockers
+    assert "v14_quality_policy_wave1_typing_ratchet" in schema14_blockers
     assert "v14_quality_policy_call_binding_lambda_effect_collector_migration" in _policy_blockers(
         schema15_forged
     )

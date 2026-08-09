@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
-
-from typing import Any as _InterfaceType
+from song_agent.platform.contracts.documents import JsonDocument
+from song_agent.release_check.matrix import ReleaseCheckDefinition
 
 from . import dependencies as _commands_release_check_parts_dependencies
 
 from .release_check_commands_and_presenter_adapters import _warn_legacy_ga_flags, build_release_check_parser, build_verify_ga_readiness_parser
-Any, CommandSpec, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, build_ga_readiness_report, generate_request, json, load_provider_config, os, print_release_check_report, provider_configured, read_json, release_check_definitions_as_dicts, release_check_profiles, run_release_check_matrix, select_check_definitions, sys, test_provider_config, verify_ga_readiness_report, write_ga_readiness_report, write_ga_readiness_verification_report, write_interface_document, write_json, write_json_report, write_timing_report = _commands_release_check_parts_dependencies.Any, _commands_release_check_parts_dependencies.CommandSpec, _commands_release_check_parts_dependencies.Path, _commands_release_check_parts_dependencies.ProviderConfig, _commands_release_check_parts_dependencies.ProviderError, _commands_release_check_parts_dependencies.SongRequest, _commands_release_check_parts_dependencies.argparse, _commands_release_check_parts_dependencies.build_auth_config, _commands_release_check_parts_dependencies.build_ga_readiness_report, _commands_release_check_parts_dependencies.generate_request, _commands_release_check_parts_dependencies.json, _commands_release_check_parts_dependencies.load_provider_config, _commands_release_check_parts_dependencies.os, _commands_release_check_parts_dependencies.print_release_check_report, _commands_release_check_parts_dependencies.provider_configured, _commands_release_check_parts_dependencies.read_json, _commands_release_check_parts_dependencies.release_check_definitions_as_dicts, _commands_release_check_parts_dependencies.release_check_profiles, _commands_release_check_parts_dependencies.run_release_check_matrix, _commands_release_check_parts_dependencies.select_check_definitions, _commands_release_check_parts_dependencies.sys, _commands_release_check_parts_dependencies.test_provider_config, _commands_release_check_parts_dependencies.verify_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_verification_report, _commands_release_check_parts_dependencies.write_interface_document, _commands_release_check_parts_dependencies.write_json, _commands_release_check_parts_dependencies.write_json_report, _commands_release_check_parts_dependencies.write_timing_report
+CommandSpec, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, build_ga_readiness_report, generate_request, json, load_provider_config, os, print_release_check_report, provider_configured, read_json, release_check_definitions_as_dicts, release_check_profiles, run_release_check_matrix, select_check_definitions, sys, test_provider_config, verify_ga_readiness_report, write_ga_readiness_report, write_ga_readiness_verification_report, write_interface_document, write_json, write_json_report, write_timing_report = _commands_release_check_parts_dependencies.CommandSpec, _commands_release_check_parts_dependencies.Path, _commands_release_check_parts_dependencies.ProviderConfig, _commands_release_check_parts_dependencies.ProviderError, _commands_release_check_parts_dependencies.SongRequest, _commands_release_check_parts_dependencies.argparse, _commands_release_check_parts_dependencies.build_auth_config, _commands_release_check_parts_dependencies.build_ga_readiness_report, _commands_release_check_parts_dependencies.generate_request, _commands_release_check_parts_dependencies.json, _commands_release_check_parts_dependencies.load_provider_config, _commands_release_check_parts_dependencies.os, _commands_release_check_parts_dependencies.print_release_check_report, _commands_release_check_parts_dependencies.provider_configured, _commands_release_check_parts_dependencies.read_json, _commands_release_check_parts_dependencies.release_check_definitions_as_dicts, _commands_release_check_parts_dependencies.release_check_profiles, _commands_release_check_parts_dependencies.run_release_check_matrix, _commands_release_check_parts_dependencies.select_check_definitions, _commands_release_check_parts_dependencies.sys, _commands_release_check_parts_dependencies.test_provider_config, _commands_release_check_parts_dependencies.verify_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_verification_report, _commands_release_check_parts_dependencies.write_interface_document, _commands_release_check_parts_dependencies.write_json, _commands_release_check_parts_dependencies.write_json_report, _commands_release_check_parts_dependencies.write_timing_report
 def _execute_verify_ga_readiness_report_part_01(argv: list[str], _split_state):
     raw_args = ['verify-ga-readiness-report', *argv]
     pass
@@ -36,7 +35,7 @@ def _execute_verify_ga_readiness_report_part_03(argv: list[str], _split_state):
     return (False, None)
 
 def _execute_verify_ga_readiness_report(argv: list[str]) -> None:
-    _split_state: dict[str, _InferenceType] = {}
+    _split_state: JsonDocument = {}
     _split_result = _execute_verify_ga_readiness_report_part_01(argv, _split_state)
     if _split_result[0]:
         return _split_result[1]
@@ -71,7 +70,7 @@ def _execute_release_check(argv: list[str]) -> None:
             for item in rows:
                 print(f"{item['check_id']}\t{item['group']}\t{item.get('version') or '-'}\t{item['name']}")
         return
-    def _progress(definition: _InterfaceType) -> None:
+    def _progress(definition: ReleaseCheckDefinition) -> None:
         print(f"[release-check] running {definition.check_id} ...", file=sys.stderr, flush=True)
     report = run_release_check_matrix(
         profile=args.profile,

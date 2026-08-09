@@ -1,0 +1,2565 @@
+{
+  "cli_registration_relocations": [
+    {
+      "capability_id": "studio.maintenance",
+      "command": "status",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:28:status",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:116:status",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "backup",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:31:backup",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:119:backup",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "create",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:33:create",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:121:create",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "list",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:36:list",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:124:list",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "verify",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:38:verify",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:126:verify",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "restore-plan",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:41:restore-plan",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:129:restore-plan",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "restore",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:46:restore",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:134:restore",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "upgrade",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:55:upgrade",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:143:upgrade",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "preflight",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:57:preflight",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:145:preflight",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "migration",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:63:migration",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:151:migration",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "status",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:65:status",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:153:status",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "plan",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:66:plan",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:154:plan",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "run",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:67:run",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:155:run",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "check",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:71:check",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:159:check",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "list",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:73:list",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:161:list",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "run",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:75:run",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:163:run",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "studio.maintenance",
+      "command": "show",
+      "function": "build_maintenance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:78:show",
+      "old_id": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters:166:show",
+      "source": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "active",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:110:active",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:108:active",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "versions",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:111:versions",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:109:versions",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "version",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:113:version",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:111:version",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "promotions",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:116:promotions",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:114:promotions",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "promotion",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:118:promotion",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:116:promotion",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "promote-request",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:121:promote-request",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:119:promote-request",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "approve",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:126:approve",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:124:approve",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-plan-reviews",
+      "command": "create",
+      "function": "build_acceptance_fix_plan_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:14:create",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:12:create",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "reject",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:133:reject",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:131:reject",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "promote",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:138:promote",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:136:promote",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "rollback",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:143:rollback",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:141:rollback",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-campaign-governance",
+      "command": "events",
+      "function": "build_planning_rule_governance_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:148:events",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:146:events",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "refresh",
+      "function": "build_planning_rule_impact_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:159:refresh",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:157:refresh",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "list",
+      "function": "build_planning_rule_impact_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:167:list",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:165:list",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "show",
+      "function": "build_planning_rule_impact_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:172:show",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:170:show",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "refresh-existing",
+      "function": "build_planning_rule_impact_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:175:refresh-existing",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:173:refresh-existing",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "archive",
+      "function": "build_planning_rule_impact_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:178:archive",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:176:archive",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-kb",
+      "command": "refresh",
+      "function": "build_acceptance_kb_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:190:refresh",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:188:refresh",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-plan-reviews",
+      "command": "list",
+      "function": "build_acceptance_fix_plan_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:20:list",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:18:list",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-kb",
+      "command": "report",
+      "function": "build_acceptance_kb_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:194:report",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:192:report",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-kb",
+      "command": "entries",
+      "function": "build_acceptance_kb_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:196:entries",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:194:entries",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-kb",
+      "command": "show",
+      "function": "build_acceptance_kb_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:199:show",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:197:show",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-kb",
+      "command": "search",
+      "function": "build_acceptance_kb_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:202:search",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:200:search",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-kb",
+      "command": "recommend",
+      "function": "build_acceptance_kb_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:210:recommend",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:208:recommend",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-plan-reviews",
+      "command": "show",
+      "function": "build_acceptance_fix_plan_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:22:show",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:20:show",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-plan-reviews",
+      "command": "refresh",
+      "function": "build_acceptance_fix_plan_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:25:refresh",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:23:refresh",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-plan-reviews",
+      "command": "create-fix-sprint",
+      "function": "build_acceptance_fix_plan_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:28:create-fix-sprint",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:26:create-fix-sprint",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-plan-reviews",
+      "command": "review",
+      "function": "build_acceptance_fix_plan_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:34:review",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:32:review",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-plan-reviews",
+      "command": "recommend",
+      "function": "build_acceptance_fix_plan_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:38:recommend",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:36:recommend",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "create",
+      "function": "build_planning_ruleset_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:53:create",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:51:create",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "list",
+      "function": "build_planning_ruleset_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:58:list",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:56:list",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "show",
+      "function": "build_planning_ruleset_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:60:show",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:58:show",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "clone",
+      "function": "build_planning_ruleset_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:63:clone",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:61:clone",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "archive",
+      "function": "build_planning_ruleset_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:67:archive",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:65:archive",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "validate",
+      "function": "build_planning_ruleset_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:70:validate",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:68:validate",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "run",
+      "function": "build_planning_simulation_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:82:run",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:80:run",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "show",
+      "function": "build_planning_simulation_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:90:show",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:88:show",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "refresh",
+      "function": "build_planning_simulation_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:93:refresh",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:91:refresh",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "archive",
+      "function": "build_planning_simulation_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:96:archive",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:94:archive",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.acceptance-fix-planning",
+      "command": "list",
+      "function": "build_planning_simulation_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:99:list",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.acceptance_fix_plan:97:list",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/acceptance_fix_plan.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "status",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:10:status",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:223:status",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "detect",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:13:detect",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:226:detect",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "test-profile",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:16:test-profile",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:229:test-profile",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "setup-report",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:20:setup-report",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:233:setup-report",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "smoke",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:24:smoke",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:237:smoke",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "smoke-report",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:31:smoke-report",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:244:smoke-report",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "session",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:36:session",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:249:session",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "create",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:38:create",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:251:create",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "list",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:41:list",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:254:list",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "detail",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:43:detail",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:256:detail",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "review",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:46:review",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:259:review",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "marker",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:56:marker",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:269:marker",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "create-review-task",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:64:create-review-task",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:277:create-review-task",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "create-audio-revision-draft",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:70:create-audio-revision-draft",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:283:create-audio-revision-draft",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "create-mix-patch-draft",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:76:create-mix-patch-draft",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:289:create-mix-patch-draft",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "report",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:82:report",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:295:report",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "close",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:85:close",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:298:close",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "compare",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:90:compare",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:303:compare",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "create",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:92:create",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:305:create",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "review",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:96:review",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:309:review",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    },
+    {
+      "capability_id": "quality.audio-lab",
+      "command": "report",
+      "function": "build_audio_lab_parser",
+      "new_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:106:report",
+      "old_id": "song_agent.interfaces.cli.commands.quality_parts.audio_lab_parser_and_adapters:319:report",
+      "source": "song_agent/interfaces/cli/commands/quality_parts/audio_lab_parser_and_adapters.py"
+    }
+  ],
+  "input_hashes": {
+    "baseline": "e8c1ec990d6f7f3330b7dd148e7abdbd6be45f37d74bf3ae671aebd3124f43e7",
+    "capabilities": "2ae5c43eb8c7ad6d99600737132796700807e9e571d87b0295b8c60bd97b2d29",
+    "catalog": "2e83d96e1e6ae2c7921a09af40490c75ab10c4f0b3d7d90d714bcb557e61a2c0",
+    "package_projection": "45879327cf3444f1d9e4993c043d71bc495a0125596ef7791ec7bced312bfe69",
+    "package_writer_policy": "e7b7674fcba0072ba7100e058edd915de7de83f7f9fff24082a0a28195e3d040",
+    "packages": "c1cf7d2a35580200d0ed3d9c23949451708b2040b3b97d50dedc84d9991bdcf5",
+    "state": "1f353dd270a47efe05a23db997558bbd88bf72e42ee3dc765340c1d6b145742d",
+    "state_policy": "21d23353bc5eb425bd66fdf1742035d8660e7df486d9183ac3b27811fa8cf967",
+    "waivers": "dd7f4d88165d58ea3ff7e3b7d2f144b561fbb92d66bc1c2f1dc3c30ced455aba"
+  },
+  "integrity_hash": "a0757af4a398e8e55b849c35d710a1015d07ea39b435a0d26d4d37e5e2093208",
+  "invariants": {
+    "active_to_compatibility_import_count": 0,
+    "boundary_violation_count": 0,
+    "business_surface_added": false,
+    "package_site_count_after": 2676,
+    "package_site_count_before": 2687,
+    "package_type_set_changed": false,
+    "package_writer_set_changed": false,
+    "production_cycle_count": 0
+  },
+  "migration_id": "v14.4-wave1-platform-application-interfaces",
+  "package_site_additions": [],
+  "package_site_retirements": [
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/capabilities/registry.py:40:32:40:99@40:53:40:56"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "a1aec42f8e2b968f96bde37ea6adfc995ea4ea61e2c0d87e9996980439e20a8e",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/persistence/v13_migration.py:183:23:183:112"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "5c741676a6adefe813b4220be1664fe7b75a219c20a0599f7f76736e92117649",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/persistence/v14_migration.py:111:21:131:13"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "fd9fd46c852d2a521cb626bb7828d3699047409ccaf8fbba80c65fa54607f794",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/persistence/v14_migration.py:135:21:147:13"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "42ac0565b1f7417bc0909521e47cb325067e9bbf2e8b0bb8e39cfb65f97128f9",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/persistence/v14_migration.py:164:19:176:9"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "782fd16a435efe0eab3b983b6815115147d479fab0c6775fc562b0a197ea16b7",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/persistence/v14_migration.py:229:19:244:13"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "95975c7fc814e207b3677f5692f187d16d27863a901597a032c3a2a51383b8e5",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/persistence/v14_migration.py:40:15:58:9"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "01145eca16e27b2e96cc88078212e9ecbd7e3336f0897d28c3db17b812857ae5",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/persistence/v14_migration.py:85:21:96:13"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "540fc442601fe984d02188eac70465a312ebcb74feb6ba871faf7f3f79431487",
+      "reason": "Typed control flow removed an unresolved or duplicate legacy raw-write observation.",
+      "site_id": "song_agent/platform/verification/registry.py:44:12:44:100@44:25:44:100"
+    }
+  ],
+  "package_site_transitions": [
+    {
+      "capability_id": "program.unified-command-center-release-train-lifecycle",
+      "new_expression_hashes": [
+        "3fffc5c5c4a4adce832c83e79d8ec77d46393ab123c5179323feff8fc189ae8a"
+      ],
+      "new_ids": [
+        "song_agent/domains/program/unified_command_center_release_train_lifecycle.py:279:41:279:128"
+      ],
+      "old_expression_hashes": [
+        "8ad530ce42ab8674e0fa1fa0ef936a6cc5c4f56cd8d9530d1d932c928aa19b20"
+      ],
+      "old_ids": [
+        "song_agent/domains/program/unified_command_center_release_train_lifecycle.py:279:41:279:138"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "program.ports.adapter",
+      "new_expression_hashes": [
+        "c1cda26362828b69266512052b97cb3729e3b052e4ade47c0a1e3383defe73c7"
+      ],
+      "new_ids": [
+        "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:478:12:478:59@478:54:478:59"
+      ],
+      "old_expression_hashes": [
+        "c1cda26362828b69266512052b97cb3729e3b052e4ade47c0a1e3383defe73c7"
+      ],
+      "old_ids": [
+        "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:474:25:478:5@475:51:475:56"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "program.ports.adapter",
+      "new_expression_hashes": [
+        "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954"
+      ],
+      "new_ids": [
+        "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:341:12:341:41@341:38:341:41"
+      ],
+      "old_expression_hashes": [
+        "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+        "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+        "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954"
+      ],
+      "old_ids": [
+        "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:430:22:430:82@430:39:430:42",
+        "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:431:20:431:85@431:37:431:40",
+        "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:432:21:432:90@432:38:432:41"
+      ],
+      "transition": "semantic_consolidation"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "new_expression_hashes": [
+        "5e8c9902207afaeb7120430c585a445f21e92932081d64bc99f80e4925bcb002"
+      ],
+      "new_ids": [
+        "song_agent/interfaces/api/routes/creation_parts/audition_context_pack.py:330:8:330:41@330:38:330:41"
+      ],
+      "old_expression_hashes": [
+        "1cd90eb2a535cdb121dfc4a68aa32585f53d4bd85d511767dc194f10095eb68f"
+      ],
+      "old_ids": [
+        "song_agent/interfaces/api/routes/creation_parts/audition_context_pack.py:235:8:235:73@235:54:235:73"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "new_expression_hashes": [
+        "1198d92eaa2b1c5d1416449c0d36d8e94486a784fac3c540055b77e69e92a8d0"
+      ],
+      "new_ids": [
+        "song_agent/interfaces/api/routes/trust_parts/public_trust_center_acceptance_board.py:90:31:96:21@93:28:93:72"
+      ],
+      "old_expression_hashes": [
+        "a21f862bafeb758cffd02afc1f826076805df65551cd438db92ba2e0061810b1"
+      ],
+      "old_ids": [
+        "song_agent/interfaces/api/routes/trust_parts/public_trust_center_acceptance_board.py:55:114:55:462@55:224:55:268"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "program.ports.adapter",
+      "new_expression_hashes": [
+        "b8efb78e119d382a941432e94c0277bd60f5c611c3ced2a81dccda4fddcc66c6"
+      ],
+      "new_ids": [
+        "song_agent/interfaces/cli/commands/program_parts/unified_command_center_release_train_change_control_command.py:254:12:254:55@254:28:254:55"
+      ],
+      "old_expression_hashes": [
+        "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619"
+      ],
+      "old_ids": [
+        "song_agent/interfaces/cli/commands/program_parts/unified_command_center_release_train_change_control_command.py:252:12:252:33@252:28:252:33"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "trust.release-operations",
+      "new_expression_hashes": [
+        "0343ba717706e2813e24197bf04acbb14049b7baf36ab14bddafbac8bc24b9f9"
+      ],
+      "new_ids": [
+        "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:25:8:25:65@25:22:25:64"
+      ],
+      "old_expression_hashes": [
+        "30bf6fc9e65ce736670d9f315ef7ca7bea8a57c15591e0d597a544762efa79da"
+      ],
+      "old_ids": [
+        "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:21:8:21:59@21:22:21:58"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "new_expression_hashes": [
+        "acfa6ae717b23108edee15d5a1730d3609f09c8e344133c397ead82d7be10aef"
+      ],
+      "new_ids": [
+        "song_agent/platform/contracts/run_state.py:58:16:62:17@58:34:62:17"
+      ],
+      "old_expression_hashes": [
+        "1712fa513bab1c25014c60ee43d8afa282c8888229af400f013625c3c9b28a30"
+      ],
+      "old_ids": [
+        "song_agent/platform/contracts/run_state.py:51:20:54:9@52:18:52:41"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "new_expression_hashes": [
+        "0bf64bf0cc098dbec5ab9d405f46036c22f7d22907944285909448e1a2666917"
+      ],
+      "new_ids": [
+        "song_agent/platform/lifecycle/change_control.py:75:12:75:59@75:26:75:58"
+      ],
+      "old_expression_hashes": [
+        "2ade8d67d802eaae1bb1c8d4bdd60b65058b96978aa27aa50dd3d1728dbf41ec"
+      ],
+      "old_ids": [
+        "song_agent/platform/lifecycle/change_control.py:68:8:68:36@68:22:68:35"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "new_expression_hashes": [
+        "b8d0b65bf0060849d9bfa941ddaa9bc6eb6e0822ebccb1ceab8703b08fb6b4e8"
+      ],
+      "new_ids": [
+        "song_agent/platform/lifecycle/generation.py:33:12:33:59@33:28:33:58"
+      ],
+      "old_expression_hashes": [
+        "c8dee78f8c7b466c881847accc196998bad00e2b96c5ef913dfbe454d3807c96"
+      ],
+      "old_ids": [
+        "song_agent/platform/lifecycle/generation.py:32:12:32:34@32:28:32:33"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "new_expression_hashes": [
+        "ccdfc8b637cac69c0bd7f8bd047c4a777694e22edd0bc3daf42f45746c8149ad"
+      ],
+      "new_ids": [
+        "song_agent/platform/persistence/v13_migration.py:177:17:189:9"
+      ],
+      "old_expression_hashes": [
+        "e817f92250cc428f63f4fc5c3c7838abfcc45a8cb7ead0b759e01a927d49d7ae"
+      ],
+      "old_ids": [
+        "song_agent/platform/persistence/v13_migration.py:168:17:180:9"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "capability_id": "studio.architecture-governance",
+      "new_expression_hashes": [
+        "b8d0b65bf0060849d9bfa941ddaa9bc6eb6e0822ebccb1ceab8703b08fb6b4e8"
+      ],
+      "new_ids": [
+        "song_agent/platform/verification/model.py:75:8:75:53@75:22:75:52"
+      ],
+      "old_expression_hashes": [
+        "c8dee78f8c7b466c881847accc196998bad00e2b96c5ef913dfbe454d3807c96"
+      ],
+      "old_ids": [
+        "song_agent/platform/verification/model.py:65:8:65:28@65:22:65:27"
+      ],
+      "transition": "semantic_rewrite"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/application/policy_compatibility.py:18:17:20:5@19:13:19:18",
+      "old_id": "song_agent/application/policy_compatibility.py:17:17:19:5@18:13:18:18",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/application/program/http_routes/receiver_acceptance_change.py:65:316:65:463@65:322:65:327",
+      "old_id": "song_agent/application/program/http_routes/receiver_acceptance_change.py:64:316:64:463@64:322:64:327",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/application/program/service.py:22:27:25:9@23:35:23:40",
+      "old_id": "song_agent/application/program/service.py:44:27:47:9@45:35:45:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "922faa38e63f2d586c5bd29ce303d7ebf4d8439470a1c3bf0dd21c7c51c43ceb",
+      "new_id": "song_agent/capabilities/model.py:53:15:61:9@59:61:59:78",
+      "old_id": "song_agent/capabilities/model.py:52:15:60:9@58:61:58:78",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "c926daee9861b9a1e8f95e995b1a9182ee195474f2f512f98433d3ed80bbcfd1",
+      "new_id": "song_agent/capabilities/registry.py:39:36:63:13@44:32:44:57",
+      "old_id": "song_agent/capabilities/registry.py:42:12:82:13@47:32:47:57",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.unified-command-center-release-train",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/program/unified_command_center_release_train.py:485:58:485:151@485:64:485:69",
+      "old_id": "song_agent/domains/program/unified_command_center_release_train.py:485:44:485:137@485:50:485:55",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.unified-command-center-release-train-lifecycle",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/program/unified_command_center_release_train_lifecycle.py:269:58:269:165@269:64:269:69",
+      "old_id": "song_agent/domains/program/unified_command_center_release_train_lifecycle.py:269:44:269:151@269:50:269:55",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.unified-release-program",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/program/unified_release_program.py:500:58:500:151@500:64:500:69",
+      "old_id": "song_agent/domains/program/unified_release_program.py:500:44:500:137@500:50:500:55",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "b6200f24da5205773599709f37ce2a55a57d636b4b632cfe4700ce77fd911d47",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:132:16:138:17@133:20:137:21",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:133:16:139:17@134:20:138:21",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "74f5e96a6ce0a74584e0492d1838a0ce48cc01a1657cb49bffd9449170311437",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:163:23:163:103@163:36:163:72",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:164:23:164:103@164:36:164:72",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "2662589f55841b3f372a1f68c8d97eb52eaab97d0ec0c714c6b4b150eda5b9a9",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:164:21:164:91@164:32:164:64",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:165:21:165:91@165:32:165:64",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "f17612fd8bb67361f92fa0af98c88e736a64539a4dccae4a72d028fdef3e948a",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:165:30:165:125@165:46:165:88",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:166:30:166:125@166:46:166:88",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:292:26:292:150@292:56:292:59",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:293:26:293:150@293:56:293:59",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:293:23:297:5@294:40:294:43",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_acceptance_change_verifier.py:294:23:298:5@295:40:295:43",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:439:22:439:83@439:39:439:42",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:216:18:216:86@216:37:216:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:440:22:440:82@440:39:440:42",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:217:19:217:88@217:38:217:41",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:441:20:441:85@441:37:441:40",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:218:20:218:87@218:39:218:42",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:406:39:406:126@406:45:406:50",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:396:39:396:126@396:45:396:50",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:407:37:407:102@407:43:407:48",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:397:37:397:102@397:43:397:48",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:442:21:442:90@442:38:442:41",
+      "old_id": "song_agent/domains/program/unified_release_program_continuity_command_center_verifier.py:429:22:429:83@429:39:429:42",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "trust.ga-check",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py:36:23:36:115@36:29:36:34",
+      "old_id": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py:35:23:35:115@35:29:35:34",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "trust.ga-check",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py:40:23:40:123@40:29:40:34",
+      "old_id": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py:39:23:39:123@39:29:39:34",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "trust.ga-check",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py:44:23:44:123@44:29:44:34",
+      "old_id": "song_agent/domains/trust/release_portfolio_governance_attestation_transparency_acknowledgement_contracts.py:43:23:43:123@43:29:43:34",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19",
+      "new_id": "song_agent/interfaces/api/router.py:33:12:33:35@33:31:33:35",
+      "old_id": "song_agent/interfaces/api/router.py:29:12:29:35@29:31:29:35",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "3636de952fa8621e461473f1a1f5a47f8ff1f2bc2f2c3e984279599c3fff67d7",
+      "new_id": "song_agent/interfaces/api/routes/creation_parts/audition_context_pack.py:140:22:140:241@140:28:140:76",
+      "old_id": "song_agent/interfaces/api/routes/creation_parts/audition_context_pack.py:87:22:91:13@88:21:88:69",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "3636de952fa8621e461473f1a1f5a47f8ff1f2bc2f2c3e984279599c3fff67d7",
+      "new_id": "song_agent/interfaces/api/routes/creation_parts/library_recommend.py:284:22:284:135@284:28:284:76",
+      "old_id": "song_agent/interfaces/api/routes/creation_parts/library_recommend.py:276:22:276:135@276:28:276:76",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "3636de952fa8621e461473f1a1f5a47f8ff1f2bc2f2c3e984279599c3fff67d7",
+      "new_id": "song_agent/interfaces/api/routes/creation_parts/provider.py:300:22:303:13@301:21:301:69",
+      "old_id": "song_agent/interfaces/api/routes/creation_parts/provider.py:288:22:288:153@288:28:288:76",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/interfaces/api/routes/quality_parts/release_encoded_audio_acceptance_export_gate.py:43:27:47:9@44:80:44:83",
+      "old_id": "song_agent/interfaces/api/routes/quality_parts/release_encoded_audio_acceptance_export_gate.py:42:27:46:9@43:80:43:83",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "40d67d662fbde91aa86eae55668b1bfb67dce76600497754971729761e847fb1",
+      "new_id": "song_agent/interfaces/api/routes/quality_parts/release_encoded_audio_acceptance_export_gate.py:50:24:54:9@51:45:51:133",
+      "old_id": "song_agent/interfaces/api/routes/quality_parts/release_encoded_audio_acceptance_export_gate.py:49:24:53:9@50:45:50:133",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/interfaces/api/routes/quality_parts/release_format_decisions.py:259:21:259:114@259:56:259:59",
+      "old_id": "song_agent/interfaces/api/routes/quality_parts/release_format_decisions.py:255:21:255:114@255:56:255:59",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "1f2f10faf6557c27ae7dde8e9eeb7e4994842b98d4f5915eaccf2162abcab165",
+      "new_id": "song_agent/interfaces/api/routes/quality_parts/render_editor_preview_audio.py:34:8:34:113@34:22:34:112",
+      "old_id": "song_agent/interfaces/api/routes/quality_parts/render_editor_preview_audio.py:32:8:32:113@32:22:32:112",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "58252597e0804c364cd3d5f2d8e8384c9493c94804142b62d12c7bde31ad77f7",
+      "new_id": "song_agent/interfaces/api/routes/studio_parts/get_or_refresh_sprint_judge_summary.py:189:12:189:84@189:33:189:84",
+      "old_id": "song_agent/interfaces/api/routes/studio_parts/get_or_refresh_sprint_judge_summary.py:148:12:148:84@148:33:148:84",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "a21f862bafeb758cffd02afc1f826076805df65551cd438db92ba2e0061810b1",
+      "new_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:146:134:146:436@146:244:146:288",
+      "old_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:124:134:124:436@124:244:124:288",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "a21f862bafeb758cffd02afc1f826076805df65551cd438db92ba2e0061810b1",
+      "new_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:200:134:200:436@200:244:200:288",
+      "old_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:176:134:176:436@176:244:176:288",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "a21f862bafeb758cffd02afc1f826076805df65551cd438db92ba2e0061810b1",
+      "new_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:246:134:246:436@246:244:246:288",
+      "old_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:220:134:220:436@220:244:220:288",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "a21f862bafeb758cffd02afc1f826076805df65551cd438db92ba2e0061810b1",
+      "new_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:75:130:75:432@75:240:75:284",
+      "old_id": "song_agent/interfaces/api/routes/trust_parts/public_trust_centers.py:57:130:57:432@57:240:57:284",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "39200d1e8a8dbbb6d7bcea51e02b99f062d32a5f83151e8c5a9fab79576245dd",
+      "new_id": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/render_stems.py:177:12:177:43@177:37:177:43",
+      "old_id": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/render_stems.py:176:12:176:43@176:37:176:43",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "39200d1e8a8dbbb6d7bcea51e02b99f062d32a5f83151e8c5a9fab79576245dd",
+      "new_id": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/render_stems.py:191:12:191:49@191:43:191:49",
+      "old_id": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/render_stems.py:190:12:190:49@190:43:190:49",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "39200d1e8a8dbbb6d7bcea51e02b99f062d32a5f83151e8c5a9fab79576245dd",
+      "new_id": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/render_stems.py:205:12:205:48@205:42:205:48",
+      "old_id": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/render_stems.py:204:12:204:48@204:42:204:48",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "564e249cf233028418cde1d60b3a533daab257fa94c6f35db7325fe712d5c509",
+      "new_id": "song_agent/interfaces/api/runtime_parts/helpers/api_info.py:202:8:202:54@202:27:202:54",
+      "old_id": "song_agent/interfaces/api/runtime_parts/helpers/api_info.py:191:8:191:54@191:27:191:54",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "6c87f68371b28954707ebb92afee7ccffb74c6f71ec8fea8a98cf6104289585b",
+      "new_id": "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py:155:12:155:32@155:26:155:31",
+      "old_id": "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py:112:12:112:32@112:26:112:31",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py:76:14:76:102@76:20:76:25",
+      "old_id": "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py:33:14:33:102@33:20:33:25",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "9ef22868fda0711e5fbbc0ced8bb5af4b3d56a549e69b331f11fd1d09832e7d6",
+      "new_id": "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py:77:4:77:33@77:19:77:32",
+      "old_id": "song_agent/interfaces/api/runtime_parts/helpers/generation_mode.py:34:4:34:33@34:19:34:32",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "5e8c9902207afaeb7120430c585a445f21e92932081d64bc99f80e4925bcb002",
+      "new_id": "song_agent/interfaces/api/runtime_parts/job_store_parts/node_retry.py:113:12:113:39@113:36:113:39",
+      "old_id": "song_agent/interfaces/api/runtime_parts/job_store_parts/node_retry.py:112:12:112:39@112:36:112:39",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_release_encode"
+      ],
+      "capability_id": "delivery.release-check",
+      "expression_source_hash": "56034b2836f02808f5300bc98118119ab1bbed7b2a4f2fb418cc96e0ea5f4b68",
+      "new_id": "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py:276:4:276:33",
+      "old_id": "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py:274:4:274:33",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "delivery.release-check",
+      "expression_source_hash": "1f0c9116683c7cd98b14e165fe6ff20cc1bdbf580dd9c1d0b1f3819a61f8bed9",
+      "new_id": "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py:47:12:47:39@47:26:47:38",
+      "old_id": "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py:45:12:45:39@45:26:45:38",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_release_operations_runbook"
+      ],
+      "capability_id": "delivery.release-check",
+      "expression_source_hash": "f8a82a942c2c7370a17e7262666e92fb0039fb5784a53291c6c66855a9e1a4f7",
+      "new_id": "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py:70:4:70:45",
+      "old_id": "song_agent/interfaces/cli/commands/delivery_parts/release_operations_runbook.py:68:4:68:45",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "delivery.release-check",
+      "expression_source_hash": "bd445c462b7eebbc242e27f08c7d981e97fb28faf17ea73862bf95119b60e0f7",
+      "new_id": "song_agent/interfaces/cli/commands/delivery_parts/verify_release.py:296:8:296:31@296:22:296:30",
+      "old_id": "song_agent/interfaces/cli/commands/delivery_parts/verify_release.py:294:8:294:31@294:22:294:30",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_release_operations"
+      ],
+      "capability_id": "delivery.release-check",
+      "expression_source_hash": "ff8df51d0e251d35700c7bac82af59966abcee3f2d7846334e807fd42cd145a3",
+      "new_id": "song_agent/interfaces/cli/commands/delivery_parts/verify_release.py:315:4:315:37",
+      "old_id": "song_agent/interfaces/cli/commands/delivery_parts/verify_release.py:313:4:313:37",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._run_maintenance_command"
+      ],
+      "capability_id": "studio.maintenance",
+      "expression_source_hash": "64a906353e73da2c88e2c98faa55ee3f559735d054cb13f23f34ac6cfdf7cca7",
+      "new_id": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py:241:13:241:43",
+      "old_id": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py:306:13:306:43",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_maintenance"
+      ],
+      "capability_id": "studio.maintenance",
+      "expression_source_hash": "7bb7689a9daf446bf0d6e6733c7c6be1a6be483790a12411010d9bc6df9cf000",
+      "new_id": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py:254:4:254:30",
+      "old_id": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py:314:4:314:30",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._unified_release_program_operations_payload_from_args"
+      ],
+      "capability_id": "program.unified-command-center-release-train-change-control",
+      "expression_source_hash": "c5c6d9728ba7335b7f7c027b86f47a0969caf67ce6d26d1f413312d1502d004e",
+      "new_id": "song_agent/interfaces/cli/commands/program_parts/unified_command_center_release_train_change_control_command.py:262:14:262:73",
+      "old_id": "song_agent/interfaces/cli/commands/program_parts/unified_command_center_release_train_change_control_command.py:260:14:260:73",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_acceptance_command.py:219:38:219:105@219:44:219:49",
+      "old_id": "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_acceptance_command.py:214:14:214:81@214:20:214:25",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "program.ports.adapter",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_command_center_acceptance_change_command.py:55:38:55:105@55:44:55:49",
+      "old_id": "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_command_center_acceptance_change_command.py:43:14:43:81@43:20:43:25",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "quality.audio-lab",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_command_center_command.py:93:11:93:78@93:17:93:22",
+      "old_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_command_center_command.py:80:11:80:78@80:17:80:22",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_acceptance_fix_sprint"
+      ],
+      "capability_id": "quality.audio-lab",
+      "expression_source_hash": "0d96d3b0c63717618854f94be982a7f13e7a5477d8a426830ca39b4928af1e93",
+      "new_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:225:4:225:40",
+      "old_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:221:4:221:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_acceptance_fix_plan"
+      ],
+      "capability_id": "quality.audio-lab",
+      "expression_source_hash": "735b4fb467aff23a536219e7b78b0f208cb028425348eb4b3ad59567975fd409",
+      "new_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:270:4:270:38",
+      "old_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:266:4:266:38",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "quality.audio-lab",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:50:18:50:120@50:24:50:29",
+      "old_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:46:18:46:120@46:24:46:29",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_release_audio_review"
+      ],
+      "capability_id": "quality.audio-lab",
+      "expression_source_hash": "e2fab4c3ee5d82b2eaa94c2516a1ba95cb2d9d28688bc74c44e56a10f4bedab0",
+      "new_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:63:4:63:39",
+      "old_id": "song_agent/interfaces/cli/commands/quality_parts/release_audio_review.py:59:4:59:39",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "5f54227b74fbba7743c47cd286b4873f2e17331518d56facfc03e34cde4a0950",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py:313:8:313:31@313:22:313:30",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py:311:8:311:31@311:22:311:30",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "12ea12eace7d655f471ce55e34f89b1b77a3d9d05a445ca82877dd2235beaa51",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py:328:8:328:29@328:22:328:28",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py:326:8:326:29@326:22:326:28",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_release_portfolio_governance_attestation_portal_review"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "ae175b9386020a799fbd68a05dd088b92b4c75cdc1871d8ac4b72bfa99e5728e",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py:338:4:338:73",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/attestation_workflows.py:336:4:336:73",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "58cec2c9e31bea6205f2d043be3e568a57d03fb2975f41e86b6dcf76424220e8",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:131:8:131:48@131:38:131:47",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:129:8:129:48@129:38:129:47",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_hub_part_01"
+      ],
+      "capability_id": "trust.public-trust-center-publication",
+      "expression_source_hash": "1b4ad218bcf97426c2c05a8035c9d28ffda866d79ca40c6cf7a5231e6bfa042a",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:177:20:177:77",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:175:20:175:77",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_hub"
+      ],
+      "capability_id": "trust.public-trust-center-publication",
+      "expression_source_hash": "43153d62cdda5aa05cbf9df66e03e1594853c1109f7b913a9800f931d01251b7",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:185:4:185:39",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:183:4:183:39",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "58cec2c9e31bea6205f2d043be3e568a57d03fb2975f41e86b6dcf76424220e8",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:223:8:223:32@223:22:223:31",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:218:8:218:32@218:22:218:31",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_assurance_watch"
+      ],
+      "capability_id": "trust.public-trust-center-publication",
+      "expression_source_hash": "83103d4ba351fb791e15ce359b88f5e33b5bf6fbc54ea98bb827afe437d19ab8",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:257:4:257:51",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:248:4:248:51",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_assurance_watch_signoff"
+      ],
+      "capability_id": "trust.public-trust-center-publication",
+      "expression_source_hash": "53761e50fd1225942b9207041f942c67367dd8a84fd28d313caa282eb8ce876d",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:312:4:312:59",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:303:4:303:59",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "d96b722a1623f83d4628c33e97b96d6818b9d310ac169f79566d4a6ddd030294",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:48:8:48:33@48:22:48:32",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:46:8:46:33@46:22:46:32",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_public_trust_center_publication_monitor"
+      ],
+      "capability_id": "trust.public-trust-center-publication",
+      "expression_source_hash": "387180b9d97c999bb054a8ae8c3187aebb6e87a878ec46ce0cddeeca4514f85a",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:99:4:99:58",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/public_trust_center_publication_monitor.py:97:4:97:58",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "5f54227b74fbba7743c47cd286b4873f2e17331518d56facfc03e34cde4a0950",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_attestation_accepted_evidence.py:170:8:170:31@170:22:170:30",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_attestation_accepted_evidence.py:166:8:166:31@166:22:166:30",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_release_portfolio_governance_attestation_transparency_acknowledgement"
+      ],
+      "capability_id": "trust.release-portfolio-governance-attestation-accepted-evidence",
+      "expression_source_hash": "013ee7cfaa2530e13e7ccebc5610558ca7b5bbf6b5b5c128d7e153008e40ca5e",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_attestation_accepted_evidence.py:203:4:203:88",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/release_portfolio_governance_attestation_accepted_evidence.py:199:4:199:88",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_controls"
+      ],
+      "capability_id": "trust.trust-operations-final-readiness",
+      "expression_source_hash": "84cfbf430b2b6e0346f0cc09d0508d6197bfc0729212dfe1b441e7d28180d35b",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:127:4:127:44",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:123:4:123:44",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "58cec2c9e31bea6205f2d043be3e568a57d03fb2975f41e86b6dcf76424220e8",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:144:8:144:32@144:22:144:31",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:140:8:140:32@140:22:140:31",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_assurance"
+      ],
+      "capability_id": "trust.trust-operations-final-readiness",
+      "expression_source_hash": "f47adb1db02ee3493f6501e67dfea65785d89862130c1b8d9f2756a7d88cc0f1",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:177:4:177:45",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:173:4:173:45",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_control_signoff"
+      ],
+      "capability_id": "trust.trust-operations-final-readiness",
+      "expression_source_hash": "8955ff60fd71d9bf97147259271909e57e345bb425dab22e14333d2135764498",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:253:4:253:51",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:249:4:249:51",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_final_readiness"
+      ],
+      "capability_id": "trust.trust-operations-final-readiness",
+      "expression_source_hash": "ccc8f2cd01c941c9a1ba864be5440ea7426af04ce33e439e959d9a61ae722500",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:58:4:58:51",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:54:4:54:51",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "1cb9db72ea4a62ca6b20e9c4a9e2c89dcfb6476d59fc114c0f9d9845f6449b1c",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:96:8:96:31@96:22:96:30",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_final_readiness.py:92:8:92:31@92:22:92:30",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_incident_knowledge"
+      ],
+      "capability_id": "trust.trust-operations-hub-incidents",
+      "expression_source_hash": "ad5cc8f234b2540adcc2e4a61ae53b075bdeaeb6bea18e79d6897b6119f2df2b",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:159:4:159:54",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:155:4:155:54",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "58cec2c9e31bea6205f2d043be3e568a57d03fb2975f41e86b6dcf76424220e8",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:27:8:27:32@27:22:27:31",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:23:8:23:32@23:22:23:31",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._execute_trust_operations_hub_incidents"
+      ],
+      "capability_id": "trust.trust-operations-hub-incidents",
+      "expression_source_hash": "0cfcaaf43c3a8ccf23ec6f81de0ee7e01b20d66b8295db94955c1bd09927f8ac",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:88:4:88:49",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:84:4:84:49",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "trust.release-operations",
+      "expression_source_hash": "ae13d438df2b66c4322b6cddb3ec316604fcacf68b9f677985b7060b7634a2e8",
+      "new_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:103:8:103:197@103:22:103:196",
+      "old_id": "song_agent/interfaces/cli/commands/trust_parts/trust_operations_hub_incidents.py:99:8:99:197@99:22:99:196",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "4a33eacd5fa65f2b2e2871cd131286b53c415b131666d71173bb6e3fe59361b3",
+      "new_id": "song_agent/platform/contracts/evidence_manifest.py:25:15:25:59@25:31:25:35",
+      "old_id": "song_agent/platform/contracts/evidence_manifest.py:22:15:22:59@22:31:22:35",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "4a33eacd5fa65f2b2e2871cd131286b53c415b131666d71173bb6e3fe59361b3",
+      "new_id": "song_agent/platform/contracts/evidence_manifest.py:33:29:33:67@33:45:33:49",
+      "old_id": "song_agent/platform/contracts/evidence_manifest.py:30:29:30:67@30:45:30:49",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/platform/contracts/packages.py:195:21:195:88@195:57:195:60",
+      "old_id": "song_agent/platform/contracts/packages.py:183:21:183:88@183:57:183:60",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "c51adf416bbfd612e3cd6b5ccce773aade330971f7f43bc1d98d3f58ee603415",
+      "new_id": "song_agent/platform/contracts/run_state.py:35:8:35:44@35:32:35:44",
+      "old_id": "song_agent/platform/contracts/run_state.py:34:8:34:44@34:32:34:44",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "c7c5c1d70c5dec4416ab6158afd0b223ef40c29b1dc1f97ed9428b94d4cadb1c",
+      "new_id": "song_agent/platform/contracts/run_state.py:38:8:38:39@38:31:38:39",
+      "old_id": "song_agent/platform/contracts/run_state.py:37:8:37:39@37:31:37:39",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "314e9faf2a2383fc4e0a7f443de19b2ff5f92a2c20ac791abab242f7aae16ab4",
+      "new_id": "song_agent/platform/contracts/run_state.py:45:25:47:13@46:22:46:40",
+      "old_id": "song_agent/platform/contracts/run_state.py:44:25:46:13@45:22:45:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._build_node.helper_mapping_literal",
+        "unresolved_helper_call._build_node"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "206d6bd87d3ffc75ace03ae197b805c593f5b53c245545948d58b5fe382aafbb",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:170:15:170:88",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:111:15:111:88",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_setdefault"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "30ecdad6537bbf577988ced2b05b88b70c827a1c5b3bf7fd94bf0d7b48b3e765",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:182:20:182:80@182:63:182:79",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:123:20:123:80@123:63:123:79",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_setdefault"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "30ecdad6537bbf577988ced2b05b88b70c827a1c5b3bf7fd94bf0d7b48b3e765",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:186:20:186:102@186:85:186:101",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:127:20:127:102@127:85:127:101",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "a1cb100f57e971cacf269e7c26e4630a25a8e9d4bdd35e32df1a80b66b896254",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:202:19:202:86@202:63:202:67",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:143:19:143:86@143:63:143:67",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._resolve_proofs"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "1b535fff55d1e70d9f82c9661a9f3601bd8699abd4c32e38ecc7f1dd5d42484a",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:237:22:237:78",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:178:22:178:78",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._run_runtime"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "883653f206c58d286c35ce0e68e974ee33ef3728cf9cb0f97ab8983104145f68",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:238:14:238:73",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:179:14:179:73",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._manifest_identity.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "0d9bf872349e6b53110d90dffce3fbe951cbcb0e32b7f559ffb09ffa2afe7b2b",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:242:24:244:5",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:183:24:185:5",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.song-editor",
+      "expression_source_hash": "da5797191c83686dfc014a18108d31684151bcdda4bf6c93c07757fc2631ab8c",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:326:11:334:5@332:57:332:103",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:267:11:275:5@273:57:273:103",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "4174424b0fc1ffd0dc03464e064e73b70b5637aa6e22c8c41e519e68e65a98fa",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:391:12:391:89@391:28:391:89",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:326:12:326:89@326:28:326:89",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "aa304c42ad55cc76347a75eba958d79ada60eab2315d4b4585d944926974d04f",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:407:22:407:104@407:33:407:44",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:337:22:337:104@337:33:337:44",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "6c93462fef59eac5e5dd8c72b9e34a8ff68da04a38feac90538c85c7a931d9c3",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:407:8:407:105@407:22:407:104",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:337:8:337:105@337:22:337:104",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_setdefault"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "513b0cfc87b24ef3735d86c2dd23127debe92aad9ce8844ad443665f7d5db85e",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:507:12:507:48@507:42:507:47",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:437:12:437:48@437:42:437:47",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:556:11:556:134@556:17:556:22",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:486:11:486:134@486:17:486:22",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._build_nodes.helper_mapping_literal",
+        "unresolved_helper_call._build_nodes"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "8bf1a5b7c182d9b2a6905f38c0016f6c4b26d90dd561c23ca7d2efadb6546d01",
+      "new_id": "song_agent/platform/evidence_graph/builder.py:124:12:130:5",
+      "old_id": "song_agent/platform/evidence_graph/builder.py:65:12:71:5",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "545ea538461003efdc8c81c244531b003f6f26cfccf6c0073b3239fdedf49446",
+      "new_id": "song_agent/platform/evidence_graph/model.py:88:15:88:58@88:30:88:34",
+      "old_id": "song_agent/platform/evidence_graph/model.py:76:15:76:58@76:30:76:34",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "3f357c453f9d0d0931218294381d2a49c0dccd70660e9c8d47ae615fd8364e22",
+      "new_id": "song_agent/platform/lifecycle/archive.py:34:19:34:81@34:26:34:43",
+      "old_id": "song_agent/platform/lifecycle/archive.py:37:19:37:81@37:26:37:43",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "6f4c84a84e53c2116d4207fddbb781b636de1fa6e463bf2a01e308ea49e5939d",
+      "new_id": "song_agent/platform/lifecycle/archive.py:56:19:60:9@57:53:57:70",
+      "old_id": "song_agent/platform/lifecycle/archive.py:59:19:63:9@60:53:60:70",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "3f357c453f9d0d0931218294381d2a49c0dccd70660e9c8d47ae615fd8364e22",
+      "new_id": "song_agent/platform/lifecycle/archive.py:68:19:68:81@68:26:68:43",
+      "old_id": "song_agent/platform/lifecycle/archive.py:71:19:71:81@71:26:71:43",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/lifecycle/event_ledger.py:123:44:123:133@123:50:123:55",
+      "old_id": "song_agent/platform/lifecycle/event_ledger.py:119:44:119:133@119:50:119:55",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/lifecycle/event_ledger.py:124:42:124:109@124:48:124:53",
+      "old_id": "song_agent/platform/lifecycle/event_ledger.py:120:42:120:109@120:48:120:53",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/lifecycle/event_ledger.py:132:42:132:109@132:48:132:53",
+      "old_id": "song_agent/platform/lifecycle/event_ledger.py:126:42:126:109@126:48:126:53",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/lifecycle/event_ledger.py:140:27:140:116@140:33:140:38",
+      "old_id": "song_agent/platform/lifecycle/event_ledger.py:133:27:133:116@133:33:133:38",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/lifecycle/event_ledger.py:189:24:193:25@190:33:190:38",
+      "old_id": "song_agent/platform/lifecycle/event_ledger.py:182:24:186:25@183:33:183:38",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/lifecycle/event_ledger.py:91:37:91:109@91:43:91:48",
+      "old_id": "song_agent/platform/lifecycle/event_ledger.py:90:37:90:109@90:43:90:48",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "091fe1c63a81d3e9ac180b240d4c4f2587f93be4fa96e478a1b4a42e44cedcca",
+      "new_id": "song_agent/platform/lifecycle/generation.py:26:33:30:9@28:61:28:73",
+      "old_id": "song_agent/platform/lifecycle/generation.py:25:35:29:9@27:61:27:73",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_update_mapping"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "2ec6ce63e3a372f23a1f59dbbc59cf04517d8f7d026d9bdeaac71659f06305a8",
+      "new_id": "song_agent/platform/lifecycle/registry.py:66:4:70:5@66:22:70:5",
+      "old_id": "song_agent/platform/lifecycle/registry.py:109:4:113:5@109:22:113:5",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/lifecycle/signoff.py:17:49:17:143@17:55:17:60",
+      "old_id": "song_agent/platform/lifecycle/signoff.py:16:49:16:143@16:55:16:60",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call.validate_runtime_state_authority_policy"
+      ],
+      "capability_id": "studio.file-artifacts",
+      "expression_source_hash": "5a08448da773241b872bbb7ba9901460fe24f36a372801287f4f56e7872fbb48",
+      "new_id": "song_agent/platform/persistence/file_artifacts.py:146:15:146:62",
+      "old_id": "song_agent/platform/persistence/file_artifacts.py:152:15:152:62",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._runtime_state_freeze"
+      ],
+      "capability_id": "studio.file-artifacts",
+      "expression_source_hash": "58aeca258d9672e00d4b07baa68c6354f70264290167a3f38ee93d1b7997db46",
+      "new_id": "song_agent/platform/persistence/file_artifacts.py:194:51:194:107",
+      "old_id": "song_agent/platform/persistence/file_artifacts.py:199:51:199:107",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.file-artifacts",
+      "expression_source_hash": "004f3e6f7c98c70426e54cbf80516cba25934ccb31ccd2782312a6b335e49cf6",
+      "new_id": "song_agent/platform/persistence/file_artifacts.py:212:25:215:9@213:42:213:126",
+      "old_id": "song_agent/platform/persistence/file_artifacts.py:217:25:220:9@218:42:218:126",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.file-artifacts",
+      "expression_source_hash": "84d26716d26f0abfda6aa634c5ee4838d9f32191525b1a0d851ec9e277f95d2f",
+      "new_id": "song_agent/platform/persistence/file_artifacts.py:212:8:215:9@212:25:215:9",
+      "old_id": "song_agent/platform/persistence/file_artifacts.py:217:8:220:9@217:25:220:9",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.file-artifacts",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/persistence/file_artifacts.py:213:42:213:126@213:50:213:55",
+      "old_id": "song_agent/platform/persistence/file_artifacts.py:218:42:218:126@218:50:218:55",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_setdefault"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "new_id": "song_agent/platform/persistence/program.py:121:12:121:60@121:57:121:59",
+      "old_id": "song_agent/platform/persistence/program.py:119:12:119:60@119:57:119:59",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "c65e5d003e3f7901e274975b5c0ad4103a7e059f87d9b2e6dd8dace34bb3efc8",
+      "new_id": "song_agent/platform/persistence/program.py:122:44:122:100@122:50:122:62",
+      "old_id": "song_agent/platform/persistence/program.py:120:44:120:100@120:50:120:62",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._integrity_document"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "5f7faee9ed10edc15bb74be9086b43ea6a4a09e35e2f979c8852be1404cdb067",
+      "new_id": "song_agent/platform/persistence/v13_migration.py:114:23:124:17",
+      "old_id": "song_agent/platform/persistence/v13_migration.py:107:23:117:17",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._integrity_document"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "b45a58829287b2419522b3d822de0a20feaad279413d2da8fe862302ad48273e",
+      "new_id": "song_agent/platform/persistence/v13_migration.py:130:19:139:13",
+      "old_id": "song_agent/platform/persistence/v13_migration.py:122:19:131:13",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "b15aa80bfea8d2e3a47a0d2f588acc9265017a8622deac55742afb391050d177",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:107:4:107:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:104:4:104:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:107:4:107:74@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:104:4:104:74@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "978163a17ff52b0ede96cde0175d48901a4d16d2447e40c366301eb89ea8bf5b",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:111:4:111:77",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:108:4:108:77",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:111:4:111:77@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:108:4:108:77@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "92a1bbabc45604bb51d0721bd4970f7c7724078c4d05ca3b8b7370d3f3968419",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:115:4:115:40",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:112:4:112:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:115:4:115:40@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:112:4:112:40@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "92a1bbabc45604bb51d0721bd4970f7c7724078c4d05ca3b8b7370d3f3968419",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:121:4:121:40",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:118:4:118:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:121:4:121:40@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:118:4:118:40@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "92a1bbabc45604bb51d0721bd4970f7c7724078c4d05ca3b8b7370d3f3968419",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:130:4:130:40",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:127:4:127:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:130:4:130:40@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:127:4:127:40@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "3fcbe13411d4366f3737ba5f24c1743154c71476e95b37d0f1f0ead310bad215",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:147:4:147:42",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:144:4:144:42",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:147:4:147:42@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:144:4:144:42@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "c9ef32018084fc30ee2d58a2f032c6c8fa921cd05ca46a515cc4efc59c294d00",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:153:4:153:68",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:150:4:150:68",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:153:4:153:68@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:150:4:150:68@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "b51c9bad177c7f75305e53b0bbfa5d298c03f86619a9d74235e9e16e8b3ccbfc",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:157:4:157:83",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:154:4:154:83",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:157:4:157:83@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:154:4:154:83@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._run_capability"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "1291ee0c2090a1754fe4be5e90022ba29c20c68e501691e307246e7760b0356d",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:22:12:22:45",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:19:12:19:45",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._run_capability.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:22:12:22:45@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:19:12:19:45@58:24:58:41",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._run_capability.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:22:12:22:45@61:24:61:41",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:19:12:19:45@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "0289c01955474f98abc5cb3ebfe7e375dd973b485fd899808595583758e451d9",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:37:4:37:44",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:34:4:34:44",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:37:4:37:44@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:34:4:34:44@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_assignment"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "7d6b4386cb42022e1c60133205aa0e9db4268da094ceb8937cbada7dfc83a2ee",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:56:8:56:96@56:24:56:96",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:53:8:53:96@53:24:53:96",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:59:11:64:5@61:24:61:41",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:56:11:61:5@58:24:58:41",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "5c285177adde2f341796fa45303fb21295de0ba0ec6ce344179062a059df1444",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:71:11:74:5@72:14:72:114",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:68:11:71:5@69:14:69:114",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:78:15:85:5@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:75:15:82:5@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "9a1501c0315917f3ace09d0590dd35ecac0592f8f2e0ede37cf33176bb204690",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:94:4:94:77",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:91:4:91:77",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:94:4:94:77@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:91:4:91:77@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._write_package"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "92a1bbabc45604bb51d0721bd4970f7c7724078c4d05ca3b8b7370d3f3968419",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:98:4:98:40",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:95:4:95:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._write_package.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/attack_corpus.py:98:4:98:40@80:57:80:74",
+      "old_id": "song_agent/platform/verification/attack_corpus.py:95:4:95:40@77:57:77:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/platform/verification/external_bindings.py:19:22:19:66@19:37:19:40",
+      "old_id": "song_agent/platform/verification/external_bindings.py:18:22:18:66@18:37:18:40",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "634768dae1474506e4bf7d341890542b09987d7e6aea5d446c02e37581a56954",
+      "new_id": "song_agent/platform/verification/external_bindings.py:20:20:20:62@20:35:20:38",
+      "old_id": "song_agent/platform/verification/external_bindings.py:19:20:19:62@19:35:19:38",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/verification/history.py:18:35:18:122@18:41:18:46",
+      "old_id": "song_agent/platform/verification/history.py:17:35:17:122@17:41:17:46",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "cd42404d52ad55ccfa9aca4adc828aa5800ad9d385a0671fbcbf724118320619",
+      "new_id": "song_agent/platform/verification/history.py:19:33:19:98@19:39:19:44",
+      "old_id": "song_agent/platform/verification/history.py:18:33:18:98@18:39:18:44",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "922faa38e63f2d586c5bd29ce303d7ebf4d8439470a1c3bf0dd21c7c51c43ceb",
+      "new_id": "song_agent/platform/verification/model.py:61:27:73:5@63:57:63:74",
+      "old_id": "song_agent/platform/verification/model.py:51:29:63:5@53:57:53:74",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "8829218e7b24cbb9c0e2b2a0029df1c8a3e829f0bfa32aa97d944a4b681eb0a6",
+      "new_id": "song_agent/platform/verification/redaction.py:66:20:70:9@67:22:67:67",
+      "old_id": "song_agent/platform/verification/redaction.py:62:15:66:9@63:22:63:67",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "unresolved_helper_call._verifier_adoption_row"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "c55780b25c27354290c2250538913b91d03df099c4000a62167ba60ca1e8dafb",
+      "new_id": "song_agent/platform/verification/registry.py:98:16:98:43",
+      "old_id": "song_agent/platform/verification/registry.py:117:16:117:43",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "helper_call._verifier_adoption_row.helper_mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/registry.py:98:16:98:43@138:24:138:41",
+      "old_id": "song_agent/platform/verification/registry.py:117:16:117:43@287:24:287:41",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/registry.py:134:35:139:5@138:24:138:41",
+      "old_id": "song_agent/platform/verification/registry.py:283:11:288:5@287:24:287:41",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "mapping_literal"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "f3e8e858d5a9e288248b0b53ff00f8fe0d4fbc691a5c8764a2fa6c84c6947f90",
+      "new_id": "song_agent/platform/verification/registry.py:60:39:77:9@65:28:65:45",
+      "old_id": "song_agent/platform/verification/registry.py:79:15:96:9@84:28:84:45",
+      "transition": "source_relocation"
+    },
+    {
+      "candidate_kinds": [
+        "dynamic_key_mapping_comprehension"
+      ],
+      "capability_id": "studio.architecture-governance",
+      "expression_source_hash": "8829218e7b24cbb9c0e2b2a0029df1c8a3e829f0bfa32aa97d944a4b681eb0a6",
+      "new_id": "song_agent/platform/verification/sanitization.py:55:20:59:9@56:22:56:67",
+      "old_id": "song_agent/platform/verification/sanitization.py:50:15:54:9@51:22:51:67",
+      "transition": "source_relocation"
+    }
+  ],
+  "package_type": "musicforge_v144_wave1_surface_migration",
+  "release_check_additions": [
+    "v144.wave1_platform_application_interfaces_smoke"
+  ],
+  "schema_version": 1,
+  "status": "candidate",
+  "target_hashes": {
+    "baseline_hash": "0e938231be949256431385504bbf04e6ae41dc0a3ae0cfae583512bfee6c3847",
+    "capability_registry_hash": "bc901d2324f32d271567fecbad4c07d005a24750e71b23ed1e8207b3fa5dfd4c",
+    "catalog_hash": "49294bf4d6fb156f8153afeae488ce859d65e490f5d34a3bac0d08145a551bea",
+    "package_projection_hash": "a15ba1009cda23f5cfa011c57d5c389b527bdb0517dcda10a2a02c4808d40880",
+    "package_registry_hash": "28a3d0f80ff9c697b8d1dbd0aa20bd76f9f29efc51d8e4ea0b17429bbb6d6127",
+    "package_writer_policy_hash": "2232f406f609cb84006dbdef4acc05bbec118a47f16f82c3d7bd5b4bfea836bb",
+    "state_policy_hash": "36f09b71009a715d8e559da9933d226d2d616ca18e89aef813c987483629c52b",
+    "state_registry_hash": "850509af2239c7d2f9820e5cbbb7c4d0428080ce80f705525dbb2e27f8d3267b",
+    "waiver_registry_hash": "dd7f4d88165d58ea3ff7e3b7d2f144b561fbb92d66bc1c2f1dc3c30ced455aba"
+  }
+}

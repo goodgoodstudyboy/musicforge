@@ -2,20 +2,22 @@ from __future__ import annotations
 
 import re
 import zipfile
-from typing import Any
+from collections.abc import Mapping
 
+from song_agent.platform.contracts.documents import JsonDocument
 from song_agent.platform.verification.hashing import sha256_bytes
 from song_agent.platform.verification.model import build_check
 
 
 def manifest_file_checks(
     archive: zipfile.ZipFile,
-    manifest: dict[str, Any],
+    manifest: Mapping[str, object],
     *,
     expected_files: set[str],
     check_prefix: str,
-) -> list[dict[str, Any]]:
-    rows = [row for row in manifest.get("files", []) if isinstance(row, dict)]
+) -> list[JsonDocument]:
+    file_rows = manifest.get("files")
+    rows = [row for row in file_rows if isinstance(row, dict)] if isinstance(file_rows, list) else []
     paths = {str(row.get("path") or "") for row in rows}
     checks = [
         build_check(

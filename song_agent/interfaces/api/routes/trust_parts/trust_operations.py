@@ -1,127 +1,132 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
-
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+
+from song_agent.application.http_ports import trust as trust_ports
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustRoutesTrustOperations(TrustRouteContext):
     @property
-    def trust_operations_hub_store(self) -> _InterfaceType:
+    def trust_operations_hub_store(self) -> trust_ports.TrustOperationsHubStore:
         return self.server.trust_operations_hub_store
 
     @property
-    def trust_operations_incident_store(self) -> _InterfaceType:
+    def trust_operations_incident_store(self) -> trust_ports.TrustOperationsIncidentStore:
         return self.server.trust_operations_incident_store
 
     @property
-    def trust_operations_incident_knowledge_store(self) -> _InterfaceType:
+    def trust_operations_incident_knowledge_store(self) -> trust_ports.TrustOperationsIncidentKnowledgeStore:
         return self.server.trust_operations_incident_knowledge_store
 
     @property
-    def trust_operations_control_store(self) -> _InterfaceType:
+    def trust_operations_control_store(self) -> trust_ports.TrustOperationsControlStore:
         return self.server.trust_operations_control_store
 
     @property
-    def trust_operations_control_signoff_store(self) -> _InterfaceType:
+    def trust_operations_control_signoff_store(self) -> trust_ports.TrustOperationsControlSignoffStore:
         return self.server.trust_operations_control_signoff_store
 
     @property
-    def trust_operations_assurance_store(self) -> _InterfaceType:
+    def trust_operations_assurance_store(self) -> trust_ports.TrustOperationsAssuranceStore:
         return self.server.trust_operations_assurance_store
 
     @property
-    def trust_operations_assurance_watch_store(self) -> _InterfaceType:
+    def trust_operations_assurance_watch_store(self) -> trust_ports.TrustOperationsAssuranceWatchStore:
         return self.server.trust_operations_assurance_watch_store
 
     @property
-    def trust_operations_assurance_watch_signoff_store(self) -> _InterfaceType:
+    def trust_operations_assurance_watch_signoff_store(self) -> trust_ports.TrustOperationsAssuranceWatchSignoffStore:
         return self.server.trust_operations_assurance_watch_signoff_store
 
     @property
-    def trust_operations_final_readiness_store(self) -> _InterfaceType:
+    def trust_operations_final_readiness_store(self) -> trust_ports.TrustOperationsFinalReadinessStore:
         return self.server.trust_operations_final_readiness_store
 
     @property
-    def release_portfolio_audit_store(self) -> _InterfaceType:
+    def release_portfolio_audit_store(self) -> trust_ports.ReleasePortfolioAuditStore:
         return self.server.release_portfolio_audit_store
 
     @property
-    def release_portfolio_governance_store(self) -> _InterfaceType:
+    def release_portfolio_governance_store(self) -> trust_ports.ReleasePortfolioGovernanceStore:
         return self.server.release_portfolio_governance_store
 
     @property
-    def release_portfolio_governance_signoff_store(self) -> _InterfaceType:
+    def release_portfolio_governance_signoff_store(self) -> trust_ports.ReleasePortfolioGovernanceSignoffStore:
         return self.server.release_portfolio_governance_signoff_store
 
     @property
-    def release_portfolio_governance_audit_store(self) -> _InterfaceType:
+    def release_portfolio_governance_audit_store(self) -> trust_ports.ReleasePortfolioGovernanceAuditStore:
         return self.server.release_portfolio_governance_audit_store
 
     @property
-    def release_portfolio_governance_reviewer_pack_store(self) -> _InterfaceType:
+    def release_portfolio_governance_reviewer_pack_store(self) -> trust_ports.ReleasePortfolioGovernanceReviewerPackStore:
         return self.server.release_portfolio_governance_reviewer_pack_store
 
     @property
-    def release_portfolio_governance_final_board_store(self) -> _InterfaceType:
+    def release_portfolio_governance_final_board_store(self) -> trust_ports.ReleasePortfolioGovernanceFinalBoardStore:
         return self.server.release_portfolio_governance_final_board_store
 
     @property
-    def release_portfolio_governance_evidence_vault_store(self) -> _InterfaceType:
+    def release_portfolio_governance_evidence_vault_store(self) -> trust_ports.ReleasePortfolioGovernanceEvidenceVaultStore:
         return self.server.release_portfolio_governance_evidence_vault_store
 
     @property
-    def release_portfolio_governance_attestation_store(self) -> _InterfaceType:
+    def release_portfolio_governance_attestation_store(self) -> trust_ports.ReleasePortfolioGovernanceAttestationStore:
         return self.server.release_portfolio_governance_attestation_store
 
     @property
-    def release_portfolio_governance_attestation_registry_store(self) -> _InterfaceType:
+    def release_portfolio_governance_attestation_registry_store(self) -> trust_ports.ReleasePortfolioGovernanceAttestationRegistryStore:
         return self.server.release_portfolio_governance_attestation_registry_store
 
     @property
-    def release_portfolio_governance_attestation_portal_store(self) -> _InterfaceType:
+    def release_portfolio_governance_attestation_portal_store(self) -> trust_ports.ReleasePortfolioGovernanceAttestationPortalStore:
         return self.server.release_portfolio_governance_attestation_portal_store
 
     @property
-    def release_portfolio_governance_attestation_portal_review_store(self) -> _InterfaceType:
+    def release_portfolio_governance_attestation_portal_review_store(self) -> trust_ports.ReleasePortfolioGovernanceAttestationPortalReviewStore:
         return self.server.release_portfolio_governance_attestation_portal_review_store
 
     @property
-    def release_portfolio_governance_attestation_accepted_evidence_store(self) -> _InterfaceType:
+    def release_portfolio_governance_attestation_accepted_evidence_store(
+        self,
+    ) -> trust_ports.ReleasePortfolioGovernanceAttestationAcceptedEvidenceStore:
         return self.server.release_portfolio_governance_attestation_accepted_evidence_store
 
     @property
-    def release_portfolio_governance_attestation_transparency_store(self) -> _InterfaceType:
+    def release_portfolio_governance_attestation_transparency_store(self) -> trust_ports.ReleasePortfolioGovernanceAttestationTransparencyStore:
         return self.server.release_portfolio_governance_attestation_transparency_store
 
     @property
-    def release_portfolio_governance_attestation_transparency_acknowledgement_store(self) -> _InterfaceType:
+    def release_portfolio_governance_attestation_transparency_acknowledgement_store(
+        self,
+    ) -> trust_ports.ReleasePortfolioGovernanceAttestationTransparencyAcknowledgementStore:
         return self.server.release_portfolio_governance_attestation_transparency_acknowledgement_store
 
     @property
-    def public_trust_center_store(self) -> _InterfaceType:
+    def public_trust_center_store(self) -> trust_ports.PublicTrustCenterStore:
         return self.server.public_trust_center_store
 
     @property
-    def public_trust_center_anchor_registry_store(self) -> _InterfaceType:
+    def public_trust_center_anchor_registry_store(self) -> trust_ports.PublicTrustCenterAnchorRegistryStore:
         return self.server.public_trust_center_anchor_registry_store
 
     @property
-    def public_trust_center_anchor_transparency_store(self) -> _InterfaceType:
+    def public_trust_center_anchor_transparency_store(self) -> trust_ports.PublicTrustCenterAnchorTransparencyStore:
         return self.server.public_trust_center_anchor_transparency_store
 
     @property
-    def public_trust_center_distribution_kit_store(self) -> _InterfaceType:
+    def public_trust_center_distribution_kit_store(self) -> trust_ports.PublicTrustCenterDistributionKitStore:
         return self.server.public_trust_center_distribution_kit_store
 
     @property
-    def public_trust_center_distribution_kit_acceptance_store(self) -> _InterfaceType:
+    def public_trust_center_distribution_kit_acceptance_store(self) -> trust_ports.PublicTrustCenterDistributionKitAcceptanceStore:
         return self.server.public_trust_center_distribution_kit_acceptance_store
 
     @property
-    def public_trust_center_acceptance_board_store(self) -> _InterfaceType:
+    def public_trust_center_acceptance_board_store(self) -> trust_ports.PublicTrustCenterAcceptanceBoardStore:
         return self.server.public_trust_center_acceptance_board_store
 
     def _handle_trust_operations(self, method: str, path: str) -> None:
@@ -157,13 +162,21 @@ class TrustRoutesTrustOperations(TrustRouteContext):
             if method != "GET":
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
-            self._send_file(self.trust_operations_incident_store.zip_path(_interfaces_api_runtime.unquote(hub_id)), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-incidents.zip")
+            self._send_file(
+                self.trust_operations_incident_store.zip_path(_interfaces_api_runtime.unquote(hub_id)),
+                "application/zip",
+                filename=f"musicforge-{hub_id}-trust-operations-incidents.zip",
+            )
             return
         if rest == "/knowledge.zip":
             if method != "GET":
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
-            self._send_file(self.trust_operations_incident_knowledge_store.zip_path(_interfaces_api_runtime.unquote(hub_id)), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-knowledge.zip")
+            self._send_file(
+                self.trust_operations_incident_knowledge_store.zip_path(_interfaces_api_runtime.unquote(hub_id)),
+                "application/zip",
+                filename=f"musicforge-{hub_id}-trust-operations-knowledge.zip",
+            )
             return
         if rest.startswith("/controls/") and rest.endswith(".zip"):
             if method != "GET":
@@ -172,7 +185,11 @@ class TrustRoutesTrustOperations(TrustRouteContext):
             parts = [part for part in rest.split("/") if part]
             if len(parts) == 2:
                 assessment_id = _interfaces_api_runtime.unquote(parts[1].removesuffix(".zip"))
-                self._send_file(self.trust_operations_control_store.zip_path(_interfaces_api_runtime.unquote(hub_id), assessment_id), "application/zip", filename=f"musicforge-{hub_id}-trust-operations-controls.zip")
+                self._send_file(
+                    self.trust_operations_control_store.zip_path(_interfaces_api_runtime.unquote(hub_id), assessment_id),
+                    "application/zip",
+                    filename=f"musicforge-{hub_id}-trust-operations-controls.zip",
+                )
                 return
         if rest == "/controls" or rest.startswith("/controls/"):
             self._handle_trust_operations_controls(method, _interfaces_api_runtime.unquote(hub_id), rest.removeprefix("/controls"))
@@ -203,8 +220,12 @@ class TrustRoutesTrustOperations(TrustRouteContext):
                     payload = self._optional_json_body()
                     hub_id = str(payload.get("hub_id") or "hub")
                     policy_id = str(payload.get("policy_id") or "default")
-                    result = self.trust_operations_assurance_store.refresh_run(hub_id, payload, policy_id=policy_id, now=_interfaces_api_runtime._utc_now())
-                    self._send_json({"ok": result.get("run", {}).get("status") == "passed", **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+                    result = self.trust_operations_assurance_store.refresh_run(
+                        hub_id, payload, policy_id=policy_id, now=_interfaces_api_runtime._utc_now()
+                    )
+                    self._send_json(
+                        {"ok": result.get("run", {}).get("status") == "passed", **result}, status=_interfaces_api_runtime.HTTPStatus.CREATED
+                    )
                     return
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                 return
@@ -222,20 +243,28 @@ class TrustRoutesTrustOperations(TrustRouteContext):
                     if method != "GET":
                         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                         return
-                    self._send_file(self.trust_operations_assurance_store.archive_zip_path(run_id), "application/zip", filename=f"musicforge-{run_id}-trust-operations-assurance.zip")
+                    self._send_file(
+                        self.trust_operations_assurance_store.archive_zip_path(run_id),
+                        "application/zip",
+                        filename=f"musicforge-{run_id}-trust-operations-assurance.zip",
+                    )
                     return
                 if action == "export":
                     if method != "POST":
                         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                         return
-                    manifest = self.trust_operations_assurance_store.export_archive(run_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                    manifest = self.trust_operations_assurance_store.export_archive(
+                        run_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now()
+                    )
                     self._send_json({"ok": True, "run_id": run_id, "manifest": manifest}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
                     return
                 if action == "zip":
                     if method != "POST":
                         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                         return
-                    zip_info = self.trust_operations_assurance_store.build_archive_zip(run_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now())
+                    zip_info = self.trust_operations_assurance_store.build_archive_zip(
+                        run_id, self._optional_json_body(), now=_interfaces_api_runtime._utc_now()
+                    )
                     self._send_json({"ok": True, "run_id": run_id, "zip": zip_info})
                     return
                 if action == "verify":
@@ -243,8 +272,17 @@ class TrustRoutesTrustOperations(TrustRouteContext):
                         self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
                         return
                     report = self.trust_operations_assurance_store.verify_archive_zip(run_id, self._optional_json_body())
-                    _interfaces_api_runtime.write_trust_operations_assurance_verification_report(report, self.trust_operations_assurance_store.verification_report_path(run_id))
-                    self._send_json({"ok": report.get("status") != "failed", "run_id": run_id, "verification": report, "summary": report.get("summary", {})})
+                    _interfaces_api_runtime.write_trust_operations_assurance_verification_report(
+                        report, self.trust_operations_assurance_store.verification_report_path(run_id)
+                    )
+                    self._send_json(
+                        {
+                            "ok": report.get("status") != "failed",
+                            "run_id": run_id,
+                            "verification": report,
+                            "summary": report.get("summary", {}),
+                        }
+                    )
                     return
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Trust Operations Assurance route not found.")
         except _interfaces_api_runtime.TrustOperationsAssuranceNotFoundError as exc:

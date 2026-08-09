@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument
 
 from copy import deepcopy as deepcopy
 from dataclasses import replace as replace

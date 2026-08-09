@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.coercion import as_list as _as_list
+# Wave 1 preserves this domain authority's frozen source span.
+# Its implementation changes are limited to typed document boundaries;
+# ownership migration remains deferred to the bounded-context waves.
 
-from typing import Any as _InferenceType
-
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument
 
 import json as json
 import shutil as shutil
@@ -174,7 +174,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
             external_evidence_manifest_path=payload.get("external_evidence_manifest") or payload.get("external_evidence_manifest_path") or self._saved_input(train_id, "external_evidence_manifest"),
             change_control_zip_path=payload.get("change_control_zip") or payload.get("change_control_zip_path") or self.change_control_store.zip_path(train_id),
             change_control_verification_report_path=payload.get("change_control_verification_report") or payload.get("change_control_verification_report_path") or self.change_control_store.verification_report_path(train_id),
-            reset_proof_paths=_as_list(_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id))),
+            reset_proof_paths=_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id)),
         )
         write_unified_command_center_release_train_lifecycle_verification_report(report, self.verification_report_path(train_id))
         return report
@@ -209,7 +209,7 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
                 external_evidence_manifest_path=payload.get("external_evidence_manifest_path") or payload.get("external_evidence_manifest") or self._saved_input(train_id, "external_evidence_manifest"),
                 change_control_zip_path=payload.get("change_control_zip_path") or payload.get("change_control_zip") or self.change_control_store.zip_path(train_id),
                 change_control_verification_report_path=payload.get("change_control_verification_report_path") or payload.get("change_control_verification_report") or self.change_control_store.verification_report_path(train_id),
-                reset_proof_paths=_as_list(_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id))),
+                reset_proof_paths=_reset_proof_paths(payload) or _reset_proof_paths(self._saved_inputs(train_id)),
             )
             if not _integrity_ok(external):
                 return _gate_failed("Release Train Lifecycle verification integrity failed.")
@@ -266,17 +266,17 @@ class UnifiedCommandCenterReleaseTrainLifecycleStore:
                 "archive_history_hashes": [row.get("entry_hash") for row in archive_history_items if row.get("entry_hash")],
             }
         )
-        source["source_hash"] = stable_hash({key: value for key, value in source.items() if key not in {"source_hash", "integrity_hash", "created_at"}})
+        source["source_hash"] = source_hash = stable_hash({key: value for key, value in source.items() if key not in {"source_hash", "integrity_hash", "created_at"}})
         source["integrity_hash"] = _integrity_hash(source)
         ledger = self._lifecycle_ledger(train_id, history)
         ledger_text = "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in ledger)
-        succession = _with_integrity(_succession_map(train_id, source["source_hash"], signoff_events, reset_events, archive_history_items, train_summary))
-        coverage = _with_integrity(_coverage_doc(train_id, source["source_hash"], reset_events, reset_proofs, change_summary, archive_history_items))
-        archive_history = _with_integrity({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_archive_history_ledger", "train_id": train_id, "source_hash": source["source_hash"], "items": archive_history_items, "summary": {"archive_history_count": len(archive_history_items)}})
-        readiness = _with_integrity(_readiness_doc(train_id, source["source_hash"], self.train_store.latest_signoff_state(train_id), train_summary, change_summary, coverage))
+        succession = _with_integrity(_succession_map(train_id, source_hash, signoff_events, reset_events, archive_history_items, train_summary))
+        coverage = _with_integrity(_coverage_doc(train_id, source_hash, reset_events, reset_proofs, change_summary, archive_history_items))
+        archive_history = _with_integrity({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_archive_history_ledger", "train_id": train_id, "source_hash": source_hash, "items": archive_history_items, "summary": {"archive_history_count": len(archive_history_items)}})
+        readiness = _with_integrity(_readiness_doc(train_id, source_hash, self.train_store.latest_signoff_state(train_id), train_summary, change_summary, coverage))
         gaps = _gap_items(readiness, coverage, bool(reset_events), change_summary)
-        gap_plan = _with_integrity({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_lifecycle_gap_plan", "train_id": train_id, "source_hash": source["source_hash"], "items": gaps, "summary": {"gap_count": len(gaps), "blocking_gap_count": sum(1 for row in gaps if row.get("severity") == "blocking")}})
-        evidence_index = _with_integrity(_evidence_index_doc(train_id, source["source_hash"], train_summary, change_summary, reset_proofs))
+        gap_plan = _with_integrity({"schema_version": UNIFIED_COMMAND_CENTER_RELEASE_TRAIN_LIFECYCLE_SCHEMA_VERSION, "package_type": "musicforge_unified_command_center_release_train_lifecycle_gap_plan", "train_id": train_id, "source_hash": source_hash, "items": gaps, "summary": {"gap_count": len(gaps), "blocking_gap_count": sum(1 for row in gaps if row.get("severity") == "blocking")}})
+        evidence_index = _with_integrity(_evidence_index_doc(train_id, source_hash, train_summary, change_summary, reset_proofs))
         blockers = [row["check_id"] for row in readiness.get("checks", []) if row.get("status") == "failed"]
         blockers.extend(row.get("gap_id") for row in gaps if row.get("severity") == "blocking")
         blockers = [str(row) for row in blockers if row]
@@ -468,9 +468,9 @@ def _path_text(value: Any) -> str | None:
     return str(value) if value else None
 
 
-def _reset_proof_paths(payload: ImplementationDocument) -> list[str]:
+def _reset_proof_paths(payload: ImplementationDocument) -> list[Path | str]:
     value = payload.get("reset_proofs") or payload.get("reset_proof_paths")
-    rows: list[_InferenceType] = []
+    rows: list[Path | str] = []
     if isinstance(value, list):
         rows.extend(str(item) for item in value if item)
     elif value:

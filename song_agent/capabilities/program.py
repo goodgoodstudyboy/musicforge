@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.capabilities.model import CapabilitySpec, RuntimeVerificationSpec
+from song_agent.platform.contracts import JsonValue
 
 
 def _program(
@@ -11,7 +12,7 @@ def _program(
     package_type: str,
     verification_package_type: str,
     *,
-    defaults: tuple[tuple[str, object], ...],
+    defaults: tuple[tuple[str, JsonValue], ...],
     proofs: tuple[tuple[str, str], ...] = (),
     required: tuple[str, ...] = (),
     aliases: tuple[str, ...] = (),

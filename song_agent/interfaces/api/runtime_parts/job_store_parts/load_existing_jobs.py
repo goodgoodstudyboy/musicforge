@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
 
-from song_agent.platform.contracts.coercion import as_list as _as_list
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_documents as _as_documents, as_list as _as_list
 
-from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+from song_agent.application.jobs.ports import JobStoreContext
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value as _normalize
 
-import song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies as core_dependencies
-import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, EditIntent, HTTPStatus, JobState, Path, build_edit_metadata, json, threading, validate_edit_intent
+import song_agent.interfaces.bootstrap.api.core as core_dependencies
+import song_agent.interfaces.bootstrap.api.creation_quality as creation_dependencies
+from song_agent.interfaces.bootstrap.api.core import EditIntent, HTTPStatus, JobState, Path, build_edit_metadata, json, threading, validate_edit_intent
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongPlan, SongRequest, load_provider_config, read_json, write_json
+from song_agent.interfaces.bootstrap.api.creation_quality import ProjectPaths, SongPlan, SongRequest, load_provider_config, read_json, write_json
 
 from song_agent.interfaces.api.runtime_parts.helpers.job_artifacts import _candidate_source_summary
 
@@ -31,9 +31,9 @@ class JobStoreLoadExistingJobs(JobStoreContext):
         context_pack_store: creation_dependencies.ContextPackStore | None = None,
     ) -> None:
         self.runs_dir = Path(runs_dir).resolve()
-        self.asset_store = asset_store or core_dependencies.AssetStore()
-        self.reference_store = reference_store or creation_dependencies.ReferenceStore()
-        self.context_pack_store = context_pack_store or creation_dependencies.ContextPackStore()
+        self.asset_store = asset_store or _api_store_factories.asset_store()
+        self.reference_store = reference_store or _api_store_factories.reference_store()
+        self.context_pack_store = context_pack_store or _api_store_factories.context_pack_store()
         self.lock = threading.RLock()
         self.jobs: dict[str, JobState] = {}
         self.load_existing_jobs()
@@ -72,14 +72,14 @@ class JobStoreLoadExistingJobs(JobStoreContext):
         with self.lock:
             return self.jobs.get(job_id)
 
-    def create_job(self, payload: dict[str, Any], start_immediately: bool = True) -> JobState:
+    def create_job(self, payload: JsonDocument, start_immediately: bool = True) -> JobState:
         request = SongRequest.from_dict(payload)
-        asset_refs = _as_list(payload.get("asset_refs"))
-        reference_refs = _as_list(payload.get("reference_refs"))
-        context_pack = payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None
+        asset_refs = _as_documents(payload.get("asset_refs"))
+        reference_refs = _as_documents(payload.get("reference_refs"))
+        context_pack = _as_document(payload.get("context_pack")) or None
         generation_mode = _generation_mode(payload)
         pipeline_mode = _pipeline_mode(payload)
-        provider_snapshot: dict[str, Any]
+        provider_snapshot: JsonDocument
         if generation_mode == "provider":
             provider_config, _sources = load_provider_config()
             provider_config.validate_ready_for_provider()
@@ -101,8 +101,8 @@ class JobStoreLoadExistingJobs(JobStoreContext):
                 message="Queued for local deterministic generation.",
                 input_payload={
                     **request.to_dict(),
-                    **({"asset_refs": asset_refs} if asset_refs else {}),
-                    **({"reference_refs": reference_refs} if reference_refs else {}),
+                    **({"asset_refs": _normalize(asset_refs)} if asset_refs else {}),
+                    **({"reference_refs": _normalize(reference_refs)} if reference_refs else {}),
                     **({"context_pack": context_pack} if context_pack else {}),
                 },
                 provider_snapshot=provider_snapshot,
@@ -117,13 +117,13 @@ class JobStoreLoadExistingJobs(JobStoreContext):
             self.start_job(job_id)
         return job
 
-    def _create_edit_job_part_01(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: ImplementationDocument | None, name: str, start_immediately: bool, provider_patch: ImplementationDocument | None, provider_usage: ImplementationDocument | None, provider_snapshot: ImplementationDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: ImplementationDocument | None, asset_refs: list[ImplementationDocument] | None, reference_refs: list[ImplementationDocument] | None, context_pack: ImplementationDocument | None, _split_state):
+    def _create_edit_job_part_01(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: JsonDocument | None, name: str, start_immediately: bool, provider_patch: JsonDocument | None, provider_usage: JsonDocument | None, provider_snapshot: JsonDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: JsonDocument | None, asset_refs: list[JsonDocument] | None, reference_refs: list[JsonDocument] | None, context_pack: JsonDocument | None, _split_state):
         validate_edit_intent(parent_plan, intent)
         if intent.provider_mode == 'provider' and provider_patch is None:
             raise NotImplementedError('Provider-backed edit is not implemented in v1.1.0.')
         return (False, None)
 
-    def _create_edit_job_part_02(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: ImplementationDocument | None, name: str, start_immediately: bool, provider_patch: ImplementationDocument | None, provider_usage: ImplementationDocument | None, provider_snapshot: ImplementationDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: ImplementationDocument | None, asset_refs: list[ImplementationDocument] | None, reference_refs: list[ImplementationDocument] | None, context_pack: ImplementationDocument | None, _split_state):
+    def _create_edit_job_part_02(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: JsonDocument | None, name: str, start_immediately: bool, provider_patch: JsonDocument | None, provider_usage: JsonDocument | None, provider_snapshot: JsonDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: JsonDocument | None, asset_refs: list[JsonDocument] | None, reference_refs: list[JsonDocument] | None, context_pack: JsonDocument | None, _split_state):
         with self.lock:
             title = _clean_title(name) or f'{parent_plan.title} {intent.edit_type}'
             run_dir = self._reserve_run_dir(title)
@@ -153,7 +153,7 @@ class JobStoreLoadExistingJobs(JobStoreContext):
             if preset:
                 _split_state['job'].input_payload['preset_id'] = preset.get('preset_id')
             if provider_patch is not None:
-                _split_state['job'].input_payload['provider_patch'] = {'summary': provider_patch.get('summary'), 'operation_count': len(provider_patch.get('operations', []))}
+                _split_state['job'].input_payload['provider_patch'] = {'summary': provider_patch.get('summary'), 'operation_count': len(_as_list(provider_patch.get('operations')))}
                 _split_state['job'].input_payload['template_id'] = template_id
                 _split_state['job'].input_payload['preview_id'] = preview_id
                 if candidate_group_id:
@@ -167,14 +167,14 @@ class JobStoreLoadExistingJobs(JobStoreContext):
             write_json(ProjectPaths.create(run_dir).data / 'edit-metadata.json', metadata)
         return (False, None)
 
-    def _create_edit_job_part_03(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: ImplementationDocument | None, name: str, start_immediately: bool, provider_patch: ImplementationDocument | None, provider_usage: ImplementationDocument | None, provider_snapshot: ImplementationDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: ImplementationDocument | None, asset_refs: list[ImplementationDocument] | None, reference_refs: list[ImplementationDocument] | None, context_pack: ImplementationDocument | None, _split_state):
+    def _create_edit_job_part_03(self, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: JsonDocument | None, name: str, start_immediately: bool, provider_patch: JsonDocument | None, provider_usage: JsonDocument | None, provider_snapshot: JsonDocument | None, template_id: str | None, preview_id: str | None, candidate_group_id: str | None, candidate_id: str | None, candidate: JsonDocument | None, asset_refs: list[JsonDocument] | None, reference_refs: list[JsonDocument] | None, context_pack: JsonDocument | None, _split_state):
         if start_immediately:
             self.start_job(_split_state['job_id'])
         return (True, _split_state['job'])
         return (False, None)
 
-    def create_edit_job(self, *, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: dict[str, Any] | None=None, name: str='', start_immediately: bool=True, provider_patch: dict[str, Any] | None=None, provider_usage: dict[str, Any] | None=None, provider_snapshot: dict[str, Any] | None=None, template_id: str | None=None, preview_id: str | None=None, candidate_group_id: str | None=None, candidate_id: str | None=None, candidate: dict[str, Any] | None=None, asset_refs: list[dict[str, Any]] | None=None, reference_refs: list[dict[str, Any]] | None=None, context_pack: dict[str, Any] | None=None) -> JobState:
-        _split_state: dict[str, _InferenceType] = {}
+    def create_edit_job(self, *, project_id: str, parent_version_id: str, parent_job: JobState, parent_plan: SongPlan, intent: EditIntent, preset: JsonDocument | None=None, name: str='', start_immediately: bool=True, provider_patch: JsonDocument | None=None, provider_usage: JsonDocument | None=None, provider_snapshot: JsonDocument | None=None, template_id: str | None=None, preview_id: str | None=None, candidate_group_id: str | None=None, candidate_id: str | None=None, candidate: JsonDocument | None=None, asset_refs: list[JsonDocument] | None=None, reference_refs: list[JsonDocument] | None=None, context_pack: JsonDocument | None=None) -> JobState:
+        _split_state: dict[str, JsonDocument] = {}
         _split_result = self._create_edit_job_part_01(project_id, parent_version_id, parent_job, parent_plan, intent, preset, name, start_immediately, provider_patch, provider_usage, provider_snapshot, template_id, preview_id, candidate_group_id, candidate_id, candidate, asset_refs, reference_refs, context_pack, _split_state)
         if _split_result[0]:
             return _split_result[1]

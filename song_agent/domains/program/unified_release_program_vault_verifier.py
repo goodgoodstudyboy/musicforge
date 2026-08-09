@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_int
 
 import io as io
 import json as json
@@ -457,7 +457,7 @@ def _anchor_checks(
             _check("urpv_anchor_package_type", anchor.get("package_type") == UNIFIED_RELEASE_PROGRAM_VAULT_ANCHOR_PACKAGE_TYPE, "Vault anchor package type is valid."),
             _check("urpv_anchor_integrity", _integrity_ok(anchor), "Vault anchor integrity hash is valid."),
             _check("urpv_anchor_zip_sha256", anchor.get("vault_zip_sha256") == _sha256_path(zip_path), "Vault anchor binds current ZIP hash."),
-            _check("urpv_anchor_zip_size", int(anchor.get("vault_zip_size_bytes") or -1) == zip_path.stat().st_size, "Vault anchor binds current ZIP size."),
+            _check("urpv_anchor_zip_size", _as_int(anchor.get("vault_zip_size_bytes") or -1) == zip_path.stat().st_size, "Vault anchor binds current ZIP size."),
             _check("urpv_anchor_manifest_hash", anchor.get("vault_manifest_hash") == manifest.get("integrity_hash"), "Vault anchor binds manifest hash."),
             _check("urpv_anchor_source_hash", anchor.get("vault_source_hash") == source.get("source_hash") == report.get("source_hash"), "Vault anchor binds source hash."),
             _check("urpv_anchor_report_hash", anchor.get("vault_report_hash") == report.get("integrity_hash"), "Vault anchor binds report hash."),

@@ -12,11 +12,11 @@ from .commands import program as program_commands
 from .commands import program_context as program_context_commands
 from .commands import maintenance as maintenance_commands
 from .commands import release_check as release_check_commands
-import song_agent.interfaces.cli.composition as _composition
+from .commands.creation_parts.verify_unified_command_center_continuous_review import (
+    handle_default_generate,
+)
 from .registry import CommandRegistry
 
-
-_CLI_COMPOSITION = _composition
 
 COMMAND_MODULES = (creation_commands, studio_commands, quality_commands, delivery_commands, trust_commands, program_commands, program_context_commands, maintenance_commands, release_check_commands,)
 REGISTRY = CommandRegistry(spec for module in COMMAND_MODULES for spec in module.SPECS)
@@ -33,7 +33,7 @@ def _main() -> None:
         if spec is not None:
             REGISTRY.dispatch(spec.name, raw_args[1:])
             return
-    creation_commands.handle_default_generate(raw_args)
+    handle_default_generate(raw_args)
 
 
 def main() -> None:

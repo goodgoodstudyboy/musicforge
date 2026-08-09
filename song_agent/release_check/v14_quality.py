@@ -53,6 +53,7 @@ MYPY_CRITICAL_TARGETS = (
     "song_agent/release_check/v14_wave0_source.py",
     "song_agent/release_check/v14_wave0_state_registry.py",
     "song_agent/release_check/v14_wave0_surfaces.py",
+    "song_agent/release_check/v14_wave1.py",
 )
 MYPY_TARGETS = (*MYPY_ROOTS, *MYPY_CRITICAL_TARGETS)
 COVERAGE_ROOTS = (*MYPY_ROOTS, "song_agent/release_check")
@@ -766,7 +767,7 @@ def run_v1421_stabilization_rollback_smoke(root: Path) -> tuple[bool, str]:
         "mypy_roots_complete": bool(violations["mypy_roots_complete"]),
         "mypy_exclude_absent": not violations["mypy_exclude"],
         "policy_hard_limits_immutable": stabilization.get("hard_limits") == hard_limits,
-        "policy_typing_file_budgets_immutable": _explicit_any_file_budgets_hash(policy)
+        "policy_typing_file_budgets_immutable": stabilization.get("explicit_any_file_budgets_hash")
         == V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH,
         "policy_module_debt_ceilings_immutable": _module_debt_ceilings_hash(policy)
         == V1421_MODULE_DEBT_CEILINGS_HASH,
@@ -1036,12 +1037,11 @@ def run_v14210_explicit_any_alias_fail_closed_smoke(root: Path) -> tuple[bool, s
         "alias_fail_closed_migration_recorded": int(migration.get("from_schema_version") or 0) == 12
         and int(migration.get("to_schema_version") or 0) == 13,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
-        == V14210_EXPLICIT_ANY_CEILING
+        <= V14210_EXPLICIT_ANY_CEILING
         and int(migration.get("previous_explicit_any_ceiling") or 0) == V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
-        == V14210_AFFECTED_FILE_CEILING,
-        "layer_ceilings_unchanged": typing_limits.get("explicit_any_layer_budgets")
-        == V14210_LAYER_CEILINGS,
+        <= V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": _layer_ceilings_not_raised(typing_limits.get("explicit_any_layer_budgets"), V14210_LAYER_CEILINGS),
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
         "quality_policy_passed": not _policy_blockers(policy),
     }
@@ -1074,12 +1074,11 @@ def run_v143_explicit_any_call_effect_dataflow_smoke(root: Path) -> tuple[bool, 
         "call_effect_migration_recorded": int(migration.get("from_schema_version") or 0) == 13
         and int(migration.get("to_schema_version") or 0) == V143_CALL_EFFECT_SCHEMA_VERSION,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
-        == V14210_EXPLICIT_ANY_CEILING
+        <= V14210_EXPLICIT_ANY_CEILING
         and int(migration.get("previous_explicit_any_ceiling") or 0) == V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
-        == V14210_AFFECTED_FILE_CEILING,
-        "layer_ceilings_unchanged": typing_limits.get("explicit_any_layer_budgets")
-        == V14210_LAYER_CEILINGS,
+        <= V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": _layer_ceilings_not_raised(typing_limits.get("explicit_any_layer_budgets"), V14210_LAYER_CEILINGS),
         "active_scope_flow_clear": int(typing.get("explicit_any_scope_blocker_count") or 0) == 0,
         "active_total_within_ceiling": int(typing.get("explicit_any_count") or 0)
         <= V14210_EXPLICIT_ANY_CEILING,
@@ -1115,11 +1114,10 @@ def run_v1431_call_effect_component_compaction_smoke(root: Path) -> tuple[bool, 
         == V1431_COMPONENT_COMPACTION_ADR
         and (root / V1431_COMPONENT_COMPACTION_ADR).is_file(),
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
-        == V14210_EXPLICIT_ANY_CEILING,
+        <= V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
-        == V14210_AFFECTED_FILE_CEILING,
-        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
-        == V14210_LAYER_CEILINGS,
+        <= V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": _layer_ceilings_not_raised(typing_limits.get("explicit_any_layer_budgets"), V14210_LAYER_CEILINGS),
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
     }
     detail = {
@@ -1167,11 +1165,10 @@ def run_v1432_expression_binding_single_pass_smoke(root: Path) -> tuple[bool, st
         == V1432_EXPRESSION_SCAN_ADR
         and (root / V1432_EXPRESSION_SCAN_ADR).is_file(),
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
-        == V14210_EXPLICIT_ANY_CEILING,
+        <= V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
-        == V14210_AFFECTED_FILE_CEILING,
-        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
-        == V14210_LAYER_CEILINGS,
+        <= V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": _layer_ceilings_not_raised(typing_limits.get("explicit_any_layer_budgets"), V14210_LAYER_CEILINGS),
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
     }
     detail = {
@@ -1202,13 +1199,12 @@ def run_v1433_call_binding_lambda_effect_smoke(root: Path) -> tuple[bool, str]:
         and int(migration.get("to_schema_version") or 0)
         == V1433_CALL_BINDING_SCHEMA_VERSION,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
-        == V14210_EXPLICIT_ANY_CEILING
+        <= V14210_EXPLICIT_ANY_CEILING
         and int(migration.get("previous_explicit_any_ceiling") or 0)
         == V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
-        == V14210_AFFECTED_FILE_CEILING,
-        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
-        == V14210_LAYER_CEILINGS,
+        <= V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": _layer_ceilings_not_raised(typing_limits.get("explicit_any_layer_budgets"), V14210_LAYER_CEILINGS),
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
     }
     detail = {
@@ -1237,11 +1233,10 @@ def run_v1434_late_bound_lexical_capture_smoke(root: Path) -> tuple[bool, str]:
         and int(migration.get("to_schema_version") or 0)
         == V1434_LEXICAL_CAPTURE_SCHEMA_VERSION,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
-        == V14210_EXPLICIT_ANY_CEILING,
+        <= V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
-        == V14210_AFFECTED_FILE_CEILING,
-        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
-        == V14210_LAYER_CEILINGS,
+        <= V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": _layer_ceilings_not_raised(typing_limits.get("explicit_any_layer_budgets"), V14210_LAYER_CEILINGS),
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
     }
     detail = {
@@ -1270,11 +1265,10 @@ def run_v1435_first_global_lexical_capture_smoke(root: Path) -> tuple[bool, str]
         and int(migration.get("to_schema_version") or 0)
         == EXPLICIT_ANY_COLLECTOR_SCHEMA_VERSION,
         "explicit_any_ceiling_unchanged": int(typing_limits.get("explicit_any_max_count") or 0)
-        == V14210_EXPLICIT_ANY_CEILING,
+        <= V14210_EXPLICIT_ANY_CEILING,
         "affected_file_ceiling_unchanged": int(typing_limits.get("explicit_any_affected_file_max_count") or 0)
-        == V14210_AFFECTED_FILE_CEILING,
-        "layer_ceilings_unchanged": dict(typing_limits.get("explicit_any_layer_budgets") or {})
-        == V14210_LAYER_CEILINGS,
+        <= V14210_AFFECTED_FILE_CEILING,
+        "layer_ceilings_unchanged": _layer_ceilings_not_raised(typing_limits.get("explicit_any_layer_budgets"), V14210_LAYER_CEILINGS),
         "recovery_ceilings_unchanged": stabilization.get("hard_limits") == V1421_RECOVERY_LIMITS,
     }
     detail = {
@@ -1511,16 +1505,30 @@ def _policy_blockers(policy: dict[str, Any]) -> list[str]:
         blockers.append("v14_quality_policy_first_global_lexical_capture_collector_migration")
     typing = policy.get("typing") or {}
     if (
-        int(typing.get("explicit_any_max_count") or 0) != V14210_EXPLICIT_ANY_CEILING
-        or int(typing.get("explicit_any_affected_file_max_count") or 0)
-        != V14210_AFFECTED_FILE_CEILING
-        or typing.get("explicit_any_layer_budgets") != V14210_LAYER_CEILINGS
+        int(typing.get("explicit_any_max_count") or 0) > V14210_EXPLICIT_ANY_CEILING
+        or int(typing.get("explicit_any_affected_file_max_count") or 0) > V14210_AFFECTED_FILE_CEILING
+        or any(
+            int(count) > int(V14210_LAYER_CEILINGS.get(str(layer), 0))
+            for layer, count in (typing.get("explicit_any_layer_budgets") or {}).items()
+        )
     ):
         blockers.append("v14_quality_policy_alias_fail_closed_ceilings")
     if stabilization.get("hard_limits") != V1421_RECOVERY_LIMITS:
         blockers.append("v14_quality_policy_stabilization_limits")
-    if _explicit_any_file_budgets_hash(policy) != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
+    if stabilization.get("explicit_any_file_budgets_hash") != V1421_EXPLICIT_ANY_FILE_BUDGETS_HASH:
         blockers.append("v14_quality_policy_stabilization_typing_file_budgets")
+    wave1 = stabilization.get("wave1_typing_ratchet") or {}
+    if (
+        int(wave1.get("explicit_any_max_count") or 0) != V144_WAVE1_EXPLICIT_ANY_CEILING
+        or int(wave1.get("affected_file_max_count") or 0) != V144_WAVE1_AFFECTED_FILE_CEILING
+        or wave1.get("layer_budgets") != V144_WAVE1_LAYER_CEILINGS
+        or wave1.get("file_budgets_hash") != V144_WAVE1_EXPLICIT_ANY_FILE_BUDGETS_HASH
+        or int(typing.get("explicit_any_max_count") or 0) != V144_WAVE1_EXPLICIT_ANY_CEILING
+        or int(typing.get("explicit_any_affected_file_max_count") or 0) != V144_WAVE1_AFFECTED_FILE_CEILING
+        or typing.get("explicit_any_layer_budgets") != V144_WAVE1_LAYER_CEILINGS
+        or _explicit_any_file_budgets_hash(policy) != V144_WAVE1_EXPLICIT_ANY_FILE_BUDGETS_HASH
+    ):
+        blockers.append("v14_quality_policy_wave1_typing_ratchet")
     if _module_debt_ceilings_hash(policy) != V1421_MODULE_DEBT_CEILINGS_HASH:
         blockers.append("v14_quality_policy_stabilization_module_debt")
     return blockers
@@ -2790,6 +2798,7 @@ class _ExplicitAnyCollector(ast.NodeVisitor):
         )
         if function_index is None:
             return None
+        owner_index: int | None
         if name in self._global_names[function_index]:
             owner_index = 0
         elif name in self._nonlocal_names[function_index]:
@@ -3117,16 +3126,16 @@ def _scope_named_expression_lines(body: list[ast.stmt]) -> dict[str, tuple[int, 
         ) -> None:
             for value in (*node.decorator_list, *node.args.defaults):
                 self.visit(value)
-            for value in node.args.kw_defaults:
-                if value is not None:
-                    self.visit(value)
+            for default in node.args.kw_defaults:
+                if default is not None:
+                    self.visit(default)
 
         def visit_Lambda(self, node: ast.Lambda) -> None:
             for value in node.args.defaults:
                 self.visit(value)
-            for value in node.args.kw_defaults:
-                if value is not None:
-                    self.visit(value)
+            for default in node.args.kw_defaults:
+                if default is not None:
+                    self.visit(default)
 
         def visit_ClassDef(self, node: ast.ClassDef) -> None:
             for value in (*node.decorator_list, *node.bases):
@@ -4424,3 +4433,15 @@ def _file_hash(path: Path) -> str:
     if value is None:
         raise FileNotFoundError(path)
     return value
+
+
+def _layer_ceilings_not_raised(current: object, historical: dict[str, int]) -> bool:
+    return all(str(layer) in historical and int(count) <= historical[str(layer)] for layer, count in (current.items() if isinstance(current, dict) else ()))
+
+
+# Wave 1 freezes a reviewed reduction without rewriting the historical v14.2
+# recovery evidence above.
+V144_WAVE1_EXPLICIT_ANY_CEILING = 6544
+V144_WAVE1_AFFECTED_FILE_CEILING = 310
+V144_WAVE1_LAYER_CEILINGS = {"domains": 6544}
+V144_WAVE1_EXPLICIT_ANY_FILE_BUDGETS_HASH = "191451f0d2f4da66a9b4e5b00f81b6ec9312c5f109446734e8cfee5612578615"

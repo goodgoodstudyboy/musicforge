@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
-
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
+from song_agent.platform.contracts import as_documents as _as_documents
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 from song_agent.platform.persistence.database import MusicForgeDatabase
 from song_agent.platform.persistence.file_artifacts import FileArtifactStore, sha256_path
 from song_agent.platform.persistence.locks import WorkspaceLock
@@ -20,10 +19,10 @@ class PersistenceRecovery:
         self.database.initialize()
         self.artifacts = FileArtifactStore(self.workspace_root)
 
-    def inspect(self) -> list[dict[str, Any]]:
+    def inspect(self) -> list[JsonDocument]:
         if not self.artifacts.transactions_root.exists():
             return []
-        rows = []
+        rows: list[JsonDocument] = []
         for intent_path in sorted(self.artifacts.transactions_root.glob("*/intent.json")):
             try:
                 intent = json.loads(intent_path.read_text(encoding="utf-8"))
@@ -36,7 +35,7 @@ class PersistenceRecovery:
                 rows.append(intent)
         return rows
 
-    def recover(self) -> dict[str, Any]:
+    def recover(self) -> JsonDocument:
         recovered: list[str] = []
         rolled_back: list[str] = []
         with WorkspaceLock(self.workspace_root, operation="persistence-recovery"):
@@ -45,10 +44,9 @@ class PersistenceRecovery:
                 namespace = str(intent.get("namespace") or "")
                 generation = self.artifacts.generation_dir(namespace, transaction_id)
                 pointer = self.artifacts.read_pointer(namespace)
-                raw_files = intent.get("files")
-                if not isinstance(raw_files, list) or not raw_files or not all(isinstance(row, dict) for row in raw_files):
+                files = _as_documents(intent.get("files"))
+                if not files:
                     raise RuntimeError(f"Recovery file ledger is invalid for transaction {transaction_id}.")
-                files: list[dict[str, Any]] = raw_files
                 if generation.exists():
                     if not self.artifacts.verify_tree(generation, files):
                         raise RuntimeError(f"Recovery integrity failure for transaction {transaction_id}.")
@@ -95,14 +93,14 @@ class PersistenceRecovery:
                     shutil.rmtree(staging)
                 rolled_back.append(transaction_id)
         program_recovered = ProgramStateRepository(self.workspace_root, database=self.database).recover_pending()
-        return {
+        return normalize_json_document({
             "status": "passed",
             "recovered": recovered,
             "rolled_back": rolled_back,
             "program_recovered": program_recovered,
-        }
+        })
 
-    def _record_committed(self, intent: ImplementationDocument, generation: Path, pointer_hash: str) -> None:
+    def _record_committed(self, intent: JsonDocument, generation: Path, pointer_hash: str) -> None:
         with self.database.transaction() as connection:
             connection.execute(
                 """
@@ -123,7 +121,7 @@ class PersistenceRecovery:
             )
 
 
-def _tree_hash(rows: list[ImplementationDocument]) -> str:
+def _tree_hash(rows: list[JsonDocument]) -> str:
     from song_agent.platform.persistence.file_artifacts import stable_tree_hash
 
     return stable_tree_hash(rows)

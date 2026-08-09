@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
 
+from song_agent.application.jobs.model import JobState
+from song_agent.application.http_ports import creation as creation_ports
+from song_agent.application.http_ports.creation import CandidateGroup, ProjectDocument, ProjectVersion, SongPlan
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
-
-from typing import Any
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_int as _as_int
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
     def _handle_project_candidate_artifact(self, method: str, project_id: str, group_id: str, candidate_id: str, action: str) -> None:
         try:
-            group_store = _interfaces_api_runtime.CandidateGroupStore(self.project_store.project_dir(project_id))
+            group_store = _api_store_factories.candidate_group_store(self.project_store.project_dir(project_id))
             group = self._project_candidate_group_or_conflict(project_id, group_store, group_id)
             if group is None:
                 return
@@ -80,7 +84,12 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
 
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Candidate artifact route not found.")
 
-    def _project_candidate_group_or_conflict(self, project_id: str, group_store: _InterfaceType, group_id: str) -> Any | None:
+    def _project_candidate_group_or_conflict(
+        self,
+        project_id: str,
+        group_store: creation_ports.CandidateGroupStore,
+        group_id: str,
+    ) -> CandidateGroup | None:
         document = self.project_store.sync_project(project_id, self.store.get_job)
         group = group_store.read_group(group_id)
         parent = next((version for version in document.versions if version.version_id == group.parent_version_id), None)
@@ -89,7 +98,10 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
             return None
         _document, _parent, _parent_job, parent_plan = self._project_edit_parent(project_id, parent.version_id)
         if _interfaces_api_runtime.candidate_group_stale(group, _interfaces_api_runtime.song_plan_hash(parent_plan)):
-            self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, "Provider edit candidate group is stale because the parent song-plan.json has changed.")
+            self._send_error(
+                _interfaces_api_runtime.HTTPStatus.CONFLICT,
+                "Provider edit candidate group is stale because the parent song-plan.json has changed.",
+            )
             return None
         return group
 
@@ -104,7 +116,7 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
             instruction = str(payload.get("instruction") or "").strip()
             if not instruction:
                 raise ValueError("instruction is required.")
-            candidate_count = int(payload.get("candidate_count") or 2)
+            candidate_count = _as_int(payload.get("candidate_count") or 2)
             template_ids = _interfaces_api_runtime._prompt_ab_template_ids(payload.get("template_ids"))
             groups = []
             for template_id in template_ids:
@@ -122,7 +134,7 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
                 groups.append(group)
                 created_group_ids.append(group.group_id)
             project_dir = self.project_store.project_dir(project_id)
-            experiment = _interfaces_api_runtime.PromptABStore(project_dir).create_experiment(
+            experiment = _api_store_factories.prompt_ab_store(project_dir).create_experiment(
                 project_id=project_id,
                 parent_version_id=version_id,
                 instruction=instruction,
@@ -189,7 +201,7 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
             return
         try:
             self.project_store.get_project(project_id)
-            experiments = _interfaces_api_runtime.PromptABStore(self.project_store.project_dir(project_id)).list_experiments()
+            experiments = _api_store_factories.prompt_ab_store(self.project_store.project_dir(project_id)).list_experiments()
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
             return
@@ -205,8 +217,8 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
         try:
             self.project_store.get_project(project_id)
             project_dir = self.project_store.project_dir(project_id)
-            experiment = _interfaces_api_runtime.PromptABStore(project_dir).read_experiment(ab_id)
-            group_store = _interfaces_api_runtime.CandidateGroupStore(project_dir)
+            experiment = _api_store_factories.prompt_ab_store(project_dir).read_experiment(ab_id)
+            group_store = _api_store_factories.candidate_group_store(project_dir)
             groups = [group_store.read_group(group_id).to_dict() for group_id in experiment.group_ids]
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Prompt A/B experiment not found.")
@@ -214,7 +226,7 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
         except ValueError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
             return
-        self._send_json({"project_id": project_id, "experiment": experiment.to_dict(), "groups": groups})
+        self._send_json({"project_id": project_id, "experiment": experiment.to_dict(), "groups": normalize_json_value(groups)})
 
     def _handle_project_prompt_ab_delete(self, method: str, project_id: str, ab_id: str) -> None:
         if method != "POST":
@@ -222,7 +234,7 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
             return
         try:
             self.project_store.get_project(project_id)
-            _interfaces_api_runtime.PromptABStore(self.project_store.project_dir(project_id)).delete_experiment(ab_id)
+            _api_store_factories.prompt_ab_store(self.project_store.project_dir(project_id)).delete_experiment(ab_id)
             self.project_store.append_event(project_id, "provider_prompt_ab_deleted", {"ab_id": ab_id})
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Prompt A/B experiment not found.")
@@ -238,30 +250,30 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
             return
-        usage_records = []
+        usage_records: list[JsonDocument] = []
         for version in document.versions:
             usage_path = _interfaces_api_runtime.Path(version.output_dir) / "data" / "provider-usage.json"
             if usage_path.exists():
-                usage = _interfaces_api_runtime.read_json(usage_path)
+                usage = _as_document(_interfaces_api_runtime.read_json(usage_path))
                 usage_records.append({"version_id": version.version_id, "job_id": version.job_id, "usage": usage})
-        group_records = []
+        group_records: list[JsonDocument] = []
         groups_dir = self.project_store.project_dir(project_id) / "candidate-groups"
         if groups_dir.exists():
             for usage_path in sorted(groups_dir.glob("*/provider-usage.json")):
                 try:
-                    usage = _interfaces_api_runtime.read_json(usage_path)
+                    usage = _as_document(_interfaces_api_runtime.read_json(usage_path))
                 except (OSError, ValueError, TypeError, _interfaces_api_runtime.json.JSONDecodeError):
                     continue
                 group_records.append({"group_id": usage_path.parent.name, "usage": usage})
-        total_tokens = sum(int(record["usage"].get("total_tokens") or 0) for record in usage_records)
-        total_tokens += sum(int(record["usage"].get("total_tokens") or 0) for record in group_records)
+        total_tokens = sum(_as_int(_as_document(record.get("usage")).get("total_tokens") or 0) for record in usage_records)
+        total_tokens += sum(_as_int(_as_document(record.get("usage")).get("total_tokens") or 0) for record in group_records)
         self._send_json(
             {
                 "project_id": project_id,
                 "total_calls": len(usage_records) + len(group_records),
                 "total_tokens": total_tokens,
-                "records": usage_records,
-                "candidate_group_records": group_records,
+                "records": normalize_json_value(usage_records),
+                "candidate_group_records": normalize_json_value(group_records),
             }
         )
 
@@ -289,10 +301,25 @@ class CreationRoutesProjectCandidateArtifact(CreationRouteContext):
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
             return
         if refresh:
-            self.project_store.append_event(project_id, "project_review_metrics_refreshed", {"latest_readiness": report.get("latest_readiness"), "sprint_count": report.get("sprint_count")})
-        self._send_json({"ok": True, "project_id": project_id, "review_metrics": report, "summary": _interfaces_api_runtime.project_review_metrics_summary(report)})
+            self.project_store.append_event(
+                project_id,
+                "project_review_metrics_refreshed",
+                {"latest_readiness": report.get("latest_readiness"), "sprint_count": report.get("sprint_count")},
+            )
+        self._send_json(
+            {
+                "ok": True,
+                "project_id": project_id,
+                "review_metrics": report,
+                "summary": _interfaces_api_runtime.project_review_metrics_summary(report),
+            }
+        )
 
-    def _project_edit_parent(self, project_id: str, version_id: str) -> tuple[Any, Any, _InterfaceType, _InterfaceType]:
+    def _project_edit_parent(
+        self,
+        project_id: str,
+        version_id: str,
+    ) -> tuple[ProjectDocument, ProjectVersion, JobState, SongPlan]:
         document = self.project_store.sync_project(project_id, self.store.get_job)
         parent = next((version for version in document.versions if version.version_id == version_id), None)
         if parent is None:

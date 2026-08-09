@@ -48,9 +48,22 @@ def test_command_registry_inventory_help_and_exit_policy_snapshot() -> None:
         assert spec is not None
         expected_policy = "program-result-v1" if name.startswith("unified-release-program") else "legacy-compatible"
         assert spec.exit_code_policy == expected_policy
-        assert spec.parser.__module__ == spec.handler.__module__
+        assert spec.parser.__module__.startswith("song_agent.interfaces.cli.commands")
+        assert spec.handler.__module__.startswith("song_agent.interfaces.cli.commands")
         assert len(inspect.getsourcelines(spec.handler)[0]) < 100
     assert _hash_json(command_help_contract_rows(REGISTRY)) == EXPECTED_COMMAND_HELP_HASH
+
+
+def test_cli_registry_uses_static_command_ownership() -> None:
+    cli_root = ROOT / "song_agent" / "interfaces" / "cli"
+    assert not (cli_root / "bindings.py").exists()
+    assert not (cli_root / "composition.py").exists()
+    assert not list((cli_root / "composition_parts").glob("*.py"))
+    for row in command_inventory():
+        spec = REGISTRY.get(row["name"])
+        assert spec is not None
+        assert spec.parser.__module__.startswith("song_agent.interfaces.cli.commands")
+        assert spec.handler.__module__.startswith("song_agent.interfaces.cli.commands")
 
 
 def test_route_inventory_snapshot_and_conflict_detection() -> None:

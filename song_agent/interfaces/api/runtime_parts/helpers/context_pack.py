@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
+from song_agent.platform.contracts import JsonDocument, as_list as _as_list
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, unquote
+from song_agent.interfaces.bootstrap.api.core import unquote
 
 def _match_context_pack_route(path: str) -> tuple[str, str] | None:
     prefix = "/api/context-packs/"
@@ -245,14 +245,14 @@ def _match_project_review_sprint_tail(tail: str) -> tuple[str, str] | None:
         return unquote(parts[1]), f"action-queue:{unquote(parts[3])}:{parts[4]}"
     return None
 
-def _recommendation_action_for_task(report: ImplementationDocument, task_id: str) -> ImplementationDocument:
+def _recommendation_action_for_task(report: JsonDocument, task_id: str) -> JsonDocument:
     actions = report.get("recommended_actions") if isinstance(report, dict) else []
     for action in _as_list(actions):
         if isinstance(action, dict) and action.get("task_id") == task_id:
             return action
     return {}
 
-def _context_ref_count(preview: Any) -> int:
+def _context_ref_count(preview: object) -> int:
     if not isinstance(preview, dict):
         return 0
     return len(preview.get("asset_refs") or []) + len(preview.get("reference_refs") or [])

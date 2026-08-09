@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
-
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list
 import json as json
 import re as re
 import zipfile as zipfile
@@ -471,11 +470,12 @@ def _generation_checks(
     resets: dict[str, ImplementationDocument],
 ) -> list[ImplementationDocument]:
     current_number = _as_int(current_generation.get("generation"))
-    proofs_by_previous = {
-        _as_int(proof.get("previous_generation")): proof
-        for proof in (bundle.get("proof") or {} for bundle in resets.values())
-        if _as_int(proof.get("previous_generation")) is not None
-    }
+    proofs_by_previous: dict[int, ImplementationDocument] = {}
+    for bundle in resets.values():
+        proof = _as_document(bundle.get("proof"))
+        previous_generation = _as_int(proof.get("previous_generation"))
+        if previous_generation is not None:
+            proofs_by_previous[previous_generation] = proof
     expected = set(proofs_by_previous)
     if current_number is not None:
         expected.add(current_number)

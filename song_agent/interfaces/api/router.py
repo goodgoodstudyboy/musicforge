@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Callable, Iterable
+from typing import Iterable, Protocol
 
 from song_agent.interfaces.api.routes.manifest import ACTIVE_DISPATCH_HANDLERS, ACTIVE_ROUTE_ROWS
 
 
 HTTP_METHODS = {"GET", "POST", "PATCH", "PUT", "DELETE"}
+
+
+class LegacyDispatchCallable(Protocol):
+    def __call__(self, *arguments: object, **options: object) -> object: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +47,7 @@ def explicit_route_specs() -> tuple[RouteSpec, ...]:
     return tuple(RouteSpec(*row) for row in ACTIVE_ROUTE_ROWS)
 
 
-def route_specs_from_dispatch(_dispatch: Callable[..., object] | None = None) -> tuple[RouteSpec, ...]:
+def route_specs_from_dispatch(_dispatch: LegacyDispatchCallable | None = None) -> tuple[RouteSpec, ...]:
     """Compatibility API for callers migrating from the pre-v13.5 AST registry."""
 
     return explicit_route_specs()
@@ -52,7 +56,7 @@ def route_specs_from_dispatch(_dispatch: Callable[..., object] | None = None) ->
 DEFAULT_ROUTE_REGISTRY = RouteRegistry(explicit_route_specs())
 
 
-def configure_route_registry(_dispatch: Callable[..., object] | None = None) -> RouteRegistry:
+def configure_route_registry(_dispatch: LegacyDispatchCallable | None = None) -> RouteRegistry:
     global DEFAULT_ROUTE_REGISTRY
     DEFAULT_ROUTE_REGISTRY = RouteRegistry(explicit_route_specs())
     return DEFAULT_ROUTE_REGISTRY

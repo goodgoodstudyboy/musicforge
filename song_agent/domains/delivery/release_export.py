@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document
 
 import hashlib as hashlib
 import json as json
@@ -35,7 +35,7 @@ from song_agent.domains.delivery.format_decisions import FormatDecisionStore as 
 from song_agent.domains.delivery.rights_clearance import RightsClearanceStore as RightsClearanceStore
 from song_agent.domains.delivery.release_metadata import attach_metadata_export_to_manifest as attach_metadata_export_to_manifest, export_release_metadata_files as export_release_metadata_files, metadata_qa_allows_export as metadata_qa_allows_export, read_release_metadata as read_release_metadata, read_release_metadata_qa as read_release_metadata_qa, release_metadata_source_hash as release_metadata_source_hash
 from song_agent.domains.delivery.release_qa import release_qa_allows_export as release_qa_allows_export, release_qa_summary as release_qa_summary, release_source_hash as release_source_hash
-from song_agent.domains.delivery.release_export_manifest import RELEASE_EXPORT_BLOCKED_KEYS as RELEASE_EXPORT_BLOCKED_KEYS, read_release_export_manifest as read_release_export_manifest
+from song_agent.domains.delivery.release_export_manifest import RELEASE_EXPORT_BLOCKED_KEYS as RELEASE_EXPORT_BLOCKED_KEYS, ReleaseExportDocument as ReleaseExportDocument, ReleaseExportPort as ReleaseExportPort, read_release_export_manifest as read_release_export_manifest
 from song_agent.domains.delivery.releases import BLOCKED_RELEASE_KEYS as BLOCKED_RELEASE_KEYS, ReleaseDocument as ReleaseDocument, ReleaseStore as ReleaseStore, stable_hash as stable_hash
 
 
@@ -249,7 +249,7 @@ def build_release_export_bundle(
     return manifest
 
 
-def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, now: str | None = None, allow_signed: bool = False) -> dict[str, Any]:
+def build_release_export_zip(release_store: ReleaseExportPort, release_id: str, *, now: str | None = None, allow_signed: bool = False) -> dict[str, Any]:
     if not allow_signed:
         _ensure_release_export_mutable(release_store, release_id)
     refresh_release_export_signoff_summary(release_store, release_id)
@@ -292,7 +292,7 @@ def build_release_export_zip(release_store: ReleaseStore, release_id: str, *, no
     return sanitize_metadata(zip_info, blocked_keys=BLOCKED_RELEASE_KEYS)
 
 
-def _ensure_release_export_mutable(release_store: ReleaseStore, release_id: str, *, release: ReleaseDocument | None = None) -> None:
+def _ensure_release_export_mutable(release_store: ReleaseExportPort, release_id: str, *, release: ReleaseExportDocument | None = None) -> None:
     document = release or release_store.get_release(release_id)
     signoff = release_store.read_signoff(release_id, default={})
     signoff_status = str(signoff.get("status") or document.latest_signoff_summary.get("status") or "")
@@ -302,7 +302,7 @@ def _ensure_release_export_mutable(release_store: ReleaseStore, release_id: str,
         raise ReleaseExportError("Signed releases cannot rebuild export or ZIP. Reset signoff before exporting again.")
 
 
-def refresh_release_export_signoff_summary(release_store: ReleaseStore, release_id: str) -> dict[str, Any]:
+def refresh_release_export_signoff_summary(release_store: ReleaseExportPort, release_id: str) -> dict[str, Any]:
     export_dir = release_store.export_dir(release_id)
     manifest_path = export_dir / "manifest.json"
     if not manifest_path.exists():

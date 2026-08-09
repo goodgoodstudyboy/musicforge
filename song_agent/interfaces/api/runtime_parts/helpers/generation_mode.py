@@ -1,32 +1,75 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from collections.abc import Sequence
+from typing import Protocol
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, Path, datetime, hashlib, re, read_release_export_manifest, threading, timezone
+from song_agent.platform.contracts import JsonDocument, JsonValue, as_document as _as_document
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import SongRequest
+from song_agent.interfaces.bootstrap.api.core import Path, datetime, hashlib, re, read_release_export_manifest, threading, timezone
+
+from song_agent.interfaces.bootstrap.api.creation_quality import SongRequest
+from song_agent.interfaces.bootstrap.api import program as _program_bootstrap
 
 from song_agent.interfaces.api.runtime_parts.core import VARIATION_REQUEST_FIELDS
 
-def _generation_mode(payload: ImplementationDocument) -> str:
+
+class _ProjectStateView(Protocol):
+    @property
+    def hidden(self) -> bool: ...
+    @property
+    def selected_version_id(self) -> str | None: ...
+    @property
+    def final_version_id(self) -> str | None: ...
+    @property
+    def status(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def description(self) -> str: ...
+    @property
+    def tags(self) -> list[str]: ...
+
+
+class _ProjectVersionView(Protocol):
+    @property
+    def quality_gate_status(self) -> str: ...
+    @property
+    def variant_type(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def note(self) -> str: ...
+
+
+class _ProjectDocumentView(Protocol):
+    @property
+    def state(self) -> _ProjectStateView: ...
+    @property
+    def versions(self) -> Sequence[_ProjectVersionView]: ...
+
+
+class _WatchdogPort(Protocol):
+    def run_watchdog_tick(self) -> int: ...
+
+def _generation_mode(payload: JsonDocument) -> str:
     mode = str(payload.get("generation_mode", "local") or "local")
     if mode not in {"local", "provider"}:
         raise ValueError("generation_mode must be either local or provider.")
     return mode
 
-def _pipeline_mode(payload: ImplementationDocument) -> str:
+def _pipeline_mode(payload: JsonDocument) -> str:
     mode = str(payload.get("pipeline_mode", "single") or "single")
     if mode not in {"single", "multinode"}:
         raise ValueError("pipeline_mode must be either single or multinode.")
     return mode
 
 def _variation_request_payload(
-    parent_request: ImplementationDocument,
-    request_patch: ImplementationDocument,
+    parent_request: JsonDocument,
+    request_patch: JsonDocument,
     *,
-    generation_mode: Any = None,
-    pipeline_mode: Any = None,
-) -> ImplementationDocument:
+    generation_mode: JsonValue = None,
+    pipeline_mode: JsonValue = None,
+) -> JsonDocument:
     unknown = sorted(set(request_patch) - VARIATION_REQUEST_FIELDS)
     if unknown:
         raise ValueError(f"request_patch contains unsupported fields: {', '.join(unknown)}.")
@@ -42,7 +85,7 @@ def _variation_request_payload(
     return payload
 
 def _project_matches_filters(
-    document: Any,
+    document: _ProjectDocumentView,
     *,
     q: str,
     status: str,
@@ -100,7 +143,7 @@ def _content_disposition_filename(filename: str) -> str:
     utf8_name = "".join(char for char in str(filename) if ord(char) >= 32 and char not in {'"', "\r", "\n"})
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{_rfc5987_quote(utf8_name)}"
 
-def _dict_or_empty(value: Any) -> ImplementationDocument:
+def _dict_or_empty(value: object) -> JsonDocument:
     return _as_document(value)
 
 def _server_file_sha256(path: Path) -> str | None:
@@ -112,20 +155,20 @@ def _server_file_sha256(path: Path) -> str | None:
             digest.update(chunk)
     return digest.hexdigest()
 
-def _safe_read_release_export_manifest(release_store: Any, release_id: str) -> ImplementationDocument:
+def _safe_read_release_export_manifest(release_store: _program_bootstrap.ReleaseStore, release_id: str) -> JsonDocument:
     try:
         return read_release_export_manifest(release_store, release_id)
     except FileNotFoundError:
         return {}
 
-def _string_list(value: Any) -> list[str]:
+def _string_list(value: object) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list):
         raise ValueError("tags must be a list.")
     return [str(item).strip() for item in value if str(item).strip()]
 
-def _clean_title(value: Any) -> str:
+def _clean_title(value: object) -> str:
     return str(value or "").strip()
 
 def _parse_iso_datetime(value: str | None) -> datetime | None:
@@ -139,7 +182,7 @@ def _parse_iso_datetime(value: str | None) -> datetime | None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed
 
-def _start_watchdog(store: Any, stop_event: threading.Event) -> threading.Thread:
+def _start_watchdog(store: _WatchdogPort, stop_event: threading.Event) -> threading.Thread:
     def run() -> None:
         while not stop_event.wait(5):
             store.run_watchdog_tick()

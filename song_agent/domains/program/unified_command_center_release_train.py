@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import json as json
@@ -482,15 +482,15 @@ class UnifiedCommandCenterReleaseTrainStore:
                 "evidence_fingerprints": [{key: row.get(key) for key in ("item_id", "center_id", "evidence_type", "zip_sha256", "manifest_hash", "verification_report_hash", "verification_status")} for row in evidence_rows],
             }
         )
-        source["source_hash"] = stable_hash({key: value for key, value in source.items() if key not in {"source_hash", "integrity_hash"}})
+        source["source_hash"] = source_hash = stable_hash({key: value for key, value in source.items() if key not in {"source_hash", "integrity_hash"}})
         source["integrity_hash"] = _integrity_hash(source)
-        inventory = _inventory_document(train_id, source["source_hash"], evidence_rows, now)
-        readiness = _readiness_document(train_id, source["source_hash"], item_rows, evidence_rows, now)
-        dependency = _dependency_document(train_id, source["source_hash"], item_rows, now)
-        wave = _wave_document(train_id, source["source_hash"], item_rows, now)
-        report = _go_no_go_report(train_id, source["source_hash"], train, readiness, dependency, inventory, now)
-        runbook = _runbook_document(train_id, source["source_hash"], readiness, report, now)
-        runbook_result = _runbook_result(train_id, source["source_hash"], [])
+        inventory = _inventory_document(train_id, source_hash, evidence_rows, now)
+        readiness = _readiness_document(train_id, source_hash, item_rows, evidence_rows, now)
+        dependency = _dependency_document(train_id, source_hash, item_rows, now)
+        wave = _wave_document(train_id, source_hash, item_rows, now)
+        report = _go_no_go_report(train_id, source_hash, train, readiness, dependency, inventory, now)
+        runbook = _runbook_document(train_id, source_hash, readiness, report, now)
+        runbook_result = _runbook_result(train_id, source_hash, [])
         return {"train": train, "source": source, "items": items_doc, "inventory": inventory, "readiness": readiness, "dependency": dependency, "wave": wave, "report": report, "runbook": runbook, "runbook_result": runbook_result}
 
     def _ensure_docs(self, train_id: str, payload: ImplementationDocument) -> ImplementationDocument:

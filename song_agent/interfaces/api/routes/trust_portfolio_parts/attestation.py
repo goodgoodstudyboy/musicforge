@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import JsonDocument
+
 from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioAttestationRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_attestation(self, method, parts, portfolio_id, action) -> bool:
+    def _dispatch_portfolio_attestation(self, method: str, parts: list[str], portfolio_id: str, action: str) -> bool:
         if action == 'governance-attestation':
             query = _interfaces_api_runtime.parse_qs(_interfaces_api_runtime.urlparse(self.path).query)
             query_profile = str(query.get('profile', ['public_summary'])[0] or 'public_summary')
@@ -16,7 +19,11 @@ class TrustPortfolioAttestationRoutes(TrustPortfolioRouteContext):
                     return True
                 report = self.release_portfolio_governance_attestation_store.read_report(portfolio_id, profile=query_profile, default={})
                 stale = self.release_portfolio_governance_attestation_store.report_is_stale(portfolio_id, report, profile=query_profile) if report else False
-                summary = _interfaces_api_runtime.sanitize_metadata(_interfaces_api_runtime.portfolio_governance_attestation_summary(report) if report else {'status': 'missing', 'profile': query_profile})
+                summary: JsonDocument = _interfaces_api_runtime.sanitize_metadata(
+                    _interfaces_api_runtime.portfolio_governance_attestation_summary(report)
+                    if report
+                    else {"status": "missing", "profile": query_profile}
+                )
                 summary['stale'] = stale
                 certificate = self.release_portfolio_governance_attestation_store.read_certificate(portfolio_id, profile=query_profile, default={})
                 verification_path = self.release_portfolio_governance_attestation_store.verification_report_path(portfolio_id, query_profile)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.batch_runner_context import BatchRunnerContext
+from song_agent.application.jobs.ports import BatchRunnerContext
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import BatchDocument
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProviderError, RendererError, load_provider_config, load_renderer_config
+from song_agent.interfaces.bootstrap.api.core import BatchDocument
+from song_agent.interfaces.bootstrap.api.creation_quality import ProviderError, RendererError, load_provider_config, load_renderer_config
 
 class BatchRunnerFinishBatch(BatchRunnerContext):
     def _finish_batch(self, document: BatchDocument) -> None:

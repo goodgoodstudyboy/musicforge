@@ -8,6 +8,7 @@ from song_agent.application.interface_persistence import write_interface_documen
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class CreationRoutesProjectEditPreview(CreationRouteContext):
     def _handle_project_edit_preview(self, method: str, project_id: str, version_id: str) -> None:
         if method != "POST":
@@ -54,7 +55,7 @@ class CreationRoutesProjectEditPreview(CreationRouteContext):
                 provider_request_id=None if provider_snapshot.get("request_id") is None else str(provider_snapshot.get("request_id")),
                 asset_refs=asset_snapshot["asset_refs"],
                 reference_refs=reference_snapshot["reference_refs"],
-                context_pack=payload.get("context_pack") if isinstance(payload.get("context_pack"), dict) else None,
+                context_pack=_as_document(payload.get("context_pack")) or None,
             )
             if asset_snapshot["asset_refs"]:
                 self.asset_store.mark_used(

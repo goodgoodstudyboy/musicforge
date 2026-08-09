@@ -12,10 +12,9 @@ from typing import Any
 from song_agent import __version__
 from song_agent.architecture_guardrails import build_architecture_snapshot, evaluate_architecture
 from song_agent.capabilities import capability_registry
+from song_agent.interfaces.bootstrap.api.program import active_lifecycle_registry, active_verifier_registry
 from song_agent.platform.lifecycle.attack_corpus import run_active_lifecycle_attack_corpus
-from song_agent.platform.lifecycle.registry import active_lifecycle_registry
 from song_agent.platform.verification.attack_corpus import run_active_verifier_attack_corpus
-from song_agent.platform.verification.registry import active_verifier_registry
 from song_agent.release_check.matrix import all_check_definitions
 
 
@@ -58,8 +57,12 @@ def build_lts_audit(repo_root: Path | str = ".") -> dict[str, Any]:
     verifier_rows = [{**row, "migrated": row.get("status") == "passed"} for row in verifier_adoption["rows"]]
     lifecycle_rows = [{**row, "migrated": row.get("status") == "passed"} for row in lifecycle_adoption["rows"]]
     with tempfile.TemporaryDirectory(prefix="musicforge-v132-audit-") as temp:
-        verifier_attacks = run_active_verifier_attack_corpus(Path(temp) / "verification")
-        lifecycle_attacks = run_active_lifecycle_attack_corpus(Path(temp) / "lifecycle")
+        verifier_attacks = run_active_verifier_attack_corpus(
+            Path(temp) / "verification", active_verifier_registry
+        )
+        lifecycle_attacks = run_active_lifecycle_attack_corpus(
+            Path(temp) / "lifecycle", active_lifecycle_registry
+        )
     persistence_rows = _persistence_adoption_rows(root)
     module_limits, function_limits = _structured_limits(root)
     definitions = list(all_check_definitions())

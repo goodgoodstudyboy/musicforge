@@ -1,36 +1,35 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_int as _as_int, as_list as _as_list
 
 from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
 
-from typing import Any
-
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.application.http_ports.quality import PlanningRuleSimulationReport
+from song_agent.platform.contracts.documents import JsonDocument
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
-    def _release_acceptance_fix_sprint_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_acceptance_fix_sprint_gate(self, payload: JsonDocument) -> JsonDocument:
         fix_sprint_id = str(payload.get("acceptance_fix_sprint_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_acceptance_fix_sprint", False))
         try:
             if fix_sprint_id:
-                sprint = self.acceptance_fix_sprint_store.read_sprint(fix_sprint_id)
+                sprint = self.server.acceptance_fix_sprint_store.read_sprint(fix_sprint_id)
             elif release_id:
-                summary = _interfaces_api_runtime.latest_fix_sprint_summary(self.acceptance_fix_sprint_store, release_id=release_id)
+                summary = _interfaces_api_runtime.latest_fix_sprint_summary(self.server.acceptance_fix_sprint_store, release_id=release_id)
                 if summary.get("status") == "missing":
                     return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Sprint evidence is missing."}
-                sprint = self.acceptance_fix_sprint_store.read_sprint(str(summary.get("fix_sprint_id") or ""))
+                sprint = self.server.acceptance_fix_sprint_store.read_sprint(str(summary.get("fix_sprint_id") or ""))
             else:
                 return {}
-            items = self.acceptance_fix_sprint_store.read_items(sprint.fix_sprint_id)
-            closeout = self.acceptance_fix_sprint_store.read_closeout(sprint.fix_sprint_id, default={})
+            items = self.server.acceptance_fix_sprint_store.read_items(sprint.fix_sprint_id)
+            closeout = self.server.acceptance_fix_sprint_store.read_closeout(sprint.fix_sprint_id, default={})
             summary = _interfaces_api_runtime.fix_sprint_summary(sprint, items)
             closeout_summary = _interfaces_api_runtime.acceptance_fix_closeout_summary(closeout)
-            stale = self.acceptance_fix_sprint_store.sprint_is_stale(sprint)
+            stale = self.server.acceptance_fix_sprint_store.sprint_is_stale(sprint)
             ok = sprint.status == "closed" and closeout_summary.get("status") in {"passed", "warning", "force_closed"}
             evidence = {**summary, "sprint_status": summary.get("status"), "stale": stale, "closeout": closeout_summary}
             if stale:
@@ -43,22 +42,22 @@ class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
         except _interfaces_api_runtime.AcceptanceFixSprintError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_acceptance_fix_plan_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_acceptance_fix_plan_gate(self, payload: JsonDocument) -> JsonDocument:
         plan_id = str(payload.get("acceptance_fix_plan_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_acceptance_fix_plan", False))
         try:
             if plan_id:
-                plan = self.acceptance_fix_plan_store.read_plan(plan_id)
+                plan = self.server.acceptance_fix_plan_store.read_plan(plan_id)
                 summary = _interfaces_api_runtime.fix_plan_summary(plan)
             elif release_id:
-                summary = _interfaces_api_runtime.latest_fix_plan_summary(self.acceptance_fix_plan_store, release_id=release_id)
+                summary = _interfaces_api_runtime.latest_fix_plan_summary(self.server.acceptance_fix_plan_store, release_id=release_id)
                 if summary.get("status") == "missing":
                     return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Plan evidence is missing."}
-                plan = self.acceptance_fix_plan_store.read_plan(str(summary.get("plan_id") or ""))
+                plan = self.server.acceptance_fix_plan_store.read_plan(str(summary.get("plan_id") or ""))
             else:
                 return {}
-            stale = self.acceptance_fix_plan_store.plan_is_stale(plan)
+            stale = self.server.acceptance_fix_plan_store.plan_is_stale(plan)
             status = "passed" if plan.status in {"ready", "used", "warning"} and not stale else "warning"
             evidence = {**summary, "stale": stale}
             if stale:
@@ -71,22 +70,22 @@ class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
         except _interfaces_api_runtime.AcceptanceFixPlanError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_acceptance_fix_plan_review_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_acceptance_fix_plan_review_gate(self, payload: JsonDocument) -> JsonDocument:
         review_id = str(payload.get("acceptance_fix_plan_review_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_acceptance_fix_plan_review", False))
         try:
             if review_id:
-                review = self.acceptance_fix_plan_review_store.read_review(review_id)
+                review = self.server.acceptance_fix_plan_review_store.read_review(review_id)
                 summary = _interfaces_api_runtime.fix_plan_review_summary(review)
             elif release_id:
-                summary = _interfaces_api_runtime.latest_fix_plan_review_summary(self.acceptance_fix_plan_review_store, release_id=release_id)
+                summary = _interfaces_api_runtime.latest_fix_plan_review_summary(self.server.acceptance_fix_plan_review_store, release_id=release_id)
                 if summary.get("status") == "missing":
                     return {"status": "failed" if require_gate else "missing", "message": "Acceptance Fix Plan Outcome Review evidence is missing."}
-                review = self.acceptance_fix_plan_review_store.read_review(str(summary.get("review_id") or ""))
+                review = self.server.acceptance_fix_plan_review_store.read_review(str(summary.get("review_id") or ""))
             else:
                 return {}
-            stale = self.acceptance_fix_plan_review_store.review_is_stale(review)
+            stale = self.server.acceptance_fix_plan_review_store.review_is_stale(review)
             scope = _as_document(review.scope)
             scope_ok = not release_id or scope.get("release_id") == release_id
             evidence = {**summary, "stale": stale}
@@ -102,33 +101,33 @@ class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
         except _interfaces_api_runtime.AcceptanceFixPlanReviewError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_acceptance_kb_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_acceptance_kb_gate(self, payload: JsonDocument) -> JsonDocument:
         release_id = str(payload.get("release_id") or "").strip()
         if not release_id:
             return {}
         try:
-            summary = self.acceptance_kb_store.summary(release_id=release_id)
+            summary = self.server.acceptance_kb_store.summary(release_id=release_id)
             status = "warning" if summary.get("stale") else "available" if int(summary.get("entry_count") or 0) else "missing"
             return {**summary, "status": status}
         except _interfaces_api_runtime.AcceptanceKnowledgeBaseError as exc:
             return {"status": "warning", "message": str(exc)}
 
-    def _release_planning_rule_simulation_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_planning_rule_simulation_gate(self, payload: JsonDocument) -> JsonDocument:
         simulation_id = str(payload.get("planning_simulation_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_planning_rule_simulation", False))
         try:
             if simulation_id:
-                simulation = self.planning_rule_simulation_store.read_simulation(simulation_id)
+                simulation = self.server.planning_rule_simulation_store.read_simulation(simulation_id)
                 summary = _interfaces_api_runtime.planning_simulation_summary(simulation)
             elif release_id:
-                summary = self.planning_rule_simulation_store.latest_summary(release_id=release_id)
+                summary = self.server.planning_rule_simulation_store.latest_summary(release_id=release_id)
                 if summary.get("status") == "missing":
                     return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Simulation evidence is missing."}
-                simulation = self.planning_rule_simulation_store.read_simulation(str(summary.get("simulation_id") or ""))
+                simulation = self.server.planning_rule_simulation_store.read_simulation(str(summary.get("simulation_id") or ""))
             else:
                 return {}
-            stale = self.planning_rule_simulation_store.simulation_is_stale(simulation)
+            stale = self.server.planning_rule_simulation_store.simulation_is_stale(simulation)
             scope = _as_document(simulation.scope)
             scope_ok = not release_id or scope.get("release_id") == release_id or self._planning_simulation_reviews_match_release(simulation, release_id)
             evidence = {**summary, "stale": stale}
@@ -147,18 +146,18 @@ class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
         except _interfaces_api_runtime.PlanningRuleSimulationError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_planning_rule_governance_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_planning_rule_governance_gate(self, payload: JsonDocument) -> JsonDocument:
         require_gate = bool(payload.get("require_planning_rule_governance", False))
         requested_version_id = str(payload.get("planning_rule_version_id") or "").strip()
         force = bool(payload.get("force", False))
         try:
-            active = self.planning_rule_governance_store.active_version()
+            active = self.server.planning_rule_governance_store.active_version()
             if active is None:
                 return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Governance active version is missing."}
-            summary = self.planning_rule_governance_store.active_summary()
-            evidence_stale = self.planning_rule_governance_store.version_evidence_is_stale(active)
-            frozen_integrity_ok = self.planning_rule_governance_store.frozen_ruleset_integrity_ok(active)
-            version_source_integrity_ok = self.planning_rule_governance_store.version_source_integrity_ok(active)
+            summary = self.server.planning_rule_governance_store.active_summary()
+            evidence_stale = self.server.planning_rule_governance_store.version_evidence_is_stale(active)
+            frozen_integrity_ok = self.server.planning_rule_governance_store.frozen_ruleset_integrity_ok(active)
+            version_source_integrity_ok = self.server.planning_rule_governance_store.version_source_integrity_ok(active)
             integrity_ok = frozen_integrity_ok and version_source_integrity_ok
             evidence = {**summary, "evidence_stale": evidence_stale, "integrity_ok": integrity_ok, "frozen_ruleset_integrity_ok": frozen_integrity_ok, "version_source_integrity_ok": version_source_integrity_ok}
             if active.status in {"rolled_back", "archived"}:
@@ -179,29 +178,29 @@ class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
         except _interfaces_api_runtime.PlanningRuleGovernanceError as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _release_planning_rule_impact_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_planning_rule_impact_gate(self, payload: JsonDocument) -> JsonDocument:
         report_id = str(payload.get("planning_rule_impact_report_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         require_gate = bool(payload.get("require_planning_rule_impact", False))
         force = bool(payload.get("force", False))
         allow_warning = bool(payload.get("allow_impact_warning", False))
         override_reason = str(payload.get("override_reason") or "").strip()
-        min_manual_reviews = max(0, int(payload.get("impact_min_manual_reviews") or 1))
+        min_manual_reviews = max(0, _as_int(payload.get("impact_min_manual_reviews") or 1))
         try:
             if report_id:
-                report = self.planning_rule_impact_store.get_report(report_id)
+                report = self.server.planning_rule_impact_store.get_report(report_id)
             elif release_id:
-                summary = self.planning_rule_impact_store.latest_summary(release_id=release_id)
+                summary = self.server.planning_rule_impact_store.latest_summary(release_id=release_id)
                 if summary.get("status") == "missing":
                     return {"status": "failed" if require_gate else "missing", "message": "Planning Rule Impact evidence is missing."}
-                report = self.planning_rule_impact_store.get_report(str(summary.get("report_id") or ""))
+                report = self.server.planning_rule_impact_store.get_report(str(summary.get("report_id") or ""))
             else:
                 return {}
             raw_status = report.status
             summary = _interfaces_api_runtime.planning_rule_impact_summary(report)
-            stale = self.planning_rule_impact_store.report_is_stale(report)
-            integrity_ok = self.planning_rule_impact_store.report_integrity_ok(report)
-            active = self.planning_rule_governance_store.active_version()
+            stale = self.server.planning_rule_impact_store.report_is_stale(report)
+            integrity_ok = self.server.planning_rule_impact_store.report_integrity_ok(report)
+            active = self.server.planning_rule_governance_store.active_version()
             active_id = active.version_id if active else None
             recommendation = str(summary.get("recommendation") or "")
             evidence = {
@@ -243,14 +242,14 @@ class QualityRoutesReleaseAcceptanceFixSprintGate(QualityRouteContext):
         except (_interfaces_api_runtime.PlanningRuleImpactError, _interfaces_api_runtime.PlanningRuleGovernanceError, ValueError) as exc:
             return {"status": "failed" if require_gate else "warning", "message": str(exc)}
 
-    def _planning_simulation_reviews_match_release(self, simulation: Any, release_id: str) -> bool:
-        source = simulation.source if hasattr(simulation, "source") and isinstance(simulation.source, dict) else {}
+    def _planning_simulation_reviews_match_release(self, simulation: PlanningRuleSimulationReport, release_id: str) -> bool:
+        source = simulation.source
         review_ids = _as_list(source.get("review_ids"))
         if not review_ids:
             return False
         for review_id in review_ids:
             try:
-                review = self.acceptance_fix_plan_review_store.read_review(str(review_id))
+                review = self.server.acceptance_fix_plan_review_store.read_review(str(review_id))
             except _interfaces_api_runtime.AcceptanceFixPlanReviewError:
                 return False
             if review.scope.get("release_id") != release_id:

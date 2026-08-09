@@ -1,20 +1,28 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from typing import Protocol
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, AuthConfig, Path, __version__, datetime, json, os, timezone, webbrowser
+from song_agent.platform.contracts import JsonDocument, as_document as _as_document
+from song_agent.platform.contracts.coercion import as_int as _as_int
+from song_agent.platform.contracts.documents import normalize_json_value
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import SprintActionItem, SprintActionQueue, StemManifest, read_json, sanitize_metadata
+from song_agent.interfaces.bootstrap.api.core import AuthConfig, Path, __version__, datetime, json, os, timezone, webbrowser
+
+from song_agent.interfaces.bootstrap.api.creation_quality import SprintActionItem, SprintActionQueue, StemManifest, read_json, sanitize_metadata
 
 from song_agent.interfaces.api.runtime_parts.core import RUNS_DIR
+
+
+class _ReviewDecisionReportPort(Protocol):
+    def read_decision_report(self, task_id: str) -> JsonDocument: ...
 
 def api_info(
     auth_config: AuthConfig | None = None,
     *,
     authorized: bool = True,
-) -> dict[str, Any]:
+) -> JsonDocument:
     auth_required = bool(auth_config and auth_config.enabled)
-    public_info: dict[str, Any] = {
+    public_info: JsonDocument = {
         "app": "MusicForge",
         "version": __version__,
         "auth_required": auth_required,
@@ -29,7 +37,7 @@ def api_info(
         "provider": {"enabled": False, "summary": "Local deterministic composer"},
     }
 
-def api_template() -> dict[str, Any]:
+def api_template() -> JsonDocument:
     return {
         "defaults": {
             "title": "Rainy Convenience Store",
@@ -77,7 +85,7 @@ def _artifact_kind(path: Path) -> str:
         return "audio"
     return "file"
 
-def _artifact_dict(path: Path) -> ImplementationDocument:
+def _artifact_dict(path: Path) -> JsonDocument:
     return {
         "name": path.name,
         "path": str(path),
@@ -86,8 +94,8 @@ def _artifact_dict(path: Path) -> ImplementationDocument:
         "size_bytes": path.stat().st_size,
     }
 
-def discover_artifacts(run_dir: Path) -> list[dict[str, Any]]:
-    artifacts: list[dict[str, Any]] = []
+def discover_artifacts(run_dir: Path) -> list[JsonDocument]:
+    artifacts: list[JsonDocument] = []
     for path in sorted(run_dir.rglob("*")):
         if path.is_file():
             artifacts.append(
@@ -102,7 +110,7 @@ def open_folder(path: Path) -> None:
         return
     webbrowser.open(path.resolve().as_uri())
 
-def _build_summary(plan_path: Path, midi_path: Path) -> ImplementationDocument:
+def _build_summary(plan_path: Path, midi_path: Path) -> JsonDocument:
     plan = read_json(plan_path)
     tracks = plan.get("tracks", [])
     sections = plan.get("sections", [])
@@ -120,7 +128,7 @@ def _build_summary(plan_path: Path, midi_path: Path) -> ImplementationDocument:
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def _build_validator_report(plan_path: Path, midi_path: Path) -> ImplementationDocument:
+def _build_validator_report(plan_path: Path, midi_path: Path) -> JsonDocument:
     plan = read_json(plan_path)
     return {
         "status": "passed",
@@ -137,25 +145,25 @@ def _build_validator_report(plan_path: Path, midi_path: Path) -> ImplementationD
         "checked_at": _utc_now(),
     }
 
-def _usage_int(usage: ImplementationDocument, field_name: str) -> int:
+def _usage_int(usage: JsonDocument, field_name: str) -> int:
     value = usage.get(field_name)
     if value is None:
         return 0
     try:
-        return max(0, int(value))
+        return max(0, _as_int(value))
     except (TypeError, ValueError):
         return 0
 
 def _provider_usage_record(
     *,
-    config_snapshot: ImplementationDocument,
+    config_snapshot: JsonDocument,
     operation: str,
     template_id: str,
     started_at: str,
     status: str,
-    provider_usage: ImplementationDocument | None = None,
-    request_id: Any = None,
-) -> ImplementationDocument:
+    provider_usage: JsonDocument | None = None,
+    request_id: object = None,
+) -> JsonDocument:
     provider_usage = provider_usage or {}
     prompt_tokens = _usage_int(provider_usage, "prompt_tokens")
     completion_tokens = _usage_int(provider_usage, "completion_tokens")
@@ -176,13 +184,16 @@ def _provider_usage_record(
         "status": status,
     }
 
-def _try_read_review_decision_report(task_store: Any, task_id: str) -> ImplementationDocument:
+def _try_read_review_decision_report(
+    task_store: _ReviewDecisionReportPort,
+    task_id: str,
+) -> JsonDocument:
     try:
         return task_store.read_decision_report(task_id)
     except (FileNotFoundError, OSError, ValueError, TypeError, json.JSONDecodeError):
         return {}
 
-def _review_sprints_list_summary(sprints: list[ImplementationDocument]) -> ImplementationDocument:
+def _review_sprints_list_summary(sprints: list[JsonDocument]) -> JsonDocument:
     statuses: dict[str, int] = {}
     total_conflicts = 0
     blocking_conflicts = 0
@@ -191,12 +202,12 @@ def _review_sprints_list_summary(sprints: list[ImplementationDocument]) -> Imple
         statuses[status] = statuses.get(status, 0) + 1
         summary = _as_document(sprint.get("summary"))
         counts = _as_document(summary.get("counts"))
-        total_conflicts += int(counts.get("conflict_count") or 0)
-        blocking_conflicts += int(counts.get("blocking_conflict_count") or 0)
+        total_conflicts += _as_int(counts.get("conflict_count") or 0)
+        blocking_conflicts += _as_int(counts.get("blocking_conflict_count") or 0)
     return sanitize_metadata(
         {
             "total": len(sprints),
-            "statuses": statuses,
+            "statuses": normalize_json_value(statuses),
             "conflict_count": total_conflicts,
             "blocking_conflict_count": blocking_conflicts,
         }
@@ -223,7 +234,7 @@ def _select_action_queue_items(queue: SprintActionQueue, selected_ids: list[str]
             items.append(item)
     return sorted(items, key=_action_queue_run_sort_key)
 
-def _audio_report(audio_path: Path) -> ImplementationDocument:
+def _audio_report(audio_path: Path) -> JsonDocument:
     return {
         "exists": audio_path.exists(),
         "path": str(audio_path),
@@ -267,7 +278,7 @@ def _manifest_response(
     manifest: StemManifest,
     *,
     status: str | None = None,
-) -> ImplementationDocument:
+) -> JsonDocument:
     return {
         "job_id": job_id,
         "status": status or _stem_manifest_status(manifest),

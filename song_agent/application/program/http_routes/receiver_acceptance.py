@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.application.program.http_context import ProgramHttpContext
+from song_agent.platform.contracts.coercion import as_document
 
 from http import HTTPStatus
 
@@ -37,7 +38,8 @@ class ProgramReceiverAcceptanceHttpRoutes(ProgramHttpContext):
                 self._send_error(HTTPStatus.BAD_REQUEST, 'Receiver response import does not accept path fields: ' + ', '.join(forbidden))
                 return True
             result = self.unified_release_program_continuity_command_center_acceptance_store.import_response(program_id, payload)
-            self._send_json({'ok': result.get('status') == 'imported', **result, 'summary': {'response_id': result['response'].get('response_id')}}, status=HTTPStatus.CREATED)
+            response = as_document(result.get('response'))
+            self._send_json({'ok': result.get('status') == 'imported', **result, 'summary': {'response_id': response.get('response_id')}}, status=HTTPStatus.CREATED)
             return True
         if tail.startswith('/continuity-command-center-acceptance/responses/') and tail.endswith('/accepted-evidence'):
             if method != 'POST':

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from song_agent.platform.contracts.documents import JsonDocument
+
 from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfolioRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioReviewerRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_reviewer(self, method, parts, portfolio_id, action) -> bool:
+    def _dispatch_portfolio_reviewer(self, method: str, parts: list[str], portfolio_id: str, action: str) -> bool:
         if action == 'governance-reviewer-pack':
             if len(parts) == 2:
                 if method != 'GET':
@@ -14,7 +17,9 @@ class TrustPortfolioReviewerRoutes(TrustPortfolioRouteContext):
                     return True
                 report = self.release_portfolio_governance_reviewer_pack_store.read_report(portfolio_id, default={})
                 stale = self.release_portfolio_governance_reviewer_pack_store.report_is_stale(portfolio_id, report) if report else False
-                summary = _interfaces_api_runtime.sanitize_metadata(_interfaces_api_runtime.portfolio_governance_reviewer_pack_summary(report) if report else {'status': 'missing'})
+                summary: JsonDocument = _interfaces_api_runtime.sanitize_metadata(
+                    _interfaces_api_runtime.portfolio_governance_reviewer_pack_summary(report) if report else {"status": "missing"}
+                )
                 summary['stale'] = stale
                 self._send_json({'ok': True, 'portfolio_id': portfolio_id, 'report': report, 'retrospective': self.release_portfolio_governance_reviewer_pack_store.read_retrospective(portfolio_id, default={}), 'evidence_index': self.release_portfolio_governance_reviewer_pack_store.read_evidence_index(portfolio_id, default={}), 'timeline': self.release_portfolio_governance_reviewer_pack_store.read_timeline(portfolio_id, default={}), 'summary': summary, 'stale': stale})
                 return True

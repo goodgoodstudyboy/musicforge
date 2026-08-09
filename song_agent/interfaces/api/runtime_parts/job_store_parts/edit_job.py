@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document, as_list as _as_list
 
-from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+from song_agent.application.jobs.ports import JobStoreContext
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import EditIntent, EditedSongPlanResult, JobState, Path, apply_asset_refs_to_plan, apply_edit_intent, asset_refs_snapshot, build_edit_metadata, write_asset_refs_snapshot
+from song_agent.interfaces.bootstrap.api.core import EditIntent, EditedSongPlanResult, JobState, Path, apply_asset_refs_to_plan, apply_edit_intent, asset_refs_snapshot, build_edit_metadata, write_asset_refs_snapshot
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, ProviderEditPatch, SongPlan, append_event, apply_candidate_intents, apply_provider_edit_patch, apply_review_edit, clear_stem_artifacts, context_pack_snapshot, read_json, reference_refs_snapshot, render_midi, write_context_pack_snapshot, write_json, write_reference_refs_snapshot
+from song_agent.interfaces.bootstrap.api.creation_quality import ProjectPaths, ProviderEditPatch, SongPlan, append_event, apply_candidate_intents, apply_provider_edit_patch, apply_review_edit, clear_stem_artifacts, context_pack_snapshot, read_json, reference_refs_snapshot, render_midi, write_context_pack_snapshot, write_json, write_reference_refs_snapshot
+from song_agent.interfaces.bootstrap.api.creation_quality import ReviewEditIntent
 
 from song_agent.interfaces.api.runtime_parts.helpers.api_info import _build_summary, _build_validator_report, _utc_now
 
@@ -43,7 +44,6 @@ class JobStoreEditJob(JobStoreContext):
             result_plan = apply_asset_refs_to_plan(_split_state['result'].plan, self.asset_store, _split_state['asset_snapshot']['asset_refs'])
             _split_state['result'] = EditedSongPlanResult(plan=result_plan, summary=_split_state['result'].summary, warnings=_split_state['result'].warnings)
         if _split_state['metadata'].get('edit_source') == 'audition_review' and isinstance(_split_state['metadata'].get('review_edit'), dict):
-            from song_agent.domains.quality.review_edits import ReviewEditIntent
             review_edit_result = apply_review_edit(parent_plan, ReviewEditIntent.from_dict(_split_state['metadata']['review_edit']))
             _split_state['result'] = review_edit_result
             if _split_state['asset_snapshot']['asset_refs']:
@@ -126,16 +126,16 @@ class JobStoreEditJob(JobStoreContext):
         return (False, None)
 
     def _run_edit_job(self, job_id: str) -> None:
-        _split_state = {}
-        _split_state['job'] = self.get_job(job_id)
-        if _split_state['job'] is None:
+        job = self.get_job(job_id)
+        if job is None:
             return
-        _split_state['run_dir'] = Path(_split_state['job'].output_dir)
-        _split_state['paths'] = ProjectPaths.create(_split_state['run_dir'])
-        if _split_state['job'].cancel_requested:
-            self._update_job(_split_state['job'], status='cancelled', step='cancelled', message='Edit job was cancelled before generation started.')
+        run_dir = Path(job.output_dir)
+        paths = ProjectPaths.create(run_dir)
+        _split_state: dict[str, object] = {'job': job, 'run_dir': run_dir, 'paths': paths}
+        if job.cancel_requested:
+            self._update_job(job, status='cancelled', step='cancelled', message='Edit job was cancelled before generation started.')
             return
-        self._update_job(_split_state['job'], status='running', step='edit', message='Applying local edit intent.', attempt_count=_split_state['job'].attempt_count + 1, started_at=_split_state['job'].started_at or _utc_now(), heartbeat_at=_utc_now(), stalled=False)
+        self._update_job(job, status='running', step='edit', message='Applying local edit intent.', attempt_count=job.attempt_count + 1, started_at=job.started_at or _utc_now(), heartbeat_at=_utc_now(), stalled=False)
         try:
             _split_result = self._run_edit_job_part_01(job_id, _split_state)
             if _split_result[0]:
@@ -151,24 +151,24 @@ class JobStoreEditJob(JobStoreContext):
             if latest is not None:
                 self._update_job(latest, status='cancelled', step='cancelled', message='Edit job was cancelled at a stage boundary.', finished_at=_utc_now())
         except Exception as exc:
-            latest = self.get_job(job_id) or _split_state['job']
+            latest = self.get_job(job_id) or job
             self._update_job(latest, status='failed', step='failed', message='Edit job failed.', error=str(exc), last_error=str(exc), finished_at=_utc_now())
 
-    def _prepare_asset_refs_for_job(self, job: JobState) -> ImplementationDocument:
+    def _prepare_asset_refs_for_job(self, job: JobState) -> JsonDocument:
         snapshot = asset_refs_snapshot(self.asset_store, job.input_payload.get("asset_refs"), captured_at=_utc_now())
         if snapshot["asset_refs"]:
             ProjectPaths.create(Path(job.output_dir))
             write_asset_refs_snapshot(Path(job.output_dir), snapshot)
         return snapshot
 
-    def _prepare_reference_refs_for_job(self, job: JobState) -> ImplementationDocument:
+    def _prepare_reference_refs_for_job(self, job: JobState) -> JsonDocument:
         snapshot = reference_refs_snapshot(self.reference_store, job.input_payload.get("reference_refs"), captured_at=_utc_now())
         if snapshot["reference_refs"]:
             ProjectPaths.create(Path(job.output_dir))
             write_reference_refs_snapshot(Path(job.output_dir), snapshot)
         return snapshot
 
-    def _prepare_context_pack_for_job(self, job: JobState) -> ImplementationDocument | None:
+    def _prepare_context_pack_for_job(self, job: JobState) -> JsonDocument | None:
         context_pack = job.input_payload.get("context_pack")
         if not isinstance(context_pack, dict) or not context_pack.get("pack_id"):
             return None

@@ -99,13 +99,15 @@ def run_interface_registry_smoke(root: Path) -> tuple[bool, str]:
         commands = REGISTRY.inventory()
         command_names = [row["name"] for row in commands]
         handlers_small = True
-        parser_colocated = True
+        command_ownership = True
         for name in sorted(command_names):
             spec = REGISTRY.get(name)
             if spec is None:
                 raise RuntimeError(f"Missing registered command: {name}")
             handlers_small = handlers_small and len(inspect.getsourcelines(spec.handler)[0]) < 100
-            parser_colocated = parser_colocated and spec.parser.__module__ == spec.handler.__module__
+            command_ownership = command_ownership and all(
+                callback.__module__.startswith("song_agent.interfaces.cli.commands") for callback in (spec.parser, spec.handler)
+            )
 
         routes = api_inventory()
         route_keys = [(row["method"], row["pattern"]) for row in routes]
@@ -113,9 +115,7 @@ def run_interface_registry_smoke(root: Path) -> tuple[bool, str]:
         modules = script_modules()
         architecture = build_architecture_snapshot(root)
         compatibility_edges = architecture["active_to_compatibility_imports"]
-        api_router_source = (
-            repo_root / "song_agent" / "interfaces" / "api" / "router.py"
-        ).read_text(encoding="utf-8")
+        api_router_source = (repo_root / "song_agent" / "interfaces" / "api" / "router.py").read_text(encoding="utf-8")
         facade_limits = {
             "cli": len((repo_root / "song_agent" / "cli.py").read_text(encoding="utf-8").splitlines()) < 500,
             "server": len((repo_root / "song_agent" / "server.py").read_text(encoding="utf-8").splitlines()) < 1000,
@@ -126,7 +126,7 @@ def run_interface_registry_smoke(root: Path) -> tuple[bool, str]:
             "command_snapshot": _hash_json(commands) == EXPECTED_COMMAND_INVENTORY_HASH,
             "help_snapshot": _hash_json(command_help_contract_rows(REGISTRY)) == EXPECTED_COMMAND_HELP_HASH,
             "handlers_small": handlers_small,
-            "parser_colocated": parser_colocated,
+            "command_ownership": command_ownership,
             "routes": len(routes) == 117 and len(route_keys) == len(set(route_keys)),
             "route_snapshot": _hash_json(routes) == EXPECTED_ROUTE_INVENTORY_HASH,
             "route_schemas": all(

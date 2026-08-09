@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
-from typing import Any
-
-
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
+
 
 class CreationRoutesReference(CreationRouteContext):
     def _handle_reference_route_part_01(self, method: str, reference_id: str, tail: str, _split_state):
@@ -103,7 +101,7 @@ class CreationRoutesReference(CreationRouteContext):
         return (False, None)
 
     def _handle_reference_route(self, method: str, reference_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         try:
             _split_result = self._handle_reference_route_part_01(method, reference_id, tail, _split_state)
             if _split_result[0]:
@@ -112,7 +110,7 @@ class CreationRoutesReference(CreationRouteContext):
             if _split_result[0]:
                 return _split_result[1]
         except FileNotFoundError:
-            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Reference not found.')
+            self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Reference not found.")
             return
         except _interfaces_api_runtime.ReferenceAnalysisError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
@@ -121,10 +119,14 @@ class CreationRoutesReference(CreationRouteContext):
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
             return
         except ValueError as exc:
-            status = _interfaces_api_runtime.HTTPStatus.CONFLICT if 'Hidden references' in str(exc) or 'cannot be converted' in str(exc) else _interfaces_api_runtime.HTTPStatus.BAD_REQUEST
+            status = (
+                _interfaces_api_runtime.HTTPStatus.CONFLICT
+                if "Hidden references" in str(exc) or "cannot be converted" in str(exc)
+                else _interfaces_api_runtime.HTTPStatus.BAD_REQUEST
+            )
             self._send_error(status, str(exc))
             return
-        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Reference route not found.')
+        self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Reference route not found.")
 
     def _handle_reference_slice_route(self, method: str, reference_id: str, tail: str) -> None:
         parts = tail.strip("/").split("/")
@@ -193,7 +195,7 @@ class CreationRoutesReference(CreationRouteContext):
         if method != "GET":
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, "Method not allowed.")
             return
-        records: list[dict[str, Any]] = []
+        records: list[JsonDocument] = []
         for job in self.store.list_jobs(include_hidden=True):
             record = _interfaces_api_runtime.usage_record_from_file(
                 _interfaces_api_runtime.Path(job.output_dir) / "data" / "provider-usage.json",
@@ -305,4 +307,4 @@ class CreationRoutesReference(CreationRouteContext):
             self.project_store.update_version_quality_gate(project_id, version.version_id, result)
             results.append({"version_id": version.version_id, "quality_gate": result.to_dict()})
         document = self.project_store.get_project(project_id)
-        self._send_json({"ok": True, "results": results, **document.to_dict()})
+        self._send_json({"ok": True, "results": normalize_json_value(results), **document.to_dict()})

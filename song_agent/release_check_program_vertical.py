@@ -5,8 +5,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from song_agent.application.program import ProgramApplicationService
 from song_agent.architecture_guardrails import build_architecture_snapshot
+from song_agent.interfaces.bootstrap.api.program import build_program_application
 from song_agent.interfaces.api.routes.program_registry import PROGRAM_ROUTE_REGISTRY
 from song_agent.interfaces.cli.app import REGISTRY
 
@@ -25,10 +25,10 @@ def run_program_vertical_slice_smoke(root: Path) -> tuple[bool, str]:
         canonical_files.extend(sorted(domain_root.glob("unified_command_center_release_train*_verifier.py")))
 
         with tempfile.TemporaryDirectory(prefix="mf-v134-program-") as temp:
-            service = ProgramApplicationService.build(root=Path(temp) / "unified-release-programs")
-            created = service.invoke("program", "create_program", {"name": "v13.4 vertical slice"})
+            service = build_program_application(root=Path(temp) / "unified-release-programs")
+            created = service.create_program({"name": "v13.4 vertical slice"})
             program_id = str(created["program_id"])
-            loaded = service.invoke("program", "get_program", program_id)
+            loaded = service.get_program(program_id)
 
         command_specs = [
             REGISTRY.get(row["name"])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.application.program.http_context import ProgramHttpContext
+from song_agent.platform.contracts.coercion import as_document
 
 from http import HTTPStatus
 
@@ -12,7 +13,7 @@ class ProgramReceiverAcceptanceChangeHttpRoutes(ProgramHttpContext):
                 self._send_error(HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return True
             detail = self.unified_release_program_continuity_command_center_acceptance_change_store.get_state(program_id)
-            state = detail.get('state') or {}
+            state = as_document(detail.get('state'))
             self._send_json({'ok': True, **detail, 'status': state.get('status') or 'not_configured', 'summary': state})
             return True
         if tail in {root + '/cr' for root in change_roots}:

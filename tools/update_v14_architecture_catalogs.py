@@ -11,6 +11,12 @@ from song_agent.release_check.architecture_ratchet import build_architecture_deb
 def update(root: Path, *, check: bool = False) -> int:
     snapshot = build_architecture_snapshot(root)
     baseline = build_architecture_baseline(root, baseline_version="14.0.0")
+    existing_baseline = json.loads((root / "architecture-baseline.json").read_text(encoding="utf-8"))
+    previous_mega_files = existing_baseline.get("mega_file_max_lines") or {}
+    baseline["mega_file_max_lines"] = {
+        path: min(int(maximum), int(previous_mega_files.get(path, maximum)))
+        for path, maximum in (baseline.get("mega_file_max_lines") or {}).items()
+    }
     existing_debt = json.loads((root / "architecture-debt.json").read_text(encoding="utf-8"))
     debt = build_architecture_debt_catalog(
         root,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_list as _as_list
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_list
 
 import json as json
 from pathlib import Path as Path

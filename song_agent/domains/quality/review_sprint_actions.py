@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list
 
 import hashlib as hashlib
 import json as json
@@ -9,7 +9,7 @@ import shutil as shutil
 import threading as threading
 from dataclasses import asdict as asdict, dataclass as dataclass, field as field
 from pathlib import Path as Path
-from typing import Any as Any
+from typing import Any as Any, Sequence as Sequence
 
 from song_agent.domains.studio.projectio import read_json as read_json, write_json as write_json
 from song_agent.domains.studio.project_repository import now_iso as now_iso
@@ -359,7 +359,7 @@ def action_queue_summary(queue: SprintActionQueue | dict[str, Any] | None) -> di
     )
 
 
-def action_queue_export_summary(queues: list[SprintActionQueue | dict[str, Any]]) -> dict[str, Any]:
+def action_queue_export_summary(queues: Sequence[SprintActionQueue | dict[str, Any]]) -> dict[str, Any]:
     if not queues:
         return {}
     clean_queues = [queue if isinstance(queue, SprintActionQueue) else SprintActionQueue.from_dict(queue) for queue in queues]
@@ -377,7 +377,7 @@ def action_queue_export_summary(queues: list[SprintActionQueue | dict[str, Any]]
     )
 
 
-def action_queue_collection_summary(queues: list[SprintActionQueue | dict[str, Any]]) -> dict[str, Any]:
+def action_queue_collection_summary(queues: Sequence[SprintActionQueue | dict[str, Any]]) -> dict[str, Any]:
     return action_queue_export_summary(queues)
 
 

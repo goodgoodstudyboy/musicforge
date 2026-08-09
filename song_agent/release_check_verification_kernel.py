@@ -40,14 +40,14 @@ def run_kernel_adoption_smoke(root: Path) -> tuple[bool, str]:
     del root
     try:
         from song_agent.capabilities import capability_registry
+        from song_agent.interfaces.bootstrap.api.program import active_lifecycle_registry, active_verifier_registry
         from song_agent.platform.lifecycle.attack_corpus import run_active_lifecycle_attack_corpus
         from song_agent.platform.verification.attack_corpus import run_active_verifier_attack_corpus
-        from song_agent.platform.verification.registry import active_verifier_registry
 
         with tempfile.TemporaryDirectory(prefix="mf-v132-kernel-adoption-") as temp:
             base = Path(temp)
-            verification = run_active_verifier_attack_corpus(base / "verification")
-            lifecycle = run_active_lifecycle_attack_corpus(base / "lifecycle")
+            verification = run_active_verifier_attack_corpus(base / "verification", active_verifier_registry)
+            lifecycle = run_active_lifecycle_attack_corpus(base / "lifecycle", active_lifecycle_registry)
         product_components = {
             row.component_type for row in capability_registry.all() if row.bounded_context == "program"
         }

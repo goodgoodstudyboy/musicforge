@@ -4,7 +4,7 @@ from song_agent.platform.contracts.coercion import as_float as _as_float, as_int
 
 from typing import Any as _InferenceType
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument
 
 import hashlib as hashlib
 import json as json

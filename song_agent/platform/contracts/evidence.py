@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from typing import Any
+
+from song_agent.platform.contracts.coercion import as_int
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 
 
 @dataclass(frozen=True)
@@ -29,20 +32,20 @@ class EvidenceRef:
             self.generation,
         )
 
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+    def to_dict(self) -> JsonDocument:
+        return normalize_json_document(asdict(self))
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> "EvidenceRef":
+    def from_dict(cls, value: Mapping[str, object]) -> "EvidenceRef":
         return cls(
-            schema_version=int(value.get("schema_version") or 1),
+            schema_version=as_int(value.get("schema_version") or 1),
             component_type=str(value.get("component_type") or ""),
             component_id=str(value.get("component_id") or ""),
             evidence_type=str(value.get("evidence_type") or ""),
-            generation=int(value.get("generation") or 1),
+            generation=as_int(value.get("generation") or 1),
             package_type=str(value.get("package_type") or ""),
             zip_sha256=str(value.get("zip_sha256") or ""),
-            zip_size_bytes=int(value.get("zip_size_bytes") or 0),
+            zip_size_bytes=as_int(value.get("zip_size_bytes") or 0),
             manifest_hash=str(value.get("manifest_hash") or ""),
             verification_report_hash=str(value.get("verification_report_hash") or ""),
             source_hash=str(value.get("source_hash") or ""),

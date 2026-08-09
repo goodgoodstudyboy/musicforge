@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
-
 import json
 import shutil
 import zipfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 from song_agent.platform.verification.hashing import sha256_file
 from song_agent.platform.verification.zip_security import frozen_zip_snapshot_errors, is_safe_zip_entry
@@ -33,7 +30,7 @@ class ImmutableSnapshotGuard:
 
 class ArchiveBuilder:
     @staticmethod
-    def export_documents(export_dir: Path, documents: dict[str, dict[str, Any] | str | bytes]) -> dict[str, bytes]:
+    def export_documents(export_dir: Path, documents: Mapping[str, Mapping[str, object] | str | bytes]) -> dict[str, bytes]:
         payloads = {name: _serialize(value) for name, value in documents.items()}
         unsafe = sorted(name for name in payloads if not is_safe_zip_entry(name) or name.endswith("/"))
         if unsafe:
@@ -66,7 +63,7 @@ class ArchiveBuilder:
     @staticmethod
     def build_payload_zip(
         zip_path: Path,
-        documents: Mapping[str, dict[str, Any] | str | bytes],
+        documents: Mapping[str, Mapping[str, object] | str | bytes],
     ) -> Path:
         expected = {name: _serialize(value) for name, value in documents.items()}
         unsafe = sorted(name for name in expected if not is_safe_zip_entry(name) or name.endswith("/"))
@@ -101,7 +98,7 @@ class ArchiveBuilder:
         return target
 
 
-def _serialize(value: ImplementationDocument | str | bytes) -> bytes:
+def _serialize(value: Mapping[str, object] | str | bytes) -> bytes:
     if isinstance(value, bytes):
         return value
     if isinstance(value, str):

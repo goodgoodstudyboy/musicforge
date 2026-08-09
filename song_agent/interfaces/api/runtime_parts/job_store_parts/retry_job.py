@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import AUDIO_ARTIFACT_FILENAME, Any, HTTPStatus, JobState, Path, audio_artifact_summary, build_audio_artifact_manifest, datetime, shutil, threading, timezone, write_audio_artifact_manifest
+from song_agent.application.jobs.ports import JobStoreContext
 
-import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, ProviderError, RendererError, SongPlan, affected_nodes_for_retry, append_event, clear_stem_artifacts, load_or_preview_stem_manifest, load_renderer_config, read_json, read_stem_manifest, render_audio, render_stem_audio, render_stem_midis, stem_manifest_stale, write_json
+from song_agent.interfaces.bootstrap.api.core import AUDIO_ARTIFACT_FILENAME, HTTPStatus, JobState, Path, RendererConfig, RendererProfile, audio_artifact_summary, build_audio_artifact_manifest, datetime, shutil, threading, timezone, write_audio_artifact_manifest
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
+
+from song_agent.interfaces.bootstrap.api.creation_quality import ProjectPaths, ProviderError, RendererError, SongPlan, affected_nodes_for_retry, append_event, clear_stem_artifacts, load_or_preview_stem_manifest, load_renderer_config, read_json, read_stem_manifest, render_audio, render_stem_audio, render_stem_midis, stem_manifest_stale, write_json
 
 from song_agent.interfaces.api.runtime_parts.helpers.api_info import _artifact_dict, _audio_report, _manifest_response, _stem_audio_manifest_status, _stem_midi_manifest_status, _utc_now
 
@@ -52,7 +54,7 @@ class JobStoreRetryJob(JobStoreContext):
         self,
         job_id: str,
         node_name: str,
-    ) -> tuple[JobState | None, HTTPStatus, str | None, dict[str, Any]]:
+    ) -> tuple[JobState | None, HTTPStatus, str | None, JsonDocument]:
         job = self.get_job(job_id)
         if job is None:
             return None, HTTPStatus.NOT_FOUND, "Job not found.", {}
@@ -69,7 +71,7 @@ class JobStoreRetryJob(JobStoreContext):
         if job.status not in {"completed", "failed", "stalled", "interrupted"}:
             return job, HTTPStatus.CONFLICT, f"Cannot retry a node for a {job.status} job.", {}
 
-        node_store = creation_dependencies.NodeStore(Path(job.output_dir))
+        node_store = _api_store_factories.node_store(Path(job.output_dir))
         try:
             node_store.read_node(node_name)
         except FileNotFoundError:
@@ -105,7 +107,7 @@ class JobStoreRetryJob(JobStoreContext):
             daemon=True,
         )
         thread.start()
-        return job, HTTPStatus.ACCEPTED, None, retry
+        return job, HTTPStatus.ACCEPTED, None, normalize_json_document(retry)
 
     def run_watchdog_tick(self, now: datetime | None = None) -> int:
         now = now or datetime.now(timezone.utc)
@@ -149,7 +151,13 @@ class JobStoreRetryJob(JobStoreContext):
             self.jobs.pop(job_id, None)
             return True, HTTPStatus.OK, None
 
-    def render_job_audio(self, job_id: str, *, config: Any | None = None, audio_profile: Any | None = None) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    def render_job_audio(
+        self,
+        job_id: str,
+        *,
+        config: RendererConfig | None = None,
+        audio_profile: RendererProfile | None = None,
+    ) -> tuple[JsonDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."
@@ -201,7 +209,7 @@ class JobStoreRetryJob(JobStoreContext):
             "audio_artifact_summary": audio_artifact_summary(manifest),
         }, HTTPStatus.OK, None
 
-    def get_job_stems(self, job_id: str) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    def get_job_stems(self, job_id: str) -> tuple[JsonDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."
@@ -221,7 +229,7 @@ class JobStoreRetryJob(JobStoreContext):
         job_id: str,
         *,
         force: bool = False,
-    ) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    ) -> tuple[JsonDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."
@@ -248,7 +256,7 @@ class JobStoreRetryJob(JobStoreContext):
         *,
         stem_ids: list[str] | None = None,
         force: bool = False,
-    ) -> tuple[dict[str, Any], HTTPStatus, str | None]:
+    ) -> tuple[JsonDocument, HTTPStatus, str | None]:
         job = self.get_job(job_id)
         if job is None:
             return {}, HTTPStatus.NOT_FOUND, "Job not found."

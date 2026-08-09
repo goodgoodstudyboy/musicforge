@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import JsonDocument, as_document as _as_document, as_int as _as_int
 
 import json
 import os
@@ -86,7 +86,7 @@ class WorkspaceLock:
                     descriptor = os.open(self.lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
                 except FileExistsError:
                     lock = _read_lock(self.lock_path)
-                    owner_pid = int(lock.get("owner_pid") or 0)
+                    owner_pid = _as_int(lock.get("owner_pid") or 0)
                     if owner_pid and not _pid_exists(owner_pid):
                         self._remove_stale(owner_pid=owner_pid, token=str(lock.get("token") or ""))
                         continue
@@ -106,7 +106,7 @@ class WorkspaceLock:
                     os.close(descriptor)
                 if write_error is not None:
                     current = _read_lock(self.lock_path)
-                    if not current or (current.get("token") == token and int(current.get("owner_pid") or 0) == os.getpid()):
+                    if not current or (current.get("token") == token and _as_int(current.get("owner_pid") or 0) == os.getpid()):
                         self.lock_path.unlink(missing_ok=True)
                     raise write_error
                 self._state.owner_thread_id = thread_id
@@ -124,7 +124,7 @@ class WorkspaceLock:
         self._state.depth -= 1
         if self._state.depth == 0:
             lock = _read_lock(self.lock_path)
-            if lock.get("token") != self._state.token or int(lock.get("owner_pid") or 0) != os.getpid():
+            if lock.get("token") != self._state.token or _as_int(lock.get("owner_pid") or 0) != os.getpid():
                 self._state.owner_thread_id = None
                 self._state.token = ""
                 self._state.mutex.release()
@@ -140,14 +140,14 @@ class WorkspaceLock:
         lock = _read_lock(self.lock_path)
         if not lock:
             return False
-        owner_pid = int(lock.get("owner_pid") or 0)
+        owner_pid = _as_int(lock.get("owner_pid") or 0)
         if not force and owner_pid and _pid_exists(owner_pid):
             raise WorkspaceLockError("Cannot recover a lock owned by a live process.")
         return self._remove_stale(owner_pid=owner_pid, token=str(lock.get("token") or ""), force=force)
 
     def _remove_stale(self, *, owner_pid: int, token: str, force: bool = False) -> bool:
         current = _read_lock(self.lock_path)
-        if int(current.get("owner_pid") or 0) != owner_pid or str(current.get("token") or "") != token:
+        if _as_int(current.get("owner_pid") or 0) != owner_pid or str(current.get("token") or "") != token:
             return False
         if not force and owner_pid and _pid_exists(owner_pid):
             raise WorkspaceLockError("Lock owner is still alive.")
@@ -155,7 +155,7 @@ class WorkspaceLock:
         return True
 
 
-def _read_lock(path: Path) -> ImplementationDocument:
+def _read_lock(path: Path) -> JsonDocument:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):

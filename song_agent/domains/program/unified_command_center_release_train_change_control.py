@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any as _InferenceType
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.domains.legacy_documents import ImplementationDocument
 
 import json as json
 import shutil as shutil

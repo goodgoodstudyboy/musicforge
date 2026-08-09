@@ -67,7 +67,10 @@ def test_audio_profile_api_crud(tmp_path: Path, monkeypatch) -> None:
 
 def test_job_render_audio_uses_profile_and_blocks_stale_download(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("song_agent.server.render_audio", lambda midi, wav, config: fake_render_audio(midi, wav))
+    monkeypatch.setattr(
+        "song_agent.interfaces.api.runtime_parts.job_store_parts.retry_job.render_audio",
+        lambda midi, wav, config: fake_render_audio(midi, wav),
+    )
     server = start_test_server()
     try:
         final = create_completed_job(server, "Profile Render Audio")

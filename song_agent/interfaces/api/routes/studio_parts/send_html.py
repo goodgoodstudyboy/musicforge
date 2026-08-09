@@ -6,9 +6,43 @@ from http import HTTPStatus
 from pathlib import Path
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
+from song_agent.platform.contracts.documents import JsonDocument
 
 
 class StudioRoutesSendHtml(StudioRouteContext):
+    def _read_json_body(self) -> JsonDocument:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length).decode("utf-8")
+        if not body:
+            raise ValueError("Request body must be JSON.")
+        data = _interfaces_api_runtime.json.loads(body)
+        if not isinstance(data, dict):
+            raise ValueError("Request body must be a JSON object.")
+        return data
+
+    def _optional_json_body(self) -> JsonDocument:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length == 0:
+            return {}
+        body = self.rfile.read(length).decode("utf-8")
+        if not body:
+            return {}
+        data = _interfaces_api_runtime.json.loads(body)
+        if not isinstance(data, dict):
+            raise ValueError("Request body must be a JSON object.")
+        return data
+
+    def _merge_editor_patch_metadata(self, left: JsonDocument | None, right: JsonDocument | None) -> JsonDocument:
+        return _interfaces_api_runtime._merge_editor_patch_metadata(left, right)
+
+    def _send_json(self, data: JsonDocument, status: HTTPStatus = HTTPStatus.OK) -> None:
+        body = _interfaces_api_runtime.json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(status.value)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _send_html(self, html: str) -> None:
         body = html.encode("utf-8")
         self.send_response(_interfaces_api_runtime.HTTPStatus.OK.value)

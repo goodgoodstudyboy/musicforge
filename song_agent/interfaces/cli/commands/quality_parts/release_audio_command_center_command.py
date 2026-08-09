@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+from song_agent.interfaces.bootstrap.cli import stores as _quality_stores
+
+from argparse import Namespace
+from pathlib import Path as FilePath
+
 from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.coercion import as_int as _as_int
+from song_agent.platform.contracts.coercion import as_list as _as_list
+from song_agent.platform.contracts.coercion import as_string_list as _as_string_list
 
-from typing import Any as _InterfaceType
-
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument
 
 from . import dependencies as _commands_quality_parts_dependencies
 
 from .release_audio_regression_command import _release_audio_command_center_evidence_from_args
-AcceptanceAnalyticsStore, AcceptanceFixPlanReviewStore, AcceptanceFixPlanningStore, AcceptanceFixSprintStore, AcceptanceKnowledgeBaseStore, AcceptanceStore, AnalyticsScope, Any, AudioCampaignGovernanceStore, AudioCampaignPlannerStore, AudioCampaignRemediationStore, AudioCampaignStore, AudioEncodingProfileStore, AudioEncodingStore, AudioFixSprintStore, AudioLabStore, AudioProfileStore, AudioReviewEvidenceStore, CommandSpec, DistributionStore, EncodedAudioAcceptanceStore, FormatDecisionStore, Path, PlanningRuleGovernanceStore, PlanningRuleImpactStore, PlanningRuleSimulationStore, ProjectStore, ProviderConfig, ProviderError, ReleaseAudioBaselineGovernanceStore, ReleaseAudioCertificationStore, ReleaseAudioCommandCenterStore, ReleaseAudioQualityActionQueueSignoffStore, ReleaseAudioQualityActionQueueStore, ReleaseAudioQualityObservatoryStore, ReleaseAudioRegressionResponseStore, ReleaseAudioRegressionStore, ReleaseAudioTimelineStore, ReleaseStore, SongRequest, acceptance_analytics_summary, analyze_wav_health, argparse, audio_campaign_archive_verification_exit_code, audio_campaign_remediation_verification_exit_code, audio_campaign_verification_exit_code, audio_review_summary_public, build_acceptance_diff, build_acceptance_report, build_auth_config, default_acceptance_song_cases, encoded_audio_acceptance_summary_public, evidence_to_verifier_kwargs, fix_plan_review_summary, fix_plan_summary, fix_sprint_summary, generate_request, get_acceptance_profile, governance_summary, json, knowledge_entry_summary, knowledge_report_summary, load_provider_config, music_health_allows_review, normalize_required_profiles, os, planning_rule_impact_summary, planning_simulation_summary, promotion_summary, provider_configured, read_json, release_audio_baseline_registry_verification_exit_code, release_audio_certification_verification_exit_code, release_audio_command_center_verification_exit_code, release_audio_quality_action_queue_signoff_archive_verification_exit_code, release_audio_quality_action_queue_verification_exit_code, release_audio_quality_observatory_verification_exit_code, release_audio_regression_response_verification_exit_code, release_audio_regression_verification_exit_code, release_audio_timeline_verification_exit_code, ruleset_summary, sys, test_provider_config, unified_command_center_evidence_review_acceptance_verification_exit_code, unified_release_program_continuity_acceptance_change_verification_exit_code, unified_release_program_continuity_acceptance_verification_exit_code, unified_release_program_continuity_command_center_acceptance_change_verification_exit_code, verification_exit_code, verify_audio_campaign_archive_package, verify_audio_campaign_package, verify_audio_campaign_remediation_package, verify_release_audio_baseline_registry_package, verify_release_audio_certification_package, verify_release_audio_command_center_package, verify_release_audio_quality_action_queue_package, verify_release_audio_quality_action_queue_signoff_archive_package, verify_release_audio_quality_observatory_package, verify_release_audio_regression_package, verify_release_audio_regression_response_package, verify_release_audio_timeline_package, verify_unified_command_center_evidence_review_acceptance_package, verify_unified_release_program_continuity_acceptance_change_package, verify_unified_release_program_continuity_acceptance_package, verify_unified_release_program_continuity_command_center_acceptance_change_package, verify_unified_release_program_continuity_command_center_acceptance_package, write_audio_campaign_archive_verification_report, write_audio_campaign_remediation_verification_report, write_audio_campaign_verification_report, write_interface_document, write_json, write_release_audio_baseline_registry_verification_report, write_release_audio_certification_verification_report, write_release_audio_command_center_verification_report, write_release_audio_quality_action_queue_signoff_archive_verification_report, write_release_audio_quality_action_queue_verification_report, write_release_audio_quality_observatory_verification_report, write_release_audio_regression_response_verification_report, write_release_audio_regression_verification_report, write_release_audio_timeline_verification_report, write_unified_command_center_evidence_review_acceptance_verification_report, write_unified_release_program_continuity_acceptance_change_verification_report, write_unified_release_program_continuity_acceptance_verification_report, write_unified_release_program_continuity_command_center_acceptance_change_verification_report, write_verification_report = _commands_quality_parts_dependencies.AcceptanceAnalyticsStore, _commands_quality_parts_dependencies.AcceptanceFixPlanReviewStore, _commands_quality_parts_dependencies.AcceptanceFixPlanningStore, _commands_quality_parts_dependencies.AcceptanceFixSprintStore, _commands_quality_parts_dependencies.AcceptanceKnowledgeBaseStore, _commands_quality_parts_dependencies.AcceptanceStore, _commands_quality_parts_dependencies.AnalyticsScope, _commands_quality_parts_dependencies.Any, _commands_quality_parts_dependencies.AudioCampaignGovernanceStore, _commands_quality_parts_dependencies.AudioCampaignPlannerStore, _commands_quality_parts_dependencies.AudioCampaignRemediationStore, _commands_quality_parts_dependencies.AudioCampaignStore, _commands_quality_parts_dependencies.AudioEncodingProfileStore, _commands_quality_parts_dependencies.AudioEncodingStore, _commands_quality_parts_dependencies.AudioFixSprintStore, _commands_quality_parts_dependencies.AudioLabStore, _commands_quality_parts_dependencies.AudioProfileStore, _commands_quality_parts_dependencies.AudioReviewEvidenceStore, _commands_quality_parts_dependencies.CommandSpec, _commands_quality_parts_dependencies.DistributionStore, _commands_quality_parts_dependencies.EncodedAudioAcceptanceStore, _commands_quality_parts_dependencies.FormatDecisionStore, _commands_quality_parts_dependencies.Path, _commands_quality_parts_dependencies.PlanningRuleGovernanceStore, _commands_quality_parts_dependencies.PlanningRuleImpactStore, _commands_quality_parts_dependencies.PlanningRuleSimulationStore, _commands_quality_parts_dependencies.ProjectStore, _commands_quality_parts_dependencies.ProviderConfig, _commands_quality_parts_dependencies.ProviderError, _commands_quality_parts_dependencies.ReleaseAudioBaselineGovernanceStore, _commands_quality_parts_dependencies.ReleaseAudioCertificationStore, _commands_quality_parts_dependencies.ReleaseAudioCommandCenterStore, _commands_quality_parts_dependencies.ReleaseAudioQualityActionQueueSignoffStore, _commands_quality_parts_dependencies.ReleaseAudioQualityActionQueueStore, _commands_quality_parts_dependencies.ReleaseAudioQualityObservatoryStore, _commands_quality_parts_dependencies.ReleaseAudioRegressionResponseStore, _commands_quality_parts_dependencies.ReleaseAudioRegressionStore, _commands_quality_parts_dependencies.ReleaseAudioTimelineStore, _commands_quality_parts_dependencies.ReleaseStore, _commands_quality_parts_dependencies.SongRequest, _commands_quality_parts_dependencies.acceptance_analytics_summary, _commands_quality_parts_dependencies.analyze_wav_health, _commands_quality_parts_dependencies.argparse, _commands_quality_parts_dependencies.audio_campaign_archive_verification_exit_code, _commands_quality_parts_dependencies.audio_campaign_remediation_verification_exit_code, _commands_quality_parts_dependencies.audio_campaign_verification_exit_code, _commands_quality_parts_dependencies.audio_review_summary_public, _commands_quality_parts_dependencies.build_acceptance_diff, _commands_quality_parts_dependencies.build_acceptance_report, _commands_quality_parts_dependencies.build_auth_config, _commands_quality_parts_dependencies.default_acceptance_song_cases, _commands_quality_parts_dependencies.encoded_audio_acceptance_summary_public, _commands_quality_parts_dependencies.evidence_to_verifier_kwargs, _commands_quality_parts_dependencies.fix_plan_review_summary, _commands_quality_parts_dependencies.fix_plan_summary, _commands_quality_parts_dependencies.fix_sprint_summary, _commands_quality_parts_dependencies.generate_request, _commands_quality_parts_dependencies.get_acceptance_profile, _commands_quality_parts_dependencies.governance_summary, _commands_quality_parts_dependencies.json, _commands_quality_parts_dependencies.knowledge_entry_summary, _commands_quality_parts_dependencies.knowledge_report_summary, _commands_quality_parts_dependencies.load_provider_config, _commands_quality_parts_dependencies.music_health_allows_review, _commands_quality_parts_dependencies.normalize_required_profiles, _commands_quality_parts_dependencies.os, _commands_quality_parts_dependencies.planning_rule_impact_summary, _commands_quality_parts_dependencies.planning_simulation_summary, _commands_quality_parts_dependencies.promotion_summary, _commands_quality_parts_dependencies.provider_configured, _commands_quality_parts_dependencies.read_json, _commands_quality_parts_dependencies.release_audio_baseline_registry_verification_exit_code, _commands_quality_parts_dependencies.release_audio_certification_verification_exit_code, _commands_quality_parts_dependencies.release_audio_command_center_verification_exit_code, _commands_quality_parts_dependencies.release_audio_quality_action_queue_signoff_archive_verification_exit_code, _commands_quality_parts_dependencies.release_audio_quality_action_queue_verification_exit_code, _commands_quality_parts_dependencies.release_audio_quality_observatory_verification_exit_code, _commands_quality_parts_dependencies.release_audio_regression_response_verification_exit_code, _commands_quality_parts_dependencies.release_audio_regression_verification_exit_code, _commands_quality_parts_dependencies.release_audio_timeline_verification_exit_code, _commands_quality_parts_dependencies.ruleset_summary, _commands_quality_parts_dependencies.sys, _commands_quality_parts_dependencies.test_provider_config, _commands_quality_parts_dependencies.unified_command_center_evidence_review_acceptance_verification_exit_code, _commands_quality_parts_dependencies.unified_release_program_continuity_acceptance_change_verification_exit_code, _commands_quality_parts_dependencies.unified_release_program_continuity_acceptance_verification_exit_code, _commands_quality_parts_dependencies.unified_release_program_continuity_command_center_acceptance_change_verification_exit_code, _commands_quality_parts_dependencies.verification_exit_code, _commands_quality_parts_dependencies.verify_audio_campaign_archive_package, _commands_quality_parts_dependencies.verify_audio_campaign_package, _commands_quality_parts_dependencies.verify_audio_campaign_remediation_package, _commands_quality_parts_dependencies.verify_release_audio_baseline_registry_package, _commands_quality_parts_dependencies.verify_release_audio_certification_package, _commands_quality_parts_dependencies.verify_release_audio_command_center_package, _commands_quality_parts_dependencies.verify_release_audio_quality_action_queue_package, _commands_quality_parts_dependencies.verify_release_audio_quality_action_queue_signoff_archive_package, _commands_quality_parts_dependencies.verify_release_audio_quality_observatory_package, _commands_quality_parts_dependencies.verify_release_audio_regression_package, _commands_quality_parts_dependencies.verify_release_audio_regression_response_package, _commands_quality_parts_dependencies.verify_release_audio_timeline_package, _commands_quality_parts_dependencies.verify_unified_command_center_evidence_review_acceptance_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_acceptance_change_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_acceptance_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_command_center_acceptance_change_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_command_center_acceptance_package, _commands_quality_parts_dependencies.write_audio_campaign_archive_verification_report, _commands_quality_parts_dependencies.write_audio_campaign_remediation_verification_report, _commands_quality_parts_dependencies.write_audio_campaign_verification_report, _commands_quality_parts_dependencies.write_interface_document, _commands_quality_parts_dependencies.write_json, _commands_quality_parts_dependencies.write_release_audio_baseline_registry_verification_report, _commands_quality_parts_dependencies.write_release_audio_certification_verification_report, _commands_quality_parts_dependencies.write_release_audio_command_center_verification_report, _commands_quality_parts_dependencies.write_release_audio_quality_action_queue_signoff_archive_verification_report, _commands_quality_parts_dependencies.write_release_audio_quality_action_queue_verification_report, _commands_quality_parts_dependencies.write_release_audio_quality_observatory_verification_report, _commands_quality_parts_dependencies.write_release_audio_regression_response_verification_report, _commands_quality_parts_dependencies.write_release_audio_regression_verification_report, _commands_quality_parts_dependencies.write_release_audio_timeline_verification_report, _commands_quality_parts_dependencies.write_unified_command_center_evidence_review_acceptance_verification_report, _commands_quality_parts_dependencies.write_unified_release_program_continuity_acceptance_change_verification_report, _commands_quality_parts_dependencies.write_unified_release_program_continuity_acceptance_verification_report, _commands_quality_parts_dependencies.write_unified_release_program_continuity_command_center_acceptance_change_verification_report, _commands_quality_parts_dependencies.write_verification_report
-def _run_release_audio_command_center_command(args: argparse.Namespace) -> ImplementationDocument:
+AcceptanceAnalyticsStore, AcceptanceFixPlanReviewStore, AcceptanceFixPlanningStore, AcceptanceFixSprintStore, AcceptanceKnowledgeBaseStore, AcceptanceStore, AnalyticsScope, AudioCampaignGovernanceStore, AudioCampaignPlannerStore, AudioCampaignRemediationStore, AudioCampaignStore, AudioEncodingProfileStore, AudioEncodingStore, AudioFixSprintStore, AudioLabStore, AudioProfileStore, AudioReviewEvidenceStore, CommandSpec, DistributionStore, EncodedAudioAcceptanceStore, FormatDecisionStore, Path, PlanningRuleGovernanceStore, PlanningRuleImpactStore, PlanningRuleSimulationStore, ProjectStore, ProviderConfig, ProviderError, ReleaseAudioBaselineGovernanceStore, ReleaseAudioCertificationStore, ReleaseAudioCommandCenterStore, ReleaseAudioQualityActionQueueSignoffStore, ReleaseAudioQualityActionQueueStore, ReleaseAudioQualityObservatoryStore, ReleaseAudioRegressionResponseStore, ReleaseAudioRegressionStore, ReleaseAudioTimelineStore, ReleaseStore, SongRequest, acceptance_analytics_summary, analyze_wav_health, argparse, audio_campaign_archive_verification_exit_code, audio_campaign_remediation_verification_exit_code, audio_campaign_verification_exit_code, audio_review_summary_public, build_acceptance_diff, build_acceptance_report, build_auth_config, default_acceptance_song_cases, encoded_audio_acceptance_summary_public, evidence_to_verifier_kwargs, fix_plan_review_summary, fix_plan_summary, fix_sprint_summary, generate_request, get_acceptance_profile, governance_summary, json, knowledge_entry_summary, knowledge_report_summary, load_provider_config, music_health_allows_review, normalize_required_profiles, os, planning_rule_impact_summary, planning_simulation_summary, promotion_summary, provider_configured, read_json, release_audio_baseline_registry_verification_exit_code, release_audio_certification_verification_exit_code, release_audio_command_center_verification_exit_code, release_audio_quality_action_queue_signoff_archive_verification_exit_code, release_audio_quality_action_queue_verification_exit_code, release_audio_quality_observatory_verification_exit_code, release_audio_regression_response_verification_exit_code, release_audio_regression_verification_exit_code, release_audio_timeline_verification_exit_code, ruleset_summary, sys, test_provider_config, unified_command_center_evidence_review_acceptance_verification_exit_code, unified_release_program_continuity_acceptance_change_verification_exit_code, unified_release_program_continuity_acceptance_verification_exit_code, unified_release_program_continuity_command_center_acceptance_change_verification_exit_code, verification_exit_code, verify_audio_campaign_archive_package, verify_audio_campaign_package, verify_audio_campaign_remediation_package, verify_release_audio_baseline_registry_package, verify_release_audio_certification_package, verify_release_audio_command_center_package, verify_release_audio_quality_action_queue_package, verify_release_audio_quality_action_queue_signoff_archive_package, verify_release_audio_quality_observatory_package, verify_release_audio_regression_package, verify_release_audio_regression_response_package, verify_release_audio_timeline_package, verify_unified_command_center_evidence_review_acceptance_package, verify_unified_release_program_continuity_acceptance_change_package, verify_unified_release_program_continuity_acceptance_package, verify_unified_release_program_continuity_command_center_acceptance_change_package, verify_unified_release_program_continuity_command_center_acceptance_package, write_audio_campaign_archive_verification_report, write_audio_campaign_remediation_verification_report, write_audio_campaign_verification_report, write_interface_document, write_json, write_release_audio_baseline_registry_verification_report, write_release_audio_certification_verification_report, write_release_audio_command_center_verification_report, write_release_audio_quality_action_queue_signoff_archive_verification_report, write_release_audio_quality_action_queue_verification_report, write_release_audio_quality_observatory_verification_report, write_release_audio_regression_response_verification_report, write_release_audio_regression_verification_report, write_release_audio_timeline_verification_report, write_unified_command_center_evidence_review_acceptance_verification_report, write_unified_release_program_continuity_acceptance_change_verification_report, write_unified_release_program_continuity_acceptance_verification_report, write_unified_release_program_continuity_command_center_acceptance_change_verification_report, write_verification_report = _commands_quality_parts_dependencies.AcceptanceAnalyticsStore, _commands_quality_parts_dependencies.AcceptanceFixPlanReviewStore, _commands_quality_parts_dependencies.AcceptanceFixPlanningStore, _commands_quality_parts_dependencies.AcceptanceFixSprintStore, _commands_quality_parts_dependencies.AcceptanceKnowledgeBaseStore, _commands_quality_parts_dependencies.AcceptanceStore, _commands_quality_parts_dependencies.AnalyticsScope, _commands_quality_parts_dependencies.AudioCampaignGovernanceStore, _commands_quality_parts_dependencies.AudioCampaignPlannerStore, _commands_quality_parts_dependencies.AudioCampaignRemediationStore, _commands_quality_parts_dependencies.AudioCampaignStore, _commands_quality_parts_dependencies.AudioEncodingProfileStore, _commands_quality_parts_dependencies.AudioEncodingStore, _commands_quality_parts_dependencies.AudioFixSprintStore, _commands_quality_parts_dependencies.AudioLabStore, _commands_quality_parts_dependencies.AudioProfileStore, _commands_quality_parts_dependencies.AudioReviewEvidenceStore, _commands_quality_parts_dependencies.CommandSpec, _commands_quality_parts_dependencies.DistributionStore, _commands_quality_parts_dependencies.EncodedAudioAcceptanceStore, _commands_quality_parts_dependencies.FormatDecisionStore, _commands_quality_parts_dependencies.Path, _commands_quality_parts_dependencies.PlanningRuleGovernanceStore, _commands_quality_parts_dependencies.PlanningRuleImpactStore, _commands_quality_parts_dependencies.PlanningRuleSimulationStore, _commands_quality_parts_dependencies.ProjectStore, _commands_quality_parts_dependencies.ProviderConfig, _commands_quality_parts_dependencies.ProviderError, _commands_quality_parts_dependencies.ReleaseAudioBaselineGovernanceStore, _commands_quality_parts_dependencies.ReleaseAudioCertificationStore, _commands_quality_parts_dependencies.ReleaseAudioCommandCenterStore, _commands_quality_parts_dependencies.ReleaseAudioQualityActionQueueSignoffStore, _commands_quality_parts_dependencies.ReleaseAudioQualityActionQueueStore, _commands_quality_parts_dependencies.ReleaseAudioQualityObservatoryStore, _commands_quality_parts_dependencies.ReleaseAudioRegressionResponseStore, _commands_quality_parts_dependencies.ReleaseAudioRegressionStore, _commands_quality_parts_dependencies.ReleaseAudioTimelineStore, _commands_quality_parts_dependencies.ReleaseStore, _commands_quality_parts_dependencies.SongRequest, _commands_quality_parts_dependencies.acceptance_analytics_summary, _commands_quality_parts_dependencies.analyze_wav_health, _commands_quality_parts_dependencies.argparse, _commands_quality_parts_dependencies.audio_campaign_archive_verification_exit_code, _commands_quality_parts_dependencies.audio_campaign_remediation_verification_exit_code, _commands_quality_parts_dependencies.audio_campaign_verification_exit_code, _commands_quality_parts_dependencies.audio_review_summary_public, _commands_quality_parts_dependencies.build_acceptance_diff, _commands_quality_parts_dependencies.build_acceptance_report, _commands_quality_parts_dependencies.build_auth_config, _commands_quality_parts_dependencies.default_acceptance_song_cases, _commands_quality_parts_dependencies.encoded_audio_acceptance_summary_public, _commands_quality_parts_dependencies.evidence_to_verifier_kwargs, _commands_quality_parts_dependencies.fix_plan_review_summary, _commands_quality_parts_dependencies.fix_plan_summary, _commands_quality_parts_dependencies.fix_sprint_summary, _commands_quality_parts_dependencies.generate_request, _commands_quality_parts_dependencies.get_acceptance_profile, _commands_quality_parts_dependencies.governance_summary, _commands_quality_parts_dependencies.json, _commands_quality_parts_dependencies.knowledge_entry_summary, _commands_quality_parts_dependencies.knowledge_report_summary, _commands_quality_parts_dependencies.load_provider_config, _commands_quality_parts_dependencies.music_health_allows_review, _commands_quality_parts_dependencies.normalize_required_profiles, _commands_quality_parts_dependencies.os, _commands_quality_parts_dependencies.planning_rule_impact_summary, _commands_quality_parts_dependencies.planning_simulation_summary, _commands_quality_parts_dependencies.promotion_summary, _commands_quality_parts_dependencies.provider_configured, _commands_quality_parts_dependencies.read_json, _commands_quality_parts_dependencies.release_audio_baseline_registry_verification_exit_code, _commands_quality_parts_dependencies.release_audio_certification_verification_exit_code, _commands_quality_parts_dependencies.release_audio_command_center_verification_exit_code, _commands_quality_parts_dependencies.release_audio_quality_action_queue_signoff_archive_verification_exit_code, _commands_quality_parts_dependencies.release_audio_quality_action_queue_verification_exit_code, _commands_quality_parts_dependencies.release_audio_quality_observatory_verification_exit_code, _commands_quality_parts_dependencies.release_audio_regression_response_verification_exit_code, _commands_quality_parts_dependencies.release_audio_regression_verification_exit_code, _commands_quality_parts_dependencies.release_audio_timeline_verification_exit_code, _commands_quality_parts_dependencies.ruleset_summary, _commands_quality_parts_dependencies.sys, _commands_quality_parts_dependencies.test_provider_config, _commands_quality_parts_dependencies.unified_command_center_evidence_review_acceptance_verification_exit_code, _commands_quality_parts_dependencies.unified_release_program_continuity_acceptance_change_verification_exit_code, _commands_quality_parts_dependencies.unified_release_program_continuity_acceptance_verification_exit_code, _commands_quality_parts_dependencies.unified_release_program_continuity_command_center_acceptance_change_verification_exit_code, _commands_quality_parts_dependencies.verification_exit_code, _commands_quality_parts_dependencies.verify_audio_campaign_archive_package, _commands_quality_parts_dependencies.verify_audio_campaign_package, _commands_quality_parts_dependencies.verify_audio_campaign_remediation_package, _commands_quality_parts_dependencies.verify_release_audio_baseline_registry_package, _commands_quality_parts_dependencies.verify_release_audio_certification_package, _commands_quality_parts_dependencies.verify_release_audio_command_center_package, _commands_quality_parts_dependencies.verify_release_audio_quality_action_queue_package, _commands_quality_parts_dependencies.verify_release_audio_quality_action_queue_signoff_archive_package, _commands_quality_parts_dependencies.verify_release_audio_quality_observatory_package, _commands_quality_parts_dependencies.verify_release_audio_regression_package, _commands_quality_parts_dependencies.verify_release_audio_regression_response_package, _commands_quality_parts_dependencies.verify_release_audio_timeline_package, _commands_quality_parts_dependencies.verify_unified_command_center_evidence_review_acceptance_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_acceptance_change_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_acceptance_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_command_center_acceptance_change_package, _commands_quality_parts_dependencies.verify_unified_release_program_continuity_command_center_acceptance_package, _commands_quality_parts_dependencies.write_audio_campaign_archive_verification_report, _commands_quality_parts_dependencies.write_audio_campaign_remediation_verification_report, _commands_quality_parts_dependencies.write_audio_campaign_verification_report, _commands_quality_parts_dependencies.write_interface_document, _commands_quality_parts_dependencies.write_json, _commands_quality_parts_dependencies.write_release_audio_baseline_registry_verification_report, _commands_quality_parts_dependencies.write_release_audio_certification_verification_report, _commands_quality_parts_dependencies.write_release_audio_command_center_verification_report, _commands_quality_parts_dependencies.write_release_audio_quality_action_queue_signoff_archive_verification_report, _commands_quality_parts_dependencies.write_release_audio_quality_action_queue_verification_report, _commands_quality_parts_dependencies.write_release_audio_quality_observatory_verification_report, _commands_quality_parts_dependencies.write_release_audio_regression_response_verification_report, _commands_quality_parts_dependencies.write_release_audio_regression_verification_report, _commands_quality_parts_dependencies.write_release_audio_timeline_verification_report, _commands_quality_parts_dependencies.write_unified_command_center_evidence_review_acceptance_verification_report, _commands_quality_parts_dependencies.write_unified_release_program_continuity_acceptance_change_verification_report, _commands_quality_parts_dependencies.write_unified_release_program_continuity_acceptance_verification_report, _commands_quality_parts_dependencies.write_unified_release_program_continuity_command_center_acceptance_change_verification_report, _commands_quality_parts_dependencies.write_verification_report
+def _run_release_audio_command_center_command(args: Namespace) -> JsonDocument:
     pass
     pass
 
-    store = ReleaseAudioCommandCenterStore()
+    store = _quality_stores.release_audio_command_center_store()
     evidence = _release_audio_command_center_evidence_from_args(args)
     if args.action == "refresh":
         report = store.refresh(args.release_id, evidence)
@@ -36,7 +42,14 @@ def _run_release_audio_command_center_command(args: argparse.Namespace) -> Imple
         return {"ok": True, "runbook": runbook, "summary": runbook.get("summary", {}), "status": "passed"}
     if args.action == "run-safe":
         result = store.run_safe(args.release_id, evidence)
-        return {"ok": int((result.get("summary") or {}).get("failed_count") or 0) == 0, "runbook_results": result, "summary": result.get("summary", {}), "status": "passed" if int((result.get("summary") or {}).get("failed_count") or 0) == 0 else "failed"}
+        summary = _as_document(result.get("summary"))
+        failed_count = _as_int(summary.get("failed_count") or 0)
+        return {
+            "ok": failed_count == 0,
+            "runbook_results": result,
+            "summary": summary,
+            "status": "passed" if failed_count == 0 else "failed",
+        }
     if args.action == "export":
         result = store.export_package(args.release_id, evidence)
         return {"ok": result.get("status") == "passed", **result, "summary": result.get("manifest", {})}
@@ -50,7 +63,7 @@ def _run_release_audio_command_center_command(args: argparse.Namespace) -> Imple
         return {"ok": report.get("status") == "passed", "verification": report, "summary": report.get("summary", {}), "status": report.get("status")}
     raise ValueError("Unsupported release-audio-command-center command.")
 
-def _command_center_acceptance_payload(args: argparse.Namespace) -> ImplementationDocument:
+def _command_center_acceptance_payload(args: Namespace) -> JsonDocument:
     payload = {
         "review_pack": getattr(args, "review_pack", None),
         "review_pack_verification_report": getattr(args, "review_pack_verification_report", None),
@@ -79,35 +92,37 @@ def _command_center_acceptance_payload(args: argparse.Namespace) -> Implementati
         payload["policy"] = policy
     return {key: value for key, value in payload.items() if value is not None}
 
-def _print_audio_lab_result(result: ImplementationDocument, *, json_output: bool) -> None:
+def _print_audio_lab_result(result: JsonDocument, *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    status = result.get("status") or result.get("environment", {}).get("status") or result.get("summary", {}).get("status") or "unknown"
+    environment = _as_document(result.get("environment"))
+    result_summary = _as_document(result.get("summary"))
+    status = result.get("status") or environment.get("status") or result_summary.get("status") or "unknown"
     print("MusicForge Audio Lab")
     print(f"status: {status}")
     if "environment" in result:
-        summary = result["environment"].get("summary", {})
+        summary = _as_document(environment.get("summary"))
         print(f"renderer: {summary.get('renderer_status')}")
         print(f"real_audio_ready: {summary.get('real_audio_ready')}")
     if "smoke_run" in result:
-        smoke = result["smoke_run"]
+        smoke = _as_document(result["smoke_run"])
         print(f"smoke_run: {smoke.get('smoke_run_id')}")
     if "session" in result:
-        session = result["session"]
+        session = _as_document(result["session"])
         print(f"session: {session.get('session_id')}")
     if "comparison" in result:
-        comparison = result["comparison"]
+        comparison = _as_document(result["comparison"])
         print(f"comparison: {comparison.get('comparison_id')}")
 
-def _print_audio_fix_sprint_result(result: ImplementationDocument, *, json_output: bool) -> None:
+def _print_audio_fix_sprint_result(result: JsonDocument, *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
+    summary = _as_document(result.get("summary"))
+    status = result.get("status") or summary.get("status") or "unknown"
     print("MusicForge Audio Fix Sprint")
     print(f"status: {status}")
-    summary = _as_document(result.get("summary"))
     if summary:
         details = []
         for key in ("issue_count", "candidate_count", "selected_count", "resolved_count", "manual_recheck_count", "test_fake_count"):
@@ -116,21 +131,21 @@ def _print_audio_fix_sprint_result(result: ImplementationDocument, *, json_outpu
         if details:
             print("summary: " + " ".join(details))
     if "sprint" in result:
-        sprint = result["sprint"]
+        sprint = _as_document(result["sprint"])
         print(f"sprint: {sprint.get('fix_sprint_id')} stale={sprint.get('stale', False)}")
     if "closeout" in result:
-        closeout = result["closeout"]
-        blockers = closeout.get("blockers") or []
+        closeout = _as_document(result["closeout"])
+        blockers = _as_string_list(closeout.get("blockers"))
         print(f"closeout: {closeout.get('status')} blockers={','.join(blockers) if blockers else '-'}")
 
-def _print_audio_campaign_result(result: ImplementationDocument, *, json_output: bool) -> None:
+def _print_audio_campaign_result(result: JsonDocument, *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
+    summary = _as_document(result.get("summary"))
+    status = result.get("status") or summary.get("status") or "unknown"
     print("MusicForge Audio Campaign")
     print(f"status: {status}")
-    summary = _as_document(result.get("summary"))
     details = []
     for key in ("case_count", "manual_review_count", "real_audio_count", "test_fake_count", "open_fix_sprint_count"):
         if key in summary:
@@ -138,20 +153,20 @@ def _print_audio_campaign_result(result: ImplementationDocument, *, json_output:
     if details:
         print("summary: " + " ".join(details))
     if "campaign" in result:
-        campaign = result["campaign"]
+        campaign = _as_document(result["campaign"])
         print(f"campaign: {campaign.get('campaign_id')} {campaign.get('name')}")
     if "verification" in result:
-        verification = result["verification"]
+        verification = _as_document(result["verification"])
         print(f"verification: {verification.get('status')} blockers={verification.get('blockers') or []}")
 
-def _print_release_audio_certification_result(result: ImplementationDocument, *, json_output: bool) -> None:
+def _print_release_audio_certification_result(result: JsonDocument, *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    status = result.get("status") or result.get("summary", {}).get("status") or "unknown"
+    summary = _as_document(result.get("summary"))
+    status = result.get("status") or summary.get("status") or "unknown"
     print("MusicForge Release Audio Certification")
     print(f"status: {status}")
-    summary = _as_document(result.get("summary"))
     details = []
     for key in ("track_count", "manual_accepted_track_count", "real_audio_track_count", "blocker_count", "remediation_status"):
         if key in summary:
@@ -159,19 +174,19 @@ def _print_release_audio_certification_result(result: ImplementationDocument, *,
     if details:
         print("summary: " + " ".join(details))
     if "verification" in result:
-        verification = result["verification"]
+        verification = _as_document(result["verification"])
         print(f"verification: {verification.get('status')} blockers={verification.get('blockers') or []}")
 
 def run_acceptance_check(
     *,
-    out_dir: _InterfaceType,
+    out_dir: FilePath,
     profile_id: str,
     cases: int,
     render_audio_mode: str,
     auto_review: bool,
     min_rating: int,
     manual_required: bool = False,
-) -> dict[str, _InterfaceType]:
+) -> JsonDocument:
     pass
     pass
     pass
@@ -182,7 +197,7 @@ def run_acceptance_check(
     if render_audio_mode == "require":
         render_audio_mode = "always"
     render_audio_mode = render_audio_mode if render_audio_mode != "auto" or profile.render_audio == "auto" else profile.render_audio
-    store = AcceptanceStore(out_dir)
+    store = _quality_stores.acceptance_store(out_dir)
     suite_payload = {
         "name": f"v4.5 {profile.profile_id} music acceptance",
         "mode": profile.profile_id,
@@ -235,7 +250,7 @@ def run_acceptance_check(
         report = store.read_report(suite.suite_id)
     return report
 
-def print_acceptance_check_report(report: dict[str, _InterfaceType]) -> None:
+def print_acceptance_check_report(report: JsonDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge acceptance-check")
     print(f"status: {report.get('status')}")
@@ -246,7 +261,7 @@ def print_acceptance_check_report(report: dict[str, _InterfaceType]) -> None:
     print(f"renderer: {summary.get('renderer_status')}")
     print(f"acceptance_status: {summary.get('acceptance_status')}")
 
-def print_acceptance_diff_report(report: dict[str, _InterfaceType]) -> None:
+def print_acceptance_diff_report(report: JsonDocument) -> None:
     summary = _as_document(report.get("summary"))
     print("MusicForge acceptance-diff")
     print(f"status: {report.get('status')}")
@@ -256,7 +271,7 @@ def print_acceptance_diff_report(report: dict[str, _InterfaceType]) -> None:
     print(f"new_blockers: {summary.get('new_blocker_count', 0)}")
     print(f"rating_regressions: {summary.get('rating_regression_count', 0)}")
 
-def print_release_audio_review_result(result: dict[str, _InterfaceType]) -> None:
+def print_release_audio_review_result(result: JsonDocument) -> None:
     summary = _as_document(result.get("summary"))
     review = _as_document(result.get("review"))
     print("MusicForge release-audio-review")
@@ -264,7 +279,7 @@ def print_release_audio_review_result(result: dict[str, _InterfaceType]) -> None
     print(f"status: {summary.get('status') or review.get('status') or result.get('status') or '-'}")
     print(f"tracks: {summary.get('track_count', 0)}")
     print(f"manual accepted: {summary.get('manual_accepted_track_count', 0)}")
-    print(f"missing: {len(summary.get('missing_track_ids', []) or [])}")
+    print(f"missing: {len(_as_string_list(summary.get('missing_track_ids')))}")
     print(f"stale: {summary.get('stale_review_count', 0)}")
     print(f"needs_fix: {summary.get('needs_fix_track_count', 0)}")
     if review:
@@ -272,14 +287,14 @@ def print_release_audio_review_result(result: dict[str, _InterfaceType]) -> None
     if result.get("task_id"):
         print(f"task: {result.get('task_id')}")
     if result.get("reviews") is not None:
-        print(f"reviews: {len(result.get('reviews') or [])}")
+        print(f"reviews: {len(_as_list(result.get('reviews')))}")
 
-def print_acceptance_analytics_report(report: dict[str, _InterfaceType]) -> None:
+def print_acceptance_analytics_report(report: JsonDocument) -> None:
     summary = _as_document(report.get("summary"))
     source = _as_document(report.get("source_summary"))
     print("MusicForge acceptance-analytics")
     print(f"readiness: {summary.get('readiness_status')}")
-    print(f"scope: {(report.get('scope') or {}).get('type') if isinstance(report.get('scope'), dict) else 'global'}")
+    print(f"scope: {_as_document(report.get('scope')).get('type', 'global')}")
     print(f"report: {report.get('report_id')}")
     print(f"suites: {source.get('suite_count', 0)}")
     print(f"cases: {summary.get('case_count', 0)}")
@@ -288,7 +303,7 @@ def print_acceptance_analytics_report(report: dict[str, _InterfaceType]) -> None
     print(f"issues: {summary.get('issue_count', 0)}")
     print(f"recommendations: {summary.get('recommendation_count', 0)}")
 
-def print_acceptance_fix_sprint_result(result: dict[str, _InterfaceType]) -> None:
+def print_acceptance_fix_sprint_result(result: JsonDocument) -> None:
     summary = _as_document(result.get("summary"))
     sprint = _as_document(result.get("fix_sprint"))
     delta = _as_document(result.get("delta_report"))
@@ -300,13 +315,14 @@ def print_acceptance_fix_sprint_result(result: dict[str, _InterfaceType]) -> Non
         print(f"items: {summary.get('item_count', 0)}")
         print(f"open_items: {summary.get('open_item_count', 0)}")
     if result.get("results"):
-        print(f"task_results: {len(result.get('results') or [])}")
+        results = result.get("results")
+        print(f"task_results: {len(results) if isinstance(results, list) else 0}")
     if delta:
-        print(f"delta_status: {(delta.get('summary') or {}).get('status')}")
+        print(f"delta_status: {_as_document(delta.get('summary')).get('status')}")
     if closeout:
         print(f"closeout_status: {closeout.get('status')}")
 
-def print_acceptance_fix_plan_result(result: dict[str, _InterfaceType]) -> None:
+def print_acceptance_fix_plan_result(result: JsonDocument) -> None:
     summary = _as_document(result.get("summary"))
     plan = result.get("fix_plan") or result.get("fix_plan_preview")
     plan = _as_document(plan)
@@ -327,6 +343,6 @@ def print_acceptance_fix_plan_result(result: dict[str, _InterfaceType]) -> None:
     print(f"items: {summary.get('planned_item_count', 0)}")
     print(f"kb_matches: {summary.get('kb_match_count', 0)}")
     if result.get("fix_sprint"):
-        print(f"created_fix_sprint: {(result.get('fix_sprint') or {}).get('fix_sprint_id')}")
+        print(f"created_fix_sprint: {_as_document(result.get('fix_sprint')).get('fix_sprint_id')}")
 
 __all__ = ('_run_release_audio_command_center_command', '_command_center_acceptance_payload', '_print_audio_lab_result', '_print_audio_fix_sprint_result', '_print_audio_campaign_result', '_print_release_audio_certification_result', 'run_acceptance_check', 'print_acceptance_check_report', 'print_acceptance_diff_report', 'print_release_audio_review_result', 'print_acceptance_analytics_report', 'print_acceptance_fix_sprint_result', 'print_acceptance_fix_plan_result')

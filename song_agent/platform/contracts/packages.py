@@ -2,22 +2,34 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-from importlib import resources
-from typing import Any, Callable, Literal, overload
+from typing import Callable, Literal, TypedDict, overload
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.documents import JsonDocument
+from song_agent.platform.resource_access import PackagedResource, read_packaged_text
 
 NestedZipPolicy = Literal["deny", "allowlisted"]
-SemanticVerifier = Callable[[Any], list[dict[str, Any]]]
+
+
+class SemanticVerificationContext(TypedDict):
+    archive: zipfile.ZipFile
+    manifest: JsonDocument
+    names: list[str]
+    summary: JsonDocument
+    strict: bool
+
+
+SemanticVerifier = Callable[[SemanticVerificationContext], list[JsonDocument]]
 RUNTIME_PACKAGE_WRITER_POLICY_TYPE = "musicforge_v144_runtime_package_writer_policy"
 RUNTIME_PACKAGE_WRITER_POLICY_RESOURCE = "runtime-package-writer-policy.json"
 RUNTIME_PACKAGE_WRITER_POLICY_SCHEMA_VERSION = 2
 RUNTIME_PACKAGE_REGISTRY_PROJECTION_RESOURCE = "runtime-package-registry.json"
-APPROVED_PACKAGE_REGISTRY_INTEGRITY_HASH = "c1cf7d2a35580200d0ed3d9c23949451708b2040b3b97d50dedc84d9991bdcf5"
-APPROVED_PACKAGE_REGISTRY_PROJECTION_HASH = "45879327cf3444f1d9e4993c043d71bc495a0125596ef7791ec7bced312bfe69"
+APPROVED_PACKAGE_REGISTRY_INTEGRITY_HASH = "28a3d0f80ff9c697b8d1dbd0aa20bd76f9f29efc51d8e4ea0b17429bbb6d6127"
+APPROVED_PACKAGE_REGISTRY_PROJECTION_HASH = "a15ba1009cda23f5cfa011c57d5c389b527bdb0517dcda10a2a02c4808d40880"
 PACKAGE_WRITER_GUARD_SYMBOL = "song_agent.platform.contracts.packages.require_registered_package_type"
 PACKAGE_WRITER_GUARD_ALIAS = "_require_registered_package_type"
 PACKAGE_WRITER_ATTACK_CORPUS = "song_agent.platform.verification.attack_corpus._write_package"
@@ -236,10 +248,15 @@ def _document_hash(document: dict[str, object]) -> str:
 
 
 def _load_resource_object(resource_name: str, label: str) -> dict[str, object]:
+    resources_by_name = {
+        RUNTIME_PACKAGE_WRITER_POLICY_RESOURCE: PackagedResource.PACKAGE_WRITER_POLICY,
+        RUNTIME_PACKAGE_REGISTRY_PROJECTION_RESOURCE: PackagedResource.PACKAGE_REGISTRY,
+    }
     try:
-        payload = resources.files(__package__).joinpath(resource_name).read_text(encoding="utf-8")
+        resource = resources_by_name[resource_name]
+        payload = read_packaged_text(resource)
         document = json.loads(payload)
-    except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+    except (FileNotFoundError, KeyError, json.JSONDecodeError, OSError) as exc:
         raise RuntimeError(f"{label} is unavailable.") from exc
     if not isinstance(document, dict):
         raise RuntimeError(f"{label} must be a JSON object.")

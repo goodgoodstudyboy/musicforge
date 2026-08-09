@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.job_store_context import JobStoreContext
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.application.jobs.ports import JobStoreContext
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Any, JobState, Path, rerun_multinode_from_node
+from song_agent.platform.contracts.documents import JsonDocument
 
-import song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies as creation_dependencies
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import ProjectPaths, SongRequest, append_event, clear_stem_artifacts, load_provider_config, render_midi, slugify, write_json
+from song_agent.interfaces.bootstrap.api.core import JobState, Path, rerun_multinode_from_node
+
+from song_agent.interfaces.bootstrap.api.creation_quality import ProjectPaths, SongRequest, append_event, clear_stem_artifacts, load_provider_config, render_midi, slugify, write_json
 
 from song_agent.interfaces.api.runtime_parts.helpers.api_info import _build_summary, _build_validator_report, _utc_now
 
@@ -21,7 +22,7 @@ class JobStoreNodeRetry(JobStoreContext):
         job_id: str,
         node_name: str,
         affected_nodes: list[str],
-        provider_snapshot: ImplementationDocument,
+        provider_snapshot: JsonDocument,
     ) -> None:
         job = self.get_job(job_id)
         if job is None:
@@ -29,7 +30,7 @@ class JobStoreNodeRetry(JobStoreContext):
         request = SongRequest.from_dict(job.input_payload)
         run_dir = Path(job.output_dir)
         paths = ProjectPaths.create(run_dir)
-        node_store = creation_dependencies.NodeStore(run_dir)
+        node_store = _api_store_factories.node_store(run_dir)
         provider_config = None
         if provider_snapshot.get("mode") == "provider":
             provider_config, _sources = load_provider_config()
@@ -104,7 +105,7 @@ class JobStoreNodeRetry(JobStoreContext):
                 finished_at=_utc_now(),
             )
 
-    def _update_job(self, job: JobState, **changes: Any) -> None:
+    def _update_job(self, job: JobState, **changes: object) -> None:
         with self.lock:
             for key, value in changes.items():
                 setattr(job, key, value)
@@ -157,7 +158,7 @@ class JobStoreNodeRetry(JobStoreContext):
             raise ValueError("Refusing to delete outside runs directory.")
         return target
 
-    def _provider_snapshot_for_retry(self, job: JobState) -> ImplementationDocument:
+    def _provider_snapshot_for_retry(self, job: JobState) -> JsonDocument:
         if job.provider_snapshot.get("mode") != "provider":
             return job.provider_snapshot
         provider_config, _sources = load_provider_config()

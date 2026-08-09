@@ -5,8 +5,9 @@ from song_agent.interfaces.api.route_contexts.trust_portfolio import TrustPortfo
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
 class TrustPortfolioFinalActionsRoutes(TrustPortfolioRouteContext):
-    def _dispatch_portfolio_final_actions(self, method, parts, portfolio_id, action) -> bool:
+    def _dispatch_portfolio_final_actions(self, method: str, parts: list[str], portfolio_id: str, action: str) -> bool:
         if action == 'governance-queues' and len(parts) == 2:
             if method != 'POST':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')

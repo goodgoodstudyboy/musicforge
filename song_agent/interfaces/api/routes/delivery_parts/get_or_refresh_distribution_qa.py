@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from song_agent.interfaces.api.route_contexts.delivery import DeliveryRouteContext
 
-from song_agent.platform.contracts.documents import ImplementationDocument
-
-from typing import Any
+from song_agent.application.http_ports.delivery import DistributionTarget
+from song_agent.platform.contracts.documents import JsonDocument
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class DeliveryRoutesGetOrRefreshDistributionQa(DeliveryRouteContext):
-    def _get_or_refresh_distribution_qa(self, release_id: str, target: Any, *, refresh: bool) -> ImplementationDocument:
+    def _get_or_refresh_distribution_qa(
+        self,
+        release_id: str,
+        target: DistributionTarget,
+        *,
+        refresh: bool,
+    ) -> JsonDocument:
         if not refresh:
             existing = self.distribution_store.read_qa(release_id, target.target_id, default={})
             if existing:

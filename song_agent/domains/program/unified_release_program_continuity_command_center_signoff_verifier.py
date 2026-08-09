@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_int, _as_list
 
 import json as json
 import re as re
@@ -476,7 +476,7 @@ def _current_command_center_checks(
             _check("urpcccs_current_verification_package_type", external.get("package_type") == UNIFIED_RELEASE_PROGRAM_CONTINUITY_COMMAND_CENTER_VERIFICATION_PACKAGE_TYPE, "Current verification report package type is valid."),
             _check("urpcccs_current_verification_status", external.get("status") == "passed", "Current verification report passed."),
             _check("urpcccs_current_runtime_status", runtime.get("status") == "passed", "Current Command Center runtime verification passed.", {"blockers": runtime.get("blockers") or []}),
-            _check("urpcccs_current_external_report_binding", external.get("zip_sha256") == runtime.get("zip_sha256") == actual["command_center_zip_sha256"] and int(external.get("zip_size_bytes") or -1) == actual["command_center_zip_size_bytes"] and external.get("manifest_hash") == runtime.get("manifest_hash"), "External verification report binds the current Command Center ZIP."),
+            _check("urpcccs_current_external_report_binding", external.get("zip_sha256") == runtime.get("zip_sha256") == actual["command_center_zip_sha256"] and _as_int(external.get("zip_size_bytes") or -1) == actual["command_center_zip_size_bytes"] and external.get("manifest_hash") == runtime.get("manifest_hash"), "External verification report binds the current Command Center ZIP."),
             _check("urpcccs_current_evidence_integrity", _integrity_ok(evidence), "Current evidence manifest integrity is valid."),
             _check("urpcccs_current_generation_signed", current_state.get("current") is True and current_state.get("acceptance_status") == "signed", "Current generation is signed."),
         ]

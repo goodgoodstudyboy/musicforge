@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document
+from song_agent.platform.contracts import JsonDocument, JsonValue
 
 import json
 import re
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
-from song_agent.platform.contracts.packages import PackageSpec
+from song_agent.platform.contracts.documents import normalize_json_document
+from song_agent.platform.contracts.packages import PackageSpec, SemanticVerificationContext
 from song_agent.platform.verification.hashing import integrity_ok, sha256_file
 from song_agent.platform.verification.manifest import manifest_file_checks
 from song_agent.platform.verification.model import build_check, build_verification_report, has_blocking_failures
@@ -21,26 +22,41 @@ from song_agent.platform.verification.zip_security import (
 )
 
 
+class PackageEnvelopeReport(TypedDict):
+    schema_version: int
+    package_type: str
+    status: str
+    zip_sha256: JsonValue
+    zip_size_bytes: JsonValue
+    manifest_hash: JsonValue
+    source_hash: JsonValue
+    summary: JsonDocument
+    checks: list[JsonDocument]
+    blockers: list[str]
+    warnings: list[str]
+    integrity_hash: str
+
+
 def verify_package_envelope(
     zip_path: Path | str,
     spec: PackageSpec,
     *,
     strict: bool = True,
-) -> dict[str, Any]:
+) -> PackageEnvelopeReport:
     target = Path(zip_path)
-    checks: list[dict[str, Any]] = []
+    checks: list[JsonDocument] = []
     target_is_file = target.is_file()
-    summary: dict[str, Any] = {
+    summary: JsonDocument = {
         "zip_sha256": sha256_file(target) if target_is_file else "",
         "zip_size_bytes": target.stat().st_size if target_is_file else 0,
         "manifest_hash": None,
     }
     checks.append(build_check(f"{spec.check_prefix}_zip_exists", target_is_file, "Package ZIP exists."))
     if not target_is_file:
-        return build_verification_report(package_type=spec.verification_package_type, checks=checks, summary=summary)
+        return cast(PackageEnvelopeReport, build_verification_report(package_type=spec.verification_package_type, checks=checks, summary=summary))
     checks.extend(_outer_archive_checks(target, spec))
     if has_blocking_failures(checks):
-        return build_verification_report(package_type=spec.verification_package_type, checks=checks, summary=summary)
+        return cast(PackageEnvelopeReport, build_verification_report(package_type=spec.verification_package_type, checks=checks, summary=summary))
     try:
         with zipfile.ZipFile(target) as archive:
             infos = archive.infolist()
@@ -51,18 +67,28 @@ def verify_package_envelope(
             summary["manifest_hash"] = manifest.get("integrity_hash")
             checks.append(archive_redaction_check(archive, names, check_id=f"{spec.check_prefix}_redaction_scan", suffixes=spec.redaction_suffixes))
             if spec.semantic_verifier and not has_blocking_failures(checks):
-                checks.extend(spec.semantic_verifier({"archive": archive, "manifest": manifest, "names": names, "summary": summary, "strict": strict}))
+                context: SemanticVerificationContext = {
+                    "archive": archive,
+                    "manifest": manifest,
+                    "names": names,
+                    "summary": summary,
+                    "strict": strict,
+                }
+                checks.extend(spec.semantic_verifier(context))
     except (OSError, zipfile.BadZipFile, ValueError) as exc:
         checks.append(build_check(f"{spec.check_prefix}_zip_readable", False, "Package ZIP is readable.", {"error_type": type(exc).__name__}))
-    return build_verification_report(
-        package_type=spec.verification_package_type,
-        checks=checks,
-        summary=summary,
-        schema_version=spec.schema_version,
+    return cast(
+        PackageEnvelopeReport,
+        build_verification_report(
+            package_type=spec.verification_package_type,
+            checks=checks,
+            summary=summary,
+            schema_version=spec.schema_version,
+        ),
     )
 
 
-def _outer_archive_checks(target: Path, spec: PackageSpec) -> list[ImplementationDocument]:
+def _outer_archive_checks(target: Path, spec: PackageSpec) -> list[JsonDocument]:
     raw_unsafe = raw_unsafe_entry_names(target)
     return [
         build_check(f"{spec.check_prefix}_zip_size", target.stat().st_size <= spec.max_zip_size_mb * 1024 * 1024, "ZIP size is within limit."),
@@ -71,7 +97,7 @@ def _outer_archive_checks(target: Path, spec: PackageSpec) -> list[Implementatio
     ]
 
 
-def _entry_structure_checks(infos: list[zipfile.ZipInfo], names: list[str], spec: PackageSpec) -> list[ImplementationDocument]:
+def _entry_structure_checks(infos: list[zipfile.ZipInfo], names: list[str], spec: PackageSpec) -> list[JsonDocument]:
     name_set = set(names)
     duplicates = sorted({name for name in names if names.count(name) > 1})
     unsafe = sorted(name for name in names if not is_safe_zip_entry(name))
@@ -104,16 +130,16 @@ def _read_and_check_manifest(
     archive: zipfile.ZipFile,
     name_set: set[str],
     spec: PackageSpec,
-) -> tuple[ImplementationDocument, list[ImplementationDocument]]:
-    manifest: dict[str, Any] = {}
-    checks: list[dict[str, Any]] = []
+) -> tuple[JsonDocument, list[JsonDocument]]:
+    manifest: JsonDocument = {}
+    checks: list[JsonDocument] = []
     if spec.manifest_entry not in name_set:
         if spec.manifest_entry:
             checks.append(build_check(f"{spec.check_prefix}_manifest_required", False, "Manifest entry exists."))
         return manifest, checks
     try:
         value = json.loads(archive.read(spec.manifest_entry).decode("utf-8"))
-        manifest = _as_document(value)
+        manifest = normalize_json_document(value) if isinstance(value, dict) else {}
     except (UnicodeDecodeError, json.JSONDecodeError, KeyError) as exc:
         checks.append(build_check(f"{spec.check_prefix}_manifest_json", False, "Manifest is valid JSON.", {"error_type": type(exc).__name__}))
     checks.extend([

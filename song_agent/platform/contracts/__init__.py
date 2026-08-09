@@ -1,7 +1,25 @@
 """Versioned contracts shared across MusicForge domains."""
 
-from song_agent.platform.contracts.coercion import as_document, as_float, as_int, as_list, as_path, as_text, document_or, list_or
-from song_agent.platform.contracts.documents import ImplementationDocument, JsonDocument, JsonPrimitive, JsonValue
+from song_agent.platform.contracts.coercion import (
+    as_document,
+    as_documents,
+    as_float,
+    as_int,
+    as_list,
+    as_path,
+    as_string_list,
+    as_text,
+    document_or,
+    list_or,
+)
+from song_agent.platform.contracts.documents import (
+    JsonDocument,
+    JsonPrimitive,
+    JsonValue,
+    is_json_document,
+    is_json_document_list,
+    is_json_value,
+)
 from song_agent.platform.contracts.errors import DomainError
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.contracts.evidence_manifest import ExternalEvidenceManifest
@@ -22,7 +40,6 @@ __all__ = [
     "EvidenceRef",
     "ExternalEvidenceManifest",
     "GenerationRef",
-    "ImplementationDocument",
     "JsonDocument",
     "JsonPrimitive",
     "JsonValue",
@@ -38,11 +55,16 @@ __all__ = [
     "ResetAuthorization",
     "SignoffRef",
     "as_document",
+    "as_documents",
     "as_float",
     "as_int",
     "as_list",
     "as_path",
+    "as_string_list",
     "as_text",
     "document_or",
     "list_or",
+    "is_json_document",
+    "is_json_document_list",
+    "is_json_value",
 ]

@@ -1,104 +1,13 @@
-from __future__ import annotations
+
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
-
-from typing import Any as _InterfaceType
-
-from song_agent.interfaces.cli.bindings import BINDINGS as CLI_BINDINGS
+from song_agent.platform.contracts.coercion import as_list as _as_list
+from song_agent.platform.contracts.documents import JsonDocument
 
 from . import dependencies as _commands_release_check_parts_dependencies
 
-from .cross_domain_adapters import _add_ga_unified_command_center_evidence_args
-Any, CommandSpec, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, build_ga_readiness_report, generate_request, json, load_provider_config, os, print_release_check_report, provider_configured, read_json, release_check_definitions_as_dicts, release_check_profiles, run_release_check_matrix, select_check_definitions, sys, test_provider_config, verify_ga_readiness_report, write_ga_readiness_report, write_ga_readiness_verification_report, write_interface_document, write_json, write_json_report, write_timing_report = _commands_release_check_parts_dependencies.Any, _commands_release_check_parts_dependencies.CommandSpec, _commands_release_check_parts_dependencies.Path, _commands_release_check_parts_dependencies.ProviderConfig, _commands_release_check_parts_dependencies.ProviderError, _commands_release_check_parts_dependencies.SongRequest, _commands_release_check_parts_dependencies.argparse, _commands_release_check_parts_dependencies.build_auth_config, _commands_release_check_parts_dependencies.build_ga_readiness_report, _commands_release_check_parts_dependencies.generate_request, _commands_release_check_parts_dependencies.json, _commands_release_check_parts_dependencies.load_provider_config, _commands_release_check_parts_dependencies.os, _commands_release_check_parts_dependencies.print_release_check_report, _commands_release_check_parts_dependencies.provider_configured, _commands_release_check_parts_dependencies.read_json, _commands_release_check_parts_dependencies.release_check_definitions_as_dicts, _commands_release_check_parts_dependencies.release_check_profiles, _commands_release_check_parts_dependencies.run_release_check_matrix, _commands_release_check_parts_dependencies.select_check_definitions, _commands_release_check_parts_dependencies.sys, _commands_release_check_parts_dependencies.test_provider_config, _commands_release_check_parts_dependencies.verify_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_verification_report, _commands_release_check_parts_dependencies.write_interface_document, _commands_release_check_parts_dependencies.write_json, _commands_release_check_parts_dependencies.write_json_report, _commands_release_check_parts_dependencies.write_timing_report
-def print_acceptance_fix_plan_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_fix_plan_result(*args, **kwargs)
-
-def print_acceptance_fix_sprint_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_fix_sprint_result(*args, **kwargs)
-
-def print_acceptance_kb_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_kb_result(*args, **kwargs)
-
-def print_planning_rule_governance_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_rule_governance_result(*args, **kwargs)
-
-def print_planning_rule_impact_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_rule_impact_result(*args, **kwargs)
-
-def print_planning_ruleset_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_ruleset_result(*args, **kwargs)
-
-def print_planning_simulation_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_simulation_result(*args, **kwargs)
-
-def print_public_trust_center_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_public_trust_center_result(*args, **kwargs)
-
-def print_release_audio_review_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_release_audio_review_result(*args, **kwargs)
-
-def print_release_operations_archive_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_archive_result(*args, **kwargs)
-
-def print_release_operations_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_audit_result(*args, **kwargs)
-
-def print_release_operations_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_result(*args, **kwargs)
-
-def print_release_operations_reviewer_pack_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_reviewer_pack_result(*args, **kwargs)
-
-def print_release_operations_runbook_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_runbook_result(*args, **kwargs)
-
-def print_release_operations_signoff_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_signoff_result(*args, **kwargs)
-
-def print_release_portfolio_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_audit_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_accepted_evidence_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_accepted_evidence_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_portal_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_portal_review_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_review_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_registry_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_registry_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_transparency_acknowledgement_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_acknowledgement_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_transparency_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_result(*args, **kwargs)
-
-def print_release_portfolio_governance_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_audit_result(*args, **kwargs)
-
-def print_release_portfolio_governance_evidence_vault_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_evidence_vault_result(*args, **kwargs)
-
-def print_release_portfolio_governance_final_board_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_final_board_result(*args, **kwargs)
-
-def print_release_portfolio_governance_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_result(*args, **kwargs)
-
-def print_release_portfolio_governance_reviewer_pack_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_reviewer_pack_result(*args, **kwargs)
-
-def print_release_portfolio_governance_signoff_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_signoff_result(*args, **kwargs)
-
-def run_acceptance_check(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.run_acceptance_check(*args, **kwargs)
+from song_agent.interfaces.cli.commands.program_parts.program_evidence_args_and_adapters import _add_ga_unified_command_center_evidence_args
+CommandSpec, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, build_ga_readiness_report, generate_request, json, load_provider_config, os, print_release_check_report, provider_configured, read_json, release_check_definitions_as_dicts, release_check_profiles, run_release_check_matrix, select_check_definitions, sys, test_provider_config, verify_ga_readiness_report, write_ga_readiness_report, write_ga_readiness_verification_report, write_interface_document, write_json, write_json_report, write_timing_report = _commands_release_check_parts_dependencies.CommandSpec, _commands_release_check_parts_dependencies.Path, _commands_release_check_parts_dependencies.ProviderConfig, _commands_release_check_parts_dependencies.ProviderError, _commands_release_check_parts_dependencies.SongRequest, _commands_release_check_parts_dependencies.argparse, _commands_release_check_parts_dependencies.build_auth_config, _commands_release_check_parts_dependencies.build_ga_readiness_report, _commands_release_check_parts_dependencies.generate_request, _commands_release_check_parts_dependencies.json, _commands_release_check_parts_dependencies.load_provider_config, _commands_release_check_parts_dependencies.os, _commands_release_check_parts_dependencies.print_release_check_report, _commands_release_check_parts_dependencies.provider_configured, _commands_release_check_parts_dependencies.read_json, _commands_release_check_parts_dependencies.release_check_definitions_as_dicts, _commands_release_check_parts_dependencies.release_check_profiles, _commands_release_check_parts_dependencies.run_release_check_matrix, _commands_release_check_parts_dependencies.select_check_definitions, _commands_release_check_parts_dependencies.sys, _commands_release_check_parts_dependencies.test_provider_config, _commands_release_check_parts_dependencies.verify_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_report, _commands_release_check_parts_dependencies.write_ga_readiness_verification_report, _commands_release_check_parts_dependencies.write_interface_document, _commands_release_check_parts_dependencies.write_json, _commands_release_check_parts_dependencies.write_json_report, _commands_release_check_parts_dependencies.write_timing_report
 
 def build_release_check_parser() -> argparse.ArgumentParser:
     pass
@@ -263,7 +172,7 @@ def build_verify_ga_readiness_parser() -> argparse.ArgumentParser:
     parser.add_argument("--release-check-ga-report", type=Path, default=None, help="External ga release-check JSON report.")
     return parser
 
-def print_ga_readiness_report(report: dict[str, _InterfaceType]) -> None:
+def print_ga_readiness_report(report: JsonDocument) -> None:
     print("MusicForge GA readiness")
     print(f"status: {report.get('status')}")
     summary = _as_document(report.get("summary"))
@@ -278,13 +187,13 @@ def print_ga_readiness_report(report: dict[str, _InterfaceType]) -> None:
         "git_status",
     ):
         print(f"{key}: {summary.get(key, 'unknown')}")
-    for check in report.get("checks") or []:
+    for check in _as_list(report.get("checks")):
         if not isinstance(check, dict):
             continue
         print(f"{check.get('check_id')}: {check.get('status')} ({check.get('severity')})")
         if check.get("message"):
             print(f"  {check.get('message')}")
-    actions = [item for item in report.get("next_actions") or [] if isinstance(item, dict)]
+    actions = [item for item in _as_list(report.get("next_actions")) if isinstance(item, dict)]
     if actions:
         print("next actions:")
         for item in actions[:10]:
@@ -298,5 +207,3 @@ def _warn_legacy_ga_flags(argv: list[str]) -> None:
             + ", ".join(legacy),
             file=sys.stderr,
         )
-
-__all__ = ('print_acceptance_fix_plan_result', 'print_acceptance_fix_sprint_result', 'print_acceptance_kb_result', 'print_planning_rule_governance_result', 'print_planning_rule_impact_result', 'print_planning_ruleset_result', 'print_planning_simulation_result', 'print_public_trust_center_result', 'print_release_audio_review_result', 'print_release_operations_archive_result', 'print_release_operations_audit_result', 'print_release_operations_result', 'print_release_operations_reviewer_pack_result', 'print_release_operations_runbook_result', 'print_release_operations_signoff_result', 'print_release_portfolio_audit_result', 'print_release_portfolio_governance_attestation_accepted_evidence_result', 'print_release_portfolio_governance_attestation_portal_result', 'print_release_portfolio_governance_attestation_portal_review_result', 'print_release_portfolio_governance_attestation_registry_result', 'print_release_portfolio_governance_attestation_result', 'print_release_portfolio_governance_attestation_transparency_acknowledgement_result', 'print_release_portfolio_governance_attestation_transparency_result', 'print_release_portfolio_governance_audit_result', 'print_release_portfolio_governance_evidence_vault_result', 'print_release_portfolio_governance_final_board_result', 'print_release_portfolio_governance_result', 'print_release_portfolio_governance_reviewer_pack_result', 'print_release_portfolio_governance_signoff_result', 'run_acceptance_check', 'build_release_check_parser', 'build_ga_check_parser', 'build_verify_ga_readiness_parser', 'print_ga_readiness_report', '_warn_legacy_ga_flags')

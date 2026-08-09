@@ -6,12 +6,15 @@ from song_agent.platform.contracts.lifecycle import ResetAuthorization, SignoffR
 from song_agent.platform.lifecycle.archive import ArchiveBuilder
 from song_agent.platform.lifecycle.change_control import ChangeRequestService, ResetService
 from song_agent.platform.lifecycle.event_ledger import HistoryChain
-from song_agent.platform.lifecycle.registry import active_lifecycle_registry
+from song_agent.platform.lifecycle.registry import LifecycleCapabilityRegistry
 from song_agent.platform.lifecycle.signoff import SignoffService
 from song_agent.platform.verification.hashing import integrity_hash
 
 
-def run_active_lifecycle_attack_corpus(root: Path) -> dict[str, object]:
+def run_active_lifecycle_attack_corpus(
+    root: Path,
+    registry: LifecycleCapabilityRegistry,
+) -> dict[str, object]:
     root.mkdir(parents=True, exist_ok=True)
     history = HistoryChain(root / "history.jsonl")
     signoff = SignoffService.seal(
@@ -38,7 +41,7 @@ def run_active_lifecycle_attack_corpus(root: Path) -> dict[str, object]:
     full_resign_blocked = _full_resign_blocked(root, reference)
     stale_snapshot_blocked = _stale_snapshot_blocked(root)
     cr_reuse_blocked = _cr_reuse_blocked()
-    adoption = active_lifecycle_registry.adoption_report()
+    adoption = registry.adoption_report()
     results = {
         "signoff_pair": valid_pair,
         "history_binding": valid_history,

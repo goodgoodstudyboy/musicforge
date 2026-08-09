@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import ast
+import json
 from dataclasses import dataclass
 from pathlib import Path
+
+from song_agent.platform.verification.hashing import integrity_ok
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,12 @@ CONTEXT_SPECS = (
 
 
 def adopt_composition_types(root: Path, *, write: bool) -> dict[str, object]:
+    if _retired_by_wave1(root):
+        return {
+            "changed_files": [],
+            "contexts": {},
+            "status": "retired_by_v14.4_wave1",
+        }
     changed: list[str] = []
     contexts: dict[str, int] = {}
     for spec in CONTEXT_SPECS:
@@ -74,6 +83,22 @@ def adopt_composition_types(root: Path, *, write: bool) -> dict[str, object]:
             if write:
                 path.write_text(updated, encoding="utf-8")
     return {"changed_files": sorted(set(changed)), "contexts": contexts}
+
+
+def _retired_by_wave1(root: Path) -> bool:
+    path = root / "architecture-v14.4-wave1-surface-migration.json"
+    if not path.is_file():
+        return False
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return (
+        document.get("package_type") == "musicforge_v144_wave1_surface_migration"
+        and document.get("migration_id") == "v14.4-wave1-platform-application-interfaces"
+        and document.get("status") == "candidate"
+        and integrity_ok(document)
+    )
 
 
 def _leaf_classes(path: Path, context_class: str, *, include_classes_with_bases: bool) -> tuple[str, ...]:

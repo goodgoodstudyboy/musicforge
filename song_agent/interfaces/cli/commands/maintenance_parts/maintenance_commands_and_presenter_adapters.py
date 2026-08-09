@@ -1,106 +1,18 @@
-from __future__ import annotations
+from argparse import ArgumentParser, Namespace
 
-from typing import Any as _InterfaceType
-
-from song_agent.platform.contracts.documents import ImplementationDocument
-
-from song_agent.interfaces.cli.bindings import BINDINGS as CLI_BINDINGS
+from song_agent.application.maintenance import MAINTENANCE_CHECK_PROFILES
+from song_agent.interfaces.bootstrap.maintenance import build_maintenance_application
+from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.coercion import as_list as _as_list
+from song_agent.platform.contracts.documents import JsonDocument
+from song_agent.platform.contracts.documents import normalize_json_document
 
 from . import dependencies as _commands_maintenance_parts_dependencies
 
-from .cross_domain_adapters import _writable_status
-Any, CommandSpec, LTSMaintenanceStore, MAINTENANCE_PROFILES, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, generate_request, json, load_provider_config, maintenance_backup_verification_exit_code, os, print_maintenance_backup_verification_report, provider_configured, read_json, sys, test_provider_config, verify_maintenance_backup_zip, write_interface_document, write_json, write_maintenance_backup_verification_report = _commands_maintenance_parts_dependencies.Any, _commands_maintenance_parts_dependencies.CommandSpec, _commands_maintenance_parts_dependencies.LTSMaintenanceStore, _commands_maintenance_parts_dependencies.MAINTENANCE_PROFILES, _commands_maintenance_parts_dependencies.Path, _commands_maintenance_parts_dependencies.ProviderConfig, _commands_maintenance_parts_dependencies.ProviderError, _commands_maintenance_parts_dependencies.SongRequest, _commands_maintenance_parts_dependencies.argparse, _commands_maintenance_parts_dependencies.build_auth_config, _commands_maintenance_parts_dependencies.generate_request, _commands_maintenance_parts_dependencies.json, _commands_maintenance_parts_dependencies.load_provider_config, _commands_maintenance_parts_dependencies.maintenance_backup_verification_exit_code, _commands_maintenance_parts_dependencies.os, _commands_maintenance_parts_dependencies.print_maintenance_backup_verification_report, _commands_maintenance_parts_dependencies.provider_configured, _commands_maintenance_parts_dependencies.read_json, _commands_maintenance_parts_dependencies.sys, _commands_maintenance_parts_dependencies.test_provider_config, _commands_maintenance_parts_dependencies.verify_maintenance_backup_zip, _commands_maintenance_parts_dependencies.write_interface_document, _commands_maintenance_parts_dependencies.write_json, _commands_maintenance_parts_dependencies.write_maintenance_backup_verification_report
-def print_acceptance_fix_sprint_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_fix_sprint_result(*args, **kwargs)
+from song_agent.interfaces.cli.commands.studio import _writable_status
+CommandSpec, LTSMaintenanceStore, MAINTENANCE_PROFILES, Path, ProviderConfig, ProviderError, SongRequest, argparse, build_auth_config, generate_request, json, load_provider_config, maintenance_backup_verification_exit_code, os, print_maintenance_backup_verification_report, provider_configured, read_json, sys, test_provider_config, verify_maintenance_backup_zip, write_interface_document, write_json, write_maintenance_backup_verification_report = _commands_maintenance_parts_dependencies.CommandSpec, _commands_maintenance_parts_dependencies.LTSMaintenanceStore, _commands_maintenance_parts_dependencies.MAINTENANCE_PROFILES, _commands_maintenance_parts_dependencies.Path, _commands_maintenance_parts_dependencies.ProviderConfig, _commands_maintenance_parts_dependencies.ProviderError, _commands_maintenance_parts_dependencies.SongRequest, _commands_maintenance_parts_dependencies.argparse, _commands_maintenance_parts_dependencies.build_auth_config, _commands_maintenance_parts_dependencies.generate_request, _commands_maintenance_parts_dependencies.json, _commands_maintenance_parts_dependencies.load_provider_config, _commands_maintenance_parts_dependencies.maintenance_backup_verification_exit_code, _commands_maintenance_parts_dependencies.os, _commands_maintenance_parts_dependencies.print_maintenance_backup_verification_report, _commands_maintenance_parts_dependencies.provider_configured, _commands_maintenance_parts_dependencies.read_json, _commands_maintenance_parts_dependencies.sys, _commands_maintenance_parts_dependencies.test_provider_config, _commands_maintenance_parts_dependencies.verify_maintenance_backup_zip, _commands_maintenance_parts_dependencies.write_interface_document, _commands_maintenance_parts_dependencies.write_json, _commands_maintenance_parts_dependencies.write_maintenance_backup_verification_report
 
-def print_acceptance_kb_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_acceptance_kb_result(*args, **kwargs)
-
-def print_ga_readiness_report(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.release_check.print_ga_readiness_report(*args, **kwargs)
-
-def print_planning_rule_governance_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_rule_governance_result(*args, **kwargs)
-
-def print_planning_rule_impact_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_rule_impact_result(*args, **kwargs)
-
-def print_planning_ruleset_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_ruleset_result(*args, **kwargs)
-
-def print_planning_simulation_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_planning_simulation_result(*args, **kwargs)
-
-def print_public_trust_center_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_public_trust_center_result(*args, **kwargs)
-
-def print_release_audio_review_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.print_release_audio_review_result(*args, **kwargs)
-
-def print_release_operations_archive_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_archive_result(*args, **kwargs)
-
-def print_release_operations_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_audit_result(*args, **kwargs)
-
-def print_release_operations_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_result(*args, **kwargs)
-
-def print_release_operations_reviewer_pack_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_reviewer_pack_result(*args, **kwargs)
-
-def print_release_operations_runbook_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_runbook_result(*args, **kwargs)
-
-def print_release_operations_signoff_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.delivery.print_release_operations_signoff_result(*args, **kwargs)
-
-def print_release_portfolio_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_audit_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_accepted_evidence_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_accepted_evidence_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_portal_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_portal_review_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_portal_review_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_registry_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_registry_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_transparency_acknowledgement_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_acknowledgement_result(*args, **kwargs)
-
-def print_release_portfolio_governance_attestation_transparency_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_attestation_transparency_result(*args, **kwargs)
-
-def print_release_portfolio_governance_audit_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_audit_result(*args, **kwargs)
-
-def print_release_portfolio_governance_evidence_vault_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_evidence_vault_result(*args, **kwargs)
-
-def print_release_portfolio_governance_final_board_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_final_board_result(*args, **kwargs)
-
-def print_release_portfolio_governance_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_result(*args, **kwargs)
-
-def print_release_portfolio_governance_reviewer_pack_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_reviewer_pack_result(*args, **kwargs)
-
-def print_release_portfolio_governance_signoff_result(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.trust.print_release_portfolio_governance_signoff_result(*args, **kwargs)
-
-def run_acceptance_check(*args: _InterfaceType, **kwargs: _InterfaceType) -> _InterfaceType:
-    return CLI_BINDINGS.quality.run_acceptance_check(*args, **kwargs)
-
-def build_doctor_parser() -> argparse.ArgumentParser:
+def build_doctor_parser() -> ArgumentParser:
     doctor_parser = argparse.ArgumentParser(description="Check the local MusicForge setup.")
     doctor_parser.add_argument(
         "--provider-test",
@@ -109,7 +21,7 @@ def build_doctor_parser() -> argparse.ArgumentParser:
     )
     return doctor_parser
 
-def build_maintenance_parser() -> argparse.ArgumentParser:
+def build_maintenance_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage local MusicForge LTS maintenance, backups, upgrades, and checks.")
     subparsers = parser.add_subparsers(dest="section", required=True)
 
@@ -161,14 +73,14 @@ def build_maintenance_parser() -> argparse.ArgumentParser:
     check_list = check_sub.add_parser("list", help="List maintenance check profiles and prior runs.")
     check_list.add_argument("--json", action="store_true")
     check_run = check_sub.add_parser("run", help="Run a maintenance check profile.")
-    check_run.add_argument("--profile", choices=["daily", "weekly", "release", "emergency"], default="daily")
+    check_run.add_argument("--profile", choices=MAINTENANCE_CHECK_PROFILES, default="daily")
     check_run.add_argument("--json", action="store_true")
     check_show = check_sub.add_parser("show", help="Show a maintenance check report.")
     check_show.add_argument("--check-id", required=True)
     check_show.add_argument("--json", action="store_true")
     return parser
 
-def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
+def build_verify_maintenance_backup_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser(description="Verify a MusicForge LTS maintenance backup ZIP.")
     parser.add_argument("zip_path", type=Path, help="Path to musicforge-maintenance-backup.zip.")
     parser.add_argument("--json", action="store_true", help="Print the full verification report as JSON.")
@@ -179,26 +91,35 @@ def build_verify_maintenance_backup_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-entry-count", type=int, default=20000)
     return parser
 
-def _run_maintenance_command(args: argparse.Namespace) -> ImplementationDocument:
+def _run_maintenance_command(args: Namespace) -> JsonDocument:
     pass
 
-    store = LTSMaintenanceStore()
+    application = build_maintenance_application(Path.cwd())
     if args.section == "status":
-        return store.status()
+        return application.status()
     if args.section == "backup":
         if args.backup_action == "create":
-            result = store.backups.create_backup(mode=args.mode)
-            return {"status": result.get("verification", {}).get("status") or "unknown", **result}
+            result = application.create_backup(args.mode)
+            verification = _as_document(result.get("verification"))
+            return normalize_json_document(
+                {"status": verification.get("status") or "unknown", **result}
+            )
         if args.backup_action == "list":
-            return {"status": "passed", "backups": store.backups.list_backups()}
+            return normalize_json_document(
+                {"status": "passed", "backups": application.list_backups()}
+            )
         if args.backup_action == "verify":
-            verification = store.backups.verify_backup(args.backup_id)
+            verification = application.verify_backup(args.backup_id)
             return {"status": verification.get("status"), "backup_id": args.backup_id, "verification": verification}
         if args.backup_action == "restore-plan":
-            plan = store.backups.restore_plan(backup_id=args.backup_id, zip_path=args.zip_path, target=args.target)
+            plan = application.restore_plan(
+                backup_id=args.backup_id,
+                zip_path=args.zip_path,
+                target=args.target,
+            )
             return {"status": plan.get("status"), "restore_plan": plan}
         if args.backup_action == "restore":
-            result = store.backups.restore(
+            result = application.restore_backup(
                 backup_id=args.backup_id,
                 zip_path=args.zip_path,
                 target=args.target,
@@ -208,50 +129,64 @@ def _run_maintenance_command(args: argparse.Namespace) -> ImplementationDocument
             )
             return {"status": result.get("status"), **result}
     if args.section == "upgrade" and args.upgrade_action == "preflight":
-        report = store.run_upgrade_preflight(target_version=args.target_version, require_verified_backup=args.require_verified_backup, allow_dirty=args.allow_dirty)
+        report = application.run_upgrade_preflight(
+            target_version=args.target_version,
+            require_verified_backup=args.require_verified_backup,
+            allow_dirty=args.allow_dirty,
+        )
         return {"status": report.get("status"), "preflight": report}
     if args.section == "migration":
         if args.migration_action == "status":
-            return {"status": "passed", "migration": store.migration_status()}
+            return {"status": "passed", "migration": application.migration_status()}
         if args.migration_action == "plan":
-            return {"status": "passed", "migration_plan": store.migration_plan()}
+            return {"status": "passed", "migration_plan": application.migration_plan()}
         if args.migration_action == "run":
-            result = store.run_migrations(require_backup=args.require_backup)
+            result = application.run_migrations(require_backup=args.require_backup)
             return {"status": "passed", **result}
     if args.section == "check":
         if args.check_action == "list":
-            return {"status": "passed", "profiles": sorted(MAINTENANCE_PROFILES), "runs": store.list_check_runs()}
+            return normalize_json_document(
+                {
+                    "status": "passed",
+                    "profiles": list(MAINTENANCE_CHECK_PROFILES),
+                    "runs": application.list_check_runs(),
+                }
+            )
         if args.check_action == "run":
-            report = store.run_check(profile=args.profile)
+            report = application.run_check(args.profile)
             return {"status": report.get("status"), "report": report}
         if args.check_action == "show":
-            path = store.check_runs_dir / args.check_id / "maintenance-check-report.json"
-            return {"status": "passed", "report": read_json(path)}
+            return {"status": "passed", "report": application.read_check(args.check_id)}
     raise ValueError("Unsupported maintenance command.")
 
-def _print_maintenance_result(result: ImplementationDocument, *, json_output: bool) -> None:
+def _print_maintenance_result(result: JsonDocument, *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
-    status = result.get("status") or result.get("report", {}).get("status") or result.get("verification", {}).get("status") or "unknown"
+    report = _as_document(result.get("report"))
+    verification = _as_document(result.get("verification"))
+    status = result.get("status") or report.get("status") or verification.get("status") or "unknown"
     print(f"MusicForge LTS Maintenance: {status}")
     if "backup" in result:
-        backup = result.get("backup") or {}
+        backup = _as_document(result.get("backup"))
         print(f"backup: {backup.get('backup_id')} {backup.get('verification_status') or backup.get('status')}")
     if "verification" in result:
-        verification = result.get("verification") or {}
-        print(f"verification: {verification.get('status')} blockers={(verification.get('summary') or {}).get('blocker_count')}")
+        verification = _as_document(result.get("verification"))
+        print(
+            f"verification: {verification.get('status')} "
+            f"blockers={_as_document(verification.get('summary')).get('blocker_count')}"
+        )
     if "restore_plan" in result:
-        plan = result.get("restore_plan") or {}
-        print(f"restore plan: {plan.get('status')} actions={len(plan.get('actions') or [])}")
+        plan = _as_document(result.get("restore_plan"))
+        print(f"restore plan: {plan.get('status')} actions={len(_as_list(plan.get('actions')))}")
     if "preflight" in result:
-        preflight = result.get("preflight") or {}
+        preflight = _as_document(result.get("preflight"))
         print(f"preflight: {preflight.get('preflight_id')} {preflight.get('status')}")
     if "migration" in result:
-        migration = result.get("migration") or {}
-        print(f"migration: {migration.get('status')} applied={len(migration.get('applied') or [])}")
+        migration = _as_document(result.get("migration"))
+        print(f"migration: {migration.get('status')} applied={len(_as_list(migration.get('applied')))}")
     if "report" in result:
-        report = result.get("report") or {}
+        report = _as_document(result.get("report"))
         print(f"report: {report.get('check_id')} {report.get('profile')} {report.get('status')}")
 
 def run_doctor(*, provider_test: bool = False) -> None:
@@ -305,7 +240,12 @@ def _execute_maintenance(argv: list[str]) -> None:
     args = parser.parse_args(raw_args[1:])
     result = _run_maintenance_command(args)
     _print_maintenance_result(result, json_output=bool(getattr(args, "json", False)))
-    status = str(result.get("status") or result.get("report", {}).get("status") or result.get("verification", {}).get("status") or "")
+    status = str(
+        result.get("status")
+        or _as_document(result.get("report")).get("status")
+        or _as_document(result.get("verification")).get("status")
+        or ""
+    )
     if status in {"blocked", "failed"}:
         raise SystemExit(1)
     return
@@ -316,7 +256,6 @@ def handle_maintenance(argv: list[str]) -> None:
 def _execute_verify_maintenance_backup(argv: list[str]) -> None:
     raw_args = ['verify-maintenance-backup', *argv]
     pass
-
 
     parser = build_verify_maintenance_backup_parser()
     args = parser.parse_args(raw_args[1:])
@@ -337,5 +276,3 @@ def _execute_verify_maintenance_backup(argv: list[str]) -> None:
 
 def handle_verify_maintenance_backup(argv: list[str]) -> None:
     _execute_verify_maintenance_backup(argv)
-
-__all__ = ('print_acceptance_fix_sprint_result', 'print_acceptance_kb_result', 'print_ga_readiness_report', 'print_planning_rule_governance_result', 'print_planning_rule_impact_result', 'print_planning_ruleset_result', 'print_planning_simulation_result', 'print_public_trust_center_result', 'print_release_audio_review_result', 'print_release_operations_archive_result', 'print_release_operations_audit_result', 'print_release_operations_result', 'print_release_operations_reviewer_pack_result', 'print_release_operations_runbook_result', 'print_release_operations_signoff_result', 'print_release_portfolio_audit_result', 'print_release_portfolio_governance_attestation_accepted_evidence_result', 'print_release_portfolio_governance_attestation_portal_result', 'print_release_portfolio_governance_attestation_portal_review_result', 'print_release_portfolio_governance_attestation_registry_result', 'print_release_portfolio_governance_attestation_result', 'print_release_portfolio_governance_attestation_transparency_acknowledgement_result', 'print_release_portfolio_governance_attestation_transparency_result', 'print_release_portfolio_governance_audit_result', 'print_release_portfolio_governance_evidence_vault_result', 'print_release_portfolio_governance_final_board_result', 'print_release_portfolio_governance_result', 'print_release_portfolio_governance_reviewer_pack_result', 'print_release_portfolio_governance_signoff_result', 'run_acceptance_check', 'build_doctor_parser', 'build_maintenance_parser', 'build_verify_maintenance_backup_parser', '_run_maintenance_command', '_print_maintenance_result', 'run_doctor', '_execute_doctor', 'handle_doctor', '_execute_maintenance', 'handle_maintenance', '_execute_verify_maintenance_backup', 'handle_verify_maintenance_backup')

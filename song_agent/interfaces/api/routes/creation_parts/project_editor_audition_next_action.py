@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-from typing import Any as _InterfaceType
+from song_agent.interfaces.bootstrap.api import creation_quality as _api_store_factories
 
 from song_agent.interfaces.api.route_contexts.creation import CreationRouteContext
 
-from typing import Any
-
+from song_agent.application.jobs.model import JobState
+from song_agent.application.http_ports.creation import (
+    EditorAuditionManifest,
+    EditorPreview,
+    ProjectDocument,
+    ProjectVersion,
+    SongPlan,
+)
+from song_agent.platform.contracts.documents import normalize_json_value
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
+
 
 class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
     def _handle_project_editor_audition_next_action(self, method: str, project_id: str, preview_id: str, audition_id: str, action: str) -> None:
@@ -30,23 +38,31 @@ class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
                 now=_interfaces_api_runtime._utc_now(),
             )
             result = _interfaces_api_runtime.apply_review_edit(parent_plan, review_edit)
-            validator = {"status": "passed", "checks": ["review_edit_intent", "edit_intent_validation", "song_plan_validation"], "checked_at": _interfaces_api_runtime._utc_now()}
+            validator = {
+                "status": "passed",
+                "checks": ["review_edit_intent", "edit_intent_validation", "song_plan_validation"],
+                "checked_at": _interfaces_api_runtime._utc_now(),
+            }
             if action == "review-edit-preview":
-                stored = _interfaces_api_runtime.ReviewEditStore(self.project_store.project_dir(project_id)).create_preview(
+                stored = _api_store_factories.review_edit_store(self.project_store.project_dir(project_id)).create_preview(
                     review_edit=review_edit,
                     parent_plan=parent_plan,
                     result=result,
                     validator=validator,
                     now=_interfaces_api_runtime._utc_now(),
                 )
-                self.project_store.append_event(project_id, "audition_review_edit_preview_created", {"preview_id": preview_id, "audition_id": audition_id, "review_edit_id": stored.review_edit_id})
+                self.project_store.append_event(
+                    project_id,
+                    "audition_review_edit_preview_created",
+                    {"preview_id": preview_id, "audition_id": audition_id, "review_edit_id": stored.review_edit_id},
+                )
                 self._send_json(
                     {
                         "ok": True,
                         "review_edit": stored.to_dict(),
                         "summary": _interfaces_api_runtime.review_edit_summary(stored, result),
                         "quality": result.plan.quality.to_dict() if result.plan.quality else {},
-                        "validator": validator,
+                        "validator": normalize_json_value(validator),
                     },
                     status=_interfaces_api_runtime.HTTPStatus.CREATED,
                 )
@@ -73,8 +89,22 @@ class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
                 change_summary=str(payload.get("change_summary") or f"Review edit from {audition.audition_id}"),
             )
             version = next(version for version in document.versions if version.job_id == job.job_id)
-            self.project_store.append_event(project_id, "audition_review_edit_created", {"preview_id": preview_id, "audition_id": audition_id, "version_id": version.version_id, "job_id": job.job_id})
-            self._send_json({"ok": True, **document.to_dict(), "version": version.to_dict(), "job": job.to_dict(), "review_edit": review_edit.to_dict(), "summary": _interfaces_api_runtime.review_edit_summary(review_edit, result)}, status=_interfaces_api_runtime.HTTPStatus.ACCEPTED)
+            self.project_store.append_event(
+                project_id,
+                "audition_review_edit_created",
+                {"preview_id": preview_id, "audition_id": audition_id, "version_id": version.version_id, "job_id": job.job_id},
+            )
+            self._send_json(
+                {
+                    "ok": True,
+                    **document.to_dict(),
+                    "version": version.to_dict(),
+                    "job": job.to_dict(),
+                    "review_edit": review_edit.to_dict(),
+                    "summary": _interfaces_api_runtime.review_edit_summary(review_edit, result),
+                },
+                status=_interfaces_api_runtime.HTTPStatus.ACCEPTED,
+            )
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Review edit resource not found.")
         except _interfaces_api_runtime.ReviewEditUnavailableError as exc:
@@ -85,11 +115,16 @@ class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
         except _interfaces_api_runtime.ProviderError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
 
-    def _review_edit_context(self, project_id: str, preview_id: str, audition_id: str) -> tuple[Any, Any, _InterfaceType, _InterfaceType, Any, Any, _InterfaceType]:
+    def _review_edit_context(
+        self,
+        project_id: str,
+        preview_id: str,
+        audition_id: str,
+    ) -> tuple[ProjectDocument, ProjectVersion, JobState, SongPlan, EditorPreview, EditorAuditionManifest, SongPlan]:
         project_dir = self.project_store.project_dir(project_id)
         self.project_store.get_project(project_id)
-        preview_store = _interfaces_api_runtime.EditorPreviewStore(project_dir)
-        audition_store = _interfaces_api_runtime.EditorAuditionStore(project_dir)
+        preview_store = _api_store_factories.editor_preview_store(project_dir)
+        audition_store = _api_store_factories.editor_audition_store(project_dir)
         preview = preview_store.read_preview(preview_id)
         audition = audition_store.read_audition(preview_id, audition_id)
         audition_plan = audition_store.read_plan(preview_id, audition_id)
@@ -107,7 +142,7 @@ class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
         payload = self._optional_json_body()
         try:
             _document, parent, _parent_job, parent_plan, preview, audition, audition_plan = self._review_edit_context(project_id, preview_id, audition_id)
-            task_store = _interfaces_api_runtime.ReviewTaskStore(self.project_store.project_dir(project_id))
+            task_store = _api_store_factories.review_task_store(self.project_store.project_dir(project_id))
             task = task_store.create_task(
                 project_id=project_id,
                 parent_version_id=parent.version_id,
@@ -119,12 +154,20 @@ class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
                 now=_interfaces_api_runtime._utc_now(),
             )
             self.project_store.append_event(project_id, "review_task_created", {"task_id": task.task_id, "preview_id": preview_id, "audition_id": audition_id})
-            self._send_json({"ok": True, "task": task.to_dict(), "candidates": [], "events": task_store.read_events(task.task_id)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            self._send_json(
+                {"ok": True, "task": task.to_dict(), "candidates": [], "events": normalize_json_value(task_store.read_events(task.task_id))},
+                status=_interfaces_api_runtime.HTTPStatus.CREATED,
+            )
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Review task source not found.")
         except _interfaces_api_runtime.ReviewTaskStateError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.CONFLICT, str(exc))
-        except (_interfaces_api_runtime.ReviewTaskError, _interfaces_api_runtime.EditorAuditionError, _interfaces_api_runtime.EditorPatchStaleError, ValueError) as exc:
+        except (
+            _interfaces_api_runtime.ReviewTaskError,
+            _interfaces_api_runtime.EditorAuditionError,
+            _interfaces_api_runtime.EditorPatchStaleError,
+            ValueError,
+        ) as exc:
             status = _interfaces_api_runtime.HTTPStatus.CONFLICT if "stale" in str(exc).lower() else _interfaces_api_runtime.HTTPStatus.BAD_REQUEST
             self._send_error(status, str(exc))
 
@@ -137,9 +180,16 @@ class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
             query = _interfaces_api_runtime.parse_qs(query_string)
             include_archived = _interfaces_api_runtime._query_value(query, "include_archived").lower() in {"1", "true", "yes"}
             status = _interfaces_api_runtime._query_value(query, "status") or None
-            task_store = _interfaces_api_runtime.ReviewTaskStore(self.project_store.project_dir(project_id))
+            task_store = _api_store_factories.review_task_store(self.project_store.project_dir(project_id))
             tasks = task_store.list_tasks(include_archived=include_archived, status=status)
-            self._send_json({"ok": True, "project_id": project_id, "summary": _interfaces_api_runtime.task_list_summary(tasks), "tasks": [task.to_dict() for task in tasks]})
+            self._send_json(
+                {
+                    "ok": True,
+                    "project_id": project_id,
+                    "summary": normalize_json_value(_interfaces_api_runtime.task_list_summary(tasks)),
+                    "tasks": [task.to_dict() for task in tasks],
+                }
+            )
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
         except ValueError as exc:
@@ -149,15 +199,22 @@ class CreationRoutesProjectEditorAuditionNextAction(CreationRouteContext):
         try:
             self.project_store.get_project(project_id)
             project_dir = self.project_store.project_dir(project_id)
-            sprint_store = _interfaces_api_runtime.ReviewSprintStore(project_dir)
-            task_store = _interfaces_api_runtime.ReviewTaskStore(project_dir)
+            sprint_store = _api_store_factories.review_sprint_store(project_dir)
+            task_store = _api_store_factories.review_task_store(project_dir)
             if method == "GET":
                 query = _interfaces_api_runtime.parse_qs(query_string)
                 include_archived = _interfaces_api_runtime._query_value(query, "include_archived").lower() in {"1", "true", "yes"}
                 status = _interfaces_api_runtime._query_value(query, "status") or None
                 sprints = sprint_store.list_sprints(include_archived=include_archived, status=status)
                 payloads = [self._review_sprint_public_payload(sprint_store, sprint) for sprint in sprints]
-                self._send_json({"ok": True, "project_id": project_id, "summary": _interfaces_api_runtime._review_sprints_list_summary(payloads), "sprints": payloads})
+                self._send_json(
+                    {
+                        "ok": True,
+                        "project_id": project_id,
+                        "summary": _interfaces_api_runtime._review_sprints_list_summary(payloads),
+                        "sprints": normalize_json_value(payloads),
+                    }
+                )
                 return
             if method == "POST":
                 payload = self._optional_json_body()

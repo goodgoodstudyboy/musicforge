@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
-
 import hashlib
 import json
 import shutil
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
 
+from song_agent.platform.contracts import as_documents as _as_documents, as_int as _as_int
+from song_agent.platform.contracts.documents import JsonDocument
+from song_agent.platform.contracts.documents import normalize_json_document
 from song_agent.platform.persistence.database import MusicForgeDatabase, SCHEMA_VERSION
 from song_agent.platform.persistence.file_artifacts import sha256_path, stable_tree_hash
 from song_agent.platform.persistence.locks import WorkspaceLock
@@ -33,12 +34,12 @@ class LegacyWorkspaceMigrator:
         self.legacy_roots = tuple(_safe_legacy_root(value) for value in legacy_roots)
         self.migration_root = self.workspace_root / "state" / "migrations"
 
-    def dry_run(self) -> dict[str, Any]:
+    def dry_run(self) -> JsonDocument:
         files = self._source_files()
         source_hash = stable_tree_hash(files)
         migration_id = f"legacy-{source_hash[:16]}"
         existing = self._existing(migration_id)
-        return {
+        return normalize_json_document({
             "schema_version": 1,
             "package_type": "musicforge_legacy_workspace_migration_plan",
             "migration_id": migration_id,
@@ -46,13 +47,13 @@ class LegacyWorkspaceMigrator:
             "database_schema_version": SCHEMA_VERSION,
             "source_hash": source_hash,
             "file_count": len(files),
-            "total_size_bytes": sum(int(row["size_bytes"]) for row in files),
+            "total_size_bytes": sum(_as_int(row["size_bytes"]) for row in files),
             "files": files,
             "source_preserved": True,
             "backup_required": True,
-        }
+        })
 
-    def execute(self, *, fail_after_backup: bool = False) -> dict[str, Any]:
+    def execute(self, *, fail_after_backup: bool = False) -> JsonDocument:
         plan = self.dry_run()
         migration_id = str(plan["migration_id"])
         if plan["status"] == "no_changes":
@@ -66,19 +67,20 @@ class LegacyWorkspaceMigrator:
             backup = self.migration_root / "backups" / migration_id
             if backup.exists():
                 raise RuntimeError("Legacy migration backup already exists without a committed migration.")
-            for row in plan["files"]:
+            plan_files = _as_documents(plan.get("files"))
+            for row in plan_files:
                 source = self.workspace_root / str(row["path"])
                 target = backup / str(row["path"])
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
-            backup_rows = _fingerprint_paths(backup, [str(row["path"]) for row in plan["files"]])
-            if backup_rows != plan["files"]:
+            backup_rows = _fingerprint_paths(backup, [str(row["path"]) for row in plan_files])
+            if backup_rows != plan_files:
                 raise RuntimeError("Legacy migration backup verification failed.")
             if fail_after_backup:
                 raise RuntimeError("Injected migration failure after verified backup.")
             created_at = _now()
             workflow_rows = collect_active_v12_state(backup)
-            program_documents = _program_documents(backup, plan["files"])
+            program_documents = _program_documents(backup, plan_files)
             imported_workflow_count = 0
             imported_program_document_count = 0
             program_repository = ProgramStateRepository(self.workspace_root, database=self.database)
@@ -89,7 +91,7 @@ class LegacyWorkspaceMigrator:
                 )
                 connection.executemany(
                     "INSERT INTO legacy_migration_files(migration_id, relative_path, sha256, size_bytes) VALUES (?, ?, ?, ?)",
-                    [(migration_id, row["path"], row["sha256"], row["size_bytes"]) for row in plan["files"]],
+                    [(migration_id, row["path"], row["sha256"], row["size_bytes"]) for row in plan_files],
                 )
                 for relative_path, document, payload in program_documents:
                     if program_repository.adopt_legacy_document(
@@ -100,20 +102,32 @@ class LegacyWorkspaceMigrator:
                         migration_id=migration_id,
                     ):
                         imported_program_document_count += 1
-                for row in workflow_rows:
+                for workflow_row in workflow_rows:
                     inserted = connection.execute(
                         """
                         INSERT INTO workflow_objects(object_type, object_id, generation, status, version, payload_hash, updated_at)
                         VALUES (?, ?, ?, ?, 1, ?, ?)
                         ON CONFLICT(object_type, object_id) DO NOTHING
                         """,
-                        (row["object_type"], row["object_id"], row["generation"], row["status"], row["payload_hash"], created_at),
+                        (
+                            workflow_row["object_type"],
+                            workflow_row["object_id"],
+                            workflow_row["generation"],
+                            workflow_row["status"],
+                            workflow_row["payload_hash"],
+                            created_at,
+                        ),
                     )
                     if inserted.rowcount == 1:
                         imported_workflow_count += 1
                         connection.execute(
                             "INSERT INTO legacy_migration_objects(migration_id, object_type, object_id, payload_hash) VALUES (?, ?, ?, ?)",
-                            (migration_id, row["object_type"], row["object_id"], row["payload_hash"]),
+                            (
+                                migration_id,
+                                workflow_row["object_type"],
+                                workflow_row["object_id"],
+                                workflow_row["payload_hash"],
+                            ),
                         )
             report = {
                 **plan,
@@ -131,7 +145,7 @@ class LegacyWorkspaceMigrator:
             report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             return report
 
-    def rollback(self, migration_id: str) -> dict[str, Any]:
+    def rollback(self, migration_id: str) -> JsonDocument:
         with WorkspaceLock(self.workspace_root, operation=f"legacy-migration-rollback:{migration_id}"):
             existing = self._existing(migration_id)
             if not existing:
@@ -189,7 +203,7 @@ class LegacyWorkspaceMigrator:
                 "backup_verified": True,
             }
 
-    def _source_files(self) -> list[ImplementationDocument]:
+    def _source_files(self) -> list[JsonDocument]:
         paths: list[Path] = []
         for relative_root in self.legacy_roots:
             root = self.workspace_root / relative_root
@@ -203,18 +217,18 @@ class LegacyWorkspaceMigrator:
                 and path.resolve().is_relative_to(self.workspace_root)
                 and path.suffix.lower() in {".json", ".jsonl"}
             )
-        rows = []
+        rows: list[JsonDocument] = []
         for path in sorted(set(paths)):
             relative = path.relative_to(self.workspace_root).as_posix()
             rows.append({"path": relative, "sha256": sha256_path(path), "size_bytes": path.stat().st_size})
         return rows
 
-    def _existing(self, migration_id: str) -> ImplementationDocument:
+    def _existing(self, migration_id: str) -> JsonDocument:
         with self.database.session() as connection:
             row = connection.execute("SELECT * FROM legacy_migrations WHERE migration_id=?", (migration_id,)).fetchone()
         return dict(row) if row else {}
 
-    def _migration_files(self, migration_id: str) -> list[ImplementationDocument]:
+    def _migration_files(self, migration_id: str) -> list[JsonDocument]:
         with self.database.session() as connection:
             rows = connection.execute(
                 "SELECT relative_path, sha256, size_bytes FROM legacy_migration_files WHERE migration_id=? ORDER BY relative_path",
@@ -223,8 +237,8 @@ class LegacyWorkspaceMigrator:
         return [{"path": str(row["relative_path"]), "sha256": str(row["sha256"]), "size_bytes": int(row["size_bytes"])} for row in rows]
 
 
-def _fingerprint_paths(root: Path, relative_paths: list[str]) -> list[ImplementationDocument]:
-    rows = []
+def _fingerprint_paths(root: Path, relative_paths: list[str]) -> list[JsonDocument]:
+    rows: list[JsonDocument] = []
     for relative in sorted(relative_paths):
         path = root / relative
         if not path.is_file():
@@ -235,9 +249,9 @@ def _fingerprint_paths(root: Path, relative_paths: list[str]) -> list[Implementa
 
 def _program_documents(
     root: Path,
-    rows: list[ImplementationDocument],
-) -> list[tuple[str, ImplementationDocument, bytes]]:
-    documents: list[tuple[str, dict[str, Any], bytes]] = []
+    rows: list[JsonDocument],
+) -> list[tuple[str, JsonDocument, bytes]]:
+    documents: list[tuple[str, JsonDocument, bytes]] = []
     for row in rows:
         relative = str(row["path"])
         parts = Path(relative.replace("\\", "/")).parts
@@ -258,7 +272,7 @@ def _program_documents(
     return documents
 
 
-def migration_source_id(rows: list[dict[str, Any]]) -> str:
+def migration_source_id(rows: Sequence[Mapping[str, object]]) -> str:
     payload = json.dumps(rows, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

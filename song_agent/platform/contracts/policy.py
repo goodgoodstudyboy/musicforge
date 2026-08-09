@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 
 
 @dataclass(frozen=True)
@@ -47,15 +48,15 @@ class PolicyProfile:
     no_blockers: NoBlockerRequirement = field(default_factory=NoBlockerRequirement)
     schema_version: int = 1
 
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+    def to_dict(self) -> JsonDocument:
+        return normalize_json_document(asdict(self))
 
 
 @dataclass(frozen=True)
 class GateResult:
     policy_id: str
     status: str
-    checks: tuple[dict[str, Any], ...]
+    checks: tuple[JsonDocument, ...]
     blockers: tuple[str, ...]
     warnings: tuple[str, ...]
     graph_hash: str
@@ -65,5 +66,5 @@ class GateResult:
     def passed(self) -> bool:
         return self.status == "passed"
 
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+    def to_dict(self) -> JsonDocument:
+        return normalize_json_document(asdict(self))

@@ -1902,97 +1902,6 @@
     {
       "functions": [
         {
-          "max_lines": 94,
-          "migrated_from": "song_agent/interfaces/api/routes/creation_parts/part_010.py:_generate_review_sprint_provider_candidates",
-          "name": "_generate_review_sprint_provider_candidates"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/api/routes/creation_parts/save_review_sprint_recommendation_context_pack.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
-          "max_lines": 82,
-          "migrated_from": "song_agent/interfaces/api/routes/program_ucc_parts/core.py:_dispatch_ucc_core",
-          "name": "_dispatch_ucc_core"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/api/routes/program_ucc_parts/core.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
-          "max_lines": 83,
-          "migrated_from": "song_agent/interfaces/api/routes/program_ucc_parts/drifts.py:_dispatch_ucc_drifts",
-          "name": "_dispatch_ucc_drifts"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/api/routes/program_ucc_parts/drifts.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
-          "max_lines": 99,
-          "migrated_from": "song_agent/interfaces/api/routes/program_ucc_parts/evidence_detail.py:_dispatch_ucc_evidence_detail",
-          "name": "_dispatch_ucc_evidence_detail"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/api/routes/program_ucc_parts/evidence_detail.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
-          "max_lines": 99,
-          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/downloads.py:_dispatch_portfolio_downloads",
-          "name": "_dispatch_portfolio_downloads"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/api/routes/trust_portfolio_parts/downloads.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
-          "max_lines": 100,
-          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/final_board.py:_dispatch_portfolio_final_board",
-          "name": "_dispatch_portfolio_final_board"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/api/routes/trust_portfolio_parts/final_board.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
-          "max_lines": 96,
-          "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/portal_review.py:_dispatch_portfolio_portal_review",
-          "name": "_dispatch_portfolio_portal_review"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/api/routes/trust_portfolio_parts/portal_review.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
           "max_lines": 84,
           "migrated_from": "song_agent/interfaces/api/routes/trust_portfolio_parts/registry.py:_dispatch_portfolio_registry",
           "name": "_dispatch_portfolio_registry"
@@ -2019,19 +1928,6 @@
     {
       "functions": [
         {
-          "max_lines": 84,
-          "migrated_from": "song_agent/interfaces/api/server.py:__init__",
-          "name": "__init__"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/cli/bindings.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
           "max_lines": 90,
           "migrated_from": "song_agent/interfaces/cli/commands/program_parts/part_002.py:_add_ga_unified_command_center_evidence_args",
           "name": "_add_ga_unified_command_center_evidence_args"
@@ -2052,19 +1948,6 @@
       ],
       "owner": "musicforge-interfaces",
       "path": "song_agent/interfaces/cli/commands/program_parts/unified_release_program_continuity_command_center_acceptance_change.py",
-      "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
-      "removal_target_version": "14.0.0"
-    },
-    {
-      "functions": [
-        {
-          "max_lines": 96,
-          "migrated_from": "song_agent/interfaces/cli/commands/program_parts/part_010.py:_run_unified_release_program_handoff_command",
-          "name": "_run_unified_release_program_handoff_command"
-        }
-      ],
-      "owner": "musicforge-interfaces",
-      "path": "song_agent/interfaces/cli/commands/program_parts/unified_release_program_handoff_command.py",
       "reason": "Pre-v13 interface surface is held to no growth for the v13 LTS line and retires at the next major cutover.",
       "removal_target_version": "14.0.0"
     },

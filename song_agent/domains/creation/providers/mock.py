@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.domains.legacy_documents import _as_int
 
 from dataclasses import dataclass as dataclass
 from typing import Any as Any
@@ -192,10 +193,10 @@ class MockProviderClient:
         for index, candidate in enumerate(candidates):
             candidate_id = str(candidate.get("candidate_id") or "")
             local_scores = _as_document(candidate.get("scores"))
-            combined = int(local_scores.get("combined") or max(60, 86 - index * 6))
+            combined = _as_int(local_scores.get("combined") or max(60, 86 - index * 6))
             provider_bonus = 3 if candidate.get("source") == "provider" else 0
             overall = max(0, min(100, combined + provider_bonus - index))
-            risk = max(5, min(95, int(local_scores.get("risk") or (18 + index * 7))))
+            risk = max(5, min(95, _as_int(local_scores.get("risk") or (18 + index * 7))))
             scores.append(
                 {
                     "candidate_id": candidate_id,

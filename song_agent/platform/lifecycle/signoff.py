@@ -1,24 +1,25 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from collections.abc import Mapping
 
 from song_agent.platform.contracts.lifecycle import SignoffRef
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document
 from song_agent.platform.lifecycle.event_ledger import HistoryChain
 from song_agent.platform.verification.hashing import integrity_hash, integrity_ok, stable_hash
 
 
 class SignoffService:
     @staticmethod
-    def seal(document: dict[str, Any], *, payload_hash: bool = True) -> dict[str, Any]:
-        result = dict(document)
+    def seal(document: Mapping[str, object], *, payload_hash: bool = True) -> JsonDocument:
+        result = normalize_json_document(document)
         if payload_hash:
             result["payload_hash"] = stable_hash({key: value for key, value in result.items() if key not in {"payload_hash", "integrity_hash"}})
         result["integrity_hash"] = integrity_hash(result)
         return result
 
     @staticmethod
-    def validate_pair(signoff: dict[str, Any], binding: dict[str, Any], *, signoff_field: str = "signoff_hash") -> bool:
+    def validate_pair(signoff: Mapping[str, object], binding: Mapping[str, object], *, signoff_field: str = "signoff_hash") -> bool:
         return integrity_ok(signoff) and integrity_ok(binding) and binding.get(signoff_field) == signoff.get("integrity_hash")
 
     @staticmethod

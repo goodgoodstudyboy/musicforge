@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
-
-from song_agent.platform.contracts.coercion import as_document as _as_document
+from song_agent.platform.contracts.coercion import as_document as _as_document, as_int as _as_int
 
 from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
 
-from typing import Any
+from song_agent.application.http_ports.quality import ReleaseDocument, sanitize_sensitive_text
 
-from song_agent.domains.creation.redaction import sanitize_sensitive_text
-
-from song_agent.platform.contracts.documents import ImplementationDocument
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_value
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
 class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
-    def _release_acceptance_gate_part_01(self, payload: ImplementationDocument, _split_state):
+    def _release_acceptance_gate_part_01(self, payload: JsonDocument, _split_state):
         _split_state['suite_id'] = str(payload.get('acceptance_suite_id') or '').strip()
         _split_state['analytics_evidence'] = self._release_acceptance_analytics_gate(payload)
         _split_state['fix_sprint_evidence'] = self._release_acceptance_fix_sprint_gate(payload)
@@ -28,7 +24,7 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
         _split_state['planning_impact_evidence'] = self._release_planning_rule_impact_gate(payload)
         return (False, None)
 
-    def _release_acceptance_gate_part_02(self, payload: ImplementationDocument, _split_state):
+    def _release_acceptance_gate_part_02(self, payload: JsonDocument, _split_state):
         if not _split_state['suite_id']:
             if not _split_state['analytics_evidence']:
                 _split_state['gate'] = {}
@@ -101,8 +97,8 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
             return (True, _split_state['gate'])
         return (False, None)
 
-    def _release_acceptance_gate_part_03(self, payload: ImplementationDocument, _split_state):
-        report = self.acceptance_store.read_report(_split_state['suite_id'])
+    def _release_acceptance_gate_part_03(self, payload: JsonDocument, _split_state):
+        report = self.server.acceptance_store.read_report(_split_state['suite_id'])
         summary = _interfaces_api_runtime.acceptance_report_summary(report)
         acceptance_status = str(summary.get('acceptance_status') or '')
         release_ready = bool(summary.get('release_ready', False))
@@ -156,8 +152,8 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
         return (True, _split_state['gate'])
         return (False, None)
 
-    def _release_acceptance_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
-        _split_state: dict[str, _InferenceType] = {}
+    def _release_acceptance_gate(self, payload: JsonDocument) -> JsonDocument:
+        _split_state: dict[str, JsonDocument] = {}
         _split_result = self._release_acceptance_gate_part_01(payload, _split_state)
         if _split_result[0]:
             return _split_result[1]
@@ -169,15 +165,15 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
             return _split_result[1]
         raise RuntimeError("_release_acceptance_gate did not produce a result.")
 
-    def _release_audio_campaign_gate(self, release_id: str, payload: ImplementationDocument, *, required: bool) -> ImplementationDocument:
+    def _release_audio_campaign_gate(self, release_id: str, payload: JsonDocument, *, required: bool) -> JsonDocument:
         campaign_id = str(payload.get("audio_campaign_id") or payload.get("campaign_id") or "").strip()
         if not campaign_id:
             return {"status": "failed" if required else "missing", "hard_block": bool(required), "message": "Audio Campaign id is required.", "release_id": release_id}
-        gate = self.audio_campaign_governance_store.gate(
+        gate = self.server.audio_campaign_governance_store.gate(
             campaign_id,
             required=required,
-            archive_zip_path=payload.get("audio_campaign_archive_zip_path") or payload.get("audio_campaign_archive"),
-            archive_verification_report_path=payload.get("audio_campaign_archive_verification_report_path") or payload.get("audio_campaign_archive_verification_report"),
+            archive_zip_path=self._optional_text(payload.get("audio_campaign_archive_zip_path") or payload.get("audio_campaign_archive")),
+            archive_verification_report_path=self._optional_text(payload.get("audio_campaign_archive_verification_report_path") or payload.get("audio_campaign_archive_verification_report")),
         )
         try:
             release = self.release_store.get_release(release_id)
@@ -186,7 +182,7 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
             release = None
             track_count = 0
         summary = _as_document(gate.get("summary"))
-        case_count = int(summary.get("case_count") or 0)
+        case_count = _as_int(summary.get("case_count") or 0)
         gate = {**gate, "release_id": release_id, "track_count": track_count, "case_count": case_count}
         if required and gate.get("status") == "passed" and track_count > 0 and case_count < track_count:
             gate.update(
@@ -219,14 +215,14 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
                 )
         return gate
 
-    def _release_audio_campaign_coverage(self, release: Any, campaign_id: str) -> ImplementationDocument:
+    def _release_audio_campaign_coverage(self, release: ReleaseDocument, campaign_id: str) -> JsonDocument:
         try:
-            case_index = _interfaces_api_runtime.read_json(self.audio_campaign_store.case_index_path(campaign_id))
+            case_index = _interfaces_api_runtime.read_json(self.server.audio_campaign_store.case_index_path(campaign_id))
         except Exception as exc:
             return {"status": "failed", "message": f"Audio Campaign case index is unavailable: {sanitize_sensitive_text(str(exc))}", "missing_tracks": []}
         return _interfaces_api_runtime.audio_campaign_release_track_coverage(release.tracks, case_index)
 
-    def _release_audio_campaign_final_export_current(self, release: Any) -> ImplementationDocument:
+    def _release_audio_campaign_final_export_current(self, release: ReleaseDocument) -> JsonDocument:
         rows = []
         stale = []
         for track in sorted(release.tracks, key=lambda item: (getattr(item, "disc_number", 1), getattr(item, "track_number", 1), getattr(item, "track_id", ""))):
@@ -248,9 +244,13 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
             rows.append(row)
             if not current:
                 stale.append(row)
-        return {"status": "passed" if not stale else "failed", "track_count": len(rows), "current_track_count": len(rows) - len(stale), "stale_tracks": stale, "tracks": rows}
+        return {"status": "passed" if not stale else "failed", "track_count": len(rows), "current_track_count": len(rows) - len(stale), "stale_tracks": normalize_json_value(stale), "tracks": normalize_json_value(rows)}
 
-    def _release_audio_gate(self, release_id: str, payload: ImplementationDocument) -> ImplementationDocument:
+    @staticmethod
+    def _optional_text(value: object) -> str | None:
+        return value if isinstance(value, str) and value else None
+
+    def _release_audio_gate(self, release_id: str, payload: JsonDocument) -> JsonDocument:
         require_health = bool(payload.get("require_audio_health", False))
         require_human = bool(payload.get("require_human_audio_review", False))
         require_per_track_review = bool(payload.get("require_per_track_audio_review", False))
@@ -267,7 +267,7 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
         except Exception as exc:
             return {"status": "failed", "hard_block": True, "message": f"Release Audio QA is unavailable: {sanitize_sensitive_text(str(exc))}"}
         summary = _interfaces_api_runtime.release_audio_summary(report)
-        evidence: dict[str, Any] = {
+        evidence: JsonDocument = {
             **summary,
             "require_audio_health": require_health,
             "require_human_audio_review": require_human,
@@ -277,7 +277,7 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
             "require_current_mix_state": require_current_mix,
             "require_audio_revision_closeout": require_audio_revision,
         }
-        revision_gate = self.audio_revision_store.gate(release_id, required=require_audio_revision, now=_interfaces_api_runtime._utc_now())
+        revision_gate = self.server.audio_revision_store.gate(release_id, required=require_audio_revision, now=_interfaces_api_runtime._utc_now())
         if require_audio_revision or revision_gate.get("session_count"):
             evidence["audio_revision"] = revision_gate
             if revision_gate.get("status") == "failed":
@@ -310,7 +310,7 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
                 if not suite_id:
                     return {**evidence, "status": "failed", "hard_block": True, "message": "require_human_audio_review needs acceptance_suite_id."}
                 try:
-                    acceptance = self.acceptance_store.read_report(suite_id)
+                    acceptance = self.server.acceptance_store.read_report(suite_id)
                 except Exception as exc:
                     return {**evidence, "status": "failed", "hard_block": True, "message": f"Acceptance report is unavailable: {sanitize_sensitive_text(str(exc))}"}
                 acceptance_summary = _interfaces_api_runtime.acceptance_report_summary(acceptance)
@@ -320,14 +320,14 @@ class QualityRoutesReleaseAcceptanceGate(QualityRouteContext):
                     return {**evidence, "status": "failed", "hard_block": True, "message": "Human WAV listening review evidence is missing."}
         return {**evidence, "status": "passed", "message": "Release audio gate passed."}
 
-    def _release_acceptance_analytics_gate(self, payload: ImplementationDocument) -> ImplementationDocument:
+    def _release_acceptance_analytics_gate(self, payload: JsonDocument) -> JsonDocument:
         report_id = str(payload.get("acceptance_analytics_report_id") or "").strip()
         release_id = str(payload.get("release_id") or "").strip()
         try:
             if report_id:
-                report = self.acceptance_analytics_store.get_report(report_id)
+                report = self.server.acceptance_analytics_store.get_report(report_id)
             elif release_id:
-                report = self.acceptance_analytics_store.latest_report(_interfaces_api_runtime.AnalyticsScope.from_values(scope_type="release", release_id=release_id))
+                report = self.server.acceptance_analytics_store.latest_report(_interfaces_api_runtime.AnalyticsScope.from_values(scope_type="release", release_id=release_id))
             else:
                 return {}
         except (_interfaces_api_runtime.AcceptanceAnalyticsError, _interfaces_api_runtime.AcceptanceAnalyticsNotFoundError, _interfaces_api_runtime.ReleaseNotFoundError, ValueError):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from song_agent.platform.contracts.documents import JsonDocument
 
 from song_agent.interfaces.api.route_contexts.quality import QualityRouteContext
 
@@ -12,13 +12,13 @@ class QualityRoutesAcceptance(QualityRouteContext):
         _split_state['parts'] = [part for part in tail.strip('/').split('/') if part]
         if not _split_state['parts']:
             if method == 'GET':
-                suite = self.acceptance_store.get_suite(suite_id)
-                cases = self.acceptance_store.list_cases(suite_id)
-                self._send_json({'ok': True, 'suite': suite.to_dict(), 'cases': [_split_state['case'].to_dict() for _split_state['case'] in cases], 'summary': _interfaces_api_runtime.acceptance_suite_summary(suite), 'events': self.acceptance_store.read_events(suite_id)})
+                suite = self.server.acceptance_store.get_suite(suite_id)
+                cases = self.server.acceptance_store.list_cases(suite_id)
+                self._send_json({'ok': True, 'suite': suite.to_dict(), 'cases': [_split_state['case'].to_dict() for _split_state['case'] in cases], 'summary': _interfaces_api_runtime.acceptance_suite_summary(suite), 'events': self.server.acceptance_store.read_events(suite_id)})
                 return (True, None)
             if method == 'POST':
-                suite = self.acceptance_store.get_suite(suite_id)
-                self.acceptance_store.ensure_mutable(suite)
+                suite = self.server.acceptance_store.get_suite(suite_id)
+                self.server.acceptance_store.ensure_mutable(suite)
                 _split_state['payload'] = self._optional_json_body()
                 if _split_state['payload'].get('name'):
                     suite.name = str(_split_state['payload'].get('name'))
@@ -26,7 +26,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
                     suite.mode = str(_split_state['payload'].get('mode'))
                 if _split_state['payload'].get('min_rating') is not None:
                     suite.min_rating = int(_split_state['payload'].get('min_rating'))
-                suite = self.acceptance_store.save_suite(suite)
+                suite = self.server.acceptance_store.save_suite(suite)
                 self._send_json({'ok': True, 'suite': suite.to_dict(), 'summary': _interfaces_api_runtime.acceptance_suite_summary(suite)})
                 return (True, None)
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -35,27 +35,27 @@ class QualityRoutesAcceptance(QualityRouteContext):
             if method != 'POST':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return (True, None)
-            _split_state['case'] = self.acceptance_store.add_case(suite_id, self._read_json_body())
-            self._send_json({'ok': True, 'case': _split_state['case'].to_dict(), 'summary': _interfaces_api_runtime.acceptance_suite_summary(self.acceptance_store.get_suite(suite_id))}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
+            _split_state['case'] = self.server.acceptance_store.add_case(suite_id, self._read_json_body())
+            self._send_json({'ok': True, 'case': _split_state['case'].to_dict(), 'summary': _interfaces_api_runtime.acceptance_suite_summary(self.server.acceptance_store.get_suite(suite_id))}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
             return (True, None)
         if _split_state['parts'] == ['report']:
             if method == 'GET':
-                _split_state['report'] = self.acceptance_store.read_report(suite_id, default={})
+                _split_state['report'] = self.server.acceptance_store.read_report(suite_id, default={})
                 self._send_json({'ok': True, 'suite_id': suite_id, 'report': _split_state['report'], 'summary': _interfaces_api_runtime.acceptance_report_summary(_split_state['report'])})
                 return (True, None)
             if method == 'POST':
-                _split_state['report'] = self.acceptance_store.build_report(suite_id)
+                _split_state['report'] = self.server.acceptance_store.build_report(suite_id)
                 self._send_json({'ok': True, 'suite_id': suite_id, 'report': _split_state['report'], 'summary': _interfaces_api_runtime.acceptance_report_summary(_split_state['report'])})
                 return (True, None)
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
             return (True, None)
         if _split_state['parts'] == ['signoff']:
             if method == 'GET':
-                signoff = self.acceptance_store.read_signoff(suite_id, default={})
+                signoff = self.server.acceptance_store.read_signoff(suite_id, default={})
                 self._send_json({'ok': True, 'suite_id': suite_id, 'signoff': signoff, 'summary': _interfaces_api_runtime.acceptance_signoff_summary(signoff)})
                 return (True, None)
             if method == 'POST':
-                signoff = self.acceptance_store.signoff(suite_id, self._optional_json_body())
+                signoff = self.server.acceptance_store.signoff(suite_id, self._optional_json_body())
                 self._send_json({'ok': True, 'suite_id': suite_id, 'signoff': signoff, 'summary': _interfaces_api_runtime.acceptance_signoff_summary(signoff)})
                 return (True, None)
             self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -69,14 +69,14 @@ class QualityRoutesAcceptance(QualityRouteContext):
             if not reason:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, 'reason is required.')
                 return (True, None)
-            event = self.acceptance_store.reset_signoff(suite_id, reason)
+            event = self.server.acceptance_store.reset_signoff(suite_id, reason)
             self._send_json({'ok': True, 'suite_id': suite_id, 'summary': {'status': 'reset'}, 'history_event': event})
             return (True, None)
         if _split_state['parts'] == ['archive']:
             if method != 'POST':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                 return (True, None)
-            suite = self.acceptance_store.archive_suite(suite_id)
+            suite = self.server.acceptance_store.archive_suite(suite_id)
             self._send_json({'ok': True, 'suite': suite.to_dict(), 'summary': _interfaces_api_runtime.acceptance_suite_summary(suite)})
             return (True, None)
         return (False, None)
@@ -91,8 +91,8 @@ class QualityRoutesAcceptance(QualityRouteContext):
             if not other_suite_id:
                 self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, 'other_suite_id is required.')
                 return (True, None)
-            left = self.acceptance_store.read_report(other_suite_id)
-            right = self.acceptance_store.read_report(suite_id)
+            left = self.server.acceptance_store.read_report(other_suite_id)
+            right = self.server.acceptance_store.read_report(suite_id)
             diff = _interfaces_api_runtime.build_acceptance_diff(left, right)
             self._send_json({'ok': True, 'suite_id': suite_id, 'other_suite_id': other_suite_id, 'diff': diff, 'summary': diff.get('summary', {})})
             return (True, None)
@@ -166,24 +166,24 @@ class QualityRoutesAcceptance(QualityRouteContext):
             case_id = _split_state['parts'][1]
             _split_state['action'] = _split_state['parts'][2] if len(_split_state['parts']) >= 3 else ''
             if not _split_state['action']:
-                _split_state['case'] = self.acceptance_store.get_case(suite_id, case_id)
-                self._send_json({'ok': True, 'case': _split_state['case'].to_dict(), 'health': self.acceptance_store.read_health(suite_id, case_id, default={}), 'review': self.acceptance_store.read_review(suite_id, case_id, default={})})
+                _split_state['case'] = self.server.acceptance_store.get_case(suite_id, case_id)
+                self._send_json({'ok': True, 'case': _split_state['case'].to_dict(), 'health': self.server.acceptance_store.read_health(suite_id, case_id, default={}), 'review': self.server.acceptance_store.read_review(suite_id, case_id, default={})})
                 return (True, None)
             if _split_state['action'] == 'generate':
                 if method != 'POST':
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                     return (True, None)
                 _split_state['payload'] = self._optional_json_body()
-                _split_state['case'] = self.acceptance_store.generate_case(suite_id, case_id, render_audio_mode=str(_split_state['payload'].get('render_audio') or 'auto'))
+                _split_state['case'] = self.server.acceptance_store.generate_case(suite_id, case_id, render_audio_mode=str(_split_state['payload'].get('render_audio') or 'auto'))
                 self._send_json({'ok': True, 'case': _split_state['case'].to_dict()})
                 return (True, None)
             if _split_state['action'] == 'health':
                 if method == 'GET':
-                    _split_state['report'] = self.acceptance_store.read_health(suite_id, case_id, default={})
+                    _split_state['report'] = self.server.acceptance_store.read_health(suite_id, case_id, default={})
                     self._send_json({'ok': True, 'suite_id': suite_id, 'case_id': case_id, 'health': _split_state['report']})
                     return (True, None)
                 if method == 'POST':
-                    _split_state['report'] = self.acceptance_store.run_health(suite_id, case_id)
+                    _split_state['report'] = self.server.acceptance_store.run_health(suite_id, case_id)
                     self._send_json({'ok': True, 'suite_id': suite_id, 'case_id': case_id, 'health': _split_state['report']})
                     return (True, None)
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -195,16 +195,16 @@ class QualityRoutesAcceptance(QualityRouteContext):
                 _split_state['payload'] = self._optional_json_body()
                 profile = self._renderer_profile_from_payload(_split_state['payload'])
                 config = profile.to_renderer_config() if profile is not None else None
-                _split_state['result'] = self.acceptance_store.render_audio(suite_id, case_id, mode=str(_split_state['payload'].get('mode') or 'auto'), config=config)
+                _split_state['result'] = self.server.acceptance_store.render_audio(suite_id, case_id, mode=str(_split_state['payload'].get('mode') or 'auto'), config=config)
                 self._send_json({'ok': True, 'suite_id': suite_id, 'case_id': case_id, **_split_state['result']})
                 return (True, None)
             if _split_state['action'] == 'review':
                 if method == 'GET':
-                    review = self.acceptance_store.read_review(suite_id, case_id, default={})
+                    review = self.server.acceptance_store.read_review(suite_id, case_id, default={})
                     self._send_json({'ok': True, 'suite_id': suite_id, 'case_id': case_id, 'review': review, 'summary': _interfaces_api_runtime.listening_review_summary(review)})
                     return (True, None)
                 if method == 'POST':
-                    review = self.acceptance_store.write_review(suite_id, case_id, self._read_json_body())
+                    review = self.server.acceptance_store.write_review(suite_id, case_id, self._read_json_body())
                     self._send_json({'ok': True, 'suite_id': suite_id, 'case_id': case_id, 'review': review, 'summary': _interfaces_api_runtime.listening_review_summary(review)})
                     return (True, None)
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -213,19 +213,19 @@ class QualityRoutesAcceptance(QualityRouteContext):
                 if method != 'GET':
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                     return (True, None)
-                self._send_file(self.acceptance_store.case_dir(suite_id, case_id) / 'song.mid', 'audio/midi', filename=f'{suite_id}-{case_id}.mid')
+                self._send_file(self.server.acceptance_store.case_dir(suite_id, case_id) / 'song.mid', 'audio/midi', filename=f'{suite_id}-{case_id}.mid')
                 return (True, None)
             if _split_state['action'] == 'audio':
                 if method != 'GET':
                     self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
                     return (True, None)
-                self._send_file(self.acceptance_store.case_dir(suite_id, case_id) / 'song.wav', 'audio/wav', filename=f'{suite_id}-{case_id}.wav')
+                self._send_file(self.server.acceptance_store.case_dir(suite_id, case_id) / 'song.wav', 'audio/wav', filename=f'{suite_id}-{case_id}.wav')
                 return (True, None)
         self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, 'Acceptance route not found.')
         return (False, None)
 
     def _handle_acceptance_route(self, method: str, suite_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: dict[str, JsonDocument] = {}
         try:
             _split_result = self._handle_acceptance_route_part_01(method, suite_id, tail, _split_state)
             if _split_result[0]:
@@ -255,7 +255,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
             return
         try:
             scope = _interfaces_api_runtime.AnalyticsScope.from_values(scope_type="suite", suite_id=suite_id)
-            report = self.acceptance_analytics_store.latest_report(scope)
+            report = self.server.acceptance_analytics_store.latest_report(scope)
             self._send_json({"ok": True, "suite_id": suite_id, "analytics": report, "summary": _interfaces_api_runtime.acceptance_analytics_summary(report)})
         except _interfaces_api_runtime.AcceptanceAnalyticsNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
@@ -268,7 +268,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
             return
         try:
             scope = _interfaces_api_runtime.AnalyticsScope.from_values(scope_type="suite", suite_id=suite_id)
-            report = self.acceptance_analytics_store.refresh(scope, now=_interfaces_api_runtime._utc_now())
+            report = self.server.acceptance_analytics_store.refresh(scope, now=_interfaces_api_runtime._utc_now())
             self._send_json({"ok": True, "suite_id": suite_id, "analytics": report, "summary": _interfaces_api_runtime.acceptance_analytics_summary(report)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
         except (_interfaces_api_runtime.AcceptanceAnalyticsError, _interfaces_api_runtime.AcceptanceNotFoundError, ValueError) as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.BAD_REQUEST, str(exc))
@@ -280,7 +280,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
         try:
             self.project_store.get_project(project_id)
             scope = _interfaces_api_runtime.AnalyticsScope.from_values(scope_type="project", project_id=project_id)
-            report = self.acceptance_analytics_store.latest_report(scope)
+            report = self.server.acceptance_analytics_store.latest_report(scope)
             self._send_json({"ok": True, "project_id": project_id, "analytics": report, "summary": _interfaces_api_runtime.acceptance_analytics_summary(report)})
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
@@ -294,7 +294,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
         try:
             self.project_store.get_project(project_id)
             scope = _interfaces_api_runtime.AnalyticsScope.from_values(scope_type="project", project_id=project_id)
-            report = self.acceptance_analytics_store.refresh(scope, now=_interfaces_api_runtime._utc_now())
+            report = self.server.acceptance_analytics_store.refresh(scope, now=_interfaces_api_runtime._utc_now())
             self._send_json({"ok": True, "project_id": project_id, "analytics": report, "summary": _interfaces_api_runtime.acceptance_analytics_summary(report)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
         except FileNotFoundError:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, "Project not found.")
@@ -308,7 +308,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
         try:
             self.release_store.get_release(release_id)
             scope = _interfaces_api_runtime.AnalyticsScope.from_values(scope_type="release", release_id=release_id)
-            report = self.acceptance_analytics_store.latest_report(scope)
+            report = self.server.acceptance_analytics_store.latest_report(scope)
             self._send_json({"ok": True, "release_id": release_id, "analytics": report, "summary": _interfaces_api_runtime.acceptance_analytics_summary(report)})
         except _interfaces_api_runtime.ReleaseNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
@@ -322,7 +322,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
         try:
             self.release_store.get_release(release_id)
             scope = _interfaces_api_runtime.AnalyticsScope.from_values(scope_type="release", release_id=release_id)
-            report = self.acceptance_analytics_store.refresh(scope, now=_interfaces_api_runtime._utc_now())
+            report = self.server.acceptance_analytics_store.refresh(scope, now=_interfaces_api_runtime._utc_now())
             self._send_json({"ok": True, "release_id": release_id, "analytics": report, "summary": _interfaces_api_runtime.acceptance_analytics_summary(report)}, status=_interfaces_api_runtime.HTTPStatus.CREATED)
         except _interfaces_api_runtime.ReleaseNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
@@ -335,7 +335,7 @@ class QualityRoutesAcceptance(QualityRouteContext):
             return
         try:
             scope = _interfaces_api_runtime._analytics_scope_from_query(query_string)
-            report = self.acceptance_analytics_store.latest_report(scope)
+            report = self.server.acceptance_analytics_store.latest_report(scope)
             self._send_json({"ok": True, "analytics": report, "summary": _interfaces_api_runtime.acceptance_analytics_summary(report)})
         except _interfaces_api_runtime.AcceptanceAnalyticsNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))

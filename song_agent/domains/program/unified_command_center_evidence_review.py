@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list, _as_path
 from song_agent.platform.contracts.packages import require_registered_package_type as _require_registered_package_type
 
 import base64 as base64

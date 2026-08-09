@@ -1,14 +1,30 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from collections.abc import Mapping, Sequence
+from typing import Protocol
 
-from typing import Any
+from song_agent.platform.contracts import JsonDocument, as_document
+from song_agent.platform.contracts.documents import normalize_json_document
 
 from song_agent.domains.delivery.releases import stable_hash
 
 
-def audio_campaign_release_track_coverage(tracks: list[Any], case_index: dict[str, Any]) -> dict[str, Any]:
-    cases = [case for case in case_index.get("cases", []) if isinstance(case, dict)]
+class ReleaseTrackView(Protocol):
+    disc_number: int
+    track_number: int
+    track_id: str
+    title: str
+    project_id: str
+    version_id: str
+    final_export_hash: str | None
+
+
+def audio_campaign_release_track_coverage(
+    tracks: Sequence[ReleaseTrackView],
+    case_index: Mapping[str, object],
+) -> JsonDocument:
+    raw_cases = case_index.get("cases")
+    cases = [as_document(case) for case in raw_cases if isinstance(case, dict)] if isinstance(raw_cases, list) else []
     case_keys = {_case_release_key(case) for case in cases}
     case_keys.discard("")
     rows = []
@@ -36,16 +52,16 @@ def audio_campaign_release_track_coverage(tracks: list[Any], case_index: dict[st
         rows.append(row)
         if not matched:
             missing.append(row)
-    return {
+    return normalize_json_document({
         "status": "passed" if not missing else "failed",
         "matched_track_count": len(rows) - len(missing),
         "track_count": len(rows),
         "case_count": len(cases),
         "missing_tracks": missing,
-    }
+    })
 
 
-def _track_release_key(track: Any) -> str:
+def _track_release_key(track: ReleaseTrackView) -> str:
     return _identity_key(
         getattr(track, "project_id", ""),
         getattr(track, "version_id", ""),
@@ -53,11 +69,11 @@ def _track_release_key(track: Any) -> str:
     )
 
 
-def _case_release_key(case: ImplementationDocument) -> str:
+def _case_release_key(case: JsonDocument) -> str:
     return _identity_key(case.get("project_id"), case.get("version_id"), case.get("final_export_hash"))
 
 
-def _identity_key(project_id: Any, version_id: Any, final_export_hash: Any) -> str:
+def _identity_key(project_id: object, version_id: object, final_export_hash: object) -> str:
     project = str(project_id or "").strip()
     version = str(version_id or "").strip()
     export_hash = str(final_export_hash or "").strip()

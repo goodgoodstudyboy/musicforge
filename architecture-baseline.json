@@ -6,24 +6,24 @@
   "dependency_exceptions": [],
   "mega_file_max_lines": {
     "song_agent/cli.py": 17,
-    "song_agent/interfaces/api/routes/creation.py": 481,
+    "song_agent/interfaces/api/routes/creation.py": 479,
     "song_agent/interfaces/api/routes/delivery.py": 25,
-    "song_agent/interfaces/api/routes/maintenance.py": 165,
-    "song_agent/interfaces/api/routes/program.py": 66,
+    "song_agent/interfaces/api/routes/maintenance.py": 111,
+    "song_agent/interfaces/api/routes/program.py": 65,
     "song_agent/interfaces/api/routes/quality.py": 40,
-    "song_agent/interfaces/api/routes/studio.py": 85,
-    "song_agent/interfaces/api/routes/trust.py": 125,
-    "song_agent/interfaces/api/runtime.py": 43,
-    "song_agent/interfaces/cli/commands/creation.py": 27,
-    "song_agent/interfaces/cli/commands/delivery.py": 52,
-    "song_agent/interfaces/cli/commands/maintenance.py": 19,
-    "song_agent/interfaces/cli/commands/program.py": 60,
-    "song_agent/interfaces/cli/commands/quality.py": 81,
+    "song_agent/interfaces/api/routes/studio.py": 82,
+    "song_agent/interfaces/api/routes/trust.py": 122,
+    "song_agent/interfaces/api/runtime.py": 36,
+    "song_agent/interfaces/cli/commands/creation.py": 19,
+    "song_agent/interfaces/cli/commands/delivery.py": 43,
+    "song_agent/interfaces/cli/commands/maintenance.py": 18,
+    "song_agent/interfaces/cli/commands/program.py": 46,
+    "song_agent/interfaces/cli/commands/quality.py": 63,
     "song_agent/interfaces/cli/commands/release_check.py": 23,
-    "song_agent/interfaces/cli/commands/studio.py": 52,
-    "song_agent/interfaces/cli/commands/trust.py": 108,
+    "song_agent/interfaces/cli/commands/studio.py": 46,
+    "song_agent/interfaces/cli/commands/trust.py": 88,
     "song_agent/release_checks.py": 0,
-    "song_agent/server.py": 30,
+    "song_agent/server.py": 14,
     "song_agent/webui.py": 3
   },
   "module_count": 1029,
@@ -139,6 +139,36 @@
     {
       "context": null,
       "layer": "application",
+      "module": "song_agent.application.http_ports.creation",
+      "path": "song_agent/application/http_ports/creation.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.http_ports.delivery",
+      "path": "song_agent/application/http_ports/delivery.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.http_ports.quality",
+      "path": "song_agent/application/http_ports/quality.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.http_ports.studio",
+      "path": "song_agent/application/http_ports/studio.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.http_ports.trust",
+      "path": "song_agent/application/http_ports/trust.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
       "module": "song_agent.application.interface_persistence",
       "path": "song_agent/application/interface_persistence.py"
     },
@@ -157,6 +187,12 @@
     {
       "context": null,
       "layer": "application",
+      "module": "song_agent.application.jobs.ports",
+      "path": "song_agent/application/jobs/ports.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
       "module": "song_agent.application.legacy",
       "path": "song_agent/application/legacy/__init__.py"
     },
@@ -165,6 +201,18 @@
       "layer": "application",
       "module": "song_agent.application.legacy.release_signoff",
       "path": "song_agent/application/legacy/release_signoff.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.legacy.release_signoff_ports",
+      "path": "song_agent/application/legacy/release_signoff_ports.py"
+    },
+    {
+      "context": null,
+      "layer": "application",
+      "module": "song_agent.application.maintenance",
+      "path": "song_agent/application/maintenance.py"
     },
     {
       "context": null,
@@ -987,6 +1035,12 @@
       "layer": "domain",
       "module": "song_agent.domains.delivery.submissions",
       "path": "song_agent/domains/delivery/submissions.py"
+    },
+    {
+      "context": null,
+      "layer": "domain",
+      "module": "song_agent.domains.legacy_documents",
+      "path": "song_agent/domains/legacy_documents.py"
     },
     {
       "context": "program",
@@ -2659,12 +2713,6 @@
     {
       "context": "api",
       "layer": "interface",
-      "module": "song_agent.interfaces.api.patching",
-      "path": "song_agent/interfaces/api/patching.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
       "module": "song_agent.interfaces.api.request",
       "path": "song_agent/interfaces/api/request.py"
     },
@@ -2821,6 +2869,12 @@
     {
       "context": "api",
       "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.creation_parts.project_editor_auditions",
+      "path": "song_agent/interfaces/api/routes/creation_parts/project_editor_auditions.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
       "module": "song_agent.interfaces.api.routes.creation_parts.project_final_export",
       "path": "song_agent/interfaces/api/routes/creation_parts/project_final_export.py"
     },
@@ -2833,14 +2887,32 @@
     {
       "context": "api",
       "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.creation_parts.project_mix_operations",
+      "path": "song_agent/interfaces/api/routes/creation_parts/project_mix_operations.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
       "module": "song_agent.interfaces.api.routes.creation_parts.project_review_sprint",
       "path": "song_agent/interfaces/api/routes/creation_parts/project_review_sprint.py"
     },
     {
       "context": "api",
       "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.creation_parts.project_review_sprint_action_queues",
+      "path": "song_agent/interfaces/api/routes/creation_parts/project_review_sprint_action_queues.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
       "module": "song_agent.interfaces.api.routes.creation_parts.project_review_task",
       "path": "song_agent/interfaces/api/routes/creation_parts/project_review_task.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.creation_parts.project_review_task_reports_lifecycle",
+      "path": "song_agent/interfaces/api/routes/creation_parts/project_review_task_reports_lifecycle.py"
     },
     {
       "context": "api",
@@ -2931,6 +3003,12 @@
       "layer": "interface",
       "module": "song_agent.interfaces.api.routes.maintenance",
       "path": "song_agent/interfaces/api/routes/maintenance.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.maintenance_operations",
+      "path": "song_agent/interfaces/api/routes/maintenance_operations.py"
     },
     {
       "context": "api",
@@ -3235,6 +3313,12 @@
     {
       "context": "api",
       "layer": "interface",
+      "module": "song_agent.interfaces.api.routes.studio_parts.review_sprint_action_queue_completion",
+      "path": "song_agent/interfaces/api/routes/studio_parts/review_sprint_action_queue_completion.py"
+    },
+    {
+      "context": "api",
+      "layer": "interface",
       "module": "song_agent.interfaces.api.routes.studio_parts.send_html",
       "path": "song_agent/interfaces/api/routes/studio_parts/send_html.py"
     },
@@ -3409,12 +3493,6 @@
     {
       "context": "api",
       "layer": "interface",
-      "module": "song_agent.interfaces.api.runtime_parts.batch_runner_context",
-      "path": "song_agent/interfaces/api/runtime_parts/batch_runner_context.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
       "module": "song_agent.interfaces.api.runtime_parts.batch_runner_parts",
       "path": "song_agent/interfaces/api/runtime_parts/batch_runner_parts/__init__.py"
     },
@@ -3453,36 +3531,6 @@
       "layer": "interface",
       "module": "song_agent.interfaces.api.runtime_parts.dependencies",
       "path": "song_agent/interfaces/api/runtime_parts/dependencies/__init__.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
-      "module": "song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies",
-      "path": "song_agent/interfaces/api/runtime_parts/dependencies/core_dependencies.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
-      "module": "song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies",
-      "path": "song_agent/interfaces/api/runtime_parts/dependencies/creation_quality_dependencies.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
-      "module": "song_agent.interfaces.api.runtime_parts.dependencies.delivery_quality_dependencies",
-      "path": "song_agent/interfaces/api/runtime_parts/dependencies/delivery_quality_dependencies.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
-      "module": "song_agent.interfaces.api.runtime_parts.dependencies.program_dependencies",
-      "path": "song_agent/interfaces/api/runtime_parts/dependencies/program_dependencies.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
-      "module": "song_agent.interfaces.api.runtime_parts.dependencies.trust_dependencies",
-      "path": "song_agent/interfaces/api/runtime_parts/dependencies/trust_dependencies.py"
     },
     {
       "context": "api",
@@ -3529,12 +3577,6 @@
     {
       "context": "api",
       "layer": "interface",
-      "module": "song_agent.interfaces.api.runtime_parts.job_store_context",
-      "path": "song_agent/interfaces/api/runtime_parts/job_store_context.py"
-    },
-    {
-      "context": "api",
-      "layer": "interface",
       "module": "song_agent.interfaces.api.runtime_parts.job_store_parts",
       "path": "song_agent/interfaces/api/runtime_parts/job_store_parts/__init__.py"
     },
@@ -3575,6 +3617,114 @@
       "path": "song_agent/interfaces/api/server.py"
     },
     {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap",
+      "path": "song_agent/interfaces/bootstrap/__init__.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.api.core",
+      "path": "song_agent/interfaces/bootstrap/api/core.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.api.creation_quality",
+      "path": "song_agent/interfaces/bootstrap/api/creation_quality.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.api.delivery_quality",
+      "path": "song_agent/interfaces/bootstrap/api/delivery_quality.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.api.program",
+      "path": "song_agent/interfaces/bootstrap/api/program.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.api.program_lifecycle_capabilities",
+      "path": "song_agent/interfaces/bootstrap/api/program_lifecycle_capabilities.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.api.program_verifier_capabilities",
+      "path": "song_agent/interfaces/bootstrap/api/program_verifier_capabilities.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.api.trust",
+      "path": "song_agent/interfaces/bootstrap/api/trust.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.creation",
+      "path": "song_agent/interfaces/bootstrap/cli/creation.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.delivery",
+      "path": "song_agent/interfaces/bootstrap/cli/delivery.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.maintenance",
+      "path": "song_agent/interfaces/bootstrap/cli/maintenance.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.program",
+      "path": "song_agent/interfaces/bootstrap/cli/program.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.quality",
+      "path": "song_agent/interfaces/bootstrap/cli/quality.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.release_check",
+      "path": "song_agent/interfaces/bootstrap/cli/release_check.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.stores",
+      "path": "song_agent/interfaces/bootstrap/cli/stores.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.trust",
+      "path": "song_agent/interfaces/bootstrap/cli/trust.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.cli.trust_verification",
+      "path": "song_agent/interfaces/bootstrap/cli/trust_verification.py"
+    },
+    {
+      "context": null,
+      "layer": "interface",
+      "module": "song_agent.interfaces.bootstrap.maintenance",
+      "path": "song_agent/interfaces/bootstrap/maintenance.py"
+    },
+    {
       "context": "cli",
       "layer": "interface",
       "module": "song_agent.interfaces.cli",
@@ -3585,12 +3735,6 @@
       "layer": "interface",
       "module": "song_agent.interfaces.cli.app",
       "path": "song_agent/interfaces/cli/app.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.bindings",
-      "path": "song_agent/interfaces/cli/bindings.py"
     },
     {
       "context": "cli",
@@ -3613,12 +3757,6 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.creation_parts.cross_domain_adapters",
-      "path": "song_agent/interfaces/cli/commands/creation_parts/cross_domain_adapters.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.creation_parts.dependencies",
       "path": "song_agent/interfaces/cli/commands/creation_parts/dependencies.py"
     },
@@ -3631,20 +3769,8 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.creation_parts.dependency_parts.dependency_catalog",
-      "path": "song_agent/interfaces/cli/commands/creation_parts/dependency_parts/dependency_catalog.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.creation_parts.generation_commands_and_presenter_adapters",
       "path": "song_agent/interfaces/cli/commands/creation_parts/generation_commands_and_presenter_adapters.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.creation_parts.program_trust_parser_adapters",
-      "path": "song_agent/interfaces/cli/commands/creation_parts/program_trust_parser_adapters.py"
     },
     {
       "context": "cli",
@@ -3667,12 +3793,6 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.delivery_parts.cross_domain_adapters",
-      "path": "song_agent/interfaces/cli/commands/delivery_parts/cross_domain_adapters.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.delivery_parts.dependencies",
       "path": "song_agent/interfaces/cli/commands/delivery_parts/dependencies.py"
     },
@@ -3681,12 +3801,6 @@
       "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.delivery_parts.dependency_parts",
       "path": "song_agent/interfaces/cli/commands/delivery_parts/dependency_parts/__init__.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.delivery_parts.dependency_parts.dependency_catalog",
-      "path": "song_agent/interfaces/cli/commands/delivery_parts/dependency_parts/dependency_catalog.py"
     },
     {
       "context": "cli",
@@ -3733,12 +3847,6 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.maintenance_parts.cross_domain_adapters",
-      "path": "song_agent/interfaces/cli/commands/maintenance_parts/cross_domain_adapters.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.maintenance_parts.dependencies",
       "path": "song_agent/interfaces/cli/commands/maintenance_parts/dependencies.py"
     },
@@ -3751,20 +3859,8 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.maintenance_parts.dependency_parts.dependency_catalog",
-      "path": "song_agent/interfaces/cli/commands/maintenance_parts/dependency_parts/dependency_catalog.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.maintenance_parts.maintenance_commands_and_presenter_adapters",
       "path": "song_agent/interfaces/cli/commands/maintenance_parts/maintenance_commands_and_presenter_adapters.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.maintenance_parts.program_parser_adapters",
-      "path": "song_agent/interfaces/cli/commands/maintenance_parts/program_parser_adapters.py"
     },
     {
       "context": "cli",
@@ -3795,12 +3891,6 @@
       "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.program_parts.dependency_parts",
       "path": "song_agent/interfaces/cli/commands/program_parts/dependency_parts/__init__.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.program_parts.dependency_parts.dependency_catalog",
-      "path": "song_agent/interfaces/cli/commands/program_parts/dependency_parts/dependency_catalog.py"
     },
     {
       "context": "cli",
@@ -3919,12 +4009,6 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.quality_parts.cross_domain_adapters",
-      "path": "song_agent/interfaces/cli/commands/quality_parts/cross_domain_adapters.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.quality_parts.dependencies",
       "path": "song_agent/interfaces/cli/commands/quality_parts/dependencies.py"
     },
@@ -3933,12 +4017,6 @@
       "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.quality_parts.dependency_parts",
       "path": "song_agent/interfaces/cli/commands/quality_parts/dependency_parts/__init__.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.quality_parts.dependency_parts.dependency_catalog",
-      "path": "song_agent/interfaces/cli/commands/quality_parts/dependency_parts/dependency_catalog.py"
     },
     {
       "context": "cli",
@@ -4009,12 +4087,6 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.release_check_parts.cross_domain_adapters",
-      "path": "song_agent/interfaces/cli/commands/release_check_parts/cross_domain_adapters.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.release_check_parts.dependencies",
       "path": "song_agent/interfaces/cli/commands/release_check_parts/dependencies.py"
     },
@@ -4027,20 +4099,8 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.release_check_parts.dependency_parts.dependency_catalog",
-      "path": "song_agent/interfaces/cli/commands/release_check_parts/dependency_parts/dependency_catalog.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.release_check_parts.ga_check",
       "path": "song_agent/interfaces/cli/commands/release_check_parts/ga_check.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.release_check_parts.program_parser_adapters",
-      "path": "song_agent/interfaces/cli/commands/release_check_parts/program_parser_adapters.py"
     },
     {
       "context": "cli",
@@ -4089,18 +4149,6 @@
       "layer": "interface",
       "module": "song_agent.interfaces.cli.commands.trust_parts.dependency_parts",
       "path": "song_agent/interfaces/cli/commands/trust_parts/dependency_parts/__init__.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.trust_parts.dependency_parts.dependency_catalog",
-      "path": "song_agent/interfaces/cli/commands/trust_parts/dependency_parts/dependency_catalog.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.commands.trust_parts.dependency_parts.verification_catalog",
-      "path": "song_agent/interfaces/cli/commands/trust_parts/dependency_parts/verification_catalog.py"
     },
     {
       "context": "cli",
@@ -4207,66 +4255,6 @@
     {
       "context": "cli",
       "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition",
-      "path": "song_agent/interfaces/cli/composition.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts",
-      "path": "song_agent/interfaces/cli/composition_parts/__init__.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.creation",
-      "path": "song_agent/interfaces/cli/composition_parts/creation.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.delivery",
-      "path": "song_agent/interfaces/cli/composition_parts/delivery.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.maintenance",
-      "path": "song_agent/interfaces/cli/composition_parts/maintenance.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.program",
-      "path": "song_agent/interfaces/cli/composition_parts/program.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.quality",
-      "path": "song_agent/interfaces/cli/composition_parts/quality.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.release_check",
-      "path": "song_agent/interfaces/cli/composition_parts/release_check.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.studio",
-      "path": "song_agent/interfaces/cli/composition_parts/studio.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
-      "module": "song_agent.interfaces.cli.composition_parts.trust",
-      "path": "song_agent/interfaces/cli/composition_parts/trust.py"
-    },
-    {
-      "context": "cli",
-      "layer": "interface",
       "module": "song_agent.interfaces.cli.errors",
       "path": "song_agent/interfaces/cli/errors.py"
     },
@@ -4287,12 +4275,6 @@
       "layer": "interface",
       "module": "song_agent.interfaces.web",
       "path": "song_agent/interfaces/web/__init__.py"
-    },
-    {
-      "context": "web",
-      "layer": "interface",
-      "module": "song_agent.interfaces.web.assets",
-      "path": "song_agent/interfaces/web/assets.py"
     },
     {
       "context": "studio",
@@ -4411,6 +4393,12 @@
     {
       "context": null,
       "layer": "platform",
+      "module": "song_agent.platform.auth",
+      "path": "song_agent/platform/auth.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
       "module": "song_agent.platform.contracts",
       "path": "song_agent/platform/contracts/__init__.py"
     },
@@ -4485,6 +4473,12 @@
       "layer": "platform",
       "module": "song_agent.platform.evidence_graph.model",
       "path": "song_agent/platform/evidence_graph/model.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.evidence_graph.path_support",
+      "path": "song_agent/platform/evidence_graph/path_support.py"
     },
     {
       "context": null,
@@ -4617,6 +4611,12 @@
       "layer": "platform",
       "module": "song_agent.platform.policy.profiles",
       "path": "song_agent/platform/policy/profiles.py"
+    },
+    {
+      "context": null,
+      "layer": "platform",
+      "module": "song_agent.platform.resource_access",
+      "path": "song_agent/platform/resource_access.py"
     },
     {
       "context": null,
@@ -5185,12 +5185,6 @@
     {
       "context": null,
       "layer": "release_check",
-      "module": "song_agent.release_check.v14_baseline",
-      "path": "song_agent/release_check/v14_baseline.py"
-    },
-    {
-      "context": null,
-      "layer": "release_check",
       "module": "song_agent.release_check.v14_certification",
       "path": "song_agent/release_check/v14_certification.py"
     },
@@ -5289,6 +5283,12 @@
       "layer": "release_check",
       "module": "song_agent.release_check.v14_wave0_surfaces",
       "path": "song_agent/release_check/v14_wave0_surfaces.py"
+    },
+    {
+      "context": null,
+      "layer": "release_check",
+      "module": "song_agent.release_check.v14_wave1",
+      "path": "song_agent/release_check/v14_wave1.py"
     },
     {
       "context": null,

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts.documents import ImplementationDocument
+from collections.abc import Iterable
 
-from typing import Any, Iterable
+from song_agent.platform.contracts.coercion import as_string_list
+from song_agent.platform.contracts.documents import JsonDocument, normalize_json_document, normalize_json_value
 
 from song_agent.platform.contracts.evidence import EvidenceRef
 from song_agent.platform.contracts.policy import PolicyProfile
@@ -13,7 +14,7 @@ from song_agent.platform.policy import evaluate_policy
 _PASSING_STATES = {"passed", "ready", "signed", "closed", "current", "accepted", "not_required"}
 
 
-def normalized_legacy_require_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def normalized_legacy_require_payload(payload: JsonDocument) -> JsonDocument:
     normalized = {
         key: value for key, value in payload.items() if key.startswith("require_")
     }
@@ -23,23 +24,23 @@ def normalized_legacy_require_payload(payload: dict[str, Any]) -> dict[str, Any]
     return normalized
 
 
-def legacy_require_summary(payload: dict[str, Any], policy_id: str) -> dict[str, Any]:
+def legacy_require_summary(payload: JsonDocument, policy_id: str) -> JsonDocument:
     payload = normalized_legacy_require_payload(payload)
     enabled = sorted(
         key
         for key, value in payload.items()
         if key.startswith("require_") and bool(value)
     )
-    return {
+    return normalize_json_document({
         "status": "converted" if enabled else "not_requested",
         "policy_id": policy_id,
         "enabled": enabled,
         "count": len(enabled),
         "authoritative": False,
-    }
+    })
 
 
-def canonical_release_policy_id(payload: dict[str, Any]) -> str:
+def canonical_release_policy_id(payload: JsonDocument) -> str:
     requested = str(payload.get("gate_policy") or payload.get("policy") or "").strip()
     if requested == "release.audio_strict":
         return "release.audio"
@@ -51,7 +52,7 @@ def canonical_release_policy_id(payload: dict[str, Any]) -> str:
     ) else "release.standard"
 
 
-def canonical_ga_policy_id(requested: str | None, payload: dict[str, Any]) -> str:
+def canonical_ga_policy_id(requested: str | None, payload: JsonDocument) -> str:
     if requested:
         return str(requested)
     lts_terms = ("continuity", "receiver", "final_readiness", "trust_control", "assurance")
@@ -64,12 +65,12 @@ def canonical_ga_policy_id(requested: str | None, payload: dict[str, Any]) -> st
 
 
 def evaluate_legacy_release_policy(
-    payload: dict[str, Any],
-    acceptance_gate: dict[str, Any],
+    payload: JsonDocument,
+    acceptance_gate: JsonDocument,
     *,
     release_id: str,
     qa_passed: bool,
-) -> dict[str, Any]:
+) -> JsonDocument:
     policy_id = canonical_release_policy_id(payload)
     external = acceptance_gate.get("evidence_policy")
     if isinstance(external, dict):
@@ -77,7 +78,7 @@ def evaluate_legacy_release_policy(
         result["policy_id"] = policy_id
         result["legacy_require_summary"] = legacy_require_summary(payload, policy_id)
         return result
-    rows: list[tuple[str, dict[str, Any]]] = [
+    rows: list[tuple[str, JsonDocument]] = [
         ("release_qa", {"status": "passed" if qa_passed else "failed"})
     ]
     if acceptance_gate.get("status"):
@@ -86,7 +87,10 @@ def evaluate_legacy_release_policy(
                 "legacy_required_gates",
                 {
                     "status": acceptance_gate.get("status"),
-                    "blockers": acceptance_gate.get("blockers") or ("release.legacy_required_gates",),
+                    "blockers": normalize_json_value(
+                        as_string_list(acceptance_gate.get("blockers"))
+                        or ["release.legacy_required_gates"]
+                    ),
                 },
             )
         )
@@ -98,8 +102,8 @@ def evaluate_legacy_release_policy(
 def evaluate_check_policy(
     policy_id: str,
     component_id: str,
-    checks: Iterable[dict[str, Any]],
-) -> dict[str, Any]:
+    checks: Iterable[JsonDocument],
+) -> JsonDocument:
     rows = [
         (str(check.get("check_id") or "check"), check)
         for check in checks
@@ -111,8 +115,8 @@ def evaluate_check_policy(
 def evaluate_gate_rows(
     policy_id: str,
     component_id: str,
-    rows: Iterable[tuple[str, dict[str, Any]]],
-) -> dict[str, Any]:
+    rows: Iterable[tuple[str, JsonDocument]],
+) -> JsonDocument:
     nodes = tuple(_gate_node(component_id, key, value) for key, value in rows)
     graph = EvidenceGraph(nodes=nodes, edges=())
     gate = evaluate_policy(PolicyProfile(policy_id=policy_id, description="Legacy gate facts projected into Policy Engine."), graph)
@@ -128,10 +132,10 @@ def evaluate_gate_rows(
     }
 
 
-def _gate_node(component_id: str, key: str, value: ImplementationDocument) -> EvidenceNode:
+def _gate_node(component_id: str, key: str, value: JsonDocument) -> EvidenceNode:
     status = str(value.get("status") or "failed").lower()
     passed = status in _PASSING_STATES
-    blockers = () if passed else tuple(str(row) for row in value.get("blockers") or (f"legacy_gate.{key}",))
+    blockers = () if passed else tuple(as_string_list(value.get("blockers")) or [f"legacy_gate.{key}"])
     return EvidenceNode(
         node_id=f"legacy:{component_id}:{key}",
         ref=EvidenceRef(

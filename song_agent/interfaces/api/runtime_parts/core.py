@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.dependencies.creation_quality_dependencies import MAX_REFERENCE_WAV_BYTES
+from song_agent.interfaces.bootstrap.api.creation_quality import MAX_REFERENCE_WAV_BYTES
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import Path
+from song_agent.interfaces.bootstrap.api.core import Path
 
 RUNS_DIR = Path("runs")
 

@@ -1,12 +1,30 @@
 from __future__ import annotations
 
+from typing import TypedDict
+
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
+from song_agent.platform.contracts.documents import JsonDocument
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
+class _PortfolioQueueRouteState(TypedDict, total=False):
+    tail: str
+    parts: list[str]
+    queue_id: str
+    action: str
+    payload: JsonDocument
+    queue: JsonDocument
+    report: JsonDocument
+    manifest: JsonDocument
+    zip_info: JsonDocument
+
+
 class TrustRoutesReleasePortfolioGovernanceQueues(TrustRouteContext):
-    def _handle_release_portfolio_governance_queues_part_01(self, method: str, path: str, _split_state):
+    def _handle_release_portfolio_governance_queues_part_01(
+        self, method: str, path: str, _split_state: _PortfolioQueueRouteState
+    ) -> tuple[bool, None]:
         if _split_state['tail'] in {'', '/'}:
             if method != 'GET':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -69,7 +87,9 @@ class TrustRoutesReleasePortfolioGovernanceQueues(TrustRouteContext):
             return (True, None)
         return (False, None)
 
-    def _handle_release_portfolio_governance_queues_part_02(self, method: str, path: str, _split_state):
+    def _handle_release_portfolio_governance_queues_part_02(
+        self, method: str, path: str, _split_state: _PortfolioQueueRouteState
+    ) -> tuple[bool, None]:
         if _split_state['action'] == 'export' and len(_split_state['parts']) == 3 and (_split_state['parts'][2] == 'zip'):
             if method != 'POST':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -131,7 +151,9 @@ class TrustRoutesReleasePortfolioGovernanceQueues(TrustRouteContext):
             return (True, None)
         return (False, None)
 
-    def _handle_release_portfolio_governance_queues_part_03(self, method: str, path: str, _split_state):
+    def _handle_release_portfolio_governance_queues_part_03(
+        self, method: str, path: str, _split_state: _PortfolioQueueRouteState
+    ) -> tuple[bool, None]:
         if _split_state['action'] == 'archive.zip' and len(_split_state['parts']) == 2:
             if method != 'GET':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -186,9 +208,9 @@ class TrustRoutesReleasePortfolioGovernanceQueues(TrustRouteContext):
         return (False, None)
 
     def _handle_release_portfolio_governance_queues(self, method: str, path: str) -> None:
-        _split_state = {}
-        prefix = '/api/release-portfolio-governance-queues'
-        _split_state['tail'] = path[len(prefix):]
+        _split_state: _PortfolioQueueRouteState = {}
+        prefix = "/api/release-portfolio-governance-queues"
+        _split_state["tail"] = path[len(prefix) :]
         try:
             _split_result = self._handle_release_portfolio_governance_queues_part_01(method, path, _split_state)
             if _split_result[0]:

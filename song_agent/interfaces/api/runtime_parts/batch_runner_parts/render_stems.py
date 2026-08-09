@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from song_agent.interfaces.api.runtime_parts.batch_runner_context import BatchRunnerContext
+from song_agent.application.jobs.ports import BatchRunnerContext
 
-from song_agent.interfaces.api.runtime_parts.dependencies.core_dependencies import BatchDocument, HTTPStatus, now_iso, threading, time
+from song_agent.interfaces.bootstrap.api.core import BatchDocument, HTTPStatus, now_iso, threading, time
+from song_agent.platform.contracts.documents import normalize_json_document
 
 class BatchRunnerRenderStems(BatchRunnerContext):
     def render_stems(
@@ -135,7 +136,7 @@ class BatchRunnerRenderStems(BatchRunnerContext):
                     self.batch_store.append_event(
                         batch_id,
                         "batch_audio_render_finished",
-                        self._audio_counts(document),
+                        normalize_json_document(self._audio_counts(document)),
                     )
                     return
                 time.sleep(0.1)
@@ -154,7 +155,7 @@ class BatchRunnerRenderStems(BatchRunnerContext):
                     self.batch_store.append_event(
                         batch_id,
                         "batch_stem_render_finished",
-                        self._stem_counts(document),
+                        normalize_json_document(self._stem_counts(document)),
                     )
                     return
                 time.sleep(0.1)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path, document_or as _document_or
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_list, _as_path, _document_or
 
 import json as json
 import threading as threading
@@ -369,7 +369,7 @@ class UnifiedCommandCenterReviewerDecisionBoardStore:
                     "response_verification_report_path": str(row.get("response_verification_report_path") or row.get("accepted_evidence_response_verification_report") or row.get("response_verification_report") or (self.evidence_review_store.accepted_evidence_dir(center_id, review_id, evidence_id) / "response-verification-summary.json" if review_id and evidence_id else "")),
                 }
             )
-        paths = {
+        paths: ImplementationDocument = {
             "board_id": board_id,
             "review_id": review_id,
             "review_zip": str(payload.get("review_zip") or payload.get("evidence_review_zip") or payload.get("unified_command_center_evidence_review") or (self.evidence_review_store.zip_path(center_id, review_id) if review_id else "")),

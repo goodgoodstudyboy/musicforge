@@ -1,14 +1,32 @@
 from __future__ import annotations
 
-from typing import Any as _InferenceType
+from typing import TypedDict
+
+from song_agent.platform.contracts.documents import JsonDocument
 
 from song_agent.interfaces.api.route_contexts.trust import TrustRouteContext
 
 
 import song_agent.interfaces.api.runtime as _interfaces_api_runtime
 
+
+class _KnowledgeRouteState(TypedDict, total=False):
+    parts: list[str]
+
+
+class _ControlSignoffRouteState(TypedDict, total=False):
+    exception: JsonDocument
+    cr: JsonDocument
+
+
 class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
-    def _handle_trust_operations_knowledge_part_01(self, method: str, hub_id: str, tail: str, _split_state):
+    def _handle_trust_operations_knowledge_part_01(
+        self,
+        method: str,
+        hub_id: str,
+        tail: str,
+        _split_state: _KnowledgeRouteState,
+    ) -> tuple[bool, None]:
         if tail in {'', '/'}:
             if method != 'GET':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -66,7 +84,13 @@ class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
         _split_state['parts'] = [part for part in tail.split('/') if part]
         return (False, None)
 
-    def _handle_trust_operations_knowledge_part_02(self, method: str, hub_id: str, tail: str, _split_state):
+    def _handle_trust_operations_knowledge_part_02(
+        self,
+        method: str,
+        hub_id: str,
+        tail: str,
+        _split_state: _KnowledgeRouteState,
+    ) -> tuple[bool, None]:
         if len(_split_state['parts']) >= 2 and _split_state['parts'][0] == 'entries':
             entry_id = _interfaces_api_runtime.unquote(_split_state['parts'][1])
             if len(_split_state['parts']) == 2:
@@ -113,7 +137,7 @@ class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
         return (False, None)
 
     def _handle_trust_operations_knowledge(self, method: str, hub_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: _KnowledgeRouteState = {}
         try:
             _split_result = self._handle_trust_operations_knowledge_part_01(method, hub_id, tail, _split_state)
             if _split_result[0]:
@@ -130,7 +154,13 @@ class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
         except FileNotFoundError as exc:
             self._send_error(_interfaces_api_runtime.HTTPStatus.NOT_FOUND, str(exc))
 
-    def _handle_trust_operations_control_signoff_part_01(self, method: str, hub_id: str, tail: str, _split_state):
+    def _handle_trust_operations_control_signoff_part_01(
+        self,
+        method: str,
+        hub_id: str,
+        tail: str,
+        _split_state: _ControlSignoffRouteState,
+    ) -> tuple[bool, None]:
         if tail in {'', '/'}:
             if method != 'GET':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -203,7 +233,13 @@ class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
             return (True, None)
         return (False, None)
 
-    def _handle_trust_operations_control_signoff_part_02(self, method: str, hub_id: str, tail: str, _split_state):
+    def _handle_trust_operations_control_signoff_part_02(
+        self,
+        method: str,
+        hub_id: str,
+        tail: str,
+        _split_state: _ControlSignoffRouteState,
+    ) -> tuple[bool, None]:
         if tail == '/verify':
             if method != 'POST':
                 self._send_error(_interfaces_api_runtime.HTTPStatus.METHOD_NOT_ALLOWED, 'Method not allowed.')
@@ -234,7 +270,7 @@ class TrustRoutesTrustOperationsKnowledge(TrustRouteContext):
         return (False, None)
 
     def _handle_trust_operations_control_signoff(self, method: str, hub_id: str, tail: str) -> None:
-        _split_state: dict[str, _InferenceType] = {}
+        _split_state: _ControlSignoffRouteState = {}
         try:
             _split_result = self._handle_trust_operations_control_signoff_part_01(method, hub_id, tail, _split_state)
             if _split_result[0]:

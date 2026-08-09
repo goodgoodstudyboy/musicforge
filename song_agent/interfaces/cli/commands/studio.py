@@ -1,16 +1,12 @@
-from __future__ import annotations
 
-from song_agent.interfaces.cli.bindings import BINDINGS as CLI_BINDINGS
+from song_agent.interfaces.cli.commands.creation_parts.generation_commands_and_presenter_adapters import build_serve_parser
+
 import argparse
 import os
 from pathlib import Path
-from typing import Any
-from song_agent.domains.creation.auth import build_auth_config
-
+from song_agent.platform.auth import build_auth_config
 
 from song_agent.interfaces.cli.registry import CommandSpec
-def build_serve_parser(*args: Any, **kwargs: Any) -> Any:
-    return CLI_BINDINGS.creation.build_serve_parser(*args, **kwargs)
 
 def build_verify_human_review_pack_parser() -> argparse.ArgumentParser:
     verify_parser = argparse.ArgumentParser(description="Verify a portable MusicForge Human Review Pack ZIP.")
@@ -42,10 +38,8 @@ def _execute_serve(argv: list[str]) -> None:
     serve(args.host, args.port, auth_config=auth_config)
     return
 
-
 def handle_serve(argv: list[str]) -> None:
     _execute_serve(argv)
-
 
 SPECS = (
     CommandSpec(name='serve', parser=build_serve_parser, handler=handle_serve, help='Serve', group='studio'),

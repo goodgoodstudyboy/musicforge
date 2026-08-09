@@ -1,21 +1,23 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Protocol
+
+from song_agent.application.program.http_context import ErrorSender, JsonBodyReader, JsonSender
+from song_agent.interfaces.api.route_contexts.program import FileSender, ProgramServerPort
+from song_agent.platform.contracts.documents import JsonDocument
 
 
-class ProgramUccRouteContext:
-    """Static inventory of members supplied by runtime composition."""
+class EvidencePayloadBuilder(Protocol):
+    def __call__(self, payload: JsonDocument) -> JsonDocument: ...
 
-    _optional_json_body: Any
-    _read_json_body: Any
-    _send_error: Any
-    _send_file: Any
-    _send_json: Any
-    _unified_command_center_evidence_from_payload: Any
-    unified_command_center_continuous_review_store: Any
-    unified_command_center_drift_response_store: Any
-    unified_command_center_evidence_review_store: Any
-    unified_command_center_handoff_store: Any
-    unified_command_center_reviewer_decision_board_store: Any
-    unified_command_center_signoff_store: Any
-    unified_command_center_store: Any
+
+class ProgramUccRouteContext(ProgramServerPort, Protocol):
+    """Static UCC route contract supplied by API composition."""
+
+    server: ProgramServerPort
+    _optional_json_body: JsonBodyReader
+    _read_json_body: JsonBodyReader
+    _send_error: ErrorSender
+    _send_file: FileSender
+    _send_json: JsonSender
+    _unified_command_center_evidence_from_payload: EvidencePayloadBuilder

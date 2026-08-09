@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_document as _as_document, as_list as _as_list, as_path as _as_path
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_document, _as_int, _as_list, _as_path
 
 import json as json
 import re as re
@@ -213,9 +213,9 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
         local_manifest = read_json(Path(evidence_manifest_path))
     except (OSError, json.JSONDecodeError, ProgramPersistenceError) as exc:
         return [_check("urpccc_external_manifest_readable", False, "External evidence manifest can be read.", {"error": sanitize_sensitive_text(str(exc))})]
-    local_items = {(_item_key(row)): row for row in local_manifest.get("items") or []}
-    public_items = {(_item_key(row)): row for row in public_manifest.get("items") or []}
-    runtime_items = {(_item_key(row)): row for row in runtime_index.get("items") or []}
+    local_items = _indexed_items(local_manifest.get("items"))
+    public_items = _indexed_items(public_manifest.get("items"))
+    runtime_items = _indexed_items(runtime_index.get("items"))
     checks.append(_check("urpccc_external_manifest_integrity_runtime", _integrity_ok(local_manifest), "External evidence manifest integrity is valid."))
     checks.append(_check("urpccc_external_manifest_items_match", set(local_items) == set(public_items), "External evidence manifest item identities match package manifest.", {"missing": sorted(set(public_items) - set(local_items)), "extra": sorted(set(local_items) - set(public_items))}))
     public_state = _as_document(public_manifest.get("current_state"))
@@ -301,7 +301,7 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
                 )
             )
             try:
-                external = json.loads(verification_path.read_text(encoding="utf-8"))
+                external = _as_document(json.loads(verification_path.read_text(encoding="utf-8")))
             except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                 external = {}
         try:
@@ -312,6 +312,7 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
                 "blockers": [sanitize_sensitive_text(str(exc))],
                 "summary": {},
             }
+        runtime = _as_document(runtime)
         expected_package_type = EXPECTED_VERIFICATION_TYPES.get(component_type)
         checks.extend(
             [
@@ -322,7 +323,7 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
                 _check(f"urpccc_external_{safe_key}_runtime_passed", runtime.get("status") == "passed", "Runtime verifier passes for component.", {"blockers": runtime.get("blockers") or []}),
                 _check(f"urpccc_external_{safe_key}_external_passed", external.get("status") == "passed", "External verification report is passed."),
                 _check(f"urpccc_external_{safe_key}_zip_sha256", public.get("package_sha256") == _sha256_path(package_path) == external.get("zip_sha256"), "Package SHA matches manifest and verification report."),
-                _check(f"urpccc_external_{safe_key}_zip_size_bytes", int(public.get("zip_size_bytes") or -1) == package_path.stat().st_size == int(external.get("zip_size_bytes") or -2), "Package size matches manifest and verification report."),
+                _check(f"urpccc_external_{safe_key}_zip_size_bytes", _as_int(public.get("zip_size_bytes") or -1) == package_path.stat().st_size == _as_int(external.get("zip_size_bytes") or -2), "Package size matches manifest and verification report."),
                 _check(f"urpccc_external_{safe_key}_manifest_hash", public.get("manifest_hash") == runtime.get("manifest_hash") == external.get("manifest_hash"), "Manifest hash matches runtime and verification report."),
                 _check(f"urpccc_external_{safe_key}_verification_hash", public.get("verification_report_hash") == external.get("integrity_hash"), "Verification hash matches manifest row."),
                 _check(f"urpccc_external_{safe_key}_report_status", public.get("report_status") == external.get("status") == "passed", "Inventory report status follows current external report."),
@@ -330,6 +331,15 @@ def _external_evidence_checks(public_manifest: ImplementationDocument, runtime_i
             ]
         )
     return checks
+
+
+def _indexed_items(value: object) -> dict[str, ImplementationDocument]:
+    indexed: dict[str, ImplementationDocument] = {}
+    for raw in _as_list(value):
+        row = _as_document(raw)
+        if row:
+            indexed[_item_key(row)] = row
+    return indexed
 
 
 def runtime_verify_continuity_command_center_component(component_type: str, row: dict[str, Any], rows: dict[str, dict[str, Any]]) -> dict[str, Any]:

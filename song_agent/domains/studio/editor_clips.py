@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from song_agent.platform.contracts import ImplementationDocument, as_int as _as_int, document_or as _document_or, list_or as _list_or
+from song_agent.domains.legacy_documents import ImplementationDocument, _as_int, _document_or, _list_or
 
 import hashlib as hashlib
 import json as json
